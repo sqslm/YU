@@ -30,6 +30,7 @@ import { NotesStore } from './notes'
 import { registerNotesIpc } from './notes-ipc'
 import { LocalAsrHost } from './local-asr/host'
 import { registerLocalAsrIpc } from './local-asr/ipc'
+import { collectResources } from './resources'
 import { applyReplaceText } from './agent'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
@@ -58,6 +59,9 @@ import { mainLanguage, mt, setMainLanguage } from '@shared/mainI18n'
 // enumeration or capture latency. Appending (not replacing) keeps Chromium's own
 // `--disable-features` defaults, including `SpareRendererForSitePerProcess`.
 app.commandLine.appendSwitch('disable-features', 'AudioServiceOutOfProcess')
+// This app renders 2D UI. Software composition avoids retaining a large GPU
+// surface pool after the small recording bar has returned to the background.
+if (process.platform === 'win32') app.disableHardwareAcceleration()
 
 const store = new SettingsStore()
 const history = new HistoryStore()
@@ -103,6 +107,7 @@ const notes = new NotesStore({
  */
 const localAsr = new LocalAsrHost(() => store.get().localAsr, {
   log: (line) => log(line),
+  isBusy: () => pipeline?.isBusy ?? false,
   onProgress: (progress) => {
     if (!settingsWindow || settingsWindow.isDestroyed()) return
     settingsWindow.webContents.send('localAsr:progress', progress)
@@ -568,8 +573,13 @@ function registerIpc(): void {
     setMainLanguage(next.uiLanguage)
     hotkeys?.apply(next)
     if (next.launchAtStartup !== previous.launchAtStartup) {
-      app.setLoginItemSettings({ openAtLogin: next.launchAtStartup })
+      app.setLoginItemSettings({ openAtLogin: next.launchAtStartup, args: ['--background'] })
     }
+    if (next.localAsr.modelId !== previous.localAsr.modelId ||
+        next.localAsr.language !== previous.localAsr.language ||
+        next.localAsr.modelDir !== previous.localAsr.modelDir ||
+        (!next.localAsr.enabled && previous.localAsr.enabled)) localAsr.release()
+    localAsr.reconfigure()
     // Retention is enforced by the store, so a change takes effect immediately
     // (and the next append persists the trimmed list) — REQ-05.
     if (next.historyLimit !== previous.historyLimit) history.setLimit(next.historyLimit)
@@ -725,6 +735,22 @@ function registerIpc(): void {
 
   ipcMain.handle('app:openDataFolder', async () => {
     await shell.openPath(app.getPath('userData'))
+  })
+  const resources = (): ReturnType<typeof collectResources> =>
+    collectResources(app.getAppMetrics(), localAsr.memoryState())
+  ipcMain.handle('app:resources', resources)
+  ipcMain.handle('app:releaseResources', async () => {
+    if (pipeline?.isBusy || localAsr.inUse) throw new Error(mt('录音或识别进行中，请结束后再释放资源'))
+    localAsr.reclaim()
+    uia.reclaim()
+    if (cardWindow && !cardWindow.isDestroyed() && !cardWindow.isVisible()) {
+      clearCardRetire()
+      cardWindow.destroy()
+      cardWindow = null
+      pendingCard = null
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    return resources()
   })
 
   /**
@@ -1131,7 +1157,7 @@ async function bootstrap(): Promise<void> {
     // The local engine, when the user installed and loaded one. The pipeline
     // tries it first and falls back to the provider chain on any failure.
     localAsr: {
-      ready: () => localAsr.ready(),
+      ready: () => localAsr.available(),
       transcribeWav: (wav) => localAsr.transcribeWav(wav)
     }
   })
@@ -1187,7 +1213,7 @@ async function bootstrap(): Promise<void> {
       const next = await store.update({ localAsr: { ...store.get().localAsr, ...patch } })
       // A different model or language invalidates whatever is in memory; the page
       // then shows 未加载 instead of silently transcribing with the old weights.
-      if (localAsr.ready() && (patch.modelId || patch.language || patch.modelDir)) {
+      if ('modelId' in patch || 'language' in patch || 'modelDir' in patch) {
         localAsr.release()
       }
       return next
@@ -1195,11 +1221,11 @@ async function bootstrap(): Promise<void> {
     log: (line) => log(line)
   })
   ensureBarWindow()
-  ensureSettingsWindow()
+  if (!process.argv.includes('--background')) ensureSettingsWindow()
 
   hotkeys!.start(store.get())
   uia.start()
-  app.setLoginItemSettings({ openAtLogin: settings.launchAtStartup })
+  app.setLoginItemSettings({ openAtLogin: settings.launchAtStartup, args: ['--background'] })
 
   /**
    * `themeMode: 'system'` is resolved twice on purpose: the renderer follows
@@ -1499,7 +1525,9 @@ if (!gotLock) {
   console.error('[app] another instance holds the single-instance lock; quitting')
   app.quit()
 } else {
-  app.on('second-instance', () => ensureSettingsWindow())
+  app.on('second-instance', (_event, args) => {
+    if (!args.includes('--background')) ensureSettingsWindow()
+  })
 
   app.whenReady().then(bootstrap).catch((err) => {
     console.error('[app] bootstrap failed', err)
@@ -1512,6 +1540,8 @@ if (!gotLock) {
   app.on('before-quit', () => {
     hotkeys?.stop()
     uia.stop()
+    localAsr.release()
+    sync?.stop()
   })
 
   app.on('activate', () => ensureSettingsWindow())

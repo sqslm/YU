@@ -53,7 +53,6 @@ export class UiaHost {
   private restarts = 0
   private stopped = false
   private wanted = false
-  private retiring = false
   private ready = false
 
   constructor(private readonly log: (line: string) => void = () => {}) {}
@@ -91,17 +90,15 @@ export class UiaHost {
       })
       this.proc = child
       this.restarts = 0
-      child.on('message', (message: unknown) => this.onMessage(message as ChildMessage))
+      child.on('message', (message: unknown) => {
+        if (this.proc === child) this.onMessage(message as ChildMessage)
+      })
       child.on('exit', (code) => {
+        if (this.proc !== child) return
         this.log(`[uia] exited with ${code}`)
         this.proc = null
         this.ready = false
         this.flushPending()
-        // A deliberate retirement is not a crash: do not spawn it straight back.
-        if (this.retiring) {
-          this.retiring = false
-          return
-        }
         if (!this.stopped && this.restarts < MAX_RESTARTS) {
           this.restarts += 1
           setTimeout(() => this.spawn(), 1200)
@@ -175,7 +172,6 @@ export class UiaHost {
         return
       }
       this.log('[uia] idle: reclaiming the context reader')
-      this.retiring = true
       const proc = this.proc
       this.proc = null
       this.ready = false
@@ -232,9 +228,20 @@ export class UiaHost {
     this.wanted = false
     this.clearIdle()
     this.flushPending()
-    this.retiring = Boolean(this.proc)
-    this.proc?.kill()
+    const proc = this.proc
     this.proc = null
     this.ready = false
+    proc?.kill()
+  }
+
+  /** Drop only an idle reader, leaving on-demand reads enabled. */
+  reclaim(): boolean {
+    if (!this.proc || this.pending.size > 0 || !this.ready) return false
+    this.clearIdle()
+    const proc = this.proc
+    this.proc = null
+    this.ready = false
+    proc.kill()
+    return true
   }
 }

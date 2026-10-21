@@ -219,24 +219,32 @@ describe('local speech model defaults', () => {
     expect(settings.localAsr.language).toBe('auto')
     expect(settings.localAsr.mirror).toBe('cn')
     expect(settings.localAsr.modelDir).toBe('')
+    expect(settings.localAsr.idleUnloadMinutes).toBe(5)
   })
 
   it('keeps a stored choice that still exists', () => {
     const settings = mergeSettings({
-      localAsr: { enabled: true, modelId: 'paraformer-zh', modelDir: 'D:\\models', language: 'zh', mirror: 'official' }
+      localAsr: { enabled: true, modelId: 'paraformer-zh', modelDir: 'D:\\models', language: 'zh', mirror: 'official', idleUnloadMinutes: 15 }
     })
     expect(settings.localAsr).toEqual({
       enabled: true,
       modelId: 'paraformer-zh',
       modelDir: 'D:\\models',
       language: 'zh',
-      mirror: 'official'
+      mirror: 'official',
+      idleUnloadMinutes: 15
     })
   })
 
   it('drops a model id that is no longer in the catalogue', () => {
     const settings = mergeSettings({ localAsr: { modelId: 'gone-forever' } as never })
     expect(settings.localAsr.modelId).toBe(DEFAULT_LOCAL_MODEL)
+  })
+
+  it('migrates older settings and bounds the idle timeout without replacing zero', () => {
+    for (const [input, expected] of [[undefined, 5], [0, 0], [-1, 0], [90, 60], [NaN, 5]]) {
+      expect(mergeSettings({ localAsr: { idleUnloadMinutes: input } as never }).localAsr.idleUnloadMinutes).toBe(expected)
+    }
   })
 
   it('drops a language the chosen model cannot do', () => {

@@ -12,6 +12,7 @@ import type {
   NoteStore,
   PromptKind,
   RecordingSessionInfo,
+  ResourceUsage,
   Settings,
   ServerMeta,
   SyncStatus
@@ -177,6 +178,8 @@ export interface TypelessApi {
     copyText(text: string): Promise<void>
     /** Real app version, so the UI never hardcodes a build number. */
     version(): Promise<string>
+    resources(): Promise<ResourceUsage>
+    releaseResources(): Promise<ResourceUsage>
     /**
      * Dim the native window buttons with the page while a dialog is open. They
      * are drawn above the web content, so the renderer cannot reach them.

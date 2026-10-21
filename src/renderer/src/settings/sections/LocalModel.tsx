@@ -195,7 +195,7 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
         <Box data-local-dot sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: dotColor, flexShrink: 0 }} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography data-local-status sx={{ fontSize: 12, lineHeight: 1.5 }} noWrap>
-            {i18n.t(PHASE_LABEL[status?.phase ?? 'idle'] ?? '')}
+            {status?.autoResume ? i18n.t('待自动恢复') : i18n.t(PHASE_LABEL[status?.phase ?? 'idle'] ?? '')}
             {settled && status?.message ? ` · ${status.message}` : ''}
             {!settled ? ' · ' + i18n.t('正在保存选择…') : ''}
           </Typography>

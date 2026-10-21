@@ -87,7 +87,7 @@ export function Bar(): JSX.Element {
     // The bar already pulls settings for the microphone, so the mode toggle rides
     // along on that existing channel — no preload or main-process change needed.
     const applySettings = (settings: Settings): void => {
-      applyUiLanguage(settings.language)
+      applyUiLanguage(settings.uiLanguage)
       void capture.setDevice(settings.inputDeviceId)
       setShowMode(settings.showModeInBar)
       soundsRef.current = settings.playSounds

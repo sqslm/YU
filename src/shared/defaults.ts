@@ -92,7 +92,8 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
     modelId: DEFAULT_LOCAL_MODEL,
     modelDir: '',
     language: 'auto',
-    mirror: 'cn'
+    mirror: 'cn',
+    idleUnloadMinutes: 5
   },
   // Empty by default: an untouched install keeps using the legacy blocks above,
   // so nothing changes until the user saves a profile on purpose.
@@ -341,7 +342,8 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     modelId: findModel(input.localAsr?.modelId) ? input.localAsr!.modelId : base.localAsr.modelId,
     modelDir: typeof input.localAsr?.modelDir === 'string' ? input.localAsr.modelDir : base.localAsr.modelDir,
     language: pickLanguage(input.localAsr?.modelId, input.localAsr?.language),
-    mirror: input.localAsr?.mirror === 'official' ? 'official' : 'cn'
+    mirror: input.localAsr?.mirror === 'official' ? 'official' : 'cn',
+    idleUnloadMinutes: clampNumber(input.localAsr?.idleUnloadMinutes, 0, 60, base.localAsr.idleUnloadMinutes)
   }
   merged.multimodal.maxSeconds = clampNumber(
     input.multimodal?.maxSeconds,

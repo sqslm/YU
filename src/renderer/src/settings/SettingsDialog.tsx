@@ -7,6 +7,7 @@ import { ProvidersSection } from './sections/Providers'
 import { PromptsSection } from './sections/Prompts'
 import { RoutingSection } from './sections/Routing'
 import { SearchSection } from './sections/Search'
+import { ResourcesSection } from './sections/Resources'
 import { AccountSection } from './sections/Account'
 import { AboutSection, useAppVersion } from './sections/About'
 import { GuidePage } from './pages/Guide'
@@ -77,6 +78,12 @@ const SECTIONS = [
     labelKey: 'settings.nav.shortcuts',
     hintKey: 'settings.hint.shortcuts',
     icon: <IconKeyboard />
+  },
+  {
+    id: 'resources',
+    labelKey: 'settings.nav.resources',
+    hintKey: 'settings.hint.resources',
+    icon: <IconCpu />
   },
   {
     id: 'models',
@@ -291,6 +298,7 @@ export function SettingsDialog({
           {section === 'prompts' && <PromptsSection settings={settings} patch={patch} />}
           {section === 'routing' && <RoutingSection settings={settings} patch={patch} />}
           {section === 'search' && <SearchSection settings={settings} patch={patch} />}
+          {section === 'resources' && <ResourcesSection settings={settings} patch={patch} />}
           {section === 'guide' && <GuidePage embedded />}
           {section === 'about' && <AboutSection settings={settings} />}
         </Box>

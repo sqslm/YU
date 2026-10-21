@@ -693,7 +693,7 @@ describe('correction rule hits', () => {
 
 describe('local speech model routing', () => {
   const localOn = {
-    localAsr: { enabled: true, modelId: 'sense-voice-small', modelDir: '', language: 'auto', mirror: 'cn' }
+    localAsr: { enabled: true, modelId: 'sense-voice-small', modelDir: '', language: 'auto', mirror: 'cn', idleUnloadMinutes: 5 }
   } as const
 
   const run = async (

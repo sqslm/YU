@@ -115,7 +115,7 @@ export function createSettingsWindow(mode: ThemeMode = 'dark'): BrowserWindow {
     show: false,
     webPreferences: {
       preload,
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       // Nothing here is a document the user spell-checks, and the checker loads a
@@ -168,7 +168,7 @@ export function openLoginWindow(mode: ThemeMode = 'dark'): BrowserWindow {
     show: false,
     webPreferences: {
       preload,
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false
@@ -248,7 +248,7 @@ export function createBarWindow(position: BarPlacement | null): BrowserWindow {
     backgroundColor: '#00000000',
     webPreferences: {
       preload,
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       // The pill draws frames continuously, so spelling can never be needed here.
@@ -434,7 +434,7 @@ export function createCardWindow(): BrowserWindow {
     backgroundColor: '#00000000',
     webPreferences: {
       preload,
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       // Nothing here is a document the user spell-checks, and the checker loads a

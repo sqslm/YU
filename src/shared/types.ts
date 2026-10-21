@@ -376,6 +376,24 @@ export interface LocalAsrSettings {
   language: string
   /** Which host to download from; the CN mirror is the same bytes. */
   mirror: 'official' | 'cn'
+  /** Unload idle native weights after these minutes; 0 keeps them loaded. */
+  idleUnloadMinutes: number
+}
+
+export interface ResourceUsage {
+  measuredAt: number
+  /** Private physical RAM, excluding shared pages; null when unavailable. */
+  privateResidentBytes: number | null
+  workingSetBytes: number
+  committedBytes: number | null
+  processes: Array<{
+    pid: number
+    role: string
+    privateResidentBytes: number | null
+    workingSetBytes: number
+    committedBytes: number | null
+  }>
+  localModel: { loaded: boolean; autoResume: boolean }
 }
 
 export interface Settings {

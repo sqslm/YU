@@ -219,6 +219,8 @@ export interface LocalAsrStatus {
   expectedBytes: number
   /** Engine state: idle (files only), loading, ready (in memory), error. */
   phase: 'idle' | 'loading' | 'ready' | 'error'
+  /** Weights were reclaimed; the next local dictation reloads them. */
+  autoResume: boolean
   /**
    * The model the engine actually holds, or null.
    *

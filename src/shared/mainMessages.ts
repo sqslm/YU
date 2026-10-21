@@ -534,5 +534,7 @@ export const MAIN_MESSAGES: Record<string, string> = {
   '韩语': 'Korean',
   '正在阅读原文…': 'Reading the original page…',
   '无效 URL': 'Invalid URL',
-  '上游网关超时': 'Upstream gateway timed out'
+  '上游网关超时': 'Upstream gateway timed out',
+  '录音或识别进行中，请结束后再释放资源': 'Finish recording or recognition before releasing resources',
+  '空闲模型已释放，下次听写时自动加载': 'Idle model released; it reloads on the next dictation'
 }

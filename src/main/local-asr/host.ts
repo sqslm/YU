@@ -55,6 +55,8 @@ type DirSource = 'custom' | 'install' | 'userData' | 'detected' | 'none'
 
 export interface LocalAsrCallbacks {
   log: (line: string) => void
+  /** Recording must keep already loaded weights warm, even before decoding. */
+  isBusy?: () => boolean
   /** Pushes download progress to the settings window. */
   onProgress: (progress: LocalDownloadProgress | null) => void
 }
@@ -193,6 +195,10 @@ export class LocalAsrHost {
   private seq = 0
   private readonly pending = new Map<number, { resolve: (text: string) => void; reject: (error: Error) => void }>()
   private loadedSignal: { resolve: () => void; reject: (error: Error) => void } | null = null
+  private idleTimer: ReturnType<typeof setTimeout> | null = null
+  private resumeAfterIdle = false
+  private activating: Promise<LocalAsrStatus> | null = null
+  private loadGeneration = 0
 
   constructor(
     private readonly settings: () => LocalAsrSettings,
@@ -266,7 +272,7 @@ export class LocalAsrHost {
     await this.locate(model, settings.modelDir)
     // The phase line has to say something useful before the user has pressed
     // anything: with the files missing "未加载" alone reads like a broken switch.
-    if (this.phase === 'idle') {
+    if (this.phase === 'idle' && !this.resumeAfterIdle) {
       this.message = this.present
         ? mt('文件齐全（{{size}}），可以加载', { size: formatBytes(this.installedBytes) })
         : mt('缺少 {{n}} 个文件，先下载', { n: this.missing.length })
@@ -291,6 +297,7 @@ export class LocalAsrHost {
       installedBytes: this.installedBytes,
       expectedBytes: modelBytes(model),
       phase: this.phase,
+      autoResume: this.resumeAfterIdle,
       loadedModelId: loaded?.id ?? null,
       loadedModelName: loaded?.name ?? null,
       message: this.message,
@@ -307,11 +314,11 @@ export class LocalAsrHost {
   /** Whether the native module is present in this build at all. */
   runtimeAvailable(): boolean {
     try {
-      // `require` on purpose: a native addon must not be bundled, and a build
-      // without the prebuilt binary has to degrade to "not available" instead of
-      // crashing at import time.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require('sherpa-onnx-node')
+      // Resolve files without loading the native runtime into the main process.
+      // Only the disposable recognizer worker should ever map its libraries.
+      const wrapper = require.resolve('sherpa-onnx-node')
+      const platform = process.platform === 'win32' ? 'win' : process.platform
+      require.resolve(`sherpa-onnx-${platform}-${process.arch}/sherpa-onnx.node`, { paths: [dirname(wrapper)] })
       return true
     } catch {
       return false
@@ -421,7 +428,13 @@ export class LocalAsrHost {
   }
 
   /** Start the child and make it build the recogniser. */
-  async activate(): Promise<LocalAsrStatus> {
+  activate(): Promise<LocalAsrStatus> {
+    if (this.activating) return this.activating
+    this.activating = this.activateSelected().finally(() => { this.activating = null })
+    return this.activating
+  }
+
+  private async activateSelected(): Promise<LocalAsrStatus> {
     const settings = this.settings()
     const model = findModel(settings.modelId) ?? LOCAL_MODELS[0]
     this.language = settings.language || 'auto'
@@ -429,7 +442,11 @@ export class LocalAsrHost {
     if (this.phase === 'ready' && this.loadedModel?.id === model.id) return this.status()
 
     this.release()
+    const generation = this.loadGeneration
+    this.phase = 'loading'
+    this.message = mt('正在加载模型…')
     await this.locate(model, settings.modelDir)
+    if (generation !== this.loadGeneration) return this.status()
     if (!this.present) {
       this.phase = 'error'
       this.message = mt('缺少 {{n}} 个模型文件，先下载或检查目录', { n: this.missing.length })
@@ -441,8 +458,6 @@ export class LocalAsrHost {
       return this.status()
     }
 
-    this.phase = 'loading'
-    this.message = mt('正在加载模型…')
     const started = Date.now()
     const paths = modelPaths(model, this.dir)
     try {
@@ -461,8 +476,10 @@ export class LocalAsrHost {
         language: this.language
       })
       await withTimeout(loaded, LOAD_TIMEOUT_MS, mt('加载超时'))
+      if (generation !== this.loadGeneration) return this.status()
       this.loadedModel = model
       this.phase = 'ready'
+      this.scheduleIdle()
       // The badge next to it already says 已加载; the line itself should carry
       // the name and the cost, not repeat the verb.
       this.message = `${model.name}（${formatBytes(this.installedBytes)}）`
@@ -470,6 +487,7 @@ export class LocalAsrHost {
         `[local-asr] loaded ${model.id} from ${this.dir} in ${Date.now() - started}ms (language ${this.language})`
       )
     } catch (error) {
+      if (generation !== this.loadGeneration) return this.status()
       this.loadedSignal = null
       this.kill()
       this.phase = 'error'
@@ -481,6 +499,9 @@ export class LocalAsrHost {
 
   /** Kill the child. The OS takes the weights back; nothing else in this app can. */
   release(): void {
+    this.loadGeneration += 1
+    this.clearIdle()
+    this.resumeAfterIdle = false
     if (this.worker) this.callbacks.log('[local-asr] releasing the recogniser process')
     this.kill()
     if (this.phase === 'ready' || this.phase === 'loading') {
@@ -494,9 +515,56 @@ export class LocalAsrHost {
     return this.phase === 'ready' && this.worker !== null
   }
 
+  get inUse(): boolean {
+    return this.phase === 'loading' || this.pending.size > 0
+  }
+
+  /** An automatically unloaded model remains eligible for local dictation. */
+  available(): boolean {
+    return this.ready() || this.resumeAfterIdle
+  }
+
+  memoryState(): { loaded: boolean; autoResume: boolean } {
+    return { loaded: this.ready(), autoResume: this.resumeAfterIdle }
+  }
+
+  /** Free idle weights without turning the user's local recognition choice off. */
+  reclaim(): boolean {
+    if (!this.ready() || this.inUse || this.callbacks.isBusy?.()) return false
+    const resume = this.settings().enabled
+    this.release()
+    this.resumeAfterIdle = resume
+    if (resume) this.message = mt('空闲模型已释放，下次听写时自动加载')
+    return true
+  }
+
+  reconfigure(): void {
+    this.clearIdle()
+    this.scheduleIdle()
+  }
+
+  private clearIdle(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer)
+    this.idleTimer = null
+  }
+
+  private scheduleIdle(): void {
+    this.clearIdle()
+    const minutes = this.settings().idleUnloadMinutes
+    if (!this.ready() || this.inUse || !minutes) return
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null
+      if (this.reclaim()) this.callbacks.log('[local-asr] idle: reclaimed model weights')
+      else this.scheduleIdle()
+    }, minutes * 60_000)
+    this.idleTimer.unref?.()
+  }
+
   /** Transcribe one wav buffer. Returns '' when the model heard nothing. */
   async transcribeWav(wav: Uint8Array): Promise<string> {
+    if (this.resumeAfterIdle) await this.activate()
     if (!this.ready() || !this.worker) throw new Error(mt('本地模型未加载'))
+    this.clearIdle()
     const id = ++this.seq
     const started = Date.now()
     const answer = new Promise<string>((resolve, reject) => {
@@ -512,6 +580,7 @@ export class LocalAsrHost {
       return text.trim()
     } finally {
       this.pending.delete(id)
+      this.scheduleIdle()
     }
   }
 
@@ -618,7 +687,9 @@ export class LocalAsrHost {
       stdio: 'inherit'
     })
     this.worker = child
-    child.on('message', (message: unknown) => this.onMessage(message as ChildMessage))
+    child.on('message', (message: unknown) => {
+      if (this.worker === child) this.onMessage(message as ChildMessage)
+    })
     child.on('exit', (code) => {
       if (this.worker !== child) return
       this.worker = null
@@ -659,6 +730,7 @@ export class LocalAsrHost {
   private kill(): void {
     const child = this.worker
     this.worker = null
+    this.loadedSignal?.reject(new Error(mt('识别进程已释放')))
     this.loadedSignal = null
     for (const [, waiting] of this.pending) waiting.reject(new Error(mt('识别进程已释放')))
     this.pending.clear()
