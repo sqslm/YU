@@ -7,6 +7,20 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '请先配置语音转写模型': 'Configure a speech transcription model first',
+  '录音文件不能超过 128 MB': 'Recordings must be no larger than 128 MB',
+  '请选择 WAV、MP3、M4A 或 OGG 录音': 'Select a WAV, MP3, M4A or OGG recording',
+  '已取消录音处理': 'Recording processing cancelled',
+  '录音解码超时': 'Recording decoding timed out',
+  '录音时长不能超过 10 分钟': 'Recordings must be no longer than 10 minutes',
+  '此录音需要 FFmpeg，请安装并加入 PATH，或设置 TYPELESS_FFMPEG': 'This recording needs FFmpeg. Install it on PATH or set TYPELESS_FFMPEG',
+  '无法解码录音：{{message}}': 'Cannot decode recording: {{message}}',
+  '录音中没有有效音频': 'The recording contains no valid audio',
+  '此随记没有本地录音': 'This note has no local recording',
+  '重新识别失败：{{message}}': 'Transcription retry failed: {{message}}',
+  '已有录音正在处理': 'A recording is already being processed',
+  '导入录音': 'Import recording',
+  '录音文件': 'Recordings',
   '2–8 个关键词，不要写成问句。': '2–8 keywords, not a question.',
   '阿里云百炼（录音文件识别）': 'Alibaba DashScope (file transcription)',
   '阿里云百炼没有填 API Key（设置 → 模型 → 这条配置的「API Key」）': 'Alibaba DashScope has no API key (Settings → Models → "API Key" on this entry)',

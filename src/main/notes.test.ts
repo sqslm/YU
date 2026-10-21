@@ -40,7 +40,7 @@ vi.mock('./providers/llm', async () => {
   return { ...actual, complete: mocks.complete }
 })
 
-vi.mock('./audio/transcode', () => ({ toOggOpus: mocks.toOggOpus }))
+vi.mock('./audio/transcode', () => ({ toOggOpus: mocks.toOggOpus, resolveFfmpeg: () => process.env.TYPELESS_FFMPEG || 'ffmpeg' }))
 
 const TEST_PROFILES: ProviderProfile[] = [
   {
@@ -131,6 +131,15 @@ afterEach(() => {
 })
 
 describe('creation', () => {
+  it('rolls back the recording and row when the database cannot be written', async () => {
+    const store = await loadedStore()
+    const temp = join(dir, `notes.json.${process.pid}.tmp`)
+    mkdirSync(temp)
+    await expect(store.create({ pcm: pcm(), durationMs: 1000 })).rejects.toThrow()
+    expect(store.list().notes).toHaveLength(0)
+    expect(audioBytesOf(dir)).toBe(0)
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+  })
   it('persists a blank text note without audio or provider calls and restores it after restart', async () => {
     const store = await loadedStore()
     const entry = await store.createText({ text: '' })
@@ -258,6 +267,78 @@ describe('creation', () => {
     expect(notes[0]!.id).toBe(entry.id)
     expect(notes[0]!.polished).toBe('你好，世界。')
     expect(existsSync(reopened.audioPathOf(entry.id)!)).toBe(true)
+  })
+})
+
+describe('re-transcription', () => {
+  async function recorded(): Promise<{ store: NotesStore; id: string; file: string }> {
+    mocks.toOggOpus.mockResolvedValue({ ok: false, reason: 'disabled' })
+    const store = await loadedStore()
+    const note = await store.create({ pcm: pcm(), durationMs: 1000 })
+    await vi.waitFor(() => expect(store.list().notes[0].polishStatus).toBe('ok'))
+    await store.update(note.id, { transcript: '手动原文', polished: '手动润色' })
+    mocks.transcribe.mockResolvedValue({ text: '重新转写' })
+    mocks.complete.mockResolvedValue('重新润色')
+    return { store, id: note.id, file: store.audioPathOf(note.id)! }
+  }
+
+  it('atomically replaces both texts, preserves audio and persists the result for sync', async () => {
+    const { store, id, file } = await recorded()
+    const before = readFileSync(file)
+    const result = await store.retranscribe(id)
+    expect(result).toMatchObject({ transcript: '重新转写', polished: '重新润色', polishStatus: 'ok', pending: true })
+    expect(readFileSync(file)).toEqual(before)
+    expect(readDb(dir).notes[0]).toEqual(result)
+    expect(store.pendingChanges().live[0]).toEqual(result)
+  })
+  it.each(['asr', 'polish', 'empty'])('preserves both edited texts and recording on %s failure', async kind => {
+    const { store, id, file } = await recorded()
+    const before = readFileSync(file)
+    if (kind === 'asr') mocks.transcribe.mockRejectedValue(new Error('offline'))
+    if (kind === 'polish') mocks.complete.mockRejectedValue(new Error('offline'))
+    if (kind === 'empty') mocks.transcribe.mockResolvedValue({ text: '  ' })
+    await expect(store.retranscribe(id)).rejects.toThrow()
+    expect(store.list().notes[0]).toMatchObject({ transcript: '手动原文', polished: '手动润色', polishStatus: 'failed' })
+    expect(readFileSync(file)).toEqual(before)
+    expect(readDb(dir).notes[0].transcript).toBe('手动原文')
+  })
+  it('does not replace a newer user edit, or recreate a deleted note', async () => {
+    const { store, id } = await recorded()
+    let finish!: (value: { text: string }) => void
+    mocks.transcribe.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const first = store.retranscribe(id)
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+    await store.update(id, { transcript: '稍后修改' })
+    finish({ text: '过期结果' })
+    expect(await first).toBeUndefined()
+    expect(store.list().notes[0].transcript).toBe('稍后修改')
+    finish = undefined as never
+    const second = store.retranscribe(id)
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+    await store.remove(id)
+    finish({ text: '已删除记录的结果' })
+    expect(await second).toBeUndefined()
+    expect(store.list().notes).toHaveLength(0)
+  })
+  it('reports a persistence failure without replacing the original text', async () => {
+    const { store, id } = await recorded()
+    mkdirSync(join(dir, `notes.json.${process.pid}.tmp`))
+    await expect(store.retranscribe(id)).rejects.toThrow()
+    expect(store.list().notes[0]).toMatchObject({ transcript: '手动原文', polished: '手动润色' })
+    expect(readDb(dir).notes[0]).toMatchObject({ transcript: '手动原文', polished: '手动润色' })
+  })
+  it('keeps the original state when cancelled and supports disabling polish', async () => {
+    const { store, id } = await recorded()
+    const before = store.list().notes[0]
+    const controller = new AbortController()
+    mocks.transcribe.mockImplementationOnce(async () => { controller.abort(); return { text: '取消后' } })
+    await expect(store.retranscribe(id, controller.signal)).rejects.toThrow()
+    expect(store.list().notes[0]).toEqual(before)
+    settings.polish.enabled = false
+    const result = await store.retranscribe(id)
+    expect(result).toMatchObject({ transcript: '重新转写', polished: '', polishStatus: 'skipped' })
+    const text = await store.createText({ text: '纯文本' })
+    await expect(store.retranscribe(text.id)).rejects.toThrow('没有本地录音')
   })
 })
 

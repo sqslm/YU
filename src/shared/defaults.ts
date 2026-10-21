@@ -138,6 +138,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   mainPromptCardId: '',
   appRules: [],
   showModeInBar: true,
+  liveCaptions: true,
   playSounds: true,
   /**
    * Off by default: rich insertion changes what the target receives (HTML as
@@ -358,6 +359,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   merged.showModeInBar =
     typeof input.showModeInBar === 'boolean' ? input.showModeInBar : base.showModeInBar
   merged.playSounds = typeof input.playSounds === 'boolean' ? input.playSounds : base.playSounds
+  merged.liveCaptions = typeof input.liveCaptions === 'boolean' ? input.liveCaptions : base.liveCaptions
   merged.richInsert = typeof input.richInsert === 'boolean' ? input.richInsert : base.richInsert
   merged.muteWhileRecording =
     typeof input.muteWhileRecording === 'boolean' ? input.muteWhileRecording : base.muteWhileRecording

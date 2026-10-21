@@ -127,6 +127,9 @@ export interface TypelessApi {
   notes: {
     list(): Promise<NoteStore>
     createText(input?: { categoryId?: string; fromClipboard?: boolean }): Promise<NoteEntry>
+    importAudio(categoryId?: string): Promise<NoteEntry | null>
+    retranscribe(id: string): Promise<NoteEntry | null>
+    cancelAudioJob(): Promise<void>
     exportText(ids: string[], format: NoteExportFormat): Promise<{ path: string; count: number } | null>
     exportAudio(id: string): Promise<string | null>
     /** Stores a finished recording, then runs ASR and the light polish prompt. */
@@ -247,6 +250,7 @@ export interface TypelessApi {
   }
   bar: {
     onState(callback: (state: BarState) => void): () => void
+    onCaption(callback: (caption: { active: boolean; text: string; unavailable?: boolean }) => void): () => void
     onStop(callback: () => void): () => void
     sendAudio(chunk: Int16Array): void
     stopped(): void

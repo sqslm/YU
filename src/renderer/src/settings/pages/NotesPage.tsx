@@ -5,6 +5,7 @@ import {
   ButtonGroup,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -190,6 +191,10 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
   const [exportMenu, setExportMenu] = useState<{ anchor: HTMLElement; ids: string[]; label: string } | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
   const [creatingText, setCreatingText] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [retryConfirmId, setRetryConfirmId] = useState<string | null>(null)
+  const [retranscribingId, setRetranscribingId] = useState<string | null>(null)
+  const audioJobRef = useRef(false)
   const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
   const bodyInputRef = useRef<HTMLTextAreaElement | null>(null)
   const focusNewNoteRef = useRef<string | null>(null)
@@ -352,7 +357,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
   }, [patchEntry])
 
   const createTextNote = useCallback(async (fromClipboard = false): Promise<void> => {
-    if (creatingText || loading || recording || starting || busy || bulkBusy || exportBusy) return
+    if (creatingText || importing || retranscribingId || loading || recording || starting || busy || bulkBusy || exportBusy) return
     setCreatingText(true)
     setCreateMenuAt(null)
     setNotice('')
@@ -371,7 +376,54 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
       setFlash(t(fromClipboard ? 'notes.createdFromClipboard' : 'notes.textCreated'))
     } catch (err) { setNotice(messageOf(err)) }
     finally { setCreatingText(false) }
-  }, [creatingText, loading, recording, starting, busy, bulkBusy, exportBusy, flushNow, categoryId, t])
+  }, [creatingText, importing, retranscribingId, loading, recording, starting, busy, bulkBusy, exportBusy, flushNow, categoryId, t])
+
+  useEffect(() => () => {
+    if (audioJobRef.current) void window.api.notes.cancelAudioJob().catch(() => undefined)
+    audioJobRef.current = false
+  }, [])
+
+  const importAudio = async (): Promise<void> => {
+    if (audioJobRef.current) return
+    setCreateMenuAt(null)
+    setNotice('')
+    setFlash('')
+    setImporting(true)
+    audioJobRef.current = true
+    try {
+      await flushNow()
+      if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
+      if (!audioJobRef.current) return
+      const note = await window.api.notes.importAudio(categoryId || undefined)
+      if (!note) return
+      setNotes(prev => [note, ...prev.filter(item => item.id !== note.id)])
+      setSelectedId(note.id)
+      setQueryInput('')
+      setQuery('')
+      setActiveTags([])
+      setSelection([])
+      setFlash(t('notes.audioImported'))
+    } catch (err) { setNotice(messageOf(err)) }
+    finally { audioJobRef.current = false; setImporting(false) }
+  }
+
+  const retranscribe = async (): Promise<void> => {
+    const id = retryConfirmId
+    setRetryConfirmId(null)
+    if (!id || audioJobRef.current) return
+    setNotice('')
+    setFlash('')
+    setRetranscribingId(id)
+    audioJobRef.current = true
+    try {
+      await flushNow()
+      if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
+      if (!audioJobRef.current) return
+      const updated = await window.api.notes.retranscribe(id)
+      if (updated) { patchEntry(updated); setFlash(t('notes.retranscribed')) }
+    } catch (err) { setNotice(messageOf(err)) }
+    finally { audioJobRef.current = false; setRetranscribingId(null) }
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -438,7 +490,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
   // ---- microphone -------------------------------------------------------
 
   const startRecording = async (): Promise<void> => {
-    if (recording || starting) return
+    if (recording || starting || audioJobRef.current) return
     setStarting(true)
     setMicMessage('')
     micErrorRef.current = ''
@@ -920,7 +972,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
           <Box sx={{ flex: 1 }} />
 
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
-            <ButtonGroup size="small" variant="outlined" disabled={creatingText || loading || recording || starting || busy || bulkBusy || exportBusy} sx={{ height: 34 }}>
+            <ButtonGroup size="small" variant="outlined" disabled={creatingText || importing || !!retranscribingId || loading || recording || starting || busy || bulkBusy || exportBusy} sx={{ height: 34 }}>
               <Button data-notes-new-text title={t('notes.newTextShortcut')} aria-keyshortcuts="Control+N" onClick={() => void createTextNote()} startIcon={<IconPlus size={14} />} sx={{ fontSize: 12 }}>
                 {creatingText ? t('notes.creatingText') : t('notes.newText')}
               </Button>
@@ -986,7 +1038,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
               size="small"
               variant={recording ? 'contained' : 'outlined'}
               color={recording ? 'error' : 'primary'}
-              disabled={starting}
+              disabled={starting || importing || !!retranscribingId}
               onClick={() => void (recording ? stopRecording() : startRecording())}
               startIcon={<IconMic size={14} />}
               sx={{ fontSize: 12, height: 34 }}
@@ -995,6 +1047,12 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
             </Button>
           </Stack>
         </Stack>
+
+        {(importing || retranscribingId) && <Stack data-notes-audio-job role="status" direction="row" spacing={1} alignItems="center">
+          <CircularProgress size={13} />
+          <Typography sx={{ fontSize: 11.5 }}>{t(importing ? 'notes.importingAudio' : 'notes.retranscribing')}</Typography>
+          <Button data-notes-cancel-audio-job size="small" onClick={() => { audioJobRef.current = false; void window.api.notes.cancelAudioJob().catch(err => setNotice(messageOf(err))) }}>{t('common.cancel')}</Button>
+        </Stack>}
 
         {tagOptions.length > 0 && (
           <Stack
@@ -1369,6 +1427,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                   </Typography>
                   <TextField
                     data-notes-editor="transcript"
+                    disabled={retranscribingId === selected.id}
                     inputRef={bodyInputRef}
                     multiline
                     minRows={4}
@@ -1387,6 +1446,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                   </Typography>
                   <TextField
                     data-notes-editor="polished"
+                    disabled={retranscribingId === selected.id}
                     multiline
                     minRows={4}
                     fullWidth
@@ -1413,16 +1473,18 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                   data-notes-repolish
                   size="small"
                   variant="outlined"
-                  disabled={busy}
+                  disabled={busy || importing || !!retranscribingId}
                   onClick={() => setRepolishOpen(true)}
                   startIcon={<IconSparkles size={14} />}
                   sx={{ fontSize: 12 }}
                 >
                   {t('notes.repolish')}
                 </Button>
+                {audioKey && <Button data-notes-retranscribe size="small" disabled={busy || importing || !!retranscribingId || recording || starting}
+                  onClick={() => setRetryConfirmId(selected.id)} sx={{ fontSize: 12 }}>{t('notes.retranscribe')}</Button>}
                 {selected.polishStatus === 'failed' && (
-                  <Typography data-notes-polish-failed sx={{ fontSize: 11, color: 'warning.main' }}>
-                    {t('notes.polishFailed')}
+                  <Typography data-notes-polish-failed title={selected.polishError} sx={{ fontSize: 11, color: 'warning.main' }}>
+                    {t('notes.processingFailed')}
                   </Typography>
                 )}
               </Stack>
@@ -1514,7 +1576,17 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
       <Menu anchorEl={createMenuAt} open={Boolean(createMenuAt)} onClose={() => setCreateMenuAt(null)}>
         <MenuItem data-notes-create-blank onClick={() => void createTextNote()} sx={{ fontSize: 12.5 }}>{t('notes.newBlankText')}</MenuItem>
         <MenuItem data-notes-create-clipboard onClick={() => void createTextNote(true)} sx={{ fontSize: 12.5 }}>{t('notes.newFromClipboard')}</MenuItem>
+        <MenuItem data-notes-import-audio onClick={() => void importAudio()} sx={{ fontSize: 12.5 }}>{t('notes.importAudio')}</MenuItem>
       </Menu>
+
+      <Dialog open={!!retryConfirmId} onClose={() => setRetryConfirmId(null)} slotProps={{ paper: { sx: { borderRadius: '12px' } } }}>
+        <DialogTitle sx={{ fontSize: 15, fontWeight: 600, pb: 1 }}>{t('notes.retranscribe')}</DialogTitle>
+        <DialogContent><DialogContentText sx={{ fontSize: 12.5, lineHeight: 1.7 }}>{t('notes.retranscribeBody')}</DialogContentText></DialogContent>
+        <DialogActions sx={{ px: 2.5, pb: 2 }}>
+          <Button size="small" onClick={() => setRetryConfirmId(null)}>{t('common.cancel')}</Button>
+          <Button data-notes-retranscribe-confirm size="small" variant="contained" onClick={() => void retranscribe()}>{t('notes.retranscribe')}</Button>
+        </DialogActions>
+      </Dialog>
 
       <Menu anchorEl={exportMenu?.anchor} open={Boolean(exportMenu)} onClose={() => setExportMenu(null)}>
         <MenuItem disabled sx={{ fontSize: 11.5 }}>{exportMenu?.label}</MenuItem>

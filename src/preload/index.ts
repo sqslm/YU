@@ -86,6 +86,9 @@ const api: TypelessApi = {
   notes: {
     list: () => ipcRenderer.invoke('notes:list'),
     createText: (input) => ipcRenderer.invoke('notes:createText', input),
+    importAudio: (categoryId) => ipcRenderer.invoke('notes:importAudio', categoryId),
+    retranscribe: (id) => ipcRenderer.invoke('notes:retranscribe', id),
+    cancelAudioJob: () => ipcRenderer.invoke('notes:cancelAudioJob'),
     exportText: (ids, format) => ipcRenderer.invoke('notes:exportText', ids, format),
     exportAudio: (id) => ipcRenderer.invoke('notes:exportAudio', id),
     create: (input: { pcm: Int16Array; durationMs: number; categoryId?: string; tags?: string[] }) =>
@@ -176,6 +179,11 @@ const api: TypelessApi = {
       ipcRenderer.invoke('models:list', input)
   },
   bar: {
+    onCaption: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, caption: { active: boolean; text: string; unavailable?: boolean }): void => callback(caption)
+      ipcRenderer.on('bar:caption', listener)
+      return () => { ipcRenderer.removeListener('bar:caption', listener) }
+    },
     onState: (callback: (state: BarState) => void): (() => void) => {
       const listener = (_event: unknown, state: BarState): void => callback(state)
       ipcRenderer.on('bar:state', listener)

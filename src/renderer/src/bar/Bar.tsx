@@ -3,6 +3,7 @@ import type { BarState, Mode, Settings } from '@shared/types'
 import { AlertRow, alertOf, alertTone } from './AlertRow'
 import { MicCapture } from './capture'
 import { disposeCues, playCue } from './cues'
+import { CaptionTicker } from './CaptionTicker'
 import i18n, { applyUiLanguage } from '../i18n'
 
 /**
@@ -54,6 +55,7 @@ export function Bar(): JSX.Element {
   const [state, setState] = useState<BarState>({ phase: 'idle' })
   const [level, setLevel] = useState(0)
   const [elapsed, setElapsed] = useState(0)
+  const [caption, setCaption] = useState<{ active: boolean; text: string; unavailable?: boolean }>({ active: false, text: '' })
   // Defaults to the shipped default (`showModeInBar: true`) so the tag does not
   // pop in a frame late while the first settings round-trip is in flight.
   const [showMode, setShowMode] = useState(true)
@@ -121,6 +123,7 @@ export function Bar(): JSX.Element {
         setLevel(0)
       }
     })
+    const offCaption = window.api.bar.onCaption(setCaption)
 
     const offStop = window.api.bar.onStop(async () => {
       // Wait for the worklet's partial block before confirming the stop: `main`
@@ -133,6 +136,7 @@ export function Bar(): JSX.Element {
     return () => {
       offSettings()
       offState()
+      offCaption()
       offStop()
       disposeCues()
       void capture.stop()
@@ -182,6 +186,8 @@ export function Bar(): JSX.Element {
         @keyframes barwave { 0%,100% { transform: scaleY(.35) } 50% { transform: scaleY(1) } }
         @keyframes barfade { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
         @keyframes barpulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+        @keyframes caption-enter { from { opacity: 0; max-width: 0; transform: translate(7px,5px) scale(.9) } to { opacity: 1; max-width: 2em; transform: translate(0,0) scale(1) } }
+        @media (prefers-reduced-motion: reduce) { [data-caption-glyph] { animation: none !important } }
         .bar-alert-action { transition: filter .12s ease, transform .08s ease }
         .bar-alert-action:hover { filter: brightness(1.32) }
         .bar-alert-action:active { transform: translateY(.5px) }
@@ -212,7 +218,7 @@ export function Bar(): JSX.Element {
           {phase === 'recording' && (
             <>
               <span style={{ ...dot, animation: 'barpulse 1.4s ease-in-out infinite' }} />
-              <div style={wave}>
+              {caption.active && caption.text ? <CaptionTicker text={caption.text} /> : caption.unavailable ? <span data-caption-unavailable style={label}>{i18n.t('字幕暂不可用')}</span> : <div style={wave}>
                 {Array.from({ length: 16 }).map((_, index) => {
                   const center = 7.5
                   const distance = Math.abs(index - center) / center
@@ -231,7 +237,7 @@ export function Bar(): JSX.Element {
                     />
                   )
                 })}
-              </div>
+              </div>}
               {/* The mode text lives in the right-hand tag so the
                   `showModeInBar` switch controls it in one place. */}
               <span style={timer}>{(elapsed / 1000).toFixed(1)}s</span>

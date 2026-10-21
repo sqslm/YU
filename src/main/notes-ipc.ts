@@ -4,6 +4,7 @@ import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@share
 import type { NotesStore } from './notes'
 import { mt } from '@shared/mainI18n'
 import { exportNoteAudio, exportNoteText } from './notes-export'
+import { decodeRecording } from './audio/decode'
 
 /**
  * Notes are the one place where the renderer has to read a file from disk.
@@ -70,6 +71,34 @@ async function serveAudio(file: string, range: string | null): Promise<Response>
 
 export function registerNotesIpc(options: NotesIpcOptions): void {
   const { store, persistDir, broadcast } = options
+  let audioJob: AbortController | null = null
+
+  ipcMain.handle('notes:cancelAudioJob', () => audioJob?.abort())
+  ipcMain.handle('notes:importAudio', async (_event, categoryId?: string) => {
+    if (audioJob) throw new Error(mt('已有录音正在处理'))
+    const job = new AbortController()
+    audioJob = job
+    try {
+      const chosen = await dialog.showOpenDialog({ title: mt('导入录音'), properties: ['openFile'],
+        filters: [{ name: mt('录音文件'), extensions: ['wav', 'mp3', 'm4a', 'ogg'] }] })
+      if (chosen.canceled || !chosen.filePaths[0] || job.signal.aborted) return null
+      const audio = await decodeRecording(chosen.filePaths[0], job.signal)
+      const note = await store.create({ ...audio, categoryId }, job.signal)
+      broadcast()
+      return note
+    } catch (error) {
+      if (job.signal.aborted) return null
+      throw error
+    } finally { if (audioJob === job) audioJob = null }
+  })
+  ipcMain.handle('notes:retranscribe', async (_event, id: string) => {
+    if (audioJob) throw new Error(mt('已有录音正在处理'))
+    const job = new AbortController()
+    audioJob = job
+    try { return await store.retranscribe(id, job.signal) ?? null }
+    catch (error) { if (job.signal.aborted) return null; throw error }
+    finally { if (audioJob === job) audioJob = null; broadcast() }
+  })
 
   protocol.handle(NOTES_AUDIO_SCHEME, async (request) => {
     let id = ''

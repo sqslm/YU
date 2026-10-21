@@ -41,6 +41,7 @@ import { applyReplacements } from '@shared/text'
 import type { NoteBulk, NoteCategory, NoteEntry, NotePatch, NoteStore, NoteTombstone, Settings } from '@shared/types'
 import { toOggOpus } from './audio/transcode'
 import { encodeWav, pcmDurationMs } from './audio/wav'
+import { decodeRecording } from './audio/decode'
 import { chainFor, withFailover } from './providers/chain'
 import { transcribe } from './providers/asr'
 import { complete, unwrapModelText } from './providers/llm'
@@ -436,6 +437,7 @@ export class NotesStore {
 
     const id = randomUUID()
     const stored = await compressForStorage(wav, this.options.log)
+    signal?.throwIfAborted()
     const audioDir = join(this.root(), AUDIO_REL_DIR)
     const audioRel = `${AUDIO_REL_DIR}/${id}.${stored.format}`
     mkdirSync(audioDir, { recursive: true })
@@ -461,7 +463,13 @@ export class NotesStore {
     if (categoryId) entry.categoryId = categoryId
 
     this.data.notes.unshift(entry)
-    this.save()
+    try {
+      this.save(true)
+    } catch (error) {
+      this.data.notes.splice(this.data.notes.indexOf(entry), 1)
+      unlinkSync(join(this.root(), audioRel))
+      throw error
+    }
     this.options.log(
       `[notes] 新随记 ${id} 已保存（${stored.format}, ${Math.round(stored.data.byteLength / 1024)} KB, ${durationMs} ms）`
     )
@@ -655,6 +663,44 @@ export class NotesStore {
     await this.polishStep(id, token, this.options.getSettings(), transcript)
     const updated = this.find(id)
     return updated ? cloneNote(updated) : undefined
+  }
+
+  /** Replace text only when decoding, ASR and optional polish all succeed. */
+  async retranscribe(id: string, signal?: AbortSignal): Promise<NoteEntry | undefined> {
+    const note = this.find(id)
+    const file = this.audioPathOf(id)
+    if (!note || !file) throw new Error(mt('此随记没有本地录音'))
+    const token = this.bump(id)
+    const original = { transcript: note.transcript, polished: note.polished, editedAt: note.editedAt }
+    const unchanged = (): boolean => {
+      const current = this.find(id)
+      return !this.stale(id, token) && !!current && current.editedAt === original.editedAt &&
+        current.transcript === original.transcript && current.polished === original.polished
+    }
+    try {
+      const { pcm } = await decodeRecording(file, signal)
+      const settings = this.options.getSettings()
+      const transcript = await this.transcribe(settings, encodeWav(pcm), signal)
+      if (!transcript) throw new Error(mt('模型返回了空文本'))
+      signal?.throwIfAborted()
+      if (!unchanged()) return undefined
+      const polished = settings.polish.enabled ? await this.polish(settings, transcript, signal) : ''
+      if (settings.polish.enabled && !polished) throw new Error(mt('模型返回了空文本'))
+      signal?.throwIfAborted()
+      if (!unchanged()) return undefined
+      const current = this.find(id)!
+      const before = cloneNote(current)
+      Object.assign(current, { transcript, polished, polishStatus: settings.polish.enabled ? 'ok' : 'skipped',
+        updatedAt: Math.max(Date.now(), current.updatedAt + 1), pending: true })
+      delete current.editedAt
+      delete current.polishError
+      try { this.save(true) } catch (error) { Object.assign(current, before); throw error }
+      return cloneNote(current)
+    } catch (error) {
+      if (!signal?.aborted && unchanged()) this.patch(id, token, { polishStatus: 'failed',
+        polishError: mt('重新识别失败：{{message}}', { message: describeError(error) }) })
+      throw error
+    }
   }
 
   /**

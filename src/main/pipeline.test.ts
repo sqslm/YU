@@ -141,6 +141,7 @@ function makeSettings(overrides: Partial<Settings>): Settings {
   // "not configured" state, so every fixture supplies one per kind it uses.
   return mergeSettings({
     language: 'zh',
+    liveCaptions: false,
     profiles: TEST_PROFILES,
     chains: { asr: ['asr-test'], llm: ['llm-test'], multimodal: [] },
     ...overrides
@@ -239,6 +240,70 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllEnvs()
+})
+
+describe('caption previews', () => {
+  it('uses the available local recognizer without uploading preview audio', async () => {
+    vi.useFakeTimers()
+    const local = { ready: () => true, transcribeWav: vi.fn(async () => '本地字幕') }
+    const { pipeline, send } = harness({ liveCaptions: true,
+      localAsr: { ...mergeSettings({}).localAsr, enabled: true } }, { localAsr: local })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(2000))
+    await vi.advanceTimersByTimeAsync(1800)
+    expect(send).toHaveBeenCalledWith('bar:caption', { active: true, text: '本地字幕' })
+    expect(local.transcribeWav).toHaveBeenCalledOnce()
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    pipeline.discard()
+  })
+  it('publishes preview text, aborts it on release, and still processes the full recording', async () => {
+    vi.useFakeTimers()
+    const { pipeline, send, entries } = harness({ liveCaptions: true })
+    pipeline.start('dictation')
+    pipeline.pushAudio(tone(2000))
+    await vi.advanceTimersByTimeAsync(1800)
+    expect(send).toHaveBeenCalledWith('bar:caption', { active: true, text: '你好世界' })
+    expect(mocks.transcribe.mock.calls[0][1]).toMatchObject({ timeoutMs: 5000, warm: false })
+    const previewSignal = mocks.transcribe.mock.calls[0][1].signal as AbortSignal
+    const stopping = pipeline.stop()
+    pipeline.audioStopped()
+    await vi.advanceTimersByTimeAsync(600)
+    await stopping
+    expect(previewSignal.aborted).toBe(true)
+    expect(send).toHaveBeenLastCalledWith('bar:state', expect.anything())
+    expect(send).toHaveBeenCalledWith('bar:caption', { active: false, text: '' })
+    expect(mocks.transcribe).toHaveBeenCalledTimes(2)
+    expect(entries[0]?.status).toBe('completed')
+  })
+  it('contains a preview failure without failing the final dictation', async () => {
+    vi.useFakeTimers()
+    const { pipeline, send, entries } = harness({ liveCaptions: true })
+    mocks.transcribe.mockRejectedValueOnce(new Error('preview timeout'))
+    pipeline.start('dictation')
+    pipeline.pushAudio(tone(2000))
+    await vi.advanceTimersByTimeAsync(1800)
+    expect(send).toHaveBeenCalledWith('bar:caption', { active: true, text: '', unavailable: true })
+    const stopping = pipeline.stop(); pipeline.audioStopped()
+    await vi.advanceTimersByTimeAsync(600); await stopping
+    expect(entries[0]?.status).toBe('completed')
+  })
+  it('ignores a late old preview after cancellation and honors the off switch', async () => {
+    vi.useFakeTimers()
+    const { pipeline, send } = harness({ liveCaptions: true })
+    let finish!: (value: { text: string }) => void
+    mocks.transcribe.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    pipeline.start('dictation'); pipeline.pushAudio(tone(2000))
+    await vi.advanceTimersByTimeAsync(1800)
+    pipeline.discard(); pipeline.start('dictation')
+    finish({ text: '旧会话' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(send).not.toHaveBeenCalledWith('bar:caption', { active: true, text: '旧会话' })
+    pipeline.discard()
+    const off = harness({ liveCaptions: false })
+    off.pipeline.start('dictation'); off.pipeline.pushAudio(tone(2000))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(mocks.transcribe).toHaveBeenCalledOnce()
+    off.pipeline.discard()
+  })
 })
 
 describe('cancel()', () => {

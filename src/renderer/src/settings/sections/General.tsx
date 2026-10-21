@@ -1041,6 +1041,9 @@ export function SpeechSection({ settings, patch }: {
         </SettingsField>
       </SettingsGroup>
       <SettingsGroup icon={<IconWaveMic />} title={i18n.t('音频')}>
+        <SettingsRow label={i18n.t('录音实时字幕')} description={i18n.t('说话时分段识别并滚动显示预览，会增加语音接口调用；最终文字以完整识别为准。')}>
+          <Switch size="small" data-live-captions checked={settings.liveCaptions} onChange={event => patch({ liveCaptions: event.target.checked })} />
+        </SettingsRow>
         <SettingsRow
           label={i18n.t('麦克风')}
           description={

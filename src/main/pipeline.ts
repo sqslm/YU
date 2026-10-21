@@ -55,6 +55,7 @@ function foregroundLabel(): string {
 }
 import type { UiaSnapshot } from './uia/reader'
 import { mainLanguage, mt } from '@shared/mainI18n'
+import { LiveCaptions } from './live-captions'
 
 const MIN_DURATION_MS = 350
 const STOP_GRACE_MS = 500
@@ -209,6 +210,7 @@ function stripAppendedSources(text: string): string {
  * token so an in-flight request can never insert, record or surface anything.
  */
 export class Pipeline {
+  private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
   private recording: { mode: Mode; startedAt: number; handsFree?: boolean } | null = null
   private stage: Stage = 'idle'
@@ -644,6 +646,7 @@ export class Pipeline {
     // `index.ts` routes `this.log` into it, so every later stage — ASR, routing,
     // insertion verification — lands in the same file without extra plumbing.
     const opening = this.getSettings()
+    this.startCaptions(opening)
     const opened = foregroundWindow()
     recordingLog.begin({
       mode,
@@ -722,6 +725,46 @@ export class Pipeline {
   pushAudio(pcm: Int16Array): void {
     if (this.stage !== 'recording') return
     this.chunks.push(pcm)
+    this.captions?.push(pcm)
+  }
+
+  private startCaptions(settings: Settings): void {
+    this.stopCaptions()
+    if (!settings.liveCaptions) return
+    const token = this.runToken
+    this.sendCaption({ active: true, text: '' })
+    this.captions = new LiveCaptions({
+      transcribe: async (pcm, signal) => {
+        const wav = encodeWav(pcm)
+        const local = this.options.localAsr
+        if (settings.localAsr.enabled && local?.ready()) return local.transcribeWav(wav)
+        const profile = chainFor(settings, 'asr')[0]
+        if (!profile) throw new Error(mt('请先配置语音转写模型'))
+        const result = await transcribe({ ...settings.asr, ...profile }, {
+          wav, signal, language: settings.language || undefined, timeoutMs: 5000, warm: false
+        })
+        return result.text
+      },
+      onText: text => {
+        if (token === this.runToken && this.recording) this.sendCaption({ active: true, text })
+      },
+      onError: error => {
+        if (token !== this.runToken || !this.recording) return
+        this.log(`[captions] preview stopped: ${describeFailure(error)}`)
+        this.sendCaption({ active: true, text: '', unavailable: true })
+      }
+    })
+  }
+
+  private sendCaption(caption: { active: boolean; text: string; unavailable?: boolean }): void {
+    const win = this.bar()
+    if (win && !win.isDestroyed()) win.webContents.send('bar:caption', caption)
+  }
+
+  private stopCaptions(): void {
+    this.captions?.stop()
+    this.captions = null
+    this.sendCaption({ active: false, text: '' })
   }
 
   /**
@@ -746,6 +789,7 @@ export class Pipeline {
   async stop(): Promise<HistoryEntry | null> {
     const active = this.recording
     if (!active) return null
+    this.stopCaptions()
     this.clearSessionCap()
     this.recording = null
     this.stageMode = active.mode
@@ -798,6 +842,7 @@ export class Pipeline {
    */
   discard(): boolean {
     if (this.stage === 'idle') return false
+    this.stopCaptions()
     this.runToken += 1
     this.clearSessionCap()
     this.recording = null
@@ -822,6 +867,7 @@ export class Pipeline {
    */
   cancel(reason = 'user'): boolean {
     if (this.stage === 'idle') return false
+    this.stopCaptions()
     const mode = this.stageMode
     const token = ++this.runToken
     const startedAt = this.recording?.startedAt ?? 0

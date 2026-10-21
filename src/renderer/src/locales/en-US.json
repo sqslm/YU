@@ -973,7 +973,15 @@
     "bodyLabel": "Note text",
     "untitled": "Untitled note",
     "noLocalAudio": "This note has no local recording.",
-    "bodyPlaceholder": "Write a thought here…"
+    "bodyPlaceholder": "Write a thought here…",
+    "importAudio": "Import recording…",
+    "importingAudio": "Importing…",
+    "audioImported": "Recording saved; transcribing",
+    "retranscribe": "Transcribe again",
+    "retranscribing": "Transcribing again…",
+    "retranscribed": "Transcription complete",
+    "retranscribeBody": "Process the local recording with the current speech and polish models. Replaces the transcript and polished text only on success. Failure or cancellation keeps the existing text and recording.",
+    "processingFailed": "The last processing attempt failed"
   },
   "onboarding": {
     "welcomeTitle": "Welcome to Typeless Rebuild",
@@ -1194,5 +1202,8 @@
   "媒体服务": "Media",
   "辅助进程": "Utility",
   "已完成空闲资源回收，快捷键和麦克风保持就绪。": "Idle resources released. Shortcuts and microphone remain ready.",
-  "待自动恢复": "Reloads when needed"
+  "待自动恢复": "Reloads when needed",
+  "录音实时字幕": "Live recording captions",
+  "说话时分段识别并滚动显示预览，会增加语音接口调用；最终文字以完整识别为准。": "Preview speech in rolling segments while recording. This adds speech API calls; the final text comes from the complete recording.",
+  "字幕暂不可用": "Captions unavailable"
 }

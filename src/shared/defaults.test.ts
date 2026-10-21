@@ -4,6 +4,11 @@ import { defaultSearchProviders } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL } from './local-asr'
 
 describe('mergeSettings', () => {
+  it('enables caption previews for old settings and preserves the off switch', () => {
+    expect(mergeSettings({}).liveCaptions).toBe(true)
+    expect(mergeSettings({ liveCaptions: false }).liveCaptions).toBe(false)
+    expect(mergeSettings({ liveCaptions: 'false' as never }).liveCaptions).toBe(true)
+  })
   it('combines partial groups while preserving unrelated provider entries', () => {
     const first = applySettingsPatch({}, { asr: { apiKey: 'test' } as never })
     const pending = applySettingsPatch(first, { asr: { model: 'model' } as never })

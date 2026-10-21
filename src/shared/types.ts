@@ -534,6 +534,8 @@ export interface Settings {
   appRules: AppRule[]
   /** Show the current mode label next to the recording bar's indicator. */
   showModeInBar: boolean
+  /** Additional bounded ASR requests while recording, for a provisional caption. */
+  liveCaptions: boolean
   /**
    * Short synthesised cues on start / finish / failure. Generated with WebAudio
    * so the app ships no audio assets and the cues follow the system volume.
