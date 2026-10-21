@@ -1376,7 +1376,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                     value={transcriptDraft}
                     onChange={(event) => editField('transcript', event.target.value)}
                     onBlur={() => void flushNow()}
-                    placeholder={t('notes.transcriptPlaceholder')}
+                    placeholder={t(selected.durationMs === 0 && !audioKey ? 'notes.bodyPlaceholder' : 'notes.transcriptPlaceholder')}
                     InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }}
                   />
                 </Box>

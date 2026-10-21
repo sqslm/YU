@@ -966,7 +966,8 @@
     "textNote": "文字",
     "bodyLabel": "随记正文",
     "untitled": "未命名随记",
-    "noLocalAudio": "这条随记没有本地录音。"
+    "noLocalAudio": "这条随记没有本地录音。",
+    "bodyPlaceholder": "在这里记录想法…"
   },
   "onboarding": {
     "welcomeTitle": "欢迎使用 Typeless Rebuild",

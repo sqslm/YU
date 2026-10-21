@@ -972,7 +972,8 @@
     "textNote": "Text",
     "bodyLabel": "Note text",
     "untitled": "Untitled note",
-    "noLocalAudio": "This note has no local recording."
+    "noLocalAudio": "This note has no local recording.",
+    "bodyPlaceholder": "Write a thought here…"
   },
   "onboarding": {
     "welcomeTitle": "Welcome to Typeless Rebuild",
