@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log*
+data
+test
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+.env
+.env.*
+!.env.example
+.git

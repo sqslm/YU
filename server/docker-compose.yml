@@ -1,0 +1,54 @@
+services:
+  typeless-server:
+    build: .
+    image: typeless-server:2.0.1
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8787}:8787"
+    # Also forward the less common options documented in .env.example.
+    env_file:
+      - path: .env
+        required: false
+    # compose automatically reads server/.env for the ${VAR} values below, so the
+    # only file an operator has to create is .env (copied from .env.example).
+    environment:
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: 8787
+      NODE_ENV: production
+      # Put the public URL here if you reverse-proxy (Caddy/Nginx/Traefik).
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # Empty REGISTRATION_ENABLED means "open when SMTP is configured".
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-}
+      EMAIL_VERIFICATION_REQUIRED: ${EMAIL_VERIFICATION_REQUIRED:-true}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS_MODE: ${SMTP_TLS_MODE:-implicit}
+      DEFAULT_USER_STORAGE_MB: ${DEFAULT_USER_STORAGE_MB:-1024}
+      MAX_AUDIO_UPLOAD_MB: ${MAX_AUDIO_UPLOAD_MB:-50}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-240}
+      AUTH_LIMIT_PER_MINUTE: ${AUTH_LIMIT_PER_MINUTE:-20}
+      # Only enable behind a proxy that overwrites X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      # Named volume, not a bind mount: the container runs as `node` (uid 1000) and
+      # a bind-mounted host directory would arrive owned by root.
+      - typeless-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  typeless-data:

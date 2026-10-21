@@ -1,0 +1,39 @@
+appId: com.typeless.rebuild
+productName: Typeless Rebuild
+electronLanguages:
+  - zh-CN
+  - en-US
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - resources/icon.png
+  - package.json
+  - LICENSE
+  - THIRD_PARTY_NOTICES.md
+  - licenses/**
+asar: true
+# Placeholder feed: a build with no real server still has to boot, and the URL can
+# be overridden at runtime with TYPELESS_UPDATE_URL or <userData>/update-feed.txt.
+# `TYPELESS_NO_UPDATE=1` disables update checks entirely.
+publish:
+  provider: generic
+  url: https://example.invalid/typeless-rebuild/updates
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.png
+  artifactName: ${productName}-${version}-setup.${ext}
+nsis:
+  # Keeps `models\` alive across upgrades — see build/installer.nsh.
+  include: build/installer.nsh
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Typeless Rebuild
+  deleteAppDataOnUninstall: false
