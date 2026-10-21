@@ -27,13 +27,13 @@ export function formatNotesExport(notes: readonly NoteEntry[], categories: reado
     const duration = Math.round(note.durationMs / 1000)
     const metadata = [
       `${mt('创建时间（本地）')}：${stamp(note.createdAt)}`,
-      `${mt('录音时长')}：${mt('{{n}} 秒', { n: duration })}`,
+      ...(note.durationMs > 0 || note.audioPath ? [`${mt('录音时长')}：${mt('{{n}} 秒', { n: duration })}`] : []),
       ...(category ? [`${mt('分类')}：${literal(category)}`] : []),
       ...(note.tags.length ? [`${mt('标签')}：${note.tags.map(literal).join(' / ')}`] : [])
     ].map(line => md ? `- ${line}` : line).join('\n')
     return [
       heading(2, stamp(note.createdAt)), metadata,
-      heading(3, mt('原始转写')), note.transcript || mt('（无内容）'),
+      heading(3, mt(note.durationMs === 0 && !note.audioPath ? '随记正文' : '原始转写')), note.transcript || mt('（无内容）'),
       heading(3, mt('润色文本')), note.polished || mt('（无内容）')
     ].join('\n\n')
   })

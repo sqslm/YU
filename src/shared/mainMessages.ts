@@ -556,5 +556,9 @@ export const MAIN_MESSAGES: Record<string, string> = {
   '录音文件不可用': 'Recording file is unavailable',
   '保存随记录音': 'Save note recording',
   '录音': 'Recording',
-  '请选择原始录音以外的保存位置': 'Choose a destination other than the original recording'
+  '请选择原始录音以外的保存位置': 'Choose a destination other than the original recording',
+  '随记内容必须是文字': 'Note content must be text',
+  '文字过长，最多支持 {{n}} 个字符': 'Text is too long; the maximum is {{n}} characters',
+  '剪贴板中没有可用的文字': 'The clipboard has no usable text',
+  '随记正文': 'Note text'
 }

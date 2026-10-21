@@ -126,6 +126,7 @@ export interface TypelessApi {
   }
   notes: {
     list(): Promise<NoteStore>
+    createText(input?: { categoryId?: string; fromClipboard?: boolean }): Promise<NoteEntry>
     exportText(ids: string[], format: NoteExportFormat): Promise<{ path: string; count: number } | null>
     exportAudio(id: string): Promise<string | null>
     /** Stores a finished recording, then runs ASR and the light polish prompt. */

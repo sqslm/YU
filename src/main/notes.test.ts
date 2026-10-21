@@ -131,6 +131,57 @@ afterEach(() => {
 })
 
 describe('creation', () => {
+  it('persists a blank text note without audio or provider calls and restores it after restart', async () => {
+    const store = await loadedStore()
+    const entry = await store.createText({ text: '' })
+    expect(entry).toMatchObject({ transcript: '', polished: '', polishStatus: 'skipped', durationMs: 0, tags: [], pending: true })
+    expect(entry.editedAt).toBeGreaterThan(0)
+    expect(store.audioPathOf(entry.id)).toBeNull()
+    expect(audioBytesOf(dir)).toBe(0)
+    expect((await loadedStore()).list().notes[0]).toEqual(entry)
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.toOggOpus).not.toHaveBeenCalled()
+  })
+
+  it('keeps clipboard text verbatim, uses the known category and supports explicit polishing', async () => {
+    const store = await loadedStore()
+    await store.setCategories([{ id: 'work', name: '工作' }])
+    const text = '  临时想法 😀\n保留换行\n'
+    const entry = await store.createText({ text, categoryId: 'work' })
+    expect(entry).toMatchObject({ transcript: text, categoryId: 'work' })
+    const unknown = await store.createText({ text: '未知分类', categoryId: 'gone' })
+    expect(unknown.categoryId).toBeUndefined()
+    const polished = await store.repolish(entry.id)
+    expect(polished?.transcript).toBe(text)
+    expect(polished?.polishStatus).toBe('ok')
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    expect(store.hasAudio(entry.id)).toBe(false)
+  })
+
+  it('rejects invalid and oversized text without inserting a note or silently truncating', async () => {
+    const store = await loadedStore()
+    await expect(store.createText({ text: 123 as never })).rejects.toThrow('必须是文字')
+    await expect(store.createText({ text: 'x'.repeat(200_001) })).rejects.toThrow('200000')
+    expect(store.list().notes).toHaveLength(0)
+    const entry = await store.createText({ text: 'x'.repeat(200_000) })
+    expect(readDb(dir).notes[0].transcript).toBe(entry.transcript)
+  })
+
+  it('rolls back a text-note insertion when persistence fails, allowing a clean retry', async () => {
+    const store = await loadedStore()
+    const original = await store.createText({ text: '已有内容' })
+    const temp = join(dir, `notes.json.${process.pid}.tmp`)
+    mkdirSync(temp)
+    await expect(store.createText({ text: '新内容' })).rejects.toThrow()
+    expect(store.list().notes).toEqual([original])
+    expect(readDb(dir).notes).toEqual([original])
+    rmSync(temp, { recursive: true })
+    await store.createText({ text: '新内容' })
+    expect(readDb(dir).notes.map(note => note.transcript)).toEqual(['新内容', '已有内容'])
+  })
+
   it('hands the complete vendor ASR configuration to the provider', async () => {
     settings.profiles[0] = { ...settings.profiles[0], asrAdapter: 'azure', requestPath: '/custom/transcribe', vendor: { deployment: 'speech' } }
     const store = await loadedStore()

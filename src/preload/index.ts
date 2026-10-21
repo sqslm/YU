@@ -85,6 +85,7 @@ const api: TypelessApi = {
   },
   notes: {
     list: () => ipcRenderer.invoke('notes:list'),
+    createText: (input) => ipcRenderer.invoke('notes:createText', input),
     exportText: (ids, format) => ipcRenderer.invoke('notes:exportText', ids, format),
     exportAudio: (id) => ipcRenderer.invoke('notes:exportAudio', id),
     create: (input: { pcm: Int16Array; durationMs: number; categoryId?: string; tags?: string[] }) =>

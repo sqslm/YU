@@ -80,6 +80,13 @@ describe('portable notes export', () => {
     expect(dialog.showSaveDialog).not.toHaveBeenCalled()
   })
 
+  it('exports text-only notes as body text without inventing a recording duration', () => {
+    const md = formatNotesExport([note('text', { durationMs: 0 })], [], 'markdown')
+    expect(md).toContain('### 随记正文')
+    expect(md).not.toContain('录音时长')
+    expect(md).not.toContain('原始转写')
+  })
+
   it('canceling either dialog leaves the source and destination directory untouched', async () => {
     vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: true, filePath: '' })
     expect(await exportNoteText(store, ['one'], 'markdown')).toBeNull()

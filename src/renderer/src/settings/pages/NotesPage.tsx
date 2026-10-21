@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
+  ButtonGroup,
   Checkbox,
   Chip,
   Dialog,
@@ -24,6 +25,7 @@ import {
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayIcon from '@mui/icons-material/PlayArrow'
 import DownloadIcon from '@mui/icons-material/Download'
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import { useTranslation } from 'react-i18next'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
 import { MicCapture } from '../../bar/capture'
@@ -187,6 +189,10 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState<{ anchor: HTMLElement; ids: string[]; label: string } | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
+  const [creatingText, setCreatingText] = useState(false)
+  const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
+  const bodyInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const focusNewNoteRef = useRef<string | null>(null)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const micRef = useRef<MicCapture | null>(null)
@@ -276,6 +282,10 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
     draftBaseRef.current = { id: note?.id ?? null, transcript: note?.transcript ?? '', polished: note?.polished ?? '' }
     setTagInput('')
     setSaveState(nextSaveState('idle', 'reset'))
+    if (focusNewNoteRef.current === selectedId) {
+      bodyInputRef.current?.focus()
+      focusNewNoteRef.current = null
+    }
   }, [selectedId])
 
   /**
@@ -340,6 +350,39 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
     await saving
     if (saveInFlightRef.current === saving) saveInFlightRef.current = null
   }, [patchEntry])
+
+  const createTextNote = useCallback(async (fromClipboard = false): Promise<void> => {
+    if (creatingText || loading || recording || starting || busy || bulkBusy || exportBusy) return
+    setCreatingText(true)
+    setCreateMenuAt(null)
+    setNotice('')
+    setFlash('')
+    try {
+      await flushNow()
+      if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
+      const note = await window.api.notes.createText({ categoryId: categoryId || undefined, fromClipboard })
+      focusNewNoteRef.current = note.id
+      setNotes(prev => [note, ...prev.filter(item => item.id !== note.id)])
+      setSelectedId(note.id)
+      setQueryInput('')
+      setQuery('')
+      setActiveTags([])
+      setSelection([])
+      setFlash(t(fromClipboard ? 'notes.createdFromClipboard' : 'notes.textCreated'))
+    } catch (err) { setNotice(messageOf(err)) }
+    finally { setCreatingText(false) }
+  }, [creatingText, loading, recording, starting, busy, bulkBusy, exportBusy, flushNow, categoryId, t])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.repeat || event.isComposing || !event.ctrlKey || event.altKey || event.shiftKey || event.metaKey || event.key.toLowerCase() !== 'n') return
+      if (document.querySelector('[role="dialog"]')) return
+      event.preventDefault()
+      void createTextNote()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [createTextNote])
 
   const editField = useCallback(
     (field: 'transcript' | 'polished', value: string): void => {
@@ -877,6 +920,14 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
           <Box sx={{ flex: 1 }} />
 
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
+            <ButtonGroup size="small" variant="outlined" disabled={creatingText || loading || recording || starting || busy || bulkBusy || exportBusy} sx={{ height: 34 }}>
+              <Button data-notes-new-text title={t('notes.newTextShortcut')} aria-keyshortcuts="Control+N" onClick={() => void createTextNote()} startIcon={<IconPlus size={14} />} sx={{ fontSize: 12 }}>
+                {creatingText ? t('notes.creatingText') : t('notes.newText')}
+              </Button>
+              <Button data-notes-create-menu onClick={event => setCreateMenuAt(event.currentTarget)} aria-label={t('notes.moreCreateOptions')} sx={{ minWidth: '24px !important', px: 0.25 }}>
+                <ArrowDropDownIcon sx={{ fontSize: 17 }} />
+              </Button>
+            </ButtonGroup>
             <Button
               data-notes-export
               size="small"
@@ -1173,7 +1224,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                       data-notes-row-duration
                       sx={{ fontSize: 10.5, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}
                     >
-                      {formatDuration(note.durationMs)}
+                      {note.durationMs === 0 && !note.audioPath ? t('notes.textNote') : formatDuration(note.durationMs)}
                     </Typography>
                   </Stack>
                   <Typography
@@ -1190,7 +1241,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                       wordBreak: 'break-word'
                     }}
                   >
-                    {summarize(note, 120) || '—'}
+                    {summarize(note, 120) || t('notes.untitled')}
                   </Typography>
                   {(category || note.tags.length > 0) && (
                     <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, flexWrap: 'wrap', rowGap: 0.5 }}>
@@ -1248,7 +1299,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                   data-notes-detail-duration
                   sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}
                 >
-                  {formatDuration(selected.durationMs)}
+                  {selected.durationMs === 0 && !audioKey ? t('notes.textNote') : formatDuration(selected.durationMs)}
                 </Typography>
                 <Box sx={{ flex: 1 }} />
                 <Typography data-notes-save-state={saveState} sx={{ fontSize: 11, color: SAVE_TONE[saveState] }}>
@@ -1314,10 +1365,11 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
               <Stack spacing={2} sx={{ mt: 2.25 }}>
                 <Box>
                   <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.secondary', mb: 0.75 }}>
-                    {t('notes.transcriptLabel')}
+                    {t(selected.durationMs === 0 && !audioKey ? 'notes.bodyLabel' : 'notes.transcriptLabel')}
                   </Typography>
                   <TextField
                     data-notes-editor="transcript"
+                    inputRef={bodyInputRef}
                     multiline
                     minRows={4}
                     fullWidth
@@ -1375,7 +1427,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                 )}
               </Stack>
 
-              <Box
+              {audioKey ? <Box
                 data-notes-player
                 sx={{
                   mt: 2.5,
@@ -1451,13 +1503,18 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                     </span>
                   </Tooltip>
                 </Stack>
-              </Box>
+              </Box> : <Typography data-notes-no-audio sx={{ mt: 2, fontSize: 11.5, color: 'text.disabled' }}>{t('notes.noLocalAudio')}</Typography>}
             </Box>
           )}
         </Box>
       </Box>
 
       <audio ref={audioRef} preload="metadata" style={{ display: 'none' }} />
+
+      <Menu anchorEl={createMenuAt} open={Boolean(createMenuAt)} onClose={() => setCreateMenuAt(null)}>
+        <MenuItem data-notes-create-blank onClick={() => void createTextNote()} sx={{ fontSize: 12.5 }}>{t('notes.newBlankText')}</MenuItem>
+        <MenuItem data-notes-create-clipboard onClick={() => void createTextNote(true)} sx={{ fontSize: 12.5 }}>{t('notes.newFromClipboard')}</MenuItem>
+      </Menu>
 
       <Menu anchorEl={exportMenu?.anchor} open={Boolean(exportMenu)} onClose={() => setExportMenu(null)}>
         <MenuItem disabled sx={{ fontSize: 11.5 }}>{exportMenu?.label}</MenuItem>

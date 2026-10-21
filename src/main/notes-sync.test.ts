@@ -406,6 +406,31 @@ describe('notes sync against the real server', () => {
     expect(laptop.store.hasAudio('note-three')).toBe(false)
   })
 
+  it('syncs text-only creation, edits and deletion without requesting recording uploads', async () => {
+    const session = await signUp('text-notes@example.com')
+    const desktop = await device('text-desktop', session)
+    const created = await desktop.store.createText({ text: '文字随记 😀\n跨端同步' })
+    await desktop.engine.now()
+    const laptop = await device('text-laptop', session)
+    await laptop.engine.now()
+    const received = laptop.store.list().notes[0]
+    expect(received).toMatchObject({ id: created.id, transcript: created.transcript, durationMs: 0, polishStatus: 'skipped' })
+    expect(received.audioPath).toBeUndefined()
+    expect(laptop.store.hasAudio(created.id)).toBe(false)
+    const usage = await desktop.client.storage()
+    expect(usage.noteCount).toBe(1)
+    expect(usage.audioCount).toBe(0)
+    expect(usage.usedBytes).toBe(0)
+    await laptop.store.update(created.id, { transcript: '另一端修订', tags: ['重点'] })
+    await laptop.engine.now()
+    await desktop.engine.now()
+    expect(desktop.store.list().notes[0]).toMatchObject({ transcript: '另一端修订', tags: ['重点'] })
+    await desktop.store.remove(created.id)
+    await desktop.engine.now()
+    await laptop.engine.now()
+    expect(laptop.store.list().notes).toHaveLength(0)
+  })
+
   it('reports usage from the server, not from the local files', async () => {
     const dave = await signUp('dave@example.com')
     const desktop = await device('dave-desktop', dave, (dir) => seedNote(dir, { id: 'note-four' }, audioBytes))

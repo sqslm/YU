@@ -57,6 +57,8 @@ const AUDIO_BITRATE_KBPS = 24
 
 const MAX_TAGS = 12
 const MAX_TAG_CHARS = 24
+/** Same text limit as the sync server; clipboard text must not be truncated. */
+const MAX_TEXT_CHARS = 200_000
 const MAX_CATEGORIES = 40
 /** Changes per push, matching the server's `notesPerPush` limit. */
 const MAX_PUSH_NOTES = 200
@@ -466,6 +468,28 @@ export class NotesStore {
 
     // Detached on purpose: `create` returns as soon as the note is safe on disk.
     void this.run(id, wav, signal)
+    return cloneNote(entry)
+  }
+
+  /** Create a text-only note without recording or invoking a model. */
+  async createText(input: { text: string; categoryId?: string }): Promise<NoteEntry> {
+    if (typeof input.text !== 'string') throw new Error(mt('随记内容必须是文字'))
+    if (input.text.length > MAX_TEXT_CHARS) throw new Error(mt('文字过长，最多支持 {{n}} 个字符', { n: MAX_TEXT_CHARS }))
+    const now = Date.now()
+    const categoryId = this.knownCategory(input.categoryId)
+    const entry: NoteEntry = {
+      id: randomUUID(), createdAt: now, updatedAt: now, editedAt: now,
+      transcript: input.text, polished: '', polishStatus: 'skipped',
+      durationMs: 0, tags: [], pending: true,
+      ...(categoryId ? { categoryId } : {})
+    }
+    this.data.notes.unshift(entry)
+    try {
+      this.save(true)
+    } catch (error) {
+      this.data.notes.splice(this.data.notes.indexOf(entry), 1)
+      throw error
+    }
     return cloneNote(entry)
   }
 

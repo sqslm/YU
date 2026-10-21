@@ -1,4 +1,4 @@
-import { dialog, ipcMain, protocol } from 'electron'
+import { clipboard, dialog, ipcMain, protocol } from 'electron'
 import { readFile } from 'node:fs/promises'
 import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
 import type { NotesStore } from './notes'
@@ -92,6 +92,14 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
   ipcMain.handle('notes:list', () => store.list())
   ipcMain.handle('notes:exportText', (_event, ids: string[], format: NoteExportFormat) => exportNoteText(store, ids, format))
   ipcMain.handle('notes:exportAudio', (_event, id: string) => exportNoteAudio(store, id))
+  ipcMain.handle('notes:createText', async (_event, input?: { categoryId?: string; fromClipboard?: boolean }) => {
+    const fromClipboard = input?.fromClipboard === true
+    const text = fromClipboard ? clipboard.readText() : ''
+    if (fromClipboard && !text.trim()) throw new Error(mt('剪贴板中没有可用的文字'))
+    const note = await store.createText({ text, categoryId: input?.categoryId })
+    broadcast()
+    return note
+  })
 
   ipcMain.handle(
     'notes:create',
