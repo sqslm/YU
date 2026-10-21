@@ -21,19 +21,15 @@
     "release:archives": "node scripts/release.mjs"
   },
   "dependencies": {
+    "electron-updater": "^6.6.2",
+    "koffi": "^2.14.1",
+    "sherpa-onnx-node": "1.13.8"
+  },
+  "devDependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^6.5.0",
     "@mui/material": "^6.5.0",
-    "electron-updater": "^6.6.2",
-    "i18next": "^25.5.2",
-    "koffi": "^2.14.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-i18next": "^15.7.3",
-    "sherpa-onnx-node": "1.13.8"
-  },
-  "devDependencies": {
     "@types/node": "^24.3.0",
     "@types/react": "^18.3.24",
     "@types/react-dom": "^18.3.7",
@@ -41,6 +37,10 @@
     "electron": "^38.1.0",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.0",
+    "i18next": "^25.5.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-i18next": "^15.7.3",
     "typescript": "^5.9.2",
     "vite": "^7.1.3",
     "vitest": "^3.2.4"
