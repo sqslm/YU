@@ -630,10 +630,13 @@ export class SyncEngine {
       // Notes first: their text has to exist on the server before a recording can
       // be attached to it, and their tombstones have to land before deletions.
       await this.pushNotes()
-      await this.pullNotes()
-      await this.syncNoteAudio()
+      const notesCursor = await this.pullNotes()
       await this.pushAll()
       await this.pullAll()
+      await this.syncNoteAudio()
+      // Keep the old durable cursor until recordings are on disk as well. A
+      // failed download (or a restart) must replay the page that advertised it.
+      this.state.notesCursor = notesCursor
       this.state.lastSyncAt = Date.now()
       this.state.lastError = ''
       this.log(`[sync] done, ${this.state.remoteCount} row(s) on the server`)
@@ -710,25 +713,24 @@ export class SyncEngine {
   }
 
   /** Merges everything the server changed since the last notes cursor. */
-  private async pullNotes(): Promise<void> {
+  private async pullNotes(): Promise<number> {
     const notes = this.notes
-    if (!notes) return
+    if (!notes) return this.state.notesCursor
+    let cursor = this.state.notesCursor
     this.pendingAudio = []
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const result = await this.client.pullNotes(this.state.notesCursor, PAGE)
+      const result = await this.client.pullNotes(cursor, PAGE)
       const rows = Array.isArray(result.notes) ? result.notes : []
       const merged = notes.applyRemote(rows)
       if (merged.conflicts > 0) {
         this.log(`[sync] ${merged.conflicts} 条随记冲突：本机改动已另存`)
       }
       this.pendingAudio.push(...merged.audio)
-      const cursor = Number(result.cursor)
-      if (Number.isFinite(cursor) && cursor >= 0 && cursor !== this.state.notesCursor) {
-        this.state.notesCursor = cursor
-        this.writeState()
-      }
+      const next = Number(result.cursor)
+      if (Number.isFinite(next) && next >= 0) cursor = next
       if (!result.hasMore || rows.length === 0) break
     }
+    return cursor
   }
 
   /**
@@ -742,28 +744,33 @@ export class SyncEngine {
   private async syncNoteAudio(): Promise<void> {
     const notes = this.notes
     if (!notes) return
+    let failure: Error | null = null
     for (const item of this.pendingAudio) {
       if (notes.hasAudio(item.id)) continue
       try {
         const bytes = await this.client.downloadNoteAudio(item.id)
-        if (!bytes || bytes.byteLength === 0) continue
+        if (!bytes || bytes.byteLength === 0) throw new Error(`录音 ${item.id} 下载为空`)
         if (item.sha256) {
           const digest = createHash('sha256').update(bytes).digest('hex')
           if (digest !== item.sha256) {
-            this.log(`[sync] note ${item.id} 的录音校验不通过，已跳过`)
-            continue
+            throw new Error(`录音 ${item.id} 校验不通过`)
           }
         }
         notes.writeRemoteAudio(item.id, bytes, item.format)
+        if (!notes.hasAudio(item.id)) throw new Error(`录音 ${item.id} 未能保存到本机`)
       } catch (err) {
         this.log(`[sync] 下载录音失败 ${item.id}：${describeError(err)}`)
+        failure ??= new Error(`下载录音失败：${describeError(err)}`)
       }
     }
     this.pendingAudio = []
 
     for (const item of notes.audioPending(PAGE)) {
       const local = notes.audioData(item.id)
-      if (!local) continue
+      if (!local) {
+        failure ??= new Error(`无法读取待上传的录音 ${item.id}`)
+        continue
+      }
       try {
         await this.client.uploadNoteAudio(item.id, local.format, local.data)
         notes.markAudioUploaded(item.id)
@@ -771,8 +778,10 @@ export class SyncEngine {
         // Quota and size limits fail the same way every time; report once per pass
         // and let the rest of the account keep syncing.
         this.log(`[sync] 上传录音失败 ${item.id}：${describeError(err)}`)
+        failure ??= new Error(`上传录音失败：${describeError(err)}`)
       }
     }
+    if (failure) throw failure
   }
 
   /** Sends every local change page by page, advancing the cursor as it goes. */

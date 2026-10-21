@@ -676,10 +676,12 @@ export class NotesStore {
     return { live, dead }
   }
 
-  /** Rows the next push would send; the account page shows this as 待推送. */
+  /** Notes with unsent text, deletions or recordings; each note counts once. */
   pendingCount(): number {
     let count = this.data.deleted?.length ?? 0
-    for (const note of this.data.notes) if (note.pending === true) count += 1
+    for (const note of this.data.notes) {
+      if (note.pending === true || (note.audioPath && note.audioUploaded !== true)) count += 1
+    }
     return count
   }
 
@@ -806,7 +808,8 @@ export class NotesStore {
 
   /** True when this note already has a recording on this machine. */
   hasAudio(id: string): boolean {
-    return Boolean(this.find(id)?.audioPath)
+    const path = this.audioPathOf(id)
+    return path !== null && existsSync(path)
   }
 
   /** The stored recording, for an upload. Null when the file is gone. */

@@ -225,6 +225,32 @@ function seedNote(dir: string, note: Partial<NoteEntry> & { id: string }, audio?
 const audioBytes = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00, 0x11, 0x22, 0x33, 0x44])
 
 describe('notes sync against the real server', () => {
+  it('reports an audio upload failure and keeps the recording pending until retry succeeds', async () => {
+    const session = await signUp('audio-upload-retry@example.com')
+    const desktop = await device('audio-upload-retry', session, (dir) => seedNote(dir, { id: 'upload-retry' }, audioBytes))
+    vi.spyOn(desktop.client, 'uploadNoteAudio').mockRejectedValueOnce(new Error('upload interrupted'))
+    const failed = await desktop.engine.now()
+    expect(failed.lastError).toContain('upload interrupted')
+    expect(failed.pending).toBe(1)
+    expect(desktop.store.audioPending()).toHaveLength(1)
+    expect((await desktop.engine.now()).lastError).toBe('')
+    expect(desktop.store.audioPending()).toHaveLength(0)
+    expect(await desktop.client.downloadNoteAudio('upload-retry')).toEqual(audioBytes)
+  })
+
+  it('retries a failed recording download after the device restarts', async () => {
+    const session = await signUp('audio-download-retry@example.com')
+    const desktop = await device('audio-download-source', session, (dir) => seedNote(dir, { id: 'download-retry' }, audioBytes))
+    await desktop.engine.now()
+    const laptop = await device('audio-download-target', session)
+    vi.spyOn(laptop.client, 'downloadNoteAudio').mockRejectedValueOnce(new Error('download interrupted'))
+    expect((await laptop.engine.now()).lastError).toContain('download interrupted')
+    expect(laptop.store.hasAudio('download-retry')).toBe(false)
+    const restarted = await device('audio-download-target', session)
+    expect((await restarted.engine.now()).lastError).toBe('')
+    expect(new Uint8Array(restarted.store.audioData('download-retry')!.data)).toEqual(audioBytes)
+  })
+
   it('propagates deletion of a new note removed while its first push is in flight', async () => {
     const session = await signUp('inflight-delete@example.com')
     const desktop = await device('inflight-delete', session, (dir) => seedNote(dir, { id: 'inflight-delete' }))

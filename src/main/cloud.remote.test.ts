@@ -1,5 +1,5 @@
 /** Opt-in contract tests against a deployed server, using disposable accounts. */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -9,6 +9,7 @@ import { AccountStore } from './account'
 import { CloudClient, SyncEngine } from './cloud'
 import { HistoryStore } from './history'
 import { encodeWav } from './audio/wav'
+import { NotesStore } from './notes'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
@@ -120,5 +121,47 @@ suite('deployed account, notes, audio and history contract', () => {
     await engines[0].now()
     await engines[1].now()
     expect(stores[1].get(row.id)).toBeUndefined()
+  }, 60_000)
+
+  it('uploads an existing local note and its WAV and restores both on a fresh device', async () => {
+    const id = `local-note-${randomUUID()}`
+    const wav = encodeWav(new Int16Array(8000).fill(1000))
+    const now = Date.now()
+    const devices = []
+    for (let index = 0; index < 2; index++) {
+      const dir = join(root, `notes-device-${index}`)
+      mkdirSync(join(dir, 'notes', 'audio'), { recursive: true })
+      if (index === 0) {
+        writeFileSync(join(dir, 'notes', 'audio', `${id}.wav`), wav)
+        writeFileSync(join(dir, 'notes.json'), JSON.stringify({ categories: [], deleted: [], notes: [{
+          id, createdAt: now, updatedAt: now, durationMs: 500, transcript: 'local recording upload verification',
+          polished: 'Local recording upload verification.', polishStatus: 'ok', tags: ['audit'], pending: true,
+          audioPath: `notes/audio/${id}.wav`, audioFormat: 'wav', audioBytes: wav.byteLength
+        }] }))
+      }
+      const settings = mergeSettings({ notesDir: dir, syncEnabled: true, syncIntervalSeconds: 0, syncServerUrl: fixture!.baseUrl })
+      const notes = new NotesStore({ log: () => {}, getSettings: () => settings })
+      await notes.load()
+      const history = new HistoryStore(join(dir, 'history.sqlite'))
+      await history.load()
+      stores.push(history)
+      devices.push({ notes, engine: new SyncEngine(history, clients[index].accounts, clients[index].client,
+        () => settings, () => {}, join(dir, 'sync-state.json'), notes) })
+    }
+    try {
+      expect((await devices[0].engine.now()).lastError).toBe('')
+      expect(devices[0].notes.pendingCount()).toBe(0)
+      expect(devices[0].notes.audioPending()).toHaveLength(0)
+      const usage = await clients[0].client.storage()
+      expect(usage.noteCount).toBeGreaterThanOrEqual(1)
+      expect(usage.audioCount).toBeGreaterThanOrEqual(1)
+      expect(await clients[0].client.downloadNoteAudio(id)).toEqual(wav)
+      expect((await devices[1].engine.now()).lastError).toBe('')
+      expect(devices[1].notes.list().notes.find((note) => note.id === id)?.transcript).toBe('local recording upload verification')
+      expect(new Uint8Array(devices[1].notes.audioData(id)!.data)).toEqual(wav)
+    } finally {
+      devices[0].notes.remove(id)
+      await devices[0].engine.now()
+    }
   }, 60_000)
 })
