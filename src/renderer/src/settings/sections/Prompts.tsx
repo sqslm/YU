@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Box, Button, Chip, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
+import { Box, Button, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { NamedPrompt, PromptKind, PromptLibrary, Settings } from '@shared/types'
 import {
   PROMPT_KINDS,
@@ -57,16 +57,6 @@ function nextCardName(cards: NamedPrompt[]): string {
   return `${base} ${index}`
 }
 
-const statChipSx = {
-  height: 20,
-  fontSize: 10.5,
-  bgcolor: 'action.hover',
-  color: 'text.secondary',
-  border: 1,
-  borderColor: 'divider',
-  '& .MuiChip-label': { px: 1 }
-}
-
 export function PromptsSection({
   settings,
   patch
@@ -99,12 +89,6 @@ export function PromptsSection({
   const mainCardValue = mainCards.some((card) => card.id === settings.mainPromptCardId)
     ? settings.mainPromptCardId
     : ''
-
-  const totalCards = PROMPT_KINDS.reduce((sum, kind) => sum + library.cards[kind].length, 0)
-  const customCards = PROMPT_KINDS.reduce(
-    (sum, kind) => sum + library.cards[kind].filter((card) => !card.builtin).length,
-    0
-  )
 
   const editingCard = editing
     ? library.cards[editing.kind].find((card) => card.id === editing.id) ?? null
@@ -187,15 +171,7 @@ export function PromptsSection({
   }
 
   return (
-    <Stack spacing={2.5}>
-      {/* The sheet header already prints the section title and hint, so this row
-          only carries the library counters. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end' }}>
-        <Chip size="small" label={i18n.t('共 {{n}} 张', { n: totalCards })} sx={statChipSx} />
-        <Chip size="small" label={i18n.t('内置 {{n}}', { n: totalCards - customCards })} sx={statChipSx} />
-        <Chip size="small" label={i18n.t('自定义 {{n}}', { n: customCards })} sx={statChipSx} />
-      </Box>
-
+    <Stack spacing={3}>
       {/*
         Auto-activation lives above the blocks because it decides which block's
         active card the pipeline actually uses. The hint text is rendered from
@@ -223,8 +199,8 @@ export function PromptsSection({
               sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.25, lineHeight: 1.45 }}
             >
               {autoActivate
-                ? i18n.t('开启中：按前台应用自动挑卡（聊天→润色，AI 工具→AI，文档→文档，邮件→邮件）。')
-                : i18n.t('已关闭：所有窗口统一使用下面的主模式 + 主卡片，不再按前台应用切换。')}
+                ? i18n.t('根据当前应用自动选择提示词。')
+                : i18n.t('所有应用使用下方指定的模式和提示词。')}
             </Typography>
           </Box>
           <Switch
@@ -236,62 +212,60 @@ export function PromptsSection({
           />
         </Box>
 
-        {/*
-          Only meaningful with auto-activation off, so both selects are disabled
-          while it is on: leaving them clickable would suggest they still apply.
-        */}
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-            gap: 1.25,
-            mt: 1.5
-          }}
-        >
-          <TextField
-            select
-            size="small"
-            label={i18n.t('主模式')}
-            value={mainKind}
-            disabled={autoActivate}
-            onChange={(event) => {
-              // A card id from the old kind would dangle, so reset the pair.
-              patch({ mainPromptKind: event.target.value as PromptKind, mainPromptCardId: '' })
+        {!autoActivate && (
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              gap: 1.25,
+              mt: 1.5
             }}
-            helperText={i18n.t(i18n.t('所有窗口都按这个类型出提示词'))}
-            slotProps={{ inputLabel: { shrink: true } }}
           >
-            {MAIN_KIND_ORDER.map((kind) => (
-              <MenuItem key={kind} value={kind}>
-                {i18n.t(PROMPT_KIND_LABEL[kind])}
-              </MenuItem>
-            ))}
-          </TextField>
+            <TextField
+              select
+              size="small"
+              label={i18n.t('主模式')}
+              value={mainKind}
+              disabled={autoActivate}
+              onChange={(event) => {
+                // A card id from the old kind would dangle, so reset the pair.
+                patch({ mainPromptKind: event.target.value as PromptKind, mainPromptCardId: '' })
+              }}
+              helperText={i18n.t(i18n.t('所有窗口都按这个类型出提示词'))}
+              slotProps={{ inputLabel: { shrink: true } }}
+            >
+              {MAIN_KIND_ORDER.map((kind) => (
+                <MenuItem key={kind} value={kind}>
+                  {i18n.t(PROMPT_KIND_LABEL[kind])}
+                </MenuItem>
+              ))}
+            </TextField>
 
-          <TextField
-            select
-            size="small"
-            label={i18n.t('主卡片')}
-            // A stored id that no longer resolves reads as the follow option
-            // instead of rendering an empty value (which MUI warns about).
-            value={mainCardValue}
-            disabled={autoActivate}
-            onChange={(event) => patch({ mainPromptCardId: event.target.value })}
-            helperText={
-              mainCardValue
-                ? i18n.t('固定用这张卡，类型内切换激活卡不影响它')
-                : i18n.t('跟随该类型当前激活的那张卡')
-            }
-            slotProps={{ inputLabel: { shrink: true } }}
-          >
-            <MenuItem value="">{i18n.t(i18n.t('跟随该类型的当前卡片'))}</MenuItem>
-            {mainCards.map((card) => (
-              <MenuItem key={card.id} value={card.id}>
-                {card.builtin ? i18n.t('{{name}}（内置）', { name: card.name }) : card.name}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Box>
+            <TextField
+              select
+              size="small"
+              label={i18n.t('主卡片')}
+              // A stored id that no longer resolves reads as the follow option
+              // instead of rendering an empty value (which MUI warns about).
+              value={mainCardValue}
+              disabled={autoActivate}
+              onChange={(event) => patch({ mainPromptCardId: event.target.value })}
+              helperText={
+                mainCardValue
+                  ? i18n.t('固定用这张卡，类型内切换激活卡不影响它')
+                  : i18n.t('跟随该类型当前激活的那张卡')
+              }
+              slotProps={{ inputLabel: { shrink: true } }}
+            >
+              <MenuItem value="">{i18n.t(i18n.t('跟随该类型的当前卡片'))}</MenuItem>
+              {mainCards.map((card) => (
+                <MenuItem key={card.id} value={card.id}>
+                  {card.builtin ? i18n.t('{{name}}（内置）', { name: card.name }) : card.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+        )}
       </Box>
 
       {SECTION_ORDER.map((kind) => {
@@ -328,7 +302,7 @@ export function PromptsSection({
               )}
             </Box>
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1.25, lineHeight: 1.5 }}>
-              {PROMPT_KIND_HINT[kind]}
+              {i18n.t(PROMPT_KIND_HINT[kind])}
             </Typography>
 
             <Box
@@ -338,7 +312,7 @@ export function PromptsSection({
                 // two so the footer buttons never stack.
                 gridTemplateColumns: {
                   xs: 'repeat(2, minmax(0, 1fr))',
-                  sm: 'repeat(3, minmax(0, 1fr))'
+                  lg: 'repeat(3, minmax(0, 1fr))'
                 },
                 gap: 1.25
               }}

@@ -275,7 +275,7 @@ export function GuidePage({ embedded = false }: { embedded?: boolean } = {}): JS
 
       <Box sx={{ ...cardSx, mt: embedded ? 0 : 2 }}>
         <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>{i18n.t('目录')}</Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 0.75, mt: 1 }}>
           {SECTIONS.map((section, index) => (
             <Chip
               key={section.id}
@@ -284,7 +284,8 @@ export function GuidePage({ embedded = false }: { embedded?: boolean } = {}): JS
               onClick={() => jump(section.id)}
               label={`${index + 1}. ${i18n.t(section.title)}`}
               sx={{
-                height: 24,
+                height: 30,
+                justifyContent: 'flex-start',
                 fontSize: 11.5,
                 color: 'text.secondary',
                 borderColor: 'divider',

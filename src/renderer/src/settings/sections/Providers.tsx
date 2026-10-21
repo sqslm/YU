@@ -23,8 +23,8 @@ type Mode = Settings['pipelineMode']
  * cards themselves keep the same title/content rhythm as every other settings
  * page, because they are the same `SettingsGroup` those pages use.
  */
-const PARTITION_GAP = 3.5 // 28px
-const GROUP_GAP = 2.5 // 20px
+const PARTITION_GAP = 3 // 28px
+const GROUP_GAP = 3 // 20px
 
 const MODES: ReadonlyArray<{ value: Mode; label: string; icon: JSX.Element }> = [
   { value: 'classic', label: '传统模式', icon: <IconCpu /> },
@@ -207,8 +207,8 @@ export function ProvidersSection({
           }}
         >
           {mode === 'multimodal'
-            ? i18n.t('音频直接交给模型，一次出结果，代价是单次时长受模型上限约束。')
-            : i18n.t('先转写再润色，两次请求，成本低、两个服务可以完全不同。')}
+            ? i18n.t('使用多模态模型直接处理录音。')
+            : i18n.t('先识别语音，再使用语言模型处理文字。')}
         </Typography>
       </Box>
 
@@ -231,7 +231,7 @@ export function ProvidersSection({
               overflowWrap: 'anywhere'
             }}
           >
-            {i18n.t('还没有启用的配置，现在录音会直接报错。点下面「+ 新增配置」，选一个服务商、填上 API Key 就能用。')}
+            {i18n.t('尚未启用服务配置，请添加并启用配置，或使用本地语音识别。')}
           </Typography>
         </Box>
       )}
@@ -254,7 +254,7 @@ export function ProvidersSection({
                 collapsible
                 icon={<IconWaveMic />}
                 title={i18n.t('语音转写')}
-                hint={i18n.t(i18n.t('OpenAI 兼容 · /audio/transcriptions'))}
+                hint={i18n.t('将录音转换为文字')}
               >
                 <ProviderProfiles kind="asr" settings={settings} patch={patch} />
               </SettingsGroup>
@@ -263,13 +263,13 @@ export function ProvidersSection({
                 collapsible
                 icon={<IconBook />}
                 title={i18n.t('语言模型')}
-                hint={i18n.t(i18n.t('OpenAI 兼容 · /chat/completions'))}
+                hint={i18n.t('润色文字、翻译与回答问题')}
               >
                 <ProviderProfiles kind="llm" settings={settings} patch={patch} />
               </SettingsGroup>
             </>
           ) : (
-            <SettingsGroup collapsible icon={<IconGlobe />} title={i18n.t('多模态模型')} hint="Gemini generateContent">
+            <SettingsGroup collapsible icon={<IconGlobe />} title={i18n.t('多模态模型')} hint={i18n.t('直接理解录音并生成结果')}>
               <ProviderProfiles kind="multimodal" settings={settings} patch={patch} />
               <SettingsRow label={i18n.t('单次上限')} description={i18n.t('一次请求最多携带的音频秒数')}>
                 <SettingsNumber
@@ -291,17 +291,6 @@ export function ProvidersSection({
       */}
       <LocalModel settings={settings} patch={patch} />
 
-      <Typography
-        sx={{
-          fontSize: 11,
-          color: 'text.disabled',
-          lineHeight: 1.65,
-          px: 0.25,
-          overflowWrap: 'anywhere'
-        }}
-      >
-        {i18n.t('提示：自建 faster-whisper 网关实现 /audio/transcriptions 就能接入；凭据只留在这台电脑上。')}
-      </Typography>
     </Stack>
   )
 }

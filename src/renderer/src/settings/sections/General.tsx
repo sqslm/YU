@@ -252,50 +252,21 @@ export function SettingsGroup({
 
   const head = (
     <>
+      {icon && <Box sx={{ display: 'grid', placeItems: 'center', color: 'text.secondary' }}>{icon}</Box>}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography component="h3" sx={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: 'text.primary', m: 0 }}>
+          {title}
+        </Typography>
+        {hint && (
+          <Typography sx={{ fontSize: 11.5, lineHeight: 1.5, color: 'text.secondary', mt: 0.25, overflowWrap: 'anywhere' }}>
+            {hint}
+          </Typography>
+        )}
+      </Box>
       {collapsible && (
-        <Box
-          component="span"
-          aria-hidden
-          sx={{
-            display: 'grid',
-            placeItems: 'center',
-            width: 12,
-            alignSelf: 'center',
-            fontSize: 10,
-            lineHeight: 1,
-            color: 'text.disabled',
-            transition: 'transform 120ms',
-            transform: open ? 'none' : 'rotate(-90deg)'
-          }}
-        >
+        <Box component="span" aria-hidden sx={{ display: 'grid', placeItems: 'center', width: 20, height: 20, color: 'text.secondary', transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 120ms' }}>
           ▾
         </Box>
-      )}
-      {icon && (
-        <Box sx={{ display: 'grid', placeItems: 'center', color: 'text.disabled', alignSelf: 'center' }}>
-          {icon}
-        </Box>
-      )}
-      <Typography
-        component="h3" sx={{ fontSize: 13, fontWeight: 600, lineHeight: '20px', color: 'text.primary', m: 0 }}
-      >
-        {title}
-      </Typography>
-      {hint && (
-        <Typography
-          sx={{
-            fontSize: 11,
-            // Same line box as the title, so both baselines land together.
-            lineHeight: '18px',
-            color: 'text.disabled',
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          {hint}
-        </Typography>
       )}
     </>
   )
@@ -322,15 +293,6 @@ export function SettingsGroup({
 
   return (
     <Box>
-      {/*
-        The title and its hint are one text pair, so they must sit on one
-        baseline. `center` cannot do that: 12px/600 and 11px resolve to
-        different line boxes, so centring the boxes centres two different
-        baselines on the same axis and the grey hint reads as dropped. Baseline
-        alignment plus one explicit line-height makes them coincide exactly,
-        whatever the body1 default is.
-        The icon is not text, so it opts out and centres itself instead.
-      */}
       {collapsible ? (
         <Box
           role="button"
@@ -347,8 +309,8 @@ export function SettingsGroup({
           }}
           sx={{
             display: 'flex',
-            alignItems: 'baseline',
-            gap: 0.75,
+            alignItems: 'center',
+            gap: 1,
             // A folded card owns no body, so the 10px gap would hang in the
             // seam between two cards.
             mb: open ? 1.25 : 0,
@@ -359,7 +321,7 @@ export function SettingsGroup({
             mr: -0.5,
             pl: 0.5,
             pr: 0.5,
-            py: 0.5,
+            py: 0.75,
             borderRadius: '8px',
             cursor: 'pointer',
             userSelect: 'none',
@@ -371,7 +333,7 @@ export function SettingsGroup({
           {head}
         </Box>
       ) : (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, mb: 1.25, px: 0.25 }}>{head}</Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25, px: 0.25 }}>{head}</Box>
       )}
       {collapsible ? (
         <Box id={bodyId} sx={{ display: open ? 'block' : 'none' }}>

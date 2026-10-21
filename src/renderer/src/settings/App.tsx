@@ -17,26 +17,21 @@ import { HomePage } from './pages/Home'
 import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
 import { DictionaryPage } from './pages/Dictionary'
-import { GuidePage } from './pages/Guide'
 import { IconBook, IconChart, IconClock, IconMic, IconSettings } from './icons'
 import { Onboarding } from './pages/Onboarding'
 import StickyNote2Icon from '@mui/icons-material/StickyNote2'
-import MenuBookIcon from '@mui/icons-material/MenuBook'
 import { useTranslation } from 'react-i18next'
 import { applyUiLanguage } from '../i18n'
 import i18n from '../i18n'
 
-type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'guide'
+type Page = 'home' | 'history' | 'notes' | 'dictionary'
 
 /** Label keys resolve through i18next; the ids stay stable for routing. */
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'home', labelKey: 'nav.home', icon: <IconChart /> },
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
-  { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> },
-  // The guide used to live only inside the settings sheet, so the sidebar had no
-  // 说明 entry at all and ACC-30 step 1 ("侧边栏「说明」") could not be walked.
-  { id: 'guide', labelKey: 'nav.guide', icon: <MenuBookIcon sx={{ fontSize: 18 }} /> }
+  { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> }
 ]
 
 export function App(): JSX.Element {
@@ -117,9 +112,6 @@ export function App(): JSX.Element {
     }
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} />
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />
-    // Not `embedded`: the hub draws no heading of its own, so the page keeps its
-    // title and padding here.
-    if (page === 'guide') return <GuidePage />
     return (
       <HomePage
         settings={settings}

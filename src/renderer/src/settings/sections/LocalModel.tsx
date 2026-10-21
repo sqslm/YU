@@ -43,7 +43,7 @@ import {
   type LocalDownloadProgress,
   type LocalModel
 } from '@shared/local-asr'
-import { IconCpu, SettingsGroup, SettingsRow } from './General'
+import { controlSx, IconCpu, SettingsField, SettingsGroup, SettingsRow } from './General'
 import i18n from '../../i18n'
 
 interface LocalModelProps {
@@ -136,11 +136,11 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
     <SettingsGroup
       icon={<IconCpu />}
       title={i18n.t(i18n.t('本地语音识别'))}
-      hint={i18n.t(i18n.t('sherpa-onnx · 在这台电脑上跑，不联网也不花 token'))}
+      hint={i18n.t('离线识别，无需上传录音')}
     >
       <SettingsRow
-        label={i18n.t(i18n.t('听写时先走本地模型'))}
-        description={i18n.t(i18n.t('打开后录音先交给这里的模型；它听不出内容或出错时，才回落到上面的服务商'))}
+        label={i18n.t(i18n.t('优先使用本地识别'))}
+        description={i18n.t(i18n.t('本地识别无结果或失败时，使用已启用的在线服务。'))}
       >
         <Switch
           size="small"
@@ -150,7 +150,7 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
         />
       </SettingsRow>
 
-      <SettingsRow label={i18n.t(i18n.t('识别模型'))} description={model.hint}>
+      <SettingsRow label={i18n.t(i18n.t('识别模型'))} description={i18n.t('选择已下载的模型，加载后用于本地识别。')}>
         <TextField
           select
           size="small"
@@ -163,7 +163,7 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
             setLocal({ modelId: next.id, language: nextLanguage })
           }}
           inputProps={{ 'data-local-model': model.id }}
-          sx={{ minWidth: 260 }}
+          sx={controlSx}
         >
           {LOCAL_MODELS.map((entry) => (
             <MenuItem
@@ -280,7 +280,7 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
           value={language}
           onChange={(event) => setLocal({ language: event.target.value })}
           inputProps={{ 'data-local-language': language }}
-          sx={{ minWidth: 160 }}
+          sx={controlSx}
         >
           {languageOptions.map((code) => (
             <MenuItem key={code} value={code}>
@@ -297,26 +297,25 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
           value={settings.localAsr.mirror}
           onChange={(event) => setLocal({ mirror: event.target.value as LocalAsrMirror })}
           inputProps={{ 'data-local-mirror': settings.localAsr.mirror }}
-          sx={{ minWidth: 160 }}
+          sx={controlSx}
         >
           <MenuItem value="cn">{i18n.t(i18n.t('国内镜像'))}</MenuItem>
           <MenuItem value="official">HuggingFace</MenuItem>
         </TextField>
       </SettingsRow>
 
-      <SettingsRow
+      <SettingsField
         label={i18n.t(i18n.t('存放位置'))}
         description={
           status && !status.installWritable
-            ? i18n.t('安装目录不接受写入，已回落到用户数据目录')
-            : i18n.t('软件安装目录下的 models，卸载时一起删掉')
+            ? i18n.t('安装目录不可写，模型保存在用户数据目录。')
+            : i18n.t('模型文件的保存位置。')
         }
       >
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, flexWrap: 'wrap', rowGap: 1 }}>
           <Typography
             data-local-dir
-            sx={{ fontSize: 10.5, color: 'text.secondary', maxWidth: 300 }}
-            noWrap
+            sx={{ fontSize: 11.5, color: 'text.secondary', width: '100%', overflowWrap: 'anywhere' }}
             title={dir}
           >
             {dir || i18n.t('（还没找到）')}
@@ -331,7 +330,7 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
             {i18n.t('重新检测')}
           </Button>
         </Stack>
-      </SettingsRow>
+      </SettingsField>
 
       {settings.localAsr.modelDir.trim() !== '' && (
         <SettingsRow label={i18n.t(i18n.t('恢复默认位置'))} description={i18n.t(i18n.t('把「换目录」的选择清掉，重新用安装目录'))}>
@@ -348,7 +347,7 @@ export function LocalModel({ settings, patch }: LocalModelProps): JSX.Element {
       {status && !status.runtime && (
         <Box sx={{ px: 2, py: 1, borderTop: 1, borderColor: 'divider' }}>
           <Typography data-local-badge sx={{ fontSize: 10.5, color: 'warning.main' }}>
-            {i18n.t('这个版本没带本地运行时，只能走上面的服务商')}
+            {i18n.t('本地识别不可用，请使用在线语音服务。')}
           </Typography>
         </Box>
       )}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Box, Button, Typography } from '@mui/material'
+import { profilesOf } from '@shared/profiles'
 import type { RecordingSessionInfo, Settings } from '@shared/types'
-import { IconCode, IconInfo, IconWaveMic, SettingsGroup, SettingsRow } from './General'
+import { IconCode, IconInfo, SettingsField, SettingsGroup, SettingsRow } from './General'
 import i18n from '../../i18n'
 
 /** How the per-take log ended, in the words the pill would use. */
@@ -18,10 +19,9 @@ interface SectionProps {
 }
 
 /** Shown until the runtime answers, and forever when no version bridge exists. */
-const FALLBACK_VERSION = 'v0.8.3'
+const FALLBACK_VERSION = '—'
 
-/** `src/shared/api.ts` has no `version()` yet and is out of scope here, so the
- *  capability is probed structurally: use it when the runtime exposes it. */
+/** Version comes from the running application, including packaged builds. */
 interface VersionBridge {
   version?: () => Promise<string>
 }
@@ -35,8 +35,7 @@ function probeVersion(): Promise<string | null> {
 
 /**
  * Resolves the packaged version once. Lives here because this section owns the
- * "version" concept and the settings sheet and the account section both reuse it;
- * `src/shared` and any new file are off-limits for this change.
+ * "version" concept and the settings sheet also uses it.
  */
 export function useAppVersion(): string {
   const [version, setVersion] = useState(FALLBACK_VERSION)
@@ -54,13 +53,6 @@ export function useAppVersion(): string {
 
   return version
 }
-
-const STACK: Array<[string, string]> = [
-  [i18n.t('录音'), i18n.t('AudioWorklet · 16 kHz 单声道 PCM16 · 常开暖流')],
-  [i18n.t('热键'), i18n.t('WH_KEYBOARD_LL（utilityProcess + koffi，吞键）')],
-  [i18n.t('插入'), i18n.t('剪贴板整段粘贴 → SendInput → UIA 三级回退')],
-  [i18n.t('存储'), i18n.t('SQLite（node:sqlite）+ 子串检索，仅本机；可选同步到自建服务')]
-]
 
 export function AboutSection({ settings }: SectionProps): JSX.Element {
   const version = useAppVersion()
@@ -103,10 +95,11 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
     await refreshSessions()
   }
 
-  const route =
-    settings.pipelineMode === 'multimodal'
-      ? i18n.t('多模态 · {{model}}', { model: settings.multimodal.model })
-      : `ASR ${settings.asr.model} → LLM ${settings.polish.model}`
+  const firstModel = (kind: 'asr' | 'llm' | 'multimodal'): string =>
+    profilesOf(settings, kind).find((profile) => profile.enabled)?.model || i18n.t('未配置')
+  const route = settings.pipelineMode === 'multimodal'
+    ? i18n.t('多模态 · {{model}}', { model: firstModel('multimodal') })
+    : `${settings.localAsr.enabled ? i18n.t('本地语音识别') : firstModel('asr')}${settings.polish.enabled ? ` → ${firstModel('llm')}` : ''}`
 
   /**
    * Devices are passed in because only the renderer can enumerate them; the main
@@ -140,11 +133,11 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
             <Typography sx={{ fontSize: 11.5, color: 'text.disabled' }}>{version}</Typography>
           </Box>
           <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.75, lineHeight: 1.55 }}>
-            {i18n.t('净室复刻：自建 ASR + LLM 后端，界面与交互对齐原版 Typeless。')}
+            {i18n.t('支持本地识别和自建服务的语音输入工具。')}
           </Typography>
         </Box>
         <SettingsRow label={i18n.t('当前链路')} description={i18n.t('在「模型」里可以切换两段式与一段直出')}>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', maxWidth: 320, textAlign: 'right' }}>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', maxWidth: 240, textAlign: 'right', overflowWrap: 'anywhere' }}>
             {route}
           </Typography>
         </SettingsRow>
@@ -155,11 +148,11 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
         </SettingsRow>
       </SettingsGroup>
 
-      <Box sx={{ mt: 2.5 }}>
+      <Box sx={{ mt: 3 }}>
         <SettingsGroup icon={<IconCode />} title={i18n.t('诊断')}>
           <SettingsRow
             label={i18n.t('运行诊断')}
-            description={i18n.t('打包版本、连通性、麦克风与最近 50 行日志（已脱敏）并打开文件夹')}
+            description={i18n.t('导出版本、网络、麦克风和近期日志，敏感信息会隐藏。')}
           >
             <Button
               size="small"
@@ -183,13 +176,13 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
         </SettingsGroup>
       </Box>
 
-      <Box sx={{ mt: 2.5 }}>
+      <Box sx={{ mt: 3 }}>
         <SettingsGroup icon={<IconCode />} title={i18n.t('最近几次听写')}>
-          <SettingsRow
-            label={i18n.t('每次听写一个日志文件')}
-            description={i18n.t('哪一句没插进去，就打开那一次的文件：前台窗口、识别结果、用了哪张卡片、插入是否核对成功都在里面')}
+          <SettingsField
+            label={i18n.t('听写日志')}
+            description={i18n.t('查看近期听写的识别、处理和插入结果。')}
           >
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               <Button
                 size="small"
                 variant="outlined"
@@ -219,7 +212,7 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
                 {i18n.t('清空')}
               </Button>
             </Box>
-          </SettingsRow>
+          </SettingsField>
 
           {sessionNotice && (
             <Box sx={{ px: 2, pb: 1 }}>
@@ -297,18 +290,10 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
         </SettingsGroup>
       </Box>
 
-      <Box sx={{ mt: 2.5 }}>
-        <SettingsGroup icon={<IconWaveMic />} title={i18n.t('实现要点')}>
-          {STACK.map(([label, value]) => (
-            <SettingsRow key={label} label={label} description={value} />
-          ))}
-        </SettingsGroup>
-      </Box>
-
-      <Box sx={{ mt: 2.5 }}>
+      <Box sx={{ mt: 3 }}>
         <SettingsGroup icon={<IconCode />} title={i18n.t('开源组件')}>
-          <SettingsRow label={i18n.t('Electron + React 18 + MUI 6')} description={i18n.t('渲染层与主进程之间只走类型化的 IPC')} />
-          <SettingsRow label={i18n.t('faster-whisper / SenseVoice')} description={i18n.t('自建转写网关，任何 OpenAI 兼容接口都能接入')} />
+          <SettingsRow label={i18n.t('Electron + React 18 + MUI 6')} description={i18n.t('桌面界面与应用运行环境。')} />
+          <SettingsRow label={i18n.t('faster-whisper / SenseVoice')} description={i18n.t('支持在线转写服务和本地语音模型。')} />
         </SettingsGroup>
       </Box>
     </Box>

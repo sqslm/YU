@@ -16,11 +16,11 @@ export const PROMPT_KIND_LABEL: Record<PromptKind, string> = {
 }
 
 export const PROMPT_KIND_HINT: Record<PromptKind, string> = {
-  ai: 'Codex、Claude Code、OpenCode 等 AI 开发工具里自动使用：按「给模型看的指令」写',
-  polish: '微信、聊天、搜索框、命令行等短文本场景的默认润色',
-  translate: '翻译模式：识别后译成目标语言',
-  document: '记事本、Word、Notion、Docs 等长文编辑器里自动使用',
-  email: 'Outlook、Gmail、Foxmail 等邮件客户端里自动使用'
+  ai: '整理 AI 工具中的语音指令。',
+  polish: '将口语整理为自然流畅的文字。',
+  translate: '将识别结果翻译为目标语言。',
+  document: '整理为结构清晰的文档。',
+  email: '整理为邮件或正式消息。'
 }
 
 /** Stable id for the built-in prompt of each kind. */

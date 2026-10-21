@@ -1,9 +1,8 @@
-import { Box, Chip, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
+import { Box, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
 import {
   SEARCH_PROVIDER_CAVEAT,
   SEARCH_PROVIDER_ENDPOINT_HINT,
-  SEARCH_PROVIDER_HINT,
   SEARCH_PROVIDER_KEY_HINT,
   SEARCH_PROVIDER_KEY_PLACEHOLDER,
   SEARCH_PROVIDER_LABEL,
@@ -21,7 +20,6 @@ import {
   SettingsHint,
   SettingsRow,
   controlSx,
-  wideControlSx
 } from './General'
 import i18n from '../../i18n'
 
@@ -104,7 +102,7 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
   const providerCaveat = SEARCH_PROVIDER_CAVEAT[search.provider]
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={3}>
       <SettingsGroup icon={<IconGlobe />} title={i18n.t('网页检索')}>
         <SettingsRow
           label={i18n.t('允许联网检索')}
@@ -119,25 +117,6 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
       </SettingsGroup>
 
       <SettingsGroup icon={<IconMagnifier />} title={i18n.t('搜索服务')}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, px: 2, py: 1.25 }}>
-          <Typography sx={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'text.secondary', lineHeight: 1.5 }}>
-            {SEARCH_PROVIDER_HINT[search.provider]}
-          </Typography>
-          <Chip
-            size="small"
-            variant="outlined"
-            label={i18n.t('当前：{{name}}', { name: SEARCH_PROVIDER_LABEL[search.provider] })}
-            sx={{
-              flex: '0 0 auto',
-              height: 22,
-              fontSize: 11,
-              color: 'text.secondary',
-              borderColor: 'divider',
-              bgcolor: 'action.hover',
-              '& .MuiChip-label': { px: 1 }
-            }}
-          />
-        </Box>
         <SettingsRow label={i18n.t('搜索服务')} description={i18n.t('每个服务商各自保存密钥、地址与结果条数')}>
           <TextField
             select
@@ -160,57 +139,51 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
             {providerCaveat}
           </Typography>
         ) : null}
-        <SettingsRow label={i18n.t('API Key')} description={SEARCH_PROVIDER_KEY_HINT[search.provider]}>
-          <TextField
-            fullWidth={false}
-            sx={controlSx}
-            type="password"
-            value={entry.apiKey}
-            onChange={(event) => updateEntry({ apiKey: event.target.value })}
-            placeholder={SEARCH_PROVIDER_KEY_PLACEHOLDER[search.provider]}
-            // Optional providers stay editable; a missing *required* key only
-            // surfaces as an inline hint, never as a locked input.
-            disabled={keyFieldDisabled(search.provider)}
-            required={needsKey}
-            error={keyErrorHint !== undefined}
-            helperText={keyErrorHint}
-          />
-        </SettingsRow>
-        <SettingsField label={i18n.t('自定义地址')} description={SEARCH_PROVIDER_ENDPOINT_HINT[search.provider]}>
-          <TextField
-            fullWidth={needsEndpoint}
-            size="small"
-            sx={needsEndpoint ? undefined : wideControlSx}
-            value={entry.endpoint}
-            onChange={(event) => updateEntry({ endpoint: event.target.value })}
-            placeholder={
-              // Google's Custom Search takes its `cx` here rather than at a host,
-              // so the placeholder names the id instead of an instance URL.
-              search.provider === 'google-cse'
-                ? i18n.t('cx=… 或 https://www.googleapis.com/customsearch/v1?cx=…')
-                : needsEndpoint
-                  ? 'http://127.0.0.1:8080'
-                  : i18n.t('留空则用官方地址')
-            }
-            // Tavily/Brave may legitimately leave it empty (= official host), so
-            // only DuckDuckGo, which has no configurable host, is locked.
-            disabled={search.provider === 'duckduckgo'}
-            required={needsEndpoint}
-            error={endpointErrorHint !== undefined}
-            helperText={endpointErrorHint}
-          />
-        </SettingsField>
+        {!keyFieldDisabled(search.provider) && (
+          <SettingsRow label={i18n.t('API Key')} description={SEARCH_PROVIDER_KEY_HINT[search.provider]}>
+            <TextField
+              fullWidth={false}
+              sx={controlSx}
+              type="password"
+              value={entry.apiKey}
+              onChange={(event) => updateEntry({ apiKey: event.target.value })}
+              placeholder={SEARCH_PROVIDER_KEY_PLACEHOLDER[search.provider]}
+              // Optional providers stay editable; a missing *required* key only
+              // surfaces as an inline hint, never as a locked input.
+              disabled={keyFieldDisabled(search.provider)}
+              required={needsKey}
+              error={keyErrorHint !== undefined}
+              helperText={keyErrorHint}
+            />
+          </SettingsRow>
+        )}
+        {search.provider !== 'duckduckgo' && (
+          <SettingsField label={i18n.t('自定义地址')} description={SEARCH_PROVIDER_ENDPOINT_HINT[search.provider]}>
+            <TextField
+              fullWidth
+              size="small"
+              value={entry.endpoint}
+              onChange={(event) => updateEntry({ endpoint: event.target.value })}
+              placeholder={
+                // Google's Custom Search takes its `cx` here rather than at a host,
+                // so the placeholder names the id instead of an instance URL.
+                search.provider === 'google-cse'
+                  ? i18n.t('cx=… 或 https://www.googleapis.com/customsearch/v1?cx=…')
+                  : needsEndpoint
+                    ? 'http://127.0.0.1:8080'
+                    : i18n.t('留空则用官方地址')
+              }
+              required={needsEndpoint}
+              error={endpointErrorHint !== undefined}
+              helperText={endpointErrorHint}
+            />
+          </SettingsField>
+        )}
       </SettingsGroup>
 
       <SettingsGroup icon={<IconSliders />} title={i18n.t('结果与判定')}>
         <SettingsRow label={i18n.t('结果条数')} description={i18n.t('每次检索最多取回的网页数量，按服务商分别保存')}>
-          {/*
-            The extra top padding is for the Slider's own value label: it floats
-            26px above the track, and without room the bubble straddles the card's
-            top edge (it used to be clipped outright). Padding inside this column
-            moves the track down without moving the card.
-          */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: 240, pt: 2.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: controlSx.width, px: 0.5 }}>
             <Slider
               size="small"
               min={1}
@@ -218,7 +191,7 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
               step={1}
               marks
               value={entry.maxResults}
-              valueLabelDisplay="auto"
+              valueLabelDisplay="off"
               onChange={(_event, value) => updateEntry({ maxResults: value as number })}
             />
             <Typography

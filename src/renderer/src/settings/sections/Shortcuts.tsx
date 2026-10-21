@@ -22,14 +22,14 @@ const MODE_ROWS: Array<{ mode: Mode; label: string; hint: string; toggleHint: st
   {
     mode: 'ask',
     label: '问答',
-    hint: '主键 + 空格：识别后交给 LLM 回答',
-    toggleHint: '主键 + 空格：识别后交给 LLM 回答'
+    hint: '识别语音后回答问题',
+    toggleHint: '识别语音后回答问题'
   },
   {
     mode: 'translate',
     label: '翻译',
-    hint: '主键 + 右 Shift：识别后翻译再插入',
-    toggleHint: '主键 + 右 Shift：识别后翻译再插入'
+    hint: '将语音翻译后插入当前应用',
+    toggleHint: '将语音翻译后插入当前应用'
   }
 ]
 
@@ -170,9 +170,9 @@ export function ShortcutsSection({
   )
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={3}>
       <SettingsGroup icon={<IconKeyboard />} title={i18n.t('快捷键')}>
-        <SettingsRow label={i18n.t('启用全局快捷键')} description={i18n.t('按键由底层钩子拦截，不会传给前台应用')}>
+        <SettingsRow label={i18n.t('启用全局快捷键')} description={i18n.t('在其他应用中使用听写、翻译和问答快捷键。')}>
           <Switch
             size="small"
             checked={settings.hotkeys.enabled}

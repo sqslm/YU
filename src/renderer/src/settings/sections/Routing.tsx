@@ -414,7 +414,7 @@ function RuleKindBlock({
               <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>{i18n.t('{{n}} 条', { n: rules.length })}</Typography>
             </Box>
             <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.5, mt: 0.125 }}>
-              {PROMPT_KIND_HINT[kind]}
+              {i18n.t(PROMPT_KIND_HINT[kind])}
             </Typography>
           </Box>
         </Box>
@@ -656,7 +656,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
     const bridge = windowsBridge()
     if (!bridge) {
       setWindows(null)
-      setPickerError(i18n.t('窗口列表接口还没接上：把 window.api.windows.list() 交给主进程即可（foreground.ts 已提供 listRoutedWindows）。'))
+      setPickerError(i18n.t('暂时无法读取窗口列表，请稍后重试。'))
       return
     }
 
@@ -716,18 +716,19 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
   const infoOpen = Boolean(infoAnchor)
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={3}>
       {/* 1. how the routing decision is made --------------------------------- */}
       <Box sx={panelSx}>
         <Box sx={{ px: 2, py: 1.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 500 }}>{i18n.t(i18n.t('自动路由顺序'))}</Typography>
+            <Typography sx={{ fontSize: 13, fontWeight: 500 }}>{i18n.t(i18n.t('应用匹配'))}</Typography>
             <Chip
               size="small"
               sx={chipSx}
               color={settings.autoActivatePrompts ? 'success' : 'warning'}
               label={settings.autoActivatePrompts ? i18n.t('自动激活 开') : i18n.t('自动激活 关')}
             />
+            {!settings.autoActivatePrompts && <>
             <Chip
               size="small"
               sx={chipSx}
@@ -735,6 +736,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
               label={i18n.t('主模式 {{kind}}', { kind: i18n.t(PROMPT_KIND_LABEL[settings.mainPromptKind]) })}
             />
             <Chip size="small" sx={chipSx} variant="outlined" label={i18n.t('主卡片 {{name}}', { name: mainCardName })} />
+            </>}
             <Tooltip
               title={
                 infoOpen
@@ -880,7 +882,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
         <Box sx={{ px: 2, py: 1.5 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 500 }}>{i18n.t(i18n.t('测试窗口'))}</Typography>
           <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.25, mb: 1, lineHeight: 1.6 }}>
-            {i18n.t('输入进程名或标题里的片段，实时看它会归到哪一类；用的是和主进程同一套 shared 函数，不会写入任何设置。')}
+            {i18n.t('输入进程名或窗口标题，预览匹配结果，不会修改设置。')}
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: '180px minmax(0,1fr)', gap: 1 }}>
             <TextField
@@ -936,7 +938,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
         <DialogContent sx={{ pt: '4px !important' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.5, rowGap: 0.25, mb: 1 }}>
             <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.6 }}>
-              {i18n.t('归类结果和录音时主进程的判断一致。')}
+              {i18n.t('预览与录音使用相同的匹配规则。')}
             </Typography>
             <Chip size="small" sx={chipSx} color="error" label={i18n.t('未识别')} />
             <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.6 }}>

@@ -1,6 +1,6 @@
 import { Box, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
-import { IconSparkle, SettingsField, SettingsGroup, SettingsRow } from './General'
+import { IconSparkle, SettingsField, SettingsGroup, SettingsRow, controlSx } from './General'
 import i18n from '../../i18n'
 
 /**
@@ -23,7 +23,7 @@ export function PromptsAdvanced({
     patch({ polish: { ...settings.polish, ...delta } })
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={3}>
       <SettingsGroup icon={<IconSparkle />} title={i18n.t(i18n.t('润色行为'))}>
         <SettingsRow
           label={i18n.t(i18n.t('听写后润色'))}
@@ -36,7 +36,7 @@ export function PromptsAdvanced({
           />
         </SettingsRow>
         <SettingsRow label={i18n.t(i18n.t('温度'))} description={i18n.t(i18n.t('越低越稳定；润色场景建议 0.1–0.3'))}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: 240 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: controlSx.width, px: 0.5 }}>
             <Slider
               size="small"
               min={0}

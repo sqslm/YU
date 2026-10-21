@@ -589,7 +589,7 @@ export function ProviderProfiles({
         data-profile-toolbar={kind}
         sx={{
           display: 'flex',
-          alignItems: 'baseline',
+          alignItems: 'center',
           flexWrap: 'wrap',
           columnGap: 1.25,
           rowGap: 0.5,
@@ -602,21 +602,7 @@ export function ProviderProfiles({
         <Typography
           sx={{ fontSize: 12, fontWeight: 600, lineHeight: '18px', color: 'text.secondary' }}
         >
-          {i18n.t('已保存的配置（{{n}}）', { n: list.length })}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: 11,
-            lineHeight: '18px',
-            color: 'text.disabled',
-            minWidth: 0,
-            // Grows into the slack when the row fits, drops to its own line
-            // instead of squeezing the button when it does not.
-            flex: '1 1 160px',
-            overflowWrap: 'anywhere'
-          }}
-        >
-          {i18n.t('从上到下依次尝试，前一个失败自动换下一个')}
+          {i18n.t('{{n}} 个配置', { n: list.length })}
         </Typography>
         <Button
           size="small"
@@ -626,7 +612,7 @@ export function ProviderProfiles({
           onClick={openAdd}
           data-profile-add={kind}
         >
-          {i18n.t('+ 新增配置')}
+          {i18n.t('新增配置')}
         </Button>
       </Box>
       {list.length === 0 ? (
@@ -643,7 +629,7 @@ export function ProviderProfiles({
               overflowWrap: 'anywhere'
             }}
           >
-            {i18n.t('还没有保存的配置。点上面的「+ 新增配置」选一个服务商，填上 Base URL、模型和 API Key 就能用。')}
+            {i18n.t('暂无配置，点击「新增配置」添加服务。')}
           </Typography>
         </Box>
       ) : (
