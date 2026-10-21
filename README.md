@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.11.1-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.11.2-setup.exe
 ```
 
 ## 使用
@@ -35,6 +35,8 @@ pnpm package          # → release\Typeless Rebuild-0.11.1-setup.exe
 | 粘贴上一条结果 | `左 Ctrl + 右 Shift + V` |
 
 触发方式可在「快捷键」页切成**按一下开始 / 结束**（默认，和 Typeless 一致）或**按住说话**；热键用录制方式改，托盘菜单可临时停用全部快捷键。切到「按一下」后，**任何模式都只按一下右 Alt 就结束**——包括用 `Space + 右 Alt` 起头的 Ask，不必再重复起手组合。
+
+设置按用途分为「通用」（外观、启动与反馈）、「语音与翻译」（识别语言、翻译与录音）、「文本输入」（插入、换行与应用排除）和「数据与存储」（历史保留与目录）。每项修改自动保存，数字输入在失焦或按 Enter 后保存。
 
 设置里还有几项直接影响结果：
 

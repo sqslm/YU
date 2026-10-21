@@ -99,7 +99,7 @@ export function MicTest({ deviceId }: MicTestProps): JSX.Element {
   const silent = running && peakDb < SILENT_DB
 
   return (
-    <Box sx={{ width: 240 }} data-mic-test>
+    <Box sx={{ width: 220 }} data-mic-test>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <LinearProgress
           variant="determinate"

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Box, Button, Dialog, IconButton, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
-import { GeneralSection } from './sections/General'
+import { GeneralSection, SpeechSection, InputSection, StorageSection } from './sections/General'
 import { ShortcutsSection } from './sections/Shortcuts'
 import { ProvidersSection } from './sections/Providers'
 import { PromptsSection } from './sections/Prompts'
@@ -16,6 +16,8 @@ import {
   IconCode,
   IconCpu,
   IconInfo,
+  IconWaveMic,
+  IconFolder,
   IconKeyboard,
   IconMagnifier,
   IconSliders,
@@ -51,6 +53,24 @@ const SECTIONS = [
     labelKey: 'settings.nav.general',
     hintKey: 'settings.hint.general',
     icon: <IconSliders />
+  },
+  {
+    id: 'speech',
+    labelKey: 'settings.nav.speech',
+    hintKey: 'settings.hint.speech',
+    icon: <IconWaveMic />
+  },
+  {
+    id: 'input',
+    labelKey: 'settings.nav.input',
+    hintKey: 'settings.hint.input',
+    icon: <IconKeyboard />
+  },
+  {
+    id: 'storage',
+    labelKey: 'settings.nav.storage',
+    hintKey: 'settings.hint.storage',
+    icon: <IconFolder />
   },
   {
     id: 'shortcuts',
@@ -182,7 +202,8 @@ export function SettingsDialog({
         >
           {t('settings.title')}
         </Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>          {SECTIONS.map((item) => {
+        <Box component="nav" aria-label={t('settings.title')} sx={{ display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto', minHeight: 0, pb: 1 }}>
+          {SECTIONS.map((item) => {
             const selected = item.id === section
             return (
               <Box
@@ -199,7 +220,8 @@ export function SettingsDialog({
                   textAlign: 'left',
                   alignItems: 'center',
                   gap: 1.25,
-                  height: 30,
+                  minHeight: 32,
+                  flexShrink: 0,
                   px: 1.25,
                   borderRadius: '7px',
                   fontSize: 12.5,
@@ -207,6 +229,7 @@ export function SettingsDialog({
                   color: selected ? 'text.primary' : 'text.secondary',
                   fontWeight: selected ? 600 : 400,
                   bgcolor: selected ? 'rgba(127,127,127,.14)' : 'transparent',
+                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
                   '&:hover': {
                     bgcolor: selected ? 'rgba(127,127,127,.14)' : 'rgba(127,127,127,.08)',
                     color: 'text.primary'
@@ -260,6 +283,9 @@ export function SettingsDialog({
         >
           {section === 'account' && <AccountSection settings={settings} patch={patch} />}
           {section === 'general' && <GeneralSection settings={settings} patch={patch} />}
+          {section === 'speech' && <SpeechSection settings={settings} patch={patch} />}
+          {section === 'input' && <InputSection settings={settings} patch={patch} />}
+          {section === 'storage' && <StorageSection settings={settings} patch={patch} />}
           {section === 'shortcuts' && <ShortcutsSection settings={settings} patch={patch} />}
           {section === 'models' && <ProvidersSection settings={settings} patch={patch} />}
           {section === 'prompts' && <PromptsSection settings={settings} patch={patch} />}

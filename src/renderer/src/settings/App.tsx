@@ -66,7 +66,7 @@ export function App(): JSX.Element {
   /**
    * `themeMode` is the stored preference; `mode` is what actually paints. The
    * third option is `'system'`, which is resolved here against the OS and
-   * re-resolved whenever Windows flips — the choice lives in 设置 → 常规 → 主题.
+   * re-resolved whenever Windows flips — the choice lives in 设置 → 通用 → 外观 → 主题.
    */
   const themeMode: ThemeMode = settings?.themeMode ?? 'dark'
   const [systemMode, setSystemMode] = useState<'dark' | 'light'>(() => resolveThemeMode('system'))

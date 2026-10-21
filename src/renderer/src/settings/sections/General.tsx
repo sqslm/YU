@@ -277,7 +277,7 @@ export function SettingsGroup({
         </Box>
       )}
       <Typography
-        sx={{ fontSize: 12, fontWeight: 600, lineHeight: '18px', color: 'text.secondary' }}
+        component="h3" sx={{ fontSize: 13, fontWeight: 600, lineHeight: '20px', color: 'text.primary', m: 0 }}
       >
         {title}
       </Typography>
@@ -392,10 +392,11 @@ interface SettingsRowProps {
 
 /** Label + hint on the left, a width-constrained control on the right. */
 export function SettingsRow({ label, description, children }: SettingsRowProps): JSX.Element {
+  const labelId = useId()
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 1.5, minHeight: 52 }}>
+    <Box role="group" aria-labelledby={labelId} sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 1.75, minHeight: 64 }}>
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.35, color: 'text.primary' }}>
+        <Typography id={labelId} sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'text.primary' }}>
           {label}
         </Typography>
         {description && (
@@ -440,9 +441,10 @@ interface SettingsFieldProps {
 
 /** Stacked variant for multi-line or full-width controls. */
 export function SettingsField({ label, description, children }: SettingsFieldProps): JSX.Element {
+  const labelId = useId()
   return (
-    <Box sx={{ px: 2, py: 1.5 }}>
-      <Typography sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.35, color: 'text.primary' }}>
+    <Box role="group" aria-labelledby={labelId} sx={{ px: 2, py: 1.75 }}>
+      <Typography id={labelId} sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'text.primary' }}>
         {label}
       </Typography>
       {description && (
@@ -727,8 +729,8 @@ function NotesDataGroup({
     <>
       <SettingsGroup icon={<IconFolder />} title={i18n.t('数据')}>
         <SettingsField
-          label={i18n.t('数据目录')}
-          description={i18n.t('随记的数据库与录音都放在这个目录；默认落在系统用户数据目录')}
+          label={i18n.t('随记目录')}
+          description={i18n.t('保存随记数据库和录音。更改目录不会迁移已有内容。')}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
@@ -885,34 +887,95 @@ function NotesDataGroup({
   )
 }
 
-export function GeneralSection({
-  settings,
-  patch
-}: {
+export function GeneralSection({ settings, patch }: {
+  settings: Settings
+  patch: (delta: Partial<Settings>) => void
+}): JSX.Element {
+  return (
+    <Stack spacing={3}>
+      <SettingsGroup icon={<IconGlobe />} title={i18n.t('外观')}>
+        <SettingsRow
+          label={i18n.t('主题')}
+          description={i18n.t('选择浅色、深色或跟随系统。')}
+        >
+          <TextField
+            select
+            fullWidth={false}
+            sx={controlSx}
+            value={settings.themeMode}
+            onChange={(e) => patch({ themeMode: e.target.value as Settings['themeMode'] })}
+            data-theme-select
+          >
+            <MenuItem value="dark">{i18n.t('深色')}</MenuItem>
+            <MenuItem value="light">{i18n.t('浅色')}</MenuItem>
+            <MenuItem value="system">{i18n.t('跟随系统')}</MenuItem>
+          </TextField>
+        </SettingsRow>
+        <SettingsRow
+          label={i18n.t('界面语言')}
+          description={i18n.t('用于设置、按钮和提示文字。')}
+        >
+          <TextField
+            select
+            fullWidth={false}
+            sx={controlSx}
+            value={settings.uiLanguage}
+            onChange={(e) => patch({ uiLanguage: e.target.value === 'en' ? 'en' : 'zh' })}
+            inputProps={{ 'data-ui-language': settings.uiLanguage }}
+          >
+            <MenuItem value="zh">中文</MenuItem>
+            <MenuItem value="en">English</MenuItem>
+          </TextField>
+        </SettingsRow>
+        <SettingsRow label={i18n.t('在悬浮条上显示当前模式')} description={i18n.t('在悬浮条中显示听写、翻译或问答模式。')}>
+          <Switch
+            size="small"
+            checked={settings.showModeInBar}
+            onChange={(e) => patch({ showModeInBar: e.target.checked })}
+          />
+        </SettingsRow>
+      </SettingsGroup>
+      <SettingsGroup icon={<IconGear />} title={i18n.t('启动与反馈')}>
+        <SettingsRow label={i18n.t('开机自动启动')} description={i18n.t('登录 Windows 后在后台常驻')}>
+          <Switch
+            size="small"
+            checked={settings.launchAtStartup}
+            onChange={(e) => patch({ launchAtStartup: e.target.checked })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label={i18n.t('交互音效')}
+          description={i18n.t('录音开始、结束或失败时播放提示音。')}
+        >
+          <Switch
+            size="small"
+            checked={settings.playSounds}
+            onChange={(e) => patch({ playSounds: e.target.checked })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label={i18n.t('提示停留时长')}
+          description={i18n.t('悬浮条提示自动隐藏前的等待时间，单位为秒。')}
+        >
+          <SettingsNumber
+            value={settings.alertHideSeconds}
+            min={1}
+            max={60}
+            onChange={(next) => patch({ alertHideSeconds: next })}
+          />
+        </SettingsRow>
+      </SettingsGroup>
+    </Stack>
+  )
+}
+
+export function SpeechSection({ settings, patch }: {
   settings: Settings
   patch: (delta: Partial<Settings>) => void
 }): JSX.Element {
   const [devices, setDevices] = useState<Array<{ deviceId: string; label: string }>>([])
   /** Set when the user tried to add a language past the cap (REQ-10). */
   const [translateLimitHit, setTranslateLimitHit] = useState(false)
-  /** "Never keep" deletes existing history, so it waits for this confirmation. */
-  const [retentionConfirmOpen, setRetentionConfirmOpen] = useState(false)
-  /**
-   * The blocklist is edited as free text, one name per line. The draft keeps the
-   * user's own capitalisation while typing: `normalizeAppList` lowercases on save,
-   * and rewriting the field under the caret mid-word is hostile.
-   */
-  const [appDraft, setAppDraft] = useState(() => settings.disabledApps.join('\n'))
-  const commitApps = (): void => {
-    const lines = appDraft
-      .split(/[\n,]+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    const normalized = lines.map((line) => line.toLowerCase().replace(/\.exe$/, ''))
-    // Only write when the meaning changed: the draft is not normalised, so a
-    // straight string compare would fire on every blur.
-    if (normalized.join('\n') !== settings.disabledApps.join('\n')) patch({ disabledApps: lines })
-  }
   const translateTargets = settings.translateTargets ?? []
   const atTranslateLimit = translateTargets.length >= MAX_TRANSLATE_TARGETS
 
@@ -949,24 +1012,9 @@ export function GeneralSection({
   }, [])
 
   return (
-    <Stack spacing={2.5}>
-      <SettingsGroup icon={<IconGlobe />} title={i18n.t('语言')}>
-        <SettingsRow
-          label={i18n.t('界面语言')}
-          description={i18n.t('设置、提示与按钮文字的语言。它和下一行的语音识别语言是两件事')}
-        >
-          <TextField
-            select
-            fullWidth={false}
-            sx={controlSx}
-            value={settings.uiLanguage}
-            onChange={(e) => patch({ uiLanguage: e.target.value === 'en' ? 'en' : 'zh' })}
-            inputProps={{ 'data-ui-language': settings.uiLanguage }}
-          >
-            <MenuItem value="zh">中文</MenuItem>
-            <MenuItem value="en">English</MenuItem>
-          </TextField>
-        </SettingsRow>
+    <Stack spacing={3}>
+      <SettingsGroup icon={<IconGlobe />} title={i18n.t('识别与翻译')}>
+
         <SettingsRow
           label={i18n.t('语音识别语言')}
           description={i18n.t('识别时使用的语言提示；自动检测适合中英混说的场景')}
@@ -985,9 +1033,9 @@ export function GeneralSection({
             ))}
           </TextField>
         </SettingsRow>
-        <SettingsRow
+        <SettingsField
           label={i18n.t('翻译目标语言')}
-          description={i18n.t('一次录音可同时翻成最多 {{max}} 种语言 · 已选 {{n}}/{{max}}', { max: MAX_TRANSLATE_TARGETS, n: translateTargets.length })}
+          description={i18n.t('最多选择 {{max}} 种语言，已选 {{n}} 种。', { max: MAX_TRANSLATE_TARGETS, n: translateTargets.length })}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Autocomplete
@@ -1020,7 +1068,7 @@ export function GeneralSection({
                   placeholder={translateTargets.length === 0 ? i18n.t('至少选择一个语言') : ''}
                 />
               )}
-              sx={{ width: wideControlSx.width }}
+              fullWidth
             />
             {translateLimitHit || atTranslateLimit ? (
               <Typography sx={{ fontSize: 11, color: 'warning.main' }}>
@@ -1028,9 +1076,8 @@ export function GeneralSection({
               </Typography>
             ) : null}
           </Box>
-        </SettingsRow>
+        </SettingsField>
       </SettingsGroup>
-
       <SettingsGroup icon={<IconWaveMic />} title={i18n.t('音频')}>
         <SettingsRow
           label={i18n.t('麦克风')}
@@ -1043,7 +1090,7 @@ export function GeneralSection({
           <TextField
             select
             fullWidth={false}
-            sx={{ width: 240 }}
+            sx={controlSx}
             value={settings.inputDeviceId || SYSTEM_DEFAULT}
             onChange={(e) =>
               patch({ inputDeviceId: e.target.value === SYSTEM_DEFAULT ? '' : e.target.value })
@@ -1060,37 +1107,14 @@ export function GeneralSection({
 
         <SettingsRow
           label={i18n.t('说话测试')}
-          description={i18n.t('对着麦克风说话，蓝条跟着动就正常')}
+          description={i18n.t('开始测试后说话，检查音量指示是否有响应。')}
         >
           <MicTest deviceId={settings.inputDeviceId} />
         </SettingsRow>
 
         <SettingsRow
-          label={i18n.t('交互音效')}
-          description={i18n.t('开始、结束、失败各有一声提示音')}
-        >
-          <Switch
-            size="small"
-            checked={settings.playSounds}
-            onChange={(e) => patch({ playSounds: e.target.checked })}
-          />
-        </SettingsRow>
-
-        <SettingsRow
-          label={i18n.t('提示停留时长')}
-          description={i18n.t('悬浮条上的提示与报错自动隐藏的秒数')}
-        >
-          <SettingsNumber
-            value={settings.alertHideSeconds}
-            min={1}
-            max={60}
-            onChange={(next) => patch({ alertHideSeconds: next })}
-          />
-        </SettingsRow>
-
-        <SettingsRow
           label={i18n.t('录音时静音其他声音')}
-          description={i18n.t('按下听写键就把系统播放静音，说完立刻恢复（原本就静音的话保持静音）；麦克风是输入设备，不受影响')}
+          description={i18n.t('录音时静音系统播放，结束后恢复原有状态。')}
         >
           <Switch
             size="small"
@@ -1102,7 +1126,7 @@ export function GeneralSection({
 
         <SettingsRow
           label={i18n.t('压缩上传（Opus）')}
-          description={i18n.t('一分钟语音约 180 KB（原本 2.8 MB）。本地转写服务多数只吃 WAV，被拒时会自动回退', { keySeparator: false, nsSeparator: false })}
+          description={i18n.t('减小音频上传体积；服务不支持时自动改用 WAV。', { keySeparator: false, nsSeparator: false })}
         >
           <Switch
             size="small"
@@ -1113,13 +1137,114 @@ export function GeneralSection({
           />
         </SettingsRow>
       </SettingsGroup>
+    </Stack>
+  )
+}
 
-      {/* Notes storage: the directory, its picker and the migration flow. The
-          cards around it are untouched — this is one extra group in the stack. */}
-      <NotesDataGroup settings={settings} patch={patch} />
+export function InputSection({ settings, patch }: {
+  settings: Settings
+  patch: (delta: Partial<Settings>) => void
+}): JSX.Element {
+  /**
+   * The blocklist is edited as free text, one name per line. The draft keeps the
+   * user's own capitalisation while typing: `normalizeAppList` lowercases on save,
+   * and rewriting the field under the caret mid-word is hostile.
+   */
+  const [appDraft, setAppDraft] = useState(() => settings.disabledApps.join('\n'))
+  const commitApps = (): void => {
+    const lines = appDraft
+      .split(/[\n,]+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const normalized = lines.map((line) => line.toLowerCase().replace(/\.exe$/, ''))
+    // Only write when the meaning changed: the draft is not normalised, so a
+    // straight string compare would fire on every blur.
+    if (normalized.join('\n') !== settings.disabledApps.join('\n')) patch({ disabledApps: lines })
+  }
 
-      {/* The store already implements six retention windows; without a control
-          here the whole feature was unreachable from the UI (REQ-05). */}
+  return (
+    <Stack spacing={3}>
+      <SettingsGroup icon={<IconCode />} title={i18n.t('文本插入')}>
+        <SettingsRow
+          label={i18n.t('文本插入方式')}
+          description={i18n.t('推荐自动模式，优先通过剪贴板粘贴。')}
+        >
+          <TextField
+            select
+            fullWidth={false}
+            sx={controlSx}
+            value={settings.insertMethod}
+            onChange={(e) => patch({ insertMethod: e.target.value as Settings['insertMethod'] })}
+          >
+            <MenuItem value="auto">{i18n.t('自动（优先粘贴）')}</MenuItem>
+            <MenuItem value="sendinput">{i18n.t('模拟键盘输入（SendInput）')}</MenuItem>
+            <MenuItem value="clipboard">{i18n.t('剪贴板 + Ctrl+V')}</MenuItem>
+          </TextField>
+        </SettingsRow>
+        <SettingsRow label={i18n.t('换行处理')} description={i18n.t('识别结果里的换行如何插入到前台应用')}>
+          <TextField
+            select
+            fullWidth={false}
+            sx={controlSx}
+            value={settings.multiline}
+            onChange={(e) => patch({ multiline: e.target.value as Settings['multiline'] })}
+          >
+            <MenuItem value="space">{i18n.t(i18n.t('换成空格'))}</MenuItem>
+            <MenuItem value="shiftEnter">{i18n.t(i18n.t('Shift + Enter 软换行'))}</MenuItem>
+            <MenuItem value="keep">{i18n.t(i18n.t('直接回车'))}</MenuItem>
+          </TextField>
+        </SettingsRow>
+        <SettingsRow label={i18n.t('粘贴后恢复剪贴板内容')} description={i18n.t('粘贴完成后还原剪贴板。仅剪贴板模式可用。')}>
+          <Switch
+            size="small"
+            checked={settings.restoreClipboard}
+            disabled={settings.insertMethod === 'sendinput'}
+            onChange={(e) => patch({ restoreClipboard: e.target.checked })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label={i18n.t('保留格式（粗体、列表）')}
+          description={i18n.t('在支持富文本的应用中保留粗体和列表。仅剪贴板模式可用。')}
+        >
+          <Switch
+            size="small"
+            data-rich-insert
+            checked={settings.richInsert}
+            disabled={settings.insertMethod === 'sendinput'}
+            onChange={(e) => patch({ richInsert: e.target.checked })}
+          />
+        </SettingsRow>
+      </SettingsGroup>
+      <SettingsGroup icon={<IconSliders />} title={i18n.t('听写范围')}>
+        <SettingsField
+          label={i18n.t('在这些应用里关闭听写')}
+          description={i18n.t('每行一个进程名或窗口类名，例如 code、chrome、game；不区分大小写，可省略 .exe', { keySeparator: false, nsSeparator: false })}
+        >
+          <TextField
+            size="small"
+            multiline
+            minRows={2}
+            maxRows={6}
+            data-disabled-apps
+            fullWidth
+            value={appDraft}
+            placeholder={'code\nchrome'}
+            onChange={(event) => setAppDraft(event.target.value)}
+            onBlur={commitApps}
+          />
+        </SettingsField>
+      </SettingsGroup>
+    </Stack>
+  )
+}
+
+export function StorageSection({ settings, patch }: {
+  settings: Settings
+  patch: (delta: Partial<Settings>) => void
+}): JSX.Element {
+  const [retentionConfirmOpen, setRetentionConfirmOpen] = useState(false)
+  return (
+    <Stack spacing={3}>
       <SettingsGroup icon={<IconHistory />} title={i18n.t('历史')}>
         <SettingsRow
           label={i18n.t('历史保留期')}
@@ -1157,7 +1282,17 @@ export function GeneralSection({
           />
         </SettingsRow>
       </SettingsGroup>
-
+      <NotesDataGroup settings={settings} patch={patch} />
+      <SettingsGroup icon={<IconFolder />} title={i18n.t('应用数据')}>
+        <SettingsRow
+          label={i18n.t('用户数据总目录')}
+          description={i18n.t('打开设置、历史和日志所在的目录。')}
+        >
+          <Button size="small" variant="outlined" onClick={() => void window.api.app.openDataFolder()}>
+            {i18n.t('打开')}
+          </Button>
+        </SettingsRow>
+      </SettingsGroup>
       <Dialog open={retentionConfirmOpen} onClose={() => setRetentionConfirmOpen(false)}>
         <DialogTitle>{i18n.t('不保存历史记录？')}</DialogTitle>
         <DialogContent>
@@ -1178,123 +1313,6 @@ export function GeneralSection({
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* The reference client can switch dictation off per application. Without
-          this a game or a password manager eats the recording hotkey on every
-          press and shows a pill the user never wanted. */}
-      <SettingsGroup icon={<IconSliders />} title={i18n.t('听写范围')}>
-        <SettingsRow
-          label={i18n.t('在这些应用里关闭听写')}
-          description={i18n.t('每行一个进程名或窗口类名，例如 code、chrome、game；不区分大小写，可省略 .exe', { keySeparator: false, nsSeparator: false })}
-        >
-          <TextField
-            size="small"
-            multiline
-            minRows={2}
-            maxRows={6}
-            data-disabled-apps
-            sx={{ ...controlSx, width: '100%' }}
-            value={appDraft}
-            placeholder={'code\nchrome'}
-            onChange={(event) => setAppDraft(event.target.value)}
-            onBlur={commitApps}
-          />
-        </SettingsRow>
-      </SettingsGroup>
-
-      <SettingsGroup icon={<IconCode />} title={i18n.t('文本插入')}>
-        <SettingsRow
-          label={i18n.t('文本插入方式')}
-          description={i18n.t('剪贴板整段粘贴最稳，也不会被聊天框当成回车')}
-        >
-          <TextField
-            select
-            fullWidth={false}
-            sx={{ width: 240 }}
-            value={settings.insertMethod}
-            onChange={(e) => patch({ insertMethod: e.target.value as Settings['insertMethod'] })}
-          >
-            <MenuItem value="auto">{i18n.t('自动（优先粘贴）')}</MenuItem>
-            <MenuItem value="sendinput">{i18n.t('仅 SendInput')}</MenuItem>
-            <MenuItem value="clipboard">{i18n.t('剪贴板 + Ctrl+V')}</MenuItem>
-          </TextField>
-        </SettingsRow>
-        <SettingsRow label={i18n.t('换行处理')} description={i18n.t('识别结果里的换行如何插入到前台应用')}>
-          <TextField
-            select
-            fullWidth={false}
-            sx={{ width: 240 }}
-            value={settings.multiline}
-            onChange={(e) => patch({ multiline: e.target.value as Settings['multiline'] })}
-          >
-            <MenuItem value="space">{i18n.t(i18n.t('换成空格'))}</MenuItem>
-            <MenuItem value="shiftEnter">{i18n.t(i18n.t('Shift + Enter 软换行'))}</MenuItem>
-            <MenuItem value="keep">{i18n.t(i18n.t('直接回车'))}</MenuItem>
-          </TextField>
-        </SettingsRow>
-        <SettingsRow label={i18n.t('粘贴后恢复剪贴板内容')} description={i18n.t('插入完成后把剪贴板还原成原来的内容')}>
-          <Switch
-            size="small"
-            checked={settings.restoreClipboard}
-            disabled={settings.insertMethod === 'sendinput'}
-            onChange={(e) => patch({ restoreClipboard: e.target.checked })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label={i18n.t('保留格式（粗体、列表）')}
-          description={i18n.t('结果里带 Markdown 时同时粘贴排版，Word、邮件和文档会显示成粗体与列表；记事本等只认纯文本的地方不受影响')}
-        >
-          <Switch
-            size="small"
-            data-rich-insert
-            checked={settings.richInsert}
-            disabled={settings.insertMethod === 'sendinput'}
-            onChange={(e) => patch({ richInsert: e.target.checked })}
-          />
-        </SettingsRow>
-      </SettingsGroup>
-
-      <SettingsGroup icon={<IconGear />} title={i18n.t('常规')}>
-        <SettingsRow
-          label={i18n.t('主题')}
-          description={i18n.t('跟随系统会随后台切换明暗时一起变，窗口标题栏的按钮也跟着换色')}
-        >
-          <TextField
-            select
-            fullWidth={false}
-            sx={narrowControlSx}
-            value={settings.themeMode}
-            onChange={(e) => patch({ themeMode: e.target.value as Settings['themeMode'] })}
-            data-theme-select
-          >
-            <MenuItem value="dark">{i18n.t('深色')}</MenuItem>
-            <MenuItem value="light">{i18n.t('浅色')}</MenuItem>
-            <MenuItem value="system">{i18n.t('跟随系统')}</MenuItem>
-          </TextField>
-        </SettingsRow>
-        <SettingsRow label={i18n.t('开机自动启动')} description={i18n.t('登录 Windows 后在后台常驻')}>
-          <Switch
-            size="small"
-            checked={settings.launchAtStartup}
-            onChange={(e) => patch({ launchAtStartup: e.target.checked })}
-          />
-        </SettingsRow>
-        <SettingsRow label={i18n.t('在悬浮条上显示当前模式')} description={i18n.t('打开后在条上标出听写 / 翻译 / 问答')}>
-          <Switch
-            size="small"
-            checked={settings.showModeInBar}
-            onChange={(e) => patch({ showModeInBar: e.target.checked })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label={i18n.t('用户数据总目录')}
-          description={i18n.t('设置、历史与日志保存在这里；随记的目录在「数据」分组里单独设置')}
-        >
-          <Button size="small" variant="outlined" onClick={() => void window.api.app.openDataFolder()}>
-            {i18n.t('打开')}
-          </Button>
-        </SettingsRow>
-      </SettingsGroup>
     </Stack>
   )
 }
