@@ -23,8 +23,9 @@ import {
 } from '@mui/material'
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayIcon from '@mui/icons-material/PlayArrow'
+import DownloadIcon from '@mui/icons-material/Download'
 import { useTranslation } from 'react-i18next'
-import type { NoteBulk, NoteCategory, NoteEntry, NotePatch, Settings } from '@shared/types'
+import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
 import { MicCapture } from '../../bar/capture'
 import { IconMic, IconPlus, IconSearch, IconSettings, IconSparkles, IconTrash } from '../icons'
 import {
@@ -184,6 +185,8 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
   const [flash, setFlash] = useState('')
   /** 随记 settings: currently just whether the chord brings the hub forward. */
   const [prefsOpen, setPrefsOpen] = useState(false)
+  const [exportMenu, setExportMenu] = useState<{ anchor: HTMLElement; ids: string[]; label: string } | null>(null)
+  const [exportBusy, setExportBusy] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const micRef = useRef<MicCapture | null>(null)
@@ -203,6 +206,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingRef = useRef<{ id: string; patch: NotePatch } | null>(null)
+  const saveInFlightRef = useRef<Promise<void> | null>(null)
 
   /**
    * Mirrors kept during render so the effect that resets drafts on a selection
@@ -314,21 +318,27 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
       clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
+    // A blur may have started a write before the export button was clicked.
+    while (saveInFlightRef.current) await saveInFlightRef.current
     const pending = pendingRef.current
     if (!pending) return
     pendingRef.current = null
     setSaveState((prev) => nextSaveState(prev, 'flushStarted'))
-    try {
-      const updated = await window.api.notes.update(pending.id, pending.patch)
-      if (updated) patchEntry(updated)
-      setSaveState((prev) => nextSaveState(prev, 'flushSucceeded'))
-    } catch {
-      // The patch is the only copy of what the user typed: dropping it left the
-      // edit visible until the page closed and then gone for good. Put it back so
-      // the next flush can retry, unless newer edits already queued their own.
-      pendingRef.current = pendingRef.current ?? pending
-      setSaveState((prev) => nextSaveState(prev, 'flushFailed'))
-    }
+    const saving = (async (): Promise<void> => {
+      try {
+        const updated = await window.api.notes.update(pending.id, pending.patch)
+        if (!updated) throw new Error('Note no longer exists')
+        patchEntry(updated)
+        setSaveState((prev) => nextSaveState(prev, 'flushSucceeded'))
+      } catch {
+        // Keep the only copy of an unsaved edit available for the next retry.
+        pendingRef.current = pendingRef.current ?? pending
+        setSaveState((prev) => nextSaveState(prev, 'flushFailed'))
+      }
+    })()
+    saveInFlightRef.current = saving
+    await saving
+    if (saveInFlightRef.current === saving) saveInFlightRef.current = null
   }, [patchEntry])
 
   const editField = useCallback(
@@ -713,6 +723,35 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
 
   const selectedSet = useMemo(() => new Set(selection), [selection])
   const allVisibleSelected = visible.length > 0 && visible.every((note) => selectedSet.has(note.id))
+  const exportIds = (selection.length ? ordered.filter(note => selectedSet.has(note.id)) : visible).map(note => note.id)
+
+  const exportText = async (format: NoteExportFormat): Promise<void> => {
+    const ids = exportMenu?.ids
+    setExportMenu(null)
+    if (!ids?.length) return
+    setExportBusy(true)
+    setNotice('')
+    setFlash('')
+    try {
+      await flushNow()
+      if (pendingRef.current) throw new Error(t('notes.exportSaveFailed'))
+      const result = await window.api.notes.exportText(ids, format)
+      if (result) setFlash(t('notes.exportDone', { count: result.count }))
+    } catch (err) { setNotice(messageOf(err)) }
+    finally { setExportBusy(false) }
+  }
+
+  const saveAudio = async (): Promise<void> => {
+    const id = selectedRef.current?.id
+    if (!id) return
+    setExportBusy(true)
+    setNotice('')
+    setFlash('')
+    try {
+      if (await window.api.notes.exportAudio(id)) setFlash(t('notes.audioSaved'))
+    } catch (err) { setNotice(messageOf(err)) }
+    finally { setExportBusy(false) }
+  }
 
   const toggleSelected = (id: string): void => {
     // A confirmation from the previous batch must not sit next to a new tick.
@@ -837,60 +876,73 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
 
           <Box sx={{ flex: 1 }} />
 
-          {recording && (
-            <Stack
-              direction="row"
-              spacing={0.75}
-              alignItems="center"
-              data-notes-recording
-              data-notes-elapsed={Math.floor(recordedMs / 1000)}
-            >
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  bgcolor: 'error.main',
-                  animation: 'notesPulse 1.2s ease-in-out infinite',
-                  '@keyframes notesPulse': {
-                    '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-                    '50%': { opacity: 0.3, transform: 'scale(0.78)' }
-                  }
-                }}
-              />
-              <Typography
-                data-notes-elapsed-label
-                sx={{ fontSize: 11.5, color: 'error.main', fontVariantNumeric: 'tabular-nums' }}
-              >
-                {formatClock(recordedMs)}
-              </Typography>
-            </Stack>
-          )}
-
-          <Tooltip title={t('notes.prefsTitle')}>
-            <IconButton
-              data-notes-prefs-open
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
+            <Button
+              data-notes-export
               size="small"
-              onClick={() => setPrefsOpen(true)}
-              sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px', width: 30, height: 30 }}
-              aria-label={t('notes.prefsTitle')}
+              disabled={exportBusy || bulkBusy || loading || exportIds.length === 0}
+              startIcon={<DownloadIcon sx={{ fontSize: 16 }} />}
+              onClick={(event) => setExportMenu({ anchor: event.currentTarget, ids: exportIds, label: t(selection.length ? 'notes.exportSelected' : 'notes.exportFiltered', { count: exportIds.length }) })}
+              sx={{ fontSize: 12, height: 34 }}
             >
-              <IconSettings size={14} />
-            </IconButton>
-          </Tooltip>
+              {exportBusy ? t('notes.exporting') : t('notes.export')}
+            </Button>
 
-          <Button
-            data-notes-record={recording ? 'on' : 'idle'}
-            size="small"
-            variant={recording ? 'contained' : 'outlined'}
-            color={recording ? 'error' : 'primary'}
-            disabled={starting}
-            onClick={() => void (recording ? stopRecording() : startRecording())}
-            startIcon={<IconMic size={14} />}
-            sx={{ fontSize: 12, height: 34 }}
-          >
-            {recording ? t('notes.recordStop') : t('notes.record')}
-          </Button>
+            {recording && (
+              <Stack
+                direction="row"
+                spacing={0.75}
+                alignItems="center"
+                data-notes-recording
+                data-notes-elapsed={Math.floor(recordedMs / 1000)}
+              >
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: 'error.main',
+                    animation: 'notesPulse 1.2s ease-in-out infinite',
+                    '@keyframes notesPulse': {
+                      '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                      '50%': { opacity: 0.3, transform: 'scale(0.78)' }
+                    }
+                  }}
+                />
+                <Typography
+                  data-notes-elapsed-label
+                  sx={{ fontSize: 11.5, color: 'error.main', fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {formatClock(recordedMs)}
+                </Typography>
+              </Stack>
+            )}
+
+            <Tooltip title={t('notes.prefsTitle')}>
+              <IconButton
+                data-notes-prefs-open
+                size="small"
+                onClick={() => setPrefsOpen(true)}
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px', width: 30, height: 30 }}
+                aria-label={t('notes.prefsTitle')}
+              >
+                <IconSettings size={14} />
+              </IconButton>
+            </Tooltip>
+
+            <Button
+              data-notes-record={recording ? 'on' : 'idle'}
+              size="small"
+              variant={recording ? 'contained' : 'outlined'}
+              color={recording ? 'error' : 'primary'}
+              disabled={starting}
+              onClick={() => void (recording ? stopRecording() : startRecording())}
+              startIcon={<IconMic size={14} />}
+              sx={{ fontSize: 12, height: 34 }}
+            >
+              {recording ? t('notes.recordStop') : t('notes.record')}
+            </Button>
+          </Stack>
         </Stack>
 
         {tagOptions.length > 0 && (
@@ -1297,6 +1349,15 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
 
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5, flexWrap: 'wrap' }}>
                 <Button
+                  data-notes-export-current
+                  size="small"
+                  disabled={exportBusy || bulkBusy}
+                  onClick={(event) => setExportMenu({ anchor: event.currentTarget, ids: [selected.id], label: t('notes.exportCurrent') })}
+                  sx={{ fontSize: 12 }}
+                >
+                  {t('notes.exportCurrent')}
+                </Button>
+                <Button
                   data-notes-repolish
                   size="small"
                   variant="outlined"
@@ -1382,6 +1443,13 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                       </MenuItem>
                     ))}
                   </TextField>
+                  <Tooltip title={t('notes.saveAudio')}>
+                    <span>
+                      <IconButton data-notes-save-audio size="small" disabled={!audioKey || exportBusy} onClick={() => void saveAudio()} aria-label={t('notes.saveAudio')}>
+                        <DownloadIcon sx={{ fontSize: 17 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </Stack>
               </Box>
             </Box>
@@ -1390,6 +1458,12 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
       </Box>
 
       <audio ref={audioRef} preload="metadata" style={{ display: 'none' }} />
+
+      <Menu anchorEl={exportMenu?.anchor} open={Boolean(exportMenu)} onClose={() => setExportMenu(null)}>
+        <MenuItem disabled sx={{ fontSize: 11.5 }}>{exportMenu?.label}</MenuItem>
+        <MenuItem data-notes-export-markdown onClick={() => void exportText('markdown')} sx={{ fontSize: 12.5 }}>Markdown (.md)</MenuItem>
+        <MenuItem data-notes-export-text onClick={() => void exportText('text')} sx={{ fontSize: 12.5 }}>{t('notes.exportPlainText')}</MenuItem>
+      </Menu>
 
       <Dialog
         open={repolishOpen}

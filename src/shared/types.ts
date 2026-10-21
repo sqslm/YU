@@ -290,6 +290,8 @@ export interface NoteCategory {
   name: string
 }
 
+export type NoteExportFormat = 'markdown' | 'text'
+
 /** A long-lived voice note: recording + transcript + light polish + tags. */
 export interface NoteEntry {
   id: string

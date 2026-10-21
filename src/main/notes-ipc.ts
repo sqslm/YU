@@ -1,8 +1,9 @@
 import { dialog, ipcMain, protocol } from 'electron'
 import { readFile } from 'node:fs/promises'
-import type { NoteBulk, NoteCategory, NotePatch } from '@shared/types'
+import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
 import type { NotesStore } from './notes'
 import { mt } from '@shared/mainI18n'
+import { exportNoteAudio, exportNoteText } from './notes-export'
 
 /**
  * Notes are the one place where the renderer has to read a file from disk.
@@ -89,6 +90,8 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
   })
 
   ipcMain.handle('notes:list', () => store.list())
+  ipcMain.handle('notes:exportText', (_event, ids: string[], format: NoteExportFormat) => exportNoteText(store, ids, format))
+  ipcMain.handle('notes:exportAudio', (_event, id: string) => exportNoteAudio(store, id))
 
   ipcMain.handle(
     'notes:create',

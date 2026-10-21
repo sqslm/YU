@@ -256,6 +256,19 @@ describe('pipeline failures', () => {
 })
 
 describe('editing', () => {
+  it('reports a disk write failure to the editor and persists the edit on retry', async () => {
+    const store = await loadedStore()
+    const entry = await store.create({ pcm: pcm(), durationMs: 1000 })
+    await vi.waitFor(() => expect(store.list().notes[0]!.polishStatus).toBe('ok'))
+    const temp = join(dir, `notes.json.${process.pid}.tmp`)
+    mkdirSync(temp)
+    await expect(store.update(entry.id, { transcript: '人工修订' })).rejects.toThrow()
+    expect(readDb(dir).notes[0].transcript).toBe('你好世界')
+    rmSync(temp, { recursive: true })
+    await store.update(entry.id, { transcript: '人工修订' })
+    expect(readDb(dir).notes[0].transcript).toBe('人工修订')
+  })
+
   it('marks editedAt and never lets a late polish overwrite edited text', async () => {
     // Hang the polish request so the edit lands while the model is still working.
     let release!: (text: string) => void

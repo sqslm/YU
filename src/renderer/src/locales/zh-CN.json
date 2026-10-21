@@ -943,7 +943,17 @@
     "openAppLabel": "快捷键打开应用并进入随记页",
     "openAppHint": "关闭后录音改在后台进行：不弹窗口、不抢焦点，录音状态在悬浮条上；录完照常保存。",
     "prefsChord": "当前快捷键",
-    "prefsChordHint": "要换成别的组合，去 设置 → 快捷键 → 随记录音。"
+    "prefsChordHint": "要换成别的组合，去 设置 → 快捷键 → 随记录音。",
+    "export": "导出",
+    "exporting": "导出中…",
+    "exportSelected": "导出已选 {{count}} 条",
+    "exportFiltered": "导出筛选结果 {{count}} 条",
+    "exportCurrent": "导出此条",
+    "exportPlainText": "纯文本 (.txt)",
+    "exportSaveFailed": "文字尚未保存成功，请重试保存后再导出。",
+    "exportDone": "已导出 {{count}} 条随记",
+    "saveAudio": "保存录音",
+    "audioSaved": "录音已保存"
   },
   "onboarding": {
     "welcomeTitle": "欢迎使用 Typeless Rebuild",

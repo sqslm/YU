@@ -500,7 +500,7 @@ export class NotesStore {
     // Any user edit is a change to push; the server compares `version` before it
     // takes it, so this flag never decides *whether* the server accepts it.
     note.pending = true
-    this.save()
+    this.save(true)
     return cloneNote(note)
   }
 
@@ -1275,13 +1275,15 @@ export class NotesStore {
     this.save()
   }
 
-  private save(): void {
+  private save(reportFailure = false): void {
     if (this.loaded) {
       try {
         this.writeDatabase(this.root())
       } catch (error) {
         // The change stays in memory; a disk problem must not crash a recording.
         this.options.log(`[notes] 保存失败：${describeError(error)}`)
+        // Manual edits must not acknowledge "saved" when persistence failed.
+        if (reportFailure) throw error
       }
     }
     try {

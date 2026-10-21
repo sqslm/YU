@@ -1,6 +1,6 @@
 {
   "name": "typeless-rebuild",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "license": "MIT",
   "private": true,
   "description": "Typeless-style push-to-talk dictation client with pluggable ASR and LLM providers",

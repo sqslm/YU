@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.12.0-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.13.0-setup.exe
 ```
 
 ## 使用
@@ -37,6 +37,8 @@ pnpm package          # → release\Typeless Rebuild-0.12.0-setup.exe
 触发方式可在「快捷键」页切成**按一下开始 / 结束**（默认，和 Typeless 一致）或**按住说话**；热键用录制方式改，托盘菜单可临时停用全部快捷键。切到「按一下」后，**任何模式都只按一下右 Alt 就结束**——包括用 `Space + 右 Alt` 起头的 Ask，不必再重复起手组合。
 
 说明页仅在设置中提供，主窗口侧栏不重复显示。
+
+随记工具栏的「导出」可将当前筛选结果导出为 Markdown 或 UTF-8 纯文本；勾选记录后只导出选中项，按当前排序排列。详情中的「导出此条」只导出当前记录。文档包含创建时间（本机时区）、录音时长、分类、标签、原始转写和润色文本；导出前会等待文字保存，保存失败时停止导出。播放器右侧「保存录音」按原始 OGG / WAV 格式另存，不转码。这些是可阅读的文档与原始录音导出，不是可还原分类和同步状态的完整数据库备份。
 
 设置按用途分为「通用」（外观、启动与反馈）、「语音与翻译」（识别语言、翻译与录音）、「文本输入」（插入、换行与应用排除）和「数据与存储」（历史保留与目录）。每项修改自动保存，数字输入在失焦或按 Enter 后保存。
 

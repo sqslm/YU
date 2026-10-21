@@ -8,6 +8,7 @@ import type {
   NoteBulk,
   NoteCategory,
   NoteEntry,
+  NoteExportFormat,
   NotePatch,
   NoteStore,
   PromptKind,
@@ -125,6 +126,8 @@ export interface TypelessApi {
   }
   notes: {
     list(): Promise<NoteStore>
+    exportText(ids: string[], format: NoteExportFormat): Promise<{ path: string; count: number } | null>
+    exportAudio(id: string): Promise<string | null>
     /** Stores a finished recording, then runs ASR and the light polish prompt. */
     create(input: {
       pcm: Int16Array
