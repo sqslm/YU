@@ -17,6 +17,27 @@ import type { AnswerCardPayload, TypelessApi } from '@shared/api'
 let lastCard: AnswerCardPayload | null = null
 
 const api: TypelessApi = {
+  reminders: {
+    list: () => ipcRenderer.invoke('reminders:list'),
+    save: (input, id) => ipcRenderer.invoke('reminders:save', input, id),
+    saveMany: inputs => ipcRenderer.invoke('reminders:save-many', inputs),
+    action: (id, action) => ipcRenderer.invoke('reminders:action', id, action),
+    remove: id => ipcRenderer.invoke('reminders:remove', id),
+    extractNote: id => ipcRenderer.invoke('reminders:extract-note', id),
+    view: () => ipcRenderer.invoke('reminders:view'),
+    strong: () => ipcRenderer.invoke('reminders:strong'),
+    closeStrong: () => ipcRenderer.send('reminders:close-strong'),
+    onChanged: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('reminders:changed', listener)
+      return () => ipcRenderer.removeListener('reminders:changed', listener)
+    },
+    onOpen: callback => {
+      const listener = (_event: unknown, view: import('@shared/reminders').ReminderView): void => callback(view)
+      ipcRenderer.on('reminders:open', listener)
+      return () => ipcRenderer.removeListener('reminders:open', listener)
+    }
+  },
   settings: {
     onShortcutKey: callback => {
       const handler = (_event: Electron.IpcRendererEvent, key: import('@shared/types').ShortcutKeyEvent): void => callback(key)

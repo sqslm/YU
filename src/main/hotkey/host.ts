@@ -31,7 +31,7 @@ export type HotkeyHostEvent =
   | HotkeyLockEvent
   | HotkeyNotesEvent
   | HotkeyEscapeEvent
-  | { type: 'selection'; at: number }
+  | { type: 'selection' | 'selection-translate'; at: number }
   | { type: 'capture-key'; token: string; down: boolean }
 
 export type HotkeyMessage =
@@ -150,6 +150,8 @@ export class HotkeyHost {
       pasteLast: settings.hotkeys.pasteLastKeys.keys,
       notes: settings.hotkeys.notesKeys?.keys ?? [],
       selection: settings.hotkeys.selectionKeys.keys,
+      selectionTranslate: settings.hotkeys.selectionTranslateKeys.keys,
+      reminder: settings.hotkeys.reminderKeys.keys,
       activation: settings.activationMode
     })
     this.proc.postMessage({ type: 'enabled', value: settings.hotkeys.enabled && !this.capturing })

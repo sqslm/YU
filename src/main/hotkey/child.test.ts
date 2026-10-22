@@ -36,7 +36,8 @@ afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals()
 function configure(): void {
   native.receive!({ data: { type: 'config', bindings: {
     dictation: ['RightAlt'], ask: ['RightAlt', 'Space'], translate: ['RightAlt', 'RightShift']
-  }, pasteLast: ['LeftCtrl', 'RightShift', 'V'], selection: ['LeftCtrl', 'RightShift', 'S'], notes: [] } })
+  }, pasteLast: ['LeftCtrl', 'RightShift', 'V'], selection: ['LeftCtrl', 'RightShift', 'S'],
+    selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], notes: [] } })
   native.post.mockClear()
 }
 function key(vk: number, down: boolean): number {
@@ -51,7 +52,7 @@ function events(type: string): unknown[] {
 }
 
 describe('action shortcut release ordering', () => {
-  it.each([[0x56, 'paste-last'], [0x53, 'selection']] as const)('%s waits for every modifier before %s', (letter, action) => {
+  it.each([[0x56, 'paste-last'], [0x53, 'selection'], [0x54, 'selection-translate']] as const)('%s waits for every modifier before %s', (letter, action) => {
     key(0xa2, true); key(0xa1, true)
     expect(events('start')).toHaveLength(0)
     expect(key(letter, true)).toBe(1)
@@ -105,5 +106,16 @@ describe('action shortcut release ordering', () => {
     expect(events('start')).toEqual([
       expect.objectContaining({ mode: 'dictation' }), expect.objectContaining({ mode: 'translate' })
     ])
+  })
+  it('reserves R only for the full reminder chord and never stops reminders on ordinary R input', () => {
+    expect(key(0x52, true)).toBe(0); key(0x52, false)
+    expect(events('start')).toHaveLength(0)
+    key(0xa2, true); key(0xa1, true); expect(key(0x52, true)).toBe(1); key(0x52, false)
+    key(0xa1, false); key(0xa2, false)
+    expect(events('start')).toEqual([expect.objectContaining({ mode: 'dictation', purpose: 'reminder' })])
+    expect(key(0x52, true)).toBe(0); key(0x52, false)
+    expect(events('stop')).toHaveLength(0)
+    key(0xa2, true); key(0xa1, true); key(0x52, true); key(0x52, false); key(0xa1, false); key(0xa2, false)
+    expect(events('stop')).toHaveLength(1)
   })
 })

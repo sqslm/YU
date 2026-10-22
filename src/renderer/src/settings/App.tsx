@@ -16,6 +16,9 @@ import { SettingsDialog } from './SettingsDialog'
 import { HomePage } from './pages/Home'
 import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
+import { RemindersPage } from './pages/RemindersPage'
+import type { ReminderView } from '@shared/reminders'
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import { DictionaryPage } from './pages/Dictionary'
 import { IconBook, IconChart, IconClock, IconMic, IconSettings } from './icons'
 import { Onboarding } from './pages/Onboarding'
@@ -25,19 +28,29 @@ import { PaginationSettings } from './Pagination'
 import { applyUiLanguage } from '../i18n'
 import i18n from '../i18n'
 
-type Page = 'home' | 'history' | 'notes' | 'dictionary'
+type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders'
 
 /** Label keys resolve through i18next; the ids stay stable for routing. */
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'home', labelKey: 'nav.home', icon: <IconChart /> },
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
+  { id: 'reminders', labelKey: '提醒', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
   { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> }
 ]
 
 export function App(): JSX.Element {
   const { settings, patch, saving, error, flush } = useSettings()
   const [page, setPage] = useState<Page>('home')
+  const [reminderView, setReminderView] = useState<ReminderView | null>(null)
+  const [noteToOpen, setNoteToOpen] = useState<string | undefined>()
+  useEffect(() => {
+    const open = (view: ReminderView): void => { setReminderView(view); setSettingsOpen(false); setPage('reminders') }
+    const takeView = (): void => { void window.api.reminders.view().then(view => { if (view) open(view) }) }
+    const off = window.api.reminders.onOpen(takeView)
+    takeView()
+    return off
+  }, [])
   /** Scene name the home page asked to look up; history seeds its search box with it. */
   const [historyQuery, setHistoryQuery] = useState<string | undefined>(undefined)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -111,7 +124,8 @@ export function App(): JSX.Element {
     if (page === 'history') {
       return <HistoryPage settings={settings} patch={patch} initialQuery={historyQuery} />
     }
-    if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} />
+    if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} initialNoteId={noteToOpen} />
+    if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen(id); setPage('notes') }} />
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />
     return (
       <HomePage

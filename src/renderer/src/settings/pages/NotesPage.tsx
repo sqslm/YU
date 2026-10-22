@@ -116,6 +116,7 @@ export interface NotesPageProps {
    * "toggle the recorder"; 0 means no press has happened yet.
    */
   recordTicket?: number
+  initialNoteId?: string
 }
 
 /**
@@ -135,7 +136,7 @@ export interface NotesPageProps {
  */
 let lastRecordTicket = 0
 
-export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps): JSX.Element {
+export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: NotesPageProps): JSX.Element {
   const { t } = useTranslation()
 
   const [notes, setNotes] = useState<NoteEntry[]>([])
@@ -143,8 +144,9 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [notice, setNotice] = useState('')
+  const [extractingReminders, setExtractingReminders] = useState(false)
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialNoteId ?? null)
   const [queryInput, setQueryInput] = useState('')
   const [query, setQuery] = useState('')
   const [categoryId, setCategoryId] = useState(ALL_CATEGORIES)
@@ -278,6 +280,9 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
     if (selectedId && notes.some((note) => note.id === selectedId)) return
     setSelectedId(ordered[0]?.id ?? null)
   }, [notes, ordered, selectedId])
+  useEffect(() => {
+    if (!loading && initialNoteId && notesRef.current.some(note => note.id === initialNoteId)) setSelectedId(initialNoteId)
+  }, [loading, initialNoteId])
 
   // A new selection gets fresh drafts; the previous note was flushed by the
   // click handler before this ran.
@@ -1480,6 +1485,15 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                 >
                   {t('notes.repolish')}
                 </Button>
+                <Button data-notes-extract-reminders size="small" disabled={extractingReminders || busy || recording || starting || !!retranscribingId}
+                  onClick={() => {
+                    const id = selected.id
+                    setExtractingReminders(true); setNotice('')
+                    void flushNow().then(() => {
+                      if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
+                      return window.api.reminders.extractNote(id)
+                    }).catch(e => setNotice(messageOf(e))).finally(() => setExtractingReminders(false))
+                  }}>{t(extractingReminders ? '正在提取待办…' : '提取待办与提醒')}</Button>
                 {audioKey && <Button data-notes-retranscribe size="small" disabled={busy || importing || !!retranscribingId || recording || starting}
                   onClick={() => setRetryConfirmId(selected.id)} sx={{ fontSize: 12 }}>{t('notes.retranscribe')}</Button>}
                 {selected.polishStatus === 'failed' && (

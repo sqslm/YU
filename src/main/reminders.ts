@@ -1,0 +1,108 @@
+import { mt } from '@shared/mainI18n'
+import { DatabaseSync } from 'node:sqlite'
+import { randomUUID } from 'node:crypto'
+import type { Reminder, ReminderAction, ReminderInput } from '@shared/reminders'
+import { nextOccurrence, validRecurrence } from './reminder-time'
+
+/** Same local SQLite engine as history, kept independent of history retention. */
+export class ReminderStore {
+  private readonly db: DatabaseSync
+  constructor(file: string, private readonly now = Date.now) {
+    this.db = new DatabaseSync(file)
+    this.db.exec(`PRAGMA journal_mode = WAL;
+      CREATE TABLE IF NOT EXISTS reminders (id TEXT PRIMARY KEY, dueAt INTEGER, status TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS reminders_due ON reminders(status, dueAt);`)
+  }
+  list(): Reminder[] {
+    return this.db.prepare('SELECT data FROM reminders ORDER BY dueAt IS NULL, dueAt, id').all()
+      .map(row => JSON.parse(String(row.data)) as Reminder)
+  }
+  scheduled(): Reminder[] {
+    return this.db.prepare("SELECT data FROM reminders WHERE status = 'pending' AND dueAt IS NOT NULL ORDER BY dueAt").all()
+      .map(row => JSON.parse(String(row.data)) as Reminder)
+  }
+  due(): Reminder[] {
+    return this.db.prepare("SELECT data FROM reminders WHERE status = 'due' ORDER BY dueAt").all()
+      .map(row => JSON.parse(String(row.data)) as Reminder)
+  }
+  get(id: string): Reminder | undefined {
+    const row = this.db.prepare('SELECT data FROM reminders WHERE id = ?').get(id)
+    return row ? JSON.parse(String(row.data)) as Reminder : undefined
+  }
+  save(input: ReminderInput, id?: string): Reminder {
+    const old = id ? this.get(id) : undefined
+    if (id && !old) throw new Error(mt('提醒不存在'))
+    const sameSchedule = old && old.dueAt === input?.dueAt && JSON.stringify(old.recurrence) === JSON.stringify(input.recurrence)
+    if (!input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 300) throw new Error(mt('请输入 1–300 字的提醒事项'))
+    if (!['normal', 'strong'].includes(input.level) || !['manual', 'voice', 'note'].includes(input.source)) throw new Error(mt('提醒类型无效'))
+    if (input.dueAt !== null && (!Number.isSafeInteger(input.dueAt) || input.dueAt <= this.now() && !(sameSchedule && old.status !== 'pending') || input.dueAt > 8640000000000000)) throw new Error(mt('请选择将来的提醒时间'))
+    if (input.recurrence !== null && (!validRecurrence(input.recurrence) || input.dueAt === null)) throw new Error(mt('重复规则无效'))
+    const reminder: Reminder = { title: input.title.trim(), dueAt: input.dueAt, level: input.level,
+      recurrence: input.recurrence, source: old?.source ?? input.source, noteId: old?.noteId ?? input.noteId,
+      timeExpression: input.timeExpression, id: id ?? randomUUID(), createdAt: old?.createdAt ?? this.now(),
+      updatedAt: this.now(), status: sameSchedule ? old.status : 'pending', deliveredAt: sameSchedule ? old.deliveredAt : null, lastCompletedAt: old?.lastCompletedAt }
+    return this.write(reminder)
+  }
+  saveMany(inputs: ReminderInput[]): Reminder[] {
+    if (!Array.isArray(inputs) || !inputs.length || inputs.length > 20) throw new Error(mt('请选择 1–20 个事项'))
+    this.db.exec('BEGIN')
+    try { const rows = inputs.map(input => this.save(input)); this.db.exec('COMMIT'); return rows }
+    catch (error) { this.db.exec('ROLLBACK'); throw error }
+  }
+  private write(reminder: Reminder): Reminder {
+    this.db.prepare('INSERT OR REPLACE INTO reminders (id,dueAt,status,data) VALUES (?,?,?,?)')
+      .run(reminder.id, reminder.dueAt, reminder.status, JSON.stringify(reminder))
+    return reminder
+  }
+  markDue(id: string): Reminder | undefined {
+    const row = this.get(id)
+    if (!row || row.status !== 'pending' || row.dueAt === null || row.dueAt > this.now()) return undefined
+    return this.write({ ...row, status: 'due', deliveredAt: this.now(), updatedAt: this.now() })
+  }
+  action(id: string, action: ReminderAction, snoozeMinutes = 5): Reminder {
+    const row = this.get(id)
+    if (!row) throw new Error(mt('提醒不存在'))
+    if (!['pending', 'due'].includes(row.status)) throw new Error(mt('这条提醒已处理'))
+    if (action === 'snooze') {
+      if (!Number.isInteger(snoozeMinutes) || snoozeMinutes < 1 || snoozeMinutes > 1440) throw new Error(mt('稍后提醒时长无效'))
+      return this.write({ ...row, dueAt: this.now() + snoozeMinutes * 60_000, status: 'pending', deliveredAt: null, updatedAt: this.now() })
+    }
+    if (action !== 'cancel' && action !== 'complete') throw new Error(mt('提醒操作无效'))
+    if (action === 'complete' && row.recurrence) return this.write({ ...row,
+      dueAt: nextOccurrence(row.recurrence, Math.max(this.now(), row.dueAt ?? this.now())), status: 'pending', deliveredAt: null,
+      lastCompletedAt: this.now(), updatedAt: this.now() })
+    return this.write({ ...row, status: action === 'complete' ? 'completed' : 'cancelled', updatedAt: this.now() })
+  }
+  remove(id: string): void { this.db.prepare('DELETE FROM reminders WHERE id = ?').run(id) }
+  rebaseRecurrences(): void {
+    for (const row of this.scheduled()) if (row.recurrence && row.dueAt! > this.now()) {
+      this.write({ ...row, dueAt: nextOccurrence(row.recurrence, this.now()), updatedAt: this.now() })
+    }
+  }
+  close(): void { this.db.close() }
+}
+
+/** One deadline timer; a one-minute ceiling also detects wall-clock/zone changes. */
+export class ReminderScheduler {
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private zone = ''
+  constructor(private readonly store: ReminderStore, private readonly deliver: (reminder: Reminder) => void,
+    private readonly changed: () => void, private readonly now = Date.now) {}
+  check(): void {
+    this.stop()
+    const zone = `${Intl.DateTimeFormat().resolvedOptions().timeZone}/${new Date(this.now()).getTimezoneOffset()}`
+    if (this.zone && this.zone !== zone) this.store.rebaseRecurrences()
+    this.zone = zone
+    let next = this.now() + 60_000
+    for (const row of this.store.scheduled()) {
+      if (row.status !== 'pending' || row.dueAt === null) continue
+      if (row.dueAt <= this.now()) {
+        const due = this.store.markDue(row.id)
+        if (due) { this.changed(); this.deliver(due) }
+      } else next = Math.min(next, row.dueAt)
+    }
+    this.timer = setTimeout(() => this.check(), Math.max(1, next - this.now()))
+    this.timer.unref?.()
+  }
+  stop(): void { if (this.timer) clearTimeout(this.timer); this.timer = null }
+}

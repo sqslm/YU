@@ -69,3 +69,11 @@ describe('mainMessages dictionary', () => {
     expect(mismatched).toEqual([])
   })
 })
+
+it('only shows translated new reminder copy in English', () => {
+  setMainLanguage('en')
+  expect(mt('快速提醒')).toBe('Quick reminder')
+  expect(mt('请补充具体提醒时间')).toBe('Please specify a reminder time')
+  expect(mt('没有识别到明确的提醒指令，未创建提醒')).toBe('No explicit reminder command was found. No reminder was created.')
+  setMainLanguage('zh')
+})

@@ -31,6 +31,7 @@ interface Binding {
   mode: 'dictation' | 'translate' | 'ask'
   keys: number[]
   primary: number
+  purpose?: 'reminder'
 }
 
 const WH_KEYBOARD_LL = 13
@@ -91,6 +92,7 @@ let capturing = false
 const captureHeld = new Set<number>()
 let enabled = true
 let bindings: Binding[] = []
+let voiceBindings: Binding[] = []
 let pasteLast: Binding | null = null
 /**
  * Ctrl+Alt+N (or whatever the user bound) toggles a 随记 take. Kept apart from
@@ -100,7 +102,8 @@ let pasteLast: Binding | null = null
  */
 let notesBinding: Binding | null = null
 let selectionBinding: Binding | null = null
-let actionPending: { type: 'selection' | 'paste-last'; keys: number[] } | null = null
+let selectionTranslateBinding: Binding | null = null
+let actionPending: { type: 'selection' | 'selection-translate' | 'paste-last'; keys: number[] } | null = null
 /**
  * True while the answer card is on screen. ESC then belongs to the card — the
  * window is shown inactive, so the card's own keydown handler never fires and
@@ -185,6 +188,7 @@ interface Recording {
   primary: number
   keys: number[]
   startedAt: number
+  purpose?: 'reminder'
 }
 
 /** A press whose mode is settled when the primary comes back up. */
@@ -193,6 +197,7 @@ interface Pending {
   primary: number
   keys: number[]
   chord: Binding | null
+  purpose?: 'reminder'
 }
 
 let recording: Recording | null = null
@@ -211,6 +216,7 @@ function allDown(keys: number[]): boolean {
 function matchBinding(): Binding | null {
   let best: Binding | null = null
   for (const b of bindings) {
+    if (b.purpose && !state.eaten.has(b.primary)) continue
     if (!allDown(b.keys)) continue
     if (!best || b.keys.length > best.keys.length) best = b
   }
@@ -269,6 +275,7 @@ function boundKey(vk: number): boolean {
   for (const b of bindings) if (b.keys.includes(vk)) return true
   if (notesBinding && notesBinding.keys.includes(vk)) return true
   if (selectionBinding && selectionBinding.keys.includes(vk)) return true
+  if (selectionTranslateBinding && selectionTranslateBinding.keys.includes(vk)) return true
   return pasteLast ? pasteLast.keys.includes(vk) : false
 }
 
@@ -337,12 +344,15 @@ function swallowDown(vk: number, injected: boolean): boolean {
   if (cardOpen && vk === VK_ESCAPE) return true
   if (pasteLast && vk === chordKey(pasteLast) && allDown(pasteLast.keys)) return true
   if (selectionBinding && vk === chordKey(selectionBinding) && allDown(selectionBinding.keys)) return true
+  if (selectionTranslateBinding && vk === chordKey(selectionTranslateBinding) && allDown(selectionTranslateBinding.keys)) return true
   if (notesBinding && vk === chordKey(notesBinding) && allDown(notesBinding.keys)) return true
+  const reminder = bindings.find(binding => binding.purpose === 'reminder')
+  if (reminder && vk === reminder.primary && allDown(reminder.keys)) return true
   // A qualifier only belongs to us once its primary is held: a lone Shift or
   // Space must reach the foreground app, or typing breaks everywhere. The ledger
   // answers that question — the async key state does not necessarily see a key
   // this hook has already swallowed.
-  return shouldSwallow(bindings, vk, (primary) => pressed.has(primary))
+  return shouldSwallow(voiceBindings, vk, (primary) => pressed.has(primary))
 }
 
 /** Turns one ledger diff into start / mode / stop / cancel / paste-last events. */
@@ -376,7 +386,7 @@ function drive(): void {
       // Hold is the opposite — the gesture is "keep the keys down while you
       // talk", so releasing any of them ends the take.
       const ends =
-        activation === 'hold' ? recording.keys.includes(vk) : vk === recording.primary
+        activation === 'hold' ? recording.keys.includes(vk) : !recording.purpose && vk === recording.primary
       if (ends) {
         const mode = recording.mode
         recording = null
@@ -392,11 +402,12 @@ function drive(): void {
         pending = null
         continue
       }
+      const purpose = pending.purpose
       const mode = pending.chord?.mode ?? pending.mode
       const keys = pending.chord?.keys ?? pending.keys
       pending = null
-      recording = { mode, primary: vk, keys, startedAt: now }
-      post({ type: 'start', mode, at: now })
+      recording = { mode, primary: vk, keys, startedAt: now, purpose }
+      post({ type: 'start', mode, at: now, purpose })
     }
   }
 
@@ -419,10 +430,10 @@ function drive(): void {
     }
     if (recording) {
       const next = matchBinding()
-      if (next && next.keys.length > recording.keys.length) {
+      if (next && !next.purpose && !recording.purpose && next.keys.length > recording.keys.length) {
         recording = { ...recording, mode: next.mode, keys: next.keys }
         post({ type: 'mode', mode: next.mode, at: now })
-      } else if (vk === recording.primary) {
+      } else if (vk === recording.primary && (!recording.purpose || allDown(recording.keys))) {
         const mode = recording.mode
         recording = null
         post({ type: 'stop', mode, at: now })
@@ -434,7 +445,7 @@ function drive(): void {
       // tap the hotkey" and "hold the hotkey, then tap Shift" both mean the
       // longer gesture.
       const next = matchBinding()
-      if (next && next.keys.length > pending.keys.length) pending.chord = next
+      if (next && !next.purpose && !pending.purpose && next.keys.length > pending.keys.length) pending.chord = next
       continue
     }
     if (pasteLast && vk === chordKey(pasteLast) && allDown(pasteLast.keys)) {
@@ -446,6 +457,10 @@ function drive(): void {
     if (selectionBinding && vk === chordKey(selectionBinding) && allDown(selectionBinding.keys)) {
       // Wait for every modifier to be released before sending Ctrl+C.
       actionPending = { type: 'selection', keys: selectionBinding.keys }
+      continue
+    }
+    if (selectionTranslateBinding && vk === chordKey(selectionTranslateBinding) && allDown(selectionTranslateBinding.keys)) {
+      actionPending = { type: 'selection-translate', keys: selectionTranslateBinding.keys }
       continue
     }
     if (notesBinding && allDown(notesBinding.keys)) {
@@ -462,12 +477,12 @@ function drive(): void {
       // made a held hotkey record only the silence after the user let go, which
       // is why every word of a held take was missing from the transcript.
       if (!inputDesktopAvailable()) continue
-      recording = { mode: match.mode, primary: match.primary, keys: match.keys, startedAt: now }
-      post({ type: 'start', mode: match.mode, at: now })
+      recording = { mode: match.mode, primary: match.primary, keys: match.keys, startedAt: now, purpose: match.purpose }
+      post({ type: 'start', mode: match.mode, at: now, purpose: match.purpose })
       continue
     }
     // The take starts on the release: a held key is one press, never a stream.
-    pending = { mode: match.mode, primary: match.primary, keys: match.keys, chord: null }
+    pending = { mode: match.mode, primary: match.primary, keys: match.keys, chord: null, purpose: match.purpose }
   }
 }
 
@@ -560,6 +575,8 @@ port.on('message', (event: { data: unknown }) => {
         pasteLast: string[]
         notes?: string[]
         selection?: string[]
+        selectionTranslate?: string[]
+        reminder?: string[]
         activation?: 'hold' | 'toggle'
       }
     | { type: 'enabled'; value: boolean }
@@ -571,9 +588,15 @@ port.on('message', (event: { data: unknown }) => {
     for (const [mode, keys] of Object.entries(data.bindings)) {
       if (keys.length) bindings.push(bindingFrom(mode as Binding['mode'], keys))
     }
+    voiceBindings = [...bindings]
+    if (data.reminder?.length) {
+      const binding = bindingFrom('dictation', data.reminder)
+      bindings.push({ ...binding, purpose: 'reminder', primary: chordKey(binding) })
+    }
     bindings.sort((a, b) => b.keys.length - a.keys.length)
     pasteLast = data.pasteLast.length ? bindingFrom('dictation', data.pasteLast) : null
     selectionBinding = data.selection?.length ? bindingFrom('dictation', data.selection) : null
+    selectionTranslateBinding = data.selectionTranslate?.length ? bindingFrom('dictation', data.selectionTranslate) : null
     actionPending = null
     notesBinding = data.notes && data.notes.length > 0 ? bindingFrom('dictation', data.notes) : null
     if (data.activation === 'hold' || data.activation === 'toggle') {

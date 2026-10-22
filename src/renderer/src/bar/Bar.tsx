@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BarState, BarWindowLayout, Mode, Settings } from '@shared/types'
-import { AlertRow, alertOf, alertTone } from './AlertRow'
+import { AlertRow, alertOf, alertTone, hasAlertActions } from './AlertRow'
 import { MicCapture } from './capture'
 import { disposeCues, playCue } from './cues'
 import { CaptionTicker } from './CaptionTicker'
@@ -34,6 +34,7 @@ export function modeLabelFor(state: BarState, showMode: boolean): string | null 
     case 'recording':
     case 'working':
     case 'done': {
+      if ('taskLabel' in state && state.taskLabel) return state.taskLabel
       // `mode` is required by the type but not by a stale main process, so the
       // lookup keeps a runtime default instead of trusting the declaration.
       const mode = (state as { mode?: Mode }).mode
@@ -107,7 +108,7 @@ export function Bar(): JSX.Element {
       // A notice that carries buttons needs real clicks; every other frame stays
       // click-through, so the pill never eats the pointer it floats over. Without
       // this the alert's 「知道了」 drew a button that could not be pressed.
-      window.api.bar.interactive((alertOf(next)?.actions?.length ?? 0) > 0)
+      window.api.bar.interactive(hasAlertActions(next))
       // Cues fire on transitions only: a repeated `recording` frame (waveform
       // updates) must not re-beep.
       if (next.phase !== previous) {
@@ -170,9 +171,8 @@ export function Bar(): JSX.Element {
     'showMode' in state && typeof state.showMode === 'boolean' ? state.showMode : undefined
   const modeLabel = modeLabelFor(state, showModeFromState ?? showMode)
 
-  // The pill carries no buttons, so it never needs the mouse: leaving the whole
-  // strip click-through means a click aimed at the editor underneath is never
-  // eaten by a 340px always-on-top window.
+  // Start click-through. State updates temporarily enable the reminder Undo
+  // action; recording and other notices keep passing clicks to the editor.
   useEffect(() => {
     window.api.bar.interactive(false)
   }, [])

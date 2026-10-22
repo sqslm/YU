@@ -1,6 +1,6 @@
 {
   "name": "typeless-rebuild",
-  "version": "0.24.1",
+  "version": "0.25.0",
   "license": "MIT",
   "private": true,
   "description": "Typeless-style push-to-talk dictation client with pluggable ASR and LLM providers",
@@ -21,6 +21,7 @@
     "release:archives": "node scripts/release.mjs"
   },
   "dependencies": {
+    "chrono-node": "2.10.3",
     "electron-updater": "^6.6.2",
     "koffi": "^2.14.1",
     "sherpa-onnx-node": "1.13.8"

@@ -50,7 +50,8 @@ export default defineConfig({
           // Ask Anything answer card: its own frameless window.
           card: resolve('src/renderer/card.html'),
           // Sign-in: its own window, closable, because dictation works signed out.
-          login: resolve('src/renderer/login.html')
+          login: resolve('src/renderer/login.html'),
+          reminder: resolve('src/renderer/reminder.html')
         }
       }
     }

@@ -69,13 +69,12 @@ export function alertOf(state: BarState): BarAlert | null {
 /**
  * Whether the current state puts real buttons on screen.
  *
- * The bar deliberately has **no buttons**: a notice is information, not a
- * control panel, and every click target on a transparent always-on-top strip is
- * a chance to swallow a click meant for the editor underneath. Kept as an
- * exported predicate so the bar's drag/hit-test logic has one answer to read.
+ * Existing notices stay passive. A newly created reminder alone offers an Undo
+ * button, so the bar only receives clicks during that short confirmation.
  */
-export function hasAlertActions(_state: BarState): boolean {
-  return false
+export function hasAlertActions(state: BarState): boolean {
+  const alert = alertOf(state)
+  return alert?.kind === 'reminder' && Boolean(alert.actions?.some(action => action.id === 'undo-reminder'))
 }
 
 export interface AlertRowProps {
@@ -101,6 +100,10 @@ export function AlertRow({ alert, title }: AlertRowProps): JSX.Element {
       <span style={{ ...textStyle, color: tone.text }} title={title ?? alert.text}>
         {alert.text}
       </span>
+      {alert.kind === 'reminder' && alert.actions?.filter(action => action.id === 'undo-reminder').map(action =>
+        <button key={action.id} data-bar-action={action.id} onClick={() => window.api.bar.action(action.id)}
+          style={{ flexShrink: 0, border: 'none', borderRadius: 6, background: tone.tint, color: tone.accent,
+            padding: '4px 7px', fontSize: 11, cursor: 'pointer', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>{action.label}</button>)}
     </>
   )
 }

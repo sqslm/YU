@@ -23,11 +23,25 @@ import type {
 } from './types'
 import type { StatsFile } from './stats'
 import type { LocalAsrMirror, LocalAsrStatus, LocalDownloadProgress } from './local-asr'
+import type { Reminder, ReminderAction, ReminderInput, ReminderView } from './reminders'
 
 export type { AnswerCardPayload } from './types'
 
 /** The bridge exposed by the preload script as `window.api`. */
 export interface TypelessApi {
+  reminders: {
+    list(): Promise<Reminder[]>
+    save(input: ReminderInput, id?: string): Promise<Reminder>
+    saveMany(inputs: ReminderInput[]): Promise<Reminder[]>
+    action(id: string, action: ReminderAction): Promise<void>
+    remove(id: string): Promise<void>
+    extractNote(id: string): Promise<void>
+    view(): Promise<ReminderView | null>
+    strong(): Promise<Reminder[]>
+    closeStrong(): void
+    onChanged(callback: () => void): () => void
+    onOpen(callback: (view: ReminderView) => void): () => void
+  }
   settings: {
     get(): Promise<Settings>
     update(patch: Partial<Settings>): Promise<Settings>

@@ -53,6 +53,7 @@ export function currentUiLanguage(): UiLanguage {
  */
 export function applyUiLanguage(language: string | undefined): UiLanguage {
   const next = normalizeUiLanguage(language)
+  if (typeof document !== 'undefined') document.documentElement.lang = next === 'en' ? 'en' : 'zh-CN'
   setMainLanguage(next)
   if (i18n.resolvedLanguage !== next) void i18n.changeLanguage(next)
   return next

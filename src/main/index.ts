@@ -35,6 +35,7 @@ import { collectResources } from './resources'
 import { applyReplaceText } from './agent'
 import { SelectionEditor } from './selection-editor'
 import { captureSelectionTarget } from './selection-target'
+import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
@@ -91,6 +92,13 @@ let barWindow: BrowserWindow | null = null
 let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
+let reminders: ReminderService | null = null
+
+function broadcastReminders(): void {
+  for (const win of [settingsWindow, barWindow]) {
+    if (win && !win.isDestroyed()) win.webContents.send('reminders:changed')
+  }
+}
 
 /**
  * Notes own their own store: the document, the audio files and the background
@@ -304,6 +312,10 @@ async function appendFeedback(input: {
  */
 function handleBarAction(id: BarActionId): void {
   switch (id) {
+    case 'undo-reminder':
+      reminders?.undo()
+      pipeline?.dismissAlert()
+      break
     case 'retry':
       void pipeline?.retry().then((result) => {
         if (!result.ok) log(`[bar] retry skipped: ${result.message}`)
@@ -485,10 +497,6 @@ function showAnswerCard(payload: AnswerCardPayload): void {
  * overwritten after they clicked that button, and `ask` is a follow-up turn.
  */
 async function handleCardAction(action: CardAction): Promise<void> {
-  if (lastAnswer?.selection && action.id !== 'copy') {
-    await selectionEditor?.action(action.id)
-    return
-  }
   if (action.id === 'stop') {
     const partial = lastAnswer
     if (partial?.streaming && pipeline?.stopAnswer()) {
@@ -602,6 +610,7 @@ function registerIpc(): void {
     const previous = store.get()
     const next = await store.update(patch)
     setMainLanguage(next.uiLanguage)
+    reminders?.settingsChanged()
     hotkeys?.apply(next)
     if (next.launchAtStartup !== previous.launchAtStartup) {
       app.setLoginItemSettings({ openAtLogin: next.launchAtStartup, args: ['--background'] })
@@ -1084,8 +1093,8 @@ function wireHotkeys(): void {
           // `stop`/`lock` itself, so this side never second-guesses a take.
           // The context reader is started here rather than at boot: it costs a
           // process, and a take is the only thing that needs a snapshot.
-          uia.warm()
-          pipeline.start(event.mode, { handsFree: event.handsFree })
+          if (!event.purpose) uia.warm()
+          pipeline.start(event.mode, { handsFree: event.handsFree, purpose: event.purpose })
           break
         case 'mode':
           pipeline.upgrade(event.mode)
@@ -1097,6 +1106,7 @@ function wireHotkeys(): void {
           void pipeline.stop()
           break
         case 'cancel':
+          selectionEditor?.cancel()
           // ESC abandons the take and its audio without adding history.
           // A discarded tap also skips the cancellation hint.
           if (event.reason === 'tap') pipeline.discard()
@@ -1108,12 +1118,13 @@ function wireHotkeys(): void {
           hideCard()
           break
         case 'selection':
-          if (pipeline.isBusy) {
+        case 'selection-translate':
+          if (pipeline.isBusy || selectionEditor?.isBusy) {
             pipeline.showAlert({ kind: 'busy', level: 'info', text: mt('正在处理上一条，稍后再试'), actions: [] })
             break
           }
           hideCard()
-          void selectionEditor?.open()
+          void selectionEditor?.run(event.type === 'selection' ? 'polish' : 'translate', store.get().selectionInsertMode === 'append')
           break
         case 'notes-toggle':
           void toggleNotesRecording()
@@ -1181,7 +1192,14 @@ async function bootstrap(): Promise<void> {
     callback(permission === 'media')
   })
 
+  if (process.platform === 'win32') app.setAppUserModelId('com.typeless.rebuild')
+  reminders = new ReminderService(join(app.getPath('userData'), 'reminders.sqlite'), () => store.get(), view => {
+    const win = ensureSettingsWindow()
+    win.webContents.send('reminders:open', view)
+  }, broadcastReminders, log)
+
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+    onReminder: (text, signal) => reminders!.voice(text, signal),
     // Ask mode answers land in the card window; dictation/translate keep
     // typing straight into the foreground app.
     onAnswer: (payload) => showAnswerCard(payload),
@@ -1219,8 +1237,7 @@ async function bootstrap(): Promise<void> {
     transform: (text, operation, context) => pipeline!.transformSelection(text, operation, context),
     busy: () => pipeline!.isBusy,
     cancel: () => { pipeline?.cancel('selection') },
-    show: showAnswerCard,
-    hide: () => hideCard(false)
+    status: (text, error) => pipeline?.showAlert({ kind: 'selection', level: error ? 'error' : 'info', text: mt(text) })
   })
   wireHotkeys()
 
@@ -1259,8 +1276,12 @@ async function bootstrap(): Promise<void> {
   powerMonitor.on('lock-screen', () => {
     pipeline?.cancel('lock')
   })
+  powerMonitor.on('resume', () => reminders?.refresh())
+  powerMonitor.on('unlock-screen', () => reminders?.refresh())
 
   registerIpc()
+  reminders.registerIpc(notes)
+  reminders.start()
   registerNotesIpc({
     store: notes,
     persistDir: async (dir) => {
@@ -1599,6 +1620,9 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    selectionEditor?.cancel()
+    pipeline?.cancel('quit')
+    reminders?.stop()
     hotkeys?.stop()
     uia.stop()
     localAsr.release()

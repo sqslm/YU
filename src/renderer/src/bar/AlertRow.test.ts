@@ -69,6 +69,10 @@ describe('alertOf', () => {
 })
 
 describe('hasAlertActions', () => {
+  it('only makes the new reminder undo action interactive', () => {
+    expect(hasAlertActions({ phase: 'alert', alert: { kind: 'reminder', level: 'info', text: 'Saved', actions: [{ id: 'undo-reminder', label: 'Undo' }] } })).toBe(true)
+    expect(hasAlertActions({ phase: 'alert', alert: { kind: 'reminder', level: 'info', text: 'Review time' } })).toBe(false)
+  })
   it('is always false: the bar renders no buttons at all', () => {
     // Even an alert that *carries* actions must not put them on screen — the
     // strip stays a passive notice, so it can stay click-through.

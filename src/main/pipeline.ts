@@ -121,6 +121,7 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  onReminder?: (text: string, signal: AbortSignal) => Promise<{ message: string; undo?: boolean }>
   /**
    * Ask-mode answers are surfaced in the dedicated answer card window instead
    * of being typed into the foreground app.
@@ -207,7 +208,8 @@ function stripAppendedSources(text: string): string {
 export class Pipeline {
   private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
-  private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo } | null = null
+  private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo; purpose?: 'reminder' } | null = null
+  private takePurpose: 'reminder' | undefined
   private stage: Stage = 'idle'
   /** Mode of the current or most recent take, for bar labels. */
   private stageMode: Mode = 'dictation'
@@ -360,7 +362,7 @@ export class Pipeline {
     if (!win) return
     const live = state.phase === 'recording' || state.phase === 'working'
     if (!win.isDestroyed()) win.webContents.send('bar:state', live
-      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name }
+      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : undefined }
       : state)
     this.barPhase = state.phase
     if (live || state.phase === 'alert' || state.phase === 'error') {
@@ -432,7 +434,8 @@ export class Pipeline {
     // An alert that carries buttons must be clickable the instant it appears: the
     // user reaches for 重试/关闭 without sweeping the pointer across the pill
     // first, and pointer-enter is what would otherwise arm mouse capture.
-    this.setBarState({ phase: 'alert', alert }, this.alertLifetime())
+    this.setBarState({ phase: 'alert', alert }, alert.kind === 'reminder' && alert.actions?.some(action => action.id === 'undo-reminder')
+      ? Math.max(10_000, this.alertLifetime()) : this.alertLifetime())
   }
 
   /** A recording key landed while the previous take was still running. */
@@ -580,7 +583,7 @@ export class Pipeline {
     }, capMs)
   }
 
-  start(mode: Mode, options: { handsFree?: boolean } = {}): void {
+  start(mode: Mode, options: { handsFree?: boolean; purpose?: 'reminder' } = {}): void {
     // The stage stays `recording` while `stop()` waits for the renderer to flush
     // its tail, so a press in that window must be reported as busy instead of
     // being ignored as a duplicate start.
@@ -617,7 +620,8 @@ export class Pipeline {
     this.chunks = []
     this.encoded = null
     const opened = foregroundWindow()
-    this.recording = { mode, startedAt: Date.now(), handsFree: options.handsFree, target: opened }
+    this.takePurpose = options.purpose
+    this.recording = { mode, startedAt: Date.now(), handsFree: options.handsFree, target: opened, purpose: options.purpose }
     // Old entries are only kept until their take writes its history row; the cap
     // stops a long session from accumulating them if one never does.
     if (this.takePrompt.size > 8) this.takePrompt.clear()
@@ -630,7 +634,7 @@ export class Pipeline {
     // insertion verification — lands in the same file without extra plumbing.
     const opening = this.getSettings()
     this.startCaptions(opening)
-    this.selectTakePrompt(mode, opening, { appName: opened.className, windowTitle: opened.title })
+    if (!options.purpose) this.selectTakePrompt(mode, opening, { appName: opened.className, windowTitle: opened.title })
     recordingLog.begin({
       mode,
       appName: opened ? appLabel(opened.appName, opened.title) : '',
@@ -646,7 +650,7 @@ export class Pipeline {
     // OPT-09: silence other audio while the microphone is open. The playback
     // endpoint is muted, not the input, so dictation itself is unaffected.
     if (opening.muteWhileRecording) this.mutePlayback()
-    this.contextRead = this.readContext()
+    this.contextRead = options.purpose ? Promise.resolve(null) : this.readContext()
     this.armSessionCap()
     this.setBarState({
       phase: 'recording',
@@ -781,7 +785,7 @@ export class Pipeline {
     const pcm = concatPcm(this.chunks)
     this.chunks = []
     this.log(`[pipeline] stop ${active.mode}: ${pcmDurationMs(pcm)}ms captured`)
-    return this.complete(active.mode, pcm, token, active.target)
+    return this.complete(active.mode, pcm, token, active.target, active.purpose)
   }
 
   /**
@@ -868,6 +872,7 @@ export class Pipeline {
   async transformSelection(text: string, operation: 'polish' | 'translate', context: PromptContext): Promise<{ text: string; promptName: string } | null> {
     if (this.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
     const token = ++this.runToken
+    this.takePurpose = undefined
     const controller = new AbortController()
     this.abort = controller
     this.stage = 'working'
@@ -875,6 +880,7 @@ export class Pipeline {
     const current = this.getSettings()
     const settings = { ...current, polish: { ...current.polish, enabled: true } }
     this.selectTakePrompt(this.stageMode, settings, context)
+    this.setBarState({ phase: 'working', mode: this.stageMode, hint: mt('正在处理选中文字…') })
     try {
       const raw = await this.postProcess(this.stageMode, text, settings, controller.signal, context)
       if (token !== this.runToken || controller.signal.aborted) return null
@@ -887,6 +893,7 @@ export class Pipeline {
     } finally {
       this.finishStage(token)
       if (this.abort === controller) this.abort = null
+      if (token === this.runToken) this.setBarState({ phase: 'idle' }, 120)
     }
   }
 
@@ -1076,7 +1083,8 @@ export class Pipeline {
     mode: Mode,
     pcm: Int16Array,
     token: number,
-    openingTarget?: ForegroundInfo
+    openingTarget?: ForegroundInfo,
+    purpose?: 'reminder'
   ): Promise<HistoryEntry | null> {
     this.stage = 'working'
     this.stageMode = mode
@@ -1104,7 +1112,7 @@ export class Pipeline {
 
     const target = openingTarget ?? foregroundWindow()
     const settings = this.getSettings()
-    this.selectTakePrompt(mode, settings, { appName: target.className, windowTitle: target.title })
+    if (!purpose) this.selectTakePrompt(mode, settings, { appName: target.className, windowTitle: target.title })
     const controller = new AbortController()
     this.abort = controller
     const route = settings.pipelineMode
@@ -1128,6 +1136,20 @@ export class Pipeline {
       let actions: CardAction[] = []
       let retrieval: AskRetrieval | undefined
 
+      if (purpose === 'reminder') {
+        transcript = route === 'multimodal'
+          ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
+          : await this.asrTranscript(settings, wav, controller.signal, progress)
+        if (token !== this.runToken) return null
+        if (!transcript.trim()) throw new Error('ASR returned an empty transcript')
+        progress(mt('解析提醒中…'))
+        if (!this.options.onReminder) throw new Error(mt('提醒服务尚未就绪'))
+        const result = await this.options.onReminder(transcript, controller.signal)
+        if (token !== this.runToken) return null
+        this.showAlert({ kind: 'reminder', level: 'info', text: result.message,
+          actions: result.undo ? [{ id: 'undo-reminder', label: mt('撤销') }] : [] })
+        return null
+      }
       if (mode === 'ask') {
         // Ask always runs through the text agent: the tool loop needs a
         // transcript it can iterate on, and a one-shot multimodal answer cannot
@@ -1302,6 +1324,7 @@ export class Pipeline {
     if (token !== this.runToken) return
     this.stage = 'idle'
     this.encoded = null
+    this.takePurpose = undefined
   }
 
   /** ASR leg of the classic route, walking the configured failover chain. */

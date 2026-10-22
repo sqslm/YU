@@ -8,6 +8,7 @@ Optional speech models are downloaded separately and are not included in the ins
 
 | Package | Version | License | License texts |
 | --- | --- | --- | --- |
+| chrono-node | 2.10.3 | MIT | [LICENSE](licenses/chrono-node-2.10.3-LICENSE) |
 | sherpa-onnx-node | 1.13.8 | Apache-2.0 | [Upstream v1.13.8 license](licenses/sherpa-onnx-1.13.8-LICENSE) |
 | sherpa-onnx-win-x64 | 1.13.8 | Apache-2.0 | [Upstream v1.13.8 license](licenses/sherpa-onnx-1.13.8-LICENSE) |
 | typescript | 5.9.3 | Apache-2.0 | [LICENSE.txt](licenses/typescript-5.9.3-LICENSE.txt) |

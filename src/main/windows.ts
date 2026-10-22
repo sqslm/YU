@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { BarWindowLayout, ThemeMode } from '@shared/types'
 import { BAR_HEIGHT, BAR_WIDTH, barCaptionRect } from './barLayout'
 import { openExternalSafely } from './safeLink'
+import { mt } from '@shared/mainI18n'
 import {
   CARD_INITIAL_HEIGHT,
   CARD_MAX_HEIGHT,
@@ -18,11 +19,23 @@ const preload = join(here, '../preload/index.js')
 const rendererDir = join(here, '../renderer')
 const devServer = process.env['ELECTRON_RENDERER_URL']
 
-type Page = 'settings' | 'bar' | 'card' | 'login'
+type Page = 'settings' | 'bar' | 'card' | 'login' | 'reminder'
 
 function loadPage(win: BrowserWindow, page: Page): void {
   if (devServer) void win.loadURL(`${devServer}/${page}.html`)
   else void win.loadFile(join(rendererDir, `${page}.html`))
+}
+
+/** One closable, ordinary OS window for the whole strong-reminder queue. */
+export function createReminderWindow(mode: ThemeMode): BrowserWindow {
+  const win = new BrowserWindow({ width: 480, height: 380, minWidth: 400, minHeight: 300,
+    title: `${mt('强提醒')} · Typeless Rebuild`, show: false, alwaysOnTop: true, autoHideMenuBar: true,
+    backgroundColor: hubBackgroundColor(mode),
+    webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true } })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  win.once('ready-to-show', () => win.showInactive())
+  loadPage(win, 'reminder')
+  return win
 }
 
 /** Height of the native window-controls strip drawn over the app content. */

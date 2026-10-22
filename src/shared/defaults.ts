@@ -36,6 +36,8 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
     },
     pasteLastKeys: { keys: ['LeftCtrl', 'RightShift', 'V'] },
     selectionKeys: { keys: ['LeftCtrl', 'RightShift', 'S'] },
+    selectionTranslateKeys: { keys: ['LeftCtrl', 'RightShift', 'T'] },
+    reminderKeys: { keys: ['LeftCtrl', 'RightShift', 'R'] },
     // Ctrl+Alt+N: no modifier of the dictation gesture, so a note take can never
     // be mistaken for one and a note chord cannot start a dictation on its way in.
     notesKeys: { keys: ['LeftCtrl', 'LeftAlt', 'N'] },
@@ -46,6 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   // Empty on purpose: a connection only exists once the user saves a profile.
   // Ship a populated default and every take fails against an endpoint the user
   // never chose, with an error that points at the network instead of the setup.
+  selectionInsertMode: 'replace',
+  reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
     baseUrl: '',
     apiKey: '',
@@ -171,7 +175,7 @@ export function applySettingsPatch(current: Settings, patch: Partial<Settings>):
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings>
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings> {
   const next = { ...current, ...patch }
-  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains'] as const) {
+  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders'] as const) {
     if (patch[key]) next[key] = { ...current[key], ...patch[key] } as never
   }
   if (patch.hotkeys?.bindings) {
@@ -218,6 +222,26 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   merged.hotkeys.selectionKeys = {
     ...base.hotkeys.selectionKeys,
     ...(input.hotkeys?.selectionKeys ?? {})
+  }
+  // New shortcuts must not take an existing custom chord. A cleared binding
+  // remains cleared; only fields absent in an older version get a free default.
+  const used = [
+    ...Object.values(merged.hotkeys.bindings), merged.hotkeys.pasteLastKeys,
+    merged.hotkeys.selectionKeys, input.hotkeys?.notesKeys ?? base.hotkeys.notesKeys,
+    input.hotkeys?.selectionTranslateKeys ?? { keys: [] }, input.hotkeys?.reminderKeys ?? { keys: [] }
+  ].map(binding => [...(Array.isArray(binding) ? binding : binding.keys ?? [])].sort().join('+'))
+  for (const [field, letters] of [['selectionTranslateKeys', ['T', 'Y', 'F9']], ['reminderKeys', ['R', 'F10', 'F11']]] as const) {
+    const stored = input.hotkeys?.[field]
+    const keys = stored?.keys ?? letters.map(letter => ['LeftCtrl', 'RightShift', letter])
+      .find(chord => !used.includes([...chord].sort().join('+'))) ?? []
+    merged.hotkeys[field] = { keys }
+    used.push([...keys].sort().join('+'))
+  }
+  merged.selectionInsertMode = input.selectionInsertMode === 'append' ? 'append' : 'replace'
+  merged.reminders = {
+    notifications: input.reminders?.notifications !== false,
+    strongSound: input.reminders?.strongSound !== false,
+    snoozeMinutes: [1, 5, 10, 15, 30, 60].includes(input.reminders?.snoozeMinutes ?? 5) ? input.reminders?.snoozeMinutes ?? 5 : 5
   }
   merged.hotkeys.notesKeys = {
     ...base.hotkeys.notesKeys,

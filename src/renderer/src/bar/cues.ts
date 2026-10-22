@@ -7,7 +7,7 @@
  * without ever recording, and an idle AudioContext pins an audio device.
  */
 
-export type CueKind = 'start' | 'done' | 'error'
+export type CueKind = 'start' | 'done' | 'error' | 'reminder'
 
 interface Tone {
   frequency: number
@@ -19,6 +19,11 @@ interface Tone {
 }
 
 const TONES: Record<CueKind, Tone[]> = {
+  reminder: [
+    { frequency: 880, to: 880, durationMs: 180, gain: 0.08, type: 'sine' },
+    { frequency: 660, to: 660, durationMs: 180, gain: 0.08, type: 'sine' },
+    { frequency: 880, to: 880, durationMs: 180, gain: 0.08, type: 'sine' }
+  ],
   // Rising pair: "I am listening".
   start: [
     { frequency: 660, to: 880, durationMs: 70, gain: 0.05, type: 'sine' }

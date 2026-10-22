@@ -315,3 +315,14 @@ it('migrates selection shortcuts and validates the shared list page size', () =>
   expect(mergeSettings({ listPageSize: -2 }).listPageSize).toBe(30)
   expect(mergeSettings({ hotkeys: { selectionKeys: { keys: [] } } as never }).hotkeys.selectionKeys.keys).toEqual([])
 })
+
+it('keeps new shortcut defaults free and preserves explicitly cleared or custom chords', () => {
+  const old = mergeSettings({ hotkeys: { selectionKeys: { keys: ['LeftCtrl', 'RightShift', 'T'] } } as never })
+  expect(old.hotkeys.selectionKeys.keys).toEqual(['LeftCtrl', 'RightShift', 'T'])
+  expect(old.hotkeys.selectionTranslateKeys.keys).toEqual(['LeftCtrl', 'RightShift', 'Y'])
+  expect(old.hotkeys.reminderKeys.keys).toEqual(['LeftCtrl', 'RightShift', 'R'])
+  const custom = mergeSettings({ hotkeys: { selectionTranslateKeys: { keys: [] }, reminderKeys: { keys: ['F8'] } } as never })
+  expect(custom.hotkeys.selectionTranslateKeys.keys).toEqual([])
+  expect(custom.hotkeys.reminderKeys.keys).toEqual(['F8'])
+  expect(mergeSettings({ selectionInsertMode: 'append' }).selectionInsertMode).toBe('append')
+})

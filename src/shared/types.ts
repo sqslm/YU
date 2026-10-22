@@ -428,6 +428,8 @@ export interface Settings {
     bindings: Record<Mode, ShortcutBinding>
     pasteLastKeys: ShortcutBinding
     selectionKeys: ShortcutBinding
+    selectionTranslateKeys: ShortcutBinding
+    reminderKeys: ShortcutBinding
     /**
      * Starts and stops a 随记 (voice note) take from anywhere: the hub opens on
      * the notes page and the recorder toggles. Kept out of `bindings` because a
@@ -442,6 +444,8 @@ export interface Settings {
     notesOpenApp: boolean
   }
   asr: AsrSettings
+  selectionInsertMode: 'replace' | 'append'
+  reminders: { notifications: boolean; strongSound: boolean; snoozeMinutes: number }
   polish: PolishSettings
   /** 'classic' = ASR + text LLM, 'multimodal' = one audio-in model does both. */
   pipelineMode: PipelineMode
@@ -794,6 +798,8 @@ export type BarAlertKind =
   | 'better_microphone'
   | 'hands_free'
   | 'app_disabled'
+  | 'reminder'
+  | 'selection'
 
 export type BarAlertLevel = 'info' | 'warn' | 'error'
 
@@ -806,6 +812,7 @@ export type BarActionId =
   | 'choose_mic'
   | 'download'
   | 'dismiss'
+  | 'undo-reminder'
 
 export interface BarAction {
   id: BarActionId
@@ -829,7 +836,7 @@ export interface TranscriptionResult {
 }
 
 export type HotkeyEvent =
-  | { type: 'start'; mode: Mode; at: number; handsFree?: boolean }
+  | { type: 'start'; mode: Mode; at: number; handsFree?: boolean; purpose?: 'reminder' }
   | { type: 'mode'; mode: Mode; at: number }
   | { type: 'stop'; mode: Mode; at: number }
   | { type: 'paste-last'; at: number }
@@ -848,8 +855,9 @@ export type BarState =
       showMode?: boolean
       /** Name of the task's selected library card; omitted for card-free modes. */
       promptName?: string
+      taskLabel?: string
     }
-  | { phase: 'working'; mode: Mode; hint?: string; showMode?: boolean; promptName?: string }
+  | { phase: 'working'; mode: Mode; hint?: string; showMode?: boolean; promptName?: string; taskLabel?: string }
   | { phase: 'done'; mode: Mode; text: string; showMode?: boolean }
   /** A non-fatal notice (busy, language detected, mic advice) — REQ-01. */
   | { phase: 'alert'; alert: BarAlert }

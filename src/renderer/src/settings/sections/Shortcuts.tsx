@@ -58,12 +58,14 @@ export function ShortcutsSection({
     const hotkeys = settingsRef.current.hotkeys
     const duplicate = shortcutConflict(hotkeys, target, keys)
     if (duplicate) {
-      const label = MODE_ROWS.find(row => row.mode === duplicate)?.label ?? (duplicate === 'notes' ? '随记录音' : duplicate === 'selection' ? '选区处理' : '粘贴上一条')
+      const label = MODE_ROWS.find(row => row.mode === duplicate)?.label ?? ({ notes: '随记录音', selection: '选区润色', selectionTranslate: '选区翻译', reminder: '快速提醒', pasteLast: '粘贴上一条' }[duplicate] ?? duplicate)
       setConflict(i18n.t('该快捷键已用于「{{name}}」，已保留原快捷键。', { name: i18n.t(label) }))
       return
     }
     setConflict('')
     if (target === 'selection') patch({ hotkeys: { ...hotkeys, selectionKeys: { keys } } })
+    else if (target === 'selectionTranslate') patch({ hotkeys: { ...hotkeys, selectionTranslateKeys: { keys } } })
+    else if (target === 'reminder') patch({ hotkeys: { ...hotkeys, reminderKeys: { keys } } })
     else if (target === 'pasteLast') patch({ hotkeys: { ...hotkeys, pasteLastKeys: { keys } } })
     else if (target === 'notes') patch({ hotkeys: { ...hotkeys, notesKeys: { keys } } })
     else patch({ hotkeys: { ...hotkeys, bindings: { ...hotkeys.bindings, [target]: { keys } } } })
@@ -185,7 +187,9 @@ export function ShortcutsSection({
           i18n.t('再次插入最近一次转写结果'),
           settings.hotkeys.pasteLastKeys.keys
         )}
-        {renderRow('selection', '选区处理', '选中文字后打开润色或翻译，预览后替换或追加', settings.hotkeys.selectionKeys.keys)}
+        {renderRow('selection', '选区润色', '直接润色选中文字，按下 Esc 可取消', settings.hotkeys.selectionKeys.keys)}
+        {renderRow('selectionTranslate', '选区翻译', '直接翻译选中文字，沿用已设置的翻译目标', settings.hotkeys.selectionTranslateKeys.keys)}
+        {renderRow('reminder', '快速提醒', '录下提醒事项和时间，按现有录音方式开始和结束', settings.hotkeys.reminderKeys.keys)}
         {renderRow(
           'notes',
           i18n.t('随记录音'),

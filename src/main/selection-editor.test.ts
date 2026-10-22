@@ -1,64 +1,46 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SelectionEditor } from './selection-editor'
-
 function harness() {
   const apply = vi.fn(async () => {})
-  const deps = {
-    capture: vi.fn(async () => ({ text: '原选区', context: { appName: 'Editor' }, apply })),
+  const deps = { capture: vi.fn(async () => ({ text: '原选区', context: { appName: 'Editor' }, apply })),
     transform: vi.fn(async () => ({ text: '修改后', promptName: '日常润色' })),
-    busy: vi.fn(() => false), cancel: vi.fn(), show: vi.fn(), hide: vi.fn()
-  }
+    busy: vi.fn(() => false), cancel: vi.fn(), status: vi.fn() }
   return { editor: new SelectionEditor(deps), deps, apply }
 }
-
-describe('selection preview lifecycle', () => {
-  it('does not call a model until the operation is chosen and only edits after confirmation', async () => {
+describe('direct selection shortcuts', () => {
+  it.each([['polish', false], ['translate', true]] as const)('runs %s and applies directly (append=%s)', async (operation, append) => {
     const { editor, deps, apply } = harness()
-    await editor.open()
-    expect(deps.transform).not.toHaveBeenCalled()
-    await editor.action('selection-polish')
-    expect(deps.transform).toHaveBeenCalledWith('原选区', 'polish', { appName: 'Editor' })
-    expect(apply).not.toHaveBeenCalled()
-    expect(deps.show.mock.calls.at(-1)?.[0]).toMatchObject({ answer: '修改后', tools: ['日常润色'] })
-    await editor.action('selection-replace')
-    expect(apply).toHaveBeenCalledWith('修改后', false, expect.any(AbortSignal))
+    await editor.run(operation, append)
+    expect(deps.transform).toHaveBeenCalledWith('原选区', operation, { appName: 'Editor' })
+    expect(apply).toHaveBeenCalledWith('修改后', append, expect.any(AbortSignal))
+    expect(editor.isBusy).toBe(false)
   })
-
-  it('supports translation and explicit append; a failed target check leaves a usable preview', async () => {
+  it('reports an invalid target without retrying or overwriting it', async () => {
     const { editor, deps, apply } = harness()
     apply.mockRejectedValueOnce(new Error('选区已变化'))
-    await editor.open()
-    await editor.action('selection-translate')
-    await editor.action('selection-append')
-    expect(apply).toHaveBeenCalledWith('修改后', true, expect.any(AbortSignal))
-    expect(deps.show.mock.calls.at(-1)?.[0]).toMatchObject({ answer: '修改后', streaming: false, status: '选区已变化' })
+    await editor.run('polish', false)
+    expect(deps.status).toHaveBeenCalledWith('选区已变化', true)
+    expect(apply).toHaveBeenCalledOnce()
   })
-
-  it('stops an old operation without letting its late result overwrite the next operation', async () => {
-    const { editor, deps } = harness()
+  it('ignores a late result after cancellation and permits another operation', async () => {
+    const { editor, deps, apply } = harness()
     let finish!: (result: { text: string; promptName: string }) => void
     deps.transform.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
-    await editor.open()
-    const old = editor.action('selection-polish')
-    await editor.action('stop')
-    await editor.action('selection-translate')
-    finish({ text: '旧结果', promptName: '旧卡片' })
-    await old
-    expect(deps.cancel).toHaveBeenCalledOnce()
-    expect(deps.show.mock.calls.at(-1)?.[0].answer).toBe('修改后')
+    const first = editor.run('polish', false)
+    await vi.waitFor(() => expect(deps.transform).toHaveBeenCalledOnce())
     editor.cancel()
-    await editor.action('selection-replace')
-    expect(deps.hide).not.toHaveBeenCalled()
+    await editor.run('translate', true)
+    finish({ text: '旧结果', promptName: '旧卡片' }); await first
+    expect(deps.cancel).toHaveBeenCalledOnce()
+    expect(apply).toHaveBeenCalledOnce()
+    expect(apply).toHaveBeenCalledWith('修改后', true, expect.any(AbortSignal))
   })
-
-  it('reports no selection or a busy voice task without starting a request', async () => {
+  it('does not call a model without a selection or while a voice task is busy', async () => {
     const { editor, deps } = harness()
-    deps.busy.mockReturnValueOnce(true)
-    await editor.open()
+    deps.busy.mockReturnValueOnce(true); await editor.run('polish', false)
     expect(deps.capture).not.toHaveBeenCalled()
-    deps.capture.mockRejectedValueOnce(new Error('没有选中文字'))
-    await editor.open()
-    expect(deps.show.mock.calls.at(-1)?.[0]).toMatchObject({ status: '没有选中文字', actions: [] })
+    deps.capture.mockRejectedValueOnce(new Error('没有选中文字')); await editor.run('translate', false)
+    expect(deps.status).toHaveBeenCalledWith('没有选中文字', true)
     expect(deps.transform).not.toHaveBeenCalled()
   })
 })

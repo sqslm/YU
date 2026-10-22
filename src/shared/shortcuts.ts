@@ -8,7 +8,9 @@ export function shortcutConflict(hotkeys: Settings['hotkeys'], target: string, k
     ...hotkeys.bindings,
     pasteLast: hotkeys.pasteLastKeys,
     notes: hotkeys.notesKeys,
-    selection: hotkeys.selectionKeys
+    selection: hotkeys.selectionKeys,
+    selectionTranslate: hotkeys.selectionTranslateKeys,
+    reminder: hotkeys.reminderKeys
   }
   return Object.entries(bindings).find(([id, binding]) =>
     id !== target && binding?.keys.length && [...binding.keys].sort().join('+') === signature

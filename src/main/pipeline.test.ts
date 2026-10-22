@@ -1035,3 +1035,39 @@ describe('selected text editing', () => {
     expect(pipeline.isBusy).toBe(false)
   })
 })
+
+describe('dedicated voice reminder capture', () => {
+  it('uses ASR then its independent parser, without polish, insertion, Ask or voice history', async () => {
+    const onReminder = vi.fn(async () => ({ message: 'Clean up · tomorrow at 10 AM · Normal', undo: true }))
+    const { pipeline, store, sent } = harness({}, { onReminder })
+    pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(mocks.transcribe).toHaveBeenCalledOnce()
+    expect(onReminder).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal))
+    expect(mocks.complete).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled(); expect(mocks.askAgent).not.toHaveBeenCalled()
+    expect(store.add).not.toHaveBeenCalled()
+    expect(sent.some(state => state.phase === 'recording' && state.taskLabel === '快速提醒' && !state.promptName)).toBe(true)
+    expect(sent.at(-1)).toMatchObject({ phase: 'alert', alert: { kind: 'reminder', actions: [{ id: 'undo-reminder', label: '撤销' }] } })
+  })
+  it('does not invoke reminder parsing after ASR failure or cancelled recording', async () => {
+    const onReminder = vi.fn(async () => ({ message: 'ok' }))
+    const { pipeline, store } = harness({}, { onReminder })
+    pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200)); pipeline.cancel()
+    await pipeline.stop(); expect(onReminder).not.toHaveBeenCalled()
+    mocks.transcribe.mockRejectedValueOnce(new Error('ASR unavailable'))
+    pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(onReminder).not.toHaveBeenCalled(); expect(store.add).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
+  })
+  it('does not insert a reminder when its parser fails and returns to normal dictation on the next take', async () => {
+    const onReminder = vi.fn(async () => { throw new Error('bad reminder JSON') })
+    const { pipeline, store, sent } = harness({ polish: { enabled: false } as Settings['polish'] }, { onReminder })
+    pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
+    const first = pipeline.stop(); pipeline.audioStopped(); await first
+    expect(store.add).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
+    pipeline.start('dictation'); pipeline.pushAudio(tone(1200))
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: undefined })
+    const second = pipeline.stop(); pipeline.audioStopped(); await second
+    expect(mocks.insertText).toHaveBeenCalledOnce(); expect(onReminder).toHaveBeenCalledOnce()
+  })
+})

@@ -146,7 +146,8 @@ export function buildBarAlert(classified: ClassifiedError): BarAlert {
     open_settings: mt('设置'),
     choose_mic: mt('换麦克风'),
     download: mt('下载'),
-    dismiss: mt('关闭')
+    dismiss: mt('关闭'),
+    'undo-reminder': mt('撤销')
   }
   const level = classified.retryable ? 'error' : 'warn'
   return {

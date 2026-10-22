@@ -932,6 +932,20 @@ export function GeneralSection({ settings, patch }: {
           />
         </SettingsRow>
       </SettingsGroup>
+      <SettingsGroup icon={<IconHistory />} title={i18n.t('提醒')}>
+        <SettingsRow label={i18n.t('普通提醒通知')} description={i18n.t('到期时通过 Windows 系统通知提示。')}>
+          <Switch size="small" checked={settings.reminders.notifications} onChange={e => patch({ reminders: { ...settings.reminders, notifications: e.target.checked } })} />
+        </SettingsRow>
+        <SettingsRow label={i18n.t('强提醒提示音')} description={i18n.t('强提醒待处理时，每 30 秒提示一次。')}>
+          <Switch size="small" checked={settings.reminders.strongSound} onChange={e => patch({ reminders: { ...settings.reminders, strongSound: e.target.checked } })} />
+        </SettingsRow>
+        <SettingsRow label={i18n.t('稍后提醒时长')}>
+          <TextField select size="small" fullWidth={false} value={settings.reminders.snoozeMinutes} sx={{ width: 140 }}
+            onChange={e => patch({ reminders: { ...settings.reminders, snoozeMinutes: Number(e.target.value) } })}>
+            {[1, 5, 10, 15, 30, 60].map(n => <MenuItem key={n} value={n}>{i18n.t('{{n}} 分钟', { n })}</MenuItem>)}
+          </TextField>
+        </SettingsRow>
+      </SettingsGroup>
     </Stack>
   )
 }
@@ -1194,6 +1208,12 @@ export function InputSection({ settings, patch }: {
             disabled={settings.insertMethod === 'sendinput'}
             onChange={(e) => patch({ richInsert: e.target.checked })}
           />
+        </SettingsRow>
+      </SettingsGroup>
+      <SettingsGroup icon={<IconCode />} title={i18n.t('选区处理')}>
+        <SettingsRow label={i18n.t('处理结果')} description={i18n.t('选区润色和选区翻译快捷键共用此方式，不再弹出预览窗口。')}>
+          <Segmented value={settings.selectionInsertMode} options={[{ value: 'replace', label: '覆盖选区' }, { value: 'append', label: '追加到末尾' }]}
+            onChange={value => patch({ selectionInsertMode: value })} />
         </SettingsRow>
       </SettingsGroup>
       <SettingsGroup icon={<IconSliders />} title={i18n.t('听写范围')}>
