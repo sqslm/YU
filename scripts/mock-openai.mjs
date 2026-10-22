@@ -116,7 +116,11 @@ function weatherAnswer(question) {
  * was written — the original announcement got filtered and the aggregator took
  * first place.
  */
-const daysAgo = (days) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+const daysAgo = (days) => {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 const SCENARIOS = {
   A: {

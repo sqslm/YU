@@ -40,7 +40,8 @@ let chatBodies: string[] = []
  * bomb: the fixtures aged out of the window two days after they were written and
  * every scenario started ranking the aggregator first.
  */
-const TODAY = new Date().toISOString().slice(0, 10)
+const referenceDate = new Date()
+const TODAY = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, '0')}-${String(referenceDate.getDate()).padStart(2, '0')}`
 
 function articleHtml(title: string, body: string): string {
   const filler = `${body} `.repeat(6)
