@@ -249,6 +249,8 @@ export interface TypelessApi {
     >
   }
   bar: {
+    onLayout(callback: (layout: import('./types').BarWindowLayout) => void): () => void
+    captionVisible(visible: boolean): void
     onState(callback: (state: BarState) => void): () => void
     onCaption(callback: (caption: { active: boolean; text: string; unavailable?: boolean }) => void): () => void
     onStop(callback: () => void): () => void

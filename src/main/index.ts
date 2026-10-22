@@ -43,9 +43,11 @@ import {
   createSettingsWindow,
   openLoginWindow,
   positionCardWindow,
+  recordingBarBounds,
   rememberBarBounds,
   resizeCardToContent,
-  setBarInteractive
+  setBarInteractive,
+  setBarCaptionVisible
 } from './windows'
 import { createTray } from './tray'
 import { releaseStuckModifiers } from './insert'
@@ -374,15 +376,20 @@ async function toggleNotesRecording(): Promise<void> {
 function ensureBarWindow(): BrowserWindow {
   if (barWindow && !barWindow.isDestroyed()) return barWindow
   barWindow = createBarWindow(store.get().barPosition)
-  rememberBarBounds(barWindow.getBounds())
+  rememberBarBounds(recordingBarBounds(barWindow))
   // Persist where the user dragged the bar so it comes back to the same spot.
   let moveTimer: NodeJS.Timeout | null = null
-  barWindow.on('moved', () => {
-    if (barWindow && !barWindow.isDestroyed()) rememberBarBounds(barWindow.getBounds())
+  let lastPosition = recordingBarBounds(barWindow)
+  barWindow.on('move', () => {
+    if (!barWindow || barWindow.isDestroyed()) return
+    const bounds = recordingBarBounds(barWindow)
+    rememberBarBounds(bounds)
+    if (bounds.x === lastPosition.x && bounds.y === lastPosition.y) return
+    lastPosition = bounds
     if (moveTimer) clearTimeout(moveTimer)
     moveTimer = setTimeout(() => {
       if (!barWindow || barWindow.isDestroyed()) return
-      const [x, y] = barWindow.getPosition()
+      const { x, y } = recordingBarBounds(barWindow)
       void store.update({ barPosition: { x, y } })
     }, 600)
   })
@@ -441,7 +448,7 @@ function showAnswerCard(payload: AnswerCardPayload): void {
   // Re-anchoring on every update keeps the card glued to the bar even when the
   // user dragged it while an answer was streaming in.
   positionCardWindow(win)
-  if (barWindow && !barWindow.isDestroyed()) anchorCardToBar(win, barWindow.getBounds())
+  if (barWindow && !barWindow.isDestroyed()) anchorCardToBar(win, recordingBarBounds(barWindow))
   // Hand ESC to the hook as soon as the card is committed to appearing, before
   // the first-paint branch below can return: the window never takes focus, so
   // nothing in the renderer can see the key, and a card that is still loading
@@ -1019,6 +1026,10 @@ function registerIpc(): void {
   // renderer decides per state, main just applies it (REQ-01).
   ipcMain.on('bar:interactive', (_event, interactive: boolean) => {
     setBarInteractive(interactive === true)
+  })
+  ipcMain.on('bar:caption-visible', (event, visible: boolean) => {
+    if (event.sender !== barWindow?.webContents) return
+    setBarCaptionVisible(visible === true)
   })
 
   ipcMain.on('bar:action', (_event, id: BarActionId) => {

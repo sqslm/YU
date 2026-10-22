@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BarState, Mode, Settings } from '@shared/types'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { BarState, BarWindowLayout, Mode, Settings } from '@shared/types'
 import { AlertRow, alertOf, alertTone } from './AlertRow'
 import { MicCapture } from './capture'
 import { disposeCues, playCue } from './cues'
@@ -56,6 +56,7 @@ export function Bar(): JSX.Element {
   const [level, setLevel] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [caption, setCaption] = useState<{ active: boolean; text: string; unavailable?: boolean }>({ active: false, text: '' })
+  const [layout, setLayout] = useState<BarWindowLayout>({ barTop: 0, captionSide: 'above' })
   // Defaults to the shipped default (`showModeInBar: true`) so the tag does not
   // pop in a frame late while the first settings round-trip is in flight.
   const [showMode, setShowMode] = useState(true)
@@ -101,6 +102,7 @@ export function Bar(): JSX.Element {
       const previous = stateRef.current.phase
       stateRef.current = next
       setState(next)
+      if (next.phase !== 'recording') setCaption({ active: false, text: '' })
       // A notice that carries buttons needs real clicks; every other frame stays
       // click-through, so the pill never eats the pointer it floats over. Without
       // this the alert's 「知道了」 drew a button that could not be pressed.
@@ -124,6 +126,7 @@ export function Bar(): JSX.Element {
       }
     })
     const offCaption = window.api.bar.onCaption(setCaption)
+    const offLayout = window.api.bar.onLayout(setLayout)
 
     const offStop = window.api.bar.onStop(async () => {
       // Wait for the worklet's partial block before confirming the stop: `main`
@@ -137,6 +140,7 @@ export function Bar(): JSX.Element {
       offSettings()
       offState()
       offCaption()
+      offLayout()
       offStop()
       disposeCues()
       void capture.stop()
@@ -155,6 +159,9 @@ export function Bar(): JSX.Element {
   // line, which is why the render site checks `alert` instead of the phase.
   const alert = alertOf(state)
   const phase = state.phase
+  const showCaption = phase === 'recording' && caption.active && Boolean(caption.text)
+  useLayoutEffect(() => { window.api.bar.captionVisible(showCaption) }, [showCaption])
+  useEffect(() => () => window.api.bar.captionVisible(false), [])
   // A main process that knows the flag can ship it with the state itself; the
   // settings channel is the fallback so the tag also works without that.
   const showModeFromState =
@@ -187,17 +194,32 @@ export function Bar(): JSX.Element {
         @keyframes barfade { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
         @keyframes barpulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
         @keyframes caption-enter { from { opacity: 0; max-width: 0; transform: translate(7px,5px) scale(.9) } to { opacity: 1; max-width: 2em; transform: translate(0,0) scale(1) } }
-        @media (prefers-reduced-motion: reduce) { [data-caption-glyph] { animation: none !important } }
+        @keyframes caption-launch { from { opacity: 0; transform: translateY(var(--caption-launch-y)) scale(.35,.3) } to { opacity: 1; transform: translateY(0) scale(1) } }
+        @media (prefers-reduced-motion: reduce) { [data-caption-glyph], [data-caption-bubble] { animation: none !important } }
         .bar-alert-action { transition: filter .12s ease, transform .08s ease }
         .bar-alert-action:hover { filter: brightness(1.32) }
         .bar-alert-action:active { transform: translateY(.5px) }
         .bar-alert-action:focus-visible { outline: none }
       `}</style>
 
+      <div data-bar-strip style={{ position: 'absolute', left: 0, top: layout.barTop, width: 340, height: 60,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 8 }}>
+      <div style={{ position: 'relative', maxWidth: 300 }}>
+      {showCaption && (layout.barTop > 0 || layout.captionSide === 'below') && <div data-caption-bubble data-caption-side={layout.captionSide}
+        style={{ ...captionBubble, ...(layout.captionSide === 'above' ? { bottom: 48 } : { top: 48 }),
+          '--caption-launch-y': layout.captionSide === 'above' ? '42px' : '-42px',
+          transformOrigin: `center ${layout.captionSide === 'above' ? 'bottom' : 'top'}` } as React.CSSProperties & { '--caption-launch-y': string }}>
+        <CaptionTicker text={caption.text} />
+        <span aria-hidden="true" style={{ position: 'absolute', left: 'calc(50% - 4.5px)',
+          ...(layout.captionSide === 'above' ? { bottom: -5, borderRight: '1px solid rgba(255,255,255,.12)', borderBottom: '1px solid rgba(255,255,255,.12)' }
+            : { top: -5, borderLeft: '1px solid rgba(255,255,255,.12)', borderTop: '1px solid rgba(255,255,255,.12)' }),
+          width: 9, height: 9, transform: 'rotate(45deg)', background: '#202228' }} />
+      </div>}
       {phase === 'idle' && <div style={idlePill} />}
 
       {phase !== 'idle' && (
         <div
+          data-recording-pill
           style={{
             ...pill,
             // The alert owns the hairline while it is up (its level colours the
@@ -217,8 +239,9 @@ export function Bar(): JSX.Element {
         >
           {phase === 'recording' && (
             <>
-              <span style={{ ...dot, animation: 'barpulse 1.4s ease-in-out infinite' }} />
-              {caption.active && caption.text ? <CaptionTicker text={caption.text} /> : caption.unavailable ? <span data-caption-unavailable style={label}>{i18n.t('字幕暂不可用')}</span> : <div style={wave}>
+              <span data-caption-unavailable={caption.unavailable || undefined} title={caption.unavailable ? i18n.t('字幕暂不可用') : undefined}
+                style={{ ...dot, ...(caption.unavailable ? { background: '#cf9b52' } : {}), animation: 'barpulse 1.4s ease-in-out infinite' }} />
+              <div data-recording-wave style={wave}>
                 {Array.from({ length: 16 }).map((_, index) => {
                   const center = 7.5
                   const distance = Math.abs(index - center) / center
@@ -237,7 +260,7 @@ export function Bar(): JSX.Element {
                     />
                   )
                 })}
-              </div>}
+              </div>
               {/* The mode text lives in the right-hand tag so the
                   `showModeInBar` switch controls it in one place. */}
               <span style={timer}>{(elapsed / 1000).toFixed(1)}s</span>
@@ -275,6 +298,8 @@ export function Bar(): JSX.Element {
           {modeLabel && <span style={modeTag}>{modeLabel}</span>}
         </div>
       )}
+      </div>
+      </div>
     </div>
   )
 }
@@ -285,13 +310,17 @@ function truncate(text: string): string {
 
 const stage: React.CSSProperties = {
   height: '100%',
-  display: 'flex',
-  alignItems: 'flex-end',
-  justifyContent: 'center',
-  padding: 8,
+  position: 'relative',
   fontFamily: '"Inter", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif',
   WebkitAppRegion: 'drag'
 } as React.CSSProperties
+
+const captionBubble: React.CSSProperties = {
+  position: 'absolute', left: -14, width: 'calc(100% + 28px)', maxWidth: 324, height: 42,
+  display: 'flex', alignItems: 'center', padding: '0 16px', borderRadius: 12,
+  color: '#eef1f7', background: '#202228', border: '1px solid rgba(255,255,255,.12)',
+  boxShadow: '0 3px 10px rgba(0,0,0,.12)', animation: 'caption-launch .24s cubic-bezier(.2,.8,.25,1) both'
+}
 
 const idlePill: React.CSSProperties = {
   width: 40,

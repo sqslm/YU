@@ -813,31 +813,18 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
         </Box>
       </Box>
 
-      {/* The row under the year map is 热门场景 and nothing else: the streak keeps
-          its number in the insights card above, so it does not need a sentence
-          here, and the chips get the full width instead of the right half. The
-          chips live in their own clipped strip so the breakdown button stays
-          reachable at the far right even on a machine with a dozen apps. */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.75,
-          minHeight: 22,
-          minWidth: 0,
-          overflow: 'hidden',
-          flexWrap: 'nowrap'
-        }}
-      >
-        <Typography sx={{ fontSize: 10.5, color: t.textDim, flexShrink: 0 }}>{i18n.t(i18n.t('热门场景'))}</Typography>
+      <Box data-app-scenes sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 22, flexShrink: 0 }}>
+        <Tooltip title={i18n.t('按产生文字的记录统计 · 点击查看')}>
+          <Typography data-app-share-hint tabIndex={0} sx={{ fontSize: 10.5, color: t.textDim, flexShrink: 0 }}>{i18n.t('热门场景')}</Typography>
+        </Tooltip>
         <Box
+          data-app-scene-list
           sx={{
             display: 'flex',
             alignItems: 'center',
             gap: 0.75,
             flex: 1,
             minWidth: 0,
-            overflow: 'hidden',
             flexWrap: 'nowrap'
           }}
         >
@@ -867,44 +854,12 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
             ))
           )}
         </Box>
-        {/* What the chips count, said out loud: "热门场景" alone left the reader
-            guessing whether it was records, characters or seconds, and whether a
-            chip was a link. */}
-        <Typography
-          data-app-share-hint
-          sx={{
-            flexShrink: 0,
-            fontSize: 10.5,
-            color: t.textFaint,
-            whiteSpace: 'nowrap'
-          }}
-        >
-          {i18n.t('按产生文字的记录统计 · 点击查看')}
-        </Typography>
-        <Button
-          data-app-share-open
-          size="small"
-          variant="text"
-          aria-label={i18n.t(i18n.t('查看各 App 的调用占比'))}
-          title={i18n.t(i18n.t('各 App 的调用占比'))}
-          onClick={() => setAppShareOpen(true)}
-          sx={{
-            flexShrink: 0,
-            minWidth: 0,
-            height: 22,
-            py: 0,
-            px: 0.9,
-            gap: 0.5,
-            fontSize: 10.5,
-            lineHeight: '16px',
-            color: t.textDim,
-            border: `1px solid ${t.surfaceHi}`,
-            borderRadius: '6px',
-            '&:hover': { color: t.text, borderColor: t.textFaint, bgcolor: t.surfaceHi }
-          }}
-        >
-          <IconChart size={11} />
-          {i18n.t('分布')}
+        <Button data-app-share-open size="small" variant="text" aria-label={i18n.t('查看各 App 的调用占比')}
+          title={i18n.t('各 App 的调用占比')} onClick={() => setAppShareOpen(true)}
+          sx={{ flexShrink: 0, minWidth: 0, height: 22, py: 0, px: 0.9, gap: 0.5, fontSize: 10.5,
+            lineHeight: '16px', color: t.textDim, border: `1px solid ${t.surfaceHi}`, borderRadius: '6px',
+            '&:hover': { color: t.text, borderColor: t.textFaint, bgcolor: t.surfaceHi } }}>
+          <IconChart size={11} />{i18n.t('分布')}
         </Button>
       </Box>
 
@@ -1059,6 +1014,7 @@ function AppChip({
 }): JSX.Element {
   return (
     <ButtonBase
+      data-app-scene={name}
       title={i18n.t('{{name}} · {{n}} 次 · {{pct}}%', { name, n: count, pct: percent })}
       aria-label={i18n.t('查看 {{name}} 的记录', { name })}
       onClick={onOpen}
@@ -1071,7 +1027,8 @@ function AppChip({
         borderRadius: '6px',
         border: `1px solid ${t.surfaceHi}`,
         maxWidth: 200,
-        flexShrink: 0,
+        minWidth: 0,
+        flexShrink: 1,
         cursor: 'pointer',
         transition: 'border-color .12s ease, background-color .12s ease',
         '&:hover': { borderColor: t.textFaint, backgroundColor: t.surfaceHi }

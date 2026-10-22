@@ -1,6 +1,7 @@
 import { BrowserWindow, nativeTheme, screen } from 'electron'
 import { join } from 'node:path'
-import type { ThemeMode } from '@shared/types'
+import type { BarWindowLayout, ThemeMode } from '@shared/types'
+import { BAR_HEIGHT, BAR_WIDTH, barCaptionRect } from './barLayout'
 import { openExternalSafely } from './safeLink'
 import {
   CARD_INITIAL_HEIGHT,
@@ -197,9 +198,6 @@ export interface BarPlacement {
   y: number
 }
 
-const BAR_WIDTH = 340
-const BAR_HEIGHT = 60
-
 /** Default spot: centred horizontally, a little above the taskbar. */
 export function defaultBarPlacement(): BarPlacement {
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
@@ -220,7 +218,10 @@ export function clampBarPlacement(position: BarPlacement | null): BarPlacement {
     const withinY = position.y >= workArea.y - 20 && position.y <= workArea.y + workArea.height - 20
     return withinX && withinY
   })
-  return inside ? position : defaultBarPlacement()
+  if (!inside) return defaultBarPlacement()
+  const { workArea } = screen.getDisplayNearestPoint({ x: position.x + BAR_WIDTH / 2, y: position.y + BAR_HEIGHT / 2 })
+  return { x: Math.max(workArea.x, Math.min(position.x, workArea.x + workArea.width - BAR_WIDTH)),
+    y: Math.max(workArea.y, Math.min(position.y, workArea.y + workArea.height - BAR_HEIGHT)) }
 }
 
 /**
@@ -266,12 +267,14 @@ export function createBarWindow(position: BarPlacement | null): BrowserWindow {
 
   // The answer card anchors itself to this pill. Tracking the bounds here as
   // well as through `rememberBarBounds` means the anchor stays correct even
-  // before (or without) the caller wiring `barWindow.on('moved')`.
+  // before (or without) the caller wiring `barWindow.on('move')`.
   barWindow = win
+  captionVisible = false
+  barLayout = { barTop: 0, captionSide: 'above' }
   rememberBarBounds(win.getBounds())
-  win.on('move', () => rememberBarBounds(win.getBounds()))
-  win.on('moved', () => {
-    rememberBarBounds(win.getBounds())
+  win.on('move', () => {
+    if (captionVisible) setBarCaptionVisible(true)
+    rememberBarBounds(recordingBarBounds(win))
     const card = cardWindow
     // Keep a visible answer card glued to the pill while it is being dragged.
     if (card && !card.isDestroyed() && card.isVisible()) placeCard(card)
@@ -284,6 +287,32 @@ export function createBarWindow(position: BarPlacement | null): BrowserWindow {
   return win
 }
 
+let captionVisible = false
+let barLayout: BarWindowLayout = { barTop: 0, captionSide: 'above' }
+
+/** Saved positions and answer-card anchors always refer to the 340×60 strip. */
+export function recordingBarBounds(win: BrowserWindow): Electron.Rectangle {
+  const bounds = win.getBounds()
+  return { x: bounds.x, y: bounds.y + barLayout.barTop, width: BAR_WIDTH, height: BAR_HEIGHT }
+}
+
+export function setBarCaptionVisible(visible: boolean): void {
+  const win = barWindow
+  if (!win || win.isDestroyed()) return
+  const base = recordingBarBounds(win)
+  const { workArea } = screen.getDisplayNearestPoint({ x: base.x + BAR_WIDTH / 2, y: base.y + BAR_HEIGHT / 2 })
+  const { bounds, layout } = barCaptionRect(base, workArea, visible)
+  const old = win.getBounds()
+  const changed = old.x !== bounds.x || old.y !== bounds.y || old.width !== bounds.width || old.height !== bounds.height ||
+    barLayout.barTop !== layout.barTop || barLayout.captionSide !== layout.captionSide
+  captionVisible = visible
+  barLayout = layout
+  if (!changed) return
+  win.setBounds(bounds, false)
+  rememberBarBounds(recordingBarBounds(win))
+  win.webContents.send('bar:layout', layout)
+}
+
 // --- answer card -----------------------------------------------------------
 
 /**
@@ -291,7 +320,7 @@ export function createBarWindow(position: BarPlacement | null): BrowserWindow {
  *
  * The card appears *out of* the pill ("from just above the recording bar"), so
  * it needs a position that survives hiding the window between two answers.
- * `main/index.ts` feeds this from `barWindow.getBounds()`; the bar window built
+ * `main/index.ts` feeds this from `recordingBarBounds()`; the bar window built
  * above updates it on every move as well, so the anchor is correct even when
  * nobody else reports it.
  */
@@ -351,7 +380,7 @@ function placeCard(win: BrowserWindow): void {
 
 /**
  * Re-applies the card position whenever the pill moved. Call it from
- * `barWindow.on('moved')`; a visible card follows the pill, a hidden one is
+ * `barWindow.on('move')`; a visible card follows the pill, a hidden one is
  * simply re-anchored for its next appearance.
  */
 export function anchorCardToBar(card: BrowserWindow, barBounds: Electron.Rectangle): void {

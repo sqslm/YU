@@ -179,6 +179,12 @@ const api: TypelessApi = {
       ipcRenderer.invoke('models:list', input)
   },
   bar: {
+    onLayout: (callback) => {
+      const listener = (_event: unknown, layout: import('@shared/types').BarWindowLayout): void => callback(layout)
+      ipcRenderer.on('bar:layout', listener)
+      return () => { ipcRenderer.removeListener('bar:layout', listener) }
+    },
+    captionVisible: (visible) => ipcRenderer.send('bar:caption-visible', visible),
     onCaption: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, caption: { active: boolean; text: string; unavailable?: boolean }): void => callback(caption)
       ipcRenderer.on('bar:caption', listener)

@@ -398,6 +398,12 @@ export interface ResourceUsage {
   localModel: { loaded: boolean; autoResume: boolean }
 }
 
+/** Logical strip offset inside the transparent window shared with captions. */
+export interface BarWindowLayout {
+  barTop: number
+  captionSide: 'above' | 'below'
+}
+
 export interface Settings {
   version: number
   hotkeys: {
