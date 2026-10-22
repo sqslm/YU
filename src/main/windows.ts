@@ -26,14 +26,21 @@ function loadPage(win: BrowserWindow, page: Page): void {
   else void win.loadFile(join(rendererDir, `${page}.html`))
 }
 
-/** One closable, ordinary OS window for the whole strong-reminder queue. */
-export function createReminderWindow(mode: ThemeMode): BrowserWindow {
-  const win = new BrowserWindow({ width: 480, height: 380, minWidth: 400, minHeight: 300,
+/** A desktop-sized backdrop with one centred reminder card; never a kiosk/keyboard lock. */
+export function createReminderWindow(_mode: ThemeMode): BrowserWindow {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  const win = new BrowserWindow({ ...display.bounds,
     title: `${mt('强提醒')} · Typeless Rebuild`, show: false, alwaysOnTop: true, autoHideMenuBar: true,
-    backgroundColor: hubBackgroundColor(mode),
+    frame: false, transparent: true, hasShadow: false, resizable: false, movable: false,
+    minimizable: false, maximizable: false, fullscreenable: false,
+    backgroundColor: '#00000000',
     webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true } })
+  // Windows constrains constructor bounds to the work area; include the taskbar backdrop too.
+  win.setBounds(display.bounds)
+  // Show once in front, without continually stealing focus or suppressing OS shortcuts.
+  win.setAlwaysOnTop(true, 'screen-saver')
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  win.once('ready-to-show', () => win.showInactive())
+  win.once('ready-to-show', () => { win.show(); win.focus() })
   loadPage(win, 'reminder')
   return win
 }

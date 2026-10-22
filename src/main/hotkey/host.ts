@@ -57,6 +57,7 @@ export class HotkeyHost {
   /** Mirrors the answer card's visibility in the hook; see `setCardOpen`. */
   private cardOpen = false
   private capturing = false
+  private activity: 'idle' | 'recording' | 'working' = 'idle'
 
   constructor(
     private readonly onEvent: (event: HotkeyHostEvent) => void,
@@ -104,6 +105,9 @@ export class HotkeyHost {
         return
       }
       this.onEvent(msg)
+      // Main may reject a start while busy or in an excluded app. Acknowledge
+      // its actual state even when unchanged, so the hook cannot retain a ghost take.
+      if (msg.type === 'start') child.postMessage({ type: 'activity', value: this.activity })
     })
 
     child.on('exit', (code) => {
@@ -159,6 +163,7 @@ export class HotkeyHost {
     // keeps working on a card that was already up when the hook restarted.
     this.proc.postMessage({ type: 'card', open: this.cardOpen })
     this.proc.postMessage({ type: 'capture', active: this.capturing })
+    this.proc.postMessage({ type: 'activity', value: this.activity })
     this.onLog(`[hotkey] config activation=${settings.activationMode} enabled=${settings.hotkeys.enabled}`)
     this.onLog(`[hotkey] notes chord ${(settings.hotkeys.notesKeys?.keys ?? []).join('+') || '(none)'}`)
   }
@@ -172,6 +177,12 @@ export class HotkeyHost {
   setCardOpen(open: boolean): void {
     this.cardOpen = open
     this.proc?.postMessage({ type: 'card', open })
+  }
+
+  setActivity(value: 'idle' | 'recording' | 'working'): void {
+    if (value === this.activity) return
+    this.activity = value
+    this.proc?.postMessage({ type: 'activity', value })
   }
 
   setCapturing(active: boolean): void {

@@ -220,6 +220,11 @@ const uia = new UiaHost(log)
  * their own schedule, and each of them repaints the same overlay.
  */
 let chromeDimmed = false
+let notesRecording = false
+
+function refreshHotkeyActivity(): void {
+  hotkeys?.setActivity(notesRecording || pipeline?.isRecording ? 'recording' : pipeline?.isBusy ? 'working' : 'idle')
+}
 
 /**
  * Settings as they appear in a diagnostics report: every `apiKey` is replaced by
@@ -357,10 +362,16 @@ function ensureSettingsWindow(): BrowserWindow {
   chromeDimmed = false
   settingsWindow = createSettingsWindow(store.get().themeMode)
   settingsWindow.on('blur', () => hotkeys?.setCapturing(false))
-  settingsWindow.webContents.on('render-process-gone', () => hotkeys?.setCapturing(false))
+  settingsWindow.webContents.on('render-process-gone', () => {
+    hotkeys?.setCapturing(false)
+    notesRecording = false
+    refreshHotkeyActivity()
+  })
   settingsWindow.on('closed', () => {
     hotkeys?.setCapturing(false)
     settingsWindow = null
+    notesRecording = false
+    refreshHotkeyActivity()
   })
   return settingsWindow
 }
@@ -773,6 +784,11 @@ function registerIpc(): void {
 
   ipcMain.handle('pipeline:pasteLast', async () => (pipeline ? pipeline.pasteLast() : false))
   ipcMain.handle('pipeline:state', () => (pipeline?.isRecording ? 'recording' : 'idle'))
+  ipcMain.on('notes:recording', (event, active: boolean) => {
+    if (event.sender !== settingsWindow?.webContents) return
+    notesRecording = active === true
+    refreshHotkeyActivity()
+  })
   ipcMain.handle('pipeline:retry', async (_event, id?: string) =>
     pipeline ? pipeline.retry(id) : { ok: false, message: mt('尚未就绪') }
   )
@@ -1103,9 +1119,11 @@ function wireHotkeys(): void {
           pipeline.lockTake()
           break
         case 'stop':
-          void pipeline.stop()
+          if (notesRecording) settingsWindow?.webContents.send('notes:record-control', 'stop')
+          else void pipeline.stop()
           break
         case 'cancel':
+          if (notesRecording) settingsWindow?.webContents.send('notes:record-control', 'cancel')
           selectionEditor?.cancel()
           // ESC abandons the take and its audio without adding history.
           // A discarded tap also skips the cancellation hint.
@@ -1199,6 +1217,7 @@ async function bootstrap(): Promise<void> {
   }, broadcastReminders, log)
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+    onActivity: () => refreshHotkeyActivity(),
     onReminder: (text, signal) => reminders!.voice(text, signal),
     // Ask mode answers land in the card window; dictation/translate keep
     // typing straight into the foreground app.

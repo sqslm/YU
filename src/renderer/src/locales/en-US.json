@@ -1,4 +1,10 @@
 {
+  "选择日期和时间": "Choose date and time",
+  "上个月": "Previous month",
+  "下个月": "Next month",
+  "清除": "Clear",
+  "确定": "Confirm",
+  "所有录音均可按右 Alt 结束并提交，按 Esc 取消。": "Press Right Alt to stop and submit any recording, or Esc to cancel.",
   "选区处理": "Selection editing",
   "选中文字后打开润色或翻译，预览后替换或追加": "Select text, then preview polishing or translation before replacing or appending",
   "点击快捷键后按下组合键，松开第一个键即保存；Esc 或点击其他区域取消，× 清空。录制期间按键不会传递给其他应用。": "Click a shortcut, press the keys and release the first key to save. Esc or clicking elsewhere cancels; × clears. Keys are intercepted while recording.",

@@ -121,6 +121,7 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  onActivity?: (recording: boolean, busy: boolean) => void
   onReminder?: (text: string, signal: AbortSignal) => Promise<{ message: string; undo?: boolean }>
   /**
    * Ask-mode answers are surfaced in the dedicated answer card window instead
@@ -358,6 +359,7 @@ export class Pipeline {
   }
 
   private setBarState(state: BarState, autoHideMs = 0, options: { force?: boolean } = {}): void {
+    this.options.onActivity?.(this.isRecording, this.isBusy)
     const win = this.bar()
     if (!win) return
     const live = state.phase === 'recording' || state.phase === 'working'
@@ -756,6 +758,7 @@ export class Pipeline {
     this.clearSessionCap()
     this.recording = null
     this.stageMode = active.mode
+    this.options.onActivity?.(false, true)
     const token = this.runToken
 
     const win = this.bar()
@@ -1325,6 +1328,7 @@ export class Pipeline {
     this.stage = 'idle'
     this.encoded = null
     this.takePurpose = undefined
+    this.options.onActivity?.(false, false)
   }
 
   /** ASR leg of the classic route, walking the configured failover chain. */

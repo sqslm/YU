@@ -819,7 +819,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
         })}
 
         <Box data-history-pagination sx={{ width: '100%' }}>
-          <Pager name="history-top" page={safePage} total={total} size={pageSize} onPage={setPage} onSize={size => patch?.({ listPageSize: size })} />
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}><Pager name="history-top" page={safePage} total={total} size={pageSize} onPage={setPage} /></Box>
         </Box>
       </Box>
 

@@ -179,6 +179,8 @@ export interface TypelessApi {
     onChanged(callback: () => void): () => void
     /** The global 随记录音 shortcut, already resolved by main. */
     onRecordHotkey(callback: () => void): () => void
+    recording(active: boolean): void
+    onRecordControl(callback: (action: 'stop' | 'cancel') => void): () => void
   }
   pipeline: {
     pasteLast(): Promise<boolean>

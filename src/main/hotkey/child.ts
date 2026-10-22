@@ -43,6 +43,7 @@ const PM_REMOVE = 0x0001
 const LLKHF_INJECTED = 0x10
 /** Virtual-key code of Escape, used to abandon an in-flight take. */
 const VK_ESCAPE = 0x1b
+const VK_RIGHT_ALT = 0xa5
 
 const user32 = koffi.load('user32.dll')
 const kernel32 = koffi.load('kernel32.dll')
@@ -110,6 +111,8 @@ let actionPending: { type: 'selection' | 'selection-translate' | 'paste-last'; k
  * the hook is the only place that can see the key.
  */
 let cardOpen = false
+// Actual capture/processing state, including the notes recorder in the hub.
+let activity: 'idle' | 'recording' | 'working' = 'idle'
 /**
  * How the hotkey gesture is interpreted.
  *
@@ -339,9 +342,8 @@ function chordKey(b: Binding): number {
  */
 function swallowDown(vk: number, injected: boolean): boolean {
   if (!enabled || (injected && !allowInjected)) return false
-  // The card is the only owner of ESC while it is up: swallowing it here is what
-  // makes "ESC closes the answer" work from the app the user is actually typing in.
-  if (cardOpen && vk === VK_ESCAPE) return true
+  if (vk === VK_ESCAPE && (cardOpen || recording || pending || actionPending || activity !== 'idle')) return true
+  if (vk === VK_RIGHT_ALT && (recording || activity === 'recording')) return true
   if (pasteLast && vk === chordKey(pasteLast) && allDown(pasteLast.keys)) return true
   if (selectionBinding && vk === chordKey(selectionBinding) && allDown(selectionBinding.keys)) return true
   if (selectionTranslateBinding && vk === chordKey(selectionTranslateBinding) && allDown(selectionTranslateBinding.keys)) return true
@@ -413,19 +415,21 @@ function drive(): void {
 
   for (const vk of entered) {
     if (vk === VK_ESCAPE) {
+      const owned = recording || pending || actionPending || cardOpen || activity !== 'idle'
       actionPending = null
-      if (recording) {
-        recording = null
-        post({ type: 'cancel', at: now, reason: 'esc' })
-      } else {
-        if (pending) pending = null
-        // The stage lives in the main process, not here: a previous take may
-        // still be transcribing while this one records nothing, and that is
-        // exactly the moment the user presses ESC. Offer it every time and let
-        // `pipeline.cancel()` ignore it when nothing is in flight.
-        if (cardOpen) post({ type: 'esc', at: now })
-        post({ type: 'cancel', at: now, reason: 'esc' })
-      }
+      recording = null
+      pending = null
+      activity = 'idle'
+      if (cardOpen) post({ type: 'esc', at: now })
+      if (owned) post({ type: 'cancel', at: now, reason: 'esc' })
+      continue
+    }
+    if (vk === VK_RIGHT_ALT && (recording || activity === 'recording')) {
+      const mode = recording?.mode ?? 'dictation'
+      recording = null
+      pending = null
+      activity = 'working'
+      post({ type: 'stop', mode, at: now })
       continue
     }
     if (recording) {
@@ -438,6 +442,10 @@ function drive(): void {
         recording = null
         post({ type: 'stop', mode, at: now })
       }
+      continue
+    }
+    if (activity === 'recording') {
+      if (notesBinding && allDown(notesBinding.keys)) post({ type: 'notes-toggle', at: now })
       continue
     }
     if (pending) {
@@ -532,7 +540,7 @@ const handler = koffi.register(
     // pairing — plus reconcile()'s synthetic keyup when the real release never
     // arrives — is what lets the hotkey stay invisible to the foreground app
     // without ever leaving a modifier stranded.
-    const eaten = isDown ? swallowDown(vk, injected) : markUp(state, vk)
+    const eaten = isDown ? (repeat && state.eaten.has(vk)) || swallowDown(vk, injected) : markUp(state, vk)
     if (isDown) markEaten(state, vk, eaten)
     if (boundKey(vk) && !repeat) {
       post({
@@ -581,6 +589,7 @@ port.on('message', (event: { data: unknown }) => {
       }
     | { type: 'enabled'; value: boolean }
     | { type: 'card'; open: boolean }
+    | { type: 'activity'; value: 'idle' | 'recording' | 'working' }
     | { type: 'reset' }
     | { type: 'capture'; active: boolean }
   if (data.type === 'config') {
@@ -615,6 +624,9 @@ port.on('message', (event: { data: unknown }) => {
     actionPending = null
   } else if (data.type === 'card') {
     cardOpen = data.open
+  } else if (data.type === 'activity') {
+    activity = data.value
+    if (activity !== 'recording') recording = null
   } else if (data.type === 'enabled') {
     enabled = data.value
     if (!enabled) {

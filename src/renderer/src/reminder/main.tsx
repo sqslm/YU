@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Alert, Box, Button, Chip, CssBaseline, Stack, ThemeProvider, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, CssBaseline, Paper, Stack, ThemeProvider, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { Reminder, ReminderAction } from '@shared/reminders'
 import type { Settings } from '@shared/types'
@@ -14,6 +14,11 @@ function StrongReminder(): JSX.Element {
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [systemTheme, setSystemTheme] = useState(() => resolveThemeMode('system'))
   useEffect(() => onSystemThemeChange(() => setSystemTheme(resolveThemeMode('system'))), [])
+  useEffect(() => {
+    const escape = (event: KeyboardEvent): void => { if (event.key === 'Escape') window.api.reminders.closeStrong() }
+    window.addEventListener('keydown', escape)
+    return () => window.removeEventListener('keydown', escape)
+  }, [])
   useEffect(() => {
     const refresh = (): void => { void window.api.reminders.strong().then(setRows).catch(e => setError(String(e.message ?? e))) }
     const apply = (value: Settings): void => { setSettings(value); applyUiLanguage(value.uiLanguage) }
@@ -36,17 +41,23 @@ function StrongReminder(): JSX.Element {
     finally { setBusy(false) }
   }
   return <ThemeProvider theme={makeTheme(settings?.themeMode === 'system' ? systemTheme : settings?.themeMode ?? 'dark')}><CssBaseline />
-    <Box sx={{ p: 3 }} data-strong-reminder>
+    <Box data-strong-backdrop sx={{ height: '100%', display: 'grid', placeItems: 'center', p: 3, bgcolor: 'rgba(0,0,0,0.6)' }}>
+    <Paper data-strong-reminder role="dialog" aria-modal="true" aria-labelledby="reminder-title" elevation={12}
+      sx={{ width: 480, maxWidth: '100%', minHeight: 380, maxHeight: '100%', overflowY: 'auto', p: 3,
+        border: 1, borderColor: 'divider', borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between"><Chip color="warning" variant="outlined" label={t('强提醒')} />
         <Typography color="text.secondary" sx={{ fontSize: 12 }}>{t('待处理 {{n}} 项', { n: rows.length })}</Typography></Stack>
       {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-      <Typography sx={{ mt: 2.5, fontSize: 23, fontWeight: 650, lineHeight: 1.5, overflowWrap: 'anywhere' }}>{current?.title ?? t('没有待处理的强提醒')}</Typography>
+      <Box sx={{ flex: 1, py: 3 }}>
+      <Typography id="reminder-title" component="h1" sx={{ fontSize: 25, fontWeight: 650, lineHeight: 1.5, overflowWrap: 'anywhere' }}>{current?.title ?? t('没有待处理的强提醒')}</Typography>
       {current?.dueAt && <Typography color="text.secondary" sx={{ mt: 1, fontSize: 13 }}>{new Date(current.dueAt).toLocaleString(i18n.language === 'en' ? 'en-US' : 'zh-CN')}</Typography>}
-      <Stack direction="row" spacing={1} sx={{ mt: 3 }}>
-        <Button variant="contained" disabled={!current || busy} onClick={() => void act('complete')}>{t('确认完成')}</Button>
-        <Button variant="outlined" disabled={!current || busy} onClick={() => void act('snooze')}>{t('{{n}} 分钟后提醒', { n: settings?.reminders.snoozeMinutes ?? 5 })}</Button>
+      </Box>
+      <Stack direction="row" spacing={1}>
+        <Button sx={{ flex: 1 }} variant="contained" disabled={!current || busy} onClick={() => void act('complete')}>{t('确认完成')}</Button>
+        <Button sx={{ flex: 1 }} variant="outlined" disabled={!current || busy} onClick={() => void act('snooze')}>{t('{{n}} 分钟后提醒', { n: settings?.reminders.snoozeMinutes ?? 5 })}</Button>
       </Stack>
-      <Button color="inherit" size="small" sx={{ mt: 2 }} onClick={() => window.api.reminders.closeStrong()}>{t('关闭窗口，保留待处理事项')}</Button>
+      <Button color="inherit" size="small" sx={{ mt: 1.5, alignSelf: 'center', color: 'text.secondary' }} onClick={() => window.api.reminders.closeStrong()}>{t('关闭窗口，保留待处理事项')}</Button>
+    </Paper>
     </Box>
   </ThemeProvider>
 }

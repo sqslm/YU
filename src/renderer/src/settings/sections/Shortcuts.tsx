@@ -172,6 +172,7 @@ export function ShortcutsSection({
         </SettingsRow>
       </SettingsGroup>
 
+      <SettingsHint>{i18n.t('所有录音均可按右 Alt 结束并提交，按 Esc 取消。')}</SettingsHint>
       <SettingsGroup icon={<IconSparkle />} title={i18n.t('模式按键')}>
         {MODE_ROWS.map((row) =>
           renderRow(

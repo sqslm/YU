@@ -366,6 +366,21 @@ describe('caption previews', () => {
 })
 
 describe('cancel()', () => {
+  it('reports capture, processing and cancellation to the shared recording controls', async () => {
+    vi.useFakeTimers()
+    const onActivity = vi.fn()
+    const { pipeline } = harness({}, { onActivity })
+    pipeline.start('dictation')
+    expect(onActivity).toHaveBeenLastCalledWith(true, true)
+    pipeline.pushAudio(tone(1000))
+    const stopped = pipeline.stop()
+    expect(onActivity).toHaveBeenLastCalledWith(false, true)
+    pipeline.cancel()
+    expect(onActivity).toHaveBeenLastCalledWith(false, false)
+    await vi.advanceTimersByTimeAsync(1000)
+    await stopped
+    expect(onActivity).toHaveBeenLastCalledWith(false, false)
+  })
   it.each(['never', 'failed', 'always'] as const)('does not write cancelled takes or audio under %s', (keepAudio) => {
     const onRecorded = vi.fn()
     const { pipeline, store, sent } = harness({ keepAudio }, { onRecorded })

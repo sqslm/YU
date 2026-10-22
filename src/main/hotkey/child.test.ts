@@ -52,6 +52,65 @@ function events(type: string): unknown[] {
 }
 
 describe('action shortcut release ordering', () => {
+  it.each(['stop', 'cancel'])('owns controls for a notes recording reported by the actual recorder: %s', action => {
+    native.receive!({ data: { type: 'config', bindings: {}, pasteLast: [] } })
+    native.receive!({ data: { type: 'activity', value: 'recording' } })
+    const vk = action === 'stop' ? 0xa5 : 0x1b
+    expect(key(vk, true)).toBe(1)
+    expect(key(vk, true)).toBe(1)
+    expect(key(vk, false)).toBe(1)
+    expect(events(action)).toHaveLength(1)
+    expect(events('start')).toHaveLength(0)
+    native.receive!({ data: { type: 'activity', value: 'idle' } })
+    expect(key(vk, true)).toBe(0); expect(key(vk, false)).toBe(0)
+  })
+
+  it('swallows Escape while processing, then restores it after the task finishes', () => {
+    native.receive!({ data: { type: 'activity', value: 'working' } })
+    expect(key(0x1b, true)).toBe(1); expect(key(0x1b, false)).toBe(1)
+    expect(events('cancel')).toHaveLength(1)
+    native.receive!({ data: { type: 'activity', value: 'idle' } })
+    expect(key(0x1b, true)).toBe(0); expect(key(0x1b, false)).toBe(0)
+  })
+
+  it('Right Alt submits a held custom gesture once, even before the start key is released', () => {
+    native.receive!({ data: { type: 'config', activation: 'hold', bindings: { translate: ['F8'] }, pasteLast: [] } })
+    key(0x77, true)
+    expect(key(0xa5, true)).toBe(1); expect(key(0xa5, false)).toBe(1)
+    key(0x77, false)
+    expect(events('stop')).toHaveLength(1)
+    expect(events('start')).toHaveLength(1)
+  })
+  it('owns Escape through repeats and release while cancelling a recording, but passes it when idle', () => {
+    expect(key(0x1b, true)).toBe(0); expect(key(0x1b, false)).toBe(0)
+    native.post.mockClear()
+    key(0xa5, true); key(0xa5, false)
+    expect(key(0x1b, true)).toBe(1)
+    expect(key(0x1b, true)).toBe(1)
+    expect(key(0x1b, false)).toBe(1)
+    expect(events('cancel')).toHaveLength(1)
+    expect(events('stop')).toHaveLength(0)
+    expect(key(0x1b, true)).toBe(0); expect(key(0x1b, false)).toBe(0)
+  })
+
+  it('Right Alt submits a reminder without restarting dictation on release', () => {
+    key(0xa2, true); key(0xa1, true); key(0x52, true); key(0x52, false); key(0xa1, false); key(0xa2, false)
+    expect(key(0xa5, true)).toBe(1)
+    expect(events('stop')).toHaveLength(1)
+    expect(key(0xa5, true)).toBe(1)
+    expect(key(0xa5, false)).toBe(1)
+    expect(events('start')).toHaveLength(1)
+    expect(events('stop')).toHaveLength(1)
+  })
+
+  it.each(['dictation', 'translate', 'ask'])('Right Alt submits %s with a custom start key', mode => {
+    native.receive!({ data: { type: 'config', bindings: { [mode]: ['F8'] }, pasteLast: [], reminder: [] } })
+    key(0x77, true); key(0x77, false)
+    expect(key(0x41, true)).toBe(0); key(0x41, false)
+    expect(key(0xa5, true)).toBe(1); expect(key(0xa5, false)).toBe(1)
+    expect(events('stop')).toEqual([expect.objectContaining({ mode })])
+    expect(events('start')).toHaveLength(1)
+  })
   it.each([[0x56, 'paste-last'], [0x53, 'selection'], [0x54, 'selection-translate']] as const)('%s waits for every modifier before %s', (letter, action) => {
     key(0xa2, true); key(0xa1, true)
     expect(events('start')).toHaveLength(0)

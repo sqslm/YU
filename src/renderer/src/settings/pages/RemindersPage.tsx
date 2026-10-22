@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderView } from '@shared/reminders'
 import { localDateTime } from '@shared/reminders'
 import { PagedList } from '../Pagination'
+import { ReminderDateTime } from './ReminderDateTime'
 
 interface Form { title: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | 'daily' | 'weekly'; weekday: number }
 const empty = (): Form => ({ title: '', date: '', level: 'normal', repeat: 'none', weekday: 1 })
@@ -29,9 +30,8 @@ function Fields({ form, change }: { form: Form; change: (form: Form) => void }):
   const { t } = useTranslation()
   return <Stack spacing={1.5}>
     <TextField label={t('提醒事项')} size="small" value={form.title} onChange={e => change({ ...form, title: e.target.value })} inputProps={{ maxLength: 300 }} />
-    <TextField label={t('提醒时间')} size="small" type="datetime-local" value={form.date} InputLabelProps={{ shrink: true }}
-      onChange={e => change({ ...form, date: e.target.value,
-        weekday: form.repeat === 'weekly' && e.target.value ? new Date(e.target.value).getDay() : form.weekday })} helperText={t('留空保存为待办，不会定时通知。')} />
+    <ReminderDateTime value={form.date} onChange={date => change({ ...form, date,
+      weekday: form.repeat === 'weekly' && date ? new Date(date).getDay() : form.weekday })} />
     <Stack direction="row" spacing={1}>
       <TextField select label={t('提醒等级')} size="small" value={form.level} onChange={e => change({ ...form, level: e.target.value as Form['level'] })}>
         <MenuItem value="normal">{t('普通提醒')}</MenuItem><MenuItem value="strong">{t('强提醒')}</MenuItem>
@@ -149,7 +149,8 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
         }).then(ok => { if (ok) setReview(null) })
       }}>{t('保存所选事项')}</Button></DialogActions>
     </Dialog>
-    <Dialog open={Boolean(deleting)} onClose={() => !busy && setDeleting(null)}><DialogTitle>{t('删除这条提醒？')}</DialogTitle><DialogContent>{deleting?.title}</DialogContent>
+    <Dialog open={Boolean(deleting)} onClose={() => !busy && setDeleting(null)} fullWidth maxWidth="xs"
+      PaperProps={{ sx: { minWidth: 320 } }}><DialogTitle>{t('删除这条提醒？')}</DialogTitle><DialogContent sx={{ overflowWrap: 'anywhere' }}>{deleting?.title}</DialogContent>
       <DialogActions><Button onClick={() => setDeleting(null)}>{t('取消')}</Button><Button color="error" disabled={busy} onClick={() => deleting && void perform(() => window.api.reminders.remove(deleting.id)).then(ok => { if (ok) setDeleting(null) })}>{t('删除')}</Button></DialogActions>
     </Dialog>
   </Box>

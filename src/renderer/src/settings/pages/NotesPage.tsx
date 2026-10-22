@@ -498,12 +498,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   const startRecording = async (): Promise<void> => {
     if (recording || starting || audioJobRef.current) return
     setStarting(true)
+    window.api.notes.recording(true)
     setMicMessage('')
     micErrorRef.current = ''
-    chunksRef.current = []
+    const chunks: Int16Array[] = []
+    chunksRef.current = chunks
     const mic = new MicCapture({
       onChunk: (chunk) => {
-        chunksRef.current.push(chunk)
+        chunks.push(chunk)
       },
       onError: (message) => {
         // `start()` swallows the getUserMedia rejection, so the only record of it
@@ -516,15 +518,19 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     micRef.current = mic
     try {
       await mic.setDevice(settings.inputDeviceId ?? '', settings.audioProcessing)
+      if (micRef.current !== mic) return
       await mic.start()
+      if (micRef.current !== mic) { await mic.stop(); return }
       if (mic.isRunning) await mic.setActive(true)
     } catch (err) {
       micErrorRef.current = messageOf(err)
     }
+    if (micRef.current !== mic) return
     if (!mic.isRunning) {
       micRef.current = null
       setMicMessage(micErrorRef.current || t('notes.micUnavailable'))
       setStarting(false)
+      window.api.notes.recording(false)
       return
     }
     recStartRef.current = Date.now()
@@ -534,22 +540,25 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     recTimerRef.current = setInterval(() => setRecordedMs(Date.now() - recStartRef.current), 200)
   }
 
-  const stopRecording = async (): Promise<void> => {
-    if (!recording) return
+  const stopRecording = async (cancel = false): Promise<void> => {
+    if (!micRef.current) return
     const mic = micRef.current
     micRef.current = null
+    const parts = chunksRef.current
+    chunksRef.current = []
     if (recTimerRef.current) {
       clearInterval(recTimerRef.current)
       recTimerRef.current = null
     }
     setRecording(false)
+    setStarting(false)
+    window.api.notes.recording(false)
     setRecordedMs(0)
     if (mic) {
-      await mic.setActive(false)
+      await mic.setActive(false, !cancel)
       await mic.stop()
     }
-    const parts = chunksRef.current
-    chunksRef.current = []
+    if (cancel) return
     const samples = parts.reduce((total, part) => total + part.length, 0)
     if (samples === 0) {
       setMicMessage(t('notes.micEmpty'))
@@ -585,6 +594,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
       recTimerRef.current = null
       const mic = micRef.current
       micRef.current = null
+      window.api.notes.recording(false)
       if (mic) {
         void mic.setActive(false, false).then(() => mic.stop())
       }
@@ -603,6 +613,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     if (recording) void stopRecording()
     else void startRecording()
   }
+  const controlRecorderRef = useRef<(action: 'stop' | 'cancel') => void>(() => undefined)
+  controlRecorderRef.current = action => { void stopRecording(action === 'cancel') }
+  useEffect(() => window.api.notes.onRecordControl(action => controlRecorderRef.current(action)), [])
   useEffect(() => {
     if (recordTicket <= lastRecordTicket) return
     lastRecordTicket = recordTicket

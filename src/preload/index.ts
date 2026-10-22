@@ -140,6 +140,12 @@ const api: TypelessApi = {
      * The global 随记录音 chord, relayed by main. Fires on every press; the notes
      * page decides whether that means "start" or "stop".
      */
+    recording: (active) => ipcRenderer.send('notes:recording', active),
+    onRecordControl: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, action: 'stop' | 'cancel'): void => callback(action)
+      ipcRenderer.on('notes:record-control', listener)
+      return () => ipcRenderer.removeListener('notes:record-control', listener)
+    },
     onRecordHotkey: (callback: () => void): (() => void) => {
       const listener = (): void => callback()
       ipcRenderer.on('notes:record-toggle', listener)

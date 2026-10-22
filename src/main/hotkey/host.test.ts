@@ -8,6 +8,31 @@ import { HotkeyHost } from './host'
 
 describe('shortcut recording suspension', () => {
   beforeEach(() => vi.clearAllMocks())
+  it('acknowledges a rejected start with the unchanged actual processing state', () => {
+    const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+    mock.fork.mockReturnValue(child)
+    const host = new HotkeyHost(vi.fn())
+    host.start(mergeSettings({})); child.emit('message', { type: 'ready' })
+    host.setActivity('working')
+    child.postMessage.mockClear()
+    child.emit('message', { type: 'start', mode: 'dictation', at: 1 })
+    expect(child.postMessage).toHaveBeenLastCalledWith({ type: 'activity', value: 'working' })
+    host.stop()
+  })
+  it('mirrors the actual task activity and restores it when the child becomes ready', () => {
+    const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+    mock.fork.mockReturnValue(child)
+    const host = new HotkeyHost(vi.fn())
+    host.setActivity('recording')
+    host.start(mergeSettings({})); child.emit('message', { type: 'ready' })
+    expect(child.postMessage).toHaveBeenCalledWith({ type: 'activity', value: 'recording' })
+    child.postMessage.mockClear()
+    host.setActivity('recording')
+    expect(child.postMessage).not.toHaveBeenCalled()
+    host.setActivity('working'); host.setActivity('idle')
+    expect(child.postMessage.mock.calls.map(([message]) => message.value)).toEqual(['working', 'idle'])
+    host.stop()
+  })
   it('temporarily disables capture without changing the persisted enabled flag and respects settings updates', () => {
     const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
     mock.fork.mockReturnValue(child)
