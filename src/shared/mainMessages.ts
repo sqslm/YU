@@ -7,6 +7,21 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '不支持的搜索服务': 'Unsupported search provider',
+  '已停止生成': 'Generation stopped',
+  '模式': 'Mode',
+  '应用': 'App',
+  '卡片': 'Prompt card',
+  '识别结果': 'Result',
+  '历史记录导出': 'History export',
+  '导出历史记录': 'Export history',
+  '历史记录': 'History',
+  '请选择要导出的历史记录': 'Select history entries to export',
+  '部分记录已不存在，请刷新后重试': 'Some records no longer exist. Refresh and try again',
+  '当前筛选没有可导出的正常记录': 'No successful records in the current filter can be exported',
+  '听写': 'Dictation',
+  '问答': 'Ask',
+  '翻译': 'Translation',
   'Qwen ASR Flash 最多支持 5 分钟且编码后不超过 10 MB 的录音': 'Qwen ASR Flash supports recordings up to 5 minutes and 10 MB after encoding',
   '仅 Paraformer / Filetrans 异步模型需要；Qwen ASR Flash 直接上传录音，无需填写': 'Required only for asynchronous Paraformer / Filetrans models; Qwen ASR Flash uploads audio directly',
   '当前官方音频接口文档不可用；请先向供应商确认可用的语音端点与模型，聊天地址不代表支持转写。': 'The current audio endpoint documentation is unavailable. Confirm the speech endpoint and model with the provider; a chat endpoint does not imply transcription support.',

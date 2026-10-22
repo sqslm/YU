@@ -17,6 +17,7 @@ import type { BarActionId, BarState, CardAction, ModelListResult, Settings } fro
 import type { AnswerCardPayload } from '@shared/api'
 import { SettingsStore } from './settings'
 import { HistoryStore } from './history'
+import { exportHistory } from './history-export'
 import { AccountStore } from './account'
 import { CloudClient, SyncEngine } from './cloud'
 import { StatsStore } from './stats'
@@ -34,6 +35,7 @@ import { collectResources } from './resources'
 import { applyReplaceText } from './agent'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
+import { probeSearch } from './providers/search-probe'
 import {
   anchorCardToBar,
   applyHubTheme,
@@ -480,6 +482,13 @@ function showAnswerCard(payload: AnswerCardPayload): void {
  * overwritten after they clicked that button, and `ask` is a follow-up turn.
  */
 async function handleCardAction(action: CardAction): Promise<void> {
+  if (action.id === 'stop') {
+    const partial = lastAnswer
+    if (partial?.streaming && pipeline?.stopAnswer()) {
+      showAnswerCard({ ...partial, streaming: false, stopped: true, status: '', actions: [] })
+    }
+    return
+  }
   const answer = (action.payload ?? lastAnswer?.answer ?? '').trim()
   if (action.id === 'copy') {
     if (answer) clipboard.writeText(answer)
@@ -576,6 +585,7 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  ipcMain.handle('net:probe-search', (_event, input) => probeSearch(input))
   ipcMain.handle('settings:capture-shortcut', (event, active: boolean) => {
     if (event.sender === settingsWindow?.webContents) hotkeys?.setCapturing(active === true)
   })
@@ -728,7 +738,8 @@ function registerIpc(): void {
     return sync.now()
   })
 
-  ipcMain.handle('history:list', (_event, query: string) => history.list(query ?? ''))
+  ipcMain.handle('history:list', (_event, query: string) => history.list(query ?? '', store.get().historyLimit))
+  ipcMain.handle('history:export-text', (_event, ids, format) => exportHistory(history, ids, format))
   ipcMain.handle('history:latest', () => history.latest())
   ipcMain.handle('history:remove', (_event, id: string) => history.remove(id))
   ipcMain.handle('history:archive', (_event, id: string, archived?: boolean) =>

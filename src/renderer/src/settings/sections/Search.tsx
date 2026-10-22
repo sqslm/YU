@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
-import type { SearchConnection, SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
+import type { SearchConnection, SearchProbeResult, SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
 import {
   SEARCH_PROVIDER_CAVEAT,
   SEARCH_PROVIDER_ENDPOINT_HINT,
@@ -65,6 +65,26 @@ export function endpointHelperText(provider: SearchProvider, endpoint: string): 
 export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
   const search = settings.search
   const [editing, setEditing] = useState<SearchConnection | null>(null)
+  const [probe, setProbe] = useState<{ id: string; input: string; busy: boolean; result?: SearchProbeResult } | null>(null)
+  const probeInput = (connection: SearchConnection): string => JSON.stringify([connection.provider, connection.apiKey, connection.endpoint])
+  const testConnection = async (connection: SearchConnection): Promise<void> => {
+    if (probe?.busy) return
+    const input = probeInput(connection)
+    setProbe({ id: connection.id, input, busy: true })
+    let result: SearchProbeResult
+    try { result = await window.api.net.probeSearch(connection) }
+    catch (error) { result = { ok: false, count: 0, durationMs: 0, message: String(error) } }
+    setProbe({ id: connection.id, input, busy: false, result })
+  }
+  const probeStatus = (connection: SearchConnection): JSX.Element | null => {
+    if (probe?.id !== connection.id || probe.input !== probeInput(connection)) return null
+    const result = probe.result
+    return <Typography role="status" data-search-probe-result sx={{ px: 2, pb: 1.5, fontSize: 11.5, overflowWrap: 'anywhere', color: result && !result.ok ? 'error.main' : 'text.secondary' }}>
+      {probe.busy ? i18n.t('正在测试连接…') : result?.ok
+        ? i18n.t('连接正常 · {{count}} 条结果 · {{ms}} ms', { count: result.count, ms: result.durationMs })
+        : i18n.t('测试失败：{{message}}', { message: result?.message })}
+    </Typography>
+  }
 
   /**
    * The flat `apiKey`/`endpoint`/`maxResults` fields are a mirror the main
@@ -73,6 +93,7 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
    * reads the per-provider slot instead.
    */
   const entry = activeSearchEntry(search)
+  const singleConnection: SearchConnection = { ...entry, id: 'single', name: '', provider: search.provider, enabled: true }
 
   // `patch` shallow-merges into the top level of Settings, so the whole `search`
   // object has to travel with every change or sibling keys would be dropped.
@@ -141,13 +162,15 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
       {search.strategy && search.strategy !== 'single' && <SettingsGroup icon={<IconMagnifier />} title={i18n.t('搜索连接')}>
         {connections.map((connection, index) => <Box key={connection.id} data-search-connection={connection.id} title={connection.name} sx={{ '& p': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }}><SettingsRow label={connection.name} description={SEARCH_PROVIDER_LABEL[connection.provider]}>
           <Switch size="small" checked={connection.enabled} inputProps={{ 'aria-label': i18n.t('启用 {{name}}', { name: connection.name }) }} onChange={(_, enabled) => updateConnection(connection.id, { enabled })} />
-          <Button size="small" onClick={() => setEditing({ ...connection })}>{i18n.t('编辑')}</Button>
+          <Button size="small" sx={{ minWidth: 40 }} data-search-test={connection.id} aria-label={i18n.t('测试 {{name}}', { name: connection.name })} disabled={probe?.busy} onClick={() => void testConnection(connection)}>{i18n.t('测试')}</Button>
+          <Button size="small" sx={{ minWidth: 40 }} onClick={() => setEditing({ ...connection })}>{i18n.t('编辑')}</Button>
           <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('上移 {{name}}', { name: connection.name })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
           <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('下移 {{name}}', { name: connection.name })} disabled={index === connections.length - 1} onClick={() => move(index, 1)}>↓</Button>
           <Button size="small" color="error" onClick={() => update({ connections: connections.filter(item => item.id !== connection.id) })}>{i18n.t('删除')}</Button>
-        </SettingsRow></Box>)}
+        </SettingsRow>{probeStatus(connection)}</Box>)}
         {!connections.length && <SettingsHint>{i18n.t('添加已授权的搜索连接，可保存同一服务的多把密钥。')}</SettingsHint>}
         <Box sx={{ px: 2, py: 1.5 }}><Button variant="outlined" size="small" data-search-add onClick={() => setEditing({ id: crypto.randomUUID(), name: '', provider: 'tavily', apiKey: '', endpoint: '', maxResults: 5, enabled: true })}>{i18n.t('添加搜索连接')}</Button></Box>
+        <SettingsHint>{i18n.t('测试会发送一次真实搜索请求，可能计入服务额度；不会切换到备用连接。')}</SettingsHint>
       </SettingsGroup>}
 
       {(!search.strategy || search.strategy === 'single') && <>
@@ -214,6 +237,9 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
             />
           </SettingsField>
         )}
+        <Box sx={{ px: 2, py: 1.5 }}><Button variant="outlined" size="small" data-search-test-single disabled={probe?.busy || !!keyErrorHint || !!endpointErrorHint} onClick={() => void testConnection(singleConnection)}>{i18n.t('测试连接')}</Button></Box>
+        {probeStatus(singleConnection)}
+        <SettingsHint>{i18n.t('测试会发送一次真实搜索请求，可能计入服务额度；不会切换到备用连接。')}</SettingsHint>
       </SettingsGroup>
       </>}
 
@@ -269,8 +295,9 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
             <TextField size="small" label={i18n.t('自定义地址')} value={editing.endpoint} onChange={event => setEditing({ ...editing, endpoint: event.target.value })} helperText={SEARCH_PROVIDER_ENDPOINT_HINT[editing.provider]} />
           </>}
           <TextField size="small" label={i18n.t('单次搜索条数')} type="number" inputProps={{ min: 1, max: 10 }} value={editing.maxResults} onChange={event => setEditing({ ...editing, maxResults: Math.min(10, Math.max(1, Number(event.target.value) || 1)) })} />
-        </Stack></DialogContent>}
+        </Stack><Box sx={{ mt: 2 }}>{probeStatus(editing)}</Box></DialogContent>}
         <DialogActions><Button onClick={() => setEditing(null)}>{i18n.t('取消')}</Button>
+          <Button data-search-test-draft disabled={!editing || probe?.busy || !!apiKeyHelperText(editing.provider, editing.apiKey) || !!endpointHelperText(editing.provider, editing.endpoint)} onClick={() => { if (editing) void testConnection(editing) }}>{i18n.t('测试连接')}</Button>
           <Button variant="contained" disabled={!editing || !!apiKeyHelperText(editing.provider, editing.apiKey) || !!endpointHelperText(editing.provider, editing.endpoint)} onClick={() => {
             if (!editing) return
             const saved = { ...editing, name: editing.name.trim() || SEARCH_PROVIDER_LABEL[editing.provider] }

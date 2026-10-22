@@ -1533,6 +1533,7 @@ export async function askAgent(
   let lastRuns: ToolRun[] = []
 
   const finish = (result: AgentResult): AgentResult => {
+    abort.throwIfAborted()
     // Single choke point for anything that reaches the card or the cursor: tool
     // markup is never part of an answer, whoever produced it.
     const text = scrubToolCallMarkup(result.text)
@@ -1720,10 +1721,12 @@ export async function askAgent(
     log(`[tool] web_search ok=${outcome.ok} ${outcome.summary}`)
     return await answerFromRuns([toRun('web_search', outcome)])
   } catch (err) {
+    if (abort.aborted) throw err
     log(`[agent] failed: ${messageOf(err)}`)
     try {
       return await plain()
     } catch (inner) {
+      if (abort.aborted) throw inner
       log(`[agent] plain answer failed: ${messageOf(inner)}`)
       // An empty card reads as a broken app. Say what happened instead.
       return { text: mt('这次没能拿到回答，检查模型配置或网络后再试一次。'), sources: [], searched: false }

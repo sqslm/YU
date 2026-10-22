@@ -264,6 +264,13 @@ export interface SearchConnection extends SearchProviderEntry {
   enabled: boolean
 }
 
+export interface SearchProbeResult {
+  ok: boolean
+  count: number
+  durationMs: number
+  message?: string
+}
+
 export interface SearchSettings {
   enabled: boolean
   strategy: 'single' | 'fallback' | 'aggregate'
@@ -882,7 +889,7 @@ export interface ModelListResult {
   error?: string
 }
 
-export type CardActionId = 'copy' | 'replace' | 'ask'
+export type CardActionId = 'copy' | 'replace' | 'ask' | 'stop'
 
 export interface CardAction {
   id: CardActionId
@@ -903,6 +910,8 @@ export interface AnswerCardPayload {
   actions?: CardAction[]
   /** True when the answer is still arriving and the card should not be hidden. */
   streaming?: boolean
+  /** A user-stopped partial answer is readable but is not a completed history entry. */
+  stopped?: boolean
   /** Actual retrieval outcome; never inferred from whether search is enabled. */
   retrieval?: AskRetrieval
 }

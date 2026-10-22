@@ -14,6 +14,8 @@ import type {
   PromptKind,
   RecordingSessionInfo,
   ResourceUsage,
+  SearchConnection,
+  SearchProbeResult,
   Settings,
   ServerMeta,
   SyncStatus
@@ -32,6 +34,7 @@ export interface TypelessApi {
     onChanged(callback: (settings: Settings) => void): () => void
   }
   history: {
+    exportText(ids: string[], format: NoteExportFormat): Promise<{ path: string; count: number } | null>
     list(query?: string): Promise<HistoryEntry[]>
     latest(): Promise<HistoryEntry | undefined>
     remove(id: string): Promise<void>
@@ -213,6 +216,7 @@ export interface TypelessApi {
     ): Promise<{ ok: boolean; path?: string; message?: string }>
   }
   net: {
+    probeSearch(input: Pick<SearchConnection, 'provider' | 'apiKey' | 'endpoint'>): Promise<SearchProbeResult>
     probe(input: {
       baseUrl: string
       apiKey: string

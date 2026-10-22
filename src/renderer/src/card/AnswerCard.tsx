@@ -291,7 +291,7 @@ export function AnswerCard(): JSX.Element | null {
           <div style={brandRow}>
             <span style={brandDot} />
             <span style={brandText}>Ask</span>
-            {!busy && <span style={chip} data-card-retrieval>{searchLabel}</span>}
+            {!busy && <span style={chip} data-card-retrieval>{data.stopped ? i18n.t('已停止') : searchLabel}</span>}
           </div>
           <div style={headerActions}>
             <button
@@ -317,11 +317,11 @@ export function AnswerCard(): JSX.Element | null {
 
         {statusLine !== null && (
           <div style={statusRow} aria-live="polite">
-            <span className="card-dots" aria-hidden="true">
+            {busy && <span className="card-dots" aria-hidden="true">
               <span />
               <span />
               <span />
-            </span>
+            </span>}
             <span style={statusText}>{statusLine}</span>
           </div>
         )}
@@ -376,6 +376,7 @@ export function AnswerCard(): JSX.Element | null {
         )}
 
         <div style={actionRow}>
+          {busy && <button type="button" style={primaryButton} data-card-stop onClick={() => bridge().action?.({ id: 'stop', label: i18n.t('停止生成') })}>{i18n.t('停止生成')}</button>}
           <button type="button" style={primaryButton} onClick={copyAnswer} disabled={!answer}>
             {copied === 'answer' ? i18n.t('已复制') : i18n.t('复制回答')}
           </button>
@@ -400,7 +401,7 @@ export function AnswerCard(): JSX.Element | null {
             className="card-ask"
             value={draft}
             disabled={busy}
-            placeholder={busy ? i18n.t('正在思考…') : i18n.t('继续追问…')}
+            placeholder={busy ? i18n.t('正在思考…') : data.stopped ? i18n.t('重新提问…') : i18n.t('继续追问…')}
             style={askInput}
             inputProps={{ 'aria-label': i18n.t('追问'), style: askInputInner }}
             onChange={(event) => setDraft(event.target.value)}

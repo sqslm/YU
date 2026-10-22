@@ -1248,5 +1248,21 @@
   "待自动恢复": "Reloads when needed",
   "录音实时字幕": "Live recording captions",
   "说话时分段识别并滚动显示预览，会增加语音接口调用；最终文字以完整识别为准。": "Preview speech in rolling segments while recording. This adds speech API calls; the final text comes from the complete recording.",
-  "字幕暂不可用": "Captions unavailable"
+  "字幕暂不可用": "Captions unavailable",
+  "该快捷键已用于「{{name}}」，已保留原快捷键。": "This shortcut is already used by “{{name}}”. Your previous shortcut was kept.",
+  "正在测试连接…": "Testing connection…",
+  "连接正常 · {{count}} 条结果 · {{ms}} ms": "Connected · {{count}} results · {{ms}} ms",
+  "测试失败：{{message}}": "Test failed: {{message}}",
+  "测试 {{name}}": "Test {{name}}",
+  "测试": "Test",
+  "测试会发送一次真实搜索请求，可能计入服务额度；不会切换到备用连接。": "Testing sends one real search request that may count toward your quota. It does not use fallback connections.",
+  "已停止生成": "Generation stopped",
+  "已停止": "Stopped",
+  "停止生成": "Stop generating",
+  "重新提问…": "Ask another question…",
+  "已导出 {{count}} 条历史记录": "Exported {{count}} history entries",
+  "导出当前搜索、模式、应用和归档筛选下的全部正常记录，包含所有分页。": "Export all successful records matching the current search, mode, app and archive filters, across every page.",
+  "正在导出…": "Exporting…",
+  "导出": "Export",
+  "纯文本": "Plain text"
 }

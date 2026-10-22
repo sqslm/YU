@@ -864,6 +864,11 @@ export class Pipeline {
     return true
   }
 
+  /** Only the answer card may stop an Ask operation; dictation/translation are unaffected. */
+  stopAnswer(): boolean {
+    return this.stage === 'working' && this.stageMode === 'ask' && this.cancel('stop-answer')
+  }
+
   private lastAlert: { key: string; at: number } | null = null
 
   /**
@@ -1256,8 +1261,10 @@ export class Pipeline {
     } finally {
       // Every early return above still has to close the per-take log, or the
       // file stays open and the next take appends to a stale header.
-      recordingLog.end({ status: 'done' })
-      this.unmutePlayback()
+      if (token === this.runToken) {
+        recordingLog.end({ status: 'done' })
+        this.unmutePlayback()
+      }
       this.finishStage(token)
       if (this.abort === controller) this.abort = null
     }
@@ -1873,8 +1880,10 @@ export class Pipeline {
     } finally {
       // Every early return above still has to close the per-take log, or the
       // file stays open and the next take appends to a stale header.
-      recordingLog.end({ status: 'done' })
-      this.unmutePlayback()
+      if (token === this.runToken) {
+        recordingLog.end({ status: 'done' })
+        this.unmutePlayback()
+      }
       this.finishStage(token)
       if (this.abort === controller) this.abort = null
     }

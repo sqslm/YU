@@ -243,6 +243,38 @@ afterEach(() => {
 })
 
 describe('Ask card completion', () => {
+  it('stops an Ask request and ignores queued deltas and a late response without writing history', async () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    let resolve!: (value: unknown) => void
+    let requestSignal!: AbortSignal
+    mocks.askFollowUp.mockImplementation((...args: unknown[]) => {
+      requestSignal = args[3] as AbortSignal
+      const options = args[5] as { onDelta: (chunk: string) => void }
+      options.onDelta('已显示的内容')
+      options.onDelta('尚未显示的内容')
+      return new Promise(done => { resolve = done })
+    })
+    const { pipeline, store } = harness({}, { onAnswer })
+    const pending = pipeline.followUp('慢回答')
+    expect(pipeline.stopAnswer()).toBe(true)
+    expect(requestSignal.aborted).toBe(true)
+    const frames = onAnswer.mock.calls.length
+    resolve({ text: '迟到的回答', sources: [], searched: false })
+    await pending
+    await vi.advanceTimersByTimeAsync(100)
+    expect(onAnswer).toHaveBeenCalledTimes(frames)
+    expect(store.add).not.toHaveBeenCalled()
+    expect(pipeline.stopAnswer()).toBe(false)
+  })
+
+  it('does not cancel dictation or an idle task through the Ask stop action', () => {
+    const { pipeline } = harness({})
+    expect(pipeline.stopAnswer()).toBe(false)
+    pipeline.start('dictation')
+    expect(pipeline.stopAnswer()).toBe(false)
+    pipeline.cancel()
+  })
   it('keeps final retrieval metadata and prevents a queued stream repaint from replacing the final answer', async () => {
     vi.useFakeTimers()
     const onAnswer = vi.fn()

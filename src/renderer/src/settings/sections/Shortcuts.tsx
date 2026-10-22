@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Stack, Switch, Tooltip } from '@mui/material'
+import { Alert, Button, Stack, Switch, Tooltip } from '@mui/material'
 import type { Mode, Settings } from '@shared/types'
 import { Keycaps } from '../keycaps'
 import {
@@ -11,6 +11,7 @@ import {
   SettingsHint
 } from './General'
 import i18n from '../../i18n'
+import { shortcutConflict } from '@shared/shortcuts'
 
 const MODE_ROWS: Array<{ mode: Mode; label: string; hint: string; toggleHint: string }> = [
   {
@@ -76,6 +77,7 @@ export function ShortcutsSection({
 }): JSX.Element {
   const [capturing, setCapturing] = useState<string | null>(null)
   const [held, setHeld] = useState<string[]>([])
+  const [conflict, setConflict] = useState('')
   // Refs keep the key listeners stable while still seeing the newest settings.
   const heldRef = useRef<string[]>([])
   const settingsRef = useRef(settings)
@@ -83,6 +85,13 @@ export function ShortcutsSection({
 
   const save = (target: string, keys: string[]): void => {
     const hotkeys = settingsRef.current.hotkeys
+    const duplicate = shortcutConflict(hotkeys, target, keys)
+    if (duplicate) {
+      const label = MODE_ROWS.find(row => row.mode === duplicate)?.label ?? (duplicate === 'notes' ? '随记录音' : '粘贴上一条')
+      setConflict(i18n.t('该快捷键已用于「{{name}}」，已保留原快捷键。', { name: i18n.t(label) }))
+      return
+    }
+    setConflict('')
     if (target === 'pasteLast') patch({ hotkeys: { ...hotkeys, pasteLastKeys: { keys } } })
     else if (target === 'notes') patch({ hotkeys: { ...hotkeys, notesKeys: { keys } } })
     else patch({ hotkeys: { ...hotkeys, bindings: { ...hotkeys.bindings, [target]: { keys } } } })
@@ -160,6 +169,7 @@ export function ShortcutsSection({
         aria-pressed={capturing === id}
         sx={{ minWidth: 150, minHeight: 34, px: 1.25, borderColor: capturing === id ? 'primary.main' : 'divider', color: capturing === id ? 'primary.main' : 'text.primary', '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' } }}
         onClick={() => {
+          setConflict('')
           heldRef.current = []
           setHeld([])
           setCapturing(capturing === id ? null : id)
@@ -179,6 +189,7 @@ export function ShortcutsSection({
 
   return (
     <Stack spacing={3}>
+      {conflict && <Alert severity="warning" role="alert" data-shortcut-conflict>{conflict}</Alert>}
       <SettingsGroup icon={<IconKeyboard />} title={i18n.t('快捷键')}>
         <SettingsRow label={i18n.t('启用全局快捷键')} description={i18n.t('在其他应用中使用听写、翻译和问答快捷键。')}>
           <Switch

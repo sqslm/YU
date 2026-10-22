@@ -7,6 +7,7 @@ import {
   Dialog,
   IconButton,
   InputBase,
+  Menu,
   MenuItem,
   Stack,
   TextField,
@@ -152,6 +153,10 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   const [page, setPage] = useState(1)
   /** True while a `history.list` round trip is open (manual or automatic). */
   const [refreshing, setRefreshing] = useState(false)
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
+  const [exportMenu, setExportMenu] = useState<HTMLElement | null>(null)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportNotice, setExportNotice] = useState('')
   /** Automatic refresh holds back while the search box has the caret. */
   const [searchFocused, setSearchFocused] = useState(false)
   /** Clear-history confirmation. Destructive and irreversible, so never immediate. */
@@ -188,6 +193,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
         if (next === null) break
         queuedSearch.current = null
         setEntries(await window.api.history.list(next))
+        setLoadedQuery(next)
       }
     } finally {
       inFlight.current = false
@@ -220,8 +226,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
     focusRef.current = searchFocused
   }, [searchFocused])
   useEffect(() => {
-    dialogRef.current = feedbackFor !== null
-  }, [feedbackFor])
+    dialogRef.current = feedbackFor !== null || exportBusy || exportMenu !== null
+  }, [feedbackFor, exportBusy, exportMenu])
 
   const autoTick = useCallback(() => {
     const blocked = autoRefreshBlocked({
@@ -295,6 +301,19 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
     return filterByApp(byMode, appFilter)
   }, [entries, filter, appFilter, showArchived])
   const total = visible.length
+  const exportCurrent = async (format: 'markdown' | 'text'): Promise<void> => {
+    setExportMenu(null)
+    if (exportBusy || refreshing || loadedQuery !== query || !visible.length) return
+    const ids = visible.map(entry => entry.id)
+    setExportBusy(true)
+    setExportNotice('')
+    try {
+      const result = await window.api.history.exportText(ids, format)
+      if (result) setExportNotice(i18n.t('已导出 {{count}} 条历史记录', { count: result.count }))
+    } catch (error) {
+      setExportNotice(i18n.t('导出失败：{{error}}', { error: error instanceof Error ? error.message : String(error) }))
+    } finally { setExportBusy(false) }
+  }
   // Read-time clamp: deleting the last row of the last page shrinks `total` and
   // this lands the list on the new last page without an extra state write.
   const safePage = clampPage(page, total)
@@ -308,7 +327,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
       byDay.set(key, bucket)
     }
     return [...byDay.entries()]
-  }, [pageItems])
+  }, [pageItems, settings?.uiLanguage, i18n.resolvedLanguage])
 
   // Keep the stored page honest once the list shrinks under it, so a later refresh
   // that grows the list again does not teleport the user back to the old page.
@@ -637,6 +656,16 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               {showArchived ? i18n.t('看全部记录') : i18n.t('已归档')}
             </Button>
           </Box>
+          <Tooltip title={i18n.t('导出当前搜索、模式、应用和归档筛选下的全部正常记录，包含所有分页。')}>
+            <span><Button size="small" data-history-export disabled={exportBusy || refreshing || loadedQuery !== query || !total}
+              sx={{ fontSize: 12 }} onClick={event => setExportMenu(event.currentTarget)}>
+              {exportBusy ? i18n.t('正在导出…') : i18n.t('导出')}
+            </Button></span>
+          </Tooltip>
+          <Menu anchorEl={exportMenu} open={!!exportMenu} onClose={() => setExportMenu(null)}>
+            <MenuItem onClick={() => void exportCurrent('markdown')}>Markdown (.md)</MenuItem>
+            <MenuItem onClick={() => void exportCurrent('text')}>{i18n.t('纯文本')} (.txt)</MenuItem>
+          </Menu>
           <Button size="small" data-history-clean-abnormal
             sx={{ fontSize: 12, color: 'text.secondary' }}
             onClick={() => { setCleanupNotice(null); setClearAsk('abnormal') }}>
@@ -700,6 +729,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
       </Box>
 
       {cleanupNotice && <Typography role="status" data-history-clean-result sx={{ mt: 1, fontSize: 12, color: 'text.secondary' }}>{cleanupNotice}</Typography>}
+      {exportNotice && <Typography role="status" data-history-export-result sx={{ mt: 1, fontSize: 12, color: 'text.secondary' }}>{exportNotice}</Typography>}
 
       {/* Section header for the list: one 13px heading on the left, the active
           tab's count on the right. The page title above it was removed so

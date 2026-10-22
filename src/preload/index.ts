@@ -29,6 +29,7 @@ const api: TypelessApi = {
     }
   },
   history: {
+    exportText: (ids, format) => ipcRenderer.invoke('history:export-text', ids, format),
     list: (query = ''): Promise<HistoryEntry[]> => ipcRenderer.invoke('history:list', query),
     latest: (): Promise<HistoryEntry | undefined> => ipcRenderer.invoke('history:latest'),
     remove: (id: string): Promise<void> => ipcRenderer.invoke('history:remove', id),
@@ -150,6 +151,7 @@ const api: TypelessApi = {
       ipcRenderer.invoke('app:diagnostics', devices)
   },
   net: {
+    probeSearch: input => ipcRenderer.invoke('net:probe-search', input),
     probe: (input: {
       baseUrl: string
       apiKey: string

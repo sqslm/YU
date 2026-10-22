@@ -163,6 +163,20 @@ beforeEach(() => {
 })
 
 describe('native function calling', () => {
+  it('does not issue a fallback request or remember a cancelled answer', async () => {
+    const controller = new AbortController()
+    let resolve!: (text: string) => void
+    mocks.complete.mockImplementationOnce(() => new Promise<string>(done => { resolve = done }))
+    const settings = makeSettings({ enabled: false })
+    const pending = askAgent(settings, 'cancelled-question', {}, controller.signal, () => {}, { reset: true })
+    controller.abort()
+    resolve('cancelled-answer')
+    await expect(pending).rejects.toBeDefined()
+    expect(mocks.complete).toHaveBeenCalledTimes(1)
+    mocks.complete.mockResolvedValue('new answer')
+    await askFollowUp('new question', settings)
+    expect(JSON.stringify(mocks.complete.mock.calls.at(-1)?.[1].messages)).not.toContain('cancelled-')
+  })
   it('returns DeepSeek reasoning_content with tool history without displaying it', async () => {
     const fetchImpl = makeFetch(
       jsonResponse({ choices: [{ message: { content: null, reasoning_content: 'private tool reasoning', tool_calls: [{ id: 'reasoned-tool', type: 'function', function: { name: 'calculate', arguments: '{"expression":"2+2"}' } }] } }] }),
