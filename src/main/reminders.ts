@@ -34,10 +34,11 @@ export class ReminderStore {
     if (id && !old) throw new Error(mt('提醒不存在'))
     const sameSchedule = old && old.dueAt === input?.dueAt && JSON.stringify(old.recurrence) === JSON.stringify(input.recurrence)
     if (!input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 300) throw new Error(mt('请输入 1–300 字的提醒事项'))
+    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > 4000)) throw new Error(mt('提醒备注不能超过 4000 字'))
     if (!['normal', 'strong'].includes(input.level) || !['manual', 'voice', 'note'].includes(input.source)) throw new Error(mt('提醒类型无效'))
     if (input.dueAt !== null && (!Number.isSafeInteger(input.dueAt) || input.dueAt <= this.now() && !(sameSchedule && old.status !== 'pending') || input.dueAt > 8640000000000000)) throw new Error(mt('请选择将来的提醒时间'))
     if (input.recurrence !== null && (!validRecurrence(input.recurrence) || input.dueAt === null)) throw new Error(mt('重复规则无效'))
-    const reminder: Reminder = { title: input.title.trim(), dueAt: input.dueAt, level: input.level,
+    const reminder: Reminder = { title: input.title.trim(), description: (input.description ?? old?.description ?? '').trim(), dueAt: input.dueAt, level: input.level,
       recurrence: input.recurrence, source: old?.source ?? input.source, noteId: old?.noteId ?? input.noteId,
       timeExpression: input.timeExpression, id: id ?? randomUUID(), createdAt: old?.createdAt ?? this.now(),
       updatedAt: this.now(), status: sameSchedule ? old.status : 'pending', deliveredAt: sameSchedule ? old.deliveredAt : null, lastCompletedAt: old?.lastCompletedAt }

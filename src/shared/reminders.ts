@@ -9,6 +9,7 @@ export interface ReminderRecurrence {
 }
 export interface ReminderInput {
   title: string
+  description?: string
   dueAt: number | null
   level: ReminderLevel
   recurrence: ReminderRecurrence | null
@@ -27,6 +28,7 @@ export interface Reminder extends ReminderInput {
 export interface ReminderDraft {
   intent: 'create_reminder' | 'todo' | 'possible' | 'none'
   title: string
+  description?: string
   time_expression: string | null
   level: ReminderLevel
   recurrence: 'daily' | 'weekly' | null

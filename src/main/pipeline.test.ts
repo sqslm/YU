@@ -1052,13 +1052,21 @@ describe('selected text editing', () => {
 })
 
 describe('dedicated voice reminder capture', () => {
+  it('anchors relative reminders to recording submission, before ASR or refinement latency', async () => {
+    vi.useFakeTimers(); const submittedAt = new Date(2026, 9, 23, 8).getTime(); vi.setSystemTime(submittedAt)
+    mocks.transcribe.mockImplementation(async () => { vi.setSystemTime(submittedAt + 30_000); return { text: '20分钟后提醒我打扫卫生' } })
+    const onReminder = vi.fn(async () => ({ message: 'saved' })), { pipeline } = harness({}, { onReminder })
+    pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal), expect.any(Function), submittedAt)
+  })
   it('uses ASR then its independent parser, without polish, insertion, Ask or voice history', async () => {
     const onReminder = vi.fn(async () => ({ message: 'Clean up · tomorrow at 10 AM · Normal', undo: true }))
     const { pipeline, store, sent } = harness({}, { onReminder })
     pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
     const done = pipeline.stop(); pipeline.audioStopped(); await done
     expect(mocks.transcribe).toHaveBeenCalledOnce()
-    expect(onReminder).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal))
+    expect(onReminder).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Function), expect.any(Number))
     expect(mocks.complete).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled(); expect(mocks.askAgent).not.toHaveBeenCalled()
     expect(store.add).not.toHaveBeenCalled()
     expect(sent.some(state => state.phase === 'recording' && state.taskLabel === '快速提醒' && !state.promptName)).toBe(true)
@@ -1117,7 +1125,7 @@ describe('opening phrase mode activation', () => {
     const onReminder = vi.fn(async (_text: string) => ({ message: 'saved' }))
     const { pipeline, entries } = harness({ voiceCommands: commands() }, { onReminder })
     pipeline.start('dictation'); pipeline.pushAudio(tone(1200)); await finish(pipeline)
-    expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal))
+    expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number))
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(entries).toHaveLength(0)
@@ -1197,7 +1205,7 @@ describe('opening phrase mode activation', () => {
     pipeline.pushAudio(tone(1000)); await vi.advanceTimersByTimeAsync(1000)
     expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '快速提醒' })
     const done = finish(pipeline); await vi.advanceTimersByTimeAsync(600); await done
-    expect(onReminder).toHaveBeenCalledWith('二十分钟后打扫卫生', expect.any(AbortSignal))
+    expect(onReminder).toHaveBeenCalledWith('二十分钟后打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number))
     const wav = mocks.transcribe.mock.calls.at(-1)![1].wav
     expect(wav.length).toBeLessThan(44 + 16000 * 4 * 2)
     expect(entries).toHaveLength(0)

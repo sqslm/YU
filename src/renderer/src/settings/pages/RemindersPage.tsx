@@ -6,11 +6,11 @@ import { localDateTime } from '@shared/reminders'
 import { PagedList } from '../Pagination'
 import { ReminderDateTime } from './ReminderDateTime'
 
-interface Form { title: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | 'daily' | 'weekly'; weekday: number }
-const empty = (): Form => ({ title: '', date: '', level: 'normal', repeat: 'none', weekday: 1 })
-const fromReminder = (row: Reminder): Form => ({ title: row.title, date: localDateTime(row.dueAt), level: row.level,
+interface Form { title: string; description: string; timeExpression: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | 'daily' | 'weekly'; weekday: number }
+const empty = (): Form => ({ title: '', description: '', timeExpression: '', date: '', level: 'normal', repeat: 'none', weekday: 1 })
+const fromReminder = (row: Reminder): Form => ({ title: row.title, description: row.description ?? '', timeExpression: row.timeExpression ?? '', date: localDateTime(row.dueAt), level: row.level,
   repeat: row.recurrence?.frequency ?? 'none', weekday: row.recurrence?.weekdays?.[0] ?? 1 })
-const fromDraft = (row: ReminderDraft): Form => ({ title: row.title, date: localDateTime(row.dueAt), level: row.level,
+const fromDraft = (row: ReminderDraft): Form => ({ title: row.title, description: row.description ?? '', timeExpression: row.time_expression ?? '', date: localDateTime(row.dueAt), level: row.level,
   repeat: row.rule?.frequency ?? row.recurrence ?? 'none', weekday: row.rule?.weekdays?.[0] ?? -1 })
 
 function input(form: Form, source: ReminderInput['source'], noteId?: string, original?: Reminder): ReminderInput {
@@ -21,7 +21,7 @@ function input(form: Form, source: ReminderInput['source'], noteId?: string, ori
   if (form.repeat !== 'none' && dueAt === null) throw new Error('重复提醒需要具体时刻')
   if (form.repeat === 'weekly' && form.weekday < 0) throw new Error('请选择每周的星期')
   const date = new Date(dueAt ?? Date.now())
-  return { title: form.title, dueAt, level: form.level, source, noteId,
+  return { title: form.title, description: form.description, timeExpression: form.timeExpression || undefined, dueAt, level: form.level, source, noteId,
     recurrence: sameDate && form.repeat === (original.recurrence?.frequency ?? 'none') && form.weekday === (original.recurrence?.weekdays?.[0] ?? 1) ? original.recurrence : form.repeat === 'none' ? null : { frequency: form.repeat, hour: date.getHours(), minute: date.getMinutes(),
       ...(form.repeat === 'weekly' ? { weekdays: [form.weekday] } : {}) } }
 }
@@ -30,6 +30,8 @@ function Fields({ form, change }: { form: Form; change: (form: Form) => void }):
   const { t } = useTranslation()
   return <Stack spacing={1.5}>
     <TextField label={t('提醒事项')} size="small" value={form.title} onChange={e => change({ ...form, title: e.target.value })} inputProps={{ maxLength: 300 }} />
+    <TextField label={t('提醒备注（可选）')} size="small" multiline minRows={2} maxRows={4} value={form.description}
+      onChange={e => change({ ...form, description: e.target.value })} inputProps={{ maxLength: 4000 }} />
     <ReminderDateTime value={form.date} onChange={date => change({ ...form, date,
       weekday: form.repeat === 'weekly' && date ? new Date(date).getDay() : form.weekday })} />
     <Stack direction="row" spacing={1}>
@@ -83,7 +85,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
   const format = (stamp: number | null): string => stamp === null ? t('未设置时间 · 待办') : new Date(stamp).toLocaleString(i18n.language === 'en' ? 'en-US' : 'zh-CN')
   const sourceLabel = { manual: '手动', voice: '语音快捷键', note: '随记' }
   const statusLabel = { pending: '待处理', due: '已到期', completed: '已完成', cancelled: '已取消' }
-  const filtered = rows.filter(row => (filter === 'all' || filter === 'active' && ['pending', 'due'].includes(row.status) || filter === 'upcoming' && row.status === 'pending' && row.dueAt !== null || row.status === filter) && row.title.toLowerCase().includes(query.toLowerCase()))
+  const filtered = rows.filter(row => (filter === 'all' || filter === 'active' && ['pending', 'due'].includes(row.status) || filter === 'upcoming' && row.status === 'pending' && row.dueAt !== null || row.status === filter) && `${row.title}\n${row.description ?? ''}`.toLowerCase().includes(query.toLowerCase()))
   return <Box sx={{ p: 3 }} data-reminders-page>
     <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
       <Typography variant="h6" sx={{ fontWeight: 650 }}>{t('提醒')}</Typography>
@@ -105,6 +107,8 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
             <Chip size="small" color={row.level === 'strong' ? 'warning' : 'default'} variant="outlined" label={t(row.level === 'strong' ? '强提醒' : '普通提醒')} />
             <Chip size="small" label={t(statusLabel[row.status])} />
           </Stack>
+          {row.description && <Typography data-reminder-description title={row.description} sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflow: 'hidden' }}>{row.description}</Typography>}
+          {row.dueAt === null && row.timeExpression && <Typography sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary' }}>{t('原始时间表达：{{text}}', { text: row.timeExpression })}</Typography>}
           <Typography sx={{ fontSize: 12, color: row.status === 'due' ? 'warning.main' : 'text.secondary', mt: 0.75 }}>{format(row.dueAt)}</Typography>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5, flexWrap: 'wrap' }}>
             <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{t(sourceLabel[row.source])} · {t(row.recurrence?.frequency === 'daily' ? '每天' : row.recurrence ? '每周' : '不重复')}{row.recurrence?.weekdays?.map(day => ` ${t(['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][day]!)}`)}</Typography>

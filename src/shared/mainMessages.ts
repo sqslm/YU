@@ -722,5 +722,13 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "重复提醒需要具体时刻": "Repeating reminders need an exact time",
   "撤销": "Undo",
   "日期与每周重复的星期不一致": "The date does not match the selected day of the week",
-  "本地时刻因夏令时不存在，请选择其他时间": "This local time does not exist because of daylight saving. Please choose another time."
+  "本地时刻因夏令时不存在，请选择其他时间": "This local time does not exist because of daylight saving. Please choose another time.",
+  "整理提醒内容…": "Refining reminder content…",
+  "提取提醒事项…": "Extracting reminders…",
+  "提醒内容提炼格式无效": "Invalid reminder refinement response",
+  "提醒内容过长，请分段提取": "Reminder content is too long. Please extract it in smaller sections.",
+  "提醒备注不能超过 4000 字": "Reminder details cannot exceed 4,000 characters",
+  "暂不支持此重复规则，请手动确认": "This recurrence rule is not supported yet. Please review it manually.",
+  "请核对提炼后的提醒内容": "Please review the refined reminder details",
+  "没有可创建的提醒，本次未保存": "No reminders to create. Nothing was saved."
 }

@@ -50,6 +50,18 @@ describe('shared reminder delivery and entry points', () => {
     try { mock.extract.mockResolvedValue([draft()]); controller.abort(); await expect(service.voice('提醒我', controller.signal)).rejects.toThrow(); expect(service.store.list()).toHaveLength(0) }
     finally { service.stop() }
   })
+  it('keeps refinement details when saving and reports a withdrawn request without an error or record', async () => {
+    const { service, open } = harness(), progress = vi.fn()
+    try {
+      mock.extract.mockResolvedValueOnce([draft({ description: 'Ask whether the repair is complete; do not replace parts yet.' })])
+      await service.voice('Remind me to call', new AbortController().signal, progress)
+      expect(service.store.list()[0].description).toBe('Ask whether the repair is complete; do not replace parts yet.')
+      expect(mock.extract.mock.calls[0][4]).toBe(progress)
+      mock.extract.mockResolvedValueOnce([])
+      await expect(service.voice('Never mind, cancel that', new AbortController().signal)).resolves.toEqual({ message: '没有可创建的提醒，本次未保存' })
+      expect(service.store.list()).toHaveLength(1); expect(open).not.toHaveBeenCalled()
+    } finally { service.stop() }
+  })
   it('reviews a to-do from the explicit reminder entry instead of dropping it', async () => {
     const { service, open } = harness()
     try {

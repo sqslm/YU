@@ -8,6 +8,18 @@ const base = new Date(2026, 9, 23, 8).getTime()
 const entry = (dueAt: number | null): ReminderInput => ({ title: 'Call the technician', dueAt, level: 'normal', source: 'manual', recurrence: null })
 afterEach(() => vi.useRealTimers())
 describe('durable local reminders', () => {
+  it('persists descriptions and source expressions across restart, and preserves descriptions on older edits', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'typeless-reminder-details-')), file = join(dir, 'reminders.sqlite')
+    let store = new ReminderStore(file, () => base)
+    try {
+      const row = store.save({ ...entry(null), source: 'note', noteId: 'source-note', description: 'Ask about the repair; do not replace parts.', timeExpression: 'before Friday' })
+      store.close(); store = new ReminderStore(file, () => base)
+      expect(store.get(row.id)).toMatchObject({ description: row.description, source: 'note', noteId: 'source-note', timeExpression: 'before Friday' })
+      const { description: _description, ...olderInput } = row
+      expect(store.save({ ...olderInput, title: 'Call repair shop' }, row.id).description).toBe(row.description)
+      expect(() => store.save({ ...entry(null), description: 'x'.repeat(4001) })).toThrow('提醒备注不能超过 4000 字')
+    } finally { store.close(); rmSync(dir, { recursive: true }) }
+  })
   it('restores records after restart and delivers a missed occurrence only once', () => {
     let now = base
     const dir = mkdtempSync(join(tmpdir(), 'typeless-reminders-')), file = join(dir, 'reminders.sqlite')

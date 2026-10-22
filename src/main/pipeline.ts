@@ -125,7 +125,7 @@ function describeFailure(error: unknown): string {
 export interface PipelineOptions {
   onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal) => Promise<void>
   onActivity?: (recording: boolean, busy: boolean) => void
-  onReminder?: (text: string, signal: AbortSignal) => Promise<{ message: string; undo?: boolean }>
+  onReminder?: (text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt?: number) => Promise<{ message: string; undo?: boolean }>
   /**
    * Ask-mode answers are surfaced in the dedicated answer card window instead
    * of being typed into the foreground app.
@@ -782,6 +782,7 @@ export class Pipeline {
   async stop(): Promise<HistoryEntry | null> {
     const active = this.recording
     if (!active) return null
+    const submittedAt = Date.now()
     this.stopCaptions()
     this.clearSessionCap()
     this.recording = null
@@ -816,7 +817,7 @@ export class Pipeline {
     const pcm = concatPcm(this.chunks)
     this.chunks = []
     this.log(`[pipeline] stop ${active.mode}: ${pcmDurationMs(pcm)}ms captured`)
-    return this.complete(active.mode, pcm, token, active.target, active.purpose)
+    return this.complete(active.mode, pcm, token, active.target, active.purpose, submittedAt)
   }
 
   /**
@@ -1117,7 +1118,8 @@ export class Pipeline {
     pcm: Int16Array,
     token: number,
     openingTarget?: ForegroundInfo,
-    purpose?: 'reminder' | 'notes'
+    purpose?: 'reminder' | 'notes',
+    submittedAt = Date.now()
   ): Promise<HistoryEntry | null> {
     this.stage = 'working'
     this.stageMode = mode
@@ -1208,7 +1210,7 @@ export class Pipeline {
         if (!transcript.trim()) throw new Error('ASR returned an empty transcript')
         progress(mt('解析提醒中…'))
         if (!this.options.onReminder) throw new Error(mt('提醒服务尚未就绪'))
-        const result = await this.options.onReminder(transcript, controller.signal)
+        const result = await this.options.onReminder(transcript, controller.signal, progress, submittedAt)
         if (token !== this.runToken) return null
         this.showAlert({ kind: 'reminder', level: 'info', text: result.message,
           actions: result.undo ? [{ id: 'undo-reminder', label: mt('撤销') }] : [] })

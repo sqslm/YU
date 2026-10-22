@@ -12,6 +12,9 @@ describe('bilingual reminder time interpretation', () => {
     expect(resolveReminderTime(text, now)).toMatchObject({ dueAt: now + 20 * 60000, recurrence: null })
   })
   it.each(['两小时后', '2小时后', 'in 2 hours', 'in two hours'])('supports hours: %s', text => expect(resolveReminderTime(text, now).dueAt).toBe(now + 2 * 3600000))
+  it.each([['一个半小时后', 90], ['一個半小時後', 90], ['一刻钟后', 15], ['一刻鐘後', 15], ['再过四十五分钟', 45], ['再過四十五分鐘', 45], ['in one and a half hours', 90], ['in an hour and a half', 90]] as const)('preserves spoken relative amounts: %s', (text, minutes) => {
+    expect(resolveReminderTime(text, now).dueAt).toBe(now + minutes * 60000)
+  })
   it.each(['明天上午10点', '明天上午十点', 'tomorrow at 10 AM'])('resolves a calendar date: %s', text => expect(resolveReminderTime(text, now).dueAt).toBe(local(24, 10)))
   it.each(['每周一上午9点', '每週一上午9點', 'every Monday at 9 AM'])('calculates repeating weekday: %s', text => {
     expect(resolveReminderTime(text, now)).toMatchObject({ dueAt: local(26, 9), recurrence: { frequency: 'weekly', weekdays: [1], hour: 9, minute: 0 } })
@@ -20,6 +23,9 @@ describe('bilingual reminder time interpretation', () => {
   it.each([null, '明天', 'tomorrow', '周五之前', 'before Friday', '三点半', 'at 3:30', 'tomorrow morning', '2026-02-30 at 10 AM', '03/04 at 10am', '今天上午7点'])('requires confirmation for %s', text => expect(resolveReminderTime(text, now).dueAt).toBeNull())
   it('does not advance a weekly recurrence by a fixed 7*24-hour duration', () => {
     expect(nextOccurrence({ frequency: 'weekly', weekdays: [1], hour: 9, minute: 0 }, local(26, 10))).toBe(new Date(2026, 10, 2, 9).getTime())
+  })
+  it.each(['每天上午9点，持续7天', 'every day at 9 AM for seven days', 'every Monday at 9 AM until November 1', '每周一三五晚上9点', 'every Monday and Wednesday at 9 AM'])('does not silently weaken unsupported recurrence: %s', text => {
+    expect(resolveReminderTime(text, now)).toMatchObject({ dueAt: null, recurrence: null })
   })
   it('validates reminder intent, level, missing times and final corrected expressions', () => {
     expect(parseReminderOutput(draft('20分钟后'), now)[0]).toMatchObject({ level: 'normal', dueAt: now + 1200000, needs_confirmation: false })

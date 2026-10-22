@@ -64,7 +64,7 @@ export class LiveCaptions {
 
   private schedule(): void {
     if (this.stopped || this.running || this.timer) return
-    this.timer = setTimeout(() => { this.timer = null; void this.tick() }, 1000)
+    this.timer = setTimeout(() => { this.timer = null; void this.tick() }, this.options.openingOnly ? 1000 : 100)
     this.timer.unref?.()
   }
 

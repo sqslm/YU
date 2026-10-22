@@ -51,6 +51,7 @@ function StrongReminder(): JSX.Element {
       <Box sx={{ flex: 1, py: 3 }}>
       <Typography id="reminder-title" component="h1" sx={{ fontSize: 25, fontWeight: 650, lineHeight: 1.5, overflowWrap: 'anywhere' }}>{current?.title ?? t('没有待处理的强提醒')}</Typography>
       {current?.dueAt && <Typography color="text.secondary" sx={{ mt: 1, fontSize: 13 }}>{new Date(current.dueAt).toLocaleString(i18n.language === 'en' ? 'en-US' : 'zh-CN')}</Typography>}
+      {current?.description && <Typography data-reminder-description sx={{ mt: 1.5, fontSize: 13, color: 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 96, overflowY: 'auto' }}>{current.description}</Typography>}
       </Box>
       <Stack direction="row" spacing={1}>
         <Button sx={{ flex: 1 }} variant="contained" disabled={!current || busy} onClick={() => void act('complete')}>{t('确认完成')}</Button>

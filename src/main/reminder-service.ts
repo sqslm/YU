@@ -68,23 +68,24 @@ export class ReminderService {
     if (row.level === 'strong') { this.updateStrong(); return }
     if (!this.settings().reminders.notifications) return
     if (!Notification.isSupported()) { this.log('[reminders] Windows notifications are unavailable'); return }
-    const notice = new Notification({ title: `${mt('提醒')} · ${row.title}`, body: new Date(row.dueAt!).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN'), silent: false })
+    const notice = new Notification({ title: `${mt('提醒')} · ${row.title}`, body: new Date(row.dueAt!).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN') + (row.description ? `\n${row.description}` : ''), silent: false })
     this.notices.set(row.id, notice)
     notice.on('click', () => this.open({ id: row.id }))
     notice.on('close', () => { if (this.notices.get(row.id) === notice) this.notices.delete(row.id) })
     notice.on('failed', (_event, error) => this.log(`[reminders] notification failed: ${error}`))
     notice.show()
   }
-  async voice(text: string, signal: AbortSignal): Promise<{ message: string; undo?: boolean }> {
-    const drafts = await extractReminders(this.settings(), text, 'voice', AbortSignal.any([signal, AbortSignal.timeout(60_000)]))
+  async voice(text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt = Date.now()): Promise<{ message: string; undo?: boolean }> {
+    const drafts = await extractReminders(this.settings(), text, 'voice', AbortSignal.any([signal, AbortSignal.timeout(60_000)]), onProgress, submittedAt)
     signal.throwIfAborted()
     this.log(`[reminders] voice parsed: ${drafts.length} item(s), intents=${drafts.map(item => item.intent).join(',')}`)
-    if (!drafts.length || drafts.every(item => item.intent !== 'create_reminder' && item.intent !== 'todo')) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
+    if (!drafts.length) return { message: mt('没有可创建的提醒，本次未保存') }
+    if (drafts.every(item => item.intent !== 'create_reminder' && item.intent !== 'todo')) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
     const draft = drafts[0]!
     if (drafts.length !== 1 || draft.intent !== 'create_reminder' || draft.needs_confirmation || draft.dueAt === null || draft.dueAt <= Date.now()) {
       this.open({ drafts }); return { message: mt('请确认提醒事项与时间') }
     }
-    const row = this.save({ title: draft.title, dueAt: draft.dueAt, level: draft.level, recurrence: draft.rule,
+    const row = this.save({ title: draft.title, description: draft.description, dueAt: draft.dueAt, level: draft.level, recurrence: draft.rule,
       source: 'voice', timeExpression: draft.time_expression ?? undefined })
     this.undoId = row.id
     const time = new Date(row.dueAt!).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN', {

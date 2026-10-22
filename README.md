@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.26.1-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.27.0-setup.exe
 ```
 
 ## 使用
@@ -61,13 +61,19 @@ pnpm package          # → release\Typeless Rebuild-0.26.1-setup.exe
 
 AI 提醒通过「快速提醒」快捷键复用现有录音和 ASR，开始/结束方式跟随录音设置，点按模式使用同一个完整快捷键再次结束。所有模式（听写、翻译、问答、提醒、随记）的录音也可统一按右 Alt 结束并提交，按 Esc 取消；这两个录音控制键的按下、重复和松开不会向当前应用透传，空闲时 Esc 恢复原行为。识别后使用文本模型备用链的独立结构化 Prompt，不使用润色卡片，也不插入原输入框。快速提醒入口本身表达提醒意图，支持直接说「20分钟后打扫卫生」，无需重复「提醒我」；模型仅识别为待办时进入确认，不丢弃内容、不自动创建。明确且有效的提醒自动保存，悬浮条显示实际日期、时间及等级并提供短时撤销；缺失或有歧义的时间打开确认界面，失败、取消及普通陈述不创建提醒。默认快捷键如与已有绑定冲突，会选择可用备用键并在设置中显示。
 
-提醒支持中文、繁体中文和英文常见时间表达，由 Chrono 2.10.3 识别，再由程序校验明确的日期/时刻并计算本地时间戳。例如「20 分钟后提醒我打扫卫生」「明天上午 10 点提醒我打电话」「每周一上午 9 点提醒我开会」，以及 “Remind me in twenty minutes to clean up”, “Tomorrow at three thirty PM”, “Every Monday at 9 AM”。含糊的上午/下午、数字日期、日期范围和缺少时刻的事项要求确认，不使用模型生成的 Unix 时间戳。重复规则目前支持每天和每周指定星期；月度、年度等其他规则要求人工确认，不猜测。夏令时不存在的单次时刻要求修改，重复提醒跳过不存在的本地时刻。
+语音提醒和随记提取共用「完整内置提示词提炼 → 结构化提取 → 程序时间校验」链路。第一阶段直接使用 [完整提醒提示词](src/main/prompts/reminder-refinement.md) 全文，不摘取、不改写、不使用用户润色卡片，模板随主进程打包，设置中无显示或编辑入口。中英文保持原语言；随记仅额外注明来源，避免将普通陈述或可能计划升级为明确提醒。第二阶段参考原文核对改口、否定、数字及条件，第一阶段的不确定性不能被清除。通常调用现有文本模型两次；已撤回或没有可提炼事项时只调用一次。没有新增服务或模型配置。语音条显示两阶段进度；相对时间以结束录音的提交时刻为基准，不随 ASR 或模型耗时向后漂移。失败或任一阶段取消均不保存提醒，撤回请求显示未保存反馈；随记原文不会被改写。
+
+提醒支持中文、繁体中文和英文常见时间表达，由 Chrono 2.10.3 识别，再由程序校验明确的日期/时刻并计算本地时间戳。例如「20 分钟后提醒我打扫卫生」「明天上午 10 点提醒我打电话」「每周一上午 9 点提醒我开会」，以及 “Remind me in twenty minutes to clean up”, “Tomorrow at three thirty PM”, “Every Monday at 9 AM”。含糊的上午/下午、数字日期、日期范围和缺少时刻的事项要求确认，不使用模型生成的 Unix 时间戳。重复规则目前支持每天和每周单个星期；月度、年度、多星期和限定次数/截止日期等规则保留原文并要求人工确认，不转换为一次性或无限重复。夏令时不存在的单次时刻要求修改，重复提醒跳过不存在的本地时刻。
+
+提醒支持最多 4000 字的可选备注，保留人物、数量、条件等细节；语音创建、随记提取、批量确认和手动编辑共用此字段。备注保存在现有 SQLite JSON 记录中，旧提醒无需迁移；可按备注搜索，普通通知和强提醒均显示备注，长备注可滚动阅读。未设置时间的事项保留原始时间表达，方便稍后补充或确认不支持的规则。
 
 侧栏「提醒」支持本地手动创建、编辑、完成、取消、删除、稍后提醒、搜索、筛选和分页。普通提醒调用 Windows 系统通知，点击打开对应记录，是否呈现及声音受 Windows 通知权限和专注设置影响。提醒时间使用应用内日期选择器，跟随应用明暗主题和中英文；点击整行可选择日期、小时和分钟，确认后应用，清除则改为不定时待办。强提醒使用一个无系统标题栏、无最小化/最大化/关闭按钮的置顶遮罩窗口，在鼠标所在显示器居中显示约 480 × 380 的卡片；周围暗化并接收鼠标，避免误点后方应用。首次出现时请求前台焦点，不持续抢焦点。队列共用一个窗口，每 30 秒提示音，可完成或默认延后 5 分钟；界面保留紧急关闭入口，Esc / Alt+F4 也可退出本次显示，保留待处理状态，重启恢复。不会锁定桌面或拦截系统级切换、任务管理器等按键。通用设置可关闭普通通知、关闭强提醒声音，或修改默认稍后提醒时长。
 
 随记详情的「提取待办与提醒」只在点击时调用模型，先展示可选择、编辑的结果，再经确认批量保存，可能的计划默认不选；没有精确时间可保存为不定时的待办，保留来源随记链接，不覆盖随记原文。所有入口共用本地 SQLite 存储与同一个调度器，数据在用户目录的 reminders.sqlite，独立于语音历史保留规则和账号登录；已保存任务离线仍可触发。应用完全退出或电脑关机期间无法准时通知；重新启动、休眠恢复时检查逾期事项，一次性通知不重复弹出，未处理强提醒恢复显示。一个截止时间计时器配合至多每分钟检查系统时钟/时区变化，无高频轮询。本阶段不做云同步或服务端推送。
 
-For English users: set **Settings → General → Language** to English. Selection polish and translation have separate configurable shortcuts and apply directly; choose **Replace selection** or **Append to end** in Text input settings. **Quick reminder** uses your existing ASR and text model, accepts Chinese or English, and shows a review when the date/time is ambiguous. After choosing this mode, you can say "Clean up in twenty minutes" without repeating "remind me". Items classified only as to-dos are reviewed before saving. Activation phrases start at the first audible input, so a silent wait after pressing the recording key does not exhaust the keyword window. Captions queue new characters with a bounded buffer, preserving existing text and word spacing as new characters enter; transcription is still chunked, with a one-second check interval and provider-dependent latency. Quiet/DC-biased input and Qwen's known server-instruction echo are excluded. Saved reminders work offline while the app runs in the tray. Persistent reminders remain actionable after restart; closing their window does not mark them complete. Notes extraction always requires explicit review. Daily and weekly recurrence are supported; the app cannot notify while fully exited or the computer is off. All new pages, settings, notifications, confirmation/error messages and persistent-reminder controls follow the UI language.
+For English users: set **Settings → General → Language** to English. Selection polish and translation have separate configurable shortcuts and apply directly; choose **Replace selection** or **Append to end** in Text input settings. **Quick reminder** uses your existing ASR and text model, accepts Chinese or English, and shows a review when the date/time is ambiguous. After choosing this mode, you can say "Clean up in twenty minutes" without repeating "remind me". Items classified only as to-dos are reviewed before saving. Activation phrases start at the first audible input, so a silent wait after pressing the recording key does not exhaust the keyword window. Captions queue new characters with a bounded buffer, preserving existing text and word spacing as new characters enter; transcription is still chunked, with a 100-millisecond check interval and provider-dependent latency. Quiet/DC-biased input and Qwen's known server-instruction echo are excluded. Saved reminders work offline while the app runs in the tray. Persistent reminders remain actionable after restart; closing their window does not mark them complete. Notes extraction always requires explicit review. Daily and weekly recurrence are supported; the app cannot notify while fully exited or the computer is off. All new pages, settings, notifications, confirmation/error messages and persistent-reminder controls follow the UI language.
+
+Reminder refinement uses the entire built-in [prompt document](src/main/prompts/reminder-refinement.md), then the existing structured extraction and local time validator. Voice and note entry points share this fixed pipeline; there is no prompt setting. It normally makes two calls to your existing text provider, or one for withdrawn/empty requests. Relative voice times are anchored to recording submission. Optional reminder details preserve conditions and quantities, remain editable/searchable, and appear in notifications. Unsupported recurrence requires review rather than silently changing the schedule.
 
 模型页先选择「分步处理」或「音频直达」，再通过「语音识别 / 文本处理 / 音频模型」管理连接；文本连接始终可访问，用于 Ask 和选区等纯文字任务。本地识别独立显示，配置数据、启用开关、顺序、编辑和测试沿用原有机制，不丢弃原配置。
 
@@ -77,7 +83,7 @@ For English users: set **Settings → General → Language** to English. Selecti
 
 新建菜单的「导入录音」支持单个 WAV、MP3、M4A、OGG，最大 128 MB、10 分钟，超过上限会报错而不会截断。导入时创建可播放的 OGG / WAV 副本并自动转写、按当前设置润色，源文件不修改；副本沿用随记的同步和导出机制。原生 16 kHz 单声道 PCM16 WAV 无需额外工具，其他格式需安装 FFmpeg 并加入 PATH，或通过 `TYPELESS_FFMPEG` 指向其可执行文件；安装包不捆绑 FFmpeg。导入解码期间及「重新识别」处理期间可取消，界面显示当前处理阶段。自动识别失败仍保留录音，可在详情点击「重新识别」，确认后使用当前语音与润色配置重试；两段文字只在全部成功后替换，失败、取消、删除记录或处理期间出现新文字编辑时，不覆盖原文。
 
-按住录音键（默认右 Alt）说话时，识别条上方的小气泡默认显示字幕预览，气泡仅比识别条宽 28 像素，首次随首字从识别条弹出。新增文字排队从右侧逐字进入，旧字随显示进度从左侧退出；最多排队 120 个字、显示 48 个字，短小识别修正保留已有字符节点，大段改写重新排队，不一批同时替换。识别条保留波形、计时和模式；松开、取消后字幕清空，窗口恢复原大小，保存的位置保持以识别条为准。靠近屏幕顶部时气泡显示在下方，并适配系统的减少动画偏好。可在「设置 → 语音与翻译 → 录音实时字幕」关闭。优先使用已可用的本地识别模型，否则使用首个语音转写配置；多模态处理模式仍需语音转写配置或可用的本地模型才能预览。当前采用分段识别最近 6 秒音频，检查间隔 1 秒且单次仅一个请求，字幕仍受接口识别延迟影响，可能修正已显示文字；云端预览会增加接口调用。静音判断按短帧去直流后的能量识别持续声音，过滤无声底噪和短促开麦爆音；不是完整语音分类器，持续环境声仍可能触发识别。Qwen ASR 返回已知转写指令回显时会剔除，避免把服务器英文指令显示为字幕或交给提醒模型。预览失败会停止该次预览，最终文本仍由结束后的完整识别生成。预览音频和显示字符均有固定上限，关闭后不发送预览请求（启用关键词切换时仍保留开头识别）。
+按住录音键（默认右 Alt）说话时，识别条上方的小气泡默认显示字幕预览，气泡仅比识别条宽 28 像素，首次随首字从识别条弹出。新增文字排队从右侧逐字进入，旧字随显示进度从左侧退出；最多排队 120 个字、显示 48 个字，短小识别修正保留已有字符节点，大段改写重新排队，不一批同时替换。识别条保留波形、计时和模式；松开、取消后字幕清空，窗口恢复原大小，保存的位置保持以识别条为准。靠近屏幕顶部时气泡显示在下方，并适配系统的减少动画偏好。可在「设置 → 语音与翻译 → 录音实时字幕」关闭。优先使用已可用的本地识别模型，否则使用首个语音转写配置；多模态处理模式仍需语音转写配置或可用的本地模型才能预览。当前采用分段识别最近 6 秒音频，检查间隔 0.1 秒且单次仅一个请求，首段仍需积累至少一秒音频，字幕仍受接口识别延迟影响，可能修正已显示文字；云端预览会增加接口调用。静音判断按短帧去直流后的能量识别持续声音，过滤无声底噪和短促开麦爆音；不是完整语音分类器，持续环境声仍可能触发识别。Qwen ASR 返回已知转写指令回显时会剔除，避免把服务器英文指令显示为字幕或交给提醒模型。预览失败会停止该次预览，最终文本仍由结束后的完整识别生成。预览音频和显示字符均有固定上限，关闭后不发送预览请求（启用关键词切换时仍保留开头识别）。
 
 概览底部的热门场景保持单行标签，过长名称省略显示，标签和「分布」按钮不相互遮挡；悬停可查看完整名称，完整场景和占比见分布图。
 

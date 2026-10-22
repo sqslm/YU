@@ -21,8 +21,14 @@ export function validRecurrence(value: unknown): value is ReminderRecurrence {
       Array.isArray(r.weekdays) && r.weekdays.length > 0 && r.weekdays.length <= 7 && r.weekdays.every(d => Number.isInteger(d) && d >= 0 && d <= 6))
 }
 
-/** Chrono accepts digits for relative English units; ASR can spell them out. */
-function englishNumbers(text: string): string {
+/** Normalize spoken quantities before Chrono resolves the local date/time. */
+function normalizeTimeExpression(text: string): string {
+  // Chrono can match only the trailing "half hour" and silently lose the
+  // preceding whole hour. Normalize these spoken quantities before parsing.
+  text = text.replace(/(?:一|1)[个個]?半(?:小时|小時|钟头|鐘頭)/g, match => /[個時鐘]/.test(match) ? '90分鐘' : '90分钟')
+    .replace(/(?:一|1)刻(?:钟|鐘)?/g, match => match.includes('鐘') ? '15分鐘' : '15分钟')
+    .replace(/^(?:再)?[过過](.+(?:分钟|分鐘|小时|小時|钟头|鐘頭))$/, (match, value: string) => value + (match.includes('過') ? '後' : '后'))
+    .replace(/\b(?:one|an?|1) (?:and a half hours?|hours? and a half)\b/gi, '90 minutes')
   const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
     'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen']
   const values: Record<string, number> = Object.fromEntries(words.map((word, n) => [word, n]))
@@ -46,7 +52,10 @@ export function resolveReminderTime(expression: string | null, now: number): {
 } {
   const uncertain = (issue: string): ReturnType<typeof resolveReminderTime> => ({ dueAt: null, recurrence: null, issue: mt(issue) })
   if (!expression?.trim()) return uncertain('请补充具体提醒时间')
-  const text = englishNumbers(expression.trim())
+  const text = normalizeTimeExpression(expression.trim())
+  if ((/每|\b(?:every|daily|weekly)\b/i.test(text) && /持续|持續|直到|截止|截至|总共|總共|\b(?:until|through|for)\b/i.test(text)) ||
+    /每(?:周|週|星期)(?:[一二三四五六日天1-7][、,，和及\s]*){2,}/.test(text) ||
+    (/\b(?:every|weekly)\b/i.test(text) && (text.match(/\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi)?.length ?? 0) > 1)) return uncertain('暂不支持此重复规则，请手动确认')
   if (/之前|左右|大概|有空|某天|尽快|晚点|过几|下次|\b(?:before|by|around|about|sometime|soon|later on|approximately|CST|IST)\b/i.test(text)) return uncertain('时间不够精确，请选择日期和时间')
   if (/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(text)) {
     const numeric = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?\b/)!

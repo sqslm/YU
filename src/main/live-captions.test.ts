@@ -19,15 +19,26 @@ describe('live captions', () => {
     expect(h.transcribe).not.toHaveBeenCalled()
     h.captions.stop()
   })
-  it('provides the first preview within one second after audible input', async () => {
+  it('checks live captions every 100 ms once enough audible input is available', async () => {
     vi.useFakeTimers()
     const h = harness()
     h.captions.push(speech())
-    await vi.advanceTimersByTimeAsync(999)
+    await vi.advanceTimersByTimeAsync(99)
     expect(h.transcribe).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(h.onText).toHaveBeenCalledWith('字幕')
     h.captions.stop()
+  })
+  it('keeps hidden keyword-only detection at one second instead of increasing its request rate', async () => {
+    vi.useFakeTimers()
+    const transcribe = vi.fn(async () => 'command ask')
+    const captions = new LiveCaptions({ transcribe, openingOnly: true, onText: vi.fn(), onError: vi.fn() })
+    captions.push(speech())
+    await vi.advanceTimersByTimeAsync(999)
+    expect(transcribe).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(transcribe).toHaveBeenCalledOnce()
+    captions.stop()
   })
   it('starts the keyword window at speech onset after a long silent lead-in', async () => {
     vi.useFakeTimers()
