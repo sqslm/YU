@@ -28,7 +28,8 @@ const mocks = vi.hoisted(() => ({
   generateFromAudio: vi.fn(),
   askAgent: vi.fn(),
   askFollowUp: vi.fn(),
-  setBarInteractive: vi.fn()
+  setBarInteractive: vi.fn(),
+  foregroundWindow: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -44,7 +45,7 @@ vi.mock('./insert', () => ({
 }))
 vi.mock('./foreground', () => ({
   appLabel: (_appName: string, title: string) => title,
-  foregroundWindow: () => ({ title: 'Editor', className: 'code', appName: '', pid: 0 })
+  foregroundWindow: mocks.foregroundWindow
 }))
 vi.mock('./providers/asr', () => ({ transcribe: mocks.transcribe }))
 vi.mock('./providers/llm', async () => {
@@ -230,6 +231,7 @@ function snapshot(overrides: Partial<UiaSnapshot> = {}): UiaSnapshot {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.foregroundWindow.mockReturnValue({ title: 'Editor', className: 'code', appName: '', pid: 0 })
   mocks.transcribe.mockResolvedValue({ text: '你好世界', model: 'whisper-1' })
   mocks.complete.mockResolvedValue('你好世界')
   mocks.insertText.mockResolvedValue(undefined)
@@ -627,6 +629,140 @@ describe('empty takes', () => {
     const alert = alertOf(sent, 'empty_audio')
     expect(alert).toBeDefined()
     expect(alert!.text).toBe('没有听清任何声音')
+  })
+})
+
+describe('prompt label uses the request card', () => {
+  it('keeps tap-to-talk recording live without replacing the waveform with a hands-free notice', async () => {
+    const { pipeline, sent, entries } = harness({})
+    pipeline.start('dictation', { handsFree: true })
+    pipeline.lockTake()
+    expect(pipeline.isRecording).toBe(true)
+    expect(sent.every(state => state.phase === 'recording')).toBe(true)
+    await finish(pipeline)
+    expect(entries[0].status).toBe('completed')
+  })
+  function library(): Settings['promptLibrary'] {
+    const value = structuredClone(mergeSettings({}).promptLibrary)
+    value.cards.ai = [{ id: 'dev', name: '代码开发', content: 'CARD_CODE', temperature: 0.2 }]
+    value.cards.polish = [
+      { id: 'chat', name: '日常聊天', content: 'CARD_CHAT' },
+      { id: 'manual', name: '手动卡片', content: 'CARD_MANUAL' }
+    ]
+    value.cards.translate = [{ id: 'tr', name: '翻译卡片', content: 'CARD_TRANSLATE' }]
+    value.active.ai = 'dev'; value.active.polish = 'chat'; value.active.translate = 'tr'
+    return value
+  }
+  async function finish(pipeline: InstanceType<typeof Pipeline>): Promise<void> {
+    pipeline.pushAudio(tone(900))
+    const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
+  }
+  it.each([
+    { auto: true, match: 'code', name: '代码开发', content: 'CARD_CODE' },
+    { auto: true, match: 'unmatched', name: '日常聊天', content: 'CARD_CHAT' },
+    { auto: false, match: 'code', name: '手动卡片', content: 'CARD_MANUAL' }
+  ])('honors routing/manual priority: $auto / $match', async ({ auto, match, name, content }) => {
+    const { pipeline, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: auto,
+      mainPromptKind: 'polish', mainPromptCardId: 'manual', appRules: [{ id: 'rule', match, kind: 'ai' }] })
+    pipeline.start('dictation')
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: name })
+    expect(mocks.complete).not.toHaveBeenCalled()
+    await finish(pipeline)
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain(content)
+    expect(sent.filter(state => state.phase === 'working').every(state => state.promptName === name)).toBe(true)
+    expect(entries[0].promptName).toBe(name)
+    expect(sent.at(-1)).toMatchObject({ phase: 'done' })
+    expect(sent.at(-1)).not.toHaveProperty('promptName')
+  })
+  it('keeps the opening window for routing when focus changes during recording', async () => {
+    const { pipeline, sent } = harness({ promptLibrary: library(), appRules: [{ id: 'rule', match: 'code', kind: 'ai' }] })
+    pipeline.start('dictation')
+    const reads = mocks.foregroundWindow.mock.calls.length
+    mocks.foregroundWindow.mockReturnValue({ title: '微信', className: 'WeChat', appName: '', pid: 2 })
+    pipeline.pushAudio(tone(500))
+    expect(mocks.foregroundWindow).toHaveBeenCalledTimes(reads)
+    expect(sent.at(-1)).toMatchObject({ promptName: '代码开发' })
+    await finish(pipeline)
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_CODE')
+  })
+  it('applies manual changes at processing time, then shares the exact card snapshot with the request', async () => {
+    const { pipeline, settings, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: false,
+      mainPromptKind: 'polish', mainPromptCardId: 'chat' })
+    pipeline.start('dictation')
+    expect(sent.at(-1)).toMatchObject({ promptName: '日常聊天' })
+    settings.mainPromptCardId = 'manual'
+    mocks.transcribe.mockImplementationOnce(async () => {
+      Object.assign(settings.promptLibrary.cards.polish[1], { name: '随后修改的名字', content: 'LATER_EDIT' })
+      return { text: '你好' }
+    })
+    await finish(pipeline)
+    expect(sent.filter(state => state.phase === 'working').every(state => state.promptName === '手动卡片')).toBe(true)
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_MANUAL')
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).not.toContain('LATER_EDIT')
+    expect(entries[0].promptName).toBe('手动卡片')
+  })
+  it('updates only on an actual task mode change and uses the translate card', async () => {
+    const { pipeline, sent } = harness({ promptLibrary: library(), appRules: [{ id: 'r', match: 'code', kind: 'ai' }] })
+    pipeline.start('dictation')
+    pipeline.upgrade('translate')
+    expect(sent.at(-1)).toMatchObject({ mode: 'translate', promptName: '翻译卡片' })
+    await finish(pipeline)
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_TRANSLATE')
+  })
+  it('omits library cards for pure transcription and for the separate Ask agent', async () => {
+    const pure = harness({ promptLibrary: library(), polish: { ...mergeSettings({}).polish, enabled: false } })
+    pure.pipeline.start('dictation'); await finish(pure.pipeline)
+    expect(pure.sent.filter(s => s.phase === 'recording' || s.phase === 'working').every(s => !s.promptName)).toBe(true)
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(pure.entries[0].promptName).toBeUndefined()
+    mocks.askAgent.mockResolvedValueOnce({ text: '回答', sources: [] })
+    const ask = harness({ promptLibrary: library() })
+    ask.pipeline.start('ask'); await finish(ask.pipeline)
+    expect(ask.sent.filter(s => s.phase === 'recording' || s.phase === 'working').every(s => !s.promptName)).toBe(true)
+    expect(ask.entries[0].promptName).toBeUndefined()
+  })
+  it('labels the multimodal card because that request really uses it even with polish off', async () => {
+    mocks.generateFromAudio.mockResolvedValueOnce('多模态结果')
+    const { pipeline, sent, entries } = harness({ promptLibrary: library(), pipelineMode: 'multimodal',
+      polish: { ...mergeSettings({}).polish, enabled: false }, appRules: [{ id: 'r', match: 'code', kind: 'ai' }] })
+    pipeline.start('dictation'); await finish(pipeline)
+    expect(sent.find(s => s.phase === 'recording')).toMatchObject({ promptName: '代码开发' })
+    expect(mocks.generateFromAudio.mock.calls[0][1]).toMatchObject({ prompt: expect.stringContaining('CARD_CODE'), temperature: 0.2 })
+    expect(entries[0].promptName).toBe('代码开发')
+  })
+  it('does not stamp an unused prompt after ASR failure, or carry it into the next take', async () => {
+    mocks.transcribe.mockRejectedValueOnce(new Error('ASR offline'))
+    const { pipeline, settings, sent, entries } = harness({ promptLibrary: library() })
+    pipeline.start('dictation'); await finish(pipeline)
+    expect(entries[0].promptName).toBeUndefined()
+    settings.polish.enabled = false
+    pipeline.start('dictation')
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined })
+    pipeline.discard()
+    settings.polish.enabled = true
+    settings.autoActivatePrompts = false; settings.mainPromptKind = 'polish'; settings.mainPromptCardId = 'manual'
+    pipeline.start('dictation')
+    expect(sent.at(-1)).toMatchObject({ promptName: '手动卡片' })
+    pipeline.discard()
+  })
+  it('cannot overwrite the next task while an old context read finishes after cancellation', async () => {
+    let release!: (value: UiaSnapshot | null) => void
+    const readContext = vi.fn().mockImplementationOnce(() => new Promise(resolve => { release = resolve })).mockResolvedValue(null)
+    const { pipeline, settings, sent } = harness({ promptLibrary: library(), autoActivatePrompts: false,
+      mainPromptKind: 'polish', mainPromptCardId: 'chat' }, { readContext })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const old = pipeline.stop(); pipeline.audioStopped()
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    pipeline.cancel()
+    settings.mainPromptCardId = 'manual'
+    pipeline.start('dictation')
+    release(null)
+    expect(await old).toBeNull()
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: '手动卡片' })
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    pipeline.discard()
   })
 })
 

@@ -159,6 +159,7 @@ export function Bar(): JSX.Element {
   // line, which is why the render site checks `alert` instead of the phase.
   const alert = alertOf(state)
   const phase = state.phase
+  const promptName = phase === 'recording' || phase === 'working' ? state.promptName : undefined
   const showCaption = phase === 'recording' && caption.active && Boolean(caption.text)
   useLayoutEffect(() => { window.api.bar.captionVisible(showCaption) }, [showCaption])
   useEffect(() => () => window.api.bar.captionVisible(false), [])
@@ -270,7 +271,7 @@ export function Bar(): JSX.Element {
           {phase === 'working' && (
             <>
               <span style={{ ...dot, background: '#8f9bd6' }} />
-              <span style={label}>{state.hint ?? i18n.t('处理中…')}</span>
+              <span style={{ ...label, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{state.hint ?? i18n.t('处理中…')}</span>
             </>
           )}
 
@@ -289,9 +290,7 @@ export function Bar(): JSX.Element {
           {/* Non-fatal notices: busy, network advice, cancelled, session cap. */}
           {phase === 'alert' && alert && <AlertRow alert={alert} />}
 
-          {/* Hands-free takes outlive the key press, so the bar keeps saying so;
-              the hint alert only covers the first seconds. */}
-          {phase === 'recording' && state.handsFree && <span style={handsFreeTag}>{i18n.t('免提')}</span>}
+          {promptName && <span data-bar-prompt title={promptName} aria-label={promptName} style={promptTag}>{promptName}</span>}
 
           {/* Always the right-most child: `modeLabelFor` returns null for idle
               and error, so nothing is appended in those phases. */}
@@ -381,6 +380,12 @@ const timer: React.CSSProperties = {
   color: '#7f8593'
 }
 
+const promptTag: React.CSSProperties = {
+  fontSize: 10.5, lineHeight: '18px', color: '#bbc5e7', background: 'rgba(127,150,255,.08)',
+  border: '1px solid rgba(127,150,255,.18)', borderRadius: 5, padding: '0 6px',
+  minWidth: 0, maxWidth: 80, flex: '0 1 auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+}
+
 /**
  * The optional "current mode" tag. Deliberately the cheapest thing in the pill:
  * fixed-size, capped at 72 px and never asked to give up width, so a long
@@ -400,18 +405,6 @@ const modeTag: React.CSSProperties = {
   flex: '0 0 auto',
   maxWidth: 72,
   boxShadow: 'none'
-}
-
-/** Marks a take that keeps recording after the key is released. */
-const handsFreeTag: React.CSSProperties = {
-  fontSize: 10,
-  lineHeight: '16px',
-  letterSpacing: '.04em',
-  padding: '0 6px',
-  borderRadius: 8,
-  color: '#7f9dff',
-  background: 'rgba(127,157,255,.14)',
-  flex: '0 0 auto'
 }
 
 const result: React.CSSProperties = {

@@ -7,6 +7,7 @@ import type {
   CardAction,
   HistoryEntry,
   Mode,
+  NamedPrompt,
   PromptKind,
   Replacement,
   SearchResult,
@@ -60,7 +61,6 @@ import { LiveCaptions } from './live-captions'
 const MIN_DURATION_MS = 350
 const STOP_GRACE_MS = 500
 /** How long the hands-free hint stays before the live waveform returns. */
-const HANDS_FREE_HINT_MS = 1400
 /** Length of the synthetic tone used by debugIngest (1.6 s at 16 kHz). */
 const SAMPLE_RATE_DUMMY = 25600
 /** How long the "已取消" confirmation stays in the bar before it collapses. */
@@ -212,7 +212,7 @@ function stripAppendedSources(text: string): string {
 export class Pipeline {
   private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
-  private recording: { mode: Mode; startedAt: number; handsFree?: boolean } | null = null
+  private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo } | null = null
   private stage: Stage = 'idle'
   /** Mode of the current or most recent take, for bar labels. */
   private stageMode: Mode = 'dictation'
@@ -225,7 +225,7 @@ export class Pipeline {
    * starting in that gap — which is exactly how "卡片未记录" appeared for a user
    * dictating sentence after sentence.
    */
-  private takePrompt = new Map<number, { kind: PromptKind; cardId: string; cardName: string }>()
+  private takePrompt = new Map<number, { kind: PromptKind; card: NamedPrompt; applied: boolean }>()
   /** Provider profile that answered the take in flight (null when legacy). */
   private usedProvider: { id: string; name: string } | null = null
   private runToken = 0
@@ -362,9 +362,11 @@ export class Pipeline {
   private setBarState(state: BarState, autoHideMs = 0, options: { force?: boolean } = {}): void {
     const win = this.bar()
     if (!win) return
-    if (!win.isDestroyed()) win.webContents.send('bar:state', state)
-    this.barPhase = state.phase
     const live = state.phase === 'recording' || state.phase === 'working'
+    if (!win.isDestroyed()) win.webContents.send('bar:state', live
+      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name }
+      : state)
+    this.barPhase = state.phase
     if (live || state.phase === 'alert' || state.phase === 'error') {
       if (!win.isVisible()) win.showInactive()
     }
@@ -634,7 +636,8 @@ export class Pipeline {
     this.runToken += 1
     this.chunks = []
     this.encoded = null
-    this.recording = { mode, startedAt: Date.now(), handsFree: options.handsFree }
+    const opened = foregroundWindow()
+    this.recording = { mode, startedAt: Date.now(), handsFree: options.handsFree, target: opened }
     // Old entries are only kept until their take writes its history row; the cap
     // stops a long session from accumulating them if one never does.
     if (this.takePrompt.size > 8) this.takePrompt.clear()
@@ -647,7 +650,7 @@ export class Pipeline {
     // insertion verification — lands in the same file without extra plumbing.
     const opening = this.getSettings()
     this.startCaptions(opening)
-    const opened = foregroundWindow()
+    this.selectTakePrompt(mode, opening, { appName: opened.className, windowTitle: opened.title })
     recordingLog.begin({
       mode,
       appName: opened ? appLabel(opened.appName, opened.title) : '',
@@ -673,39 +676,13 @@ export class Pipeline {
       showMode: this.getSettings().showModeInBar,
       handsFree: options.handsFree
     })
-    if (!options.handsFree) return
-    // A tap-based take outlives the press: say how it ends, then fall back to
-    // the live waveform so the level meter keeps moving.
-    this.hintTakeLivesOn(mt('免提录音中，按一下同一个键结束'))
   }
 
-  /**
-   * The hook reported a tap: the take stays open until the key is pressed
-   * again. The hint is transient; the waveform comes back on its own.
-   */
+  /** The hook reported a tap: keep recording until the next press. */
   lockTake(): void {
     if (!this.recording) return
     this.recording.handsFree = true
     this.log('[pipeline] take locked (tap to finish)')
-    this.hintTakeLivesOn(mt('已锁定，再按一下同一个键结束'))
-  }
-
-  private hintTakeLivesOn(text: string): void {
-    const active = this.recording
-    if (!active) return
-    this.showAlert({ kind: 'hands_free', level: 'info', text, actions: [] })
-    const token = this.runToken
-    setTimeout(() => {
-      if (token !== this.runToken || this.stage !== 'recording' || !this.recording) return
-      this.setBarState({
-        phase: 'recording',
-        mode: this.recording.mode,
-        since: this.recording.startedAt,
-        activation: 'toggle',
-        showMode: this.getSettings().showModeInBar,
-        handsFree: true
-      })
-    }, HANDS_FREE_HINT_MS)
   }
 
   /** Called when the user extends the chord while still holding the key. */
@@ -713,6 +690,8 @@ export class Pipeline {
     if (!this.recording || this.recording.mode === mode) return
     this.recording.mode = mode
     this.stageMode = mode
+    const target = this.recording.target
+    this.selectTakePrompt(mode, this.getSettings(), { appName: target.className, windowTitle: target.title })
     this.setBarState({
       phase: 'recording',
       mode,
@@ -822,7 +801,7 @@ export class Pipeline {
     const pcm = concatPcm(this.chunks)
     this.chunks = []
     this.log(`[pipeline] stop ${active.mode}: ${pcmDurationMs(pcm)}ms captured`)
-    return this.complete(active.mode, pcm, token)
+    return this.complete(active.mode, pcm, token, active.target)
   }
 
   /**
@@ -843,6 +822,7 @@ export class Pipeline {
   discard(): boolean {
     if (this.stage === 'idle') return false
     this.stopCaptions()
+    this.takePrompt.delete(this.runToken)
     this.runToken += 1
     this.clearSessionCap()
     this.recording = null
@@ -868,6 +848,7 @@ export class Pipeline {
   cancel(reason = 'user'): boolean {
     if (this.stage === 'idle') return false
     this.stopCaptions()
+    this.takePrompt.delete(this.runToken)
     const mode = this.stageMode
     const token = ++this.runToken
     const startedAt = this.recording?.startedAt ?? 0
@@ -990,13 +971,14 @@ export class Pipeline {
     // The card that produced this text is part of the record: the same app can
     // route to different cards over time, and "why did this come out as an
     // email" is only answerable if the card is stored next to the text.
-    const prompt = this.takePrompt.get(token) ?? null
-    if (prompt) this.takePrompt.delete(token)
+    const selected = this.takePrompt.get(token)
+    const prompt = selected?.applied ? selected : null
+    this.takePrompt.delete(token)
     const provider = this.usedProvider
     const entry = await this.history.add({
       ...input,
       ...(prompt
-        ? { promptKind: prompt.kind, promptId: prompt.cardId, promptName: prompt.cardName }
+        ? { promptKind: prompt.kind, promptId: prompt.card.id, promptName: prompt.card.name }
         : {}),
       // Which saved profile answered. With failover this is the one that
       // actually produced the text, not necessarily the first in the chain.
@@ -1099,7 +1081,8 @@ export class Pipeline {
   private async complete(
     mode: Mode,
     pcm: Int16Array,
-    token: number
+    token: number,
+    openingTarget?: ForegroundInfo
   ): Promise<HistoryEntry | null> {
     this.stage = 'working'
     this.stageMode = mode
@@ -1125,13 +1108,15 @@ export class Pipeline {
       return null
     }
 
-    const target = foregroundWindow()
+    const target = openingTarget ?? foregroundWindow()
     const settings = this.getSettings()
+    this.selectTakePrompt(mode, settings, { appName: target.className, windowTitle: target.title })
     const controller = new AbortController()
     this.abort = controller
     const route = settings.pipelineMode
     // Surrounding text is read once per take, already in flight since start().
     const surrounding = await this.takeContext()
+    if (token !== this.runToken) { this.finishStage(token); return null }
     const context = this.contextFor(settings, target, surrounding)
 
     const progress = (hint: string): void => {
@@ -1340,6 +1325,7 @@ export class Pipeline {
 
   /** Only a run that is still current is allowed to reset the stage. */
   private finishStage(token: number): void {
+    this.takePrompt.delete(token)
     if (token !== this.runToken) return
     this.stage = 'idle'
   }
@@ -1680,7 +1666,7 @@ export class Pipeline {
    * polish temperature still applies so existing setups keep behaving the same.
    */
   private temperatureFor(kind: PromptKind, settings: Settings): number {
-    const card = resolvePromptCard(settings, settings.promptLibrary, kind)
+    const card = this.promptCardFor(kind, settings)
     return card.temperature ?? settings.polish.temperature
   }
 
@@ -1693,6 +1679,8 @@ export class Pipeline {
    * history entry still has to name the card that ran.
    */
   private promptKindFor(settings: Settings, context: PromptContext, forced?: PromptKind): PromptKind {
+    const selected = this.takePrompt.get(this.runToken)
+    if (selected && (!forced || selected.kind === forced)) return selected.kind
     const appName = context.appName ?? ''
     const windowTitle = context.windowTitle ?? ''
     const kind = forced ?? resolvePromptKind(settings, appName, windowTitle)
@@ -1705,8 +1693,21 @@ export class Pipeline {
     this.log(`[route] kind=${kind} ${hits} app="${appName}" title="${windowTitle.slice(0, 60)}"`)
     // Remembered so `record()` can stamp the entry with the card that ran.
     const card = resolvePromptCard(settings, settings.promptLibrary, kind)
-    this.takePrompt.set(this.runToken, { kind, cardId: card.id, cardName: card.name })
+    this.takePrompt.set(this.runToken, { kind, card: { ...card }, applied: false })
     return kind
+  }
+
+  /** Use the existing router for both the recording label and the request.
+   * Refresh once at processing time to honor manual changes made during a take. */
+  private selectTakePrompt(mode: Mode, settings: Settings, context: PromptContext): void {
+    this.takePrompt.delete(this.runToken)
+    if (mode === 'ask' || (mode === 'dictation' && settings.pipelineMode !== 'multimodal' && !settings.polish.enabled)) return
+    this.promptKindFor(settings, context, mode === 'translate' ? 'translate' : undefined)
+  }
+
+  private promptCardFor(kind: PromptKind, settings: Settings): NamedPrompt {
+    const selected = this.takePrompt.get(this.runToken)
+    return selected?.kind === kind ? selected.card : resolvePromptCard(settings, settings.promptLibrary, kind)
   }
 
   /**
@@ -1762,7 +1763,9 @@ export class Pipeline {
     context: PromptContext,
     extra: { translateTarget?: string } = {}
   ): string {
-    const card = resolvePromptCard(settings, settings.promptLibrary, kind)
+    const card = this.promptCardFor(kind, settings)
+    const selected = this.takePrompt.get(this.runToken)
+    if (selected?.kind === kind) selected.applied = true
     // A card — user-written, or a built-in one the user edited — is the source
     // of truth for the instruction text. Context still gets appended so the
     // focused app, the selected text and the cursor surroundings keep working.

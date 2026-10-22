@@ -826,8 +826,10 @@ export type BarState =
       handsFree?: boolean
       /** Mirror of `Settings.showModeInBar`; false hides the mode label. */
       showMode?: boolean
+      /** Name of the task's selected library card; omitted for card-free modes. */
+      promptName?: string
     }
-  | { phase: 'working'; mode: Mode; hint?: string; showMode?: boolean }
+  | { phase: 'working'; mode: Mode; hint?: string; showMode?: boolean; promptName?: string }
   | { phase: 'done'; mode: Mode; text: string; showMode?: boolean }
   /** A non-fatal notice (busy, language detected, mic advice) — REQ-01. */
   | { phase: 'alert'; alert: BarAlert }
