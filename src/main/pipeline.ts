@@ -13,7 +13,8 @@ import type {
   Replacement,
   SearchResult,
   Settings,
-  Suggestion
+  Suggestion,
+  VoiceCommandsSettings
 } from '@shared/types'
 import { applyReplacements, countRuleHits } from '@shared/text'
 import { countUnits } from '@shared/count'
@@ -53,6 +54,7 @@ import { appLabel, foregroundWindow, type ForegroundInfo } from './foreground'
 import type { UiaSnapshot } from './uia/reader'
 import { mainLanguage, mt } from '@shared/mainI18n'
 import { LiveCaptions } from './live-captions'
+import { matchVoiceCommand } from '@shared/voiceCommands'
 
 const MIN_DURATION_MS = 350
 const STOP_GRACE_MS = 500
@@ -121,6 +123,7 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal) => Promise<void>
   onActivity?: (recording: boolean, busy: boolean) => void
   onReminder?: (text: string, signal: AbortSignal) => Promise<{ message: string; undo?: boolean }>
   /**
@@ -210,7 +213,8 @@ export class Pipeline {
   private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
   private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo; purpose?: 'reminder' } | null = null
-  private takePurpose: 'reminder' | undefined
+  private takePurpose: 'reminder' | 'notes' | undefined
+  private takeVoiceCommands: VoiceCommandsSettings | null = null
   private stage: Stage = 'idle'
   /** Mode of the current or most recent take, for bar labels. */
   private stageMode: Mode = 'dictation'
@@ -364,7 +368,7 @@ export class Pipeline {
     if (!win) return
     const live = state.phase === 'recording' || state.phase === 'working'
     if (!win.isDestroyed()) win.webContents.send('bar:state', live
-      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : undefined }
+      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : undefined }
       : state)
     this.barPhase = state.phase
     if (live || state.phase === 'alert' || state.phase === 'error') {
@@ -635,6 +639,8 @@ export class Pipeline {
     // `index.ts` routes `this.log` into it, so every later stage — ASR, routing,
     // insertion verification — lands in the same file without extra plumbing.
     const opening = this.getSettings()
+    this.takeVoiceCommands = mode === 'dictation' && !options.purpose && opening.voiceCommands.enabled
+      ? structuredClone(opening.voiceCommands) : null
     this.startCaptions(opening)
     if (!options.purpose) this.selectTakePrompt(mode, opening, { appName: opened.className, windowTitle: opened.title })
     recordingLog.begin({
@@ -673,7 +679,9 @@ export class Pipeline {
 
   /** Called when the user extends the chord while still holding the key. */
   upgrade(mode: Mode): void {
-    if (!this.recording || this.recording.mode === mode) return
+    if (!this.recording) return
+    this.takeVoiceCommands = null
+    this.takePurpose = this.recording.purpose
     this.recording.mode = mode
     this.stageMode = mode
     const target = this.recording.target
@@ -695,15 +703,19 @@ export class Pipeline {
 
   private startCaptions(settings: Settings): void {
     this.stopCaptions()
-    if (!settings.liveCaptions) return
+    if (!settings.liveCaptions && !this.takeVoiceCommands) return
     const token = this.runToken
-    this.sendCaption({ active: true, text: '' })
+    if (settings.liveCaptions) this.sendCaption({ active: true, text: '' })
     this.captions = new LiveCaptions({
       transcribe: async (pcm, signal) => {
         const wav = encodeWav(pcm)
         const local = this.options.localAsr
         if (settings.localAsr.enabled && local?.ready()) return local.transcribeWav(wav)
         const profile = chainFor(settings, 'asr')[0]
+        if (!profile && this.takeVoiceCommands && settings.pipelineMode === 'multimodal') {
+          const multimodal = chainFor(settings, 'multimodal')[0]
+          if (multimodal) return generateFromAudio({ ...settings.multimodal, ...multimodal }, { wav, prompt: ASK_TRANSCRIBE_PROMPT, temperature: 0, signal })
+        }
         if (!profile) throw new Error(mt('请先配置语音转写模型'))
         const result = await transcribe({ ...settings.asr, ...profile }, {
           wav, signal, language: settings.language || undefined, timeoutMs: 5000, warm: false
@@ -711,12 +723,27 @@ export class Pipeline {
         return result.text
       },
       onText: text => {
-        if (token === this.runToken && this.recording) this.sendCaption({ active: true, text })
+        if (settings.liveCaptions && token === this.runToken && this.recording) this.sendCaption({ active: true, text })
+      },
+      openingOnly: !settings.liveCaptions,
+      onOpeningText: text => {
+        if (token !== this.runToken || !this.recording || !this.takeVoiceCommands) return
+        const command = matchVoiceCommand(text, this.takeVoiceCommands)
+        const mode = command?.mode === 'ask' || command?.mode === 'translate' ? command.mode : 'dictation'
+        const purpose = command?.mode === 'reminder' || command?.mode === 'notes' ? command.mode : undefined
+        if (mode === this.recording.mode && purpose === this.takePurpose) return
+        this.recording.mode = mode
+        this.stageMode = mode
+        this.takePurpose = purpose
+        if (purpose) this.takePrompt.delete(token)
+        else this.selectTakePrompt(mode, this.getSettings(), { appName: this.recording.target.className, windowTitle: this.recording.target.title })
+        this.setBarState({ phase: 'recording', mode, since: this.recording.startedAt,
+          activation: settings.activationMode, showMode: settings.showModeInBar, handsFree: this.recording.handsFree })
       },
       onError: error => {
         if (token !== this.runToken || !this.recording) return
         this.log(`[captions] preview stopped: ${describeFailure(error)}`)
-        this.sendCaption({ active: true, text: '', unavailable: true })
+        if (settings.liveCaptions) this.sendCaption({ active: true, text: '', unavailable: true })
       }
     })
   }
@@ -814,6 +841,7 @@ export class Pipeline {
     this.clearSessionCap()
     this.recording = null
     this.stage = 'idle'
+    this.takeVoiceCommands = null
     this.chunks = []
     this.encoded = null
     this.abort?.abort()
@@ -843,6 +871,7 @@ export class Pipeline {
     this.clearSessionCap()
     this.recording = null
     this.stage = 'idle'
+    this.takeVoiceCommands = null
     const durationMs = Math.round(this.chunks.reduce((sum, chunk) => sum + chunk.length, 0) / SAMPLE_RATE * 1000)
     this.chunks = []
     this.encoded = null
@@ -1087,7 +1116,7 @@ export class Pipeline {
     pcm: Int16Array,
     token: number,
     openingTarget?: ForegroundInfo,
-    purpose?: 'reminder'
+    purpose?: 'reminder' | 'notes'
   ): Promise<HistoryEntry | null> {
     this.stage = 'working'
     this.stageMode = mode
@@ -1115,7 +1144,8 @@ export class Pipeline {
 
     const target = openingTarget ?? foregroundWindow()
     const settings = this.getSettings()
-    if (!purpose) this.selectTakePrompt(mode, settings, { appName: target.className, windowTitle: target.title })
+    const commands = this.takeVoiceCommands
+    if (!purpose && !commands) this.selectTakePrompt(mode, settings, { appName: target.className, windowTitle: target.title })
     const controller = new AbortController()
     this.abort = controller
     const route = settings.pipelineMode
@@ -1139,10 +1169,38 @@ export class Pipeline {
       let actions: CardAction[] = []
       let retrieval: AskRetrieval | undefined
 
-      if (purpose === 'reminder') {
+      if (commands) {
         transcript = route === 'multimodal'
           ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
           : await this.asrTranscript(settings, wav, controller.signal, progress)
+        if (token !== this.runToken) return null
+        if (!transcript.trim()) throw new Error('ASR returned an empty transcript')
+        const command = matchVoiceCommand(transcript, commands)
+        mode = command?.mode === 'ask' || command?.mode === 'translate' ? command.mode : 'dictation'
+        purpose = command?.mode === 'reminder' || command?.mode === 'notes' ? command.mode : undefined
+        transcript = command ? command.text : transcript
+        this.stageMode = mode
+        this.takePurpose = purpose
+        if (purpose) this.takePrompt.delete(token)
+        else this.selectTakePrompt(mode, settings, { appName: target.className, windowTitle: target.title })
+        if (command && !transcript.trim()) {
+          this.showAlert({ kind: 'empty_audio', level: 'info', text: mt('请在关键词后继续说出内容'), actions: [] })
+          return null
+        }
+      }
+
+      if (purpose === 'notes') {
+        progress(mt('保存随记中…'))
+        if (!this.options.onVoiceNote) throw new Error(mt('随记服务尚未就绪'))
+        await this.options.onVoiceNote(pcm, transcript, controller.signal)
+        if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), taskLabel: mt('随记'), showMode: settings.showModeInBar }, DONE_HIDE_MS)
+        return null
+      }
+
+      if (purpose === 'reminder') {
+        transcript = transcript || (route === 'multimodal'
+          ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
+          : await this.asrTranscript(settings, wav, controller.signal, progress))
         if (token !== this.runToken) return null
         if (!transcript.trim()) throw new Error('ASR returned an empty transcript')
         progress(mt('解析提醒中…'))
@@ -1158,10 +1216,10 @@ export class Pipeline {
         // transcript it can iterate on, and a one-shot multimodal answer cannot
         // call web_search. In multimodal mode the multimodal model is used for
         // the transcription half only, so search/citations keep working.
-        transcript =
+        transcript = transcript || (
           route === 'multimodal'
             ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
-            : await this.asrTranscript(settings, wav, controller.signal, progress)
+            : await this.asrTranscript(settings, wav, controller.signal, progress))
         if (token !== this.runToken) return null
         if (!transcript) throw new Error('ASR returned an empty transcript')
         question = transcript
@@ -1190,7 +1248,7 @@ export class Pipeline {
         tools = outcome.tools ?? []
         actions = outcome.actions ?? []
         retrieval = outcome.retrieval
-      } else if (route === 'multimodal') {
+      } else if (route === 'multimodal' && !commands) {
         progress(mt('模型直接听写中…'))
         if (spokenMs > settings.multimodal.maxSeconds * 1000) {
           throw new Error(mt('录音超过 {{seconds}} 秒上限', { seconds: settings.multimodal.maxSeconds }))
@@ -1212,7 +1270,7 @@ export class Pipeline {
         })
         transcript = final
       } else {
-        transcript = await this.asrTranscript(settings, wav, controller.signal, progress)
+        transcript = transcript || await this.asrTranscript(settings, wav, controller.signal, progress)
         if (token !== this.runToken) return null
         if (!transcript) throw new Error('ASR returned an empty transcript')
 
@@ -1224,7 +1282,7 @@ export class Pipeline {
       // The one-shot audio route bypasses `postProcess`, so multi-target
       // translation has to be shaped here too — otherwise the prompt asks for
       // labelled lines and the raw labelled text lands in the user's editor.
-      if (route === 'multimodal' && mode === 'translate') {
+      if (route === 'multimodal' && !commands && mode === 'translate') {
         final = this.shapeMultimodalTranslation(final, settings)
       }
 
@@ -1328,6 +1386,7 @@ export class Pipeline {
     this.stage = 'idle'
     this.encoded = null
     this.takePurpose = undefined
+    this.takeVoiceCommands = null
     this.options.onActivity?.(false, false)
   }
 

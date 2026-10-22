@@ -7,6 +7,10 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '请在关键词后继续说出内容': 'Say your content after the activation phrase.',
+  '随记服务尚未就绪': 'Voice notes are not ready yet.',
+  '保存随记中…': 'Saving voice note…',
+  '随记已保存': 'Voice note saved',
   '剪贴板包含文件，请先复制文字后重试': 'The clipboard contains files. Copy text before trying again.',
   '润色选区': 'Polish selection',
   '翻译选区': 'Translate selection',

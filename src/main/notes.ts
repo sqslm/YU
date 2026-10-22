@@ -428,7 +428,8 @@ export class NotesStore {
    */
   async create(
     input: { pcm: Int16Array; durationMs: number; categoryId?: string; tags?: string[] },
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    transcript?: string
   ): Promise<NoteEntry> {
     const pcm = input.pcm instanceof Int16Array ? input.pcm : new Int16Array(0)
     const spokenMs = pcmDurationMs(pcm)
@@ -449,7 +450,7 @@ export class NotesStore {
       createdAt: now,
       updatedAt: now,
       durationMs,
-      transcript: '',
+      transcript: transcript ?? '',
       polished: '',
       polishStatus: 'pending',
       audioPath: audioRel,
@@ -475,7 +476,7 @@ export class NotesStore {
     )
 
     // Detached on purpose: `create` returns as soon as the note is safe on disk.
-    void this.run(id, wav, signal)
+    void this.run(id, wav, signal, transcript)
     return cloneNote(entry)
   }
 
@@ -1177,13 +1178,13 @@ export class NotesStore {
    * ASR then polish. Every failure is recorded on the note and nothing is deleted:
    * the recording is the user's, the provider is ours to worry about.
    */
-  private async run(id: string, wav: Uint8Array, signal?: AbortSignal): Promise<void> {
+  private async run(id: string, wav: Uint8Array, signal?: AbortSignal, suppliedTranscript?: string): Promise<void> {
     const token = this.bump(id)
     const settings = this.options.getSettings()
 
     let transcript: string
     try {
-      transcript = await this.transcribe(settings, wav, signal)
+      transcript = suppliedTranscript ?? await this.transcribe(settings, wav, signal)
     } catch (error) {
       if (signal?.aborted) return
       if (this.stale(id, token)) return

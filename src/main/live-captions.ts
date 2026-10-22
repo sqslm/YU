@@ -4,6 +4,7 @@ import { concatPcm, isSilent } from './audio/wav'
 export class LiveCaptions {
   private chunks: Int16Array[] = []
   private samples = 0
+  private totalSamples = 0
   private revision = 0
   private timer: ReturnType<typeof setTimeout> | null = null
   private running = false
@@ -13,11 +14,16 @@ export class LiveCaptions {
   constructor(private readonly options: {
     transcribe: (pcm: Int16Array, signal: AbortSignal) => Promise<string>
     onText: (text: string) => void
+    onOpeningText?: (text: string) => void
+    openingOnly?: boolean
     onError: (error: unknown) => void
   }) {}
 
   push(pcm: Int16Array): void {
     if (this.stopped || !pcm.length) return
+    if (this.options.openingOnly) pcm = pcm.subarray(0, Math.max(0, 96_000 - this.totalSamples))
+    if (!pcm.length) return
+    this.totalSamples += pcm.length
     this.chunks.push(pcm)
     this.samples += pcm.length
     // Six seconds at 16 kHz: slow requests never build up a second recording.
@@ -49,12 +55,16 @@ export class LiveCaptions {
   private async tick(): Promise<void> {
     if (this.stopped || this.samples < 16_000) return
     const pcm = concatPcm(this.chunks)
+    const fromStart = this.totalSamples <= 96_000
     if (isSilent(pcm)) return
     const revision = this.revision
     this.running = true
     try {
       const text = await this.options.transcribe(pcm, this.abort.signal)
-      if (!this.stopped && text.trim()) this.options.onText(Array.from(text.trim()).slice(-120).join(''))
+      if (!this.stopped && text.trim()) {
+        if (fromStart) this.options.onOpeningText?.(text.trim())
+        this.options.onText(Array.from(text.trim()).slice(-120).join(''))
+      }
     } catch (error) {
       if (!this.stopped) {
         // Do not repeatedly charge a failing provider just to draw a preview.

@@ -131,6 +131,24 @@ afterEach(() => {
 })
 
 describe('creation', () => {
+  it('stores keyword-routed audio and the supplied transcript without another ASR request', async () => {
+    const store = await loadedStore()
+    const entry = await store.create({ pcm: pcm(), durationMs: 1000 }, undefined, '这是已经识别的随记正文')
+    expect(entry.transcript).toBe('这是已经识别的随记正文')
+    expect(existsSync(join(dir, entry.audioPath!))).toBe(true)
+    await vi.waitFor(() => expect(store.list().notes[0]?.polishStatus).toBe('ok'))
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(mocks.complete.mock.calls[0][1].messages.at(-1).content).toContain('这是已经识别的随记正文')
+    expect(readDb(dir).notes[0]?.transcript).toBe('这是已经识别的随记正文')
+  })
+  it('does not save a keyword-routed note if cancellation lands during audio preparation', async () => {
+    const store = await loadedStore(), controller = new AbortController()
+    controller.abort()
+    await expect(store.create({ pcm: pcm(), durationMs: 1000 }, controller.signal, '正文')).rejects.toThrow()
+    expect(store.list().notes).toHaveLength(0)
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+  })
   it('rolls back the recording and row when the database cannot be written', async () => {
     const store = await loadedStore()
     const temp = join(dir, `notes.json.${process.pid}.tmp`)

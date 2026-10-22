@@ -9,6 +9,30 @@ function harness(transcribe = vi.fn(async (_pcm: Int16Array, _signal: AbortSigna
 }
 
 describe('live captions', () => {
+  it('offers opening text only while the ASR window still contains the beginning', async () => {
+    vi.useFakeTimers()
+    const onOpeningText = vi.fn(), onText = vi.fn()
+    const text = '指令问答，' + '这是正文'.repeat(40)
+    const captions = new LiveCaptions({ transcribe: async () => text, onOpeningText, onText, onError: vi.fn() })
+    captions.push(speech(2)); await vi.advanceTimersByTimeAsync(1800)
+    expect(onOpeningText).toHaveBeenCalledWith(text)
+    expect(Array.from(onText.mock.calls[0][0])).toHaveLength(120)
+    captions.push(speech(6)); await vi.advanceTimersByTimeAsync(1800)
+    expect(onOpeningText).toHaveBeenCalledOnce()
+    expect(onText).toHaveBeenCalledTimes(2)
+    captions.stop()
+  })
+  it('bounds keyword-only capture to the first six seconds without polling the rest of the recording', async () => {
+    vi.useFakeTimers()
+    const transcribe = vi.fn(async (_pcm: Int16Array) => 'command ask, hello'), onOpeningText = vi.fn()
+    const captions = new LiveCaptions({ transcribe, onOpeningText, openingOnly: true, onText: vi.fn(), onError: vi.fn() })
+    captions.push(speech(20)); await vi.advanceTimersByTimeAsync(1800)
+    expect(transcribe.mock.calls[0][0]).toEqual(speech(6))
+    captions.push(speech(30)); await vi.advanceTimersByTimeAsync(30000)
+    expect(transcribe).toHaveBeenCalledOnce()
+    expect(onOpeningText).toHaveBeenCalledOnce()
+    captions.stop()
+  })
   it('waits for a second of audible input and bounds each preview to six seconds', async () => {
     vi.useFakeTimers()
     const h = harness()

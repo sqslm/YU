@@ -12,6 +12,7 @@ import {
 } from './General'
 import i18n from '../../i18n'
 import { shortcutConflict } from '@shared/shortcuts'
+import { VoiceCommandsSection } from './VoiceCommands'
 
 const MODE_ROWS: Array<{ mode: Mode; label: string; hint: string; toggleHint: string }> = [
   {
@@ -202,6 +203,7 @@ export function ShortcutsSection({
       <SettingsHint>
         {i18n.t('点击快捷键后按下组合键，松开第一个键即保存；Esc 或点击其他区域取消，× 清空。录制期间按键不会传递给其他应用。')}
       </SettingsHint>
+      <VoiceCommandsSection settings={settings} patch={patch} />
     </Stack>
   )
 }

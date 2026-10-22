@@ -12,6 +12,7 @@ import { buildAskPrompt, buildDictationPrompt, buildTranslatePrompt } from './pr
 import { PROMPT_KINDS, defaultPromptLibrary, normalizePromptLibrary } from './promptLibrary'
 import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders, normalizeSearchConnections } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL, findModel } from './local-asr'
+import { DEFAULT_VOICE_COMMANDS, normalizeVoiceCommands } from './voiceCommands'
 
 export const SETTINGS_VERSION = 1
 
@@ -49,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   // Ship a populated default and every take fails against an endpoint the user
   // never chose, with an error that points at the network instead of the setup.
   selectionInsertMode: 'replace',
+  voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
     baseUrl: '',
@@ -175,11 +177,14 @@ export function applySettingsPatch(current: Settings, patch: Partial<Settings>):
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings>
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings> {
   const next = { ...current, ...patch }
-  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders'] as const) {
+  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands'] as const) {
     if (patch[key]) next[key] = { ...current[key], ...patch[key] } as never
   }
   if (patch.hotkeys?.bindings) {
     next.hotkeys!.bindings = { ...current.hotkeys?.bindings, ...patch.hotkeys.bindings } as Settings['hotkeys']['bindings']
+  }
+  if (patch.voiceCommands?.keywords) {
+    next.voiceCommands!.keywords = { ...current.voiceCommands?.keywords, ...patch.voiceCommands.keywords } as Settings['voiceCommands']['keywords']
   }
   if (patch.search?.providers) {
     next.search!.providers = { ...current.search?.providers } as Settings['search']['providers']
@@ -238,6 +243,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     used.push([...keys].sort().join('+'))
   }
   merged.selectionInsertMode = input.selectionInsertMode === 'append' ? 'append' : 'replace'
+  merged.voiceCommands = normalizeVoiceCommands(input.voiceCommands)
   merged.reminders = {
     notifications: input.reminders?.notifications !== false,
     strongSound: input.reminders?.strongSound !== false,

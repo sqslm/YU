@@ -1218,6 +1218,7 @@ async function bootstrap(): Promise<void> {
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
     onActivity: () => refreshHotkeyActivity(),
+    onVoiceNote: async (pcm, transcript, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript) },
     onReminder: (text, signal) => reminders!.voice(text, signal),
     // Ask mode answers land in the card window; dictation/translate keep
     // typing straight into the foreground app.

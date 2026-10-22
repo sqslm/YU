@@ -1,4 +1,9 @@
 export type Mode = 'dictation' | 'translate' | 'ask'
+export type VoiceCommandMode = Mode | 'reminder' | 'notes'
+export interface VoiceCommandsSettings {
+  enabled: boolean
+  keywords: Record<VoiceCommandMode, string[]>
+}
 
 /** Public capabilities returned by the self-hosted account server. */
 export interface ServerMeta {
@@ -445,6 +450,7 @@ export interface Settings {
   }
   asr: AsrSettings
   selectionInsertMode: 'replace' | 'append'
+  voiceCommands: VoiceCommandsSettings
   reminders: { notifications: boolean; strongSound: boolean; snoozeMinutes: number }
   polish: PolishSettings
   /** 'classic' = ASR + text LLM, 'multimodal' = one audio-in model does both. */
@@ -858,7 +864,7 @@ export type BarState =
       taskLabel?: string
     }
   | { phase: 'working'; mode: Mode; hint?: string; showMode?: boolean; promptName?: string; taskLabel?: string }
-  | { phase: 'done'; mode: Mode; text: string; showMode?: boolean }
+  | { phase: 'done'; mode: Mode; text: string; showMode?: boolean; taskLabel?: string }
   /** A non-fatal notice (busy, language detected, mic advice) — REQ-01. */
   | { phase: 'alert'; alert: BarAlert }
   | { phase: 'error'; message: string; alert?: BarAlert }
