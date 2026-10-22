@@ -14,7 +14,7 @@
  *    the struct; declaring it as intptr_t yields a raw JS number.
  */
 import koffi from 'koffi'
-import { tokenToVk } from './keys'
+import { tokenToVk, vkToToken, physicalVk } from './keys'
 import {
   createSwallowState,
   forgetAll,
@@ -86,6 +86,9 @@ function post(message: unknown): void {
   port.postMessage(message)
 }
 
+let capturing = false
+// Swallowed releases remain owned until those physical keys are lifted.
+const captureHeld = new Set<number>()
 let enabled = true
 let bindings: Binding[] = []
 let pasteLast: Binding | null = null
@@ -96,6 +99,8 @@ let pasteLast: Binding | null = null
  * dictation pipeline.
  */
 let notesBinding: Binding | null = null
+let selectionBinding: Binding | null = null
+let selectionPending = false
 /**
  * True while the answer card is on screen. ESC then belongs to the card — the
  * window is shown inactive, so the card's own keydown handler never fires and
@@ -330,6 +335,7 @@ function swallowDown(vk: number, injected: boolean): boolean {
   // makes "ESC closes the answer" work from the app the user is actually typing in.
   if (cardOpen && vk === VK_ESCAPE) return true
   if (pasteLast && vk === chordKey(pasteLast) && allDown(pasteLast.keys)) return true
+  if (selectionBinding && vk === chordKey(selectionBinding) && allDown(selectionBinding.keys)) return true
   if (notesBinding && vk === chordKey(notesBinding) && allDown(notesBinding.keys)) return true
   // A qualifier only belongs to us once its primary is held: a lone Shift or
   // Space must reach the foreground app, or typing breaks everywhere. The ledger
@@ -349,7 +355,11 @@ function drive(): void {
   const entered = [...held].filter((vk) => !prevHeld.has(vk))
   const left = [...prevHeld].filter((vk) => !held.has(vk))
   prevHeld = held
-  if (!enabled) return
+  if (!enabled || capturing) return
+  if (selectionPending && selectionBinding && selectionBinding.keys.every(vk => !held.has(vk))) {
+    selectionPending = false
+    post({ type: 'selection', at: now })
+  }
 
   // A swallowed press whose release never arrived is answered inside
   // `reconcile` (synthetic keyup, same idea as the vendor's
@@ -428,6 +438,11 @@ function drive(): void {
       post({ type: 'paste-last', at: now })
       continue
     }
+    if (selectionBinding && allDown(selectionBinding.keys)) {
+      // Wait for every modifier to be released before sending Ctrl+C.
+      selectionPending = true
+      continue
+    }
     if (notesBinding && allDown(notesBinding.keys)) {
       // A note take never coexists with a dictation take: reaching here means no
       // `pending` and no `recording`, so the host can treat this as a pure toggle.
@@ -466,7 +481,15 @@ const handler = koffi.register(
       return CallNextHookEx(null, nCode, wParam, koffi.address(lParam))
     }
 
-    const vk = kb.vkCode
+    const vk = physicalVk(kb.vkCode, kb.scanCode, kb.flags)
+    if (capturing || captureHeld.has(vk)) {
+      const repeat = captureHeld.has(vk)
+      if (isDown) captureHeld.add(vk)
+      else captureHeld.delete(vk)
+      const token = vkToToken(vk)
+      if (capturing && token && (!isDown || !repeat)) post({ type: 'capture-key', token, down: isDown })
+      return 1
+    }
     // Auto-repeat repeats the press that is already in the ledger, so `drive`
     // never sees a second "entered" for it: holding the hotkey is one gesture.
     let repeat = isDown && isRepeat(state, vk, Date.now())
@@ -531,11 +554,13 @@ port.on('message', (event: { data: unknown }) => {
         bindings: Record<string, string[]>
         pasteLast: string[]
         notes?: string[]
+        selection?: string[]
         activation?: 'hold' | 'toggle'
       }
     | { type: 'enabled'; value: boolean }
     | { type: 'card'; open: boolean }
     | { type: 'reset' }
+    | { type: 'capture'; active: boolean }
   if (data.type === 'config') {
     bindings = []
     for (const [mode, keys] of Object.entries(data.bindings)) {
@@ -543,6 +568,8 @@ port.on('message', (event: { data: unknown }) => {
     }
     bindings.sort((a, b) => b.keys.length - a.keys.length)
     pasteLast = data.pasteLast.length ? bindingFrom('dictation', data.pasteLast) : null
+    selectionBinding = data.selection?.length ? bindingFrom('dictation', data.selection) : null
+    selectionPending = false
     notesBinding = data.notes && data.notes.length > 0 ? bindingFrom('dictation', data.notes) : null
     if (data.activation === 'hold' || data.activation === 'toggle') {
       activation = data.activation
@@ -554,6 +581,10 @@ port.on('message', (event: { data: unknown }) => {
     pending = null
     prevHeld = new Set<number>()
     forgetAll(state)
+  } else if (data.type === 'capture') {
+    capturing = data.active
+    pending = null
+    selectionPending = false
   } else if (data.type === 'card') {
     cardOpen = data.open
   } else if (data.type === 'enabled') {

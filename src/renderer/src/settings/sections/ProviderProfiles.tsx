@@ -1,3 +1,4 @@
+import { PagedList } from '../Pagination'
 import { useMemo, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import {
@@ -634,7 +635,7 @@ export function ProviderProfiles({
         </Box>
       ) : (
         <Box data-profile-list={kind}>
-          {list.map((profile, index) => (
+          <PagedList name="ProviderProfiles-list">{list.map((profile, index) => (
             <ProfileRow
               key={profile.id}
               profile={profile}
@@ -649,7 +650,7 @@ export function ProviderProfiles({
                 remove: () => apply(removeProfile(settings, profile.id))
               }}
             />
-          ))}
+          ))}</PagedList>
         </Box>
       )}
 

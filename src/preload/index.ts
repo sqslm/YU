@@ -18,6 +18,11 @@ let lastCard: AnswerCardPayload | null = null
 
 const api: TypelessApi = {
   settings: {
+    onShortcutKey: callback => {
+      const handler = (_event: Electron.IpcRendererEvent, key: import('@shared/types').ShortcutKeyEvent): void => callback(key)
+      ipcRenderer.on('settings:shortcut-key', handler)
+      return () => ipcRenderer.removeListener('settings:shortcut-key', handler)
+    },
     get: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
     update: (patch: Partial<Settings>): Promise<Settings> =>
       ipcRenderer.invoke('settings:update', patch),

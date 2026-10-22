@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import InputBase from '@mui/material/InputBase'
 import { useTranslation } from 'react-i18next'
 import type { AnswerCardPayload } from '@shared/api'
-import type { CardAction } from '@shared/types'
+import type { CardAction, Settings } from '@shared/types'
 import { isSafeLink } from '@shared/links'
 import { MarkdownView } from './MarkdownView'
 import i18n, { applyUiLanguage } from '../i18n'
@@ -84,6 +84,8 @@ export function AnswerCard(): JSX.Element | null {
   const [pending, setPending] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
+  const [sourcePage, setSourcePage] = useState(1)
+  const [sourceSize, setSourceSize] = useState(30)
 
   /** True once this mount has played `cardIn`; reset when the window hides. */
   const enteredRef = useRef(false)
@@ -98,8 +100,9 @@ export function AnswerCard(): JSX.Element | null {
   const closeTimer = useRef<number | null>(null)
 
   useEffect(() => {
-    void window.api.settings.get().then(settings => applyUiLanguage(settings.uiLanguage))
-    return window.api.settings.onChanged(settings => { applyUiLanguage(settings.uiLanguage) })
+    const apply = (settings: Settings): void => { applyUiLanguage(settings.uiLanguage); setSourceSize(settings.listPageSize) }
+    void window.api.settings.get().then(apply)
+    return window.api.settings.onChanged(apply)
   }, [])
 
   /**
@@ -148,11 +151,20 @@ export function AnswerCard(): JSX.Element | null {
   // in again instead of popping into place.
   useEffect(() => {
     const onVisibility = (): void => {
-      if (document.visibilityState === 'hidden') enteredRef.current = false
+      if (document.visibilityState === 'hidden') {
+        enteredRef.current = false
+        focusedRef.current = false
+        if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+        closeTimer.current = null
+        closingRef.current = false
+        setClosing(false)
+      }
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [])
+
+  useEffect(() => setSourcePage(1), [data?.question, sourceSize])
 
   // ESC closes the card. The main process no longer hides it from
   // `before-input-event`, so this is the single path that owns the animation.
@@ -174,7 +186,7 @@ export function AnswerCard(): JSX.Element | null {
       focusedRef.current = true
     }
     const onBlur = (): void => {
-      if (!focusedRef.current) return
+      if (!focusedRef.current || document.visibilityState === 'hidden') return
       focusedRef.current = false
       requestClose()
     }
@@ -235,6 +247,8 @@ export function AnswerCard(): JSX.Element | null {
   const streaming = data.streaming === true
   const sourceList = data.sources ?? []
   const retrieval = data.retrieval
+  const sourcePages = Math.max(1, Math.ceil(sourceList.length / sourceSize))
+  const safeSourcePage = Math.min(sourcePage, sourcePages)
   const searchLabel = retrieval?.failed ? i18n.t('检索未成功')
     : retrieval?.searched || sourceList.length > 0 ? i18n.t('已联网') : i18n.t('未联网')
 
@@ -290,8 +304,8 @@ export function AnswerCard(): JSX.Element | null {
         <div style={header}>
           <div style={brandRow}>
             <span style={brandDot} />
-            <span style={brandText}>Ask</span>
-            {!busy && <span style={chip} data-card-retrieval>{data.stopped ? i18n.t('已停止') : searchLabel}</span>}
+            <span style={brandText}>{data.selection ? i18n.t('选区处理') : 'Ask'}</span>
+            {!busy && !data.selection && <span style={chip} data-card-retrieval>{data.stopped ? i18n.t('已停止') : searchLabel}</span>}
           </div>
           <div style={headerActions}>
             <button
@@ -329,7 +343,7 @@ export function AnswerCard(): JSX.Element | null {
         <div ref={scrollRef} style={answerBox} data-card-scroll>
           <div style={answerTitleRow}>
             <span style={answerMark}>✦</span>
-            <span style={answerTitle}>{i18n.t('回答')}</span>
+            <span style={answerTitle}>{i18n.t(data.selection ? '处理结果' : '回答')}</span>
           </div>
           <div style={answerBody} data-card-body>
             <MarkdownView text={answer} streaming={streaming} sources={sourceList} />
@@ -345,7 +359,9 @@ export function AnswerCard(): JSX.Element | null {
                 {retrieval.partial && ` · ${i18n.t('部分检索未完成')}`}
               </div>}
               {retrieval?.digest && <div style={sourcesTitle}>{i18n.t('已合并重复报道；仅代表本次检索覆盖范围。')}</div>}
-              {sourcesExpanded && sourceList.map((item, index) => (
+              {sourcesExpanded && sourceList.slice((safeSourcePage - 1) * sourceSize, safeSourcePage * sourceSize).map((item, localIndex) => {
+                const index = (safeSourcePage - 1) * sourceSize + localIndex
+                return (
                 <a data-card-source
                   key={`${item.url}-${index}`}
                   href={isSafeLink(item.url) ? item.url : undefined}
@@ -360,7 +376,13 @@ export function AnswerCard(): JSX.Element | null {
                     {item.snippet && <span style={sourceSnippet}>{item.snippet}</span>}
                   </span>
                 </a>
-              ))}
+              )})}
+              {sourcesExpanded && sourcePages > 1 && <div data-card-source-pagination style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                <button type="button" style={primaryButton} data-source-prev disabled={safeSourcePage <= 1} onClick={() => setSourcePage(safeSourcePage - 1)}>{i18n.t('上一页')}</button>
+                <span style={sourcesTitle}>{i18n.t('第 {{page}} / {{total}} 页', { page: safeSourcePage, total: sourcePages })}</span>
+                <button type="button" style={primaryButton} data-source-next disabled={safeSourcePage >= sourcePages} onClick={() => setSourcePage(safeSourcePage + 1)}>{i18n.t('下一页')}</button>
+              </div>}
+
             </div>
           )}
         </div>
@@ -378,7 +400,7 @@ export function AnswerCard(): JSX.Element | null {
         <div style={actionRow}>
           {busy && <button type="button" style={primaryButton} data-card-stop onClick={() => bridge().action?.({ id: 'stop', label: i18n.t('停止生成') })}>{i18n.t('停止生成')}</button>}
           <button type="button" style={primaryButton} onClick={copyAnswer} disabled={!answer}>
-            {copied === 'answer' ? i18n.t('已复制') : i18n.t('复制回答')}
+            {copied === 'answer' ? i18n.t('已复制') : i18n.t(data.selection ? '复制结果' : '复制回答')}
           </button>
           {actions.filter(action => action.id !== 'copy').map((action, index) => {
               const key = `action-${index}`
@@ -396,7 +418,7 @@ export function AnswerCard(): JSX.Element | null {
             })}
         </div>
 
-        <div style={askRow}>
+        {!data.selection && <div style={askRow}>
           <InputBase
             className="card-ask"
             value={draft}
@@ -421,7 +443,7 @@ export function AnswerCard(): JSX.Element | null {
           >
             {i18n.t('追问')}
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   )

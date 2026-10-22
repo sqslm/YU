@@ -116,3 +116,13 @@ describe('getSelection', () => {
     expect(waits).toHaveBeenCalledTimes(2)
   })
 })
+
+it('recognizes copying identical text through the clipboard sequence without leaking stale content', async () => {
+  let version = 1
+  const { deps, written } = makeDeps({
+    readClipboard: () => '同样的文字', clipboardVersion: () => version,
+    sendCopy: async () => { version++ }
+  })
+  expect(await getSelection({ deps })).toEqual({ ok: true, text: '同样的文字' })
+  expect(written).toEqual(['同样的文字'])
+})

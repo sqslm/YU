@@ -1,3 +1,4 @@
+import { PagedList } from '../Pagination'
 /**
  * The 热门场景 breakdown, opened from the chip row on the overview page.
  *
@@ -247,7 +248,7 @@ export function AppShareDialog({ open, onClose, t, apps, total }: AppShareDialog
               data-app-share-legend
               sx={{ mt: 1.75, display: 'flex', flexDirection: 'column', gap: 0.6 }}
             >
-              {slices.map((slice) => {
+              <PagedList name="app-distribution">{slices.map((slice) => {
                 const active = slice.name === hovered
                 const dim = hovered !== null && !active
                 return (
@@ -308,7 +309,7 @@ export function AppShareDialog({ open, onClose, t, apps, total }: AppShareDialog
                     </Typography>
                   </Box>
                 )
-              })}
+              })}</PagedList>
             </Box>
 
             {unlisted > 0 && (

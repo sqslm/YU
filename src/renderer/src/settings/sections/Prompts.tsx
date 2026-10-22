@@ -1,3 +1,4 @@
+import { PagedList } from '../Pagination'
 import { useMemo, useState } from 'react'
 import { Box, Button, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { NamedPrompt, PromptKind, PromptLibrary, Settings } from '@shared/types'
@@ -317,7 +318,7 @@ export function PromptsSection({
                 gap: 1.25
               }}
             >
-              {cards.map((card) => (
+              <PagedList name="Prompts-cards" revealKey={activeId}>{cards.map((card) => (
                 <PromptCard
                   key={card.id}
                   card={card}
@@ -329,7 +330,7 @@ export function PromptsSection({
                   onCopy={() => duplicateCard(kind, card.id)}
                   onDelete={() => deleteCard(kind, card.id)}
                 />
-              ))}
+              ))}</PagedList>
               {cards.length === 0 ? (
                 // Deleting every card of a kind is allowed; this keeps the block
                 // usable instead of leaving a header above an empty grid.

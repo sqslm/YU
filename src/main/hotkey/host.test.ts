@@ -14,6 +14,8 @@ describe('shortcut recording suspension', () => {
     const host = new HotkeyHost(vi.fn()), settings = mergeSettings({})
     host.start(settings); child.emit('message', { type: 'ready' })
     host.setCapturing(true)
+    expect(child.postMessage).toHaveBeenCalledWith({ type: 'capture', active: true })
+    child.emit('message', { type: 'capture-key', token: 'RightShift', down: true })
     expect(child.postMessage).toHaveBeenLastCalledWith({ type: 'enabled', value: false })
     host.apply(settings)
     expect(child.postMessage.mock.calls.filter(call => call[0].type === 'enabled').at(-1)?.[0].value).toBe(false)

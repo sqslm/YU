@@ -1008,3 +1008,30 @@ describe('local speech model routing', () => {
     expect(entries[0].transcript).toContain('服务商听出来的话')
   })
 })
+
+describe('selected text editing', () => {
+  it('uses the routed prompt and LLM even if dictation polishing is disabled, without audio or history', async () => {
+    const { pipeline, entries } = harness({ polish: { enabled: false } as Settings['polish'] })
+    mocks.complete.mockResolvedValue('润色结果')
+    const result = await pipeline.transformSelection('原文字', 'polish', { appName: 'WeChat', windowTitle: '聊天' })
+    expect(result?.text).toBe('润色结果')
+    expect(result?.promptName).toBeTruthy()
+    expect(mocks.complete.mock.calls[0][1].messages.at(-1).content).toBe('原文字')
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(entries).toHaveLength(0)
+    expect(pipeline.isBusy).toBe(false)
+  })
+  it('uses translation targets and drops late text after cancellation', async () => {
+    const { pipeline } = harness({ translateTarget: 'en' })
+    let finish!: (text: string) => void
+    mocks.complete.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const task = pipeline.transformSelection('原文', 'translate', { appName: 'Editor' })
+    await vi.waitFor(() => expect(mocks.complete).toHaveBeenCalled())
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('Target language: en')
+    pipeline.cancel('test-selection')
+    finish('late translation')
+    expect(await task).toBeNull()
+    expect(pipeline.isBusy).toBe(false)
+  })
+})

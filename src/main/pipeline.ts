@@ -864,6 +864,32 @@ export class Pipeline {
     return true
   }
 
+  /** Explicit text editing shares the existing prompts, translation targets and LLM chain. */
+  async transformSelection(text: string, operation: 'polish' | 'translate', context: PromptContext): Promise<{ text: string; promptName: string } | null> {
+    if (this.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
+    const token = ++this.runToken
+    const controller = new AbortController()
+    this.abort = controller
+    this.stage = 'working'
+    this.stageMode = operation === 'translate' ? 'translate' : 'dictation'
+    const current = this.getSettings()
+    const settings = { ...current, polish: { ...current.polish, enabled: true } }
+    this.selectTakePrompt(this.stageMode, settings, context)
+    try {
+      const raw = await this.postProcess(this.stageMode, text, settings, controller.signal, context)
+      if (token !== this.runToken || controller.signal.aborted) return null
+      const result = applyReplacements(unwrapModelText(raw), settings.replacements)
+      if (!result.trim()) throw new Error(mt('模型返回了空文本'))
+      return { text: result, promptName: this.takePrompt.get(token)?.card.name ?? '' }
+    } catch (error) {
+      if (controller.signal.aborted) return null
+      throw error
+    } finally {
+      this.finishStage(token)
+      if (this.abort === controller) this.abort = null
+    }
+  }
+
   /** Only the answer card may stop an Ask operation; dictation/translation are unaffected. */
   stopAnswer(): boolean {
     return this.stage === 'working' && this.stageMode === 'ask' && this.cancel('stop-answer')

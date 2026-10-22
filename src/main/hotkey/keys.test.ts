@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { VK, isModifierVk, tokenToVk, vkToToken } from './keys'
+import { VK, physicalVk, isModifierVk, tokenToVk, vkToToken } from './keys'
 
 describe('tokenToVk', () => {
   it('maps modifiers by side, not just role', () => {
@@ -42,4 +42,12 @@ describe('vkToToken', () => {
   it('returns undefined for unmapped keys', () => {
     expect(vkToToken(0x01)).toBeUndefined()
   })
+})
+
+it('identifies right Shift from generic VK_SHIFT and the physical scan code', () => {
+  expect(physicalVk(0x10, 0x36, 0)).toBe(VK.RightShift)
+  expect(physicalVk(0x10, 0x2a, 0)).toBe(VK.LeftShift)
+  expect(physicalVk(0x11, 0x1d, 1)).toBe(VK.RightCtrl)
+  expect(physicalVk(0x12, 0x38, 0)).toBe(VK.LeftAlt)
+  expect(physicalVk(VK.RightShift, 0x36, 0)).toBe(VK.RightShift)
 })

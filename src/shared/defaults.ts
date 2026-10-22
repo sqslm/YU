@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
       translate: { keys: ['RightAlt', 'RightShift'] }
     },
     pasteLastKeys: { keys: ['LeftCtrl', 'RightShift', 'V'] },
+    selectionKeys: { keys: ['LeftCtrl', 'LeftAlt', 'S'] },
     // Ctrl+Alt+N: no modifier of the dictation gesture, so a note take can never
     // be mistaken for one and a note chord cannot start a dictation on its way in.
     notesKeys: { keys: ['LeftCtrl', 'LeftAlt', 'N'] },
@@ -122,6 +123,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   showBarOnDesktop: true,
   barPosition: null,
   disabledApps: [],
+  listPageSize: 30,
   historyLimit: 500,
   historyDurationSeconds: -1,
   historyRefreshSeconds: 0,
@@ -211,6 +213,11 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   merged.hotkeys.pasteLastKeys = {
     ...base.hotkeys.pasteLastKeys,
     ...(input.hotkeys?.pasteLastKeys ?? {})
+  }
+  merged.listPageSize = [10, 20, 30, 50, 100].includes(merged.listPageSize) ? merged.listPageSize : 30
+  merged.hotkeys.selectionKeys = {
+    ...base.hotkeys.selectionKeys,
+    ...(input.hotkeys?.selectionKeys ?? {})
   }
   merged.hotkeys.notesKeys = {
     ...base.hotkeys.notesKeys,

@@ -1,3 +1,4 @@
+import { PagedList } from '../Pagination'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
@@ -1220,7 +1221,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
             </Box>
           )}
 
-          {!loading &&
+          <PagedList name="NotesPage-visible" resetKey={`${query}|${categoryId}|${activeTags.join(",")}`} revealKey={selectedId}>{!loading &&
             visible.map((note) => {
               const active = note.id === selectedId
               const picked = selectedSet.has(note.id)
@@ -1323,7 +1324,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                   )}
                 </Box>
               )
-            })}
+            })}</PagedList>
         </Box>
 
         <Box
@@ -1872,7 +1873,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
 
           {categories.length > 0 && (
             <Stack spacing={0.5} sx={{ mt: 1.75 }} data-notes-category-list>
-              {categories.map((category) => (
+              <PagedList name="note-categories">{categories.map((category) => (
                 <Stack key={category.id} direction="row" spacing={1} alignItems="center">
                   <Typography sx={{ fontSize: 12.5, flex: 1 }}>{category.name}</Typography>
                   <Tooltip title={t('notes.categoryDelete')}>
@@ -1885,7 +1886,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
                     </IconButton>
                   </Tooltip>
                 </Stack>
-              ))}
+              ))}</PagedList>
             </Stack>
           )}
         </DialogContent>

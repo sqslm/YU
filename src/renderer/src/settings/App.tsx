@@ -21,6 +21,7 @@ import { IconBook, IconChart, IconClock, IconMic, IconSettings } from './icons'
 import { Onboarding } from './pages/Onboarding'
 import StickyNote2Icon from '@mui/icons-material/StickyNote2'
 import { useTranslation } from 'react-i18next'
+import { PaginationSettings } from './Pagination'
 import { applyUiLanguage } from '../i18n'
 import i18n from '../i18n'
 
@@ -126,6 +127,7 @@ export function App(): JSX.Element {
 
   return (
     <ThemeProvider theme={theme}>
+    <PaginationSettings.Provider value={{ size: settings?.listPageSize ?? 30, change: size => patch({ listPageSize: size }) }}>
       <CssBaseline />
       <Box
         sx={{
@@ -262,6 +264,7 @@ export function App(): JSX.Element {
           onServerChange={(value) => void patch({ syncServerUrl: value })}
         />
       )}
+    </PaginationSettings.Provider>
     </ThemeProvider>
   )
 }

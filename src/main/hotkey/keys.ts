@@ -51,6 +51,14 @@ export function isModifierVk(vk: number): boolean {
 
 export function vkToToken(vk: number): string | undefined {
   for (const [token, code] of Object.entries(NAMED)) if (code === vk) return token
-  if (vk >= 0x30 && vk <= 0x5a) return String.fromCharCode(vk)
+  if ((vk >= 0x30 && vk <= 0x39) || (vk >= 0x41 && vk <= 0x5a)) return String.fromCharCode(vk)
   return undefined
+}
+
+/** Some keyboards report generic modifier codes; scan/extended flags identify the side. */
+export function physicalVk(vk: number, scan: number, flags: number): number {
+  if (vk === 0x10) return scan === 0x36 ? VK.RightShift : VK.LeftShift
+  if (vk === 0x11) return flags & 1 ? VK.RightCtrl : VK.LeftCtrl
+  if (vk === 0x12) return flags & 1 ? VK.RightAlt : VK.LeftAlt
+  return vk
 }

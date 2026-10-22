@@ -33,6 +33,8 @@ import { LocalAsrHost } from './local-asr/host'
 import { registerLocalAsrIpc } from './local-asr/ipc'
 import { collectResources } from './resources'
 import { applyReplaceText } from './agent'
+import { SelectionEditor } from './selection-editor'
+import { captureSelectionTarget } from './selection-target'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
@@ -444,6 +446,7 @@ function ensureCardWindow(): BrowserWindow {
 
 /** Last payload pushed into the card, used by the copy/replace actions. */
 let lastAnswer: AnswerCardPayload | null = null
+let selectionEditor: SelectionEditor | null = null
 
 function showAnswerCard(payload: AnswerCardPayload): void {
   clearCardRetire()
@@ -482,6 +485,10 @@ function showAnswerCard(payload: AnswerCardPayload): void {
  * overwritten after they clicked that button, and `ask` is a follow-up turn.
  */
 async function handleCardAction(action: CardAction): Promise<void> {
+  if (lastAnswer?.selection && action.id !== 'copy') {
+    await selectionEditor?.action(action.id)
+    return
+  }
   if (action.id === 'stop') {
     const partial = lastAnswer
     if (partial?.streaming && pipeline?.stopAnswer()) {
@@ -538,7 +545,8 @@ function scheduleCardRetire(): void {
   cardIdleTimer.unref?.()
 }
 
-function hideCard(): void {
+function hideCard(cancelSelection = true): void {
+  if (cancelSelection) selectionEditor?.cancel()
   pendingCard = null
   hotkeys?.setCardOpen(false)
   if (cardWindow && !cardWindow.isDestroyed()) cardWindow.hide()
@@ -1060,6 +1068,10 @@ function registerIpc(): void {
 function wireHotkeys(): void {
   hotkeys = new HotkeyHost(
     (event: HotkeyHostEvent) => {
+      if (event.type === 'capture-key') {
+        settingsWindow?.webContents.send('settings:shortcut-key', { token: event.token, down: event.down })
+        return
+      }
       if (!pipeline) return
       const detail = 'mode' in event ? ` ${event.mode}` : ''
       const at = 'at' in event ? ` @${event.at}` : ''
@@ -1094,6 +1106,14 @@ function wireHotkeys(): void {
           // ESC with nothing in flight: it was meant for the answer card.
           log('[card] closed by ESC from the hook')
           hideCard()
+          break
+        case 'selection':
+          if (pipeline.isBusy) {
+            pipeline.showAlert({ kind: 'busy', level: 'info', text: mt('正在处理上一条，稍后再试'), actions: [] })
+            break
+          }
+          hideCard()
+          void selectionEditor?.open()
           break
         case 'notes-toggle':
           void toggleNotesRecording()
@@ -1193,6 +1213,14 @@ async function bootstrap(): Promise<void> {
       ready: () => localAsr.available(),
       transcribeWav: (wav) => localAsr.transcribeWav(wav)
     }
+  })
+  selectionEditor = new SelectionEditor({
+    capture: () => captureSelectionTarget(store.get()),
+    transform: (text, operation, context) => pipeline!.transformSelection(text, operation, context),
+    busy: () => pipeline!.isBusy,
+    cancel: () => { pipeline?.cancel('selection') },
+    show: showAnswerCard,
+    hide: () => hideCard(false)
   })
   wireHotkeys()
 

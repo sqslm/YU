@@ -1,3 +1,4 @@
+import { PagedList } from '../Pagination'
 import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Box, Button, Checkbox, IconButton, InputBase, Tooltip, Typography } from '@mui/material'
 import {
@@ -481,7 +482,7 @@ export function DictionaryPage({ settings, patch }: DictionaryProps): JSX.Elemen
             </Box>
           ) : (
             <Box sx={{ mt: 2.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {pending.map((suggestion) => (
+              <PagedList name="Dictionary-pending">{pending.map((suggestion) => (
                 <Box key={selectKey(suggestion.from)} sx={cardSx}>
                   <Typography sx={plainTermSx}>{suggestion.from}</Typography>
                   <Typography sx={{ color: 'text.disabled', fontSize: 12 }}>→</Typography>
@@ -512,7 +513,7 @@ export function DictionaryPage({ settings, patch }: DictionaryProps): JSX.Elemen
                     {i18n.t('忽略')}
                   </Button>
                 </Box>
-              ))}
+              ))}</PagedList>
             </Box>
           )}
           {full && pending.length > 0 && (
@@ -686,7 +687,7 @@ export function DictionaryPage({ settings, patch }: DictionaryProps): JSX.Elemen
                 gap: 1
               }}
             >
-              {rows.map((row) => {
+              <PagedList name="Dictionary-rows" resetKey={`${query}|${tab}`}>{rows.map((row) => {
                 const key = selectKey(row.entry.from)
                 return (
                   <Box
@@ -766,7 +767,7 @@ export function DictionaryPage({ settings, patch }: DictionaryProps): JSX.Elemen
                     </IconButton>
                   </Box>
                 )
-              })}
+              })}</PagedList>
             </Box>
           )}
         </>

@@ -1,3 +1,4 @@
+import { PagedList } from '../Pagination'
 import { useState } from 'react'
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { SearchConnection, SearchProbeResult, SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
@@ -160,14 +161,14 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
       </SettingsGroup>
 
       {search.strategy && search.strategy !== 'single' && <SettingsGroup icon={<IconMagnifier />} title={i18n.t('搜索连接')}>
-        {connections.map((connection, index) => <Box key={connection.id} data-search-connection={connection.id} title={connection.name} sx={{ '& p': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }}><SettingsRow label={connection.name} description={SEARCH_PROVIDER_LABEL[connection.provider]}>
+        <PagedList name="Search-connections">{connections.map((connection, index) => <Box key={connection.id} data-search-connection={connection.id} title={connection.name} sx={{ '& p': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }}><SettingsRow label={connection.name} description={SEARCH_PROVIDER_LABEL[connection.provider]}>
           <Switch size="small" checked={connection.enabled} inputProps={{ 'aria-label': i18n.t('启用 {{name}}', { name: connection.name }) }} onChange={(_, enabled) => updateConnection(connection.id, { enabled })} />
           <Button size="small" sx={{ minWidth: 40 }} data-search-test={connection.id} aria-label={i18n.t('测试 {{name}}', { name: connection.name })} disabled={probe?.busy} onClick={() => void testConnection(connection)}>{i18n.t('测试')}</Button>
           <Button size="small" sx={{ minWidth: 40 }} onClick={() => setEditing({ ...connection })}>{i18n.t('编辑')}</Button>
           <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('上移 {{name}}', { name: connection.name })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
           <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('下移 {{name}}', { name: connection.name })} disabled={index === connections.length - 1} onClick={() => move(index, 1)}>↓</Button>
           <Button size="small" color="error" onClick={() => update({ connections: connections.filter(item => item.id !== connection.id) })}>{i18n.t('删除')}</Button>
-        </SettingsRow>{probeStatus(connection)}</Box>)}
+        </SettingsRow>{probeStatus(connection)}</Box>)}</PagedList>
         {!connections.length && <SettingsHint>{i18n.t('添加已授权的搜索连接，可保存同一服务的多把密钥。')}</SettingsHint>}
         <Box sx={{ px: 2, py: 1.5 }}><Button variant="outlined" size="small" data-search-add onClick={() => setEditing({ id: crypto.randomUUID(), name: '', provider: 'tavily', apiKey: '', endpoint: '', maxResults: 5, enabled: true })}>{i18n.t('添加搜索连接')}</Button></Box>
         <SettingsHint>{i18n.t('测试会发送一次真实搜索请求，可能计入服务额度；不会切换到备用连接。')}</SettingsHint>

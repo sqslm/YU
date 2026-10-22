@@ -427,6 +427,7 @@ export interface Settings {
     enabled: boolean
     bindings: Record<Mode, ShortcutBinding>
     pasteLastKeys: ShortcutBinding
+    selectionKeys: ShortcutBinding
     /**
      * Starts and stops a 随记 (voice note) take from anywhere: the hub opens on
      * the notes page and the recorder toggles. Kept out of `bindings` because a
@@ -494,6 +495,7 @@ export interface Settings {
    * packaged app (`ApplicationFrameWindow`) can be blocked either way.
    */
   disabledApps: string[]
+  listPageSize: number
   historyLimit: number
   /**
    * Retention window in seconds: `-1` forever, `0` never persist, otherwise
@@ -889,7 +891,7 @@ export interface ModelListResult {
   error?: string
 }
 
-export type CardActionId = 'copy' | 'replace' | 'ask' | 'stop'
+export type CardActionId = 'copy' | 'replace' | 'ask' | 'stop' | 'selection-polish' | 'selection-translate' | 'selection-replace' | 'selection-append'
 
 export interface CardAction {
   id: CardActionId
@@ -912,6 +914,7 @@ export interface AnswerCardPayload {
   streaming?: boolean
   /** A user-stopped partial answer is readable but is not a completed history entry. */
   stopped?: boolean
+  selection?: boolean
   /** Actual retrieval outcome; never inferred from whether search is enabled. */
   retrieval?: AskRetrieval
 }
@@ -924,3 +927,5 @@ export interface AskRetrieval {
   digest: boolean
   partial: boolean
 }
+
+export interface ShortcutKeyEvent { token: string; down: boolean }

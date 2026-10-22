@@ -7,6 +7,17 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '剪贴板包含文件，请先复制文字后重试': 'The clipboard contains files. Copy text before trying again.',
+  '润色选区': 'Polish selection',
+  '翻译选区': 'Translate selection',
+  '替换选区': 'Replace selection',
+  '追加到末尾': 'Append to field end',
+  '正在处理选中文字…': 'Processing selected text…',
+  '选择润色或翻译，预览后再应用。': 'Choose polish or translate, then preview before applying.',
+  '目标窗口已变化，请重新选择文字': 'The target window changed. Select the text again.',
+  '无法返回原输入框，请重新选择文字': 'Could not return to the original field. Select the text again.',
+  '选区已变化，未修改文字；请重新选择': 'The selection changed. No text was modified; select it again.',
+  '没有选中文字': 'No text is selected',
   '不支持的搜索服务': 'Unsupported search provider',
   '已停止生成': 'Generation stopped',
   '模式': 'Mode',

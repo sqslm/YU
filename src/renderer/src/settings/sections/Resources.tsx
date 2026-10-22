@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import { Alert, Box, Button, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import type { ResourceUsage, Settings } from '@shared/types'
 import { controlSx, IconCpu, SettingsGroup, SettingsHint, SettingsRow } from './General'
 import i18n from '../../i18n'
+import { Pager, PaginationSettings } from '../Pagination'
 
 const ROLE_LABELS: Record<string, string> = {
   main: '主进程', graphics: '图形服务', interface: '界面', hotkeys: '快捷键',
@@ -17,6 +18,8 @@ export function ResourcesSection({ settings, patch }: {
   settings: Settings
   patch: (patch: Partial<Settings>) => void
 }): JSX.Element {
+  const { size, change } = useContext(PaginationSettings)
+  const [page, setPage] = useState(1)
   const [usage, setUsage] = useState<ResourceUsage | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null)
@@ -51,6 +54,11 @@ export function ResourcesSection({ settings, patch }: {
   }
   const minutes = settings.localAsr.idleUnloadMinutes
   const intervals = [...new Set([0, 1, 5, 15, minutes])].sort((a, b) => a - b)
+  const total = usage?.processes.length ?? 0
+  const safePage = Math.min(page, Math.max(1, Math.ceil(total / size)))
+  useEffect(() => setPage(1), [size])
+  useEffect(() => { if (page !== safePage) setPage(safePage) }, [page, safePage])
+  const pager = total > size ? <Pager name="processes" page={safePage} total={total} size={size} onPage={setPage} onSize={change} /> : null
   const privateAvailable = usage !== null && usage.privateResidentBytes !== null
 
   return (
@@ -88,13 +96,15 @@ export function ResourcesSection({ settings, patch }: {
         <SettingsHint>{i18n.t('开机启动时仅驻留托盘；录音和识别过程中不会自动卸载模型。')}</SettingsHint>
       </SettingsGroup>
       <SettingsGroup title={i18n.t('进程详情')} hint={usage ? i18n.t('{{n}} 个进程', { n: usage.processes.length }) : undefined} collapsible defaultOpen={false}>
+        {pager}
         <Table size="small" aria-label={i18n.t('进程内存占用')} sx={{ '& td, & th': { fontSize: 11.5, px: 1.5, py: 1.25 }, '& tr:last-child td': { borderBottom: 0 } }}>
           <TableHead><TableRow><TableCell>{i18n.t('进程')}</TableCell><TableCell align="right">PID</TableCell><TableCell align="right">{i18n.t('驻留')}</TableCell><TableCell align="right">{i18n.t('已提交')}</TableCell></TableRow></TableHead>
-          <TableBody>{usage?.processes.map((process) => <TableRow key={process.pid}>
+          <TableBody>{usage?.processes.slice((safePage - 1) * size, safePage * size).map((process) => <TableRow key={process.pid}>
             <TableCell>{i18n.t(ROLE_LABELS[process.role] ?? '辅助进程')}</TableCell><TableCell align="right">{process.pid}</TableCell>
             <TableCell align="right">{memory(privateAvailable ? process.privateResidentBytes : process.workingSetBytes)}</TableCell><TableCell align="right">{memory(process.committedBytes)}</TableCell>
           </TableRow>)}</TableBody>
         </Table>
+        {pager}
       </SettingsGroup>
     </Stack>
   )

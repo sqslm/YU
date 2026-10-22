@@ -889,6 +889,11 @@ export function GeneralSection({ settings, patch }: {
             <MenuItem value="en">English</MenuItem>
           </TextField>
         </SettingsRow>
+        <SettingsRow label={i18n.t('列表每页条数')} description={i18n.t('用于历史记录、随记及设置中的数据列表。')}>
+          <TextField select size="small" sx={controlSx} value={settings.listPageSize} onChange={event => patch({ listPageSize: Number(event.target.value) })} inputProps={{ 'aria-label': i18n.t('每页条数') }}>
+            {[10, 20, 30, 50, 100].map(size => <MenuItem key={size} value={size}>{size}</MenuItem>)}
+          </TextField>
+        </SettingsRow>
         <SettingsRow label={i18n.t('在悬浮条上显示当前模式')} description={i18n.t('在悬浮条中显示听写、翻译或问答模式。')}>
           <Switch
             size="small"

@@ -31,6 +31,8 @@ export type HotkeyHostEvent =
   | HotkeyLockEvent
   | HotkeyNotesEvent
   | HotkeyEscapeEvent
+  | { type: 'selection'; at: number }
+  | { type: 'capture-key'; token: string; down: boolean }
 
 export type HotkeyMessage =
   | HotkeyHostEvent
@@ -147,12 +149,14 @@ export class HotkeyHost {
       bindings,
       pasteLast: settings.hotkeys.pasteLastKeys.keys,
       notes: settings.hotkeys.notesKeys?.keys ?? [],
+      selection: settings.hotkeys.selectionKeys.keys,
       activation: settings.activationMode
     })
     this.proc.postMessage({ type: 'enabled', value: settings.hotkeys.enabled && !this.capturing })
     // A re-spawned child starts with the card flag cleared; restore it so ESC
     // keeps working on a card that was already up when the hook restarted.
     this.proc.postMessage({ type: 'card', open: this.cardOpen })
+    this.proc.postMessage({ type: 'capture', active: this.capturing })
     this.onLog(`[hotkey] config activation=${settings.activationMode} enabled=${settings.hotkeys.enabled}`)
     this.onLog(`[hotkey] notes chord ${(settings.hotkeys.notesKeys?.keys ?? []).join('+') || '(none)'}`)
   }
@@ -170,6 +174,7 @@ export class HotkeyHost {
 
   setCapturing(active: boolean): void {
     this.capturing = active
+    this.proc?.postMessage({ type: 'capture', active })
     this.proc?.postMessage({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !active })
   }
 

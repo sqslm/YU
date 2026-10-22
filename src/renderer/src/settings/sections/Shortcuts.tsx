@@ -39,35 +39,6 @@ const ACTIVATION_OPTIONS = [
   { value: 'hold', label: '按住说话' }
 ] as const
 
-/** Maps a browser KeyboardEvent.code onto the hook's key tokens. */
-function codeToToken(code: string, key: string): string | null {
-  const map: Record<string, string> = {
-    AltRight: 'RightAlt',
-    AltLeft: 'LeftAlt',
-    ControlRight: 'RightCtrl',
-    ControlLeft: 'LeftCtrl',
-    ShiftRight: 'RightShift',
-    ShiftLeft: 'LeftShift',
-    MetaLeft: 'LeftWin',
-    MetaRight: 'RightWin',
-    Space: 'Space',
-    Tab: 'Tab',
-    Enter: 'Enter',
-    Escape: 'Escape',
-    Backspace: 'Backspace',
-    CapsLock: 'CapsLock'
-  }
-  if (map[code]) return map[code]
-  if (['Insert', 'Delete', 'Home', 'End', 'PageUp', 'PageDown'].includes(code)) return code
-  const keyMatch = /^Key([A-Z])$/.exec(code)
-  if (keyMatch) return keyMatch[1]
-  const digitMatch = /^Digit([0-9])$/.exec(code)
-  if (digitMatch) return digitMatch[1]
-  if (/^F([1-9]|1[0-2])$/.test(code)) return code
-  if (/^[A-Z]$/.test(key)) return key
-  return null
-}
-
 export function ShortcutsSection({
   settings,
   patch
@@ -87,12 +58,13 @@ export function ShortcutsSection({
     const hotkeys = settingsRef.current.hotkeys
     const duplicate = shortcutConflict(hotkeys, target, keys)
     if (duplicate) {
-      const label = MODE_ROWS.find(row => row.mode === duplicate)?.label ?? (duplicate === 'notes' ? '随记录音' : '粘贴上一条')
+      const label = MODE_ROWS.find(row => row.mode === duplicate)?.label ?? (duplicate === 'notes' ? '随记录音' : duplicate === 'selection' ? '选区处理' : '粘贴上一条')
       setConflict(i18n.t('该快捷键已用于「{{name}}」，已保留原快捷键。', { name: i18n.t(label) }))
       return
     }
     setConflict('')
-    if (target === 'pasteLast') patch({ hotkeys: { ...hotkeys, pasteLastKeys: { keys } } })
+    if (target === 'selection') patch({ hotkeys: { ...hotkeys, selectionKeys: { keys } } })
+    else if (target === 'pasteLast') patch({ hotkeys: { ...hotkeys, pasteLastKeys: { keys } } })
     else if (target === 'notes') patch({ hotkeys: { ...hotkeys, notesKeys: { keys } } })
     else patch({ hotkeys: { ...hotkeys, bindings: { ...hotkeys.bindings, [target]: { keys } } } })
   }
@@ -107,33 +79,20 @@ export function ShortcutsSection({
   useEffect(() => {
     if (!capturing) return
 
-    const onKeyDown = (event: KeyboardEvent): void => {
-      event.preventDefault()
-      event.stopPropagation()
-      if (event.key === 'Escape') { setCapturing(null); heldRef.current = []; setHeld([]); return }
-      const token = codeToToken(event.code, event.key)
-      if (!token) return
-      if (heldRef.current.includes(token)) return
-      heldRef.current = [...heldRef.current, token]
-      setHeld(heldRef.current)
-    }
-
-    const onKeyUp = (event: KeyboardEvent): void => {
-      event.preventDefault()
-      const token = codeToToken(event.code, event.key)
-      if (!token) return
-      const current = heldRef.current
-      if (!current.includes(token)) return
-      // Releasing the first key completes the chord; modifiers are released after.
-      const isPrimary = current[0] === token
-      // Keep the whole recorded chord even when a secondary key is released first.
-      if (isPrimary) {
-        save(capturing, current)
+    const off = window.api.settings.onShortcutKey(({ token, down }) => {
+      if (token === 'Escape' && down) { setCapturing(null); heldRef.current = []; setHeld([]); return }
+      if (down) {
+        if (!heldRef.current.includes(token)) {
+          heldRef.current = [...heldRef.current, token]
+          setHeld(heldRef.current)
+        }
+      } else if (heldRef.current[0] === token) {
+        save(capturing, heldRef.current)
         heldRef.current = []
         setHeld([])
         setCapturing(null)
       }
-    }
+    })
 
     const onBlur = (): void => {
       heldRef.current = []
@@ -145,13 +104,10 @@ export function ShortcutsSection({
       if (!(event.target instanceof Element) || !event.target.closest('[data-shortcut-controls]')) onBlur()
     }
 
-    window.addEventListener('keydown', onKeyDown, true)
-    window.addEventListener('keyup', onKeyUp, true)
     window.addEventListener('blur', onBlur)
     window.addEventListener('pointerdown', onOutside)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, true)
-      window.removeEventListener('keyup', onKeyUp, true)
+      off()
       window.removeEventListener('blur', onBlur)
       window.removeEventListener('pointerdown', onOutside)
     }
@@ -229,6 +185,7 @@ export function ShortcutsSection({
           i18n.t('再次插入最近一次转写结果'),
           settings.hotkeys.pasteLastKeys.keys
         )}
+        {renderRow('selection', '选区处理', '选中文字后打开润色或翻译，预览后替换或追加', settings.hotkeys.selectionKeys.keys)}
         {renderRow(
           'notes',
           i18n.t('随记录音'),
@@ -238,7 +195,7 @@ export function ShortcutsSection({
       </SettingsGroup>
 
       <SettingsHint>
-        {i18n.t('点击快捷键后按下组合键，松开第一个键即保存；Esc 或点击其他区域取消，× 清空。')}
+        {i18n.t('点击快捷键后按下组合键，松开第一个键即保存；Esc 或点击其他区域取消，× 清空。录制期间按键不会传递给其他应用。')}
       </SettingsHint>
     </Stack>
   )

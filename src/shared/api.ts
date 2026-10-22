@@ -1,5 +1,6 @@
 import type {
   AccountView,
+  ShortcutKeyEvent,
   BarActionId,
   BarState,
   CardAction,
@@ -31,6 +32,7 @@ export interface TypelessApi {
     get(): Promise<Settings>
     update(patch: Partial<Settings>): Promise<Settings>
     captureShortcut(active: boolean): Promise<void>
+    onShortcutKey(callback: (event: ShortcutKeyEvent) => void): () => void
     onChanged(callback: (settings: Settings) => void): () => void
   }
   history: {

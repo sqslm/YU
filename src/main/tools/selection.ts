@@ -18,6 +18,7 @@ import { mt } from '@shared/mainI18n'
 
 
 export interface SelectionDeps {
+  clipboardVersion?: () => number
   readClipboard: () => string
   writeClipboard: (text: string) => void
   /** Sends Ctrl+C to the focused window. */
@@ -67,12 +68,20 @@ async function sendCopyKey(): Promise<void> {
 
 async function defaultDeps(): Promise<SelectionDeps> {
   const { clipboard } = await import('electron')
+  const previousImage = clipboard.readImage()
+  const previousHtml = clipboard.readHTML()
+  const koffi = (await import('koffi')).default
+  const sequence = koffi.load('user32.dll').func('uint32_t GetClipboardSequenceNumber()')
   return {
+    clipboardVersion: () => Number(sequence()),
     readClipboard: () => clipboard.readText(),
     writeClipboard: (text: string) => {
-      clipboard.writeText(text)
+      if (!previousImage.isEmpty()) clipboard.writeImage(previousImage)
+      else if (previousHtml) clipboard.write({ text, html: previousHtml })
+      else clipboard.writeText(text)
     },
-    sendCopy: sendCopyKey,
+    sendCopy: clipboard.availableFormats().some(format => /files|filename|uri-list/i.test(format))
+      ? async () => { throw new Error(mt('剪贴板包含文件，请先复制文字后重试')) } : sendCopyKey,
     wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
   }
 }
@@ -97,6 +106,7 @@ export async function getSelection(options: SelectionOptions = {}): Promise<Sele
   const timeoutMs = options.timeoutMs ?? 300
   const pollMs = options.pollMs ?? 30
 
+  const previousVersion = deps.clipboardVersion?.()
   let previous = ''
   try {
     previous = deps.readClipboard()
@@ -126,7 +136,7 @@ export async function getSelection(options: SelectionOptions = {}): Promise<Sele
     } catch {
       break
     }
-    if (current !== previous) {
+    if (current !== previous || (previousVersion !== undefined && deps.clipboardVersion?.() !== previousVersion)) {
       captured = current
       break
     }
@@ -135,7 +145,7 @@ export async function getSelection(options: SelectionOptions = {}): Promise<Sele
   // Restore before reporting: the user must never lose their clipboard because
   // an assistant asked a question.
   try {
-    if (deps.readClipboard() !== previous) deps.writeClipboard(previous)
+    if (deps.readClipboard() !== previous || (previousVersion !== undefined && deps.clipboardVersion?.() !== previousVersion)) deps.writeClipboard(previous)
   } catch {
     // A failed restore is not worth failing the tool over.
   }

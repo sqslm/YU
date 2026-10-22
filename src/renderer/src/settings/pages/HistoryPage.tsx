@@ -21,7 +21,6 @@ import { IconBook, IconCheck, IconCopy, IconSearch, IconTrash } from '../icons'
 import {
   APP_FILTER_ALL,
   APP_FILTER_ALL_LABEL,
-  PAGE_SIZE,
   REFRESH_OPTIONS,
   appFilterLabel,
   appFilterStillValid,
@@ -33,8 +32,6 @@ import {
   bodyOf,
   originalMatchesResult,
   originalText,
-  canNextPage,
-  canPrevPage,
   cardLabel,
   cardTitle,
   clampPage,
@@ -48,8 +45,6 @@ import {
   hintText,
   modeLabel,
   normalizeRefreshSeconds,
-  pageLabel,
-  providerLabel,
   providerTitle,
   refreshEnabled,
   refreshLabel,
@@ -62,6 +57,8 @@ import {
   type RowActionId
 } from './historyView'
 import i18n from '../../i18n'
+import { Pager } from '../Pagination'
+import { MarkdownView } from '../../card/MarkdownView'
 
 /** The tabs above the list, left to right. Captions come from historyView. */
 const FILTERS: HistoryFilterId[] = ['all', 'dictation', 'ask', 'translate']
@@ -151,6 +148,9 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   const [notices, setNotices] = useState<Record<string, Notice>>({})
   /** 1-based page of the filtered list; clamped on read, so it may be stale. */
   const [page, setPage] = useState(1)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const pageSize = settings?.listPageSize ?? 30
+  useEffect(() => setPage(1), [pageSize])
   /** True while a `history.list` round trip is open (manual or automatic). */
   const [refreshing, setRefreshing] = useState(false)
   const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
@@ -316,8 +316,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   }
   // Read-time clamp: deleting the last row of the last page shrinks `total` and
   // this lands the list on the new last page without an extra state write.
-  const safePage = clampPage(page, total)
-  const pageItems = useMemo(() => slicePage(visible, safePage), [visible, safePage])
+  const safePage = clampPage(page, total, pageSize)
+  const pageItems = useMemo(() => slicePage(visible, safePage, pageSize), [visible, safePage, pageSize])
   const groups = useMemo(() => {
     const byDay = new Map<string, { label: string; items: HistoryEntry[] }>()
     for (const entry of pageItems) {
@@ -444,7 +444,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   }, [feedbackBusy, feedbackFor, feedbackText])
 
   return (
-    <Box sx={{ px: 4, py: 4 }}>
+    <Box sx={{ px: { xs: 2.5, md: 4 }, py: 4 }}>
       {/* Toolbar: actions only. The heading lives in the section header below, so
           the page prints 历史记录 exactly once. */}
       <Box
@@ -563,6 +563,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
             {refreshLabel(refreshSeconds)}
           </Typography>
 
+        </Box>
+        <Box data-history-filter-toolbar sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: '100%', flexWrap: 'wrap' }}>
           {/* Search box and 窗口筛选 share one row: the box takes everything it
               can (flex: 1) and the dropdown keeps a fixed 180px cap, so adding
               the filter never squeezes what the user is typing into. */}
@@ -572,8 +574,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               display: 'flex',
               alignItems: 'center',
               gap: 0.75,
-              flex: '1 1 360px',
-              minWidth: 360,
+              flex: '1 1 300px',
+              minWidth: 0,
               flexWrap: 'nowrap',
               justifyContent: 'flex-end'
             }}
@@ -616,6 +618,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                 together instead of replacing any of them. */}
             <TextField
               select
+              SelectProps={{ displayEmpty: true }}
               size="small"
               value={appFilter}
               onChange={(event) => setAppFilter(event.target.value)}
@@ -623,7 +626,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               data-history-filter="app"
               data-history-app-filter={appFilter}
               sx={{
-                width: 180,
+                width: { xs: 125, md: 180 },
                 maxWidth: 180,
                 flexShrink: 0,
                 '& .MuiInputBase-input': { fontSize: 12.5, py: 0.75 },
@@ -765,7 +768,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
         <Typography
           data-history-count={total}
           data-history-total={total}
-          title={i18n.t('每页 {{n}} 条', { n: PAGE_SIZE })}
+          title={i18n.t('每页 {{n}} 条', { n: pageSize })}
           sx={{ ml: 'auto', fontSize: 11.5, color: 'text.secondary', whiteSpace: 'nowrap' }}
         >
           {countLabel(filter, total)}
@@ -815,50 +818,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
           )
         })}
 
-        {/* Pagination: one page is 30 rows. The caption is derived from the
-            clamped page, so it never names a page the filtered list cannot fill. */}
-        <Box
-          data-history-pagination
-          sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25 }}
-        >
-          <Button
-            size="small"
-            variant="text"
-            data-history-prev
-            disabled={!canPrevPage(safePage, total)}
-            onClick={() => setPage(clampPage(safePage - 1, total))}
-            sx={{
-              minWidth: 0,
-              px: 1,
-              fontSize: 11.5,
-              color: 'text.secondary',
-              '&:hover': { color: 'text.primary' }
-            }}
-          >
-            {i18n.t('上一页')}
-          </Button>
-          <Typography
-            data-history-page={safePage}
-            sx={{ fontSize: 11.5, color: 'text.secondary', px: 0.5, whiteSpace: 'nowrap' }}
-          >
-            {pageLabel(safePage, total)}
-          </Typography>
-          <Button
-            size="small"
-            variant="text"
-            data-history-next
-            disabled={!canNextPage(safePage, total)}
-            onClick={() => setPage(clampPage(safePage + 1, total))}
-            sx={{
-              minWidth: 0,
-              px: 1,
-              fontSize: 11.5,
-              color: 'text.secondary',
-              '&:hover': { color: 'text.primary' }
-            }}
-          >
-            {i18n.t('下一页')}
-          </Button>
+        <Box data-history-pagination sx={{ width: '100%' }}>
+          <Pager name="history-top" page={safePage} total={total} size={pageSize} onPage={setPage} onSize={size => patch?.({ listPageSize: size })} />
         </Box>
       </Box>
 
@@ -897,10 +858,11 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               // Header captions live in historyView so the wording is testable.
               const cardCaption = cardLabel(entry)
               const cardRecorded = hasCardName(entry)
-              const providerCaption = providerLabel(entry)
               return (
                 <Box
                   key={entry.id}
+                  data-history-row={entry.id}
+                  title={providerTitle(entry) ?? undefined}
                   sx={{
                     px: 2,
                     py: 1.5,
@@ -932,6 +894,9 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                         overflow: 'hidden'
                       }}
                     >
+                      <Typography component="span" data-history-number={entry.id} sx={{ fontSize: 10.5, fontVariantNumeric: 'tabular-nums', color: 'text.disabled', flexShrink: 0 }}>
+                        #{(safePage - 1) * pageSize + pageItems.indexOf(entry) + 1}
+                      </Typography>
                       <Typography
                         noWrap
                         sx={{ fontSize: 11, color: 'text.disabled', flexShrink: 0 }}
@@ -963,25 +928,6 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                       >
                         {cardCaption}
                       </Typography>
-                      {/* Which saved connection answered. A chain hides a dead
-                          entry behind a healthy one, so the winner is the only way
-                          to tell "did failover kick in". Nothing when unrecorded. */}
-                      {providerCaption && (
-                        <Typography
-                          noWrap
-                          title={providerTitle(entry) ?? undefined}
-                          data-history-provider={entry.id}
-                          sx={{
-                            fontSize: 10,
-                            color: 'text.disabled',
-                            maxWidth: 120,
-                            flexShrink: 1,
-                            minWidth: 0
-                          }}
-                        >
-                          {providerCaption}
-                        </Typography>
-                      )}
                       {label && tone && (
                         <Chip
                           size="small"
@@ -1132,24 +1078,17 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                     </Box>
                   </Box>
 
-                  {body.text && (
-                    <Typography
-                      sx={{
-                        mt: 0.75,
-                        fontSize: 12.5,
-                        lineHeight: 1.65,
-                        color:
-                          body.tone === 'error'
-                            ? 'error.main'
-                            : body.tone === 'muted'
-                              ? 'text.secondary'
-                              : 'text.primary',
-                        whiteSpace: 'pre-wrap'
-                      }}
-                    >
-                      {body.text}
-                    </Typography>
-                  )}
+                  {body.text && <>
+                    <Box data-history-body={entry.id} sx={{ mt: 0.75, fontSize: 12.5, lineHeight: 1.65, overflow: 'hidden', ...(expanded[entry.id] ? {} : { maxHeight: '6.6em' }),
+                      '& [data-card-markdown] *:not(a)': { color: 'inherit !important' }, '& [data-card-markdown] p': { fontSize: '12.5px' } }}>
+                      {expanded[entry.id] || entry.mode === 'ask' ? <MarkdownView text={expanded[entry.id] ? body.text : body.text.slice(0, 400)} sources={entry.sources ?? []} />
+                        : <Typography sx={{ fontSize: 'inherit', lineHeight: 'inherit', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{body.text}</Typography>}
+                    </Box>
+                    {(body.text.length > 160 || body.text.split('\n').length > 4 || !!entry.sources?.length) && <Button size="small" data-history-expand={entry.id} aria-expanded={!!expanded[entry.id]}
+                      sx={{ mt: 0.5, p: 0, minWidth: 0, fontSize: 11.5 }} onClick={() => setExpanded(prev => ({ ...prev, [entry.id]: !prev[entry.id] }))}>
+                      {i18n.t(expanded[entry.id] ? '收起全文' : '展开全文')}
+                    </Button>}
+                  </>}
                   {body.detail && (
                     <Typography
                       sx={{
@@ -1257,7 +1196,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                     </Typography>
                   )}
 
-                  {entry.sources && entry.sources.length > 0 && (
+                  {expanded[entry.id] && entry.sources && entry.sources.length > 0 && (
                     <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                       {entry.sources
                         // Stored URLs came from a search result, so they are still
@@ -1294,6 +1233,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
           </Box>
         </Box>
       ))}
+
+      <Pager name="history-bottom" page={safePage} total={total} size={pageSize} onPage={setPage} onSize={size => patch?.({ listPageSize: size })} />
 
       <FeedbackDialog
         entry={feedbackFor}

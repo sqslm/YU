@@ -333,9 +333,9 @@ export const PAGE_SIZE = 30
  * header can print "第 1 / 1 页" instead of a meaningless "第 1 / 0 页", and an
  * absurd or negative count degrades to that same single page.
  */
-export function pageCount(total: number): number {
+export function pageCount(total: number, size = PAGE_SIZE): number {
   if (!Number.isFinite(total) || total <= 0) return 1
-  return Math.max(1, Math.ceil(Math.floor(total) / PAGE_SIZE))
+  return Math.max(1, Math.ceil(Math.floor(total) / Math.max(1, size)))
 }
 
 /**
@@ -343,8 +343,8 @@ export function pageCount(total: number): number {
  * shrinks `total`, and the page must land on the new last page instead of
  * rendering an empty page with live-looking arrows.
  */
-export function clampPage(page: number, total: number): number {
-  const last = pageCount(total)
+export function clampPage(page: number, total: number, size = PAGE_SIZE): number {
+  const last = pageCount(total, size)
   if (!Number.isFinite(page)) return 1
   const floored = Math.floor(page)
   if (floored < 1) return 1
@@ -352,10 +352,10 @@ export function clampPage(page: number, total: number): number {
 }
 
 /** The rows of one page, always at most {@link PAGE_SIZE} long. */
-export function slicePage<T>(items: readonly T[], page: number): T[] {
-  const safe = clampPage(page, items.length)
-  const start = (safe - 1) * PAGE_SIZE
-  return items.slice(start, start + PAGE_SIZE)
+export function slicePage<T>(items: readonly T[], page: number, size = PAGE_SIZE): T[] {
+  const safe = clampPage(page, items.length, size)
+  const start = (safe - 1) * size
+  return items.slice(start, start + size)
 }
 
 /** True when 上一页 has somewhere to go. */

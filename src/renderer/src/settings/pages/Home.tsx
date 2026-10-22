@@ -119,11 +119,11 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
 
   // Vendor-style lifetime insights: cumulative volume, weighted speaking rate,
   // time saved versus typing, the streak and the apps the text landed in.
-  const insights = useMemo(() => insightsFromStats(stats), [stats])
+  const insights = useMemo(() => insightsFromStats(stats, { topApps: Object.keys(stats.apps).length }), [stats])
   const saved = useMemo(() => savedLabel(insights.savedMs), [insights.savedMs])
 
   /**
-   * Calls across every app in the rollup. `insights.apps` is the top five, so
+   * Calls across every app in the rollup. `insights.apps` contains the full ranked list, so
    * the dialog's centre number comes from the rollup itself: a capped list
    * summed on its own would report "68 次" while the history holds 90.
    */
@@ -814,7 +814,7 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
               {i18n.t('说几句话之后，这里会按 App 统计文字用在了哪里')}
             </Typography>
           ) : (
-            insights.apps.slice(0, 8).map((app, index) => (
+            insights.apps.slice(0, 5).map((app, index) => (
               <AppChip
                 key={app.name}
                 t={t}

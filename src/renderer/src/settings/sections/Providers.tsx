@@ -1,296 +1,65 @@
-import { Box, Stack, Typography } from '@mui/material'
-import type { Settings } from '@shared/types'
+import { useState } from 'react'
+import { Alert, Box, Button, Stack, Typography } from '@mui/material'
+import type { ProviderKind, Settings } from '@shared/types'
 import { profilesOf } from '@shared/profiles'
-import {
-  IconBook,
-  IconCpu,
-  IconGlobe,
-  IconSparkle,
-  IconWaveMic,
-  SettingsGroup,
-  SettingsRow,
-  SettingsNumber
-} from './General'
+import { IconCpu, SettingsGroup, SettingsRow, SettingsNumber } from './General'
 import { ProviderProfiles } from './ProviderProfiles'
 import { LocalModel } from './LocalModel'
 import i18n from '../../i18n'
 
-type Mode = Settings['pipelineMode']
-
-/**
- * Spacing ladder, in 8px units: the mode switch and its banner are page blocks
- * (`PARTITION_GAP`), the cards of one mode are one group (`GROUP_GAP`). The
- * cards themselves keep the same title/content rhythm as every other settings
- * page, because they are the same `SettingsGroup` those pages use.
- */
-const PARTITION_GAP = 3 // 28px
-const GROUP_GAP = 3 // 20px
-
-const MODES: ReadonlyArray<{ value: Mode; label: string; icon: JSX.Element }> = [
-  { value: 'classic', label: '传统模式', icon: <IconCpu /> },
-  { value: 'multimodal', label: '多模态模式', icon: <IconSparkle /> }
+const SERVICES: Array<{ kind: ProviderKind; label: string; hint: string }> = [
+  { kind: 'asr', label: '语音识别', hint: '将录音转换成文字，供分步处理使用。' },
+  { kind: 'llm', label: '文本处理', hint: '用于润色、翻译、Ask 和选区处理，两种语音流程均可使用。' },
+  { kind: 'multimodal', label: '音频模型', hint: '直接理解录音并生成结果，供音频直达使用。' }
 ]
 
-/**
- * The one control on this page that is not a card.
- *
- * It is the same pill language as `Segmented` (2px trough, 26–32px options,
- * one filled option), widened to the content column because picking a pipeline
- * mode is a page-level choice rather than a value inside a row. Each option
- * carries the number of profiles saved for that mode, so the tab answers "is
- * there anything in there?" before it is opened — the counts used to sit on the
- * two partition headers this replaces.
- */
-function ModeTabs({
-  value,
-  counts,
-  onChange
-}: {
-  value: Mode
-  counts: Record<Mode, number>
-  onChange: (value: Mode) => void
-}): JSX.Element {
-  return (
-    <Box
-      role="tablist"
-      aria-label={i18n.t('模型模式')}
-      data-partition-tabs
-      sx={{
-        display: 'flex',
-        gap: '2px',
-        p: '2px',
-        borderRadius: '8px',
-        bgcolor: 'action.hover',
-        border: 1,
-        borderColor: 'divider'
-      }}
-    >
-      {MODES.map((option) => {
-        const selected = option.value === value
-        const count = counts[option.value]
-        return (
-          <Box
-            key={option.value}
-            role="tab"
-            aria-selected={selected}
-            tabIndex={0}
-            data-partition-toggle={option.value}
-            data-partition-open={selected ? 'true' : 'false'}
-            onClick={() => onChange(option.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                onChange(option.value)
-              }
-            }}
-            sx={{
-              position: 'relative',
-              flex: 1,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 0.75,
-              borderRadius: '6px',
-              fontSize: 12,
-              fontWeight: selected ? 600 : 400,
-              whiteSpace: 'nowrap',
-              cursor: 'pointer',
-              color: selected ? 'text.primary' : 'text.secondary',
-              bgcolor: selected ? 'action.selected' : 'transparent',
-              border: 1,
-              borderColor: selected ? 'divider' : 'transparent',
-              transition: 'background-color 120ms, color 120ms',
-              '&:hover': { color: 'text.primary' },
-              '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 }
-            }}
-          >
-            <Box
-              component="span"
-              sx={{
-                display: 'grid',
-                placeItems: 'center',
-                color: selected ? 'primary.main' : 'text.disabled'
-              }}
-            >
-              {option.icon}
-            </Box>
-            <Box component="span">{i18n.t(option.label)}</Box>
-            <Box
-              component="span"
-              data-partition-count={option.value}
-              sx={{
-                minWidth: 16,
-                px: '5px',
-                borderRadius: '999px',
-                fontSize: 10.5,
-                lineHeight: '15px',
-                textAlign: 'center',
-                bgcolor: 'action.hover',
-                color: count > 0 ? 'text.secondary' : 'text.disabled'
-              }}
-            >
-              {count}
-            </Box>
-            {/*
-              The only thing that says which panel is on screen, kept as a hook
-              for the UI scripts that used to read the folded partition headers.
-            */}
-            {selected ? (
-              <Box
-                component="span"
-                aria-hidden
-                data-partition-caret={option.value}
-                sx={{
-                  position: 'absolute',
-                  bottom: 4,
-                  left: '50%',
-                  width: 16,
-                  height: 2,
-                  borderRadius: 1,
-                  bgcolor: 'primary.main',
-                  transform: 'translateX(-50%)'
-                }}
-              />
-            ) : null}
-          </Box>
-        )
-      })}
+/** Choose how audio is handled, then manage connections by the job they do. */
+export function ProvidersSection({ settings, patch }: { settings: Settings; patch: (delta: Partial<Settings>) => void }): JSX.Element {
+  const [service, setService] = useState<ProviderKind>(settings.pipelineMode === 'multimodal' ? 'multimodal' : 'asr')
+  const selected = SERVICES.find(item => item.kind === service)!
+  const list = profilesOf(settings, service)
+  const enabled = list.filter(profile => profile.enabled)
+  const summary = (kind: ProviderKind): string => profilesOf(settings, kind).filter(profile => profile.enabled).map(profile => profile.name).join(' → ') || i18n.t('未启用连接')
+  return <Stack spacing={3} data-models-redesign>
+    <Box>
+      <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1 }}>{i18n.t('语音处理流程')}</Typography>
+      <Box role="group" aria-label={i18n.t('语音处理流程')} sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}>
+        {([
+          { mode: 'classic', title: '分步处理', path: '录音 → 语音识别 → 文本处理', hint: '识别与润色分别选择模型' },
+          { mode: 'multimodal', title: '音频直达', path: '录音 → 音频模型 → 结果', hint: '由支持音频输入的模型直接处理' }
+        ] as const).map(option => <Button key={option.mode} data-model-flow={option.mode} aria-pressed={settings.pipelineMode === option.mode}
+          onClick={() => { patch({ pipelineMode: option.mode }); setService(option.mode === 'classic' ? 'asr' : 'multimodal') }}
+          sx={{ display: 'block', textAlign: 'left', p: 1.75, border: 1, borderColor: settings.pipelineMode === option.mode ? 'primary.main' : 'divider', borderRadius: '10px', bgcolor: settings.pipelineMode === option.mode ? 'action.selected' : 'background.paper', color: 'text.primary' }}>
+          <Typography component="span" sx={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{i18n.t(option.title)}</Typography>
+          <Typography component="span" sx={{ display: 'block', mt: 0.75, fontSize: 11.5, color: 'text.secondary' }}>{i18n.t(option.path)}</Typography>
+          <Typography component="span" sx={{ display: 'block', mt: 0.5, fontSize: 11, color: 'text.disabled' }}>{i18n.t(option.hint)}</Typography>
+        </Button>)}
+      </Box>
+      <Box data-model-active-chain sx={{ mt: 1.25, px: 0.25, fontSize: 11.5, lineHeight: 1.7, color: 'text.secondary', overflowWrap: 'anywhere' }}>
+        {settings.pipelineMode === 'classic'
+          ? <>{i18n.t('语音识别')}：{settings.localAsr.enabled ? i18n.t('本地优先，失败后使用云端') : summary('asr')}<br />{i18n.t('文本处理')}：{summary('llm')}</>
+          : <>{i18n.t('音频模型')}：{summary('multimodal')}<br />{i18n.t('Ask 和选区处理仍使用文本处理连接。')}</>}
+      </Box>
     </Box>
-  )
-}
 
-/**
- * Model connections live only in the saved profile list.
- *
- * One mode is mounted at a time and the other one is not rendered at all: a
- * profile can only belong to one kind, so showing the other mode's list next to
- * this one only invited people to fill in a form that the current pipeline
- * never reads.
- */
-export function ProvidersSection({
-  settings,
-  patch
-}: {
-  settings: Settings
-  patch: (delta: Partial<Settings>) => void
-}): JSX.Element {
-  const patchMm = (delta: Partial<Settings['multimodal']>): void =>
-    patch({ multimodal: { ...settings.multimodal, ...delta } })
-
-  const mode = settings.pipelineMode
-  // Scoped to the mode on screen: a profile saved for the other pipeline never
-  // runs while this one is selected, so saying "nothing is configured" next to a
-  // list that could not fix it would be wrong in both directions.
-  const enabled =
-    mode === 'classic'
-      ? profilesOf(settings, 'asr').filter((profile) => profile.enabled).length +
-        profilesOf(settings, 'llm').filter((profile) => profile.enabled).length
-      : profilesOf(settings, 'multimodal').filter((profile) => profile.enabled).length
-  const counts: Record<Mode, number> = {
-    classic: profilesOf(settings, 'asr').length + profilesOf(settings, 'llm').length,
-    multimodal: profilesOf(settings, 'multimodal').length
-  }
-
-  return (
-    <Stack spacing={PARTITION_GAP}>
-      <Box>
-        <ModeTabs value={mode} counts={counts} onChange={(value) => patch({ pipelineMode: value })} />
-        <Typography
-          sx={{
-            fontSize: 11,
-            color: 'text.secondary',
-            mt: 1,
-            px: 0.25,
-            lineHeight: 1.55,
-            overflowWrap: 'anywhere'
-          }}
-        >
-          {mode === 'multimodal'
-            ? i18n.t('使用多模态模型直接处理录音。')
-            : i18n.t('先识别语音，再使用语言模型处理文字。')}
-        </Typography>
+    <Box>
+      <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1 }}>{i18n.t('模型连接')}</Typography>
+      <Box role="tablist" aria-label={i18n.t('模型连接')} sx={{ display: 'flex', gap: 0.5, borderBottom: 1, borderColor: 'divider', mb: 1.5 }}>
+        {SERVICES.map(item => <Button key={item.kind} role="tab" aria-selected={service === item.kind} data-model-service={item.kind} onClick={() => setService(item.kind)}
+          sx={{ flex: 1, minWidth: 0, borderRadius: '6px 6px 0 0', py: 1, fontSize: 12, color: service === item.kind ? 'text.primary' : 'text.secondary', bgcolor: service === item.kind ? 'action.selected' : 'transparent', borderBottom: 2, borderColor: service === item.kind ? 'primary.main' : 'transparent' }}>
+          {i18n.t(item.label)}<Box component="span" sx={{ ml: 0.75, fontSize: 10.5, color: 'text.disabled' }}>{profilesOf(settings, item.kind).length}</Box>
+        </Button>)}
       </Box>
-
-      {enabled === 0 && (
-        <Box
-          sx={{
-            px: 1.75,
-            py: 1.25,
-            borderRadius: '10px',
-            border: 1,
-            borderColor: 'warning.main',
-            bgcolor: 'action.hover'
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: 11.5,
-              color: 'text.primary',
-              lineHeight: 1.65,
-              overflowWrap: 'anywhere'
-            }}
-          >
-            {i18n.t('尚未启用服务配置，请添加并启用配置，或使用本地语音识别。')}
-          </Typography>
-        </Box>
-      )}
-
-      {/*
-        The panel keeps the partition hooks the page always exposed, and the two
-        modes never coexist: switching tabs swaps this subtree wholesale.
-      */}
-      <Box
-        role="tabpanel"
-        aria-label={mode === 'classic' ? i18n.t('传统模式配置') : i18n.t('多模态模式配置')}
-        data-partition={mode}
-        data-partition-body={mode}
-        data-partition-open="true"
-      >
-        <Stack spacing={GROUP_GAP}>
-          {mode === 'classic' ? (
-            <>
-              <SettingsGroup
-                collapsible
-                icon={<IconWaveMic />}
-                title={i18n.t('语音转写')}
-                hint={i18n.t('将录音转换为文字')}
-              >
-                <ProviderProfiles kind="asr" settings={settings} patch={patch} />
-              </SettingsGroup>
-
-              <SettingsGroup
-                collapsible
-                icon={<IconBook />}
-                title={i18n.t('语言模型')}
-                hint={i18n.t('润色文字、翻译与回答问题')}
-              >
-                <ProviderProfiles kind="llm" settings={settings} patch={patch} />
-              </SettingsGroup>
-            </>
-          ) : (
-            <SettingsGroup collapsible icon={<IconGlobe />} title={i18n.t('多模态模型')} hint={i18n.t('直接理解录音并生成结果')}>
-              <ProviderProfiles kind="multimodal" settings={settings} patch={patch} />
-              <SettingsRow label={i18n.t('单次上限')} description={i18n.t('一次请求最多携带的音频秒数')}>
-                <SettingsNumber
-                  value={settings.multimodal.maxSeconds}
-                  min={5}
-                  max={600}
-                  onChange={(next) => patchMm({ maxSeconds: next })}
-                />
-              </SettingsRow>
-            </SettingsGroup>
-          )}
-        </Stack>
-      </Box>
-
-      {/*
-        Sits below the provider cards rather than inside 语音转写: it is the
-        alternative to a provider, not another profile in the chain, and hiding
-        it inside that card would suggest the two are the same kind of thing.
-      */}
-      <LocalModel settings={settings} patch={patch} />
-
-    </Stack>
-  )
+      <Typography sx={{ mb: 1.5, fontSize: 11.5, color: 'text.secondary', lineHeight: 1.65 }}>{i18n.t(selected.hint)}</Typography>
+      <SettingsGroup icon={<IconCpu />} title={i18n.t(selected.label)}>
+        <ProviderProfiles key={service} kind={service} settings={settings} patch={patch} />
+        {service === 'multimodal' && <SettingsRow label={i18n.t('音频时长上限')} description={i18n.t('每次发送给音频模型的最长录音')}>
+          <SettingsNumber value={settings.multimodal.maxSeconds} min={5} max={600} onChange={maxSeconds => patch({ multimodal: { ...settings.multimodal, maxSeconds } })} />
+        </SettingsRow>}
+      </SettingsGroup>
+      <Typography sx={{ mt: 1, fontSize: 11, color: 'text.disabled' }}>{i18n.t('启用的连接按列表顺序调用，失败后使用下一条；拖动可调整顺序。')}</Typography>
+      {!enabled.length && <Alert severity="info" sx={{ mt: 1.5, fontSize: 12 }}>{i18n.t(service === 'asr' && settings.localAsr.enabled ? '当前优先使用本地识别，可添加云端备用连接。' : '此类服务尚未启用连接。')}</Alert>}
+    </Box>
+    <LocalModel settings={settings} patch={patch} />
+  </Stack>
 }

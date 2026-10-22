@@ -696,3 +696,11 @@ describe('the original transcript', () => {
     expect(originalMatchesResult(entry({ transcript: '', final: '' }))).toBe(false)
   })
 })
+
+it('uses the chosen page size across slicing, clamping and page counts', () => {
+  const values = Array.from({ length: 43 }, (_, i) => i + 1)
+  expect(pageCount(values.length, 10)).toBe(5)
+  expect(slicePage(values, 2, 10)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+  expect(clampPage(8, values.length, 20)).toBe(3)
+  expect(slicePage(values, 3, 20)).toEqual([41, 42, 43])
+})

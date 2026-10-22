@@ -1,3 +1,4 @@
+import { PagedList } from '../Pagination'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
@@ -483,14 +484,14 @@ function RuleKindBlock({
             </Box>
           )}
 
-          {rules.map((rule) => (
+          <PagedList name="Routing-rules">{rules.map((rule) => (
             <RuleRow
               key={rule.id}
               rule={rule}
               onUpdate={(delta) => onUpdate(rule.id, delta)}
               onDelete={() => onDelete(rule.id)}
             />
-          ))}
+          ))}</PagedList>
 
           {draft && (
             <Box
@@ -985,7 +986,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
                 </TableRow>
               </TableHead>
               <TableBody>
-                {windows.map((window, index) => {
+                <PagedList name="Routing-windows">{windows.map((window, index) => {
                   const hit = hitByCreated(window)
                   return (
                     <TableRow
@@ -1049,7 +1050,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
                       </TableCell>
                     </TableRow>
                   )
-                })}
+                })}</PagedList>
               </TableBody>
             </Table>
           )}

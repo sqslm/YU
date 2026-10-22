@@ -306,3 +306,10 @@ describe('normalizeAppList', () => {
     expect(mergeSettings({}).disabledApps).toEqual([])
   })
 })
+
+it('migrates selection shortcuts and validates the shared list page size', () => {
+  expect(mergeSettings({}).hotkeys.selectionKeys.keys).toEqual(['LeftCtrl', 'LeftAlt', 'S'])
+  expect(mergeSettings({ listPageSize: 10 }).listPageSize).toBe(10)
+  expect(mergeSettings({ listPageSize: -2 }).listPageSize).toBe(30)
+  expect(mergeSettings({ hotkeys: { selectionKeys: { keys: [] } } as never }).hotkeys.selectionKeys.keys).toEqual([])
+})
