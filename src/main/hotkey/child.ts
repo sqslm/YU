@@ -198,7 +198,7 @@ function bindingFrom(mode: Binding['mode'], keys: string[]): Binding {
 }
 
 function allDown(keys: number[]): boolean {
-  return keys.every((k) => pressed.has(k))
+  return keys.length > 0 && keys.every((k) => pressed.has(k))
 }
 
 
@@ -539,10 +539,10 @@ port.on('message', (event: { data: unknown }) => {
   if (data.type === 'config') {
     bindings = []
     for (const [mode, keys] of Object.entries(data.bindings)) {
-      bindings.push(bindingFrom(mode as Binding['mode'], keys))
+      if (keys.length) bindings.push(bindingFrom(mode as Binding['mode'], keys))
     }
     bindings.sort((a, b) => b.keys.length - a.keys.length)
-    pasteLast = bindingFrom('dictation', data.pasteLast)
+    pasteLast = data.pasteLast.length ? bindingFrom('dictation', data.pasteLast) : null
     notesBinding = data.notes && data.notes.length > 0 ? bindingFrom('dictation', data.notes) : null
     if (data.activation === 'hold' || data.activation === 'toggle') {
       activation = data.activation

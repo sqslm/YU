@@ -49,8 +49,7 @@ export const PRESET_FIELDS: Record<string, PresetField[]> = {
     {
       key: 'uploadUrl',
       label: mt('上传地址'),
-      required: true,
-      hint: mt('DashScope 只接受公网可访问的 URL，填一个能直接 PUT 音频的地址（OSS 预签名、S3、你自己的中转都行）')
+      hint: mt('仅 Paraformer / Filetrans 异步模型需要；Qwen ASR Flash 直接上传录音，无需填写')
     },
     { key: 'workspace', label: 'Workspace', hint: mt('留空用默认业务空间') }
   ],

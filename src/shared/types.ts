@@ -94,14 +94,13 @@ export interface ProviderSettings {
   /** Extra request headers, one "Name: value" per line. */
   extraHeaders?: string
   /**
-   * How the key travels. Mistral's audio endpoint wants `x-api-key` instead of
-   * `Authorization: Bearer`, and no amount of base-URL editing fixes that.
+   * How the key travels. Official OpenAI/Mistral use Bearer; a custom gateway
+   * may require x-api-key.
    */
   authHeader?: 'bearer' | 'x-api-key'
   /**
-   * Chat path relative to `baseUrl`, for vendors that are OpenAI-shaped but not
-   * at `/chat/completions` (MiniMax: `/text/chatcompletion_v2`). Absent means
-   * the standard path.
+   * Chat path relative to `baseUrl`, for custom gateways that override the
+   * standard /chat/completions path.
    */
   requestPath?: string
   /**
@@ -253,12 +252,22 @@ export type SearchProvider =
  */
 export interface SearchProviderEntry {
   apiKey: string
+  apiKeyEnc?: string
   endpoint: string
   maxResults: number
 }
 
+export interface SearchConnection extends SearchProviderEntry {
+  id: string
+  name: string
+  provider: SearchProvider
+  enabled: boolean
+}
+
 export interface SearchSettings {
   enabled: boolean
+  strategy: 'single' | 'fallback' | 'aggregate'
+  connections: SearchConnection[]
   /** Which backend answers the query. */
   provider: SearchProvider
   /** Per-provider settings; always contains an entry for every provider. */

@@ -121,6 +121,10 @@ export class SettingsStore {
     this.seal(view.polish)
     this.seal(view.multimodal)
     for (const profile of view.profiles) this.seal(profile)
+    for (const entry of Object.values(view.search.providers)) this.seal(entry)
+    for (const entry of view.search.connections) this.seal(entry)
+    // The flat mirror is derived again at load time; never leave its key in clear text.
+    view.search.apiKey = ''
     return view
   }
 
@@ -131,6 +135,9 @@ export class SettingsStore {
     this.unseal(view.polish)
     this.unseal(view.multimodal)
     for (const profile of view.profiles) this.unseal(profile)
+    for (const entry of Object.values(view.search.providers)) this.unseal(entry)
+    for (const entry of view.search.connections) this.unseal(entry)
+    view.search.apiKey = view.search.providers[view.search.provider].apiKey
     return view
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Stack, Switch, Typography } from '@mui/material'
+import { Button, Stack, Switch, Tooltip } from '@mui/material'
 import type { Mode, Settings } from '@shared/types'
 import { Keycaps } from '../keycaps'
 import {
@@ -57,6 +57,7 @@ function codeToToken(code: string, key: string): string | null {
     CapsLock: 'CapsLock'
   }
   if (map[code]) return map[code]
+  if (['Insert', 'Delete', 'Home', 'End', 'PageUp', 'PageDown'].includes(code)) return code
   const keyMatch = /^Key([A-Z])$/.exec(code)
   if (keyMatch) return keyMatch[1]
   const digitMatch = /^Digit([0-9])$/.exec(code)
@@ -80,33 +81,27 @@ export function ShortcutsSection({
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
+  const save = (target: string, keys: string[]): void => {
+    const hotkeys = settingsRef.current.hotkeys
+    if (target === 'pasteLast') patch({ hotkeys: { ...hotkeys, pasteLastKeys: { keys } } })
+    else if (target === 'notes') patch({ hotkeys: { ...hotkeys, notesKeys: { keys } } })
+    else patch({ hotkeys: { ...hotkeys, bindings: { ...hotkeys.bindings, [target]: { keys } } } })
+  }
+
+  const recording = capturing !== null
+  useEffect(() => {
+    if (!recording) return
+    void window.api.settings.captureShortcut(true)
+    return () => { void window.api.settings.captureShortcut(false) }
+  }, [recording])
+
   useEffect(() => {
     if (!capturing) return
-
-    const commit = (target: string, keys: string[]): void => {
-      const current = settingsRef.current
-      if (target === 'pasteLast') {
-        patch({ hotkeys: { ...current.hotkeys, pasteLastKeys: { keys } } })
-        return
-      }
-      if (target === 'notes') {
-        patch({ hotkeys: { ...current.hotkeys, notesKeys: { keys } } })
-        return
-      }
-      patch({
-        hotkeys: {
-          ...current.hotkeys,
-          bindings: {
-            ...current.hotkeys.bindings,
-            [target]: { keys }
-          }
-        }
-      })
-    }
 
     const onKeyDown = (event: KeyboardEvent): void => {
       event.preventDefault()
       event.stopPropagation()
+      if (event.key === 'Escape') { setCapturing(null); heldRef.current = []; setHeld([]); return }
       const token = codeToToken(event.code, event.key)
       if (!token) return
       if (heldRef.current.includes(token)) return
@@ -122,10 +117,9 @@ export function ShortcutsSection({
       if (!current.includes(token)) return
       // Releasing the first key completes the chord; modifiers are released after.
       const isPrimary = current[0] === token
-      heldRef.current = current.filter((item) => item !== token)
-      setHeld(heldRef.current)
+      // Keep the whole recorded chord even when a secondary key is released first.
       if (isPrimary) {
-        commit(capturing, current)
+        save(capturing, current)
         heldRef.current = []
         setHeld([])
         setCapturing(null)
@@ -135,37 +129,51 @@ export function ShortcutsSection({
     const onBlur = (): void => {
       heldRef.current = []
       setHeld([])
+      setCapturing(null)
+    }
+
+    const onOutside = (event: PointerEvent): void => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-shortcut-controls]')) onBlur()
     }
 
     window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('keyup', onKeyUp, true)
     window.addEventListener('blur', onBlur)
+    window.addEventListener('pointerdown', onOutside)
     return () => {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp, true)
       window.removeEventListener('blur', onBlur)
+      window.removeEventListener('pointerdown', onOutside)
     }
   }, [capturing, patch])
 
   const renderRow = (id: string, label: string, hint: string, keys: string[]): JSX.Element => (
     <SettingsRow key={id} label={i18n.t(label)} description={i18n.t(hint)}>
-      {capturing === id && held.length === 0 ? (
-        <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>{i18n.t(i18n.t('请按下按键组合…'))}</Typography>
-      ) : (
-        <Keycaps keys={capturing === id ? held : keys} />
-      )}
+      <Stack direction="row" spacing={0.5} alignItems="center" data-shortcut-controls>
+      <Tooltip title={i18n.t(capturing === id ? '按下组合键，Esc 取消' : '点击快捷键即可重新录制')}>
       <Button
         size="small"
-        variant={capturing === id ? 'contained' : 'text'}
-        sx={{ minWidth: 52, ml: 0.5 }}
+        variant="outlined"
+        data-shortcut-recorder={id}
+        aria-label={i18n.t('修改 {{name}} 快捷键', { name: i18n.t(label) })}
+        aria-pressed={capturing === id}
+        sx={{ minWidth: 150, minHeight: 34, px: 1.25, borderColor: capturing === id ? 'primary.main' : 'divider', color: capturing === id ? 'primary.main' : 'text.primary', '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' } }}
         onClick={() => {
           heldRef.current = []
           setHeld([])
           setCapturing(capturing === id ? null : id)
         }}
       >
-        {capturing === id ? i18n.t('取消') : i18n.t('录制')}
+        {capturing === id && held.length === 0 ? i18n.t('请按下按键组合…')
+          : (capturing === id ? held : keys).length ? <Keycaps keys={capturing === id ? held : keys} /> : i18n.t('未设置')}
       </Button>
+      </Tooltip>
+      <Tooltip title={i18n.t('清空快捷键')}>
+        <span><Button size="small" data-shortcut-clear={id} aria-label={i18n.t('清空 {{name}} 快捷键', { name: i18n.t(label) })}
+          disabled={keys.length === 0 && capturing !== id} sx={{ minWidth: 32, color: 'text.secondary' }} onClick={() => { setCapturing(null); heldRef.current = []; setHeld([]); save(id, []) }}>×</Button></span>
+      </Tooltip>
+      </Stack>
     </SettingsRow>
   )
 
@@ -219,7 +227,7 @@ export function ShortcutsSection({
       </SettingsGroup>
 
       <SettingsHint>
-        {i18n.t('点「录制」后按下组合键，松开第一个键即保存，立即生效。')}
+        {i18n.t('点击快捷键后按下组合键，松开第一个键即保存；Esc 或点击其他区域取消，× 清空。')}
       </SettingsHint>
     </Stack>
   )

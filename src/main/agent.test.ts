@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   fetchWeather: vi.fn()
 }))
 
-vi.mock('./providers/llm', () => ({ complete: mocks.complete }))
+vi.mock('./providers/llm', async importOriginal => ({ ...await importOriginal<typeof import('./providers/llm')>(), complete: mocks.complete }))
 
 vi.mock('./providers/search', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./providers/search')>()
@@ -163,6 +163,17 @@ beforeEach(() => {
 })
 
 describe('native function calling', () => {
+  it('returns DeepSeek reasoning_content with tool history without displaying it', async () => {
+    const fetchImpl = makeFetch(
+      jsonResponse({ choices: [{ message: { content: null, reasoning_content: 'private tool reasoning', tool_calls: [{ id: 'reasoned-tool', type: 'function', function: { name: 'calculate', arguments: '{"expression":"2+2"}' } }] } }] }),
+      textResponse('4')
+    )
+    const result = await askAgent(makeSettings(), '2+2', {}, signal, () => {}, { reset: true, fetchImpl: fetchImpl as unknown as typeof fetch })
+    expect(result.text).toBe('4')
+    const second = JSON.parse(bodies[1])
+    expect(second.messages.find((message: { tool_calls?: unknown }) => message.tool_calls)).toMatchObject({ role: 'assistant', reasoning_content: 'private tool reasoning' })
+    expect(result.text).not.toContain('private')
+  })
   it('executes a tool_call and answers from the tool result', async () => {
     const fetchImpl = makeFetch(
       toolCallResponse('calculate', { expression: '125*36' }),

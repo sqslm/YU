@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { joinUrl, parseHeaderLines } from './asr'
-import { complete, unwrapModelText } from './llm'
+import { adaptChatBody, chatPath, chatRequestBody, complete, unwrapModelText } from './llm'
+import { allPresets } from '@shared/providerPresets'
 
 describe('joinUrl', () => {
   it('joins without doubling slashes', () => {
@@ -14,6 +15,54 @@ describe('joinUrl', () => {
 
   it('keeps a bare host working', () => {
     expect(joinUrl('http://127.0.0.1:8787/v1/', 'models')).toBe('http://127.0.0.1:8787/v1/models')
+  })
+})
+
+describe('vendor chat contracts', () => {
+  it('keeps official MiniMax legacy profiles on the supported chat endpoint while respecting custom gateways', () => {
+    expect(chatPath({ baseUrl: 'https://api.minimax.cn/v1', requestPath: 'text/chatcompletion_v2' })).toBe('chat/completions')
+    expect(chatPath({ baseUrl: 'http://localhost/v1', requestPath: 'text/chatcompletion_v2' })).toBe('text/chatcompletion_v2')
+  })
+
+  it('uses each official vendor’s supported reasoning fields', () => {
+    expect(adaptChatBody({ baseUrl: 'https://api.mistral.ai/v1', model: 'mistral-medium-3-5' }, { thinking: { type: 'disabled' } }, 'off')).toEqual({ reasoning_effort: 'none' })
+    expect(adaptChatBody({ baseUrl: 'https://api.minimax.cn/v1', model: 'MiniMax-M3.1-Flash' }, { thinking: { type: 'disabled' } }, 'off')).toEqual({ reasoning_effort: 'low' })
+    const claude = chatRequestBody({ baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5', temperature: 0.2, effort: 'high' }, { messages: [] })
+    expect(claude).not.toHaveProperty('temperature')
+    expect(claude).not.toHaveProperty('reasoning_effort')
+  })
+  it.each(allPresets().filter(preset => preset.kind === 'llm'))('$name uses its declared endpoint, credentials and chat response', async preset => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'verified' } }] }), { headers: { 'content-type': 'application/json' } }))
+    try {
+      await expect(complete({ ...preset, apiKey: 'test-only-key', model: preset.model || 'test-model', temperature: 0.2, effort: '' }, { messages: [{ role: 'user', content: 'test' }] })).resolves.toBe('verified')
+      expect(fetchMock.mock.calls[0][0]).toBe(joinUrl(preset.baseUrl, preset.requestPath || 'chat/completions'))
+      const init = fetchMock.mock.calls[0][1]!
+      expect(init.headers).toMatchObject({ Authorization: 'Bearer test-only-key' })
+      expect(JSON.parse(String(init.body)).messages).toEqual([{ role: 'user', content: 'test' }])
+    } finally { fetchMock.mockRestore() }
+  })
+
+  it('uses the OpenAI reasoning token field and omits unsupported sampling/thinking fields', () => {
+    const body = chatRequestBody({ baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.5', temperature: 0.2, effort: 'high' }, { messages: [], maxTokens: 2048 })
+    expect(body).toMatchObject({ max_completion_tokens: 2048, reasoning_effort: 'high' })
+    expect(body).not.toHaveProperty('max_tokens')
+    expect(body).not.toHaveProperty('temperature')
+    expect(body).not.toHaveProperty('thinking')
+  })
+
+  it('maps Cohere roles and supported effort values in all chat paths', () => {
+    const body = adaptChatBody({ baseUrl: 'https://api.cohere.ai/compatibility/v1', model: 'command-a' }, { messages: [{ role: 'system', content: 'instruction' }], thinking: { type: 'disabled' } }, 'off')
+    expect(body.messages).toEqual([{ role: 'developer', content: 'instruction' }])
+    expect(body.reasoning_effort).toBe('none')
+    expect(body).not.toHaveProperty('thinking')
+    expect(adaptChatBody({ baseUrl: 'https://api.cohere.ai', model: 'command-a' }, {}, 'medium').reasoning_effort).toBe('high')
+  })
+
+  it('uses Gemini reasoning controls without pretending every model can disable reasoning', () => {
+    const cfg = { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.8-flash' }
+    expect(adaptChatBody(cfg, {}, 'off')).toEqual({ reasoning_effort: 'minimal' })
+    expect(adaptChatBody({ ...cfg, model: 'gemini-2.5-flash' }, {}, 'off')).toEqual({ reasoning_effort: 'none' })
+    expect(adaptChatBody({ baseUrl: 'https://my-gateway.example/v1', model: 'custom' }, {}, 'off')).toEqual({ thinking: { type: 'disabled' } })
   })
 })
 

@@ -4,14 +4,33 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SettingsStore } from './settings'
 
+const cryptoMock = vi.hoisted(() => ({ available: false }))
+
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
-  safeStorage: { isEncryptionAvailable: () => false }
+  safeStorage: { isEncryptionAvailable: () => cryptoMock.available,
+    encryptString: (text: string) => Buffer.from('sealed:' + text),
+    decryptString: (bytes: Buffer) => bytes.toString().replace(/^sealed:/, '') }
 }))
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'typeless-settings-')) })
+beforeEach(async () => { cryptoMock.available = false; dir = await mkdtemp(join(tmpdir(), 'typeless-settings-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+
+it('encrypts every search credential on disk and restores pool and legacy provider keys after restart', async () => {
+  cryptoMock.available = true
+  const file = join(dir, 'settings.json'), store = new SettingsStore(file)
+  await store.load()
+  const current = store.get().search
+  await store.update({ search: { ...current, provider: 'tavily', strategy: 'fallback', providers: { ...current.providers, tavily: { apiKey: 'legacy-search-secret', endpoint: '', maxResults: 5 } },
+    connections: [{ id: 'account-two', name: 'Account 2', provider: 'tavily', enabled: true, apiKey: 'pool-search-secret', endpoint: '', maxResults: 8 }] } })
+  const raw = await readFile(file, 'utf8')
+  expect(raw).not.toContain('legacy-search-secret')
+  expect(raw).not.toContain('pool-search-secret')
+  const loaded = await new SettingsStore(file).load()
+  expect(loaded.search.apiKey).toBe('legacy-search-secret')
+  expect(loaded.search.connections[0]).toMatchObject({ apiKey: 'pool-search-secret', maxResults: 8, enabled: true })
+})
 
 it('preserves connection settings when only a nested option changes', async () => {
   const store = new SettingsStore(join(dir, 'settings.json'))

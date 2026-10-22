@@ -33,7 +33,7 @@ import {
   formatToday
 } from '@shared/prompts'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
-import { complete } from './providers/llm'
+import { adaptChatBody, chatPath, complete } from './providers/llm'
 import { joinUrl, parseHeaderLines } from './providers/asr'
 import { fetchWeather, formatWeather, isWeatherQuery, weatherSource } from './providers/weather'
 import {
@@ -486,7 +486,7 @@ function conversationMessages(system: string, question: string): ChatMessage[] {
 
 function chatUrl(baseUrl: string, requestPath?: string): string {
   const trimmed = (baseUrl || '').trim().replace(/\/+$/, '')
-  const path = (requestPath ?? '').trim().replace(/^\/+/, '') || 'chat/completions'
+  const path = chatPath({ baseUrl, requestPath })
   return trimmed ? joinUrl(trimmed, path) : joinUrl('http://127.0.0.1:8787/v1', path)
 }
 
@@ -530,6 +530,7 @@ interface NativeToolCall {
 interface NativeReply {
   text: string
   toolCalls: NativeToolCall[]
+  reasoningContent?: string
 }
 
 interface NativeOutcome {
@@ -724,6 +725,7 @@ async function postNative(
     body.tools = toolSchemas()
     body.tool_choice = 'auto'
   }
+  adaptChatBody(settings.polish, body, settings.polish.effort)
 
   const outcome = await runWithDeadline(
     async (signal): Promise<NativeReply | null> => {
@@ -770,7 +772,7 @@ async function postNative(
       const rawCalls = message.tool_calls
       const toolCalls = Array.isArray(rawCalls) ? (rawCalls as NativeToolCall[]) : []
       const content = typeof message.content === 'string' ? message.content.trim() : ''
-      return { text: content, toolCalls }
+      return { text: content, toolCalls, ...(typeof message.reasoning_content === 'string' ? { reasoningContent: message.reasoning_content } : {}) }
     },
     options.signal,
     options.timeoutMs ?? LLM_TIMEOUT_MS
@@ -986,7 +988,8 @@ async function nativeToolLoop(
     messages.push({
       role: 'assistant',
       content: reply.text || null,
-      tool_calls: reply.toolCalls
+      tool_calls: reply.toolCalls,
+      ...(reply.reasoningContent ? { reasoning_content: reply.reasoningContent } : {})
     })
 
     const roundStart = Date.now()
@@ -1380,8 +1383,7 @@ async function streamAnswerText(
     stream: true,
     max_tokens: Math.max(256, Math.round(options.maxTokens))
   }
-  if (settings.polish.effort === 'off') body.thinking = { type: 'disabled' }
-  else if (settings.polish.effort) body.reasoning_effort = settings.polish.effort
+  adaptChatBody(settings.polish, body, settings.polish.effort)
 
   const fetchImpl = options.fetchImpl ?? globalThis.fetch
   let spoken = ''

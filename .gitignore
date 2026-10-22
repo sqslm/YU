@@ -4,6 +4,7 @@
 !/.gitattributes
 !/LICENSE
 !/README.md
+!/PROVIDER_API_AUDIT.md
 !/THIRD_PARTY_NOTICES.md
 !/package.json
 !/pnpm-lock.yaml

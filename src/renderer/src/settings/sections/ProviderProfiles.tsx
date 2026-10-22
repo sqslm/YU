@@ -102,7 +102,7 @@ function ProfileRow({
     text: ''
   })
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const preset = profile.preset ? findPreset(profile.preset) : undefined
+  const preset = profile.preset ? findPreset(profile.preset, kind) : undefined
   const dragging = drag.state?.dragId === profile.id
   // The row under the pointer only gets an edge when it is not the dragged one.
   const edge: 'before' | 'after' | null =

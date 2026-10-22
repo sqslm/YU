@@ -13,9 +13,8 @@ export interface ChatRequest {
   temperature?: number
   maxTokens?: number
   /**
-   * UI-facing reasoning effort. `off` becomes `thinking: { type: 'disabled' }`
-   * and nothing else is sent; any other value is sent as `reasoning_effort`;
-   * `''`/undefined leaves both fields out.
+   * UI-facing reasoning effort, translated to the official vendor's supported
+   * parameters. Unknown gateways keep the existing thinking/reasoning contract.
    */
   effort?: string
   signal?: AbortSignal
@@ -28,17 +27,12 @@ const DEFAULT_MAX_TOKENS = 4096
 /**
  * The request body for one chat completion.
  *
- * Effort mapping (the whole point of the `off` option):
- *
- * - `'off'`     -> `thinking: { type: 'disabled' }`, **no** `reasoning_effort`
- * - `'low'|…`   -> `reasoning_effort: <value>`, **no** `thinking`
- * - `''`/absent -> neither field
- *
- * `max_tokens` is always present so a gateway without a default never truncates
- * the polish result, and it is clamped to at least {@link MIN_MAX_TOKENS}.
+ * Start with the gateway contract, then apply the same vendor translations
+ * used by Ask tools and streaming. The output budget is at least MIN_MAX_TOKENS;
+ * OpenAI reasoning models use max_completion_tokens instead of max_tokens.
  */
 export function chatRequestBody(
-  cfg: Pick<PolishSettings, 'model' | 'temperature' | 'effort'>,
+  cfg: Pick<PolishSettings, 'model' | 'temperature' | 'effort'> & { baseUrl?: string },
   req: ChatRequest
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -53,16 +47,75 @@ export function chatRequestBody(
   if (effort === 'off') body.thinking = { type: 'disabled' }
   else if (effort) body.reasoning_effort = effort
 
+  return adaptChatBody(cfg, body, effort)
+}
+
+/** Wire differences shared by polish, Ask tools and Ask streaming. Unknown gateways keep their contract. */
+export function adaptChatBody(
+  cfg: { baseUrl?: string; model: string },
+  body: Record<string, unknown>,
+  effort = ''
+): Record<string, unknown> {
+  let host = ''
+  try {
+    host = new URL(cfg.baseUrl ?? '').hostname.toLowerCase()
+  } catch {
+    // A custom relative URL is validated by its caller.
+  }
+  if (host === 'api.cohere.ai' || host === 'api.cohere.com') {
+    if (Array.isArray(body.messages)) {
+      body.messages = body.messages.map(message =>
+        message.role === 'system' ? { ...message, role: 'developer' } : message
+      )
+    }
+    delete body.thinking
+    if (effort) body.reasoning_effort = effort === 'off' || effort === 'none' ? 'none' : 'high'
+  } else if (host === 'api.openai.com') {
+    delete body.thinking
+    const reasoning = /^(?:gpt-[56](?:[.\-]|$)|o[134](?:-|$))/.test(cfg.model)
+    if (reasoning) {
+      body.max_completion_tokens = body.max_tokens
+      delete body.max_tokens
+      if (effort === 'off') {
+        if (/^gpt-5\.[1-9]/.test(cfg.model)) body.reasoning_effort = 'none'
+        else body.reasoning_effort = /^gpt-5(?:-|$)/.test(cfg.model) ? 'minimal' : 'low'
+      } else if (effort) body.reasoning_effort = effort
+      if (body.reasoning_effort !== 'none') delete body.temperature
+    } else delete body.reasoning_effort
+  } else if (host === 'generativelanguage.googleapis.com') {
+    delete body.thinking
+    if (effort === 'off' || effort === 'none') {
+      body.reasoning_effort = /^gemini-2\.5-(?!pro)/.test(cfg.model) ? 'none' : 'minimal'
+    } else if (effort) {
+      body.reasoning_effort = ['xhigh', 'max', 'ultra'].includes(effort) ? 'high' : effort
+    }
+  } else if (host === 'api.mistral.ai') {
+    delete body.thinking
+    if (effort) body.reasoning_effort = effort === 'off' ? 'none' : ['max', 'ultra'].includes(effort) ? 'xhigh' : effort
+  } else if (host === 'api.anthropic.com') {
+    delete body.reasoning_effort // The compatibility endpoint ignores this field.
+    if (/^claude-(?:opus|sonnet|haiku)-(?:[5-9](?:-|$)|4-[7-9])/.test(cfg.model)) delete body.temperature
+    if (effort === 'off') body.thinking = { type: 'disabled' }
+  } else if (['api.minimax.io', 'api.minimax.cn', 'api.minimaxi.com'].includes(host)) {
+    delete body.thinking
+    if (effort) body.reasoning_effort = ['off', 'none', 'minimal'].includes(effort) ? 'low' : effort === 'ultra' ? 'max' : effort
+  } else {
+    if (effort === 'off') {
+      body.thinking = { type: 'disabled' }
+      delete body.reasoning_effort
+    } else if (effort) body.reasoning_effort = effort
+  }
   return body
 }
 
 /**
  * Where the chat completion lives. Nearly every vendor serves the standard
- * `/chat/completions`, but a few ship their own path (MiniMax answers on
- * `/text/chatcompletion_v2`), so a profile may override it.
+ * `/chat/completions`; a self-hosted gateway may override the path.
  */
-function chatPath(cfg: Pick<PolishSettings, 'requestPath'>): string {
+export function chatPath(cfg: Pick<PolishSettings, 'requestPath' | 'baseUrl'>): string {
   const custom = (cfg.requestPath ?? '').trim().replace(/^\/+/, '')
+  // Old built-in MiniMax profiles used its legacy endpoint with modern models.
+  if (custom === 'text/chatcompletion_v2' && /^https:\/\/api\.(?:minimax\.(?:io|cn)|minimaxi\.com)(?:\/|$)/i.test(cfg.baseUrl)) return 'chat/completions'
   return custom || 'chat/completions'
 }
 

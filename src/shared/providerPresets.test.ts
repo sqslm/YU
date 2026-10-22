@@ -38,6 +38,12 @@ describe('custom preset', () => {
 })
 
 describe('presets', () => {
+  it('resolves shared provider ids by kind so chat rows never show transcription notes', () => {
+    expect(findPreset('deepinfra', 'asr')?.asrAdapter).toBe('deepinfra')
+    expect(findPreset('deepinfra', 'llm')?.asrAdapter).toBeUndefined()
+    expect(findPreset('deepinfra', 'llm')?.baseUrl).toBe('https://api.deepinfra.com/v1/openai')
+    expect(findPreset('google-gemini', 'multimodal')?.protocol).toBe('gemini')
+  })
   it('offers a local server for asr and llm', () => {
     const asrLocal = presetsFor('asr').find((item) => item.id === 'local')
     const llmLocal = presetsFor('llm').find((item) => item.id === 'local')

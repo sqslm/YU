@@ -28,6 +28,7 @@ export interface TypelessApi {
   settings: {
     get(): Promise<Settings>
     update(patch: Partial<Settings>): Promise<Settings>
+    captureShortcut(active: boolean): Promise<void>
     onChanged(callback: (settings: Settings) => void): () => void
   }
   history: {

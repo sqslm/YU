@@ -108,14 +108,27 @@ describe('spec table', () => {
     for (const item of CN_SPECS) {
       expect(item.label).not.toContain('暂不可直连')
       expect(item.hosts.length).toBeGreaterThan(0)
-      expect(item.fields.some((presetField) => presetField.required === true)).toBe(true)
+      if (item.id !== 'aliyun') expect(item.fields.some((presetField) => presetField.required === true)).toBe(true)
     }
-    expect(spec('aliyun').fields.find((item) => item.key === 'uploadUrl')?.required).toBe(true)
+    expect(spec('aliyun').fields.find((item) => item.key === 'uploadUrl')?.required).not.toBe(true)
     expect(spec('tencent').fields.find((item) => item.key === 'region')?.value).toBe('ap-shanghai')
   })
 })
 
 describe('aliyun (DashScope async recording)', () => {
+  it('routes Qwen Flash to synchronous inline audio without an upload URL', async () => {
+    const server = await listen((_seen, res) => json(res, { output: { choices: [{ message: { content: [{ text: '直接识别' }] } }] } }))
+    try {
+      const bytes = wav().bytes
+      expect(await spec('aliyun').run(context(server.baseUrl, {}, { apiKey: 'sk-test' }), input(bytes, 'qwen3-asr-flash', 'zh-CN'))).toBe('直接识别')
+      expect(server.seen).toHaveLength(1)
+      const call = server.seen[0]
+      expect(call.path).toBe('/api/v1/services/aigc/multimodal-generation/generation')
+      expect(call.headers.authorization).toBe('Bearer sk-test')
+      expect(call.headers['x-dashscope-async']).toBeUndefined()
+      expect(JSON.parse(call.body.toString())).toMatchObject({ model: 'qwen3-asr-flash', input: { messages: [{ role: 'user', content: [{ audio: 'data:audio/wav;base64,' + BASE64(bytes) }] }] }, parameters: { asr_options: { enable_itn: false, language: 'zh' } } })
+    } finally { await server.close() }
+  })
   it('PUTs the bytes to uploadUrl, submits, polls twice and downloads the transcript', async () => {
     let base = ''
     let polls = 0

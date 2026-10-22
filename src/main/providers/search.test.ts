@@ -175,7 +175,7 @@ describe('search adapters honour language and time hints', () => {
     const url = new URL(calls[0].url)
     expect(url.searchParams.get('search_lang')).toBe('en')
     expect(url.searchParams.get('country')).toBe('US')
-    expect(url.searchParams.get('freshness')).toBe('day')
+    expect(url.searchParams.get('freshness')).toBe('pd')
     expect(url.searchParams.get('count')).toBe('5')
   })
 
@@ -190,7 +190,9 @@ describe('search adapters honour language and time hints', () => {
     expect(body.time_range).toBe('week')
     expect(body.topic).toBe('news')
     expect(body.query).toBe('AI news')
-    expect(body.api_key).toBe('test-key')
+    expect(body.api_key).toBeUndefined()
+    expect((fetchMock.mock.calls[0][1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer test-key' })
+    expect(body.include_published_date).toBe(true)
   })
 
   it('passes a region to DuckDuckGo without pinning one by default', async () => {

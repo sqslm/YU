@@ -194,7 +194,9 @@ describe('west spec catalogue', () => {
       'cohere',
       'minimax',
       'replicate',
-      'fal'
+      'fal',
+      'deepinfra',
+      'openrouter'
     ])
     for (const entry of WEST_SPECS) {
       expect(entry.label.length).toBeGreaterThan(0)
@@ -280,7 +282,7 @@ describe('assemblyai', () => {
     expect(created.path).toBe('/v2/transcript')
     expect(created.json).toEqual({
       audio_url: 'https://cdn.assemblyai.test/audio.wav',
-      speech_model: 'best',
+      speech_models: ['universal-3-5-pro', 'universal-2'],
       language_code: 'zh'
     })
 
@@ -520,6 +522,15 @@ describe('azure-openai', () => {
 })
 
 describe('cohere', () => {
+  it('keeps the compatibility base intact and puts the file after all required form fields', async () => {
+    const server = await serve((_call, res) => json(res, { text: 'verified' }))
+    expect(await spec('cohere').run(context({ baseUrl: server.origin + '/compatibility/v1' }), input({ language: 'zh' }))).toBe('verified')
+    expect(server.calls[0].path).toBe('/compatibility/v1/audio/transcriptions')
+  })
+
+  it('explains the required language instead of sending a request that cannot succeed', async () => {
+    await expect(spec('cohere').run(context({ baseUrl: 'https://api.cohere.com/v2' }), input({ language: 'auto' }))).rejects.toThrow('指定识别语言')
+  })
   it('posts multipart file + model to the v2 endpoint with Bearer auth', async () => {
     const server = await serve((_call, res) => json(res, { text: ' 你好 ' }))
     const parsed = await spec('cohere').run(context({ baseUrl: server.origin }), input({ language: 'zh' }))
@@ -537,13 +548,37 @@ describe('cohere', () => {
 describe('minimax', () => {
   it('reads data.text when the flat text field is absent', async () => {
     const server = await serve((_call, res) => json(res, { data: { text: ' 你好 ' } }))
-    const parsed = await spec('minimax').run(context({ baseUrl: server.origin }), input())
+    const parsed = await spec('minimax').run(context({ baseUrl: server.origin }), input({ language: 'zh' }))
     expect(parsed).toBe('你好')
 
     const call = server.calls[0]
-    expect(call.path).toBe('/v1/audio/transcriptions')
+    expect(call.path).toBe('/v1/speech_to_text')
     expect(call.headers.authorization).toBe('Bearer test-key')
-    expect(call.fields).toEqual({ model: 'speech-01' })
+    expect(call.headers.language).toBe('zh')
+    expect(call.fields).toEqual({ model: 'asr-1.0' })
+  })
+})
+
+describe('deepinfra', () => {
+  it.each(['/v1/openai', '/v1/inference'])('uses the native model route and audio field from %s', async root => {
+    const server = await serve((_call, res) => json(res, { text: ' verified ' }))
+    expect(await spec('deepinfra').run(context({ baseUrl: server.origin + root }), input({ model: 'openai/whisper-large-v3' }))).toBe('verified')
+    const call = server.calls[0]
+    expect(call.path).toBe('/v1/inference/openai/whisper-large-v3')
+    expect(call.headers.authorization).toBe('Bearer test-key')
+    expect(call.body.toString()).toContain('name="audio"')
+    expect(call.body.toString()).not.toContain('name="file"')
+    expect(call.body.toString()).not.toContain('name="model"')
+  })
+})
+
+describe('openrouter', () => {
+  it('sends JSON base64 audio and a language hint, without multipart', async () => {
+    const server = await serve((_call, res) => json(res, { text: ' verified ' }))
+    expect(await spec('openrouter').run(context({ baseUrl: server.origin + '/api/v1' }), input({ model: 'elevenlabs/scribe-v2', language: 'zh' }))).toBe('verified')
+    expect(server.calls[0].path).toBe('/api/v1/audio/transcriptions')
+    expect(server.calls[0].headers.authorization).toBe('Bearer test-key')
+    expect(server.calls[0].json).toEqual({ model: 'elevenlabs/scribe-v2', language: 'zh', input_audio: { data: Buffer.from(AUDIO).toString('base64'), format: 'wav' } })
   })
 })
 

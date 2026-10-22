@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   fetchWeather: vi.fn()
 }))
 
-vi.mock('./providers/llm', () => ({ complete: mocks.complete }))
+vi.mock('./providers/llm', async importOriginal => ({ ...await importOriginal<typeof import('./providers/llm')>(), complete: mocks.complete }))
 
 vi.mock('./providers/search', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./providers/search')>()

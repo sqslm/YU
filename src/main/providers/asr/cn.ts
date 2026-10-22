@@ -100,6 +100,22 @@ function pause(ctx: AsrAdapterContext, ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function runAliyun(ctx: AsrAdapterContext, input: AsrAdapterInput): Promise<string> {
+  // Qwen Flash is synchronous multimodal audio; only Filetrans/Paraformer use the async URL API.
+  if (/^qwen3-asr-flash(?!-filetrans)/.test(input.model)) {
+    const audio = `data:audio/wav;base64,${base64(input.wav)}`
+    if (input.ms > 300_000 || Buffer.byteLength(audio) > 10 * 1024 * 1024) {
+      throw new ProviderError(mt('Qwen ASR Flash 最多支持 5 分钟且编码后不超过 10 MB 的录音'))
+    }
+    const base = origin(ctx, ALIYUN_BASE).replace(/\/(?:api\/v1|compatible-mode\/v1)$/, '')
+    const language = input.language && input.language !== 'auto' ? languageHint(input.language) : ''
+    const res = await request(ctx, `${base}/api/v1/services/aigc/multimodal-generation/generation`, {
+      method: 'POST',
+      headers: { ...bearer(ctx), 'content-type': 'application/json', ...(field(ctx, 'workspace') ? { 'X-DashScope-WorkSpace': field(ctx, 'workspace') } : {}) },
+      body: JSON.stringify({ model: input.model, input: { messages: [{ role: 'user', content: [{ audio }] }] }, parameters: { result_format: 'message', asr_options: { enable_itn: false, ...(language ? { language } : {}) } } })
+    }, 60_000)
+    failUnless(httpOk(res.status), res.status, res.body, 'Qwen ASR Flash')
+    return pickString(res.json, 'output', 'choices', 0, 'message', 'content', 0, 'text').trim()
+  }
   const uploadUrl = need(ctx, 'uploadUrl', mt('音频直传地址'))
   const base = origin(ctx, ALIYUN_BASE)
   const auth = bearer(ctx)
@@ -618,8 +634,7 @@ export const CN_SPECS: AsrAdapterSpec[] = [
       {
         key: 'uploadUrl',
         label: mt('音频直传地址'),
-        hint: mt('DashScope 只接受公网可访问的音频 URL，请填一个能把文件 PUT 上去的直传地址'),
-        required: true,
+        hint: mt('仅 Paraformer / Filetrans 异步模型需要；Qwen ASR Flash 直接上传录音，无需填写'),
         placeholder: 'https://…'
       },
       {

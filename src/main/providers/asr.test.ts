@@ -1,6 +1,8 @@
 import http from 'node:http'
+import https from 'node:https'
 import type { AddressInfo } from 'node:net'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { allPresets } from '@shared/providerPresets'
 import type { ProviderSettings } from '@shared/types'
 import { ProviderError, joinUrl, parseHeaderLines, resetAsrRuntime, transcribe } from './asr'
 import { SAMPLE_RATE, encodeWav } from '../audio/wav'
@@ -141,6 +143,31 @@ afterEach(() => {
 })
 
 // ---------------------------------------------------------------------------
+
+describe('standard ASR preset wire contracts', () => {
+  it.each(allPresets().filter(preset => preset.kind === 'asr' && !preset.asrAdapter))('$name sends authenticated multipart WAV with the selected model', async preset => {
+    const server = await startServer((_item, res) => json(res, { text: 'verified' }))
+    try {
+      expect((await transcribe({ ...preset, baseUrl: server.baseUrl, apiKey: 'test-key', model: preset.model || 'test-model' }, { wav: encodeWav(speech()), language: 'zh', prompt: 'domain terms' })).text).toBe('verified')
+      const call = server.captured[0]
+      expect(call.path).toBe('/v1/audio/transcriptions')
+      expect(call.headers.authorization).toBe('Bearer test-key')
+      expect(call.fields).toMatchObject({ model: preset.model || 'test-model', response_format: 'json', language: 'zh', prompt: 'domain terms' })
+      expect(call.file?.subarray(0, 4).toString()).toBe('RIFF')
+    } finally { await server.close() }
+  })
+
+  it('corrects an older Mistral x-api-key profile on its official host', async () => {
+    const server = await startServer((_item, res) => json(res, { text: 'verified' }))
+    const local = new URL(server.baseUrl)
+    const spy = vi.spyOn(https, 'request').mockImplementation(((options: http.RequestOptions, callback: (res: http.IncomingMessage) => void) => http.request({ ...options, protocol: 'http:', hostname: local.hostname, port: local.port, agent: undefined }, callback)) as typeof https.request)
+    try {
+      await transcribe({ baseUrl: 'https://api.mistral.ai/v1', apiKey: 'test-key', model: 'voxtral-mini-latest', authHeader: 'x-api-key' }, { wav: encodeWav(speech()) })
+      expect(server.captured[0].headers.authorization).toBe('Bearer test-key')
+      expect(server.captured[0].headers['x-api-key']).toBeUndefined()
+    } finally { spy.mockRestore(); await server.close() }
+  })
+})
 
 describe('url + header helpers (imported by llm.ts)', () => {
   it('joins base urls without duplicating slashes', () => {

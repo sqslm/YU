@@ -10,7 +10,7 @@ import type {
 import { normalizeDomain } from './domain'
 import { buildAskPrompt, buildDictationPrompt, buildTranslatePrompt } from './prompts'
 import { PROMPT_KINDS, defaultPromptLibrary, normalizePromptLibrary } from './promptLibrary'
-import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders } from './searchProviders'
+import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders, normalizeSearchConnections } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL, findModel } from './local-asr'
 
 export const SETTINGS_VERSION = 1
@@ -78,6 +78,8 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   },
   search: {
     enabled: true,
+    strategy: 'single',
+    connections: [],
     provider: 'duckduckgo',
     providers: defaultSearchProviders(),
     // Mirror of providers[provider]; mergeSettings keeps it in sync so adapters
@@ -336,6 +338,8 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   // mirror of whichever provider is active, so switching provider can never
   // leave another backend's key behind.
   merged.search.providers = normalizeSearchProviders(input.search?.providers)
+  merged.search.strategy = pickEnum(input.search?.strategy, ['single', 'fallback', 'aggregate'], 'single')
+  merged.search.connections = normalizeSearchConnections(input.search?.connections)
   const activeEntry = merged.search.providers[merged.search.provider]
   merged.search.apiKey = activeEntry.apiKey
   merged.search.endpoint = activeEntry.endpoint

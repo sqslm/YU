@@ -336,8 +336,8 @@ const assemblyai: AsrAdapterSpec = {
       headers: headersWith(ctx, { ...auth, 'content-type': 'application/json' }),
       body: JSON.stringify({
         audio_url: audioUrl,
-        // AssemblyAI calls the model `speech_model`; `best` is the accurate default.
-        speech_model: input.model || 'best',
+        // speech_model/best was retired; old saved best profiles use the documented model list.
+        speech_models: !input.model || input.model === 'best' ? ['universal-3-5-pro', 'universal-2'] : [input.model],
         ...(language ? { language_code: language } : {})
       })
     })
@@ -767,14 +767,16 @@ const cohere: AsrAdapterSpec = {
   async run(ctx, input) {
     const base = apiBase(ctx, 'https://api.cohere.com/v2')
     const language = languageOf(input)
+    if (!language) throw new ProviderError(mt('Cohere 转写需要指定识别语言，不支持自动检测'))
     const form = multipart([
-      { name: 'file', filename: 'audio.wav', contentType: mimeOf(input), data: input.wav },
       { name: 'model', value: input.model || 'cohere-transcribe-03-2026' },
       // Cohere requires `language`, unlike OpenAI where it is optional; when the
       // user has not chosen one the vendor itself answers with the error.
-      ...(language ? [{ name: 'language', value: language }] : [])
+      { name: 'language', value: language },
+      { name: 'file', filename: 'audio.wav', contentType: mimeOf(input), data: input.wav }
     ])
-    const res = await request(ctx, versioned(base, 'v2', 'audio/transcriptions'), {
+    const endpoint = base.endsWith('/compatibility/v1') ? `${base}/audio/transcriptions` : versioned(base, 'v2', 'audio/transcriptions')
+    const res = await request(ctx, endpoint, {
       method: 'POST',
       headers: headersWith(ctx, {
         ...(ctx.apiKey ? { Authorization: `Bearer ${ctx.apiKey}` } : {}),
@@ -788,8 +790,7 @@ const cohere: AsrAdapterSpec = {
 }
 
 /**
- * MiniMax wraps the transcript one level deeper (`data.text`) than the OpenAI
- * shape, and the host differs between the China and international accounts.
+ * MiniMax uses speech_to_text and an optional language header, not the OpenAI audio path.
  */
 const minimax: AsrAdapterSpec = {
   id: 'minimax',
@@ -797,15 +798,16 @@ const minimax: AsrAdapterSpec = {
   hosts: ['api.minimax.chat', 'api.minimaxi.com', 'api.minimax.io', 'api.minimax.cn'],
   fields: [],
   async run(ctx, input) {
-    const base = apiBase(ctx, 'https://api.minimax.chat/v1')
+    const base = apiBase(ctx, 'https://api.minimax.io/v1')
     const form = multipart([
       { name: 'file', filename: 'audio.wav', contentType: mimeOf(input), data: input.wav },
-      { name: 'model', value: input.model || 'speech-01' }
+      { name: 'model', value: input.model || 'asr-1.0' }
     ])
-    const res = await request(ctx, versioned(base, 'v1', 'audio/transcriptions'), {
+    const res = await request(ctx, versioned(base, 'v1', 'speech_to_text'), {
       method: 'POST',
       headers: headersWith(ctx, {
         ...(ctx.apiKey ? { Authorization: `Bearer ${ctx.apiKey}` } : {}),
+        ...(languageOf(input) ? { language: languageOf(input) } : {}),
         'content-type': form.contentType
       }),
       body: form.body
@@ -941,6 +943,44 @@ const fal: AsrAdapterSpec = {
   }
 }
 
+/** DeepInfra ASR is a native model endpoint with an audio field, not OpenAI file/model. */
+const deepinfra: AsrAdapterSpec = {
+  id: 'deepinfra',
+  label: 'DeepInfra',
+  hosts: ['api.deepinfra.com'],
+  fields: [],
+  async run(ctx, input) {
+    const base = apiBase(ctx, 'https://api.deepinfra.com/v1/inference').replace(/\/v1\/(?:openai|inference)$/, '')
+    const model = (input.model || 'openai/whisper-large-v3').split('/').map(encodeURIComponent).join('/')
+    const form = multipart([{ name: 'audio', filename: 'audio.wav', contentType: mimeOf(input), data: input.wav }])
+    const res = await request(ctx, `${base}/v1/inference/${model}`, {
+      method: 'POST',
+      headers: headersWith(ctx, { ...(ctx.apiKey ? { Authorization: `Bearer ${ctx.apiKey}` } : {}), 'content-type': form.contentType }),
+      body: form.body
+    })
+    failUnless(ok(res.status), res.status, res.body, 'DeepInfra ASR')
+    return pickString(res.json, 'text').trim()
+  }
+}
+
+/** OpenRouter's transcription route accepts JSON input_audio, not multipart. */
+const openrouter: AsrAdapterSpec = {
+  id: 'openrouter',
+  label: 'OpenRouter',
+  hosts: ['openrouter.ai'],
+  fields: [],
+  async run(ctx, input) {
+    const base = apiBase(ctx, 'https://openrouter.ai/api/v1')
+    const res = await request(ctx, `${base}/audio/transcriptions`, {
+      method: 'POST',
+      headers: headersWith(ctx, { ...(ctx.apiKey ? { Authorization: `Bearer ${ctx.apiKey}` } : {}), 'content-type': 'application/json' }),
+      body: JSON.stringify({ model: input.model || 'elevenlabs/scribe-v2', input_audio: { data: Buffer.from(input.wav).toString('base64'), format: 'wav' }, ...(languageOf(input) ? { language: languageOf(input) } : {}) })
+    })
+    failUnless(ok(res.status), res.status, res.body, 'OpenRouter ASR')
+    return pickString(res.json, 'text').trim()
+  }
+}
+
 export const WEST_SPECS: AsrAdapterSpec[] = [
   deepgram,
   assemblyai,
@@ -952,5 +992,7 @@ export const WEST_SPECS: AsrAdapterSpec[] = [
   cohere,
   minimax,
   replicate,
-  fal
+  fal,
+  deepinfra,
+  openrouter
 ]

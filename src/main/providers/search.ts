@@ -416,7 +416,7 @@ function braveParams(query: SearchQuery, cfg: SearchSettings): string {
   })
   if (query.lang) params.set('search_lang', query.lang.toLowerCase())
   if (query.country) params.set('country', query.country.toUpperCase())
-  if (query.freshness) params.set('freshness', query.freshness)
+  if (query.freshness) params.set('freshness', { day: 'pd', week: 'pw', month: 'pm', year: 'py' }[query.freshness])
   return params.toString()
 }
 
@@ -468,8 +468,6 @@ export async function searchBrave(
   return limit(results, cfg.maxResults)
 }
 
-const TAVILY_DAYS: Record<Freshness, number> = { day: 1, week: 7, month: 30, year: 365 }
-
 /** Tavily search API (LLM-oriented snippets). */
 export async function searchTavily(
   cfg: SearchSettings,
@@ -480,22 +478,19 @@ export async function searchTavily(
   if (!query.text) return []
   if (!cfg.apiKey) throw new SearchError(mt('Tavily 需要 API Key'))
   const payload: Record<string, unknown> = {
-    api_key: cfg.apiKey,
     query: query.text,
     max_results: cfg.maxResults,
     include_answer: false,
+    include_published_date: true,
     search_depth: 'basic'
   }
   if (query.freshness) {
     payload.time_range = query.freshness
-    // Tavily's news topic only honours a small `days` window; stay inside it and
-    // let `time_range` carry the rest.
-    if (query.kind === 'news') payload.days = Math.min(TAVILY_DAYS[query.freshness], 30)
   }
   if (query.kind === 'news') payload.topic = 'news'
   const res = await fetch(cfg.endpoint || DEFAULTS.tavily, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify(payload),
     signal
   })
@@ -1101,6 +1096,8 @@ export async function searchDeepSeek(
 }
 
 export interface SearchWebOptions {
+  /** Per-query expansion, e.g. a news roundup; ordinary connections keep their own page size. */
+  maxResults?: number
   /** Overrides `SEARCH_TIMEOUT_MS`; `0` disables the deadline. */
   timeoutMs?: number
 }
@@ -1123,8 +1120,12 @@ export async function searchWeb(
   const timeoutMs = options.timeoutMs ?? SEARCH_TIMEOUT_MS
   const label = `${cfg.provider}/${request.kind ?? 'web'}`
   const started = Date.now()
+  const completed: SearchResult[] = []
   const outcome = await runWithDeadline(
-    (bounded) => dispatchSearch(cfg, request, bounded),
+    (bounded) => {
+      if (!cfg.strategy || cfg.strategy === 'single') return dispatchSearch(cfg, request, bounded)
+      return searchConnections(cfg, request, bounded, timeoutMs, completed, options.maxResults)
+    },
     signal,
     timeoutMs
   )
@@ -1134,6 +1135,7 @@ export async function searchWeb(
     logPerf(`[perf] search ${ms}ms ${label} hits=${outcome.value.length} "${request.text}"`)
     return outcome.value
   }
+  if (completed.length && outcome.reason === 'timeout') return rankSources(completed)
   logPerf(`[perf] search ${ms}ms ${label} ${outcome.reason} "${request.text}"`)
   if (outcome.reason === 'timeout') {
     throw new SearchError(
@@ -1142,6 +1144,31 @@ export async function searchWeb(
   }
   if (outcome.reason === 'aborted') throw new SearchError(mt('检索已取消'))
   throw new SearchError(outcome.error instanceof Error ? outcome.error.message : String(outcome.error))
+}
+
+/** Uses saved, enabled connections without changing any provider's credentials. */
+async function searchConnections(cfg: SearchSettings, query: SearchQuery, signal: AbortSignal, budgetMs: number, completed: SearchResult[], maxResults?: number): Promise<SearchResult[]> {
+  const connections = (cfg.connections ?? []).filter(connection => connection.enabled)
+  if (!connections.length) throw new SearchError(mt('没有启用的搜索连接'))
+  const errors: string[] = []
+  const attempt = async (connection: typeof connections[number]): Promise<SearchResult[]> => {
+    if (signal.aborted) return []
+    const perConnectionMs = budgetMs > 0 ? Math.max(1, Math.floor(budgetMs / Math.ceil(connections.length / (cfg.strategy === 'aggregate' ? 2 : 1)))) : 0
+    const outcome = await runWithDeadline(bounded => dispatchSearch({ ...cfg, ...connection, maxResults: maxResults ?? connection.maxResults }, query, bounded), signal, perConnectionMs)
+    if (outcome.ok && outcome.value.length) { completed.push(...outcome.value); return outcome.value }
+    errors.push(`${connection.name}: ${outcome.ok ? mt('没有检索到结果') : outcome.reason === 'error' ? String(outcome.error instanceof Error ? outcome.error.message : outcome.error) : outcome.reason}`)
+    return []
+  }
+  if (cfg.strategy === 'fallback') {
+    for (const connection of connections) {
+      if (signal.aborted) break
+      const hits = await attempt(connection)
+      if (hits.length) return hits
+    }
+  } else await runPool(connections, 2, async connection => { await attempt(connection) })
+  if (completed.length) return rankSources(completed)
+  if (signal.aborted) throw new SearchError(mt('检索已取消'))
+  throw new SearchError(errors.join('; '))
 }
 
 /**

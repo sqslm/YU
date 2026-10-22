@@ -340,7 +340,10 @@ function ensureSettingsWindow(): BrowserWindow {
   // A fresh window starts with a dialogue-free page, whatever the old one left.
   chromeDimmed = false
   settingsWindow = createSettingsWindow(store.get().themeMode)
+  settingsWindow.on('blur', () => hotkeys?.setCapturing(false))
+  settingsWindow.webContents.on('render-process-gone', () => hotkeys?.setCapturing(false))
   settingsWindow.on('closed', () => {
+    hotkeys?.setCapturing(false)
     settingsWindow = null
   })
   return settingsWindow
@@ -573,6 +576,9 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  ipcMain.handle('settings:capture-shortcut', (event, active: boolean) => {
+    if (event.sender === settingsWindow?.webContents) hotkeys?.setCapturing(active === true)
+  })
   ipcMain.handle('settings:get', () => store.get())
   ipcMain.handle('settings:update', async (_event, patch: Partial<Settings>) => {
     const previous = store.get()

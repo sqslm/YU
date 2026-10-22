@@ -7,6 +7,19 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  'Qwen ASR Flash 最多支持 5 分钟且编码后不超过 10 MB 的录音': 'Qwen ASR Flash supports recordings up to 5 minutes and 10 MB after encoding',
+  '仅 Paraformer / Filetrans 异步模型需要；Qwen ASR Flash 直接上传录音，无需填写': 'Required only for asynchronous Paraformer / Filetrans models; Qwen ASR Flash uploads audio directly',
+  '当前官方音频接口文档不可用；请先向供应商确认可用的语音端点与模型，聊天地址不代表支持转写。': 'The current audio endpoint documentation is unavailable. Confirm the speech endpoint and model with the provider; a chat endpoint does not imply transcription support.',
+  '使用原生 /v1/inference/{模型} 接口和 audio 文件字段；与聊天的 OpenAI 兼容接口不同。': 'Uses the native /v1/inference/{model} endpoint and audio file field, separate from the OpenAI-compatible chat API.',
+  '使用 Cohere 转写接口；需要在语音设置中指定识别语言，不支持自动检测。': 'Uses Cohere transcription. Select an explicit recognition language in speech settings; automatic detection is unsupported.',
+  '使用 /v1/speech_to_text，语言放在 language 请求头，默认模型 asr-1.0。': 'Uses /v1/speech_to_text with an optional language header and the default asr-1.0 model.',
+  'Qwen ASR Flash 直接提交音频；Paraformer / Filetrans 使用上传地址和异步任务。地域和业务空间须与密钥匹配。': 'Qwen ASR Flash submits audio directly; Paraformer / Filetrans use an upload URL and asynchronous jobs. Region and workspace must match the key.',
+  '使用 /v1/chat/completions；M3 推理默认开启，最低深度为 low。': 'Uses /v1/chat/completions; M3 reasoning is enabled by default with a minimum effort of low.',
+  '转写使用 JSON input_audio（Base64 WAV），模型须来自 OpenRouter 语音转文字目录。': 'Transcription uses JSON input_audio (Base64 WAV); choose a model from the OpenRouter speech-to-text catalog.',
+  '没有启用的搜索连接': 'No search connections are enabled',
+  'Cohere 转写需要指定识别语言，不支持自动检测': 'Cohere transcription requires an explicit recognition language; automatic detection is not supported',
+  '多模态音频请求超过 20 MB，请缩短录音': 'The inline audio request exceeds 20 MB; shorten the recording',
+  '使用 Bearer 鉴权，multipart 文件字段 file、模型字段 model；与 OpenAI 转写兼容。': 'Uses Bearer authentication and multipart file/model fields, compatible with OpenAI transcription.',
   '请先配置语音转写模型': 'Configure a speech transcription model first',
   '录音文件不能超过 128 MB': 'Recordings must be no larger than 128 MB',
   '请选择 WAV、MP3、M4A 或 OGG 录音': 'Select a WAV, MP3, M4A or OGG recording',

@@ -1,4 +1,4 @@
-import type { SearchProvider, SearchProviderEntry, SearchSettings } from './types'
+import type { SearchConnection, SearchProvider, SearchProviderEntry, SearchSettings } from './types'
 import { mt } from './mainI18n'
 
 /**
@@ -263,6 +263,7 @@ export function normalizeSearchProviders(input: unknown): Record<SearchProvider,
     const entry = source[provider] ?? {}
     providers[provider] = {
       apiKey: text(entry.apiKey),
+      ...(typeof entry.apiKeyEnc === 'string' ? { apiKeyEnc: entry.apiKeyEnc } : {}),
       endpoint: text(entry.endpoint),
       maxResults: clampResults(entry.maxResults, 5)
     }
@@ -272,4 +273,21 @@ export function normalizeSearchProviders(input: unknown): Record<SearchProvider,
 
 export function activeSearchEntry(search: SearchSettings): SearchProviderEntry {
   return search.providers[search.provider] ?? defaultSearchEntry(search.provider)
+}
+
+export function normalizeSearchConnections(input: unknown): SearchConnection[] {
+  if (!Array.isArray(input)) return []
+  const ids = new Set<string>()
+  const connections: SearchConnection[] = []
+  for (const value of input) {
+    if (!value || typeof value !== 'object' || !isSearchProvider(value.provider)) continue
+    const id = text(value.id)
+    const provider = value.provider as SearchProvider
+    if (!id || ids.has(id)) continue
+    ids.add(id)
+    connections.push({ id, name: text(value.name).trim() || SEARCH_PROVIDER_LABEL[provider], provider,
+      enabled: value.enabled !== false, apiKey: text(value.apiKey), endpoint: text(value.endpoint), maxResults: clampResults(value.maxResults, 5),
+      ...(typeof value.apiKeyEnc === 'string' ? { apiKeyEnc: value.apiKeyEnc } : {}) })
+  }
+  return connections
 }

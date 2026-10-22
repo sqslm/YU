@@ -22,17 +22,17 @@ export async function generateFromAudio(
 ): Promise<string> {
   if (!cfg.baseUrl) throw new ProviderError(mt('多模态 base URL 为空'))
   if (!cfg.model) throw new ProviderError(mt('多模态模型为空'))
-  if (!cfg.apiKey) throw new ProviderError(mt('多模态 API Key 为空'))
+  if (!cfg.apiKey && new URL(cfg.baseUrl).hostname === 'generativelanguage.googleapis.com') throw new ProviderError(mt('多模态 API Key 为空'))
 
   const base = cfg.baseUrl.replace(/\/+$/, '')
-  const url = `${base}/models/${encodeURIComponent(cfg.model)}:generateContent`
+  const url = `${base}/models/${encodeURIComponent(cfg.model.replace(/^models\//, ''))}:generateContent`
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...parseHeaderLines(cfg.extraHeaders)
   }
   // Google accepts either header; the key stays out of the query string so it
   // never shows up in proxy logs.
-  headers['x-goog-api-key'] = cfg.apiKey
+  if (cfg.apiKey) headers['x-goog-api-key'] = cfg.apiKey
 
   const body = {
     systemInstruction: { parts: [{ text: req.prompt }] },
@@ -56,11 +56,13 @@ export async function generateFromAudio(
     }
   }
 
+  const jsonBody = JSON.stringify(body)
+  if (Buffer.byteLength(jsonBody) > 20 * 1024 * 1024) throw new ProviderError(mt('多模态音频请求超过 20 MB，请缩短录音'))
   const res = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
-    signal: req.signal
+    body: jsonBody,
+    signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000)
   })
   const text = await res.text()
   if (!res.ok) {
@@ -72,7 +74,7 @@ export async function generateFromAudio(
   }
 
   let parsed: {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } ; finishReason?: string }>
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } ; finishReason?: string }>
     promptFeedback?: { blockReason?: string }
   }
   try {
@@ -85,6 +87,7 @@ export async function generateFromAudio(
   if (blocked) throw new ProviderError(mt('多模态请求被拒绝：{{reason}}', { reason: blocked }))
 
   const content = (parsed.candidates?.[0]?.content?.parts ?? [])
+    .filter(part => !part.thought)
     .map((part) => part.text ?? '')
     .join('')
     .trim()

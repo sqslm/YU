@@ -1,12 +1,8 @@
 /**
  * Built-in provider presets.
  *
- * Every entry was checked against the vendor's own documentation on
- * 2026-10-19 (sources at the repo root: `ASR_PROVIDERS_VERIFIED.md` and
- * `providers.json`); the ASR vendors added later, plus Cohere and StepFun, were
- * re-checked on 2026-10-21 against the live docs pages.
- * The point of a preset is that the user only has to paste an
- * API key: `baseUrl` and `model` are values that actually work, not guesses.
+ * Protocol checks and known limitations are recorded in PROVIDER_API_AUDIT.md.
+ * Presets are starting values; model availability and account access vary by vendor.
  *
  * `dropIn: false` is honest about what this client cannot do yet — a provider
  * that wants a signature, a different path, or a two-step upload is listed so it
@@ -84,7 +80,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.siliconflow.cn/v1',
     model: 'FunAudioLLM/SenseVoiceSmall',
     keyUrl: 'https://cloud.siliconflow.cn/account/ak',
-    docsUrl: 'https://docs.siliconflow.cn/cn/api-reference/audio/create-audio-transcriptions',
+    docsUrl: 'https://docs.siliconflow.cn/docs/api/audio-transcriptions-post',
     notes: mt('国内直连；SenseVoice 中文强、带情感/事件标签时会被一并转写。'),
     dropIn: true
   },
@@ -96,7 +92,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.together.ai/v1',
     model: 'openai/whisper-large-v3',
     keyUrl: 'https://api.together.ai/settings/projects/~current/api-keys',
-    docsUrl: 'https://docs.together.ai/docs/audio-transcription',
+    docsUrl: 'https://docs.together.ai/reference/audio-transcriptions',
     notes: mt('支持长音频（单文件 4 小时 / 80 MB），适合整段会议。'),
     dropIn: true
   },
@@ -108,10 +104,9 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.mistral.ai/v1',
     model: 'voxtral-mini-latest',
     models: ['voxtral-mini-latest', 'voxtral-small-latest'],
-    authHeader: 'x-api-key',
     keyUrl: 'https://console.mistral.ai/api-keys',
     docsUrl: 'https://docs.mistral.ai/capabilities/audio/',
-    notes: mt('鉴权头是 x-api-key（不是 Bearer），模板已带好；文件字段名 file、模型参数 model，与 OpenAI 一致。'),
+    notes: mt('使用 Bearer 鉴权，multipart 文件字段 file、模型字段 model；与 OpenAI 转写兼容。'),
     dropIn: true
   },
   {
@@ -141,13 +136,14 @@ const ASR_PRESETS: ProviderPreset[] = [
   {
     id: 'openrouter',
     name: 'OpenRouter',
+    asrAdapter: 'openrouter',
     kind: 'asr',
     protocol: 'openai',
     baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'openai/whisper-large-v3-turbo',
+    model: 'elevenlabs/scribe-v2',
     keyUrl: 'https://openrouter.ai/settings/keys',
-    docsUrl: 'https://openrouter.ai/docs/api/reference/audio-transcriptions',
-    notes: mt('一个 Key 通吃多家转写模型，模型名按 OpenRouter 目录写。'),
+    docsUrl: 'https://openrouter.ai/docs/cookbook/audio/push-to-talk-button',
+    notes: mt('转写使用 JSON input_audio（Base64 WAV），模型须来自 OpenRouter 语音转文字目录。'),
     dropIn: true
   },
   {
@@ -171,22 +167,21 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['accounts/fireworks/models/whisper-v3', 'whisper-v3'],
     keyUrl: 'https://app.fireworks.ai/settings/users/api-keys',
     docsUrl: 'https://docs.fireworks.ai/api-reference/audio-transcriptions',
-    // The same key and the same base serve chat, so one profile covers polish
-    // and dictation; only the path differs.
-    notes: mt('音频与聊天同一个根、同一个 Key；模型全名是 accounts/fireworks/models/whisper-v3，短别名 whisper-v3 通常也能解析。'),
+    notes: mt('当前官方音频接口文档不可用；请先向供应商确认可用的语音端点与模型，聊天地址不代表支持转写。'),
     dropIn: true
   },
   {
     id: 'deepinfra',
     name: 'DeepInfra',
+    asrAdapter: 'deepinfra',
     kind: 'asr',
     protocol: 'openai',
-    baseUrl: 'https://api.deepinfra.com/v1/openai',
+    baseUrl: 'https://api.deepinfra.com/v1/inference',
     model: 'openai/whisper-large-v3',
     models: ['openai/whisper-large-v3'],
     keyUrl: 'https://deepinfra.com/dash/api_keys',
-    docsUrl: 'https://deepinfra.com/docs/openai_api',
-    notes: mt('兼容根是 /v1/openai（少一层会 404）；音频模型按 openai/ 前缀命名。'),
+    docsUrl: 'https://docs.deepinfra.com/apis/speech',
+    notes: mt('使用原生 /v1/inference/{模型} 接口和 audio 文件字段；与聊天的 OpenAI 兼容接口不同。'),
     dropIn: true
   },
 
@@ -203,7 +198,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['cohere-transcribe-03-2026'],
     keyUrl: 'https://dashboard.cohere.com/api-keys',
     docsUrl: 'https://docs.cohere.com/docs/compatibility-api',
-    notes: mt('适配器按 Cohere 的 /v2/audio/transcriptions 发 multipart，language 必填项由适配器补齐。'),
+    notes: mt('使用 Cohere 转写接口；需要在语音设置中指定识别语言，不支持自动检测。'),
     dropIn: true
   },
   {
@@ -216,7 +211,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'asr-1.0',
     requestPath: 'speech_to_text',
     docsUrl: 'https://platform.minimax.io/docs/api-reference/speech-to-text',
-    notes: mt('适配器走 /v1/audio/transcriptions，语言放在请求头而不是表单里。'),
+    notes: mt('使用 /v1/speech_to_text，语言放在 language 请求头，默认模型 asr-1.0。'),
     dropIn: true
   },
   {
@@ -252,9 +247,10 @@ const ASR_PRESETS: ProviderPreset[] = [
     kind: 'asr',
     protocol: 'openai',
     baseUrl: 'https://api.assemblyai.com/v2',
-    model: 'best',
+    model: 'universal-2',
+    models: ['universal-2', 'universal-3-5-pro'],
     keyUrl: 'https://www.assemblyai.com/app/api-keys',
-    docsUrl: 'https://www.assemblyai.com/docs/api-reference/transcripts',
+    docsUrl: 'https://www.assemblyai.com/docs/pre-recorded-audio/api-reference/transcripts/submit',
     notes: mt('适配器先 /v2/upload 再提交 transcript，然后轮询到 completed。'),
     dropIn: true
   },
@@ -322,7 +318,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'qwen3-asr-flash',
     keyUrl: 'https://bailian.console.aliyun.com/model/settings/api-key',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/qwen-asr',
-    notes: mt('适配器先 PUT 到「上传地址」拿公网 URL，再提交异步任务并轮询（DashScope 只收公网 URL）。'),
+    notes: mt('Qwen ASR Flash 直接提交音频；Paraformer / Filetrans 使用上传地址和异步任务。地域和业务空间须与密钥匹配。'),
     dropIn: true
   },
   {
@@ -692,10 +688,9 @@ const LLM_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.minimax.cn/v1',
     model: 'MiniMax-M3.1-Flash',
     models: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
-    requestPath: 'text/chatcompletion_v2',
     keyUrl: 'https://platform.minimax.cn/user-center/basic-information/interface-key',
-    docsUrl: 'https://platform.minimax.cn/docs/api-reference/text-post',
-    notes: mt('chat 路径是 /text/chatcompletion_v2（本客户端按此发送）。'),
+    docsUrl: 'https://platform.minimax.io/docs/api-reference/text-chat-openai',
+    notes: mt('使用 /v1/chat/completions；M3 推理默认开启，最低深度为 low。'),
     dropIn: true
   },
   {
@@ -868,9 +863,9 @@ export function presetsFor(kind: ProviderKind): ProviderPreset[] {
   return [customPreset(kind), ...mine.filter((preset) => preset.dropIn), ...mine.filter((preset) => !preset.dropIn)]
 }
 
-export function findPreset(id: string): ProviderPreset | undefined {
+export function findPreset(id: string, kind?: ProviderKind): ProviderPreset | undefined {
   if (id === CUSTOM_PRESET_ID) return undefined
-  return allPresets().find((preset) => preset.id === id)
+  return allPresets().find((preset) => preset.id === id && (!kind || preset.kind === kind))
 }
 
 /** Applies a preset to a profile draft: fills the connection, leaves the key. */

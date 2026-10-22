@@ -225,7 +225,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
   // Roundups request a full page per topic, then keep the whole deduped union.
   // Ordinary lookup settings remain unchanged, including the saved provider entry.
   const searchSettings = plan.digest ? { ...ctx.settings.search, maxResults: MAX_SEARCH_RESULTS } : ctx.settings.search
-  const rankOptions = { maxAgeHours: hoursForFreshness(explicitFreshness ?? plan.freshness), ...(plan.digest ? {} : { limit }) }
+  const rankOptions = { maxAgeHours: hoursForFreshness(explicitFreshness ?? plan.freshness), ...(plan.digest || ctx.settings.search.strategy === 'aggregate' ? {} : { limit }) }
   if (explicitFreshness) {
     plan.freshness = explicitFreshness
     for (const planned of plan.queries) planned.freshness = explicitFreshness
@@ -253,7 +253,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       // Keep the three-argument call when no ceiling was overridden: callers and
       // tests treat a provider call as `(cfg, input, signal)`.
       const results = searchTimeout
-        ? await searchWeb(searchSettings, input, ctx.signal, { timeoutMs: searchTimeout })
+        ? await searchWeb(searchSettings, input, ctx.signal, { timeoutMs: searchTimeout, ...(plan.digest ? { maxResults: MAX_SEARCH_RESULTS } : {}) })
         : await searchWeb(searchSettings, input, ctx.signal)
       rounds[index] = { query: planned, results }
     } catch (err) {

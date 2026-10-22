@@ -177,6 +177,15 @@ describe('get_weather', () => {
 })
 
 describe('web_search', () => {
+  it('does not trim an aggregated ordinary query back to the legacy page size', async () => {
+    mocks.searchWeb.mockResolvedValue([
+      { title: 'Cedar model', url: 'https://cedar.test', snippet: 'one' },
+      { title: 'Maple robotics', url: 'https://maple.test', snippet: 'two' },
+      { title: 'Willow hardware', url: 'https://willow.test', snippet: 'three' }
+    ])
+    const outcome = await runTool('web_search', { query: 'compare products' }, makeContext({ question: 'compare products', settings: makeSettings({ maxResults: 1, strategy: 'aggregate' }) }))
+    expect(outcome.sources).toHaveLength(3)
+  })
   it('merges all roundup topics beyond the saved single-query count, removing repeats and stale news', async () => {
     let call = 0
     const names = ['Maple', 'Cedar', 'Willow', 'Birch', 'Aspen', 'Elm']

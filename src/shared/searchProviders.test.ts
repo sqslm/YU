@@ -13,12 +13,27 @@ import {
   defaultSearchEntry,
   defaultSearchProviders,
   isSearchProvider,
-  normalizeSearchProviders
+  normalizeSearchProviders,
+  normalizeSearchConnections
 } from './searchProviders'
 import type { SearchProvider, SearchSettings } from './types'
 
 /** The four backends that existed before the catalogue grew. */
 const LEGACY: SearchProvider[] = ['duckduckgo', 'tavily', 'brave', 'searxng']
+
+describe('search connection migration', () => {
+  it('keeps independent same-provider keys, order, enabled flags and encrypted data', () => {
+    const connections = normalizeSearchConnections([
+      { id: 'one', provider: 'tavily', apiKey: 'one', maxResults: 99 },
+      { id: 'two', name: ' Secondary ', provider: 'tavily', apiKey: '', apiKeyEnc: 'encrypted', enabled: false, maxResults: 2 },
+      { id: 'two', provider: 'brave' }, { id: '', provider: 'tavily' }, { id: 'bad', provider: 'unknown' }
+    ])
+    expect(connections).toHaveLength(2)
+    expect(connections[0]).toMatchObject({ id: 'one', provider: 'tavily', apiKey: 'one', maxResults: 10, enabled: true })
+    expect(connections[1]).toMatchObject({ id: 'two', name: 'Secondary', apiKeyEnc: 'encrypted', enabled: false, maxResults: 2 })
+    expect(normalizeSearchConnections(undefined)).toEqual([])
+  })
+})
 
 describe('search provider catalogue', () => {
   it('keeps the legacy backends first so the menu order does not shuffle', () => {

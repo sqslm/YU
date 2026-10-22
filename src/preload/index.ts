@@ -21,6 +21,7 @@ const api: TypelessApi = {
     get: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
     update: (patch: Partial<Settings>): Promise<Settings> =>
       ipcRenderer.invoke('settings:update', patch),
+    captureShortcut: (active: boolean): Promise<void> => ipcRenderer.invoke('settings:capture-shortcut', active),
     onChanged: (callback: (settings: Settings) => void): (() => void) => {
       const listener = (_event: unknown, settings: Settings): void => callback(settings)
       ipcRenderer.on('settings:changed', listener)

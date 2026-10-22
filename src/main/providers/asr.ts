@@ -428,13 +428,12 @@ async function encodeForUpload(
 /**
  * Where the key goes.
  *
- * OpenAI-compatible gateways read `Authorization: Bearer …`; a few vendors
- * (Mistral among them) require `x-api-key` instead, and sending the wrong one
- * is a 401 rather than a helpful error.
+ * OpenAI and Mistral use Bearer; custom gateways may explicitly choose x-api-key.
  */
 function applyAuth(headers: Record<string, string>, cfg: ProviderSettings): void {
   if (!cfg.apiKey) return
-  if (cfg.authHeader === 'x-api-key') headers['x-api-key'] = cfg.apiKey
+  const mistral = new URL(cfg.baseUrl).hostname === 'api.mistral.ai'
+  if (cfg.authHeader === 'x-api-key' && !mistral) headers['x-api-key'] = cfg.apiKey
   else headers.Authorization = `Bearer ${cfg.apiKey}`
 }
 

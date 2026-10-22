@@ -54,6 +54,7 @@ export class HotkeyHost {
   private stopping = false
   /** Mirrors the answer card's visibility in the hook; see `setCardOpen`. */
   private cardOpen = false
+  private capturing = false
 
   constructor(
     private readonly onEvent: (event: HotkeyHostEvent) => void,
@@ -148,7 +149,7 @@ export class HotkeyHost {
       notes: settings.hotkeys.notesKeys?.keys ?? [],
       activation: settings.activationMode
     })
-    this.proc.postMessage({ type: 'enabled', value: settings.hotkeys.enabled })
+    this.proc.postMessage({ type: 'enabled', value: settings.hotkeys.enabled && !this.capturing })
     // A re-spawned child starts with the card flag cleared; restore it so ESC
     // keeps working on a card that was already up when the hook restarted.
     this.proc.postMessage({ type: 'card', open: this.cardOpen })
@@ -165,6 +166,11 @@ export class HotkeyHost {
   setCardOpen(open: boolean): void {
     this.cardOpen = open
     this.proc?.postMessage({ type: 'card', open })
+  }
+
+  setCapturing(active: boolean): void {
+    this.capturing = active
+    this.proc?.postMessage({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !active })
   }
 
   /**

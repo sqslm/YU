@@ -1,5 +1,6 @@
-import { Box, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
-import type { SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
+import { useState } from 'react'
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
+import type { SearchConnection, SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
 import {
   SEARCH_PROVIDER_CAVEAT,
   SEARCH_PROVIDER_ENDPOINT_HINT,
@@ -63,6 +64,7 @@ export function endpointHelperText(provider: SearchProvider, endpoint: string): 
 
 export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
   const search = settings.search
+  const [editing, setEditing] = useState<SearchConnection | null>(null)
 
   /**
    * The flat `apiKey`/`endpoint`/`maxResults` fields are a mirror the main
@@ -76,6 +78,16 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
   // object has to travel with every change or sibling keys would be dropped.
   const update = (delta: Partial<SearchSettings>): void =>
     patch({ search: { ...search, ...delta } })
+
+  const connections = search.connections ?? []
+  const updateConnection = (id: string, delta: Partial<SearchConnection>): void =>
+    update({ connections: connections.map(connection => connection.id === id ? { ...connection, ...delta } : connection) })
+  const move = (index: number, direction: number): void => {
+    const next = [...connections], target = index + direction
+    if (target < 0 || target >= next.length) return
+    ;[next[index], next[target]] = [next[target], next[index]]
+    update({ connections: next })
+  }
 
   /**
    * Writes only the active provider's slot. Spreading `providers` first keeps
@@ -116,6 +128,29 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
         </SettingsRow>
       </SettingsGroup>
 
+      <SettingsGroup icon={<IconSliders />} title={i18n.t('调用方式')}>
+        <SettingsRow label={i18n.t('搜索调用方式')} description={i18n.t('顺序备用节省重复请求；合并来源会查询多个连接并合并结果。')}>
+          <TextField select sx={controlSx} value={search.strategy ?? 'single'} data-search-strategy onChange={event => update({ strategy: event.target.value as SearchSettings['strategy'] })}>
+            <MenuItem value="single">{i18n.t('单一服务')}</MenuItem>
+            <MenuItem value="fallback">{i18n.t('顺序备用')}</MenuItem>
+            <MenuItem value="aggregate">{i18n.t('合并来源')}</MenuItem>
+          </TextField>
+        </SettingsRow>
+      </SettingsGroup>
+
+      {search.strategy && search.strategy !== 'single' && <SettingsGroup icon={<IconMagnifier />} title={i18n.t('搜索连接')}>
+        {connections.map((connection, index) => <Box key={connection.id} data-search-connection={connection.id} title={connection.name} sx={{ '& p': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }}><SettingsRow label={connection.name} description={SEARCH_PROVIDER_LABEL[connection.provider]}>
+          <Switch size="small" checked={connection.enabled} inputProps={{ 'aria-label': i18n.t('启用 {{name}}', { name: connection.name }) }} onChange={(_, enabled) => updateConnection(connection.id, { enabled })} />
+          <Button size="small" onClick={() => setEditing({ ...connection })}>{i18n.t('编辑')}</Button>
+          <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('上移 {{name}}', { name: connection.name })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
+          <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('下移 {{name}}', { name: connection.name })} disabled={index === connections.length - 1} onClick={() => move(index, 1)}>↓</Button>
+          <Button size="small" color="error" onClick={() => update({ connections: connections.filter(item => item.id !== connection.id) })}>{i18n.t('删除')}</Button>
+        </SettingsRow></Box>)}
+        {!connections.length && <SettingsHint>{i18n.t('添加已授权的搜索连接，可保存同一服务的多把密钥。')}</SettingsHint>}
+        <Box sx={{ px: 2, py: 1.5 }}><Button variant="outlined" size="small" data-search-add onClick={() => setEditing({ id: crypto.randomUUID(), name: '', provider: 'tavily', apiKey: '', endpoint: '', maxResults: 5, enabled: true })}>{i18n.t('添加搜索连接')}</Button></Box>
+      </SettingsGroup>}
+
+      {(!search.strategy || search.strategy === 'single') && <>
       <SettingsGroup icon={<IconMagnifier />} title={i18n.t('搜索服务')}>
         <SettingsRow label={i18n.t('搜索服务')} description={i18n.t('每个服务商各自保存密钥、地址与结果条数')}>
           <TextField
@@ -180,9 +215,10 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
           </SettingsField>
         )}
       </SettingsGroup>
+      </>}
 
       <SettingsGroup icon={<IconSliders />} title={i18n.t('结果与判定')}>
-        <SettingsRow label={i18n.t('单次搜索条数')} description={i18n.t('普通查询每次取回的网页数；新闻汇总会自动分主题扩展，不受此总数限制。')}>
+        {(!search.strategy || search.strategy === 'single') && <SettingsRow label={i18n.t('单次搜索条数')} description={i18n.t('普通查询每次取回的网页数；新闻汇总会自动分主题扩展，不受此总数限制。')}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: controlSx.width, px: 0.5 }}>
             <Slider
               size="small"
@@ -206,7 +242,7 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
               {entry.maxResults}
             </Typography>
           </Box>
-        </SettingsRow>
+        </SettingsRow>}
         <SettingsRow
           label={i18n.t('先让模型判断是否需要检索')}
           description={i18n.t('关掉后每次提问都会检索；打开则闲聊与写作类问题直接回答，省一次请求')}
@@ -221,6 +257,28 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
           {i18n.t('新闻汇总会合并多次检索并去重；来源区显示实际覆盖范围。检索失败会明确标注，不会当作已联网回答。')}
         </SettingsHint>
       </SettingsGroup>
+      <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="sm">
+        <DialogTitle>{i18n.t('搜索连接')}</DialogTitle>
+        {editing && <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
+          <TextField size="small" label={i18n.t('名称')} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} inputProps={{ maxLength: 80 }} />
+          <TextField select size="small" label={i18n.t('搜索服务')} value={editing.provider} onChange={event => setEditing({ ...editing, provider: event.target.value as SearchProvider, apiKey: '', endpoint: '' })}>
+            {SEARCH_PROVIDERS.map(provider => <MenuItem key={provider} value={provider}>{SEARCH_PROVIDER_LABEL[provider]}</MenuItem>)}
+          </TextField>
+          {editing.provider !== 'duckduckgo' && <>
+            <TextField size="small" label="API Key" type="password" value={editing.apiKey} autoComplete="off" onChange={event => setEditing({ ...editing, apiKey: event.target.value })} helperText={apiKeyHelperText(editing.provider, editing.apiKey)} />
+            <TextField size="small" label={i18n.t('自定义地址')} value={editing.endpoint} onChange={event => setEditing({ ...editing, endpoint: event.target.value })} helperText={SEARCH_PROVIDER_ENDPOINT_HINT[editing.provider]} />
+          </>}
+          <TextField size="small" label={i18n.t('单次搜索条数')} type="number" inputProps={{ min: 1, max: 10 }} value={editing.maxResults} onChange={event => setEditing({ ...editing, maxResults: Math.min(10, Math.max(1, Number(event.target.value) || 1)) })} />
+        </Stack></DialogContent>}
+        <DialogActions><Button onClick={() => setEditing(null)}>{i18n.t('取消')}</Button>
+          <Button variant="contained" disabled={!editing || !!apiKeyHelperText(editing.provider, editing.apiKey) || !!endpointHelperText(editing.provider, editing.endpoint)} onClick={() => {
+            if (!editing) return
+            const saved = { ...editing, name: editing.name.trim() || SEARCH_PROVIDER_LABEL[editing.provider] }
+            update({ connections: connections.some(connection => connection.id === saved.id) ? connections.map(connection => connection.id === saved.id ? saved : connection) : [...connections, saved] })
+            setEditing(null)
+          }}>{i18n.t('保存')}</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   )
 }

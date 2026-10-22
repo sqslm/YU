@@ -75,6 +75,8 @@ function settings(): Settings {
   providers.searxng = { apiKey: '', endpoint: BASE, maxResults: 5 }
   const search: SearchSettings = {
     enabled: true,
+    strategy: 'single',
+    connections: [],
     provider: 'searxng',
     providers,
     apiKey: '',

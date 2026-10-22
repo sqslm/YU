@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.21.0-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.22.0-setup.exe
 ```
 
 ## 使用
@@ -37,6 +37,12 @@ pnpm package          # → release\Typeless Rebuild-0.21.0-setup.exe
 触发方式可在「快捷键」页切成**按一下开始 / 结束**（默认，和 Typeless 一致）或**按住说话**；热键用录制方式改，托盘菜单可临时停用全部快捷键。切到「按一下」后，**任何模式都只按一下右 Alt 就结束**——包括用 `Space + 右 Alt` 起头的 Ask，不必再重复起手组合。悬浮条不再重复显示「免提」标签或录音锁定提示，录音时保留波形和计时。
 
 说明页仅在设置中提供，主窗口侧栏不重复显示。
+
+「设置 → 快捷键」直接点击按键区域录制，无独立录制按钮；悬停显示提示。按下组合键后松开第一个键保存，先松开其他键也保留完整组合。`Esc`、点击其他区域或窗口失焦取消，旁边的 `×` 清空并解除该绑定。录制期间临时暂停全局快捷键处理，结束后恢复用户原来的启用状态。
+
+「设置 → 搜索 → 调用方式」提供单一服务、顺序备用和合并来源。多连接模式可添加同一服务的多把已授权密钥，也可混用已有搜索服务；每条连接独立保存名称、密钥、地址、单次条数、启停和顺序。顺序备用遇到错误、额度不足、超时或空结果时尝试下一条，第一条成功即停止；合并来源以最多两个连接并行取回结果并去重，保留健康连接的结果。每次查询仍受总超时约束，普通查询使用各连接的条数，新闻汇总沿用多主题扩展。单一服务保留原配置。推荐以顺序备用节省重复调用；合并来源会增加请求量。密钥沿用系统密钥库加密保存（系统不支持加密时沿用原有明文回退）；不自动注册账号或推测免费额度。
+
+供应商覆盖范围、协议修正和尚未完成真实账号验证的项目见 [API 核对记录](PROVIDER_API_AUDIT.md)。
 
 随记工具栏的「新建」或随记页内的 `Ctrl+N` 会创建文字随记并聚焦正文；新建菜单可从系统剪贴板的纯文字创建，只有点击该项时才读取剪贴板。当前分类会沿用，搜索和标签筛选会清空以显示新记录；空白随记显示「未命名随记」。正文自动保存，保存失败时保留待重试改动，并阻止继续新建。剪贴板内容最多 200000 个字符，超限会明确报错，不会截断。文字随记不生成录音，不自动调用模型；可手动润色，支持已有的分类、标签、同步和导出。`Ctrl+N` 仅在随记页生效，弹出对话框时不会新建。
 
@@ -81,7 +87,7 @@ pnpm package          # → release\Typeless Rebuild-0.21.0-setup.exe
 - **天气直连**：问句里出现天气/气温/下雨等意图时，绕过搜索引擎直接查 Open-Meteo（免 Key）的实况与逐日预报，把数字交给模型，因此能答出「实况 10.3°C，白天 10.2～22.5°C，降水概率 4%」这种具体值；地名会按省份消歧（`河南安阳` 不会飘到广西安阳）。
 - **悬浮条位置**：拖动后自动记住；托盘菜单可重置，显示器变化时自动回落到可用区域。
 - **回答卡**：独立悬浮卡宽 560，位于悬浮条正上方 10px，不抢焦点，`Esc` 或 ✕ 关闭。问题、回答、来源和操作分区；长回答在正文区滚动，复制和追问保持可见。支持 Markdown 对比表格；正文 `[n]` 只有对应真实来源时才可点击，来源区按原始编号展开全部网页，显示域名、日期和摘要。联网状态来自实际工具结果，展示查询方向、精读数量及部分失败，不把未联网的模型回答伪装成联网结果。完整内容和来源仍写入历史，卡片正文不重复附来源列表。界面思路参考 [Typeless 快捷问答](https://www.typeless.com/ask-anything)、[Perplexity 来源与追问](https://www.perplexity.ai/help-center/en/articles/10352903-what-is-pro-search) 和 [Raycast 搜索工具](https://manual.raycast.com/ai/custom-providers)。
-- **模型列表与思考档位**：文本模型一栏点「获取模型列表」会拉 `GET /models`（`Authorization: Bearer`），下拉支持直接输入；「思考档位」按模型的 `reasoning_supported_efforts` 与 `can_disable_thinking` 生成——选「关闭思考」时请求体发 `thinking:{type:'disabled'}` 且**不带** `reasoning_effort`，其它档位反过来发 `reasoning_effort` 且不带 `thinking`；`max_tokens` 恒 ≥1024（思考与输出共享额度）。列表缓存 10 分钟，拉取失败沿用上次结果且不清空已选模型，请求 UA 为 `typeless-rebuild/<version>`。
+- **模型列表与思考档位**：文本模型一栏点「获取模型列表」会拉 `GET /models`（`Authorization: Bearer`），下拉支持直接输入；「思考档位」按模型的 `reasoning_supported_efforts` 与 `can_disable_thinking` 生成。官方 OpenAI、Gemini、Cohere、Mistral、MiniMax 与 Claude 的参数差异由同一请求适配函数处理，润色、Ask 工具和流式回答共用；不能关闭推理的模型使用其支持的最低档位。自定义网关保留原来的 `thinking` / `reasoning_effort` 约定。输出额度至少 1024，OpenAI 推理模型使用 `max_completion_tokens` 并移除不支持的温度参数；Claude 新模型同样省略不支持的温度。列表缓存 10 分钟，拉取失败沿用上次结果且不清空已选模型，请求 UA 为 `typeless-rebuild/<version>`。
 - **Ask 是工具 Agent**：Ask 不再只是「检索 + 一次回答」，模型可以调 8 个工具——`get_weather`（Open-Meteo 实况+预报）、`web_search`、`read_webpage`（正文抽取、拒内网、内容视为不可信）、`get_datetime`（系统时间，不让模型猜日期）、`calculate`（手写递归下降求值，无 `eval`）、`get_selection` / `replace_selection`（读选中、替换选中；**替换必须点卡片按钮确认**）、`open_search`。优先走原生 Function Calling（最多两轮），模型不支持时降级为严格 JSON 意图；卡片上会显示工具进度与来源。
 - **取消**：录音中按 `Esc` 直接丢弃这一条——不插入、不写历史，悬浮条显示「已取消」后收拢。
 - **五类提示词**：设置里的「提示词」页把五类提示词（AI / 润色 / 翻译 / 文档 / 邮件）平铺成五个卡片区块——不分 tab，内置提示词也是卡片，一眼看到全部。每张卡有自己的名字、内容、**可选独立温度**；卡上可「激活 / 复制 / 编辑 / 删除」，**内置卡也能直接改**（改过会标「已改写」，编辑器里有「恢复默认文本」），改完立刻生效；内置卡也能删掉，删光后区块显示空态并提供「恢复内置提示词」，不会白屏。虚线卡用于新建。
