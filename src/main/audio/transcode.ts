@@ -1,8 +1,8 @@
 /**
  * Audio compression for the ASR upload (REQ-11).
  *
- * Speech at 24 kHz mono 16-bit is 48 KB/s, so a one-minute dictation is ~2.8 MB
- * of mostly-redundant PCM. Opus at 24 kbps carries the same speech in ~180 KB.
+ * Opus at 64 kbps favours speech detail over the older 24 kbps setting, while
+ * remaining smaller than PCM (roughly 480 KB per minute before container overhead).
  * The reference product ships libopus natively; we shell out to a system ffmpeg
  * instead, because bundling a codec for one call is not worth 2 MB of installer
  * and a native build step.
@@ -17,7 +17,7 @@ import { spawn } from 'node:child_process'
 export const MIN_COMPRESS_BYTES = 16_384
 /** Long enough for a 9-minute recording on a slow disk, short enough to not stall. */
 const TRANSCODE_TIMEOUT_MS = 8000
-const DEFAULT_BITRATE_KBPS = 24
+const DEFAULT_BITRATE_KBPS = 64
 
 export interface EncodedAudio {
   data: Uint8Array

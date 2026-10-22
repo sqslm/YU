@@ -15,6 +15,7 @@
  *     first graph was orphaned with the device still held open.
  */
 import i18n from '../i18n'
+import type { AudioProcessingMode } from '@shared/types'
 
 const WORKLET_SOURCE = `
 class TapProcessor extends AudioWorkletProcessor {
@@ -22,10 +23,18 @@ class TapProcessor extends AudioWorkletProcessor {
     super()
     this.block = new Int16Array(1024)
     this.filled = 0
+    this.active = false
     // The host asks for whatever is still buffered when the take ends. Without
     // this handshake the tail of every take never left the audio thread.
     this.port.onmessage = (event) => {
-      if (event.data && event.data.flush) this.emit(true)
+      if (event.data && event.data.active) {
+        this.filled = 0
+        this.active = true
+      }
+      if (event.data && event.data.flush) {
+        this.active = false
+        this.emit(true)
+      }
     }
   }
   emit(final) {
@@ -40,6 +49,7 @@ class TapProcessor extends AudioWorkletProcessor {
     this.port.postMessage({ chunk: out, final }, [out.buffer])
   }
   process(inputs) {
+    if (!this.active) return true
     const channel = inputs[0] && inputs[0][0]
     if (!channel) return true
     for (let i = 0; i < channel.length; i++) {
@@ -68,11 +78,12 @@ export interface CaptureHandlers {
    * A second, compressed copy of the same take (REQ-11 without ffmpeg).
    *
    * Chromium already ships an Opus encoder, so recording a webm in parallel with
-   * the PCM tap costs one `MediaRecorder` and gives the ASR upload a 24 kbps
-   * stream instead of 256 kbps of WAV — with no native codec and no subprocess.
+   * the PCM tap costs one `MediaRecorder` and gives the ASR upload a 64 kbps
+   * stream without a native codec or subprocess.
    * Main keeps whichever form the provider ends up needing.
    */
   onEncoded?: (payload: { data: Uint8Array; contentType: string }) => void
+  onFormat?: (settings: MediaTrackSettings) => void
 }
 
 export interface AudioDeviceInfo {
@@ -107,17 +118,17 @@ export async function listDevices(): Promise<AudioDeviceInfo[]> {
 /**
  * Constraints for dictation rather than for a call.
  *
- * The three WebRTC defaults are tuned for two humans talking to each other, and
- * every one of them removes information the recogniser needs: noise suppression
- * eats breath and fricatives, automatic gain pumps the level between words,
- * echo cancellation subtracts the audio it is supposed to keep. Providers do
- * their own light denoising on the decoded PCM.
+ * Preserve speech by default. The optional call-style profile is useful in a
+ * noisy room, but can colour consonants or conflict with sound-card processing.
  */
-const BASE_CONSTRAINTS: MediaTrackConstraints = {
-  channelCount: 1,
-  echoCancellation: false,
-  noiseSuppression: false,
-  autoGainControl: false
+export function captureConstraints(mode: AudioProcessingMode): MediaTrackConstraints {
+  return {
+    channelCount: { ideal: 1 },
+    sampleRate: { ideal: 48000 },
+    echoCancellation: mode === 'voice',
+    noiseSuppression: mode === 'voice',
+    autoGainControl: mode === 'voice'
+  }
 }
 
 export class MicCapture {
@@ -128,6 +139,11 @@ export class MicCapture {
   private running = false
   private active = false
   private deviceId = ''
+  private processing: AudioProcessingMode = 'fidelity'
+  private appliedKey = ''
+  private changing: Promise<void> | null = null
+  private draining = false
+  private deactivating: Promise<void> | null = null
   /** In-flight `start()`, so a second warm-up joins it instead of opening a second device. */
   private starting: Promise<void> | null = null
   /** Resolves when the worklet has handed over its partial block. */
@@ -167,14 +183,23 @@ export class MicCapture {
    * Switching microphones means tearing the graph down and warming it again.
    * Called on every settings change, so it no-ops when nothing moved.
    */
-  async setDevice(deviceId: string): Promise<void> {
+  async setDevice(deviceId: string, processing: AudioProcessingMode = this.processing): Promise<void> {
     const next = deviceId ?? ''
-    if (next === this.deviceId) return
     this.deviceId = next
-    if (!this.running) return
-    await this.stop()
-    await this.start()
-    this.handlers.onDevices?.(await listDevices())
+    this.processing = processing
+    await this.refreshDevice()
+  }
+
+  private refreshDevice(): Promise<void> {
+    if (!this.running || this.active || this.draining || this.appliedKey === `${this.deviceId}|${this.processing}`) return Promise.resolve()
+    if (this.changing) return this.changing
+    this.changing = (async () => {
+      do {
+        await this.stop()
+        await this.start()
+      } while (this.running && !this.active && this.appliedKey !== `${this.deviceId}|${this.processing}`)
+    })().finally(() => { this.changing = null })
+    return this.changing
   }
 
   /**
@@ -186,17 +211,28 @@ export class MicCapture {
    * next take cannot inherit it, but it is not forwarded.
    */
   async setActive(active: boolean, keepTail = true): Promise<void> {
-    if (active === this.active) return
     if (active) {
+      if (this.deactivating) await this.deactivating
+      if (this.changing) await this.changing
+      await this.refreshDevice()
+      if (this.active) return
       this.active = true
       this.discardTail = false
+      this.node?.port.postMessage({ active: true })
       this.armRecorder()
       return
     }
+    if (!keepTail) this.discardTail = true
+    if (this.deactivating) return this.deactivating
+    if (!this.active) return
     this.active = false
-    this.discardTail = !keepTail
-    await this.stopRecorder(keepTail)
-    await this.drainTail()
+    this.draining = true
+    // Request the PCM tail before waiting for the encoder; a slow encoder must
+    // not let whole speech blocks fall through the now-closed recording gate.
+    this.deactivating = Promise.all([this.drainTail(), this.stopRecorder(keepTail)])
+      .then(async () => { this.draining = false; await this.refreshDevice() })
+      .finally(() => { this.draining = false; this.deactivating = null })
+    return this.deactivating
   }
 
   /**
@@ -206,13 +242,13 @@ export class MicCapture {
    */
   private armRecorder(): void {
     const stream = this.stream
-    if (!stream || this.recorder) return
+    if (!stream || this.recorder || !this.handlers.onEncoded) return
     if (typeof MediaRecorder === 'undefined') return
     const type = 'audio/webm;codecs=opus'
     if (typeof MediaRecorder.isTypeSupported !== 'function') return
     if (!MediaRecorder.isTypeSupported(type)) return
     try {
-      const recorder = new MediaRecorder(stream, { mimeType: type, audioBitsPerSecond: 24_000 })
+      const recorder = new MediaRecorder(stream, { mimeType: type, audioBitsPerSecond: 64_000 })
       const parts: Blob[] = []
       recorder.ondataavailable = (event: BlobEvent) => {
         if (event.data && event.data.size > 0) parts.push(event.data)
@@ -249,7 +285,7 @@ export class MicCapture {
         resolve(new Blob(parts, { type: recorder.mimeType || 'audio/webm' }))
       }
     })
-    if (!keep || blob.size < 512) return
+    if (!keep || this.discardTail || blob.size < 512) return
     try {
       const data = new Uint8Array(await blob.arrayBuffer())
       this.handlers.onEncoded?.({ data, contentType: blob.type || 'audio/webm' })
@@ -273,14 +309,17 @@ export class MicCapture {
 
   private async open(): Promise<void> {
     try {
-      const { stream, fellBack } = await this.acquire()
+      const { stream, fellBack, key } = await this.acquire()
       this.stream = stream
+      this.appliedKey = key
       if (fellBack) this.handlers.onDevices?.(await listDevices())
       // An unplugged device ends its track instead of throwing, so without this
       // the warm stream stays "open" and the bar records silence forever.
       for (const track of stream.getTracks()) {
         track.onended = () => this.reportLoss('track ended')
+        track.contentHint = key.endsWith('|voice') ? 'speech' : 'speech-recognition'
       }
+      this.handlers.onFormat?.(stream.getAudioTracks()[0]?.getSettings() ?? {})
 
       const context = new AudioContext({ sampleRate: 16000, latencyHint: 'interactive' })
       this.context = context
@@ -294,7 +333,8 @@ export class MicCapture {
       const node = new AudioWorkletNode(context, 'pcm-tap', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
-        channelCount: 1
+        channelCount: 1,
+        channelCountMode: 'explicit'
       })
       this.node = node
 
@@ -304,12 +344,11 @@ export class MicCapture {
         const tail = payload.final === true
         // A tail block arrives after `active` went false; it is the last bit of
         // the sentence and the reason `setActive(false)` is awaited.
-        if (!this.active && !tail) return
-        if (tail && this.discardTail) {
+        if (!this.active && !this.draining && !tail) return
+        if (this.discardTail) {
           // A cancelled take still drains so the next one starts clean, but its
           // audio belongs to nothing the user asked for.
-          this.discardTail = false
-          this.settleTail()
+          if (tail) this.settleTail()
           return
         }
         if (payload.chunk.length > 0) {
@@ -331,6 +370,10 @@ export class MicCapture {
       await context.resume()
       this.running = true
       this.lost = false
+      if (this.active) {
+        node.port.postMessage({ active: true })
+        this.armRecorder()
+      }
       // A vanished endpoint can surface as a dead context rather than a dead
       // track; either signal must reach main, which classifies it as mic_missing.
       context.onstatechange = () => {
@@ -354,21 +397,24 @@ export class MicCapture {
    * until the user manually picked "system default" again — an unplugged USB
    * headset could silently disable dictation.
    */
-  private async acquire(): Promise<{ stream: MediaStream; fellBack: boolean }> {
-    if (!this.deviceId) {
-      return { stream: await navigator.mediaDevices.getUserMedia({ audio: BASE_CONSTRAINTS }), fellBack: false }
+  private async acquire(): Promise<{ stream: MediaStream; fellBack: boolean; key: string }> {
+    const deviceId = this.deviceId
+    const processing = this.processing
+    const constraints = captureConstraints(processing)
+    if (!deviceId) {
+      return { stream: await navigator.mediaDevices.getUserMedia({ audio: constraints }), fellBack: false, key: `|${processing}` }
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { ...BASE_CONSTRAINTS, deviceId: { exact: this.deviceId } }
+        audio: { ...constraints, deviceId: { exact: deviceId } }
       })
-      return { stream, fellBack: false }
+      return { stream, fellBack: false, key: `${deviceId}|${processing}` }
     } catch (err) {
       // `exact` means "this device or nothing". Nothing is not an option for a
       // dictation app, so the pin is dropped and the default endpoint is used.
-      this.deviceId = ''
+      if (this.deviceId === deviceId) this.deviceId = ''
       console.warn('[capture] pinned device unavailable, using the default:', err)
-      return { stream: await navigator.mediaDevices.getUserMedia({ audio: BASE_CONSTRAINTS }), fellBack: true }
+      return { stream: await navigator.mediaDevices.getUserMedia({ audio: constraints }), fellBack: true, key: `|${processing}` }
     }
   }
 
@@ -409,6 +455,7 @@ export class MicCapture {
 
   async stop(): Promise<void> {
     this.running = false
+    this.discardTail = true
     // A tail waiter must not hang a stop: nothing will answer it any more.
     const waiter = this.tailWaiter
     this.tailWaiter = null
@@ -420,6 +467,8 @@ export class MicCapture {
     this.node?.port.close()
     this.node?.disconnect()
     this.node = null
+    if (this.workletUrl) URL.revokeObjectURL(this.workletUrl)
+    this.workletUrl = null
     // Detach before stopping the tracks: `stop()` does not fire `ended`, but a
     // device that disappears mid-teardown would otherwise report a second loss.
     for (const track of this.stream?.getTracks() ?? []) track.onended = null

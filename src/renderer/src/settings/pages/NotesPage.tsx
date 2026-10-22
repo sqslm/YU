@@ -509,9 +509,9 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
     })
     micRef.current = mic
     try {
-      await mic.setDevice(settings.inputDeviceId ?? '')
-      mic.setActive(true)
+      await mic.setDevice(settings.inputDeviceId ?? '', settings.audioProcessing)
       await mic.start()
+      if (mic.isRunning) await mic.setActive(true)
     } catch (err) {
       micErrorRef.current = messageOf(err)
     }
@@ -539,7 +539,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
     setRecording(false)
     setRecordedMs(0)
     if (mic) {
-      mic.setActive(false)
+      await mic.setActive(false)
       await mic.stop()
     }
     const parts = chunksRef.current
@@ -580,8 +580,7 @@ export function NotesPage({ settings, patch, recordTicket = 0 }: NotesPageProps)
       const mic = micRef.current
       micRef.current = null
       if (mic) {
-        mic.setActive(false)
-        void mic.stop()
+        void mic.setActive(false, false).then(() => mic.stop())
       }
     }
   }, [])

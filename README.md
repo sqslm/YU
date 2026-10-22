@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.19.0-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.20.0-setup.exe
 ```
 
 ## 使用
@@ -58,9 +58,17 @@ pnpm package          # → release\Typeless Rebuild-0.19.0-setup.exe
 
 设置按用途分为「通用」（外观、启动与反馈）、「语音与翻译」（识别语言、翻译与录音）、「文本输入」（插入、换行与应用排除）和「数据与存储」（历史保留与目录）。每项修改自动保存，数字输入在失焦或按 Enter 后保存。
 
+「语音与翻译 → 录音处理」默认保真优先：优先请求设备 48 kHz 单声道输入，关闭浏览器的回声、降噪和自动增益处理；设备不支持时使用其可提供的格式，不将低带宽输入冒充高音质。为兼容现有本地和云端识别接口，PCM 仍由浏览器重采样为 16 kHz 单声道 16-bit WAV，不新增自制降噪或重采样算法。环境噪声较重时可选择「通话降噪」，使用 Chromium 已有的回声消除、降噪和自动增益；声卡或麦克风已有处理时可选保真，避免重复处理。录音中更改设备或处理方式，会在本次收音结束后应用，保留当前任务的完整音频。
+
+立体声设备输入会先混合为单声道，避免只读取左声道而遗漏右声道的人声。停止录音会立即请求最后一段 PCM，并与压缩编码收尾并行等待；排队中的收音块也会保留。取消时丢弃尾音及编码副本，新任务等待旧任务收尾，避免串入上一条声音。随记同样等待尾音完成后关闭设备。空闲麦克风保持预热，PCM 工作节点不再持续向页面发送空闲音频块。可选的浏览器 Opus 上传与 FFmpeg Opus 存储均请求 64 kbps，实际码率随编码器和内容变化；WAV 仍是默认识别上传格式，既有压缩选择保留。
+
+「说话测试」复用实际录音链路，最多录制 10 秒，停止后可试听同一份识别 PCM，显示输入采样率及音量过高提示。测试不调用识别服务、不写历史或随记，音频仅在页面内存中；重新测试、切换设备/处理方式或关闭页面会释放旧试听。它用于区分设备输入、处理模式和录音链路问题，不代表已验证真实麦克风的识别准确率。
+
+处理方式参考 [TeamSpeak 音频处理说明](https://business.teamspeak.com/features/client-audio-example/)、[KOOK 降噪比较建议](https://help.kookapp.cn/6a2f/cd01) 和 [Oopz 声卡兼容说明](https://help.oopz.cn/42f9/f5ae)；保真默认及无损识别输入参考 [Google Cloud ASR 最佳实践](https://docs.cloud.google.com/speech-to-text/docs/best-practices?hl=en)。通话的主观听感与识别准确率需要分别验证。
+
 设置里还有几项直接影响结果：
 
-- **麦克风**：列出全部输入设备（悬浮条持有麦克风权限，因此能拿到真实设备名），切换后音频流立即重开。
+- **麦克风**：列出全部输入设备（悬浮条持有麦克风权限，因此能拿到真实设备名）；空闲时立即切换，录音中更改在本次收音结束后生效。
 - **语言**：作为 `language` 传给 ASR；留空自动检测。
 - **词典**（hub 的「词典」页）：润色后按字面替换，修正常被识别错的专有名词，长词优先。
 - **插入方式**：默认「自动」= 剪贴板整段粘贴（一次到位，且不会被聊天框当成回车），失败才回退 SendInput 逐字符。

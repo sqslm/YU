@@ -54,7 +54,7 @@ const AUDIO_REL_DIR = 'notes/audio'
 /** Root-level container of everything the store owns; moved as a unit. */
 const NOTES_DIR = 'notes'
 /** Storage bitrate for note audio: notes are kept for a long time. */
-const AUDIO_BITRATE_KBPS = 24
+const AUDIO_BITRATE_KBPS = 64
 
 const MAX_TAGS = 12
 const MAX_TAG_CHARS = 24

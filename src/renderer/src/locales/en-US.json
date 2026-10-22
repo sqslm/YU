@@ -1,4 +1,13 @@
 {
+  "空闲时立即切换；录音中更改在本次结束后生效。": "Switches immediately when idle; changes during recording apply after the take ends.",
+  "录音处理": "Recording processing",
+  "保真优先保留人声细节；环境嘈杂时可试通话降噪。声卡已有降噪时建议保真。": "Fidelity preserves speech detail. Try call noise reduction in noisy rooms; choose fidelity if your sound card already processes audio.",
+  "保真优先（推荐）": "Fidelity (recommended)",
+  "通话降噪": "Call noise reduction",
+  "使用当前录音处理，最多录制 10 秒后可回听；测试音频只留在本机内存。": "Record up to 10 seconds with the current processing and listen back. Test audio stays in local memory.",
+  "峰值 {{db}} dBFS · 电平偏高，建议调低系统输入音量": "Peak {{db}} dBFS · high level; lower the system input volume",
+  "设备输入带宽较低，建议换用独立麦克风": "Low-bandwidth input; try a separate microphone",
+  "设备输入 {{rate}} kHz · 识别音频 16 kHz": "Device input {{rate}} kHz · recognition audio 16 kHz",
   "清理旧异常": "Clean old failed records",
   "清理旧异常记录？": "Clean old failed records?",
   "将删除旧版保存的失败、取消和空记录及对应录音，成功记录及其归档会保留。删除会同步到云端，无法撤销。": "Delete failed, cancelled and empty records from earlier versions and their recordings. Successful records and their archives stay. Deletions sync to the cloud and cannot be undone.",

@@ -1048,7 +1048,7 @@ export function SpeechSection({ settings, patch }: {
           label={i18n.t('麦克风')}
           description={
             devices.length > 0
-              ? i18n.t('切换后录音流会立即重新打开')
+              ? i18n.t('空闲时立即切换；录音中更改在本次结束后生效。')
               : i18n.t('默认使用系统输入设备；授权后会列出全部麦克风')
           }
         >
@@ -1071,10 +1071,21 @@ export function SpeechSection({ settings, patch }: {
         </SettingsRow>
 
         <SettingsRow
-          label={i18n.t('说话测试')}
-          description={i18n.t('开始测试后说话，检查音量指示是否有响应。')}
+          label={i18n.t('录音处理')}
+          description={i18n.t('保真优先保留人声细节；环境嘈杂时可试通话降噪。声卡已有降噪时建议保真。')}
         >
-          <MicTest deviceId={settings.inputDeviceId} />
+          <TextField select data-audio-processing value={settings.audioProcessing}
+            onChange={event => patch({ audioProcessing: event.target.value as Settings['audioProcessing'] })} sx={controlSx}>
+            <MenuItem value="fidelity">{i18n.t('保真优先（推荐）')}</MenuItem>
+            <MenuItem value="voice">{i18n.t('通话降噪')}</MenuItem>
+          </TextField>
+        </SettingsRow>
+
+        <SettingsRow
+          label={i18n.t('说话测试')}
+          description={i18n.t('使用当前录音处理，最多录制 10 秒后可回听；测试音频只留在本机内存。')}
+        >
+          <MicTest deviceId={settings.inputDeviceId} processing={settings.audioProcessing} />
         </SettingsRow>
 
         <SettingsRow

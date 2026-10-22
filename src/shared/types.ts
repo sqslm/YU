@@ -12,6 +12,7 @@ export interface ServerMeta {
 
 /** How a shortcut starts and stops capture. */
 export type ActivationMode = 'hold' | 'toggle'
+export type AudioProcessingMode = 'fidelity' | 'voice'
 
 /** How newlines inside generated text are delivered. */
 export type MultilineMode = 'keep' | 'space' | 'shiftEnter'
@@ -497,6 +498,8 @@ export interface Settings {
   alertHideSeconds: number
   /** Successful take audio only. Legacy `failed` is normalised to `never`. */
   keepAudio: 'never' | 'failed' | 'always'
+  /** Fidelity preserves the input; voice enables Chromium noise/gain processing. */
+  audioProcessing: AudioProcessingMode
   /** Hard cap for one take; the bar warns one minute before it (REQ-17). */
   maxSessionSeconds: number
   arrowToCursorInBar: boolean

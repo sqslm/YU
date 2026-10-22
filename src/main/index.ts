@@ -601,6 +601,7 @@ function registerIpc(): void {
       applyHubTheme(settingsWindow, next.themeMode, chromeDimmed)
       settingsWindow.webContents.send('settings:changed', next)
     }
+    if (barWindow && !barWindow.isDestroyed()) barWindow.webContents.send('settings:changed', next)
     // A new server URL, a new interval or a switch turning sync on/off all change
     // what the timer should do. `reconfigure()` is idempotent and cheap.
     if (next.syncEnabled !== previous.syncEnabled ||

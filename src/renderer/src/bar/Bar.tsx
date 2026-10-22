@@ -71,6 +71,7 @@ export function Bar(): JSX.Element {
       onLevel: (value) => setLevel(value),
       onError: (message) => window.api.bar.error(message),
       onDevices: (devices) => window.api.bar.devices(devices),
+      onFormat: (format) => window.api.bar.log(`capture input=${format.sampleRate ?? 'unknown'}Hz channels=${format.channelCount ?? 'unknown'} noise=${format.noiseSuppression ?? 'unknown'} gain=${format.autoGainControl ?? 'unknown'} echo=${format.echoCancellation ?? 'unknown'}`),
       // The compressed copy arrives before `stopped()`, so main already holds it
       // when it decides which form to upload.
       onEncoded: (payload) => window.api.bar.encoded(payload.data, payload.contentType)
@@ -91,7 +92,7 @@ export function Bar(): JSX.Element {
     // along on that existing channel — no preload or main-process change needed.
     const applySettings = (settings: Settings): void => {
       applyUiLanguage(settings.uiLanguage)
-      void capture.setDevice(settings.inputDeviceId)
+      void capture.setDevice(settings.inputDeviceId, settings.audioProcessing)
       setShowMode(settings.showModeInBar)
       soundsRef.current = settings.playSounds
     }

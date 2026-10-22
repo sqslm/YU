@@ -4,6 +4,11 @@ import { defaultSearchProviders } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL } from './local-asr'
 
 describe('mergeSettings', () => {
+  it('defaults old installations to fidelity capture and preserves the voice-processing choice', () => {
+    expect(mergeSettings({}).audioProcessing).toBe('fidelity')
+    expect(mergeSettings({ audioProcessing: 'voice' }).audioProcessing).toBe('voice')
+    expect(mergeSettings({ audioProcessing: 'unknown' as never }).audioProcessing).toBe('fidelity')
+  })
   it('retires failed-only history audio while preserving successful-audio opt-in', () => {
     expect(mergeSettings({}).keepAudio).toBe('never')
     expect(mergeSettings({ keepAudio: 'failed' }).keepAudio).toBe('never')
