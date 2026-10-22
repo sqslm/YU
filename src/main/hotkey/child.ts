@@ -100,7 +100,7 @@ let pasteLast: Binding | null = null
  */
 let notesBinding: Binding | null = null
 let selectionBinding: Binding | null = null
-let selectionPending = false
+let actionPending: { type: 'selection' | 'paste-last'; keys: number[] } | null = null
 /**
  * True while the answer card is on screen. ESC then belongs to the card — the
  * window is shown inactive, so the card's own keydown handler never fires and
@@ -268,6 +268,7 @@ function boundKey(vk: number): boolean {
   if (vk === VK_ESCAPE) return true
   for (const b of bindings) if (b.keys.includes(vk)) return true
   if (notesBinding && notesBinding.keys.includes(vk)) return true
+  if (selectionBinding && selectionBinding.keys.includes(vk)) return true
   return pasteLast ? pasteLast.keys.includes(vk) : false
 }
 
@@ -356,9 +357,10 @@ function drive(): void {
   const left = [...prevHeld].filter((vk) => !held.has(vk))
   prevHeld = held
   if (!enabled || capturing) return
-  if (selectionPending && selectionBinding && selectionBinding.keys.every(vk => !held.has(vk))) {
-    selectionPending = false
-    post({ type: 'selection', at: now })
+  if (actionPending && actionPending.keys.every(vk => !held.has(vk))) {
+    const { type } = actionPending
+    actionPending = null
+    post({ type, at: now })
   }
 
   // A swallowed press whose release never arrived is answered inside
@@ -400,6 +402,7 @@ function drive(): void {
 
   for (const vk of entered) {
     if (vk === VK_ESCAPE) {
+      actionPending = null
       if (recording) {
         recording = null
         post({ type: 'cancel', at: now, reason: 'esc' })
@@ -434,13 +437,15 @@ function drive(): void {
       if (next && next.keys.length > pending.keys.length) pending.chord = next
       continue
     }
-    if (pasteLast && allDown(pasteLast.keys)) {
-      post({ type: 'paste-last', at: now })
+    if (pasteLast && vk === chordKey(pasteLast) && allDown(pasteLast.keys)) {
+      // Sending Ctrl+V while Shift is physically down becomes Ctrl+Shift+V
+      // in the target and can also clear the hook's held Ctrl prematurely.
+      actionPending = { type: 'paste-last', keys: pasteLast.keys }
       continue
     }
-    if (selectionBinding && allDown(selectionBinding.keys)) {
+    if (selectionBinding && vk === chordKey(selectionBinding) && allDown(selectionBinding.keys)) {
       // Wait for every modifier to be released before sending Ctrl+C.
-      selectionPending = true
+      actionPending = { type: 'selection', keys: selectionBinding.keys }
       continue
     }
     if (notesBinding && allDown(notesBinding.keys)) {
@@ -569,7 +574,7 @@ port.on('message', (event: { data: unknown }) => {
     bindings.sort((a, b) => b.keys.length - a.keys.length)
     pasteLast = data.pasteLast.length ? bindingFrom('dictation', data.pasteLast) : null
     selectionBinding = data.selection?.length ? bindingFrom('dictation', data.selection) : null
-    selectionPending = false
+    actionPending = null
     notesBinding = data.notes && data.notes.length > 0 ? bindingFrom('dictation', data.notes) : null
     if (data.activation === 'hold' || data.activation === 'toggle') {
       activation = data.activation
@@ -584,7 +589,7 @@ port.on('message', (event: { data: unknown }) => {
   } else if (data.type === 'capture') {
     capturing = data.active
     pending = null
-    selectionPending = false
+    actionPending = null
   } else if (data.type === 'card') {
     cardOpen = data.open
   } else if (data.type === 'enabled') {
@@ -597,6 +602,7 @@ port.on('message', (event: { data: unknown }) => {
       // A half-finished gesture must not survive a suspend: it would start a
       // take on a release the user never meant as one.
       pending = null
+      actionPending = null
       // Anything still held now belongs to the foreground app again; forgetting
       // it is what keeps a suspended hotkey from holding a modifier down.
       forgetAll(state)
@@ -607,6 +613,7 @@ port.on('message', (event: { data: unknown }) => {
     // rather than waiting for the next physical keyup to prove us wrong.
     recording = null
     pending = null
+    actionPending = null
     forgetAll(state)
     prevHeld = new Set<number>()
   }

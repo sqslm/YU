@@ -35,7 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
       translate: { keys: ['RightAlt', 'RightShift'] }
     },
     pasteLastKeys: { keys: ['LeftCtrl', 'RightShift', 'V'] },
-    selectionKeys: { keys: ['LeftCtrl', 'LeftAlt', 'S'] },
+    selectionKeys: { keys: ['LeftCtrl', 'RightShift', 'S'] },
     // Ctrl+Alt+N: no modifier of the dictation gesture, so a note take can never
     // be mistaken for one and a note chord cannot start a dictation on its way in.
     notesKeys: { keys: ['LeftCtrl', 'LeftAlt', 'N'] },

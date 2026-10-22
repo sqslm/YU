@@ -469,9 +469,9 @@ function showAnswerCard(payload: AnswerCardPayload): void {
     return
   }
   win.webContents.send('card:data', payload)
-  // The card grows out of the pill, so the pill has to be on screen. The
-  // pipeline normally holds it, but a slow answer can outlive the idle timeout.
-  if (barWindow && !barWindow.isDestroyed() && !barWindow.isVisible()) {
+  // A selection preview has no voice take or bar lifetime. Re-showing its
+  // hidden anchor would resurrect the previous dictation result indefinitely.
+  if (!payload.selection && barWindow && !barWindow.isDestroyed() && !barWindow.isVisible()) {
     barWindow.showInactive()
   }
   // showInactive: the card must never steal the caret from the app the user
