@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.26.0-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.26.1-setup.exe
 ```
 
 ## 使用
@@ -47,7 +47,7 @@ pnpm package          # → release\Typeless Rebuild-0.26.0-setup.exe
 
 关键词只匹配语音开头，不做模糊匹配，也不扫描正文；没命中仍按正常听写处理。实时识别到开头关键词后，语音条立即更新模式和对应卡片/任务标签，保持同一段录音与计时；窗口路由继续使用录音开始时的窗口快照。最终执行以完整转写再次匹配为准，关键词不进入正文；只有关键词、识别失败或取消时不执行空任务。显式使用其他模式的快捷键，或录音中通过快捷键升级模式时，以快捷键为准。关键词配置在录音开始时快照，修改从下一次新录音生效；历史重试、随记重新转写不重新选择模式。
 
-实时切换复用现有字幕的开头识别结果，仅接受仍包含录音起点的片段，避免六秒滑动字幕把正文误当指令。关闭字幕时仍会识别开头至多六秒的音频来更新模式，可能增加少量 ASR 请求，不会在录音后半段持续轮询；实际反馈速度取决于识别接口，预览失败时仍由最终转写决定。多模态入口开启此功能后先用既有多模态服务转写，再走既有文本模型处理；传统路径只做一次最终 ASR。提醒复用原解析器，随记复用原存储、录音和润色流程及已识别文本，不重复整段 ASR。空闲时不监听唤醒词，不新增服务或模型配置。
+实时切换复用现有字幕的开头识别结果，仅接受仍包含首次有效声音起点的片段，避免六秒滑动字幕把正文误当指令。开麦后先保持安静不会耗掉关键词窗口，静音等待仅保留 200 毫秒预缓冲；已识别出的模式不会因后续不完整预览而闪回，最终仍以完整转写为准。关闭字幕时识别首次有效声音起点起至多六秒的音频来更新模式，可能增加少量 ASR 请求，不会在录音后半段持续轮询；实际反馈速度取决于识别接口，预览失败时仍由最终转写决定。多模态入口开启此功能后先用既有多模态服务转写，再走既有文本模型处理；传统路径只做一次最终 ASR。提醒复用原解析器，随记复用原存储、录音和润色流程及已识别文本，不重复整段 ASR。空闲时不监听唤醒词，不新增服务或模型配置。
 
 「设置 → 搜索 → 调用方式」提供单一服务、顺序备用和合并来源。多连接模式可添加同一服务的多把已授权密钥，也可混用已有搜索服务；每条连接独立保存名称、密钥、地址、单次条数、启停和顺序。顺序备用遇到错误、额度不足、超时或空结果时尝试下一条，第一条成功即停止；合并来源以最多两个连接并行取回结果并去重，保留健康连接的结果。每次查询仍受总超时约束，普通查询使用各连接的条数，新闻汇总沿用多主题扩展。单一服务保留原配置。推荐以顺序备用节省重复调用；合并来源会增加请求量。密钥沿用系统密钥库加密保存（系统不支持加密时沿用原有明文回退）；不自动注册账号或推测免费额度。
 
@@ -59,7 +59,7 @@ pnpm package          # → release\Typeless Rebuild-0.26.0-setup.exe
 
 选区润色和选区翻译现在分别使用独立快捷键，直接处理选中文字，不弹出选择或预览窗口。默认 `左 Ctrl + 右 Shift + S` 润色、`左 Ctrl + 右 Shift + T` 翻译，在「设置 → 文本输入 → 选区处理」选择覆盖选区或追加到输入框末尾；追加保留原文并在输入框末尾添加换行和结果。升级保留原选区键，作为润色快捷键；新翻译键优先使用 T，如与已有绑定冲突则使用 Y 或 F9，实际绑定显示在快捷键页，清空的绑定保持清空。动作和粘贴上一条在完整组合键松开后执行。选区处理复用现有文本模型链、手动卡片优先级、窗口提示词路由和翻译目标，不录音、不调用 ASR、不写语音历史。应用前复查原窗口及选区；选区变化或取消时不写入，以悬浮条提示错误。
 
-AI 提醒通过「快速提醒」快捷键复用现有录音和 ASR，开始/结束方式跟随录音设置，点按模式使用同一个完整快捷键再次结束。所有模式（听写、翻译、问答、提醒、随记）的录音也可统一按右 Alt 结束并提交，按 Esc 取消；这两个录音控制键的按下、重复和松开不会向当前应用透传，空闲时 Esc 恢复原行为。识别后使用文本模型备用链的独立结构化 Prompt，不使用润色卡片，也不插入原输入框。明确且有效的提醒自动保存，悬浮条显示实际日期、时间及等级并提供短时撤销；缺失或有歧义的时间打开确认界面，失败、取消及普通陈述不创建提醒。默认快捷键如与已有绑定冲突，会选择可用备用键并在设置中显示。
+AI 提醒通过「快速提醒」快捷键复用现有录音和 ASR，开始/结束方式跟随录音设置，点按模式使用同一个完整快捷键再次结束。所有模式（听写、翻译、问答、提醒、随记）的录音也可统一按右 Alt 结束并提交，按 Esc 取消；这两个录音控制键的按下、重复和松开不会向当前应用透传，空闲时 Esc 恢复原行为。识别后使用文本模型备用链的独立结构化 Prompt，不使用润色卡片，也不插入原输入框。快速提醒入口本身表达提醒意图，支持直接说「20分钟后打扫卫生」，无需重复「提醒我」；模型仅识别为待办时进入确认，不丢弃内容、不自动创建。明确且有效的提醒自动保存，悬浮条显示实际日期、时间及等级并提供短时撤销；缺失或有歧义的时间打开确认界面，失败、取消及普通陈述不创建提醒。默认快捷键如与已有绑定冲突，会选择可用备用键并在设置中显示。
 
 提醒支持中文、繁体中文和英文常见时间表达，由 Chrono 2.10.3 识别，再由程序校验明确的日期/时刻并计算本地时间戳。例如「20 分钟后提醒我打扫卫生」「明天上午 10 点提醒我打电话」「每周一上午 9 点提醒我开会」，以及 “Remind me in twenty minutes to clean up”, “Tomorrow at three thirty PM”, “Every Monday at 9 AM”。含糊的上午/下午、数字日期、日期范围和缺少时刻的事项要求确认，不使用模型生成的 Unix 时间戳。重复规则目前支持每天和每周指定星期；月度、年度等其他规则要求人工确认，不猜测。夏令时不存在的单次时刻要求修改，重复提醒跳过不存在的本地时刻。
 
@@ -67,7 +67,7 @@ AI 提醒通过「快速提醒」快捷键复用现有录音和 ASR，开始/结
 
 随记详情的「提取待办与提醒」只在点击时调用模型，先展示可选择、编辑的结果，再经确认批量保存，可能的计划默认不选；没有精确时间可保存为不定时的待办，保留来源随记链接，不覆盖随记原文。所有入口共用本地 SQLite 存储与同一个调度器，数据在用户目录的 reminders.sqlite，独立于语音历史保留规则和账号登录；已保存任务离线仍可触发。应用完全退出或电脑关机期间无法准时通知；重新启动、休眠恢复时检查逾期事项，一次性通知不重复弹出，未处理强提醒恢复显示。一个截止时间计时器配合至多每分钟检查系统时钟/时区变化，无高频轮询。本阶段不做云同步或服务端推送。
 
-For English users: set **Settings → General → Language** to English. Selection polish and translation have separate configurable shortcuts and apply directly; choose **Replace selection** or **Append to end** in Text input settings. **Quick reminder** uses your existing ASR and text model, accepts Chinese or English, and shows a review when the date/time is ambiguous. Saved reminders work offline while the app runs in the tray. Persistent reminders remain actionable after restart; closing their window does not mark them complete. Notes extraction always requires explicit review. Daily and weekly recurrence are supported; the app cannot notify while fully exited or the computer is off. All new pages, settings, notifications, confirmation/error messages and persistent-reminder controls follow the UI language.
+For English users: set **Settings → General → Language** to English. Selection polish and translation have separate configurable shortcuts and apply directly; choose **Replace selection** or **Append to end** in Text input settings. **Quick reminder** uses your existing ASR and text model, accepts Chinese or English, and shows a review when the date/time is ambiguous. After choosing this mode, you can say "Clean up in twenty minutes" without repeating "remind me". Items classified only as to-dos are reviewed before saving. Activation phrases start at the first audible input, so a silent wait after pressing the recording key does not exhaust the keyword window. Captions queue new characters with a bounded buffer, preserving existing text and word spacing as new characters enter; transcription is still chunked, with a one-second check interval and provider-dependent latency. Quiet/DC-biased input and Qwen's known server-instruction echo are excluded. Saved reminders work offline while the app runs in the tray. Persistent reminders remain actionable after restart; closing their window does not mark them complete. Notes extraction always requires explicit review. Daily and weekly recurrence are supported; the app cannot notify while fully exited or the computer is off. All new pages, settings, notifications, confirmation/error messages and persistent-reminder controls follow the UI language.
 
 模型页先选择「分步处理」或「音频直达」，再通过「语音识别 / 文本处理 / 音频模型」管理连接；文本连接始终可访问，用于 Ask 和选区等纯文字任务。本地识别独立显示，配置数据、启用开关、顺序、编辑和测试沿用原有机制，不丢弃原配置。
 
@@ -77,7 +77,7 @@ For English users: set **Settings → General → Language** to English. Selecti
 
 新建菜单的「导入录音」支持单个 WAV、MP3、M4A、OGG，最大 128 MB、10 分钟，超过上限会报错而不会截断。导入时创建可播放的 OGG / WAV 副本并自动转写、按当前设置润色，源文件不修改；副本沿用随记的同步和导出机制。原生 16 kHz 单声道 PCM16 WAV 无需额外工具，其他格式需安装 FFmpeg 并加入 PATH，或通过 `TYPELESS_FFMPEG` 指向其可执行文件；安装包不捆绑 FFmpeg。导入解码期间及「重新识别」处理期间可取消，界面显示当前处理阶段。自动识别失败仍保留录音，可在详情点击「重新识别」，确认后使用当前语音与润色配置重试；两段文字只在全部成功后替换，失败、取消、删除记录或处理期间出现新文字编辑时，不覆盖原文。
 
-按住录音键（默认右 Alt）说话时，识别条上方的小气泡默认显示字幕预览，气泡仅比识别条宽 28 像素，首次随首字从识别条弹出。新增文字逐字从右侧进入，旧字从左侧退出；补标点和修正识别结果会保留已有字符节点，不整段重播。识别条保留波形、计时和模式；松开、取消后字幕清空，窗口恢复原大小，保存的位置保持以识别条为准。靠近屏幕顶部时气泡显示在下方，并适配系统的减少动画偏好。可在「设置 → 语音与翻译 → 录音实时字幕」关闭。优先使用已可用的本地识别模型，否则使用首个语音转写配置；多模态处理模式仍需语音转写配置或可用的本地模型才能预览。当前采用分段识别最近 6 秒音频，最短间隔 1.8 秒且单次仅一个请求，字幕会有识别延迟，可能修正已显示文字；云端预览会增加接口调用。预览失败会停止该次预览，最终文本仍由结束后的完整识别生成。预览音频和显示字符均有固定上限，关闭后不发送预览请求。
+按住录音键（默认右 Alt）说话时，识别条上方的小气泡默认显示字幕预览，气泡仅比识别条宽 28 像素，首次随首字从识别条弹出。新增文字排队从右侧逐字进入，旧字随显示进度从左侧退出；最多排队 120 个字、显示 48 个字，短小识别修正保留已有字符节点，大段改写重新排队，不一批同时替换。识别条保留波形、计时和模式；松开、取消后字幕清空，窗口恢复原大小，保存的位置保持以识别条为准。靠近屏幕顶部时气泡显示在下方，并适配系统的减少动画偏好。可在「设置 → 语音与翻译 → 录音实时字幕」关闭。优先使用已可用的本地识别模型，否则使用首个语音转写配置；多模态处理模式仍需语音转写配置或可用的本地模型才能预览。当前采用分段识别最近 6 秒音频，检查间隔 1 秒且单次仅一个请求，字幕仍受接口识别延迟影响，可能修正已显示文字；云端预览会增加接口调用。静音判断按短帧去直流后的能量识别持续声音，过滤无声底噪和短促开麦爆音；不是完整语音分类器，持续环境声仍可能触发识别。Qwen ASR 返回已知转写指令回显时会剔除，避免把服务器英文指令显示为字幕或交给提醒模型。预览失败会停止该次预览，最终文本仍由结束后的完整识别生成。预览音频和显示字符均有固定上限，关闭后不发送预览请求（启用关键词切换时仍保留开头识别）。
 
 概览底部的热门场景保持单行标签，过长名称省略显示，标签和「分布」按钮不相互遮挡；悬停可查看完整名称，完整场景和占比见分布图。
 
@@ -112,7 +112,7 @@ For English users: set **Settings → General → Language** to English. Selecti
 - **网页搜索**：Ask Anything 先判断要不要检索（也能强制检索），需要就按问题类型排一份检索计划——新闻/实时类走 Brave News 或带 `freshness` 的普通检索，技术问题补英文关键词做中英双语检索；拿到结果先过来源排序（一手优先、聚合站只当线索、同稿转载折叠、按日期剔旧文、字段冲突标出来），再挑 2–3 篇精读原文后才作答，答案带 `[1]` 引用与「## 来源」列表，检索失败会直说覆盖受限而不是编。
 - **检索范围**：「单次搜索条数」只控制普通查询每次取回的网页数。新闻汇总自动拆成最多 6 个主题/语言查询，每次请求最多 10 个结果，合并去重后保留整个结果集合，不再按单次条数或 6 条来源截断；“今天的 AI 新闻”覆盖模型发布、产品应用、开源研究和产业政策。候选网页数不等于独立新闻数，不承诺覆盖全网所有信息。已知不是本地当天的新闻不进入今日汇总；日期不明的线索由回答单列待核实。普通问题仍最多两条查询及一次空结果重试，最多精读 3 篇原文；兼容模型的回答流程也会拿到已读摘录。
 - **响应预算**：最多两条检索并发、3 篇精读并发；明确要求联网及新闻汇总跳过模型是否检索的判定。普通回答预算 1024 tokens / 25 秒，新闻汇总 4096 tokens / 45 秒，不再强制只写几个要点。汇总检索每个查询 4 秒、整体 15 秒；普通搜索 8 秒、精读 6 秒。单个主题失败时保留其他成功结果。回答以 SSE 流式显示，80ms 节流；最终结果不会被排队中的旧文本覆盖。未完成的追问不能重复提交，失败后恢复追问。
-- **本地 ASR 优化**：keep-alive 连接（复用后 0.93ms，新建 1.84ms）、首尾静音裁剪（实测 300366B → 282320B，−6%）、`concatPcm` 一次分配、`temperature=0` + 显式 `language` 的省 token 请求、超时默认 60s（`TYPELESS_ASR_TIMEOUT_MS`）而不是永久挂起；空闲时每 4 分钟发 300ms 探针保活（`TYPELESS_ASR_WARMUP=off|all|local`，连续 3 次空闲就自停，任何 take 都不会等它）。**注意瓶颈其实在服务端**：本机 `llama.exe serve` 没开 `-ngl`（纯 CPU）且带 `--sleep-idle-seconds 900`，实测延迟与音频长度无关、只与输出 token 数相关（≈350–600ms/token），9.4s 语音要 6–20s。客户端已压到 1ms 级，剩下只能改服务端启动参数（见「已知坑」）。`[perf] asr bytes=… ms=… rtf=… trim=… conn=reuse|new` 可核对。
+- **ASR 上传与连接**：复用 keep-alive 连接，`concatPcm` 一次分配；按去直流的短帧能量裁剪首尾静音并保留 120/240 毫秒前后保护，不裁剪内部停顿。裁剪后不会再误用包含整段静音的原始压缩录音。请求仅在配置时发送 `language`，不发送兼容性不一的 `temperature`；超时默认 25 秒（`TYPELESS_ASR_TIMEOUT_MS` 可覆盖），字幕预览为 5 秒。空闲保活默认只针对本地网络服务，每 4 分钟发送 300 毫秒探针（`TYPELESS_ASR_WARMUP=off|all|local`），连续 3 次空闲后停止；探针返回文本直接丢弃，不进入字幕或录音任务。实际识别速度取决于模型与服务端硬件，可通过 `[perf] asr bytes=… ms=… rtf=… trim=… conn=reuse|new` 核对。
 - **天气直连**：问句里出现天气/气温/下雨等意图时，绕过搜索引擎直接查 Open-Meteo（免 Key）的实况与逐日预报，把数字交给模型，因此能答出「实况 10.3°C，白天 10.2～22.5°C，降水概率 4%」这种具体值；地名会按省份消歧（`河南安阳` 不会飘到广西安阳）。
 - **悬浮条位置**：拖动后自动记住；托盘菜单可重置，显示器变化时自动回落到可用区域。
 - **回答卡**：独立悬浮卡宽 560，位于悬浮条正上方 10px，不抢焦点，`Esc` 或 ✕ 关闭。问题、回答、来源和操作分区；长回答在正文区滚动，复制和追问保持可见。支持 Markdown 对比表格；正文 `[n]` 只有对应真实来源时才可点击，来源区按原始编号展开全部网页，显示域名、日期和摘要。联网状态来自实际工具结果，展示查询方向、精读数量及部分失败，不把未联网的模型回答伪装成联网结果。完整内容和来源仍写入历史，卡片正文不重复附来源列表。界面思路参考 [Typeless 快捷问答](https://www.typeless.com/ask-anything)、[Perplexity 来源与追问](https://www.perplexity.ai/help-center/en/articles/10352903-what-is-pro-search) 和 [Raycast 搜索工具](https://manual.raycast.com/ai/custom-providers)。

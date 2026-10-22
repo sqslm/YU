@@ -39,7 +39,7 @@ import {
 } from '@shared/prompts'
 import type { HistoryStore } from './history'
 import { buildBarAlert, classifyError } from './errors'
-import { concatPcm, decodeWavPcm16, encodeWav, isSilent, pcmDurationMs, SAMPLE_RATE } from './audio/wav'
+import { concatPcm, decodeWavPcm16, encodeWav, isSilent, pcmDurationMs, SAMPLE_RATE, trimSilencePcm } from './audio/wav'
 import { transcribe } from './providers/asr'
 import { complete, unwrapModelText } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
@@ -729,6 +729,7 @@ export class Pipeline {
       onOpeningText: text => {
         if (token !== this.runToken || !this.recording || !this.takeVoiceCommands) return
         const command = matchVoiceCommand(text, this.takeVoiceCommands)
+        if (!command) return
         const mode = command?.mode === 'ask' || command?.mode === 'translate' ? command.mode : 'dictation'
         const purpose = command?.mode === 'reminder' || command?.mode === 'notes' ? command.mode : undefined
         if (mode === this.recording.mode && purpose === this.takePurpose) return
@@ -1161,7 +1162,9 @@ export class Pipeline {
 
     let transcript = ''
     try {
-      const wav = encodeWav(pcm)
+      const speech = trimSilencePcm(pcm)
+      if (speech.length !== pcm.length) this.encoded = null
+      const wav = encodeWav(speech)
       let question = ''
       let final = ''
       let sources: SearchResult[] = []

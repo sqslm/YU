@@ -27,17 +27,30 @@ export function concatPcm(chunks: Int16Array[]): Int16Array {
   return out
 }
 
-/** True when the buffer is essentially silence, used to skip empty recordings. */
-export function isSilent(pcm: Int16Array, threshold = 220, ratioNeeded = 0.005): boolean {
-  if (pcm.length === 0) return true
-  let loud = 0
-  for (let i = 0; i < pcm.length; i++) if (Math.abs(pcm[i]) > threshold) loud++
-  return loud / pcm.length < ratioNeeded
+/** DC-independent energy in 20 ms frames. At least 80 ms avoids opening pops.
+ * This is a quiet-input gate, not a speech/language classifier. */
+export function audibleRange(pcm: Int16Array, threshold = 150): { start: number; end: number } | null {
+  let start = -1, end = 0, audible = 0
+  for (let at = 0; at < pcm.length; at += 320) {
+    const until = Math.min(at + 320, pcm.length), count = until - at
+    let sum = 0, squares = 0
+    for (let i = at; i < until; i++) { sum += pcm[i]; squares += pcm[i] * pcm[i] }
+    if (squares / count - (sum / count) ** 2 < threshold * threshold) continue
+    if (start < 0) start = at
+    end = until
+    audible += count
+  }
+  return audible >= 1280 ? { start, end } : null
+}
+
+/** True when the buffer contains no sustained audible input. */
+export function isSilent(pcm: Int16Array): boolean {
+  return audibleRange(pcm) === null
 }
 
 /** Tuning for {@link trimSilencePcm}; defaults match {@link isSilent}'s threshold. */
 export interface TrimOptions {
-  /** Samples at or below this absolute value count as silence (default 220). */
+  /** Minimum DC-independent frame RMS (default 150). */
   threshold?: number
   /** Silence kept before the first loud sample, so onsets are not clipped. */
   headPadMs?: number
@@ -50,7 +63,7 @@ export interface TrimOptions {
 }
 
 const TRIM_DEFAULTS: Required<TrimOptions> = {
-  threshold: 220,
+  threshold: 150,
   headPadMs: 120,
   tailPadMs: 240,
   minKeepMs: 300,
@@ -61,30 +74,22 @@ const TRIM_DEFAULTS: Required<TrimOptions> = {
  * Drops leading/trailing silence from a take, keeping a small pad on both ends.
  *
  * The returned array is a **view** on the input (`subarray`), so nothing is
- * copied; callers that keep it must not mutate the source. Unlike
- * {@link isSilent} — which answers "is this take empty?" with a loud-sample
- * ratio — this trims by absolute position, so it stays a pure byte/time saver:
- * interior silence is never touched, and no speech frame is dropped.
+ * copied; callers that keep it must not mutate the source. Uses the same
+ * audible frames as {@link isSilent}, with padding to preserve consonants.
+ * Interior silence is never touched.
  */
 export function trimSilencePcm(pcm: Int16Array, opts: TrimOptions = {}): Int16Array {
   const { threshold, headPadMs, tailPadMs, minKeepMs, minSavedMs } = { ...TRIM_DEFAULTS, ...opts }
   if (pcm.length === 0) return pcm
 
-  let first = -1
-  let last = -1
-  for (let i = 0; i < pcm.length; i++) {
-    if (pcm[i] > threshold || pcm[i] < -threshold) {
-      if (first < 0) first = i
-      last = i
-    }
-  }
+  const range = audibleRange(pcm, threshold)
   // All-silent input: leave it alone. The caller's isSilent() gate owns that case.
-  if (first < 0) return pcm
+  if (!range) return pcm
 
   const headPad = Math.round((headPadMs * SAMPLE_RATE) / 1000)
   const tailPad = Math.round((tailPadMs * SAMPLE_RATE) / 1000)
-  const start = Math.max(0, first - headPad)
-  const end = Math.min(pcm.length, last + 1 + tailPad)
+  const start = Math.max(0, range.start - headPad)
+  const end = Math.min(pcm.length, range.end + tailPad)
   const kept = end - start
   const saved = pcm.length - kept
   if (kept < Math.round((minKeepMs * SAMPLE_RATE) / 1000)) return pcm

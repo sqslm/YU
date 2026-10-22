@@ -78,9 +78,10 @@ export class ReminderService {
   async voice(text: string, signal: AbortSignal): Promise<{ message: string; undo?: boolean }> {
     const drafts = await extractReminders(this.settings(), text, 'voice', AbortSignal.any([signal, AbortSignal.timeout(60_000)]))
     signal.throwIfAborted()
-    if (!drafts.length || drafts.every(item => item.intent !== 'create_reminder')) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
+    this.log(`[reminders] voice parsed: ${drafts.length} item(s), intents=${drafts.map(item => item.intent).join(',')}`)
+    if (!drafts.length || drafts.every(item => item.intent !== 'create_reminder' && item.intent !== 'todo')) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
     const draft = drafts[0]!
-    if (drafts.length !== 1 || draft.needs_confirmation || draft.dueAt === null || draft.dueAt <= Date.now()) {
+    if (drafts.length !== 1 || draft.intent !== 'create_reminder' || draft.needs_confirmation || draft.dueAt === null || draft.dueAt <= Date.now()) {
       this.open({ drafts }); return { message: mt('请确认提醒事项与时间') }
     }
     const row = this.save({ title: draft.title, dueAt: draft.dueAt, level: draft.level, recurrence: draft.rule,

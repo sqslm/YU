@@ -18,7 +18,7 @@ describe('caption reconciliation', () => {
     expect(update(old, '')).toEqual([])
   })
   it('bounds the visible sequence and keeps emoji and combining characters together', () => {
-    expect(update([], '很长'.repeat(80))).toHaveLength(48)
+    expect(update([], '很长'.repeat(80))).toHaveLength(120)
     expect(update([], '好👨‍👩‍👧‍👦e\u0301').map(item => item.text)).toEqual(['好', '👨‍👩‍👧‍👦', 'e\u0301'])
   })
   it('does not replay existing words when ASR inserts punctuation before them', () => {
@@ -33,5 +33,10 @@ describe('caption reconciliation', () => {
     const third = update(second, '第一句还没播完，就有新文字进入到字幕中')
     expect(third.slice(0, second.length)).toEqual(second)
     expect(new Set(third.map(item => item.id)).size).toBe(third.length)
+  })
+  it('queues a rewritten sentence as new glyphs instead of replacing all shown glyphs in one batch', () => {
+    const old = glyphs('旧的一整段字幕')
+    const next = update(old, ' completely different sentence')
+    expect(next.every(glyph => !old.some(previous => previous.id === glyph.id))).toBe(true)
   })
 })

@@ -102,7 +102,7 @@ function json(res: http.ServerResponse, payload: unknown, status = 200): void {
 
 function speech(seconds = 0.5): Int16Array {
   const pcm = new Int16Array(Math.round(seconds * SAMPLE_RATE))
-  pcm.fill(9000)
+  for (let i = 0; i < pcm.length; i++) pcm[i] = Math.round(9000 * Math.sin(2 * Math.PI * 440 * i / SAMPLE_RATE))
   return pcm
 }
 
@@ -145,6 +145,19 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('standard ASR preset wire contracts', () => {
+  it.each(['Transcribe audio to text (language: zh)', 'Transcribe audio to text (language: zh)\n指令提醒，20分钟后打扫卫生'])('drops the observed Qwen server instruction echo: %s', async text => {
+    const server = await startServer((_item, res) => json(res, { text }))
+    try {
+      const result = await transcribe({ ...settings(server.baseUrl), model: 'ggml-org/Qwen3-ASR-1.7B-GGUF:Q8_0' }, { wav: encodeWav(speech()), language: 'zh' })
+      expect(result.text).toBe(text.includes('\n') ? '指令提醒，20分钟后打扫卫生' : '')
+    } finally { await server.close() }
+  })
+  it('preserves ordinary English, including references to transcription inside speech', async () => {
+    const text = 'Please transcribe audio to text and explain it.'
+    const server = await startServer((_item, res) => json(res, { text }))
+    try { expect((await transcribe({ ...settings(server.baseUrl), model: 'Qwen3-ASR' }, { wav: encodeWav(speech()) })).text).toBe(text) }
+    finally { await server.close() }
+  })
   it.each(allPresets().filter(preset => preset.kind === 'asr' && !preset.asrAdapter))('$name sends authenticated multipart WAV with the selected model', async preset => {
     const server = await startServer((_item, res) => json(res, { text: 'verified' }))
     try {

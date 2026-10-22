@@ -587,7 +587,9 @@ export async function transcribe(
     // on, a server that rejects the encoded clip (or answers 200 with an empty
     // transcript) gets one retry as WAV and is remembered, so a wrong guess costs
     // bytes, never a take.
-    let upload = await encodeForUpload(prepared.wav, cfg, log, req.encoded)
+    // A captured Opus copy still contains the original silence. Use it only
+    // when it represents the same untrimmed audio as the prepared WAV.
+    let upload = await encodeForUpload(prepared.wav, cfg, log, prepared.savedMs ? undefined : req.encoded)
     let result = await postTranscription(target, headers, upload, fields, timeoutMs, req.signal)
     let text = ''
     if (result.status >= 200 && result.status < 300) {
@@ -623,6 +625,12 @@ export async function transcribe(
       throw new ProviderError(`ASR HTTP ${result.status}`, result.status, result.body.slice(0, 500))
     }
 
+    // llama.cpp's Qwen ASR endpoint can echo its own default instruction for
+    // non-speech. It is protocol scaffolding, never a user transcript.
+    if (/qwen.*asr/i.test(model) && /^Transcribe audio to text(?: \(language: [\w-]+\))?(?:[.!]?\s*$|\s*\n)/i.test(text)) {
+      log('[asr] discarded server transcription instruction echo')
+      text = text.replace(/^Transcribe audio to text(?: \(language: [\w-]+\))?(?:[.!]?\s*$|\s*\n)/i, '').trim()
+    }
     return { text, model }
   } finally {
     inFlight -= 1

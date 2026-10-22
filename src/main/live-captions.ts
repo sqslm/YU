@@ -1,10 +1,12 @@
-import { concatPcm, isSilent } from './audio/wav'
+import { audibleRange, concatPcm, isSilent } from './audio/wav'
 
 /** A bounded preview of recent speech. Final dictation owns the complete audio. */
 export class LiveCaptions {
   private chunks: Int16Array[] = []
   private samples = 0
   private totalSamples = 0
+  private lead = new Int16Array(0)
+  private started = false
   private revision = 0
   private timer: ReturnType<typeof setTimeout> | null = null
   private running = false
@@ -21,6 +23,19 @@ export class LiveCaptions {
 
   push(pcm: Int16Array): void {
     if (this.stopped || !pcm.length) return
+    if (!this.started) {
+      const opening = concatPcm([this.lead, pcm])
+      const range = audibleRange(opening)
+      if (!range) {
+        // Only a short pre-roll is retained while waiting. Silence does not
+        // consume the six-second keyword window or cause an ASR request.
+        this.lead = opening.slice(-3200)
+        return
+      }
+      pcm = opening.subarray(Math.max(0, range.start - 1920))
+      this.lead = new Int16Array(0)
+      this.started = true
+    }
     if (this.options.openingOnly) pcm = pcm.subarray(0, Math.max(0, 96_000 - this.totalSamples))
     if (!pcm.length) return
     this.totalSamples += pcm.length
@@ -43,12 +58,13 @@ export class LiveCaptions {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
     this.chunks = []
+    this.lead = new Int16Array(0)
     this.samples = 0
   }
 
   private schedule(): void {
     if (this.stopped || this.running || this.timer) return
-    this.timer = setTimeout(() => { this.timer = null; void this.tick() }, 1800)
+    this.timer = setTimeout(() => { this.timer = null; void this.tick() }, 1000)
     this.timer.unref?.()
   }
 

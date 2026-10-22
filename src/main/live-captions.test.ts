@@ -2,13 +2,45 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LiveCaptions } from './live-captions'
 
 afterEach(() => vi.useRealTimers())
-const speech = (seconds = 1): Int16Array => new Int16Array(seconds * 16000).fill(1200)
+const speech = (seconds = 1): Int16Array => Int16Array.from({ length: seconds * 16000 }, (_, i) => Math.round(1200 * Math.sin(2 * Math.PI * 440 * i / 16000)))
 function harness(transcribe = vi.fn(async (_pcm: Int16Array, _signal: AbortSignal) => '字幕')) {
   const onText = vi.fn(), onError = vi.fn()
   return { captions: new LiveCaptions({ transcribe, onText, onError }), transcribe, onText, onError }
 }
 
 describe('live captions', () => {
+  it('never sends a DC-biased silent microphone or opening click to the recognizer', async () => {
+    vi.useFakeTimers()
+    const h = harness()
+    h.captions.push(new Int16Array(32000).fill(350))
+    const pop = new Int16Array(32000); pop.set(speech().subarray(0, 400))
+    h.captions.push(pop)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(h.transcribe).not.toHaveBeenCalled()
+    h.captions.stop()
+  })
+  it('provides the first preview within one second after audible input', async () => {
+    vi.useFakeTimers()
+    const h = harness()
+    h.captions.push(speech())
+    await vi.advanceTimersByTimeAsync(999)
+    expect(h.transcribe).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(h.onText).toHaveBeenCalledWith('字幕')
+    h.captions.stop()
+  })
+  it('starts the keyword window at speech onset after a long silent lead-in', async () => {
+    vi.useFakeTimers()
+    const onOpeningText = vi.fn(), transcribe = vi.fn(async () => '指令提醒，20分钟后打扫卫生')
+    const captions = new LiveCaptions({ transcribe, onOpeningText, openingOnly: true, onText: vi.fn(), onError: vi.fn() })
+    captions.push(new Int16Array(16000 * 12))
+    await vi.advanceTimersByTimeAsync(1800)
+    expect(transcribe).not.toHaveBeenCalled()
+    captions.push(speech(2))
+    await vi.advanceTimersByTimeAsync(1800)
+    expect(onOpeningText).toHaveBeenCalledWith('指令提醒，20分钟后打扫卫生')
+    captions.stop()
+  })
   it('offers opening text only while the ASR window still contains the beginning', async () => {
     vi.useFakeTimers()
     const onOpeningText = vi.fn(), onText = vi.fn()

@@ -1182,6 +1182,26 @@ describe('opening phrase mode activation', () => {
     expect(mocks.transcribe).toHaveBeenCalledTimes(2)
     expect(mocks.complete.mock.calls[0][1].messages.at(-1).content).toBe('今天去吃饭')
   })
+  it('ignores silent DC input, trims the lead-in and preserves a recognized mode through incomplete previews', async () => {
+    vi.useFakeTimers()
+    mocks.transcribe.mockResolvedValueOnce({ text: '指令提醒，二十分钟后打扫卫生' })
+      .mockResolvedValueOnce({ text: '二十分钟后打扫卫生' })
+      .mockResolvedValue({ text: '指令提醒，二十分钟后打扫卫生' })
+    const onReminder = vi.fn(async () => ({ message: 'saved' }))
+    const { pipeline, sent, entries } = harness({ voiceCommands: commands(), liveCaptions: true }, { onReminder })
+    pipeline.start('dictation'); pipeline.pushAudio(new Int16Array(16000 * 12).fill(350))
+    await vi.advanceTimersByTimeAsync(12000)
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    pipeline.pushAudio(tone(2000)); await vi.advanceTimersByTimeAsync(1000)
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '快速提醒' })
+    pipeline.pushAudio(tone(1000)); await vi.advanceTimersByTimeAsync(1000)
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '快速提醒' })
+    const done = finish(pipeline); await vi.advanceTimersByTimeAsync(600); await done
+    expect(onReminder).toHaveBeenCalledWith('二十分钟后打扫卫生', expect.any(AbortSignal))
+    const wav = mocks.transcribe.mock.calls.at(-1)![1].wav
+    expect(wav.length).toBeLessThan(44 + 16000 * 4 * 2)
+    expect(entries).toHaveLength(0)
+  })
   it.each([['指令提醒', '快速提醒'], ['指令笔记', '随记']])('shows %s as the live task label without a fake polishing card', async (phrase, label) => {
     vi.useFakeTimers()
     mocks.transcribe.mockResolvedValue({ text: `${phrase}，正文` })

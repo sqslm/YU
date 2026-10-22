@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export interface CaptionGlyph { id: number; text: string }
-const MAX_GLYPHS = 48
+const MAX_GLYPHS = 120
+const VISIBLE_GLYPHS = 48
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 /** Compare complete targets, including queued glyphs. Matching letters and
@@ -28,7 +29,8 @@ export function reconcileCaption(previous: CaptionGlyph[], text: string, nextId:
   for (const [oldMatch, newMatch] of matches) {
     for (let n = newAt; n < newMatch; n++) {
       const old = oldAt + n - newAt
-      result.push({ id: old < oldMatch ? previous[old].id : nextId(), text: next[n] })
+      const correction = oldMatch - oldAt <= 3 && newMatch - newAt <= 3
+      result.push({ id: correction && old < oldMatch ? previous[old].id : nextId(), text: next[n] })
     }
     if (oldMatch < previous.length) result.push(previous[oldMatch])
     oldAt = oldMatch + 1
@@ -42,31 +44,29 @@ export function CaptionTicker({ text }: { text: string }): JSX.Element {
   const target = useRef<CaptionGlyph[]>([])
   const shown = useRef(new Set<number>())
   const sequence = useRef(0)
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useLayoutEffect(() => {
     const next = reconcileCaption(target.current, text, () => ++sequence.current)
     target.current = next
     const ids = new Set(next.map(glyph => glyph.id))
     shown.current = new Set([...shown.current].filter(id => ids.has(id)))
     const reveal = (): void => {
+      timer.current = null
       const pending = target.current.find(glyph => !shown.current.has(glyph.id))
       if (pending) shown.current.add(pending.id)
-      setGlyphs(target.current.filter(glyph => shown.current.has(glyph.id)))
-      if (!target.current.some(glyph => !shown.current.has(glyph.id)) && timer.current) {
-        clearInterval(timer.current)
-        timer.current = null
-      }
+      setGlyphs(target.current.filter(glyph => shown.current.has(glyph.id)).slice(-VISIBLE_GLYPHS))
+      const remaining = target.current.filter(glyph => !shown.current.has(glyph.id)).length
+      if (remaining) timer.current = setTimeout(reveal, remaining > 12 ? 16 : 32)
     }
-    setGlyphs(next.filter(glyph => shown.current.has(glyph.id)))
+    setGlyphs(next.filter(glyph => shown.current.has(glyph.id)).slice(-VISIBLE_GLYPHS))
     if (!timer.current && next.some(glyph => !shown.current.has(glyph.id))) {
       reveal()
-      if (next.some(glyph => !shown.current.has(glyph.id))) timer.current = setInterval(reveal, 45)
     }
   }, [text])
-  useEffect(() => () => { if (timer.current) clearInterval(timer.current) }, [])
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
   return <span data-live-caption role="status" aria-label={text} style={{ width: '100%', minWidth: 0, height: 25, overflow: 'hidden', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', maskImage: 'linear-gradient(to right, transparent, black 12px)' }}>
     <span aria-hidden="true" style={{ display: 'flex', flexShrink: 0, whiteSpace: 'pre', fontSize: 14, lineHeight: '24px' }}>
-      {glyphs.map(glyph => <span key={glyph.id} data-caption-glyph data-caption-id={glyph.id} style={{ display: 'inline-flex', flexShrink: 0, overflow: 'hidden', animation: 'caption-enter .14s ease-out both' }}>{glyph.text}</span>)}
+      {glyphs.map(glyph => <span key={glyph.id} data-caption-glyph data-caption-id={glyph.id} style={{ display: 'inline-block', whiteSpace: 'pre', flexShrink: 0, overflow: 'hidden', animation: 'caption-enter .14s ease-out both' }}>{glyph.text}</span>)}
     </span>
   </span>
 }

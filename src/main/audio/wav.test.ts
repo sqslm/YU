@@ -66,6 +66,15 @@ describe('concatPcm', () => {
 })
 
 describe('isSilent', () => {
+  it('rejects a silent microphone with DC bias instead of sending it to ASR', () => {
+    expect(isSilent(new Int16Array(32000).fill(350))).toBe(true)
+  })
+  it('rejects a short opening pop without rejecting quiet speech', () => {
+    const pop = new Int16Array(32000)
+    pop.set(tone(400, 2000))
+    expect(isSilent(pop)).toBe(true)
+    expect(isSilent(tone(16000, 240))).toBe(false)
+  })
   it('flags a zeroed buffer', () => {
     expect(isSilent(new Int16Array(16000))).toBe(true)
   })
@@ -83,6 +92,17 @@ describe('isSilent', () => {
   it('treats quiet room noise as silent', () => {
     const pcm = new Int16Array(16000).fill(60)
     expect(isSilent(pcm)).toBe(true)
+  })
+})
+
+describe('quiet edge trimming', () => {
+  it('removes DC-biased silence without modifying any speech samples', () => {
+    const pcm = new Int16Array(16000 * 14).fill(350)
+    pcm.set(tone(16000), 16000 * 12)
+    const trimmed = trimSilencePcm(pcm)
+    expect(trimmed.buffer).toBe(pcm.buffer)
+    expect(trimmed.length).toBe(16000 + 1920 + 3840)
+    expect(trimmed.subarray(1920, 1920 + 16000)).toEqual(tone(16000))
   })
 })
 
@@ -191,9 +211,9 @@ describe('decodeWavPcm16', () => {
 
 
 describe('trimSilencePcm', () => {
-  /** Square block of "speech" so the trim boundaries are exact. */
+  /** A zero-mean signal; a constant block is microphone DC, not speech. */
   function block(samples: number, amplitude = 9000): Int16Array {
-    return new Int16Array(samples).fill(amplitude)
+    return tone(samples, amplitude)
   }
 
   /** 1 s silence + 1 s speech + 1 s silence. */
@@ -207,8 +227,7 @@ describe('trimSilencePcm', () => {
     const trimmed = trimSilencePcm(padded())
     expect(trimmed.length).toBe(16000 + 1920 + 3840) // speech + 120 ms head + 240 ms tail
     expect(pcmDurationMs(trimmed)).toBe(1360)
-    expect(trimmed[1920]).toBe(9000)
-    expect(trimmed[1920 + 15999]).toBe(9000)
+    expect(trimmed.subarray(1920, 1920 + 16000)).toEqual(block(16000))
   })
 
   it('returns a view, so nothing is copied', () => {
@@ -235,15 +254,15 @@ describe('trimSilencePcm', () => {
 
   it('refuses to cut below the 300 ms floor', () => {
     const pcm = new Int16Array(SAMPLE_RATE)
-    pcm[15999] = 30000 // a single click at the very end
+    pcm.set(block(1280), 16000 - 1280) // 80 ms at the end plus only head padding
     expect(trimSilencePcm(pcm)).toBe(pcm)
     const mid = new Int16Array(SAMPLE_RATE * 2)
-    mid[16000] = 30000
-    expect(trimSilencePcm(mid).length).toBe(5761) // 360 ms, above the floor
+    mid.set(block(1280), 16000)
+    expect(trimSilencePcm(mid).length).toBe(7040) // 80 ms plus 360 ms padding
   })
 
   it('honours a custom threshold', () => {
-    const pcm = new Int16Array(SAMPLE_RATE * 2).fill(150)
+    const pcm = tone(SAMPLE_RATE * 2, 200)
     pcm.set(block(16000), 16000)
     expect(pcmDurationMs(trimSilencePcm(pcm, { threshold: 220 }))).toBe(1120)
     // Lowering the threshold under the noise floor makes the noise look like
@@ -253,10 +272,10 @@ describe('trimSilencePcm', () => {
 
   it('keeps interior silence, so pauses are never cut', () => {
     const pcm = new Int16Array(SAMPLE_RATE * 4)
-    pcm.set(block(4000), 2000)
-    pcm.set(block(4000), 2000 + 4000 + 8000) // 500 ms pause in between
+    pcm.set(block(3840), 1920)
+    pcm.set(block(3840), 1920 + 3840 + 8000) // 500 ms pause in between
     const trimmed = trimSilencePcm(pcm)
-    expect(trimmed.length).toBe(4000 + 8000 + 4000 + 1920 + 3840)
+    expect(trimmed.length).toBe(3840 + 8000 + 3840 + 1920 + 3840)
   })
 
   it('handles an empty buffer', () => {

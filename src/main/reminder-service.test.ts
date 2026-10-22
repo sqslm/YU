@@ -50,6 +50,15 @@ describe('shared reminder delivery and entry points', () => {
     try { mock.extract.mockResolvedValue([draft()]); controller.abort(); await expect(service.voice('提醒我', controller.signal)).rejects.toThrow(); expect(service.store.list()).toHaveLength(0) }
     finally { service.stop() }
   })
+  it('reviews a to-do from the explicit reminder entry instead of dropping it', async () => {
+    const { service, open } = harness()
+    try {
+      mock.extract.mockResolvedValue([draft({ intent: 'todo' })])
+      await expect(service.voice('Clean up in 20 minutes', new AbortController().signal)).resolves.toEqual({ message: '请确认提醒事项与时间' })
+      expect(open).toHaveBeenCalledWith({ drafts: [expect.objectContaining({ intent: 'todo' })] })
+      expect(service.store.list()).toHaveLength(0)
+    } finally { service.stop() }
+  })
   it('sends one normal notification with click navigation, queues strong reminders in one window and permits snooze', () => {
     vi.useFakeTimers(); const base = new Date(2026, 9, 23, 8).getTime(); vi.setSystemTime(base)
     const { service, open } = harness()
