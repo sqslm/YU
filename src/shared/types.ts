@@ -495,7 +495,7 @@ export interface Settings {
    * goes away.
    */
   alertHideSeconds: number
-  /** Whether the recorded wav is kept on disk for retry/download (REQ-07). */
+  /** Successful take audio only. Legacy `failed` is normalised to `never`. */
   keepAudio: 'never' | 'failed' | 'always'
   /** Hard cap for one take; the bar warns one minute before it (REQ-17). */
   maxSessionSeconds: number
@@ -616,9 +616,8 @@ export interface PromptLibrary {
 export type ThemeMode = 'dark' | 'light' | 'system'
 
 /**
- * Lifecycle of one take. Every take that reaches the pipeline writes an entry
- * with one of these, so a cancelled or inaudible take is still inspectable and
- * retryable instead of vanishing (REQ-02).
+ * New takes are stored only as completed; archived is a successful result put
+ * away by the user. Other statuses remain readable for old history and cleanup.
  */
 export type HistoryStatus = 'completed' | 'dismissed' | 'empty' | 'error' | 'archived'
 

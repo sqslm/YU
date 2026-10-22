@@ -40,6 +40,8 @@ export interface TypelessApi {
      */
     archive(id: string, archived?: boolean): Promise<boolean>
     clear(): Promise<void>
+    /** Removes only old abnormal history and its audio; returns the row count. */
+    clearAbnormal(): Promise<number>
     /**
      * Copies a kept wav next to the user's downloads folder and returns its
      * path; `ok:false` when the take was not kept or the file is gone (REQ-07).

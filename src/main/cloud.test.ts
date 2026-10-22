@@ -280,6 +280,29 @@ describe('CloudClient', () => {
 })
 
 describe('SyncEngine', () => {
+  it('does not upload old failures, skips remote failures, and syncs explicit cleanup deletes', async () => {
+    const store = openStore()
+    await store.load()
+    store.migrateFrom([
+      { id: 'old-failure', createdAt: Date.now(), mode: 'dictation', transcript: '', final: '', durationMs: 100, status: 'error', app: '' },
+      { id: 'success', createdAt: Date.now() - 1, mode: 'dictation', transcript: '原文', final: '结果', durationMs: 100, app: '' }
+    ])
+    const accounts = new AccountStore(join(dir, 'account.json'))
+    signIn(accounts)
+    route('/transcription_history/push', 'POST', { status: 200, body: { accepted: 1 } })
+    route('/transcription_history/pull', 'GET', { status: 200, body: { entries: [
+      { id: 'remote-failure', createdAt: Date.now(), updatedAt: Date.now(), mode: 'dictation', status: 'dismissed', final: '' }
+    ], hasMore: false, nextSince: 100 } })
+    route('/transcription_history/sync_status', 'GET', { status: 200, body: { count: 1 } })
+    const sync = engine(store, accounts)
+    await sync.now()
+    expect((callsTo('/push')[0].body?.entries as Array<{ id: string }>).map(item => item.id)).toEqual(['success'])
+    expect(store.get('remote-failure')).toBeUndefined()
+    expect(store.get('old-failure')).toBeDefined()
+    expect(await store.clearAbnormal()).toBe(1)
+    await sync.now()
+    expect(callsTo('/push').at(-1)?.body?.deleted).toEqual(['old-failure'])
+  })
   it('keeps a history edit made while the push/pull cycle is in flight pending', async () => {
     const store = openStore()
     await store.load()

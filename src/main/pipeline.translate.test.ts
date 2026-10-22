@@ -255,8 +255,8 @@ describe('translate branch', () => {
     const entry = await pipeline.debugIngest('translate')
 
     expect(mocks.insertText).not.toHaveBeenCalled()
-    expect(entry?.status).toBe('error')
-    expect(entries[0]?.alertKind).toBe('llm_failed')
+    expect(entry).toBeNull()
+    expect(entries).toHaveLength(0)
     expect(log).toHaveBeenCalledWith('[translate] no target delivered (en,ja)')
     const alert = alertOf(sent, 'llm_failed')!
     expect(alert.level).toBe('error')

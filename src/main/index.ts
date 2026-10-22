@@ -727,6 +727,7 @@ function registerIpc(): void {
     history.archive(id, archived !== false)
   )
   ipcMain.handle('history:clear', () => history.clear())
+  ipcMain.handle('history:clear-abnormal', () => history.clearAbnormal())
   ipcMain.handle('history:downloadAudio', (_event, id: string) => history.downloadAudio(id))
   // Lifetime counters for 概览. Read-only: the pipeline is the only writer.
   ipcMain.handle('stats:get', () => stats.get())
@@ -995,10 +996,10 @@ function registerIpc(): void {
     }
     // A microphone failure has to look like every other failure (ACC-01 step
     // 5/7): a classified alert with real buttons instead of raw English text in a
-    // red pill, a `[capture]` log line, and an `error` row the user can find.
+    // red pill and a `[capture]` diagnostics line, without a history row.
     const classified = classifyError(new Error(text))
-    pipeline.showAlert(buildBarAlert(classified))
     void pipeline.reportCaptureError(text, classified.kind)
+    pipeline.showAlert(buildBarAlert(classified))
   })
   ipcMain.on('bar:log', (_event, message: string) => log(`[bar] ${message}`))
   // --- answer card --------------------------------------------------------
@@ -1065,9 +1066,8 @@ function wireHotkeys(): void {
           void pipeline.stop()
           break
         case 'cancel':
-          // ESC abandons the take: abort any request, drop the PCM and record a
-          // `dismissed` entry so it can still be found in history (REQ-02). A
-          // discarded tap (press too short to be speech) must leave no trace.
+          // ESC abandons the take and its audio without adding history.
+          // A discarded tap also skips the cancellation hint.
           if (event.reason === 'tap') pipeline.discard()
           else pipeline.cancel()
           break

@@ -81,7 +81,6 @@ export const MAIN_MESSAGES: Record<string, string> = {
   '讯飞听写连接失败（检查 AppID / APIKey / 网络）': 'iFlytek connection failed (check AppID / APIKey / network)',
   '要读取的网页地址。': 'The page URL to read.',
   '业务空间 ID': 'Workspace ID',
-  '已取消（可在历史中查看）': 'Cancelled (it is in History)',
   '语义检索，/search 直接返回整页正文，适合当资料喂给模型。': 'Semantic search; /search returns whole pages, which is handy as material for a model.',
   '语音服务返回了网页而不是转写结果，请检查该服务的地址与密钥': 'The speech service returned a web page instead of a transcript; check its URL and key',
   '在系统浏览器里打开一个检索页。仅当用户明确要求「帮我打开/搜一下」时使用。': 'Open a search page in the system browser. Only when the user explicitly asks you to open or search for something.',

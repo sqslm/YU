@@ -4,6 +4,11 @@ import { defaultSearchProviders } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL } from './local-asr'
 
 describe('mergeSettings', () => {
+  it('retires failed-only history audio while preserving successful-audio opt-in', () => {
+    expect(mergeSettings({}).keepAudio).toBe('never')
+    expect(mergeSettings({ keepAudio: 'failed' }).keepAudio).toBe('never')
+    expect(mergeSettings({ keepAudio: 'always' }).keepAudio).toBe('always')
+  })
   it('enables caption previews for old settings and preserves the off switch', () => {
     expect(mergeSettings({}).liveCaptions).toBe(true)
     expect(mergeSettings({ liveCaptions: false }).liveCaptions).toBe(false)

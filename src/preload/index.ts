@@ -34,6 +34,7 @@ const api: TypelessApi = {
     archive: (id: string, archived = true): Promise<boolean> =>
       ipcRenderer.invoke('history:archive', id, archived),
     clear: (): Promise<void> => ipcRenderer.invoke('history:clear'),
+    clearAbnormal: (): Promise<number> => ipcRenderer.invoke('history:clear-abnormal'),
     downloadAudio: (id: string): Promise<{ ok: boolean; path?: string; message?: string }> =>
       ipcRenderer.invoke('history:downloadAudio', id),
     feedback: (input: { id?: string; text: string }): Promise<{ ok: boolean; path?: string }> =>

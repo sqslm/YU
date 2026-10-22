@@ -347,6 +347,61 @@ describe('migration from the JSON era', () => {
 })
 
 describe('sync cursors', () => {
+  it('searches recorded card names as literal substrings', async () => {
+    const store = makeStore()
+    await store.load()
+    const card = await store.add({ mode: 'dictation', transcript: '原文', final: '结果', durationMs: 10, promptName: '周报 50%_精修' })
+    await store.add({ mode: 'dictation', transcript: '另外', final: '另一条结果', durationMs: 10, promptName: '周报 500X精修' })
+    expect(store.list('50%_').map(item => item.id)).toEqual([card.id])
+    expect(store.list('精修')).toHaveLength(2)
+  })
+
+  it('cleans old abnormal rows and their audio only after explicit cleanup, with sync tombstones', async () => {
+    const store = makeStore()
+    await store.load()
+    const normalAudio = seedAudio('normal')
+    const failedAudio = seedAudio('failed')
+    const now = Date.now()
+    const rows: HistoryEntry[] = [
+      { ...entry('normal', now, normalAudio.relative), status: 'completed' },
+      { ...entry('archived', now - 1), status: 'archived' },
+      entry('legacy-success', now - 2),
+      { ...entry('failed', now + 5, failedAudio.relative), status: 'error', error: 'offline' },
+      { ...entry('cancelled', now + 4), status: 'dismissed' },
+      { ...entry('empty', now + 3), status: 'empty' },
+      { ...entry('empty-result', now + 2), final: ' \n\t ' },
+      { ...entry('legacy-error', now + 1), error: 'old failure' }
+    ]
+    store.migrateFrom(rows)
+    expect(store.count()).toBe(8)
+    expect(store.latest()?.id).toBe('normal')
+    expect(store.pendingSince(0)).toBe(3)
+    expect(new Set(store.changesSince(0).map(item => item.id))).toEqual(new Set(['normal', 'archived', 'legacy-success']))
+    expect(await store.clearAbnormal()).toBe(5)
+    expect(store.count()).toBe(3)
+    expect(store.get('archived')?.status).toBe('archived')
+    expect(existsSync(normalAudio.absolute)).toBe(true)
+    await vi.waitFor(() => expect(existsSync(failedAudio.absolute)).toBe(false))
+    expect(new Set(store.deletionsSince(0).map(item => item.id))).toEqual(new Set(['failed', 'cancelled', 'empty', 'empty-result', 'legacy-error']))
+    expect(await store.clearAbnormal()).toBe(0)
+  })
+
+  it('skips abnormal remote rows and does not overwrite a successful local result with one', async () => {
+    const store = makeStore()
+    await store.load()
+    const normal = await store.add({ mode: 'dictation', transcript: '原文', final: '结果', durationMs: 10 })
+    const remote = { ...toSyncRow(normal), updatedAt: (normal.updatedAt ?? 0) + 1000 }
+    expect(await store.applyRemote([
+      { ...remote, status: 'error' },
+      { ...remote, id: 'cancelled', status: 'dismissed' },
+      { ...remote, id: 'empty', status: 'empty' },
+      { ...remote, id: 'blank', final: ' \n ' },
+      { ...remote, id: 'old-error', error: 'offline' }
+    ], [])).toBe(0)
+    expect(store.count()).toBe(1)
+    expect(store.get(normal.id)?.final).toBe('结果')
+    expect(await store.applyRemote([{ ...remote, id: 'archived', status: 'archived' }], [])).toBe(1)
+  })
   it('stamps a new row so the other machine can order it', async () => {
     const store = makeStore()
     await store.load()

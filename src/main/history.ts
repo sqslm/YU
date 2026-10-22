@@ -24,6 +24,12 @@ function clampLimit(value: number): number {
  */
 const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000
 
+// Archived successful results are still normal history. Legacy failures stay
+// local until the user chooses cleanup, and must not be uploaded again.
+const NORMAL_HISTORY_SQL = `status IN ('completed', 'archived')
+  AND trim(final, char(9) || char(10) || char(13) || ' ') <> ''
+  AND coalesce(trim(json_extract(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.error')), '') = ''`
+
 /**
  * Columns that exist as real SQL columns because something queries, sorts or
  * filters on them. Everything else rides in the `extra` JSON column.
@@ -269,6 +275,7 @@ export function fromSyncRow(raw: unknown): HistoryEntry | null {
   if (typeof item.hasRevertedAI === 'boolean') entry.hasRevertedAI = item.hasRevertedAI
   if (typeof item.route === 'string') entry.route = item.route as HistoryEntry['route']
   if (Array.isArray(item.sources)) entry.sources = item.sources as HistoryEntry['sources']
+  if ((entry.status && entry.status !== 'completed' && entry.status !== 'archived') || entry.error?.trim() || !entry.final.trim()) return null
   return entry
 }
 
@@ -281,9 +288,9 @@ export function fromSyncRow(raw: unknown): HistoryEntry | null {
  * per-row identity to diff. SQLite gives all three for free, and it costs no
  * dependency: Electron 38 ships Node 22.22, whose `node:sqlite` needs no flag.
  *
- * Every take is persisted, including cancelled and inaudible ones, so the user
- * can see what happened and retry it (REQ-02). A retention window trims old
- * entries on load and after every append (REQ-05), and kept wav files live in
+ * The pipeline writes successful results only. Older abnormal rows remain until
+ * explicit cleanup. A retention window trims old entries on load and append,
+ * and kept wav files live in
  * `<userData>/audio/` so a take can be downloaded or retried (REQ-07).
  */
 export class HistoryStore {
@@ -779,8 +786,8 @@ export class HistoryStore {
   }
 
   /**
-   * Newest rows first. A query does a substring match on the three fields worth
-   * searching; SQLite's LIKE is case-insensitive for ASCII and an exact
+   * Newest rows first. A query does a substring match on text, app and card name.
+   * SQLite's LIKE is case-insensitive for ASCII and an exact
    * substring match for Chinese, which is what the old in-memory index got
    * wrong for CJK (it tokenised on spaces, so a whole Chinese sentence was one
    * token and prefix search missed every match inside it).
@@ -793,9 +800,10 @@ export class HistoryStore {
           .prepare(
             `SELECT * FROM history
              WHERE final LIKE ? ESCAPE '\\' OR transcript LIKE ? ESCAPE '\\' OR app LIKE ? ESCAPE '\\'
+               OR json_extract(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.promptName') LIKE ? ESCAPE '\\'
              ORDER BY createdAt DESC LIMIT ?`
           )
-          .all(needle, needle, needle, limit)
+          .all(needle, needle, needle, needle, limit)
       : this.handle()
           .prepare('SELECT * FROM history ORDER BY createdAt DESC LIMIT ?')
           .all(limit)
@@ -804,7 +812,7 @@ export class HistoryStore {
 
   latest(): HistoryEntry | undefined {
     const row = this.handle()
-      .prepare('SELECT * FROM history ORDER BY createdAt DESC LIMIT 1')
+      .prepare(`SELECT * FROM history WHERE ${NORMAL_HISTORY_SQL} ORDER BY createdAt DESC LIMIT 1`)
       .get() as Row | undefined
     return row ? rowToEntry(row) : undefined
   }
@@ -861,6 +869,25 @@ export class HistoryStore {
     await this.wipeAll()
   }
 
+  /** Explicit cleanup of old abnormal rows; successful and archived text stays. */
+  async clearAbnormal(): Promise<number> {
+    const db = this.handle()
+    const rows = db.prepare(`SELECT id, audioPath FROM history WHERE NOT (${NORMAL_HISTORY_SQL})`).all()
+    db.exec('BEGIN')
+    try {
+      for (const row of rows) {
+        this.rawDelete(String(row.id))
+        this.markDeleted(String(row.id), Date.now())
+      }
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
+    for (const row of rows) this.removeAudioPath(row.audioPath)
+    return rows.length
+  }
+
   /* ----------------------------- sync cursors ----------------------------- */
 
   /**
@@ -871,7 +898,7 @@ export class HistoryStore {
    */
   changesSince(since: number, limit = 500): HistoryEntry[] {
     const rows = this.handle()
-      .prepare('SELECT * FROM history WHERE updatedAt > ? ORDER BY updatedAt ASC LIMIT ?')
+      .prepare(`SELECT * FROM history WHERE updatedAt > ? AND ${NORMAL_HISTORY_SQL} ORDER BY updatedAt ASC LIMIT ?`)
       .all(since, limit)
     return rows.map(rowToEntry)
   }
@@ -887,7 +914,7 @@ export class HistoryStore {
   /** How many rows carry a change newer than `since` — the "N to push" counter. */
   pendingSince(since: number): number {
     const row = this.handle()
-      .prepare('SELECT COUNT(*) AS n FROM history WHERE updatedAt > ?')
+      .prepare(`SELECT COUNT(*) AS n FROM history WHERE updatedAt > ? AND ${NORMAL_HISTORY_SQL}`)
       .get(since) as Row | undefined
     return Number(row?.n ?? 0)
   }

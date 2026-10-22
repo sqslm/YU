@@ -213,8 +213,6 @@ function silence(ms: number): Int16Array {
   return new Int16Array(Math.round((ms / 1000) * 16000))
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-
 function snapshot(overrides: Partial<UiaSnapshot> = {}): UiaSnapshot {
   return {
     controlType: 'edit',
@@ -309,61 +307,75 @@ describe('caption previews', () => {
 })
 
 describe('cancel()', () => {
-  it('lands a dismissed row and keeps the captured audio under keepAudio=failed', async () => {
-    const { pipeline, store, entries, log, sent } = harness({ keepAudio: 'failed' })
+  it.each(['never', 'failed', 'always'] as const)('does not write cancelled takes or audio under %s', (keepAudio) => {
+    const onRecorded = vi.fn()
+    const { pipeline, store, sent } = harness({ keepAudio }, { onRecorded })
     pipeline.start('dictation')
     pipeline.pushAudio(tone(800))
-    await sleep(10)
-
-    expect(pipeline.cancel()).toBe(true)
-
-    await vi.waitFor(() => expect(entries).toHaveLength(1))
-    const entry = entries[0]!
-    expect(entry.status).toBe('dismissed')
-    expect(entry.alertKind).toBe('cancelled')
-    expect(entry.durationMs).toBeGreaterThan(0)
-    // `dismissed` is not `completed`, so a `failed`-audio setting keeps it.
-    // `record()` runs detached after `cancel()`, so wait for the save itself
-    // rather than for the row (which is written first).
-    await vi.waitFor(() => expect(store.saveAudio).toHaveBeenCalledTimes(1))
-    const [savedId, wav] = store.saveAudio.mock.calls[0] as [string, Buffer]
-    expect(savedId).toBe(entry.id)
-    // 800 ms of PCM16 => 44-byte RIFF header plus samples.
-    expect(wav.byteLength).toBe(44 + 800 * 16 * 2)
-    expect(wav.subarray(0, 4).toString('latin1')).toBe('RIFF')
-    await vi.waitFor(() =>
-      expect(entry.audioPath).toBe('/tmp/typeless/audio/h1.wav')
-    )
-    // The reason rides along in the log line: "user" for an Esc press or the
-    // 取消 action, "suspend"/"lock" when Windows ended the session.
-    expect(log).toHaveBeenCalledWith(
-      '[pipeline] cancelled dictation take (800ms captured, user)'
-    )
-    // The bar is told to flush and stop the microphone, and shows the hint.
-    expect(sent).toContainEqual(
-      expect.objectContaining({ phase: 'done', mode: 'dictation', text: '已取消（可在历史中查看）' })
-    )
-    pipeline.dismissAlert()
-  })
-
-  it('keeps no audio when keepAudio=never even though the same PCM was captured', async () => {
-    const { pipeline, store, entries } = harness({ keepAudio: 'never' })
-    pipeline.start('dictation')
-    pipeline.pushAudio(tone(800))
-    await sleep(10)
-
     pipeline.cancel()
-
-    await vi.waitFor(() => expect(entries).toHaveLength(1))
-    expect(entries[0]!.status).toBe('dismissed')
-    // Identical capture to the test above: only the setting differs.
+    expect(store.add).not.toHaveBeenCalled()
     expect(store.saveAudio).not.toHaveBeenCalled()
-    expect(entries[0]!.audioPath).toBeUndefined()
+    expect(onRecorded).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({ phase: 'done', text: '已取消' })
     pipeline.dismissAlert()
   })
 })
 
+describe('successful history only', () => {
+  it('does not keep a processing take or its late ASR response after cancellation', async () => {
+    let release!: (value: { text: string }) => void
+    mocks.transcribe.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    const { pipeline, store } = harness({ keepAudio: 'always' })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped()
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    pipeline.cancel()
+    release({ text: '迟到的结果' })
+    expect(await done).toBeNull()
+    expect(store.add).not.toHaveBeenCalled()
+    expect(store.saveAudio).not.toHaveBeenCalled()
+    pipeline.dismissAlert()
+  })
+  it.each(['asr', 'llm', 'empty', 'insert'] as const)('keeps %s failures out of history and audio but still reports them', async (failure) => {
+    const onRecorded = vi.fn()
+    const { pipeline, store, sent } = harness({ keepAudio: 'always' }, { onRecorded })
+    if (failure === 'asr') mocks.transcribe.mockRejectedValueOnce(new Error('ASR offline'))
+    if (failure === 'llm') mocks.complete.mockRejectedValueOnce(new Error('LLM offline'))
+    if (failure === 'empty') mocks.complete.mockResolvedValueOnce('   ')
+    if (failure === 'insert') mocks.verifyInsertion.mockResolvedValueOnce({ ok: false, reason: 'mismatch' })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped()
+    expect(await done).toBeNull()
+    expect(store.add).not.toHaveBeenCalled()
+    expect(store.saveAudio).not.toHaveBeenCalled()
+    expect(onRecorded).not.toHaveBeenCalled()
+    expect(sent.some(state => state.phase === 'alert')).toBe(true)
+    expect(alerts(sent).flatMap(state => state.alert.actions ?? []).some(action => action.id === 'retry')).toBe(false)
+  })
+  it('still saves successful text, provenance, audio and usage when requested', async () => {
+    const onRecorded = vi.fn()
+    const { pipeline, store, entries } = harness({ keepAudio: 'always' }, { onRecorded })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ status: 'completed', final: '你好世界', promptName: expect.any(String) })
+    expect(store.saveAudio).toHaveBeenCalledOnce()
+    expect(onRecorded).toHaveBeenCalledOnce()
+  })
+})
+
 describe('reportCaptureError()', () => {
+  it('never creates history or audio for a capture failure', async () => {
+    const { pipeline, store } = harness({ keepAudio: 'always' })
+    pipeline.start('dictation')
+    pipeline.pushAudio(tone(800))
+    await pipeline.reportCaptureError('decode failed', 'asr_failed')
+    expect(pipeline.isRecording).toBe(false)
+    expect(pipeline.isBusy).toBe(false)
+    expect(store.add).not.toHaveBeenCalled()
+    expect(store.saveAudio).not.toHaveBeenCalled()
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+  })
   it('only logs a missing or denied microphone and writes no history row', async () => {
     const { pipeline, store, log } = harness({})
 
@@ -375,25 +387,6 @@ describe('reportCaptureError()', () => {
     expect(log).toHaveBeenCalledWith('[capture] Permission denied')
   })
 
-  it('records any other capture failure as an error row', async () => {
-    const { pipeline, entries, store } = harness({ keepAudio: 'failed' })
-
-    await pipeline.reportCaptureError('decode failed', 'asr_failed')
-
-    expect(entries).toHaveLength(1)
-    expect(entries[0]).toMatchObject({
-      mode: 'dictation',
-      status: 'error',
-      alertKind: 'asr_failed',
-      error: 'decode failed',
-      durationMs: 0,
-      app: 'Editor',
-      transcript: '',
-      final: ''
-    })
-    // Nothing was captured, so there is no PCM to keep.
-    expect(store.saveAudio).not.toHaveBeenCalled()
-  })
 })
 
 describe('busy guard', () => {
@@ -735,7 +728,7 @@ describe('prompt label uses the request card', () => {
     mocks.transcribe.mockRejectedValueOnce(new Error('ASR offline'))
     const { pipeline, settings, sent, entries } = harness({ promptLibrary: library() })
     pipeline.start('dictation'); await finish(pipeline)
-    expect(entries[0].promptName).toBeUndefined()
+    expect(entries).toHaveLength(0)
     settings.polish.enabled = false
     pipeline.start('dictation')
     expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined })

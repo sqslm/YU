@@ -37,7 +37,7 @@ import {
 } from '@shared/prompts'
 import type { HistoryStore } from './history'
 import { buildBarAlert, classifyError } from './errors'
-import { concatPcm, decodeWavPcm16, encodeWav, isSilent, pcmDurationMs } from './audio/wav'
+import { concatPcm, decodeWavPcm16, encodeWav, isSilent, pcmDurationMs, SAMPLE_RATE } from './audio/wav'
 import { transcribe } from './providers/asr'
 import { complete, unwrapModelText } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
@@ -49,18 +49,12 @@ import { recordingLog } from './recordingLog'
 import { muteOthers, restoreOthers } from './systemAudio'
 import { appLabel, foregroundWindow, type ForegroundInfo } from './foreground'
 
-/** History label for whatever is focused: app name, never the session title. */
-function foregroundLabel(): string {
-  const window = foregroundWindow()
-  return appLabel(window.appName, window.title)
-}
 import type { UiaSnapshot } from './uia/reader'
 import { mainLanguage, mt } from '@shared/mainI18n'
 import { LiveCaptions } from './live-captions'
 
 const MIN_DURATION_MS = 350
 const STOP_GRACE_MS = 500
-/** How long the hands-free hint stays before the live waveform returns. */
 /** Length of the synthetic tone used by debugIngest (1.6 s at 16 kHz). */
 const SAMPLE_RATE_DUMMY = 25600
 /** How long the "已取消" confirmation stays in the bar before it collapses. */
@@ -418,6 +412,9 @@ export class Pipeline {
    * chord — but one with buttons stays long enough to be read and clicked.
    */
   showAlert(alert: BarAlert): void {
+    // New failures have no saved audio/history to replay. Retry of an old row
+    // remains available explicitly from that row, rather than from a new alert.
+    alert = { ...alert, actions: alert.actions?.filter((action) => action.id !== 'retry') }
     // One failure can be reported twice: the take that ends raises its notice and
     // a trailing capture event can raise the same one again a few milliseconds
     // later. Re-showing it right after the user pressed 关闭 reads as "the button
@@ -526,30 +523,11 @@ export class Pipeline {
    * ACC-01 step 5/7 + ACC-12 step 4/5: a microphone failure is raised by the bar
    * renderer, before or outside any take, so `complete()`'s catch never sees it.
    *
-   * A missing or denied device is *not* a failed take — nothing was said, there is
-   * no transcript to retry — so it gets the alert and a log line but no history
-   * row. Anything else (a decode failure, a crashed capture) is a real failed take
-   * and is recorded with the alert kind that was shown, so it can be found again
-   * instead of vanishing with the pill.
+   * Capture failures belong in diagnostics, not transcription history.
    */
-  async reportCaptureError(message: string, kind: BarAlertKind): Promise<void> {
+  async reportCaptureError(message: string, _kind: BarAlertKind): Promise<void> {
     this.log(`[capture] ${message}`)
-    if (kind === 'mic_missing' || kind === 'mic_denied') return
-    try {
-      await this.record({
-        mode: this.currentMode,
-        transcript: '',
-        final: '',
-        durationMs: 0,
-        app: foregroundLabel(),
-        error: message,
-        status: 'error',
-        alertKind: kind
-      })
-    } catch (err) {
-      // Called from an IPC handler: a history write must never reject into it.
-      this.log(`[capture] cannot record the failure: ${String(err)}`)
-    }
+    if (this.stage === 'recording') this.discard()
   }
 
   /** Snapshot of the two session-cap timers, cleared on stop/cancel. */
@@ -828,6 +806,7 @@ export class Pipeline {
     this.recording = null
     this.stage = 'idle'
     this.chunks = []
+    this.encoded = null
     this.abort?.abort()
     this.abort = null
     const win = this.bar()
@@ -851,15 +830,13 @@ export class Pipeline {
     this.takePrompt.delete(this.runToken)
     const mode = this.stageMode
     const token = ++this.runToken
-    const startedAt = this.recording?.startedAt ?? 0
 
     this.clearSessionCap()
     this.recording = null
     this.stage = 'idle'
-    // Encoded before the buffer is dropped: a cancelled take is only restorable
-    // if its audio survives, and `record()` decides that from `keepAudio`.
-    const pcm = concatPcm(this.chunks)
+    const durationMs = Math.round(this.chunks.reduce((sum, chunk) => sum + chunk.length, 0) / SAMPLE_RATE * 1000)
     this.chunks = []
+    this.encoded = null
     this.abort?.abort()
     this.abort = null
 
@@ -867,26 +844,12 @@ export class Pipeline {
     const win = this.bar()
     if (win && !win.isDestroyed()) win.webContents.send('capture:stop')
 
-    this.log(`[pipeline] cancelled ${mode} take (${pcmDurationMs(pcm)}ms captured, ${reason})`)
+    this.log(`[pipeline] cancelled ${mode} take (${durationMs}ms captured, ${reason})`)
     this.unmutePlayback()
-    recordingLog.end({ status: 'cancelled', audioMs: pcmDurationMs(pcm) })
-    // A cancelled take still lands in history as `dismissed` so it can be seen
-    // (and, when audio was kept, retried) instead of disappearing (REQ-02).
-    void this.record(
-      {
-        mode,
-        transcript: '',
-        final: '',
-        durationMs: startedAt > 0 ? Date.now() - startedAt : 0,
-        app: foregroundLabel(),
-        status: 'dismissed',
-        alertKind: 'cancelled'
-      },
-      pcm
-    ).catch((err) => this.log(`[pipeline] cannot record cancelled take: ${String(err)}`))
+    recordingLog.end({ status: 'cancelled', audioMs: durationMs })
     this.clearCancelHint()
     this.setBarState(
-      { phase: 'done', mode, text: mt('已取消（可在历史中查看）'), showMode: this.getSettings().showModeInBar },
+      { phase: 'done', mode, text: mt('已取消'), showMode: this.getSettings().showModeInBar },
       CANCEL_HINT_MS
     )
     // Collapse to the idle pill afterwards; the token guard keeps a quick
@@ -991,9 +954,7 @@ export class Pipeline {
     } catch (err) {
       this.log(`[pipeline] usage rollup failed: ${String(err)}`)
     }
-    const keep = this.getSettings().keepAudio
-    const wanted =
-      keep === 'always' || (keep === 'failed' && (input.status ?? 'completed') !== 'completed')
+    const wanted = this.getSettings().keepAudio === 'always'
     if (!pcm || pcm.length === 0 || !wanted) return entry
     try {
       const audioPath = await this.history.saveAudio(entry.id, Buffer.from(encodeWav(pcm)))
@@ -1209,7 +1170,7 @@ export class Pipeline {
 
       const beforeRules = unwrapModelText(final)
       final = applyReplacements(beforeRules, settings.replacements)
-      if (!final) throw new Error(mt('模型返回了空文本'))
+      if (!final.trim()) throw new Error(mt('模型返回了空文本'))
       this.countRuleHits(transcript, settings.replacements)
 
       if (mode === 'ask') {
@@ -1237,20 +1198,21 @@ export class Pipeline {
       }
       if (token !== this.runToken) return null
 
-      // Ask answers live in the card: the pill stays as the idle anchor dot so the
-      // card visibly hangs off it instead of duplicating the answer text.
-      this.setBarState(
-        mode === 'ask' ? { phase: 'idle' } : { phase: 'done', mode, text: final, showMode: this.getSettings().showModeInBar },
-        DONE_HIDE_MS
-      )
-
       if (insertFailed) {
         // Keep the text one keystroke away and say what happened, instead of
         // finishing with a silent "done" the user has to notice themselves.
         clipboard.writeText(final)
         const alert = buildBarAlert(classifyError(new Error('insert failed')))
         this.showAlert({ ...alert, level: 'error', text: mt('文本可能没有插入成功，已复制到剪贴板') })
+        recordingLog.end({ status: 'error', chars: final.length, audioMs: spokenMs, error: mt('文本未能插入目标控件') })
+        return null
       }
+
+      // Ask answers live in the card; other modes show their successful result.
+      this.setBarState(
+        mode === 'ask' ? { phase: 'idle' } : { phase: 'done', mode, text: final, showMode: this.getSettings().showModeInBar },
+        DONE_HIDE_MS
+      )
 
       const entry = await this.record(
         {
@@ -1261,15 +1223,7 @@ export class Pipeline {
           app: appLabel(target.appName, target.title),
           sources,
           route,
-          // A failed read-back is a real failure, so the row says so; the clean
-          // path keeps the plain `completed` status the history row expects.
-          ...(insertFailed
-            ? {
-                status: 'error' as const,
-                alertKind: 'server_error' as BarAlertKind,
-                error: mt('文本未能插入目标控件')
-              }
-            : { status: 'completed' as const }),
+          status: 'completed',
           wordCount: countUnits(final),
           focusedWindowTitle: target.title
         },
@@ -1279,12 +1233,11 @@ export class Pipeline {
 
       // ACC-06: what the user leaves in the control a moment later is the only
       // honest signal of what we got wrong, so read it once more and learn.
-      if (mode !== 'ask' && !insertFailed) this.scheduleEditCapture(entry.id, final, transcript)
+      if (mode !== 'ask') this.scheduleEditCapture(entry.id, final, transcript)
       recordingLog.end({
-        status: insertFailed ? 'error' : 'done',
+        status: 'done',
         chars: final.length,
-        audioMs: spokenMs,
-        ...(insertFailed ? { error: mt('文本未能插入目标控件') } : {})
+        audioMs: spokenMs
       })
       return entry
     } catch (err) {
@@ -1292,27 +1245,10 @@ export class Pipeline {
       const message = err instanceof Error ? err.message : String(err)
       this.log(`[pipeline] failed: ${message}`)
       recordingLog.end({ status: 'error', audioMs: spokenMs, error: message })
-      // Turn the raw message into something actionable: the alert carries the
-      // retry / settings buttons and the entry keeps the error for the history
-      // row (REQ-12).
+      // Failures remain visible as alerts and diagnostics, without a history row.
       const classified = classifyError(err)
       this.showAlert(buildBarAlert(classified))
-      return await this.record(
-        {
-          mode,
-          transcript,
-          final: '',
-          durationMs: spokenMs,
-          app: appLabel(target.appName, target.title),
-          error: message,
-          route,
-          status: 'error',
-          alertKind: classified.kind,
-          focusedWindowTitle: target.title
-        },
-        pcm,
-        token
-      )
+      return null
     } finally {
       // Every early return above still has to close the per-take log, or the
       // file stays open and the next take appends to a stale header.
@@ -1328,6 +1264,7 @@ export class Pipeline {
     this.takePrompt.delete(token)
     if (token !== this.runToken) return
     this.stage = 'idle'
+    this.encoded = null
   }
 
   /** ASR leg of the classic route, walking the configured failover chain. */
@@ -1525,7 +1462,7 @@ export class Pipeline {
    *
    * Failure is per target: a target whose block is missing is reported as a
    * partial success (warn alert, surviving blocks inserted). Only a reply with
-   * no usable block at all reaches the shared `status:'error'` path.
+   * no usable block at all reaches the shared failure alert path.
    */
   private async translate(
     settings: Settings,

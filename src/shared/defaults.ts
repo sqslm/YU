@@ -126,7 +126,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   notesDir: '',
   notePlaybackRate: 1,
   alertHideSeconds: 4,
-  keepAudio: 'failed',
+  keepAudio: 'never',
   maxSessionSeconds: 540,
   arrowToCursorInBar: false,
   themeMode: 'dark',
@@ -314,7 +314,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   // history one take at a time.
   merged.disabledApps = normalizeAppList(input.disabledApps)
   merged.historyLimit = clampNumber(input.historyLimit, 1, 100_000, base.historyLimit)
-  merged.keepAudio = pickEnum(input.keepAudio, ['never', 'failed', 'always'], base.keepAudio)
+  merged.keepAudio = pickEnum(input.keepAudio, ['never', 'always'], base.keepAudio)
   merged.maxSessionSeconds = clampNumber(
     input.maxSessionSeconds,
     10,

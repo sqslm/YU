@@ -155,7 +155,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   /** Automatic refresh holds back while the search box has the caret. */
   const [searchFocused, setSearchFocused] = useState(false)
   /** Clear-history confirmation. Destructive and irreversible, so never immediate. */
-  const [clearAsk, setClearAsk] = useState(false)
+  const [clearAsk, setClearAsk] = useState<'all' | 'abnormal' | null>(null)
+  const [cleanupNotice, setCleanupNotice] = useState<string | null>(null)
   /**
    * Archived rows are stored but hidden. The toggle swaps the list to the
    * archive instead of mixing the two: a take the user put away should not sit
@@ -445,6 +446,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
             gap: 0.75,
             flexWrap: 'wrap',
             rowGap: 0.75,
+            width: '100%',
             justifyContent: 'flex-end'
           }}
         >
@@ -551,8 +553,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               display: 'flex',
               alignItems: 'center',
               gap: 0.75,
-              flex: 1,
-              minWidth: 240,
+              flex: '1 1 360px',
+              minWidth: 360,
               flexWrap: 'nowrap',
               justifyContent: 'flex-end'
             }}
@@ -580,7 +582,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                 onChange={(event) => setQuery(event.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                placeholder={i18n.t(i18n.t('搜索'))}
+                placeholder={i18n.t('搜索文字、应用或卡片')}
                 sx={{
                   fontSize: 12.5,
                   flex: 1,
@@ -635,12 +637,17 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               {showArchived ? i18n.t('看全部记录') : i18n.t('已归档')}
             </Button>
           </Box>
+          <Button size="small" data-history-clean-abnormal
+            sx={{ fontSize: 12, color: 'text.secondary' }}
+            onClick={() => { setCleanupNotice(null); setClearAsk('abnormal') }}>
+            {i18n.t('清理旧异常')}
+          </Button>
           <Tooltip title={i18n.t(i18n.t('清空全部历史'))}>
             <Button
               size="small"
               variant="text"
               sx={{ fontSize: 12, color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-              onClick={() => setClearAsk(true)}
+              onClick={() => setClearAsk('all')}
             >
               {i18n.t('清空')}
             </Button>
@@ -648,16 +655,18 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
           {/* Wiping history also deletes every kept wav and cannot be undone, so
               the button asks first. It sits next to the refresh control at 12px,
               which made an accidental click indistinguishable from a reload. */}
-          <Dialog open={clearAsk} onClose={() => setClearAsk(false)}>
+          <Dialog open={clearAsk !== null} onClose={() => setClearAsk(null)}>
             <Box sx={{ p: 2.5, width: 340 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{i18n.t(i18n.t('清空全部历史？'))}</Typography>
+              <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{i18n.t(clearAsk === 'abnormal' ? '清理旧异常记录？' : '清空全部历史？')}</Typography>
               <Typography
                 sx={{ fontSize: 12.5, color: 'text.secondary', mt: 1, lineHeight: 1.7 }}
               >
-                {i18n.t('将永久删除全部历史记录以及对应的录音文件，无法撤销。')}
+                {i18n.t(clearAsk === 'abnormal'
+                  ? '将删除旧版保存的失败、取消和空记录及对应录音，成功记录及其归档会保留。删除会同步到云端，无法撤销。'
+                  : '将永久删除全部历史记录以及对应的录音文件，无法撤销。')}
               </Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'flex-end' }}>
-                <Button size="small" onClick={() => setClearAsk(false)}>
+                <Button size="small" onClick={() => setClearAsk(null)}>
                   {i18n.t('取消')}
                 </Button>
                 <Button
@@ -666,18 +675,31 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                   color="error"
                   data-history-clear-confirm
                   onClick={async () => {
-                    setClearAsk(false)
-                    await window.api.history.clear()
-                    await reload(query)
+                    const choice = clearAsk
+                    setClearAsk(null)
+                    try {
+                      if (choice === 'abnormal') {
+                        const n = await window.api.history.clearAbnormal()
+                        setCleanupNotice(i18n.t('已清理 {{n}} 条旧异常记录', { n }))
+                      } else {
+                        await window.api.history.clear()
+                        setCleanupNotice(null)
+                      }
+                      await reload(query)
+                    } catch (error) {
+                      setCleanupNotice(i18n.t('清理失败：{{error}}', { error: String(error) }))
+                    }
                   }}
                 >
-                  {i18n.t('全部删除')}
+                  {i18n.t(clearAsk === 'abnormal' ? '确认清理' : '全部删除')}
                 </Button>
               </Stack>
             </Box>
           </Dialog>
         </Box>
       </Box>
+
+      {cleanupNotice && <Typography role="status" data-history-clean-result sx={{ mt: 1, fontSize: 12, color: 'text.secondary' }}>{cleanupNotice}</Typography>}
 
       {/* Section header for the list: one 13px heading on the left, the active
           tab's count on the right. The page title above it was removed so

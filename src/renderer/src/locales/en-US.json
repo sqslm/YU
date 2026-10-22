@@ -1,4 +1,11 @@
 {
+  "清理旧异常": "Clean old failed records",
+  "清理旧异常记录？": "Clean old failed records?",
+  "将删除旧版保存的失败、取消和空记录及对应录音，成功记录及其归档会保留。删除会同步到云端，无法撤销。": "Delete failed, cancelled and empty records from earlier versions and their recordings. Successful records and their archives stay. Deletions sync to the cloud and cannot be undone.",
+  "确认清理": "Clean records",
+  "已清理 {{n}} 条旧异常记录": "Cleaned {{n}} old failed records",
+  "清理失败：{{error}}": "Cleanup failed: {{error}}",
+  "搜索文字、应用或卡片": "Search text, apps or cards",
   " · 内置卡片同样可以改写": " · built-in cards can be edited too",
   "，填完才能调用这家服务商。": "; fill it in before this provider can be called.",
   "：它不会随窗口标题变化，改文档名也不会失配。": ": it does not change with the window title, so renaming a document cannot break the match.",
