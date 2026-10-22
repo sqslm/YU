@@ -63,6 +63,23 @@ describe('parseInline', () => {
   })
 })
 
+describe('comparison tables', () => {
+  const table = '| 产品 | 优点 | 价格 |\n| :--- | :---: | ---: |\n| **甲** | `a|b` | 10[1] |\n| 乙 | 左\\|右 | 20 |'
+  it('parses cell formatting, alignment, escaped pipes and code pipes', () => {
+    const blocks = parseMarkdown(table)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]).toMatchObject({ kind: 'table', align: ['left', 'center', 'right'] })
+    if (blocks[0].kind !== 'table') throw new Error('expected table')
+    expect(blocks[0].rows[0][1]).toEqual([{ kind: 'code', text: 'a|b' }])
+    expect(blocks[0].rows[1][1]).toEqual([{ kind: 'text', text: '左|右' }])
+  })
+  it('accepts every streaming prefix and preserves surrounding paragraphs', () => {
+    for (let end = 0; end <= table.length; end++) expect(() => parseMarkdown(table.slice(0, end))).not.toThrow()
+    expect(parseMarkdown(`结论。\n\n${table}\n\n补充。`).map(block => block.kind)).toEqual(['paragraph', 'table', 'paragraph'])
+    expect(parseMarkdown('a|b\nnot a divider')[0].kind).toBe('paragraph')
+  })
+})
+
 describe('parseMarkdown', () => {
   it('reads headings, paragraphs, lists, code, quotes and rules', () => {
     const blocks = parseMarkdown(ANSWER)

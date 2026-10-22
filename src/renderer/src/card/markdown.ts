@@ -34,6 +34,7 @@ export type Block =
   | { kind: 'list'; ordered: boolean; items: Inline[][] }
   | { kind: 'quote'; inlines: Inline[] }
   | { kind: 'code'; lang: string; text: string }
+  | { kind: 'table'; headers: Inline[][]; rows: Inline[][][]; align: Array<'left' | 'center' | 'right'> }
   | { kind: 'rule' }
 
 import { isSafeLink } from '@shared/links'
@@ -44,6 +45,21 @@ const BULLET = /^\s{0,3}[-*•]\s+(.*)$/
 const ORDERED = /^\s{0,3}(\d{1,3})[.)]\s+(.*)$/
 const RULE = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/
 const QUOTE = /^\s{0,3}>\s?(.*)$/
+
+/** Pipes in inline code or escaped with a backslash belong to the cell. */
+function tableCells(line: string): string[] {
+  const cells: string[] = []
+  let text = '', code = false
+  const row = line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '')
+  for (let i = 0; i < row.length; i++) {
+    if (row[i] === '\\' && row[i + 1] === '|') { text += '|'; i++; continue }
+    if (row[i] === '`') code = !code
+    if (row[i] === '|' && !code) { cells.push(text.trim()); text = '' }
+    else text += row[i]
+  }
+  cells.push(text.trim())
+  return cells
+}
 
 /** Anything the reader should treat as "the paragraph ended here". */
 function isBlank(line: string): boolean {
@@ -225,6 +241,21 @@ export function parseMarkdown(source: string): Block[] {
 
     if (isBlank(line)) {
       flushAll()
+      continue
+    }
+
+    const divider = tableCells(lines[index + 1] ?? '')
+    const headers = tableCells(line)
+    if (line.includes('|') && headers.length > 1 && divider.length === headers.length && divider.every(cell => /^:?-{3,}:?$/.test(cell))) {
+      flushAll()
+      const rows: Inline[][][] = []
+      index++
+      while (index + 1 < lines.length && lines[index + 1]!.includes('|') && !FENCE.test(lines[index + 1]!) && !HEADING.test(lines[index + 1]!)) {
+        const cells = tableCells(lines[++index]!)
+        rows.push(headers.map((_, cell) => parseInline(cells[cell] ?? '')))
+      }
+      blocks.push({ kind: 'table', headers: headers.map(parseInline), rows,
+        align: divider.map(cell => cell.endsWith(':') ? cell.startsWith(':') ? 'center' : 'right' : 'left') })
       continue
     }
 

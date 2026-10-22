@@ -1,4 +1,13 @@
 {
+  "单次搜索条数": "Results per search",
+  "普通查询每次取回的网页数；新闻汇总会自动分主题扩展，不受此总数限制。": "Page size for ordinary searches. News roundups expand across topics and are not capped at this total.",
+  "新闻汇总会合并多次检索并去重；来源区显示实际覆盖范围。检索失败会明确标注，不会当作已联网回答。": "News roundups merge and deduplicate several searches. Sources show actual coverage, and failed retrieval is clearly marked.",
+  "已联网": "Web sources",
+  "未联网": "No web retrieval",
+  "检索未成功": "Retrieval failed",
+  "检索 {{queries}} 个方向 · 阅读 {{pages}} 篇原文": "{{queries}} search queries · {{pages}} pages read",
+  "部分检索未完成": "Some searches did not complete",
+  "已合并重复报道；仅代表本次检索覆盖范围。": "Duplicate reports merged. Coverage reflects this search only.",
   "空闲时立即切换；录音中更改在本次结束后生效。": "Switches immediately when idle; changes during recording apply after the take ends.",
   "录音处理": "Recording processing",
   "保真优先保留人声细节；环境嘈杂时可试通话降噪。声卡已有降噪时建议保真。": "Fidelity preserves speech detail. Try call noise reduction in noisy rooms; choose fidelity if your sound card already processes audio.",

@@ -242,6 +242,33 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+describe('Ask card completion', () => {
+  it('keeps final retrieval metadata and prevents a queued stream repaint from replacing the final answer', async () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    const retrieval = { searched: true, failed: false, queries: ['AI news', 'AI 模型'], pagesRead: 2, digest: true, partial: false }
+    mocks.askFollowUp.mockImplementation(async (...args: unknown[]) => {
+      const options = args[5] as { onDelta: (chunk: string) => void }
+      options.onDelta('首段')
+      options.onDelta('排队中的旧内容')
+      return { text: '最终回答', sources: [], searched: true, retrieval }
+    })
+    const { pipeline } = harness({}, { onAnswer })
+    await pipeline.followUp('继续查 AI 新闻')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(onAnswer).toHaveBeenLastCalledWith(expect.objectContaining({ answer: '最终回答', retrieval }))
+    expect(onAnswer.mock.calls.at(-1)?.[0].streaming).not.toBe(true)
+  })
+
+  it('ends the card waiting state when a follow-up fails', async () => {
+    const onAnswer = vi.fn()
+    mocks.askFollowUp.mockRejectedValue(new Error('provider unavailable'))
+    const { pipeline } = harness({}, { onAnswer })
+    await pipeline.followUp('再详细一点')
+    expect(onAnswer).toHaveBeenLastCalledWith(expect.objectContaining({ question: '再详细一点', answer: 'provider unavailable', streaming: false }))
+  })
+})
+
 describe('caption previews', () => {
   it('uses the available local recognizer without uploading preview audio', async () => {
     vi.useFakeTimers()

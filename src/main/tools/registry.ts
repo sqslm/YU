@@ -16,6 +16,7 @@ import type { CardAction, SearchResult, Settings } from '@shared/types'
 import { formatToday } from '@shared/prompts'
 import {
   formatSearchResults,
+  filterTodayNews,
   hoursForFreshness,
   planSearch,
   rankSources,
@@ -214,18 +215,21 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
   let query = cleanedInput || ctx.question
   if (!query) return fail(mt('缺少检索词'))
 
-  const limit = Math.min(Math.max(1, ctx.settings.search.maxResults || 5), MAX_SEARCH_RESULTS)
   ctx.onStatus?.('正在检索…')
 
   // The planner decides *how many* queries this question deserves. A stock
   // quote gets one; a Chinese news question additionally gets an English one,
   // because the primary coverage of anything global is not in Chinese.
   const plan = planSearch(ctx.question || query, query)
+  const limit = Math.min(Math.max(1, ctx.settings.search.maxResults || 5), MAX_SEARCH_RESULTS)
+  // Roundups request a full page per topic, then keep the whole deduped union.
+  // Ordinary lookup settings remain unchanged, including the saved provider entry.
+  const searchSettings = plan.digest ? { ...ctx.settings.search, maxResults: MAX_SEARCH_RESULTS } : ctx.settings.search
+  const rankOptions = { maxAgeHours: hoursForFreshness(explicitFreshness ?? plan.freshness), ...(plan.digest ? {} : { limit }) }
   if (explicitFreshness) {
     plan.freshness = explicitFreshness
     for (const planned of plan.queries) planned.freshness = explicitFreshness
   }
-  const maxAgeHours = hoursForFreshness(plan.freshness)
   // Legacy field: callers and tests read a freshness label, "any" when unset.
   const freshness = plan.freshness ?? 'any'
 
@@ -241,7 +245,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
     seenQueries.add(key)
     unique.push(planned)
   }
-  const searchTimeout = ctx.timeouts?.web_search
+  const searchTimeout = ctx.timeouts?.web_search ?? (plan.digest ? 4000 : undefined)
   const rounds: SearchRound[] = new Array(unique.length)
   await runPool(unique, SEARCH_PLAN_CONCURRENCY, async (planned, index) => {
     try {
@@ -249,8 +253,8 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       // Keep the three-argument call when no ceiling was overridden: callers and
       // tests treat a provider call as `(cfg, input, signal)`.
       const results = searchTimeout
-        ? await searchWeb(ctx.settings.search, input, ctx.signal, { timeoutMs: searchTimeout })
-        : await searchWeb(ctx.settings.search, input, ctx.signal)
+        ? await searchWeb(searchSettings, input, ctx.signal, { timeoutMs: searchTimeout })
+        : await searchWeb(searchSettings, input, ctx.signal)
       rounds[index] = { query: planned, results }
     } catch (err) {
       rounds[index] = { query: planned, results: [], error: messageOf(err) }
@@ -266,7 +270,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
   let results = rankSources(
     rounds.flatMap((round) => round.results),
     ctx.question || query,
-    { maxAgeHours, limit }
+    rankOptions
   )
   ctx.log(`[search] ${results.length} result(s) for "${query}" via ${executed.join(' | ')}`)
 
@@ -284,9 +288,9 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       retried = true
       query = retry
       try {
-        results = rankSources(await searchWeb(ctx.settings.search, retry, ctx.signal), ctx.question, {
-          limit
-        })
+        const retryInput = plan.freshness ? { text: retry, freshness: plan.freshness, ...(plan.kind === 'news' ? { kind: 'news' as const } : {}) } : retry
+        results = rankSources(await searchWeb(searchSettings, retryInput, ctx.signal), ctx.question, rankOptions)
+        executed.push(retry)
         ctx.log(`[search] retry "${query}" → ${results.length} result(s)`)
       } catch (err) {
         ctx.log(`[search] retry failed: ${messageOf(err)}`)
@@ -294,6 +298,8 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       }
     }
   }
+
+  if (plan.digest && plan.urgent) results = filterTodayNews(results)
 
   if (results.length === 0) {
     return {
@@ -311,6 +317,8 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       query,
       queries: executed,
       kind: plan.kind,
+      digest: plan.digest === true,
+      failedQueries: errors.length,
       freshness,
       recencyDays: FRESHNESS_DAYS[freshness as keyof typeof FRESHNESS_DAYS] ?? 0,
       retried,
@@ -621,7 +629,8 @@ async function attemptTool(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolOutcome> {
-  const timeoutMs = ctx.timeouts?.[tool.name] ?? TOOL_TIMEOUTS[tool.name] ?? 0
+  const timeoutMs = ctx.timeouts?.[tool.name] ??
+    (tool.name === 'web_search' && planSearch(ctx.question, textArg(args, 'query')).digest ? 15_000 : TOOL_TIMEOUTS[tool.name]) ?? 0
   const outcome = await runWithDeadline(
     (signal) => tool.run(args, { ...ctx, signal }),
     ctx.signal,

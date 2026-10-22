@@ -201,16 +201,15 @@ describe('grounded answer prompt', () => {
 
   it('demands a conclusion first and concrete detail after it', () => {
     expect(prompt).toContain('第一句直接给结论')
-    expect(prompt).toContain('2–4 句细节')
-    expect(prompt).toContain('数值、单位、日期')
+    expect(prompt).toContain('不限于 2–4 句或几条新闻')
+    expect(prompt).toContain('每条说明发生了什么及其来源')
     expect(prompt).toContain('12℃')
   })
 
-  it('bans the empty hedges that make a grounded answer useless', () => {
-    expect(prompt).toContain('严禁空话')
-    for (const hedge of ['无法确认', '建议自行查询', '请以官方发布为准', '仅供参考']) {
-      expect(prompt).toContain(hedge)
-    }
+  it('states search limitations without inventing live news or full-web coverage', () => {
+    expect(prompt).toContain('不得将本次搜索称为全网全部信息')
+    expect(prompt).toContain('不得用模型记忆补造当天新闻')
+    expect(prompt).toContain('日期待核实')
     expect(prompt).toContain('信息确实缺失时，只用一句话说明缺的是什么')
   })
 

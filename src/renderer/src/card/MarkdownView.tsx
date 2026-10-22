@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react'
 import { parseMarkdown } from './markdown'
 import type { Block, Inline } from './markdown'
+import type { SearchResult } from '@shared/types'
+import { isSafeLink } from '@shared/links'
 
 /**
  * Turns the card's answer text into readable prose.
@@ -119,7 +121,7 @@ const caretStyle: CSSProperties = {
   animation: 'cardCaret 1.05s steps(1, end) infinite'
 }
 
-function renderInline(inlines: Inline[], keyBase: string): JSX.Element[] {
+function renderInline(inlines: Inline[], keyBase: string, sources: SearchResult[] = []): JSX.Element[] {
   return inlines.map((inline, index) => {
     const key = `${keyBase}-${index}`
     switch (inline.kind) {
@@ -154,12 +156,16 @@ function renderInline(inlines: Inline[], keyBase: string): JSX.Element[] {
             {inline.text || inline.href}
           </a>
         )
-      case 'cite':
+      case 'cite': {
+        const source = /^\d+$/.test(inline.label) ? sources[Number(inline.label) - 1] : undefined
         return (
           <sup key={key} style={citeStyle}>
-            {inline.label}
+            {source && isSafeLink(source.url)
+              ? <a href={source.url} target="_blank" rel="noopener noreferrer" title={source.title || source.url} style={{ color: 'inherit', textDecoration: 'none' }} data-card-citation={inline.label}>[{inline.label}]</a>
+              : inline.label}
           </sup>
         )
+      }
       default:
         return <span key={key}>{inline.text}</span>
     }
@@ -173,10 +179,12 @@ function renderInline(inlines: Inline[], keyBase: string): JSX.Element[] {
  */
 export function MarkdownView({
   text,
-  streaming = false
+  streaming = false,
+  sources = []
 }: {
   text: string
   streaming?: boolean
+  sources?: SearchResult[]
 }): JSX.Element {
   const blocks: Block[] = parseMarkdown(text)
   const caret = streaming ? <span style={caretStyle} aria-hidden="true" /> : null
@@ -193,7 +201,7 @@ export function MarkdownView({
             const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4'
             return (
               <Tag key={key} style={headingStyle(block.level)}>
-                {renderInline(block.inlines, key)}
+                {renderInline(block.inlines, key, sources)}
                 {withCaret}
               </Tag>
             )
@@ -204,7 +212,7 @@ export function MarkdownView({
               <Tag key={key} style={listStyle(block.ordered)}>
                 {block.items.map((item, itemIndex) => (
                   <li key={`${key}-${itemIndex}`} style={listItemStyle}>
-                    {renderInline(item, `${key}-${itemIndex}`)}
+                    {renderInline(item, `${key}-${itemIndex}`, sources)}
                     {itemIndex === block.items.length - 1 ? withCaret : null}
                   </li>
                 ))}
@@ -214,7 +222,7 @@ export function MarkdownView({
           case 'quote':
             return (
               <blockquote key={key} style={quoteStyle}>
-                {renderInline(block.inlines, key)}
+                {renderInline(block.inlines, key, sources)}
                 {withCaret}
               </blockquote>
             )
@@ -227,10 +235,17 @@ export function MarkdownView({
             )
           case 'rule':
             return <hr key={key} style={ruleStyle} />
+          case 'table':
+            return <div key={key} style={{ overflowX: 'auto', marginBottom: 10 }} data-card-table>
+              <table style={{ ...BODY, width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead><tr>{block.headers.map((cell, column) => <th key={column} style={{ textAlign: block.align[column], padding: '7px 9px', borderBottom: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.05)', whiteSpace: 'nowrap' }}>{renderInline(cell, `${key}-h${column}`, sources)}</th>)}</tr></thead>
+                <tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, column) => <td key={column} style={{ textAlign: block.align[column], padding: '7px 9px', borderBottom: '1px solid rgba(255,255,255,.08)', minWidth: 80 }}>{renderInline(cell, `${key}-${rowIndex}-${column}`, sources)}</td>)}</tr>)}</tbody>
+              </table>{withCaret}
+            </div>
           default:
             return (
               <p key={key} style={paragraphStyle} data-card-paragraph>
-                {renderInline(block.inlines, key)}
+                {renderInline(block.inlines, key, sources)}
                 {withCaret}
               </p>
             )

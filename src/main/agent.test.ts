@@ -354,7 +354,7 @@ describe('latency budget', () => {
       return new Response(pageHtml(String(url)), { status: 200, headers: { 'content-type': 'text/html' } })
     })
 
-    const result = await askAgent(makeSettings(), '今天有什么 AI 新闻', {}, signal, (line) => log.push(line), {
+    const result = await askAgent(makeSettings(), '这次 AI 发布会有哪些新消息', {}, signal, (line) => log.push(line), {
       reset: true,
       fetchImpl: fetchImpl as unknown as typeof fetch
     })
@@ -450,7 +450,7 @@ describe('latency budget', () => {
       textResponse('有新闻。')
     )
 
-    await askAgent(makeSettings(), '今天有什么 AI 新闻', {}, signal, (line) => log.push(line), {
+    await askAgent(makeSettings(), '这次 AI 发布会有哪些新消息', {}, signal, (line) => log.push(line), {
       reset: true,
       fetchImpl: fetchImpl as unknown as typeof fetch
     })
@@ -604,6 +604,35 @@ describe('JSON intent fallback', () => {
 })
 
 describe('routing shortcuts', () => {
+  it('retrieves a news roundup directly and sends read originals to the answer without a router call', async () => {
+    mocks.searchWeb.mockResolvedValue([{ title: 'New release', url: 'https://official.test/release', snippet: 'short snippet' }])
+    mocks.complete.mockResolvedValue('新发布的产品。[1]')
+    const fetchImpl = vi.fn(async () => new Response(pageHtml('ORIGINAL_BODY_ONLY'), { headers: { 'content-type': 'text/html' } }))
+    const result = await askAgent(makeSettings({ maxResults: 1 }), '今天有什么 AI 新闻', {}, signal, () => {}, { reset: true, fetchImpl: fetchImpl as typeof fetch })
+    expect(mocks.searchWeb).toHaveBeenCalledTimes(6)
+    expect(mocks.complete).toHaveBeenCalledTimes(1)
+    const request = mocks.complete.mock.calls[0][1]
+    expect(request.messages[0].content).toContain('ORIGINAL_BODY_ONLY')
+    expect(request.maxTokens).toBe(4096)
+    expect(result.retrieval).toMatchObject({ searched: true, failed: false, digest: true, pagesRead: 1, partial: false })
+    expect(result.retrieval?.queries).toHaveLength(6)
+  })
+
+  it('marks failed retrieval truthfully instead of claiming the model answer came from the web', async () => {
+    mocks.searchWeb.mockRejectedValue(new Error('search unavailable'))
+    mocks.complete.mockResolvedValue('这次没有拿到实时新闻。')
+    const result = await askAgent(makeSettings(), '今天有什么 AI 新闻', {}, signal, () => {}, { reset: true })
+    expect(result.searched).toBe(false)
+    expect(result.sources).toEqual([])
+    expect(result.retrieval).toMatchObject({ searched: false, failed: true, partial: true })
+  })
+
+  it('honours a no-network request even when it contains a news question', async () => {
+    mocks.complete.mockResolvedValue('无法确认当天新闻。')
+    await askAgent(makeSettings(), '不要联网，今天有什么 AI 新闻', {}, signal, () => {}, { reset: true })
+    expect(mocks.searchWeb).not.toHaveBeenCalled()
+  })
+
   it('goes straight to the forecast API for a weather question', async () => {
     mocks.fetchWeather.mockResolvedValue(weatherReport)
     mocks.complete.mockResolvedValueOnce('安阳今天阴，18.4℃ [1]。')

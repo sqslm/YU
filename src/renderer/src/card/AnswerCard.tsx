@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import InputBase from '@mui/material/InputBase'
+import { useTranslation } from 'react-i18next'
 import type { AnswerCardPayload } from '@shared/api'
 import type { CardAction } from '@shared/types'
+import { isSafeLink } from '@shared/links'
 import { MarkdownView } from './MarkdownView'
-import i18n from '../i18n'
+import i18n, { applyUiLanguage } from '../i18n'
 
 /** Entrance/exit timings shared with the bar's own "appear" language. */
 const ENTER_MS = 200
@@ -73,6 +75,7 @@ function bridge(): CardBridge {
  * CSS shadow would ring the card with a dark halo on the desktop.
  */
 export function AnswerCard(): JSX.Element | null {
+  useTranslation()
   const [data, setData] = useState<AnswerCardPayload | null>(null)
   const [entering, setEntering] = useState(false)
   const [closing, setClosing] = useState(false)
@@ -80,6 +83,7 @@ export function AnswerCard(): JSX.Element | null {
   /** Follow-up question that is waiting for its answer. */
   const [pending, setPending] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [sourcesExpanded, setSourcesExpanded] = useState(false)
 
   /** True once this mount has played `cardIn`; reset when the window hides. */
   const enteredRef = useRef(false)
@@ -87,10 +91,16 @@ export function AnswerCard(): JSX.Element | null {
   /** Only a window that really held focus may close itself on blur. */
   const focusedRef = useRef(false)
   const cardRef = useRef<HTMLDivElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const reportedHeight = useRef(0)
   const copyTimer = useRef<number | null>(null)
   const enterTimer = useRef<number | null>(null)
   const closeTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    void window.api.settings.get().then(settings => applyUiLanguage(settings.uiLanguage))
+    return window.api.settings.onChanged(settings => { applyUiLanguage(settings.uiLanguage) })
+  }, [])
 
   /**
    * Plays `cardOut` and only then asks the main process to hide the window —
@@ -183,7 +193,9 @@ export function AnswerCard(): JSX.Element | null {
     const el = cardRef.current
     if (!el) return
     const report = (): void => {
-      const height = Math.ceil(el.getBoundingClientRect().height) + STAGE_PADDING * 2
+      const scroll = scrollRef.current
+      const overflow = scroll ? Math.max(0, scroll.scrollHeight - scroll.clientHeight) : 0
+      const height = Math.ceil(el.getBoundingClientRect().height + overflow) + STAGE_PADDING * 2
       if (height <= STAGE_PADDING * 2) return
       // Ignore sub-pixel jitter so a rounding wobble never triggers a resize loop.
       if (Math.abs(height - reportedHeight.current) < 4) return
@@ -194,7 +206,12 @@ export function AnswerCard(): JSX.Element | null {
     const observer = new ResizeObserver(report)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [data])
+  }, [data, sourcesExpanded])
+
+  useEffect(() => {
+    setSourcesExpanded(false)
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+  }, [data?.question])
 
   useEffect(
     () => () => {
@@ -213,9 +230,13 @@ export function AnswerCard(): JSX.Element | null {
   const answer = data.answer ?? ''
   const tools = data.tools ?? []
   const actions = data.actions ?? []
-  const busy = pending !== null
-  const statusLine = busy ? i18n.t('正在思考…') : (data.status ?? '').trim() || null
+  const busy = pending !== null || data.streaming === true
+  const statusLine = pending !== null ? i18n.t('正在思考…') : (data.status ?? '').trim() || null
   const streaming = data.streaming === true
+  const sourceList = data.sources ?? []
+  const retrieval = data.retrieval
+  const searchLabel = retrieval?.failed ? i18n.t('检索未成功')
+    : retrieval?.searched || sourceList.length > 0 ? i18n.t('已联网') : i18n.t('未联网')
 
   const flash = (kind: string): void => {
     setCopied(kind)
@@ -269,7 +290,8 @@ export function AnswerCard(): JSX.Element | null {
         <div style={header}>
           <div style={brandRow}>
             <span style={brandDot} />
-            <span style={brandText}>Typeless Rebuild</span>
+            <span style={brandText}>Ask</span>
+            {!busy && <span style={chip} data-card-retrieval>{searchLabel}</span>}
           </div>
           <div style={headerActions}>
             <button
@@ -304,26 +326,39 @@ export function AnswerCard(): JSX.Element | null {
           </div>
         )}
 
-        <div style={answerBox}>
+        <div ref={scrollRef} style={answerBox} data-card-scroll>
           <div style={answerTitleRow}>
             <span style={answerMark}>✦</span>
             <span style={answerTitle}>{i18n.t('回答')}</span>
           </div>
           <div style={answerBody} data-card-body>
-            <MarkdownView text={answer} streaming={streaming} />
+            <MarkdownView text={answer} streaming={streaming} sources={sourceList} />
           </div>
 
-          {data.sources && data.sources.length > 0 && (
+          {sourceList.length > 0 && (
             <div style={sources}>
-              <div style={sourcesTitle}>{i18n.t('来源')}</div>
-              {data.sources.slice(0, 6).map((item, index) => (
-                <a
+              <button type="button" style={sourceToggle} aria-expanded={sourcesExpanded} data-card-sources-toggle onClick={() => setSourcesExpanded(value => !value)}>
+                <span>{i18n.t('来源')} · {sourceList.length}</span><span>{sourcesExpanded ? '−' : '+'}</span>
+              </button>
+              {retrieval && <div style={sourcesTitle} data-card-coverage>
+                {i18n.t('检索 {{queries}} 个方向 · 阅读 {{pages}} 篇原文', { queries: retrieval.queries.length, pages: retrieval.pagesRead })}
+                {retrieval.partial && ` · ${i18n.t('部分检索未完成')}`}
+              </div>}
+              {retrieval?.digest && <div style={sourcesTitle}>{i18n.t('已合并重复报道；仅代表本次检索覆盖范围。')}</div>}
+              {sourcesExpanded && sourceList.map((item, index) => (
+                <a data-card-source
                   key={`${item.url}-${index}`}
-                  href={item.url}
+                  href={isSafeLink(item.url) ? item.url : undefined}
+                  target="_blank" rel="noopener noreferrer"
                   style={sourceLink}
-                  title={item.title || item.url}
+                  title={`${item.title || item.url}\n${item.url}`}
                 >
-                  {item.title || item.url}
+                  <span style={sourceNumber}>{index + 1}</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#cbd5ec', fontSize: 12 }}>{item.title || item.url}</span>
+                    <span style={{ display: 'block', color: '#8b93a4', fontSize: 10.5, marginTop: 3 }}>{sourceHost(item.url)}{item.publishedAt ? ` · ${item.publishedAt.slice(0, 10)}` : ''}</span>
+                    {item.snippet && <span style={sourceSnippet}>{item.snippet}</span>}
+                  </span>
                 </a>
               ))}
             </div>
@@ -341,25 +376,23 @@ export function AnswerCard(): JSX.Element | null {
         )}
 
         <div style={actionRow}>
-          {actions.length > 0 ? (
-            actions.map((action, index) => {
+          <button type="button" style={primaryButton} onClick={copyAnswer} disabled={!answer}>
+            {copied === 'answer' ? i18n.t('已复制') : i18n.t('复制回答')}
+          </button>
+          {actions.filter(action => action.id !== 'copy').map((action, index) => {
               const key = `action-${index}`
               return (
                 <button
                   key={key}
                   type="button"
                   style={primaryButton}
+                  disabled={busy}
                   onClick={() => runAction(action, key)}
                 >
                   {copied === key ? i18n.t('已复制') : action.label}
                 </button>
               )
-            })
-          ) : (
-            <button type="button" style={primaryButton} onClick={copyAnswer}>
-              {copied === 'answer' ? i18n.t('已复制') : i18n.t('复制回答')}
-            </button>
-          )}
+            })}
         </div>
 
         <div style={askRow}>
@@ -418,6 +451,10 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+function sourceHost(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
+}
+
 function MicIcon(): JSX.Element {
   return (
     <svg
@@ -442,6 +479,9 @@ function MicIcon(): JSX.Element {
 const baseCss = `
   html, body, #root { margin: 0; height: 100%; background: transparent; overflow: hidden }
   * { box-sizing: border-box }
+  button:disabled { opacity: .45; cursor: default !important }
+  button:focus-visible, a:focus-visible { outline: 2px solid #8fa3ff; outline-offset: 2px }
+  [data-card-source]:hover { background: rgba(255,255,255,.06) !important }
   ::-webkit-scrollbar { width: 6px; height: 6px }
   ::-webkit-scrollbar-thumb {
     background: rgba(255,255,255,.14); border-radius: 8px;
@@ -491,7 +531,7 @@ const stage: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'flex-end',
-  minHeight: '100%',
+  height: '100%',
   padding: STAGE_PADDING,
   fontFamily: '"Inter", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif'
 }
@@ -502,6 +542,8 @@ const card: React.CSSProperties = {
   // Height follows the content; the window is resized to match, so growing
   // answers push the card upwards away from the pill.
   height: 'auto',
+  maxHeight: '100%',
+  minHeight: 0,
   borderRadius: 14,
   background: 'rgba(28,28,30,.96)',
   backdropFilter: 'blur(18px)',
@@ -606,15 +648,9 @@ const statusText: React.CSSProperties = {
 }
 
 const answerBox: React.CSSProperties = {
-  flex: '0 0 auto',
-  margin: '0 14px',
-  padding: '10px 12px 12px',
-  borderRadius: 10,
-  background: 'rgba(255,255,255,.04)',
-  border: '1px solid rgba(255,255,255,.06)',
-  // Long answers scroll inside the card instead of growing the window past the
-  // screen; the cap tracks the window height the main process settled on.
-  maxHeight: '55vh',
+  flex: '0 1 auto',
+  minHeight: 0,
+  padding: '10px 16px 12px',
   overflowY: 'auto',
   userSelect: 'text'
 }
@@ -658,17 +694,29 @@ const sources: React.CSSProperties = {
 const sourcesTitle: React.CSSProperties = {
   fontSize: 10.5,
   letterSpacing: 0.5,
-  color: '#6f7788',
+  color: '#8b93a4',
   marginBottom: 2
 }
 
 const sourceLink: React.CSSProperties = {
-  fontSize: 11.5,
-  color: '#7f9bd8',
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 9,
+  padding: '9px 8px',
+  borderRadius: 8,
+  background: 'rgba(255,255,255,.025)',
   textDecoration: 'none',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis'
+}
+
+const sourceToggle: React.CSSProperties = {
+  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  width: '100%', padding: '3px 0 6px', color: '#aebbd5', background: 'transparent', border: 0, fontSize: 12, cursor: 'pointer'
+}
+const sourceNumber: React.CSSProperties = {
+  flex: '0 0 22px', textAlign: 'center', padding: '2px 0', border: '1px solid rgba(143,163,255,.25)', borderRadius: 5, color: '#9dafff', fontSize: 11
+}
+const sourceSnippet: React.CSSProperties = {
+  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 11.5, lineHeight: 1.5, color: '#a0a8b8', marginTop: 4
 }
 
 const chipRow: React.CSSProperties = {
@@ -695,6 +743,7 @@ const actionRow: React.CSSProperties = {
   flexWrap: 'wrap',
   gap: 8,
   padding: '8px 14px 0',
+  borderTop: '1px solid rgba(255,255,255,.06)',
   flex: '0 0 auto'
 }
 

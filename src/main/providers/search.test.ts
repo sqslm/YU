@@ -5,6 +5,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { SearchResult, SearchSettings } from '@shared/types'
 import {
   MAX_SEARCH_QUERIES,
+  MAX_DIGEST_QUERIES,
+  isNewsDigest,
+  filterTodayNews,
   assessRecency,
   classifyQuestion,
   dedupeSyndicated,
@@ -122,11 +125,15 @@ describe('toEnglishQuery', () => {
 })
 
 describe('planSearch', () => {
+  it('uses the local calendar day for known event dates instead of a rolling 48-hour window', () => {
+    const items = ['2026-10-21', '2026-10-22', '2026-10-23', ''].map((date, i) => ({ title: `Event ${i}`, url: `https://example.test/${i}`, snippet: date }))
+    expect(filterTodayNews(items, new Date(2026, 9, 22, 9)).map(item => item.snippet)).toEqual(['2026-10-22', ''])
+  })
   it('keeps a Chinese news question bilingual and time-bounded', () => {
     const plan = planSearch('今天的人工智能新闻', '人工智能 新闻')
     expect(plan.kind).toBe('news')
     expect(plan.freshness).toBe('day')
-    expect(plan.queries.length).toBe(2)
+    expect(plan.queries.length).toBe(MAX_DIGEST_QUERIES)
     expect(plan.queries[0].text).toBe('人工智能 新闻')
     expect(plan.queries[0].kind).toBe('news')
     expect(plan.queries[1].lang).toBe('en')
@@ -142,12 +149,23 @@ describe('planSearch', () => {
 
   it('never exceeds the query budget', () => {
     const plan = planSearch('今天的人工智能新闻', '人工智能 新闻', { maxQueries: 9 })
-    expect(plan.queries.length).toBeLessThanOrEqual(MAX_SEARCH_QUERIES)
+    expect(plan.queries.length).toBeLessThanOrEqual(MAX_DIGEST_QUERIES)
+    expect(planSearch('这次模型发布会有何新消息', '模型 发布会', { maxQueries: 9 }).queries.length).toBeLessThanOrEqual(MAX_SEARCH_QUERIES)
   })
 
   it('gives news questions a deep-read budget and stable ones none', () => {
     expect(planSearch('今天的 AI 新闻', 'AI 新闻').deepRead).toBeGreaterThan(0)
     expect(planSearch('为什么天空是蓝色', '天空 蓝色').deepRead).toBe(0)
+  })
+
+  it('covers roundup topics without turning headline translation into research', () => {
+    expect(isNewsDigest('总结今天的 AI 新闻')).toBe(true)
+    expect(isNewsDigest('翻译“今天有什么 AI 新闻”这句话')).toBe(false)
+    const plan = planSearch('今天有什么 AI 新闻', 'AI 新闻 今天')
+    expect(plan.digest).toBe(true)
+    expect(plan.queries.map(query => query.text).join(' ')).toMatch(/模型发布.*产品与应用.*开源与研究.*产业与政策/)
+    expect(plan.queries.every(query => query.freshness === 'day' && query.kind === 'news')).toBe(true)
+    expect(new Set(plan.queries.map(query => query.text)).size).toBe(plan.queries.length)
   })
 })
 

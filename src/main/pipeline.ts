@@ -1,6 +1,7 @@
 import { clipboard, type BrowserWindow } from 'electron'
 import type {
   AnswerCardPayload,
+  AskRetrieval,
   BarAlert,
   BarAlertKind,
   BarState,
@@ -223,6 +224,7 @@ export class Pipeline {
   /** Provider profile that answered the take in flight (null when legacy). */
   private usedProvider: { id: string; name: string } | null = null
   private runToken = 0
+  private cardStreamVersion = 0
   private abort: AbortController | null = null
   private cancelTimer: NodeJS.Timeout | null = null
   /** Pending auto-hide for the bar; at most one per pushed state. */
@@ -1093,6 +1095,7 @@ export class Pipeline {
       let sources: SearchResult[] = []
       let tools: string[] = []
       let actions: CardAction[] = []
+      let retrieval: AskRetrieval | undefined
 
       if (mode === 'ask') {
         // Ask always runs through the text agent: the tool loop needs a
@@ -1130,6 +1133,7 @@ export class Pipeline {
         sources = outcome.sources
         tools = outcome.tools ?? []
         actions = outcome.actions ?? []
+        retrieval = outcome.retrieval
       } else if (route === 'multimodal') {
         progress(mt('模型直接听写中…'))
         if (spokenMs > settings.multimodal.maxSeconds * 1000) {
@@ -1174,7 +1178,7 @@ export class Pipeline {
       this.countRuleHits(transcript, settings.replacements)
 
       if (mode === 'ask') {
-        this.showAnswer(final, question, sources, token, { tools, actions })
+        this.showAnswer(final, question, sources, token, { tools, actions, retrieval })
       } else {
         await this.insertInto(final, settings)
       }
@@ -1729,7 +1733,7 @@ export class Pipeline {
     question: string,
     sources: SearchResult[],
     token: number,
-    extras: { tools?: string[]; actions?: CardAction[] } = {}
+    extras: { tools?: string[]; actions?: CardAction[]; retrieval?: AskRetrieval } = {}
   ): void {
     // A cancel that landed while the request was finishing must neither touch
     // the clipboard nor pop a card.
@@ -1742,6 +1746,7 @@ export class Pipeline {
         question,
         answer: stripAppendedSources(answer),
         sources: sources.length > 0 ? sources : undefined,
+        retrieval: extras.retrieval,
         tools: tools.length > 0 ? tools : undefined,
         actions: actions.length > 0 ? actions : undefined
       },
@@ -1755,6 +1760,7 @@ export class Pipeline {
    */
   private pushCard(payload: AnswerCardPayload, token: number): void {
     if (token !== this.runToken) return
+    if (payload.streaming !== true) this.cardStreamVersion++
     try {
       this.options.onAnswer?.(payload)
     } catch (err) {
@@ -1768,11 +1774,13 @@ export class Pipeline {
    * from `showAnswer` always overwrites whatever this left behind.
    */
   private streamCard(question: string, token: number): (chunk: string) => void {
+    const version = this.cardStreamVersion
     let partial = ''
     let lastAt = 0
     let timer: ReturnType<typeof setTimeout> | null = null
     const flush = (): void => {
       timer = null
+      if (token !== this.runToken || version !== this.cardStreamVersion) return
       lastAt = Date.now()
       this.pushCard({ question, answer: partial, status: '', streaming: true }, token)
     }
@@ -1826,7 +1834,8 @@ export class Pipeline {
 
       this.showAnswer(final, text, result.sources, token, {
         tools: result.tools,
-        actions: result.actions
+        actions: result.actions,
+        retrieval: result.retrieval
       })
       // The answer is in the card, so the pill drops back to its idle dot: it is
       // the anchor the card hangs off, not a second copy of the answer.
@@ -1845,6 +1854,7 @@ export class Pipeline {
       const message = err instanceof Error ? err.message : String(err)
       const classified = classifyError(err)
       this.log(`[pipeline] follow-up failed: ${message}`)
+      this.pushCard({ question: text, answer: message, streaming: false }, token)
       // The card keeps the full message; the pill gets the same lifetime rule as
       // any other notice, so a follow-up that failed cannot pin it forever.
       const alert = buildBarAlert(classified)

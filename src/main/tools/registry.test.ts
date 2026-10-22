@@ -177,6 +177,37 @@ describe('get_weather', () => {
 })
 
 describe('web_search', () => {
+  it('merges all roundup topics beyond the saved single-query count, removing repeats and stale news', async () => {
+    let call = 0
+    const names = ['Maple', 'Cedar', 'Willow', 'Birch', 'Aspen', 'Elm']
+    mocks.searchWeb.mockImplementation(async () => {
+      const name = names[call++]
+      return [
+        { title: name, url: `https://${name}.test/report`, snippet: name, publishedAt: new Date().toISOString() },
+        { title: 'Shared', url: 'https://shared.test/report', snippet: 'same event', publishedAt: new Date().toISOString() },
+        { title: 'Old archive', url: 'https://old.test/archive', snippet: '2020-01-01', publishedAt: '2020-01-01' }
+      ]
+    })
+    const settings = makeSettings({ maxResults: 1 })
+    const outcome = await runTool('web_search', { query: 'AI 新闻 今天' }, makeContext({ question: '今天有什么 AI 新闻', settings }))
+    expect(outcome.ok).toBe(true)
+    expect(mocks.searchWeb).toHaveBeenCalledTimes(6)
+    expect(mocks.searchWeb.mock.calls.every(args => args[0].maxResults === 10)).toBe(true)
+    expect(settings.search.maxResults).toBe(1)
+    expect(outcome.sources).toHaveLength(7)
+    expect(outcome.sources?.some(source => source.url.includes('old.test'))).toBe(false)
+    expect(outcome.data).toMatchObject({ digest: true, count: 7, failedQueries: 0 })
+  })
+
+  it('keeps completed topics when one roundup query fails', async () => {
+    mocks.searchWeb.mockRejectedValueOnce(new Error('one topic unavailable'))
+      .mockResolvedValue([{ title: 'Independent event', url: 'https://source.test/event', snippet: 'new event' }])
+    const outcome = await runTool('web_search', { query: 'AI news today' }, makeContext({ question: 'AI news today' }))
+    expect(outcome.ok).toBe(true)
+    expect(outcome.data.failedQueries).toBe(1)
+    expect(outcome.sources).toHaveLength(1)
+  })
+
   const results = [
     { title: '一', url: 'https://a.test/x', snippet: 's1' },
     { title: '一（重复）', url: 'https://a.test/x/', snippet: 's2' },

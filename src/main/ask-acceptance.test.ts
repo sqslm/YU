@@ -123,7 +123,8 @@ async function run(id: string, question: string): Promise<ScenarioRun> {
   chatBodies = []
   const result = await askAgent(settings(), question, {}, undefined, () => {}, {
     reset: true,
-    fetchImpl
+    fetchImpl,
+    onDelta: () => {}
   })
   return {
     text: result.text,

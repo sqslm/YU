@@ -894,4 +894,15 @@ export interface AnswerCardPayload {
   actions?: CardAction[]
   /** True when the answer is still arriving and the card should not be hidden. */
   streaming?: boolean
+  /** Actual retrieval outcome; never inferred from whether search is enabled. */
+  retrieval?: AskRetrieval
+}
+
+export interface AskRetrieval {
+  searched: boolean
+  failed: boolean
+  queries: string[]
+  pagesRead: number
+  digest: boolean
+  partial: boolean
 }

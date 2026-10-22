@@ -210,13 +210,13 @@ describe('appendSources', () => {
     expect(out).toContain('- [同一条](https://example.com/a)')
   })
 
-  it('caps the list so a long result set cannot bloat the answer', () => {
+  it('keeps all retrieved sources instead of silently truncating roundups to six', () => {
     const many: SearchResult[] = Array.from({ length: 9 }, (_value, index) => ({
       title: `条目 ${index + 1}`,
       url: `https://example.com/${index + 1}`,
       snippet: ''
     }))
-    expect(appendSources('正文。', many).match(/^- /gm)).toHaveLength(6)
+    expect(appendSources('正文。', many).match(/^- /gm)).toHaveLength(9)
   })
 
   it('leaves an existing source section untouched', () => {

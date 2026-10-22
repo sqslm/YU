@@ -182,7 +182,7 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
       </SettingsGroup>
 
       <SettingsGroup icon={<IconSliders />} title={i18n.t('结果与判定')}>
-        <SettingsRow label={i18n.t('结果条数')} description={i18n.t('每次检索最多取回的网页数量，按服务商分别保存')}>
+        <SettingsRow label={i18n.t('单次搜索条数')} description={i18n.t('普通查询每次取回的网页数；新闻汇总会自动分主题扩展，不受此总数限制。')}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: controlSx.width, px: 0.5 }}>
             <Slider
               size="small"
@@ -218,7 +218,7 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
           />
         </SettingsRow>
         <SettingsHint>
-          {i18n.t('检索结果会作为来源附在回答后面；断网或服务不可用时会自动退回到纯模型回答。')}
+          {i18n.t('新闻汇总会合并多次检索并去重；来源区显示实际覆盖范围。检索失败会明确标注，不会当作已联网回答。')}
         </SettingsHint>
       </SettingsGroup>
     </Stack>

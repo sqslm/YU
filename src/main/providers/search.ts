@@ -1295,6 +1295,8 @@ export function formatSearchResults(results: SearchResult[]): string {
  * can afford. Two queries cover zh+en, one extra call is the follow-up.
  */
 export const MAX_SEARCH_QUERIES = 2
+/** A roundup covers several topics; the per-request result setting is not its total. */
+export const MAX_DIGEST_QUERIES = 6
 export const MAX_SEARCH_CALLS = 3
 export const MAX_DEEP_READS = 3
 
@@ -1499,6 +1501,14 @@ export interface QueryPlan {
   deepRead: number
   /** True when the question is about the last day or two. */
   urgent: boolean
+  digest?: boolean
+}
+
+/** News roundups need breadth; translating a news headline is still a language task. */
+export function isNewsDigest(text: string): boolean {
+  return /新闻|资讯|快讯|动态|\bnews\b|roundup|round.up/i.test(text) &&
+    /今天|今日|本周|这周|最新|汇总|盘点|有哪些|有什么|全部|所有|today|latest|roundup|round.up|this week/i.test(text) &&
+    !/翻译|润色|改写|这句话|这篇|这条|这则|translate|rewrite|this (?:article|sentence|headline)/i.test(text)
 }
 
 const FRESHNESS_BY_KIND: Partial<Record<QuestionKind, Freshness>> = {
@@ -1535,11 +1545,13 @@ export function planSearch(
   primary: string,
   opts: { bilingual?: boolean; maxQueries?: number } = {}
 ): QueryPlan {
-  const kind = classifyQuestion(question || primary)
+  const digest = isNewsDigest(question)
+  const kind = digest ? 'news' : classifyQuestion(question || primary)
   const text = (primary || question || '').trim()
   const urgent = kind === 'news' && TODAY_HINT.test(question)
   const freshness: Freshness | undefined = urgent ? 'day' : FRESHNESS_BY_KIND[kind]
-  const maxQueries = Math.max(1, Math.min(opts.maxQueries ?? MAX_SEARCH_QUERIES, MAX_SEARCH_QUERIES))
+  const budget = digest ? MAX_DIGEST_QUERIES : MAX_SEARCH_QUERIES
+  const maxQueries = Math.max(1, Math.min(opts.maxQueries ?? budget, budget))
   const queries: SearchQuery[] = []
 
   if (text) {
@@ -1569,12 +1581,24 @@ export function planSearch(
     }
   }
 
+  if (digest && text) {
+    const ai = /\bai\b|人工智能|大模型|机器学习/i.test(question)
+    const facets = ai
+      ? (CJK.test(question) ? ['模型发布', '产品与应用', '开源与研究', '产业与政策'] : ['model releases', 'products and applications', 'open source and research', 'industry and policy'])
+      : (CJK.test(question) ? ['官方发布', '最新进展', '行业动态', '独立报道'] : ['official announcements', 'latest developments', 'industry updates', 'independent reporting'])
+    for (const facet of facets) {
+      if (queries.length >= maxQueries) break
+      queries.push({ text: `${text} ${facet}`, kind: 'news', freshness, lang: CJK.test(question) ? 'zh' : 'en' })
+    }
+  }
+
   return {
     kind,
     queries,
     freshness,
     urgent,
-    deepRead: DEEP_READS_BY_KIND[kind]
+    deepRead: DEEP_READS_BY_KIND[kind],
+    ...(digest ? { digest: true } : {})
   }
 }
 
@@ -1678,6 +1702,18 @@ export function filterByRecency(
     const info = assessRecency(result, now)
     if (info.ageHours === undefined) return true
     return info.ageHours <= maxAgeHours
+  })
+}
+
+/** A calendar-day roundup must not label yesterday's or tomorrow's known events as today. */
+export function filterTodayNews(results: SearchResult[], now: Date = new Date()): SearchResult[] {
+  const localDay = (date: Date): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const today = localDay(now)
+  return results.filter(result => {
+    const info = assessRecency(result, now)
+    const day = info.eventDate ?? (info.publishedAt ? localDay(new Date(info.publishedAt)) : undefined)
+    // Undated leads remain usable but the answer must explicitly separate them.
+    return !day || day === today
   })
 }
 
