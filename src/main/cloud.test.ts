@@ -124,6 +124,23 @@ afterEach(() => {
 })
 
 describe('CloudClient', () => {
+  it('restores a saved account and persists refreshed tokens for the next launch', async () => {
+    const saved = new AccountStore(join(dir, 'account.json'))
+    signIn(saved)
+    const restarted = new AccountStore(saved.filePath)
+    expect(restarted.load()?.email).toBe('a@b.test')
+    const client = new CloudClient(restarted)
+    route('/api/v1/auth/me', 'GET',
+      { status: 401, body: { error: 'token_expired' } },
+      { status: 200, body: { user: { id: 'u1', email: 'a@b.test', subscription: null } } })
+    route('/api/v1/auth/refresh', 'POST', {
+      status: 200, body: { accessToken: 'after-restart', refreshToken: 'rotated-refresh', expiresIn: 900 }
+    })
+    await expect(client.me()).resolves.toMatchObject({ email: 'a@b.test' })
+    expect(new AccountStore(saved.filePath).load()?.refreshToken).toBe('rotated-refresh')
+    restarted.clear()
+    expect(new AccountStore(saved.filePath).load()).toBeNull()
+  })
   it('reads server registration and password-reset capabilities before login', async () => {
     const client = new CloudClient(new AccountStore(join(dir, 'account.json')))
     route('/api/v1/meta', 'GET', { status: 200, body: {

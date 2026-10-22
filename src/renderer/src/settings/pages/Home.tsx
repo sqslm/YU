@@ -618,9 +618,8 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
               </Typography>
             )}
             {recent.map((item) => {
-              // Which card and which provider produced this line: recorded per
-              // take by the pipeline. Legacy rows carry neither and get no chip.
               const chip = recentChipText(item)
+              const text = item.final || item.transcript || ''
               return (
                 <Box
                   key={item.id}
@@ -647,13 +646,14 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
                         minWidth: 0
                       }}
                     >
-                      {item.final || item.transcript || i18n.t('（空）')}
+                      {text || i18n.t('（空）')}
                     </Typography>
                     <Typography sx={{ fontSize: 10.5, color: t.textFaint }}>
                       {shortClock(item.durationMs || 0)}
                     </Typography>
-                    <Box
-                      onClick={() => void copy(item.final, item.id)}
+                    <ButtonBase
+                      disabled={!text}
+                      onClick={() => void copy(text, item.id)}
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
@@ -663,45 +663,18 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
                         borderRadius: '5px',
                         border: `1px solid ${t.line}`,
                         color: t.textDim,
-                        cursor: item.final ? 'pointer' : 'default',
-                        opacity: item.final ? 1 : 0.45,
+                        flexShrink: 0,
+                        opacity: text ? 1 : 0.45,
                         fontSize: 10.5
                       }}
                     >
                       <IconCopy size={11} />
                       {copied === item.id ? i18n.t('已复制') : i18n.t('复制')}
-                    </Box>
+                    </ButtonBase>
                   </Box>
-                  {/* Provenance shares the tag line rather than taking one of its
-                      own: a seventh row of text is enough to push the heat map off
-                      the bottom of a 750px window. It truncates from the left of
-                      its own field, so a long provider id cannot squeeze the tags. */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.4 }}>
+                  <Box data-recent-tags sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.4, minWidth: 0 }}>
                     <MiniTag t={t} label={i18n.t(MODE_LABEL[item.mode] ?? item.mode)} />
-                    {item.route === 'multimodal' && <MiniTag t={t} label={i18n.t('多模态')} />}
-                    {item.sources && item.sources.length > 0 && (
-                      <MiniTag t={t} label={i18n.t('来源 {{n}}', { n: item.sources.length })} />
-                    )}
-                    {chip && (
-                      <Typography
-                        data-prompt-chip
-                        title={chip}
-                        sx={{
-                          ml: 'auto',
-                          minWidth: 0,
-                          maxWidth: '64%',
-                          flexShrink: 1,
-                          fontSize: 9.5,
-                          lineHeight: '16px',
-                          color: t.textFaint,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {chip}
-                      </Typography>
-                    )}
+                    {chip && <MiniTag t={t} label={chip} card />}
                   </Box>
                 </Box>
               )
@@ -968,18 +941,27 @@ function Pills({ t, items, value, onChange }: PillsProps): JSX.Element {
 
 function MiniTag({
   t,
-  label
+  label,
+  card = false
 }: {
   t: { surfaceHi: string; textDim: string }
   label: string
+  card?: boolean
 }): JSX.Element {
   return (
     <Box
+      data-prompt-chip={card || undefined}
+      title={label}
       sx={{
         px: 0.6,
         height: 16,
-        display: 'grid',
-        placeItems: 'center',
+        minWidth: 0,
+        maxWidth: card ? '65%' : undefined,
+        flexShrink: card ? 1 : 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        lineHeight: '14px',
         borderRadius: '4px',
         fontSize: 9.5,
         color: t.textDim,

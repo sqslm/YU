@@ -1121,6 +1121,9 @@ async function bootstrap(): Promise<void> {
   // `recordingLog` itself so the module stays Electron-free and unit-testable.
   recordingLog.configure(join(app.getPath('userData'), 'recordings'))
   const settings = await store.load()
+  // Restore the persisted session only after Electron's OS encryption is ready,
+  // and before sync or the account UI reads it.
+  accounts.load()
   // Tray labels, alerts and dialogs are built in the main process; they follow
   // the same language as the windows from the first paint on.
   setMainLanguage(settings.uiLanguage)
