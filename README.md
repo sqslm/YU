@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.27.0-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.28.0-setup.exe
 ```
 
 ## 使用
@@ -66,6 +66,10 @@ AI 提醒通过「快速提醒」快捷键复用现有录音和 ASR，开始/结
 提醒支持中文、繁体中文和英文常见时间表达，由 Chrono 2.10.3 识别，再由程序校验明确的日期/时刻并计算本地时间戳。例如「20 分钟后提醒我打扫卫生」「明天上午 10 点提醒我打电话」「每周一上午 9 点提醒我开会」，以及 “Remind me in twenty minutes to clean up”, “Tomorrow at three thirty PM”, “Every Monday at 9 AM”。含糊的上午/下午、数字日期、日期范围和缺少时刻的事项要求确认，不使用模型生成的 Unix 时间戳。重复规则目前支持每天和每周单个星期；月度、年度、多星期和限定次数/截止日期等规则保留原文并要求人工确认，不转换为一次性或无限重复。夏令时不存在的单次时刻要求修改，重复提醒跳过不存在的本地时刻。
 
 提醒支持最多 4000 字的可选备注，保留人物、数量、条件等细节；语音创建、随记提取、批量确认和手动编辑共用此字段。备注保存在现有 SQLite JSON 记录中，旧提醒无需迁移；可按备注搜索，普通通知和强提醒均显示备注，长备注可滚动阅读。未设置时间的事项保留原始时间表达，方便稍后补充或确认不支持的规则。
+
+提醒可复制为新的编辑草稿，确认保存后才创建，已过期的时间会清空。已完成或取消的事项可恢复为待处理：未来时间保留，过期的一次性事项恢复为不定时待办，重复事项安排下一次。管理页和强提醒窗口的「稍后提醒」旁提供 1、5、10、15、30、60 分钟选项，仅改变本次提醒，不改默认设置；重复提醒延后时间持久保存，系统时区变化不会覆盖明确的延后时间。随记在 AI 提取期间被删除或相关文本被修改时，旧结果不会再展示，须重新提取；空白转写可使用已有随记文本。
+
+Reminders can be duplicated into an editable draft and are created only after saving. Restore completed/cancelled items to pending: keep a future time, turn an expired one-off item into an untimed to-do, or schedule the next recurring occurrence. The snooze menu offers 1, 5, 10, 15, 30 or 60 minutes for this occurrence without changing your default. Explicit snooze deadlines survive restart and timezone rebasing. Notes changed or deleted during extraction require a fresh extraction rather than showing stale results.
 
 侧栏「提醒」支持本地手动创建、编辑、完成、取消、删除、稍后提醒、搜索、筛选和分页。普通提醒调用 Windows 系统通知，点击打开对应记录，是否呈现及声音受 Windows 通知权限和专注设置影响。提醒时间使用应用内日期选择器，跟随应用明暗主题和中英文；点击整行可选择日期、小时和分钟，确认后应用，清除则改为不定时待办。强提醒使用一个无系统标题栏、无最小化/最大化/关闭按钮的置顶遮罩窗口，在鼠标所在显示器居中显示约 480 × 380 的卡片；周围暗化并接收鼠标，避免误点后方应用。首次出现时请求前台焦点，不持续抢焦点。队列共用一个窗口，每 30 秒提示音，可完成或默认延后 5 分钟；界面保留紧急关闭入口，Esc / Alt+F4 也可退出本次显示，保留待处理状态，重启恢复。不会锁定桌面或拦截系统级切换、任务管理器等按键。通用设置可关闭普通通知、关闭强提醒声音，或修改默认稍后提醒时长。
 

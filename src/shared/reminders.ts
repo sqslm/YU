@@ -23,6 +23,8 @@ export interface Reminder extends ReminderInput {
   updatedAt: number
   status: ReminderStatus
   deliveredAt: number | null
+  /** An explicit elapsed-time snooze must survive local timezone rebasing. */
+  snoozedUntil?: number
   lastCompletedAt?: number
 }
 export interface ReminderDraft {
@@ -38,7 +40,7 @@ export interface ReminderDraft {
   issue?: string
 }
 export interface ReminderView { id?: string; drafts?: ReminderDraft[]; noteId?: string }
-export type ReminderAction = 'complete' | 'cancel' | 'snooze'
+export type ReminderAction = 'complete' | 'cancel' | 'snooze' | 'restore'
 
 /** datetime-local uses local components; toISOString would shift the editor's clock. */
 export function localDateTime(value: number | null): string {

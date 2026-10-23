@@ -33,7 +33,7 @@ export interface TypelessApi {
     list(): Promise<Reminder[]>
     save(input: ReminderInput, id?: string): Promise<Reminder>
     saveMany(inputs: ReminderInput[]): Promise<Reminder[]>
-    action(id: string, action: ReminderAction): Promise<void>
+    action(id: string, action: ReminderAction, snoozeMinutes?: number): Promise<void>
     remove(id: string): Promise<void>
     extractNote(id: string): Promise<void>
     view(): Promise<ReminderView | null>

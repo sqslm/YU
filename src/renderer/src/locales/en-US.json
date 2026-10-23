@@ -1424,5 +1424,12 @@
   "原始时间表达：{{text}}": "Original time expression: {{text}}",
   "暂不支持此重复规则，请手动确认": "This recurrence rule is not supported yet. Please review it manually.",
   "请核对提炼后的提醒内容": "Please review the refined reminder details",
-  "提醒备注不能超过 4000 字": "Reminder details cannot exceed 4,000 characters"
+  "提醒备注不能超过 4000 字": "Reminder details cannot exceed 4,000 characters",
+  "选择稍后提醒时长": "Choose snooze duration",
+  "恢复为待处理": "Restore to pending",
+  "复制提醒": "Duplicate reminder",
+  "复制不会自动创建，请确认时间后保存。": "No copy is created yet. Review the time and save to create it.",
+  "未来的提醒保留时间；过期事项恢复为待办，重复提醒安排下一次。": "Future reminders keep their time. Expired items become untimed to-dos; recurring reminders resume at the next occurrence.",
+  "仅可恢复已完成或已取消的提醒": "Only completed or cancelled reminders can be restored",
+  "随记内容已更改，请重新提取": "The note has changed. Please extract reminders again."
 }

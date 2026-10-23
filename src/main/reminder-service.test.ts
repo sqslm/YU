@@ -27,6 +27,45 @@ function harness() {
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true }); vi.useRealTimers(); vi.clearAllMocks(); mock.notices.length = 0; mock.windows.length = 0; mock.handlers.clear() })
 const draft = (overrides: Partial<ReminderDraft> = {}): ReminderDraft => ({ title: 'Clean up', intent: 'create_reminder', level: 'normal', time_expression: 'in 20 minutes', dueAt: Date.now() + 1200000, rule: null, recurrence: null, needs_confirmation: false, ...overrides })
 describe('shared reminder delivery and entry points', () => {
+  it('passes a one-time snooze duration through IPC without changing the configured default', () => {
+    vi.useFakeTimers(); const now = Date.now()
+    const { service, settings } = harness()
+    try {
+      settings.reminders.snoozeMinutes = 10
+      service.registerIpc({ list: () => ({ notes: [] }) } as never)
+      const row = service.save({ title: 'Task', dueAt: now + 60000, level: 'normal', source: 'manual', recurrence: null })
+      mock.handlers.get('reminders:action')!(null, row.id, 'snooze', 15)
+      expect(service.store.get(row.id)?.dueAt).toBe(now + 900000)
+      mock.handlers.get('reminders:action')!(null, row.id, 'snooze')
+      expect(service.store.get(row.id)?.dueAt).toBe(now + 600000)
+      expect(settings.reminders.snoozeMinutes).toBe(10)
+      service.action(row.id, 'cancel'); service.action(row.id, 'restore')
+      expect(service.store.get(row.id)?.status).toBe('pending')
+    } finally { service.stop() }
+  })
+  it('uses the nonblank note text when the transcript contains only whitespace', async () => {
+    const { service } = harness()
+    try {
+      service.registerIpc({ list: () => ({ notes: [{ id: 'blank-note', transcript: '  \n ', polished: 'Call tomorrow at 10 AM' }] }) } as never)
+      mock.extract.mockResolvedValue([draft()])
+      await mock.handlers.get('reminders:extract-note')!(null, 'blank-note')
+      expect(mock.extract.mock.calls[0][1]).toBe('Call tomorrow at 10 AM')
+    } finally { service.stop() }
+  })
+  it.each(['deleted', 'edited'])('does not open stale extraction when the note was %s during parsing', async change => {
+    const { service, open } = harness()
+    let notes = [{ id: 'changing-note', transcript: 'Call tomorrow at 10 AM', polished: '' }]
+    try {
+      service.registerIpc({ list: () => ({ notes }) } as never)
+      mock.extract.mockImplementationOnce(async () => {
+        notes = change === 'deleted' ? [] : [{ ...notes[0], transcript: 'Cancel that call' }]
+        return [draft()]
+      })
+      await expect(mock.handlers.get('reminders:extract-note')!(null, 'changing-note')).rejects.toThrow()
+      expect(open).not.toHaveBeenCalled()
+      expect(service.store.list()).toHaveLength(0)
+    } finally { service.stop() }
+  })
   it('creates an explicit voice reminder once with a working undo', async () => {
     const { service, open } = harness()
     try {

@@ -730,5 +730,7 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "提醒备注不能超过 4000 字": "Reminder details cannot exceed 4,000 characters",
   "暂不支持此重复规则，请手动确认": "This recurrence rule is not supported yet. Please review it manually.",
   "请核对提炼后的提醒内容": "Please review the refined reminder details",
-  "没有可创建的提醒，本次未保存": "No reminders to create. Nothing was saved."
+  "没有可创建的提醒，本次未保存": "No reminders to create. Nothing was saved.",
+  "随记内容已更改，请重新提取": "The note has changed. Please extract reminders again.",
+  "仅可恢复已完成或已取消的提醒": "Only completed or cancelled reminders can be restored"
 }

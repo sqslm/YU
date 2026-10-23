@@ -8,6 +8,51 @@ const base = new Date(2026, 9, 23, 8).getTime()
 const entry = (dueAt: number | null): ReminderInput => ({ title: 'Call the technician', dueAt, level: 'normal', source: 'manual', recurrence: null })
 afterEach(() => vi.useRealTimers())
 describe('durable local reminders', () => {
+  it('restores processed reminders without immediately redelivering an expired occurrence', () => {
+    let now = base
+    const store = new ReminderStore(':memory:', () => now)
+    try {
+      const expired = store.save({ ...entry(base + 60000), description: 'Keep details', source: 'note', noteId: 'note-1' })
+      store.action(expired.id, 'complete'); now += 120000
+      expect(store.action(expired.id, 'restore')).toMatchObject({ id: expired.id, status: 'pending', dueAt: null, description: 'Keep details', noteId: 'note-1', deliveredAt: null })
+      const future = store.save(entry(now + 3600000)); store.action(future.id, 'cancel')
+      expect(store.action(future.id, 'restore').dueAt).toBe(future.dueAt)
+      const recurring = store.save({ ...entry(now + 60000), recurrence: { frequency: 'daily', hour: 9, minute: 0 } })
+      store.action(recurring.id, 'cancel')
+      expect(store.action(recurring.id, 'restore')).toMatchObject({ status: 'pending', dueAt: new Date(2026, 9, 23, 9).getTime() })
+      expect(() => store.action(future.id, 'restore')).toThrow('仅可恢复已完成或已取消的提醒')
+      const deliver = vi.fn(), scheduler = new ReminderScheduler(store, deliver, vi.fn(), () => now)
+      scheduler.check(); scheduler.stop(); expect(deliver).not.toHaveBeenCalled()
+    } finally { store.close() }
+  })
+  it('persists an occurrence snooze across restart, validates durations and returns to the original recurring time on completion', () => {
+    let now = base
+    const dir = mkdtempSync(join(tmpdir(), 'typeless-snooze-')), file = join(dir, 'reminders.sqlite')
+    let store = new ReminderStore(file, () => now)
+    try {
+      const row = store.save({ ...entry(base + 60000), recurrence: { frequency: 'daily', hour: 8, minute: 1 } })
+      now += 60000; store.markDue(row.id)
+      for (const minutes of [0, -1, 1.5, NaN, 1441]) expect(() => store.action(row.id, 'snooze', minutes)).toThrow('稍后提醒时长无效')
+      const snoozed = store.action(row.id, 'snooze', 60)
+      store.close(); store = new ReminderStore(file, () => now)
+      store.rebaseRecurrences()
+      expect(store.get(row.id)).toMatchObject({ dueAt: now + 3600000, snoozedUntil: snoozed.dueAt, status: 'pending' })
+      const completed = store.action(row.id, 'complete')
+      expect(completed.dueAt).toBe(new Date(2026, 9, 24, 8, 1).getTime())
+      expect(completed.snoozedUntil).toBeUndefined()
+    } finally { store.close(); rmSync(dir, { recursive: true }) }
+  })
+  it('keeps an explicit snooze deadline when recurring schedules are rebased', () => {
+    let now = base
+    const store = new ReminderStore(':memory:', () => now)
+    try {
+      const row = store.save({ ...entry(base + 60000), recurrence: { frequency: 'daily', hour: 8, minute: 1 } })
+      now += 60000; store.markDue(row.id)
+      const snoozed = store.action(row.id, 'snooze', 15)
+      store.rebaseRecurrences()
+      expect(store.get(row.id)?.dueAt).toBe(snoozed.dueAt)
+    } finally { store.close() }
+  })
   it('persists descriptions and source expressions across restart, and preserves descriptions on older edits', () => {
     const dir = mkdtempSync(join(tmpdir(), 'typeless-reminder-details-')), file = join(dir, 'reminders.sqlite')
     let store = new ReminderStore(file, () => base)

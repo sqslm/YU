@@ -5,6 +5,7 @@ import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderVi
 import { localDateTime } from '@shared/reminders'
 import { PagedList } from '../Pagination'
 import { ReminderDateTime } from './ReminderDateTime'
+import { SnoozeButton } from '../../reminder/SnoozeButton'
 
 interface Form { title: string; description: string; timeExpression: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | 'daily' | 'weekly'; weekday: number }
 const empty = (): Form => ({ title: '', description: '', timeExpression: '', date: '', level: 'normal', repeat: 'none', weekday: 1 })
@@ -58,7 +59,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
   const { t, i18n } = useTranslation()
   const [rows, setRows] = useState<Reminder[]>([]), [error, setError] = useState(''), [query, setQuery] = useState('')
   const [filter, setFilter] = useState('active'), [busy, setBusy] = useState(false)
-  const [editor, setEditor] = useState<{ id?: string; form: Form; source: ReminderInput['source']; noteId?: string } | null>(null)
+  const [editor, setEditor] = useState<{ id?: string; form: Form; source: ReminderInput['source']; noteId?: string; duplicate?: boolean } | null>(null)
   const [review, setReview] = useState<{ drafts: ReminderDraft[]; forms: Form[]; selected: boolean[]; noteId?: string } | null>(null)
   const [deleting, setDeleting] = useState<Reminder | null>(null)
   const [highlightId, setHighlightId] = useState<string | undefined>()
@@ -81,7 +82,11 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
     try { await work(); reload(); return true } catch (e) { setError(t(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(e))); return false }
     finally { setBusy(false) }
   }
-  const act = (id: string, action: ReminderAction): void => { void perform(() => window.api.reminders.action(id, action)) }
+  const act = (id: string, action: ReminderAction, minutes?: number): void => {
+    void perform(() => window.api.reminders.action(id, action, minutes)).then(ok => {
+      if (ok && action === 'restore') { setFilter('active'); setQuery(''); setHighlightId(id) }
+    })
+  }
   const format = (stamp: number | null): string => stamp === null ? t('未设置时间 · 待办') : new Date(stamp).toLocaleString(i18n.language === 'en' ? 'en-US' : 'zh-CN')
   const sourceLabel = { manual: '手动', voice: '语音快捷键', note: '随记' }
   const statusLabel = { pending: '待处理', due: '已到期', completed: '已完成', cancelled: '已取消' }
@@ -116,17 +121,26 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
           </Stack>
           <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, flexWrap: 'wrap' }}>
             {['pending', 'due'].includes(row.status) && <><Button size="small" disabled={busy} onClick={() => act(row.id, 'complete')}>{t('确认完成')}</Button>
-              <Button size="small" disabled={busy} onClick={() => act(row.id, 'snooze')}>{t('稍后提醒')}</Button>
+              <SnoozeButton label={t('稍后提醒')} disabled={busy} onSnooze={minutes => act(row.id, 'snooze', minutes)} />
               <Button size="small" disabled={busy} onClick={() => act(row.id, 'cancel')}>{t('取消提醒')}</Button></>}
+            {['completed', 'cancelled'].includes(row.status) && <Button size="small" disabled={busy}
+              title={t('未来的提醒保留时间；过期事项恢复为待办，重复提醒安排下一次。')} onClick={() => act(row.id, 'restore')}>{t('恢复为待处理')}</Button>}
             <Button size="small" disabled={busy} onClick={() => setEditor({ id: row.id, form: fromReminder(row), source: row.source, noteId: row.noteId })}>{t('编辑')}</Button>
+            <Button size="small" disabled={busy} onClick={() => {
+              const form = fromReminder(row)
+              if (form.date && new Date(form.date).getTime() <= Date.now()) form.date = ''
+              setError(''); setEditor({ form, source: 'manual', noteId: row.noteId, duplicate: true })
+            }}>{t('复制提醒')}</Button>
             <Button size="small" color="inherit" disabled={busy} onClick={() => setDeleting(row)}>{t('删除')}</Button>
           </Stack>
         </Box>)}
       </PagedList>
     </Stack>
     <Dialog open={Boolean(editor)} onClose={() => !busy && setEditor(null)} fullWidth maxWidth="sm">
-      <DialogTitle>{t(editor?.id ? '编辑提醒' : '新建提醒')}</DialogTitle>
-      <DialogContent sx={{ pt: '12px !important' }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}{editor && <Fields form={editor.form} change={form => setEditor({ ...editor, form })} />}</DialogContent>
+      <DialogTitle>{t(editor?.id ? '编辑提醒' : editor?.duplicate ? '复制提醒' : '新建提醒')}</DialogTitle>
+      <DialogContent sx={{ pt: '12px !important' }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {editor?.duplicate && <Alert severity="info" sx={{ mb: 2 }}>{t('复制不会自动创建，请确认时间后保存。')}</Alert>}
+        {editor && <Fields form={editor.form} change={form => setEditor({ ...editor, form })} />}</DialogContent>
       <DialogActions><Button disabled={busy} onClick={() => setEditor(null)}>{t('取消')}</Button><Button disabled={busy} variant="contained" onClick={() => {
         if (editor) void perform(async () => {
           const row = await window.api.reminders.save(input(editor.form, editor.source, editor.noteId, rows.find(row => row.id === editor.id)), editor.id)

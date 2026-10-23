@@ -7,6 +7,7 @@ import type { Settings } from '@shared/types'
 import { makeTheme, onSystemThemeChange, resolveThemeMode } from '../settings/theme'
 import { applyUiLanguage } from '../i18n'
 import { disposeCues, playCue } from '../bar/cues'
+import { SnoozeButton } from './SnoozeButton'
 
 function StrongReminder(): JSX.Element {
   const { t, i18n } = useTranslation()
@@ -33,10 +34,10 @@ function StrongReminder(): JSX.Element {
     const timer = setInterval(() => playCue('reminder', true), 30_000)
     return () => { clearInterval(timer); disposeCues() }
   }, [current?.id, settings?.reminders.strongSound])
-  const act = async (action: ReminderAction): Promise<void> => {
+  const act = async (action: ReminderAction, minutes?: number): Promise<void> => {
     if (!current || busy) return
     setBusy(true); setError('')
-    try { await window.api.reminders.action(current.id, action); setRows(await window.api.reminders.strong()) }
+    try { await window.api.reminders.action(current.id, action, minutes); setRows(await window.api.reminders.strong()) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -55,7 +56,8 @@ function StrongReminder(): JSX.Element {
       </Box>
       <Stack direction="row" spacing={1}>
         <Button sx={{ flex: 1 }} variant="contained" disabled={!current || busy} onClick={() => void act('complete')}>{t('确认完成')}</Button>
-        <Button sx={{ flex: 1 }} variant="outlined" disabled={!current || busy} onClick={() => void act('snooze')}>{t('{{n}} 分钟后提醒', { n: settings?.reminders.snoozeMinutes ?? 5 })}</Button>
+        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}><SnoozeButton variant="outlined" size="medium"
+          disabled={!current || busy} label={t('{{n}} 分钟后提醒', { n: settings?.reminders.snoozeMinutes ?? 5 })} onSnooze={minutes => void act('snooze', minutes)} /></Box>
       </Stack>
       <Button color="inherit" size="small" sx={{ mt: 1.5, alignSelf: 'center', color: 'text.secondary' }} onClick={() => window.api.reminders.closeStrong()}>{t('关闭窗口，保留待处理事项')}</Button>
     </Paper>

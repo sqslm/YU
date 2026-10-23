@@ -34,8 +34,8 @@ export class ReminderService {
     this.refresh()
     return row
   }
-  action(id: string, action: ReminderAction): void {
-    this.store.action(id, action, this.settings().reminders.snoozeMinutes)
+  action(id: string, action: ReminderAction, snoozeMinutes?: number): void {
+    this.store.action(id, action, snoozeMinutes ?? this.settings().reminders.snoozeMinutes)
     this.dismissed.delete(id); this.closeNotice(id); this.refresh()
   }
   remove(id: string): void { this.store.remove(id); this.dismissed.delete(id); this.closeNotice(id); this.refresh() }
@@ -103,7 +103,7 @@ export class ReminderService {
     ipcMain.handle('reminders:save-many', (_event, inputs: ReminderInput[]) => {
       const rows = this.store.saveMany(inputs); this.refresh(); return rows
     })
-    ipcMain.handle('reminders:action', (_event, id: string, action: ReminderAction) => this.action(id, action))
+    ipcMain.handle('reminders:action', (_event, id: string, action: ReminderAction, snoozeMinutes?: number) => this.action(id, action, snoozeMinutes))
     ipcMain.handle('reminders:remove', (_event, id: string) => this.remove(id))
     ipcMain.handle('reminders:view', () => { const view = this.view; this.view = null; return view })
     ipcMain.handle('reminders:strong', () => this.strongRows())
@@ -112,12 +112,16 @@ export class ReminderService {
       if (this.extracting) throw new Error(mt('正在提取待办，请稍候'))
       const note = notes.list().notes.find(item => item.id === id)
       if (!note) throw new Error(mt('随记不存在'))
+      const text = note.transcript.trim() || note.polished.trim()
       this.extracting = true
       const controller = new AbortController()
       this.noteAbort = controller
       try {
-        const drafts = await extractReminders(this.settings(), note.transcript || note.polished, 'note', AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
+        const drafts = await extractReminders(this.settings(), text, 'note', AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
         controller.signal.throwIfAborted()
+        const current = notes.list().notes.find(item => item.id === id)
+        if (!current) throw new Error(mt('随记不存在'))
+        if ((current.transcript.trim() || current.polished.trim()) !== text) throw new Error(mt('随记内容已更改，请重新提取'))
         if (!drafts.length) throw new Error(mt('没有发现待办或提醒事项'))
         this.open({ drafts, noteId: id })
       } finally { this.extracting = false; if (this.noteAbort === controller) this.noteAbort = null }

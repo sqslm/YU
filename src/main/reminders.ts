@@ -41,7 +41,8 @@ export class ReminderStore {
     const reminder: Reminder = { title: input.title.trim(), description: (input.description ?? old?.description ?? '').trim(), dueAt: input.dueAt, level: input.level,
       recurrence: input.recurrence, source: old?.source ?? input.source, noteId: old?.noteId ?? input.noteId,
       timeExpression: input.timeExpression, id: id ?? randomUUID(), createdAt: old?.createdAt ?? this.now(),
-      updatedAt: this.now(), status: sameSchedule ? old.status : 'pending', deliveredAt: sameSchedule ? old.deliveredAt : null, lastCompletedAt: old?.lastCompletedAt }
+      updatedAt: this.now(), status: sameSchedule ? old.status : 'pending', deliveredAt: sameSchedule ? old.deliveredAt : null,
+      snoozedUntil: sameSchedule ? old.snoozedUntil : undefined, lastCompletedAt: old?.lastCompletedAt }
     return this.write(reminder)
   }
   saveMany(inputs: ReminderInput[]): Reminder[] {
@@ -63,20 +64,26 @@ export class ReminderStore {
   action(id: string, action: ReminderAction, snoozeMinutes = 5): Reminder {
     const row = this.get(id)
     if (!row) throw new Error(mt('提醒不存在'))
+    if (action === 'restore') {
+      if (row.status !== 'completed' && row.status !== 'cancelled') throw new Error(mt('仅可恢复已完成或已取消的提醒'))
+      const dueAt = row.recurrence ? nextOccurrence(row.recurrence, this.now()) : row.dueAt !== null && row.dueAt > this.now() ? row.dueAt : null
+      return this.write({ ...row, dueAt, status: 'pending', deliveredAt: null, snoozedUntil: undefined, updatedAt: this.now() })
+    }
     if (!['pending', 'due'].includes(row.status)) throw new Error(mt('这条提醒已处理'))
     if (action === 'snooze') {
       if (!Number.isInteger(snoozeMinutes) || snoozeMinutes < 1 || snoozeMinutes > 1440) throw new Error(mt('稍后提醒时长无效'))
-      return this.write({ ...row, dueAt: this.now() + snoozeMinutes * 60_000, status: 'pending', deliveredAt: null, updatedAt: this.now() })
+      const dueAt = this.now() + snoozeMinutes * 60_000
+      return this.write({ ...row, dueAt, snoozedUntil: dueAt, status: 'pending', deliveredAt: null, updatedAt: this.now() })
     }
     if (action !== 'cancel' && action !== 'complete') throw new Error(mt('提醒操作无效'))
     if (action === 'complete' && row.recurrence) return this.write({ ...row,
       dueAt: nextOccurrence(row.recurrence, Math.max(this.now(), row.dueAt ?? this.now())), status: 'pending', deliveredAt: null,
-      lastCompletedAt: this.now(), updatedAt: this.now() })
+      snoozedUntil: undefined, lastCompletedAt: this.now(), updatedAt: this.now() })
     return this.write({ ...row, status: action === 'complete' ? 'completed' : 'cancelled', updatedAt: this.now() })
   }
   remove(id: string): void { this.db.prepare('DELETE FROM reminders WHERE id = ?').run(id) }
   rebaseRecurrences(): void {
-    for (const row of this.scheduled()) if (row.recurrence && row.dueAt! > this.now()) {
+    for (const row of this.scheduled()) if (row.recurrence && row.dueAt! > this.now() && row.snoozedUntil !== row.dueAt) {
       this.write({ ...row, dueAt: nextOccurrence(row.recurrence, this.now()), updatedAt: this.now() })
     }
   }
