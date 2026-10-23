@@ -192,6 +192,7 @@ const api: TypelessApi = {
       ipcRenderer.invoke('pipeline:retry', id)
   },
   app: {
+    chooseDownloadFolder: () => ipcRenderer.invoke('app:chooseDownloadFolder'),
     openDataFolder: (): Promise<void> => ipcRenderer.invoke('app:openDataFolder'),
     recordingOpen: (): Promise<boolean> => ipcRenderer.invoke('recording:open'),
     recordingList: (): Promise<RecordingSessionInfo[]> => ipcRenderer.invoke('recording:list'),

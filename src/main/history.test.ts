@@ -105,6 +105,15 @@ function ids(store: HistoryStore): string[] {
   return store.list().map((item) => item.id)
 }
 
+it('filters by a local calendar range before applying the result limit, combined with literal keyword search', async () => {
+  const from = +new Date(2026, 9, 22), until = +new Date(2026, 9, 23)
+  seedStore([entry('today', until + 1000), entry('yesterday', from + 1000), entry('before', from - 1), entry('boundary', until)])
+  const store = makeStore(); await store.setRetention(-1); await store.load()
+  expect(store.list('', 1, { from, until }).map(row => row.id)).toEqual(['yesterday'])
+  expect(store.list('原始', 10, { from, until }).map(row => row.id)).toEqual(['yesterday'])
+  expect(store.list('today', 10, { from, until })).toEqual([])
+})
+
 describe('HistoryStore retention', () => {
   it('keeps entries of any age when the window is -1 (forever)', async () => {
     const ancient = Date.now() - 400 * DAY

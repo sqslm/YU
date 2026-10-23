@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { mkdtemp, realpath, writeFile, unlink, rmdir, utimes } from 'node:fs/promises'
+import { mkdtemp, realpath, writeFile, unlink, rmdir, utimes, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 vi.mock('electron', () => ({ app: { isPackaged: false, getAppPath: () => process.cwd() } }))
@@ -7,8 +7,9 @@ import { windowsNative } from './windows-native'
 
 let root: string
 const paths: string[] = []
+const folders: string[] = []
 beforeEach(async () => { root = await realpath(await mkdtemp(join(tmpdir(), 'qinly-native-'))) })
-afterEach(async () => { for (const path of paths.splice(0)) await unlink(path); await rmdir(root) })
+afterEach(async () => { for (const path of paths.splice(0)) await unlink(path); for (const folder of folders.splice(0).reverse()) await rmdir(folder); await rmdir(root) })
 const make = async (name: string, text: string, date: string): Promise<string> => {
   const path = join(root, name); await writeFile(path, text); await utimes(path, new Date(date), new Date(date)); paths.push(path); return path
 }
@@ -25,9 +26,10 @@ it.skipIf(process.platform !== 'win32')('queries real Windows file metadata, pre
 it.skipIf(process.platform !== 'win32')('discovers real registered applications without launching them and rejects unknown native actions', async () => {
   const result = await windowsNative({ action: 'applications' })
   expect(Array.isArray(result.applications)).toBe(true)
-  for (const item of result.applications as { name: string; path: string }[]) {
-    expect(item.name).toBeTruthy(); expect(item.path).toMatch(/\.exe$/i)
-    expect(await realpath(item.path)).toBeTruthy()
+  for (const item of result.applications as { name: string; path: string; appId?: string }[]) {
+    expect(item.name).toBeTruthy()
+    if (item.appId) expect(item.appId === 'system:settings' || item.appId.includes('!')).toBe(true)
+    else { expect(item.path).toMatch(/\.exe$/i); expect(await realpath(item.path)).toBeTruthy() }
   }
   await expect(windowsNative({ action: 'run', command: 'echo should-never-run' })).rejects.toThrow('Unknown operation')
 }, 25_000)
@@ -38,3 +40,28 @@ it.skipIf(process.platform !== 'win32')('cancels and terminates the native helpe
   controller.abort()
   await expect(result).rejects.toThrow('Cancelled')
 })
+
+it.skipIf(process.platform !== 'win32')('finds actual unindexed subfolder archives without scanning beyond the configured depth', async () => {
+  let current = root
+  for (let level = 1; level <= 4; level++) { current = join(current, `depth-${level}`); await mkdir(current); folders.push(current) }
+  const zip = await make('depth-1/report.zip', 'archive metadata fixture', '2026-10-22T01:00:00Z')
+  await make('depth-1/not-an-archive.txt', 'excluded', '2026-10-22T01:00:00Z')
+  const result = await windowsNative({ action: 'search', root, extensions: ['zip', 'rar', '7z'], recursive: true, sort: 'modified' })
+  expect(result.files).toEqual([expect.objectContaining({ path: zip })])
+  expect(result.partial).toBe(true)
+}, 20000)
+
+it.skipIf(process.platform !== 'win32')('checks the original native window before reading browser or Explorer context', async () => {
+  for (const action of ['browser-url', 'explorer-folder']) await expect(windowsNative({ action, handle: '0', pid: process.pid, title: '' })).rejects.toThrow('Original window is unavailable')
+}, 20000)
+
+it.skipIf(process.platform !== 'win32')('returns real local drive capacities and refuses activation of invented applications', async () => {
+  const result = await windowsNative({ action: 'disk-space' })
+  expect((result.drives as unknown[]).length).toBeGreaterThan(0)
+  for (const drive of result.drives as { totalBytes: number; freeBytes: number; usedBytes: number }[]) {
+    expect(drive.totalBytes).toBeGreaterThan(0)
+    expect(drive.freeBytes).toBeGreaterThanOrEqual(0)
+    expect(drive.usedBytes + drive.freeBytes).toBe(drive.totalBytes)
+  }
+  await expect(windowsNative({ action: 'activate', appId: 'nonexistent-qinly-test-app!App' })).rejects.toThrow('no longer available')
+}, 25000)

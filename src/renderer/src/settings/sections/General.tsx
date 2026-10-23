@@ -1291,6 +1291,14 @@ export function StorageSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
       <NotesDataGroup settings={settings} patch={patch} />
+      <SettingsGroup icon={<IconFolder />} title={i18n.t('助手文件搜索')}>
+        <SettingsRow label={i18n.t('下载目录')} description={settings.assistantDownloadFolder || i18n.t('使用 Windows 下载目录；浏览器另设目录时可在这里指定')}>
+          <Stack direction="row" spacing={1}>
+            {settings.assistantDownloadFolder && <Button size="small" onClick={() => patch({ assistantDownloadFolder: '' })}>{i18n.t('恢复默认')}</Button>}
+            <Button size="small" variant="outlined" onClick={() => void window.api.app.chooseDownloadFolder().then(path => { if (path) patch({ assistantDownloadFolder: path }) })}>{i18n.t('选择目录')}</Button>
+          </Stack>
+        </SettingsRow>
+      </SettingsGroup>
       <SettingsGroup icon={<IconFolder />} title={i18n.t('应用数据')}>
         <SettingsRow
           label={i18n.t('用户数据总目录')}

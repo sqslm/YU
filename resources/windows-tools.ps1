@@ -3,6 +3,83 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+if ($request.action -in @('explorer-folder','browser-url')) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class QinlyWindow {
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
+}
+'@
+  function Assert-OriginalWindow {
+    if ([string]$request.handle -notmatch '^\d+$' -or [long]$request.handle -le 0) { throw 'Original window is unavailable' }
+    $script:hwnd = [IntPtr][long]$request.handle
+    [uint32]$windowPid = 0
+    [void][QinlyWindow]::GetWindowThreadProcessId($script:hwnd, [ref]$windowPid)
+    $title = New-Object Text.StringBuilder 1024
+    [void][QinlyWindow]::GetWindowText($script:hwnd, $title, 1024)
+    if (![QinlyWindow]::IsWindow($script:hwnd) -or $windowPid -ne [uint32]$request.pid -or $title.ToString() -cne [string]$request.title) { throw 'Original window has changed or closed' }
+  }
+  Assert-OriginalWindow
+  if ($request.action -eq 'explorer-folder') {
+    $shell = New-Object -ComObject Shell.Application
+    $windows = $shell.Windows()
+    try {
+      $folders = @($windows | Where-Object { [long]$_.HWND -eq [long]$request.handle } | ForEach-Object { $_.Document.Folder.Self.Path } | Sort-Object -Unique)
+      Assert-OriginalWindow
+      @{folder=$(if ($folders.Count -eq 1 -and [IO.Directory]::Exists($folders[0])) { $folders[0] } else { $null })} | ConvertTo-Json -Compress
+    } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($windows); [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
+    exit
+  }
+  Add-Type -AssemblyName UIAutomationClient
+  Add-Type -AssemblyName UIAutomationTypes
+  $element = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+  $edits = $element.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))
+  $urls = New-Object System.Collections.Generic.List[string]
+  foreach ($edit in $edits | Select-Object -First 100) {
+    if ($edit.Current.IsPassword -or $edit.Current.IsOffscreen) { continue }
+    if ($edit.Current.AutomationId -notmatch '^(?:addressEditBox|urlbar-input|urlbar)$' -and $edit.Current.Name -notmatch '\u5730\u5740|\u7db2\u5740|address|search or enter|\u641c\u7d22\u6216\u8f93\u5165|\u641c\u5c0b\u6216\u8f38\u5165') { continue }
+    # Only browser chrome under a toolbar; never a page's similarly named form field.
+    $ancestor = $edit; $toolbar = $false
+    for ($depth=0; $depth -lt 12; $depth++) {
+      $ancestor = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($ancestor)
+      if (!$ancestor -or $ancestor.Current.ControlType -eq [System.Windows.Automation.ControlType]::Document) { break }
+      if ($ancestor.Current.ControlType -eq [System.Windows.Automation.ControlType]::ToolBar) { $toolbar=$true; break }
+    }
+    if (!$toolbar) { continue }
+    $pattern = $null
+    if ($edit.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
+      $value = ([System.Windows.Automation.ValuePattern]$pattern).Current.Value
+      if ($value -match '^https?://') { $urls.Add($value) }
+    }
+  }
+  Assert-OriginalWindow
+  $unique = @($urls | Select-Object -Unique)
+  @{url=$(if ($unique.Count -eq 1) { $unique[0] } else { $null })} | ConvertTo-Json -Compress
+  exit
+}
+if ($request.action -eq 'disk-space') {
+  $drives = @([IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -in @('Fixed','Removable') } | ForEach-Object {
+    @{name=$_.Name;label=$_.VolumeLabel;totalBytes=$_.TotalSize;freeBytes=$_.AvailableFreeSpace;usedBytes=($_.TotalSize-$_.AvailableFreeSpace)}
+  })
+  @{drives=$drives} | ConvertTo-Json -Depth 5 -Compress
+  exit
+}
+if ($request.action -eq 'activate') {
+  $appId = [string]$request.appId
+  $target = if ($appId -eq 'system:settings') { 'ms-settings:' } else {
+    $registered = @(Get-StartApps | Where-Object { $_.AppID -ceq $appId })
+    if ($registered.Count -ne 1) { throw 'Registered app is no longer available' }
+    'shell:AppsFolder\' + $registered[0].AppID
+  }
+  $shell = New-Object -ComObject Shell.Application
+  try { $shell.ShellExecute($target) } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
+  @{activated=$true} | ConvertTo-Json -Compress
+  exit
+}
 if ($request.action -eq 'applications') {
   $items = New-Object System.Collections.Generic.List[object]
   foreach ($base in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths', 'HKLM:\Software\Microsoft\Windows\CurrentVersion\App Paths', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths')) {
@@ -29,6 +106,19 @@ if ($request.action -eq 'applications') {
       }
     }
   } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($ws) }
+  foreach ($registered in Get-StartApps) {
+    # Packaged applications have real AUMIDs, not conventional executable paths.
+    if ($registered.AppID -match '!') { $items.Add(@{name=$registered.Name;path='';appId=$registered.AppID}) }
+  }
+  $items.Add(@{name='Windows Settings';path='';appId='system:settings'})
+  foreach ($commandName in @('explorer.exe','notepad.exe','calc.exe')) {
+    $command = Get-Command $commandName -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $packaged = if ($commandName -eq 'calc.exe') { 'Microsoft.WindowsCalculator_' } elseif ($commandName -eq 'notepad.exe') { 'Microsoft.WindowsNotepad_' } else { '^$' }
+    if ($command -and ($commandName -eq 'explorer.exe' -or !($items | Where-Object { $_.appId -match $packaged }))) {
+      $name = if ($commandName -eq 'calc.exe') { 'Calculator' } else { $commandName -replace '\.exe$','' }
+      $items.Add(@{name=$name;path=$command.Source})
+    }
+  }
   @{applications=@($items | Sort-Object -Property @{Expression={$_.name}},@{Expression={$_.path}} -Unique | Select-Object -First 1500)} | ConvertTo-Json -Depth 5 -Compress
   exit
 }
@@ -38,13 +128,18 @@ if (!(Test-Path -LiteralPath $root -PathType Container)) { throw 'Folder does no
 $indexed = @()
 $backend = 'folder'
 $indexUnavailable = $false
+$extensions = @($request.extensions | Where-Object { $_ })
+if (!$extensions.Count -and $request.extension) { $extensions = @([string]$request.extension) }
 $connection = New-Object System.Data.OleDb.OleDbConnection('Provider=Search.CollatorDSO;Extended Properties="Application=Windows"')
 try {
   $connection.Open()
   $scope = ('file:' + $root.Replace('\','/') + '/').Replace("'", "''")
   $where = "SCOPE='$scope' AND System.FileName IS NOT NULL"
   if ($request.name) { $value=([string]$request.name).Replace("'","''"); $where += " AND System.FileName LIKE '%$value%'" }
-  if ($request.extension) { $value=([string]$request.extension).Replace("'","''"); $where += " AND System.FileExtension='.$value'" }
+  if ($extensions.Count) {
+    $extensionFilter = @($extensions | ForEach-Object { "System.FileExtension='." + ([string]$_).Replace("'","''") + "'" }) -join ' OR '
+    $where += " AND ($extensionFilter)"
+  }
   foreach ($field in @('after','before')) {
     if ($request.$field) {
       $value = ([DateTimeOffset]::Parse($request.$field)).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -61,20 +156,38 @@ try {
   try { while ($reader.Read()) { $indexed += [string]$reader.GetValue(0) } } finally { $reader.Dispose(); $command.Dispose() }
   $backend = 'windows-search+folder'
 } catch { $indexUnavailable = $true } finally { $connection.Dispose() }
-# Supplement the immediate directory: Downloads is often unindexed or indexing may lag.
-# Never recursively crawl the disk as a fallback.
-$direct = @(Get-ChildItem -LiteralPath $root -File -ErrorAction Stop | Select-Object -First 5001)
+# Optional fallback traversal is bounded, cancellable with the process, and skips junctions.
+$direct = New-Object System.Collections.Generic.List[object]
+$queue = New-Object System.Collections.Generic.Queue[object]
+$queue.Enqueue(@{path=$root;depth=0})
+$clock = [Diagnostics.Stopwatch]::StartNew()
+$scanned = 0
+$bounded = $false
+while ($queue.Count -gt 0) {
+  if ($scanned -ge 5000 -or $clock.ElapsedMilliseconds -ge 5000) { $bounded=$true; break }
+  $folder = $queue.Dequeue()
+  foreach ($item in Get-ChildItem -LiteralPath $folder.path -ErrorAction SilentlyContinue | Select-Object -First (5001-$scanned)) {
+    $scanned++
+    if ($scanned -gt 5000 -or $clock.ElapsedMilliseconds -ge 5000) { $bounded=$true; break }
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+    if (!$item.PSIsContainer) { $direct.Add($item) }
+    elseif ($request.recursive -eq $true) {
+      if ($folder.depth -lt 3) { $queue.Enqueue(@{path=$item.FullName;depth=($folder.depth+1)}) } else { $bounded=$true }
+    }
+  }
+}
+$clock.Stop()
 $paths = @($indexed) + @($direct | ForEach-Object FullName)
 $files = @($paths | Select-Object -Unique | ForEach-Object {
   $item = Get-Item -LiteralPath $_ -ErrorAction SilentlyContinue
   if (!$item -or $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return }
   if ($request.name -and $item.Name.IndexOf([string]$request.name,[StringComparison]::OrdinalIgnoreCase) -lt 0) { return }
-  if ($request.extension -and $item.Extension -ine ('.'+$request.extension)) { return }
+  if ($extensions.Count -and $item.Extension.TrimStart('.') -notin $extensions) { return }
   if ($request.after -and $item.LastWriteTimeUtc -lt ([DateTimeOffset]::Parse($request.after)).UtcDateTime) { return }
   if ($request.before -and $item.LastWriteTimeUtc -ge ([DateTimeOffset]::Parse($request.before)).UtcDateTime) { return }
   if ($item.Length -lt [long]$request.minBytes) { return }
   @{name=$item.Name;path=$item.FullName;bytes=$item.Length;modified=$item.LastWriteTimeUtc.ToString('o')}
 })
 $sort = if ($request.sort -eq 'size') { 'bytes' } else { 'modified' }
-@{files=@($files | Sort-Object -Property @{Expression={$_[$sort]};Descending=$true},@{Expression={$_.path}} | Select-Object -First 40);backend=$backend;partial=($direct.Count -ge 5001 -or $indexed.Count -ge 101 -or $files.Count -gt 40);indexUnavailable=$indexUnavailable} | ConvertTo-Json -Depth 5 -Compress
+@{files=@($files | Sort-Object -Property @{Expression={$_[$sort]};Descending=$true},@{Expression={$_.path}} | Select-Object -First 40);backend=$backend;partial=($bounded -or $indexed.Count -ge 101 -or $files.Count -gt 40);indexUnavailable=$indexUnavailable} | ConvertTo-Json -Depth 5 -Compress
 

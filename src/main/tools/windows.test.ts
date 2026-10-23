@@ -26,6 +26,51 @@ const file = async (name: string): Promise<string> => { const path = join(root, 
 const row = (path: string) => ({ name: path.split(/[\\/]/).at(-1)!, path, bytes: 5, modified: '2026-10-22T01:00:00Z' })
 
 describe('Windows tools permissions and real result selection', () => {
+  it('uses a custom Downloads getter on each task and requests bounded recursion and archive extensions', async () => {
+    let folder = root
+    const dynamic = new WindowsTools({ folders: () => ({ downloads: folder, desktop: root, documents: root }), native, confirm, openPath, openUrl })
+    await dynamic.run('search_files', { type: 'archive', recursive: true })
+    expect(native.mock.calls[0][0]).toMatchObject({ root, recursive: true, extensions: expect.arrayContaining(['zip', 'rar', '7z']) })
+    folder = join(root, 'nonexistent-download-folder')
+    await expect(dynamic.run('search_files', {})).rejects.toThrow()
+    expect(native).toHaveBeenCalledTimes(1)
+  })
+  it('resolves Explorer by its original handle and does not silently substitute Downloads', async () => {
+    const context = { appName: 'explorer', processId: 42, windowHandle: '1234', windowTitle: 'Project' }
+    native.mockResolvedValueOnce({ folder: root }).mockResolvedValueOnce({ files: [] })
+    expect((await tools.run('search_files', { folder: 'current' }, undefined, context)).ok).toBe(true)
+    expect(native.mock.calls[0][0]).toEqual({ action: 'explorer-folder', handle: '1234', pid: 42, title: 'Project' })
+    expect(native.mock.calls[1][0].root).toBe(root)
+    await expect(tools.run('get_current_folder', {}, undefined, { ...context, appName: 'code' })).rejects.toThrow('原窗口不是')
+  })
+  it('reads only a real browser URL with permission and reports an unreadable address without inventing content', async () => {
+    const context = { appName: 'chrome', processId: 42, windowHandle: '1234', windowTitle: 'Web page' }
+    native.mockResolvedValueOnce({ url: 'https://example.com/page' }).mockResolvedValueOnce({ url: null })
+    expect((await tools.run('get_current_page', {}, undefined, context)).data.url).toBe('https://example.com/page')
+    expect((await tools.run('get_current_page', {}, undefined, context)).ok).toBe(false)
+    confirm.mockResolvedValue(false); native.mockClear()
+    await expect(tools.run('get_current_page', {}, undefined, context)).rejects.toThrow()
+    expect(native).not.toHaveBeenCalled()
+  })
+  it.each(['计算器', 'Calculator'])('activates a discovered packaged calculator for %s without guessing an exe path or prompting again', async name => {
+    const appId = 'Microsoft.WindowsCalculator_registered!App'
+    native.mockResolvedValueOnce({ applications: [{ name: 'Localized Calculator', path: '', appId }] }).mockResolvedValueOnce({ activated: true })
+    expect((await tools.run('open_application', { name })).ok).toBe(true)
+    expect(native).toHaveBeenLastCalledWith({ action: 'activate', appId }, undefined)
+    expect(openPath).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled()
+  })
+  it('uses only the frozen original window metadata and refuses absent/sensitive targets', async () => {
+    expect(await tools.run('get_active_window', {}, undefined, { appName: 'code', windowTitle: 'Project', processId: 123 }))
+      .toMatchObject({ ok: true, data: { appName: 'code', title: 'Project', processId: 123 } })
+    expect((await tools.run('get_active_window', {})).ok).toBe(false)
+    expect((await tools.run('get_active_window', {}, undefined, { appName: '1Password', processId: 123 })).ok).toBe(false)
+    expect(native).not.toHaveBeenCalled()
+  })
+  it('reads actual disk data through the fixed native bridge without a model-calculated capacity', async () => {
+    native.mockResolvedValue({ drives: [{ name: 'C:\\', totalBytes: 100, freeBytes: 60, usedBytes: 40 }] })
+    expect(await tools.run('get_disk_space', {})).toMatchObject({ ok: true, data: { drives: [{ totalBytes: 100, freeBytes: 60, usedBytes: 40 }], unit: 'bytes' } })
+    expect(native).toHaveBeenCalledWith({ action: 'disk-space' }, undefined)
+  })
   it('opens a requested website without asking for authorization again', async () => {
     confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
     expect((await tools.run('open_url', { url: 'https://example.com/' })).ok).toBe(true)

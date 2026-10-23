@@ -792,21 +792,17 @@ export class HistoryStore {
    * wrong for CJK (it tokenised on spaces, so a whole Chinese sentence was one
    * token and prefix search missed every match inside it).
    */
-  list(query = '', limit = 200): HistoryEntry[] {
+  list(query = '', limit = 200, range?: { from: number; until: number }): HistoryEntry[] {
     const trimmed = query.trim()
     const needle = `%${escapeLike(trimmed)}%`
-    const rows = trimmed
-      ? this.handle()
-          .prepare(
-            `SELECT * FROM history
-             WHERE final LIKE ? ESCAPE '\\' OR transcript LIKE ? ESCAPE '\\' OR app LIKE ? ESCAPE '\\'
-               OR json_extract(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.promptName') LIKE ? ESCAPE '\\'
-             ORDER BY createdAt DESC LIMIT ?`
-          )
-          .all(needle, needle, needle, needle, limit)
-      : this.handle()
-          .prepare('SELECT * FROM history ORDER BY createdAt DESC LIMIT ?')
-          .all(limit)
+    const filters: string[] = [], values: (string | number)[] = []
+    if (trimmed) {
+      filters.push(`(final LIKE ? ESCAPE '\\' OR transcript LIKE ? ESCAPE '\\' OR app LIKE ? ESCAPE '\\'
+        OR json_extract(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.promptName') LIKE ? ESCAPE '\\')`)
+      values.push(needle, needle, needle, needle)
+    }
+    if (range) { filters.push('createdAt >= ? AND createdAt < ?'); values.push(range.from, range.until) }
+    const rows = this.handle().prepare(`SELECT * FROM history${filters.length ? ` WHERE ${filters.join(' AND ')}` : ''} ORDER BY createdAt DESC LIMIT ?`).all(...values, limit)
     return rows.map(rowToEntry)
   }
 

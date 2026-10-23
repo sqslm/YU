@@ -51,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   // Ship a populated default and every take fails against an endpoint the user
   // never chose, with an error that points at the network instead of the setup.
   selectionInsertMode: 'replace',
+  assistantDownloadFolder: '',
   voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
@@ -246,6 +247,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     used.push([...keys].sort().join('+'))
   }
   merged.selectionInsertMode = input.selectionInsertMode === 'append' ? 'append' : 'replace'
+  merged.assistantDownloadFolder = typeof input.assistantDownloadFolder === 'string' ? input.assistantDownloadFolder.trim() : ''
   merged.voiceCommands = normalizeVoiceCommands(input.voiceCommands)
   merged.reminders = {
     notifications: input.reminders?.notifications !== false,

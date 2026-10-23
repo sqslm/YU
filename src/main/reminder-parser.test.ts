@@ -75,4 +75,11 @@ describe('fixed full-document reminder refinement', () => {
     await expect(extractReminders(settings(), 'a'.repeat(200_001), 'note')).rejects.toThrow('提醒内容过长')
     expect(mocks.complete).not.toHaveBeenCalled()
   })
+  it('keeps untimed to-dos valid while reminders without times still require clarification', () => {
+    const items = [extracted({ intent: 'todo', time_expression: null }), extracted({ time_expression: null })]
+    expect(parseReminderOutput(JSON.stringify({ items }), now)).toMatchObject([
+      { intent: 'todo', needs_confirmation: false, dueAt: null },
+      { intent: 'create_reminder', needs_confirmation: true, dueAt: null }
+    ])
+  })
 })

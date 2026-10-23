@@ -60,7 +60,8 @@ import {
 } from './windows'
 import { createTray } from './tray'
 import { releaseStuckModifiers } from './insert'
-import { listRoutedWindows } from './foreground'
+import { foregroundWindow, listRoutedWindows, type ForegroundInfo } from './foreground'
+import type { PromptContext } from '@shared/prompts'
 import { mainLanguage, mt, setMainLanguage } from '@shared/mainI18n'
 
 // Chromium keeps its audio device broker in a separate process (~75 MB on
@@ -109,8 +110,13 @@ let quitting = false
 let assistantVoice = false
 let tray: ReturnType<typeof createTray> | null = null
 let hubView: import('./tools/personal').HubPage | null = null
+let assistantTarget: ForegroundInfo | undefined
+function assistantContext(target = assistantTarget): PromptContext {
+  return target ? { appName: target.appName, windowTitle: target.title, processId: target.pid, appPath: target.appPath,
+    windowRect: target.rect ?? undefined, windowHandle: target.handle } : {}
+}
 const windowsTools = new WindowsTools({
-  folders: { downloads: app.getPath('downloads'), desktop: app.getPath('desktop'), documents: app.getPath('documents') },
+  folders: () => ({ downloads: store.get().assistantDownloadFolder || app.getPath('downloads'), desktop: app.getPath('desktop'), documents: app.getPath('documents') }),
   native: windowsNative, openPath: path => shell.openPath(path), openUrl: url => shell.openExternal(url),
   confirm: async (description, signal) => {
     signal?.throwIfAborted()
@@ -123,15 +129,31 @@ const windowsTools = new WindowsTools({
   }
 })
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
+  readSelection: async (context, signal) => {
+    signal.throwIfAborted()
+    if (!assistantWindow || assistantWindow.isDestroyed()) throw new Error(mt('助手尚未就绪'))
+    const win = assistantWindow
+    const { response } = await dialog.showMessageBox(win, { type: 'question', signal, title: mt('确认本次操作'),
+      message: mt('读取原窗口的选中文字并发送给配置的模型？'), detail: context.appName || '', buttons: [mt('取消'), mt('确认')], defaultId: 0, cancelId: 0, noLink: true })
+    signal.throwIfAborted()
+    if (response !== 1) throw new Error(mt('已取消本次系统操作'))
+    try {
+      const target = await captureSelectionTarget(store.get(), context, signal)
+      signal.throwIfAborted(); return target.text
+    } finally { if (!win.isDestroyed()) win.focus() }
+  },
   personal: {
     remind: (text, signal, submittedAt) => reminders!.voice(text, signal, undefined, submittedAt),
     reminders: () => reminders!.store.list(),
+    saveReminder: (input, id) => reminders!.save(input, id),
     action: (id, action, minutes) => { if (action === 'delete') reminders!.remove(id); else reminders!.action(id, action, minutes) },
     notes: () => notes.list().notes,
     createNote: text => notes.createText({ text }),
+    updateNoteTags: (id, tags) => notes.update(id, { tags }),
     extract: (id, signal) => reminders!.extractNote(notes, id, signal),
-    history: query => history.list(query, 40),
+    history: (query, range) => history.list(query, 40, range),
     copy: text => clipboard.writeText(text),
+    readClipboard: () => clipboard.readText(),
     open: page => navigateHub(page),
     confirm: async (description, signal) => {
       signal?.throwIfAborted()
@@ -476,6 +498,7 @@ function hideAssistant(): void {
 
 function openAssistant(): boolean {
   if (notesRecording || pipeline?.isBusy || selectionEditor?.isBusy) return false
+  if (!assistantWindow?.isFocused()) assistantTarget = foregroundWindow()
   showAssistant()
   return true
 }
@@ -761,14 +784,20 @@ function registerIpc(): void {
   ipcMain.handle('assistant:send', async (event, text: string) => {
     assistantOnly(event)
     if (pipeline?.isBusy || notesRecording || selectionEditor?.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
-    await assistant.send(text)
+    await assistant.send(text, undefined, undefined, undefined, assistantContext())
+  })
+  ipcMain.handle('app:chooseDownloadFolder', async event => {
+    if (event.sender !== settingsWindow?.webContents) throw new Error('Invalid settings window')
+    const result = await dialog.showOpenDialog(settingsWindow!, { title: mt('选择下载目录'),
+      defaultPath: store.get().assistantDownloadFolder || app.getPath('downloads'), properties: ['openDirectory'] })
+    return result.canceled ? null : result.filePaths[0] ?? null
   })
   ipcMain.handle('assistant:record', async event => {
     assistantOnly(event)
     if (assistantVoice && pipeline?.isRecording) { await pipeline.stop(); return true }
     if (!pipeline || pipeline.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy) return false
     hideCard()
-    pipeline.start('ask', { handsFree: true, purpose: 'assistant' })
+    pipeline.start('ask', { handsFree: true, purpose: 'assistant', target: assistantTarget })
     assistantVoice = pipeline.isRecording
     refreshHotkeyActivity()
     return assistantVoice
@@ -1393,14 +1422,23 @@ async function bootstrap(): Promise<void> {
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
     captureSelection: () => captureSelectionTarget(store.get()),
-    voiceContext: () => {
+    voiceContext: text => {
       const last = assistant.snapshot().turns.at(-1)
-      return last?.state === 'done' ? JSON.stringify({ question: last.question.slice(0, 500), answer: last.answer.slice(0, 1000) }) : ''
+      const completion = /已经|做完|完成|检查完|\b(?:finished|completed|done)\b/iu.test(text)
+      return JSON.stringify({ recent: last?.state === 'done' ? { question: last.question.slice(0, 500), answer: last.answer.slice(0, 2000) } : null,
+        ...(completion ? { activeTasks: reminders!.store.list().filter(row => row.status === 'pending' || row.status === 'due').slice(0, 20).map(row => ({ id: row.id, title: row.title })) } : {}) })
     },
-    onAssistant: async (text, signal, submittedAt) => { signal.throwIfAborted(); showAssistant(); await assistant.send(text, signal, undefined, submittedAt) },
+    onAssistant: async (text, signal, submittedAt, context) => { signal.throwIfAborted(); showAssistant(); await assistant.send(text, signal, undefined, submittedAt, context) },
     onActivity: () => refreshHotkeyActivity(),
-    onVoiceNote: async (pcm, transcript, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript) },
-    onReminder: (text, signal, progress, submittedAt) => reminders!.voice(text, signal, progress, submittedAt),
+    onVoiceNote: async (pcm, transcript, signal) => {
+      const note = await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript)
+      assistant.rememberAnswer(transcript, JSON.stringify({ savedNote: { id: note.id, text: transcript.slice(0, 1500), createdAt: note.createdAt } }))
+    },
+    onReminder: async (text, signal, progress, submittedAt) => {
+      const result = await reminders!.voice(text, signal, progress, submittedAt)
+      if (result.reminder) assistant.rememberAnswer(text, JSON.stringify({ savedReminder: result.reminder }))
+      return result
+    },
     // Ask mode answers land in the card window; dictation/translate keep
     // typing straight into the foreground app.
     onAnswer: (payload) => showAnswerCard(payload),

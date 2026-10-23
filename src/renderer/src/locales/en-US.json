@@ -1505,5 +1505,9 @@
   "换一个日期范围试试。": "Try another date range.",
   "收起来源": "Show fewer sources",
   "查看全部来源（{{n}}）": "View all sources ({{n}})",
-  "导出当前筛选和排序下的全部正常记录，包含所有分页。": "Export all successful records in the current filters and order, across all pages."
+  "导出当前筛选和排序下的全部正常记录，包含所有分页。": "Export all successful records in the current filters and order, across all pages.",
+  "助手文件搜索": "Assistant file search",
+  "下载目录": "Download folder",
+  "使用 Windows 下载目录；浏览器另设目录时可在这里指定": "Uses the Windows Downloads folder. Choose a folder here if your browser downloads elsewhere.",
+  "选择目录": "Choose folder"
 }

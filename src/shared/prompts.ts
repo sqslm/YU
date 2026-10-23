@@ -19,6 +19,8 @@ import type { InputAreaType, Mode } from './types'
  */
 
 export interface PromptContext {
+  /** Frozen original HWND, used by explicit native context tools, not prompt text. */
+  windowHandle?: string
   /** Foreground application the dictation is going into, e.g. `Cursor.exe`. */
   appName?: string
   /** Foreground window title, e.g. `pipeline.ts — typeless`. */

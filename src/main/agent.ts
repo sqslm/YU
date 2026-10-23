@@ -81,6 +81,7 @@ export interface AgentResult {
 }
 
 export interface AgentOptions {
+  readSelection?: ToolContext['readSelection']
   submittedAt?: number
   selectionGuard?: ToolContext['selectionGuard']
   personal?: ToolContext['personal']
@@ -1543,6 +1544,8 @@ export async function askAgent(
   if (options.timeouts?.read !== undefined) toolTimeouts.read_webpage = options.timeouts.read
 
   const ctx: ToolContext = {
+    taskContext: context,
+    readSelection: options.readSelection,
     submittedAt: options.submittedAt,
     selectionGuard: options.selectionGuard,
     personal: options.personal,

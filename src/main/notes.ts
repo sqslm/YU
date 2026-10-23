@@ -1290,6 +1290,7 @@ export class NotesStore {
     const request: Parameters<typeof complete>[1] = {
       messages: [
         { role: 'system', content: system },
+        { role: 'system', content: 'This is a personal voice note, not a request to answer or execute. Lightly clean filler words, accidental repetition and punctuation; apply explicit final corrections while preserving every remaining fact, number, name, condition and the original language. Keep natural paragraphs. Do not summarize, expand or invent details. Fluent input may stay unchanged. Output only the edited note text.' },
         { role: 'user', content: transcript }
       ],
       temperature: card.temperature ?? settings.polish.temperature,

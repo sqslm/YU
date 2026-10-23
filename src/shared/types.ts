@@ -452,6 +452,8 @@ export interface Settings {
   }
   asr: AsrSettings
   selectionInsertMode: 'replace' | 'append'
+  /** Empty uses the Windows known Downloads folder. */
+  assistantDownloadFolder: string
   voiceCommands: VoiceCommandsSettings
   reminders: { notifications: boolean; strongSound: boolean; snoozeMinutes: number }
   polish: PolishSettings

@@ -47,15 +47,38 @@ function normalizeTimeExpression(text: string): string {
     `${values[hour.toLowerCase()]}:${minute ? /fifteen/i.test(minute) ? '15' : /thirty/i.test(minute) ? '30' : '45' : '00'} ${period.replace(/\./g, '')}`)
 }
 
+/** Read only the weekday clause; the clock is still resolved by Chrono. */
+function weeklyDays(text: string): { text: string; days?: number[] } {
+  const chinese = /每(?:周|週|星期)\s*([一二三四五六日天1-7][一二三四五六日天1-7、,，和及到至\-–~～\s周星期]*)/.exec(text)
+  const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const english = new RegExp(`\\b(?:every|each|weekly(?:\\s+on)?)\\s+((?:${names.join('|')})(?:\\s*(?:,\\s*(?:and\\s+)?|and|to|through|[-–])\\s*(?:${names.join('|')}))*)`, 'i').exec(text)
+  const match = chinese || english
+  if (!match) return { text }
+  const tokens = [...match[1].matchAll(chinese ? /[一二三四五六日天1-7]/g : new RegExp(names.join('|'), 'gi'))]
+  const days: number[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    const day = chinese ? ({ 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 } as Record<string, number>)[token[0]] ?? Number(token[0]) % 7
+      : names.findIndex(name => name.toLowerCase() === token[0].toLowerCase())
+    const previous = tokens[i - 1]
+    const between = previous ? match[1].slice(previous.index! + previous[0].length, token.index) : ''
+    if (previous && days.at(-1) !== day && /到|至|[-–~～]|\b(?:to|through)\b/i.test(between)) {
+      for (let next = (days.at(-1)! + 1) % 7; next !== day; next = (next + 1) % 7) days.push(next)
+    }
+    days.push(day)
+  }
+  const unique = [...new Set(days)].sort((a, b) => a - b)
+  return { text: text.replace(match[0], chinese ? `每${match[0].includes('週') ? '週' : '周'}${'日一二三四五六'[unique[0]]}` : `every ${names[unique[0]]}`), days: unique }
+}
+
 export function resolveReminderTime(expression: string | null, now: number): {
   dueAt: number | null; recurrence: ReminderRecurrence | null; issue?: string
 } {
   const uncertain = (issue: string): ReturnType<typeof resolveReminderTime> => ({ dueAt: null, recurrence: null, issue: mt(issue) })
   if (!expression?.trim()) return uncertain('请补充具体提醒时间')
-  const text = normalizeTimeExpression(expression.trim())
-  if ((/每|\b(?:every|daily|weekly)\b/i.test(text) && /持续|持續|直到|截止|截至|总共|總共|\b(?:until|through|for)\b/i.test(text)) ||
-    /每(?:周|週|星期)(?:[一二三四五六日天1-7][、,，和及\s]*){2,}/.test(text) ||
-    (/\b(?:every|weekly)\b/i.test(text) && (text.match(/\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi)?.length ?? 0) > 1)) return uncertain('暂不支持此重复规则，请手动确认')
+  const weeklyClause = weeklyDays(normalizeTimeExpression(expression.trim()))
+  const text = weeklyClause.text
+  if (/每|\b(?:every|daily|weekly)\b/i.test(text) && /持续|持續|直到|截止|截至|总共|總共|\b(?:until|through|for)\b/i.test(text)) return uncertain('暂不支持此重复规则，请手动确认')
   if (/之前|左右|大概|有空|某天|尽快|晚点|过几|下次|\b(?:before|by|around|about|sometime|soon|later on|approximately|CST|IST)\b/i.test(text)) return uncertain('时间不够精确，请选择日期和时间')
   if (/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(text)) {
     const numeric = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?\b/)!
@@ -78,7 +101,7 @@ export function resolveReminderTime(expression: string | null, now: number): {
     const weekday = start.get('weekday')
     if (weekly && weekday === null) return uncertain('请选择每周的星期')
     const recurrence: ReminderRecurrence = { frequency: weekly ? 'weekly' : 'daily', hour, minute,
-      ...(weekly ? { weekdays: [weekday!] } : {}) }
+      ...(weekly ? { weekdays: weeklyClause.days ?? [weekday!] } : {}) }
     return { dueAt: nextOccurrence(recurrence, now), recurrence }
   }
   if (!relative && !start.isCertain('day') && !start.isCertain('weekday')) return uncertain('请补充具体日期')

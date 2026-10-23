@@ -211,6 +211,7 @@ export interface TypelessApi {
     retry(id?: string): Promise<{ ok: boolean; message: string }>
   }
   app: {
+    chooseDownloadFolder(): Promise<string | null>
     openDataFolder(): Promise<void>
     openSettings(): Promise<void>
     /**

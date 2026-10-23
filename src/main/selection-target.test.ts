@@ -58,4 +58,16 @@ describe('applying a captured selection', () => {
     await expect(work).rejects.toThrow()
     expect(mocks.insert).not.toHaveBeenCalled()
   })
+  it('validates the original assistant target before reading a selection and refuses changed titles or processes', async () => {
+    const target = { windowHandle: '10', processId: 42, windowTitle: 'Document', appName: 'Editor' }
+    const captured = await captureSelectionTarget(mergeSettings({}), target, new AbortController().signal)
+    expect(captured.text).toBe('selected')
+    mocks.selected.mockClear(); mocks.pid = 99
+    await expect(captureSelectionTarget(mergeSettings({}), target)).rejects.toThrow('无法返回')
+    expect(mocks.selected).not.toHaveBeenCalled()
+    mocks.pid = 42
+    await expect(captureSelectionTarget(mergeSettings({}), { ...target, windowTitle: 'Changed' })).rejects.toThrow('目标窗口已变化')
+    await expect(captureSelectionTarget(mergeSettings({}), { ...target, appName: 'Bitwarden' })).rejects.toThrow('敏感应用')
+    expect(mocks.selected).not.toHaveBeenCalled()
+  })
 })

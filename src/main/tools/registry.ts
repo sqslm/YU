@@ -39,8 +39,10 @@ import { PERSONAL_DEFINITIONS, PERSONAL_TOOLS, type PersonalTools } from './pers
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
+  taskContext?: import('@shared/prompts').PromptContext
   submittedAt?: number
   selectionGuard?: () => void
+  readSelection?: () => Promise<string>
   personal?: PersonalTools
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
@@ -120,7 +122,7 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
 }
 
 /** Reuse reads and identical personal writes within one task, never across tasks. */
-const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder'])
+const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder', 'update_note_tags', 'get_selection', 'read_clipboard'])
 
 /** Planned queries in flight at once. The plan is two; more is throttling bait. */
 const SEARCH_PLAN_CONCURRENCY = 2
@@ -431,7 +433,7 @@ async function runGetSelection(
   ctx.onStatus?.('正在读取选中文字…')
   ctx.signal?.throwIfAborted()
   ctx.selectionGuard?.()
-  const selection = await getSelection({ deps: ctx.selectionDeps })
+  const selection = ctx.readSelection ? { ok: true, text: await ctx.readSelection() } : await getSelection({ deps: ctx.selectionDeps })
   ctx.signal?.throwIfAborted()
   ctx.selectionGuard?.()
   if (!selection.ok) return fail(selection.error ?? '无法读取选中文字')
@@ -702,7 +704,7 @@ export async function runTool(
   const outcome = await attempt
   if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS].includes(name as typeof WINDOWS_TOOLS[number])) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
     items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
-    detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，仅检查当前目录。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
+    detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[perf] tool:${name} ${Date.now() - started}ms ok=${outcome.ok}`)
   return outcome
 }

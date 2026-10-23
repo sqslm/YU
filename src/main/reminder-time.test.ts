@@ -24,8 +24,19 @@ describe('bilingual reminder time interpretation', () => {
   it('does not advance a weekly recurrence by a fixed 7*24-hour duration', () => {
     expect(nextOccurrence({ frequency: 'weekly', weekdays: [1], hour: 9, minute: 0 }, local(26, 10))).toBe(new Date(2026, 10, 2, 9).getTime())
   })
-  it.each(['每天上午9点，持续7天', 'every day at 9 AM for seven days', 'every Monday at 9 AM until November 1', '每周一三五晚上9点', 'every Monday and Wednesday at 9 AM'])('does not silently weaken unsupported recurrence: %s', text => {
+  it.each(['每天上午9点，持续7天', 'every day at 9 AM for seven days', 'every Monday at 9 AM until November 1'])('does not silently weaken unsupported recurrence: %s', text => {
     expect(resolveReminderTime(text, now)).toMatchObject({ dueAt: null, recurrence: null })
+  })
+  it.each([
+    ['每周一、三、五晚上八点', [1, 3, 5], 20], ['每周一三五晚上9点', [1, 3, 5], 21],
+    ['每周二、四上午9点', [2, 4], 9], ['每周一至周五上午9点', [1, 2, 3, 4, 5], 9],
+    ['every Monday and Wednesday at 9 AM', [1, 3], 9], ['every Monday, Wednesday and Friday at 8 PM', [1, 3, 5], 20],
+    ['every Monday through Friday at 9 AM', [1, 2, 3, 4, 5], 9], ['每周五至周一上午9点', [0, 1, 5, 6], 9]
+    , ['every Monday, Wednesday, and Friday at 8 PM', [1, 3, 5], 20], ['每周一至周一上午9点', [1], 9]
+  ] as const)('keeps all weekly days for %s', (text, weekdays, hour) => {
+    const result = resolveReminderTime(text, now)
+    expect(result.recurrence).toEqual({ frequency: 'weekly', weekdays, hour, minute: 0 })
+    expect(result.dueAt).toBe(nextOccurrence(result.recurrence!, now))
   })
   it('validates reminder intent, level, missing times and final corrected expressions', () => {
     expect(parseReminderOutput(draft('20分钟后'), now)[0]).toMatchObject({ level: 'normal', dueAt: now + 1200000, needs_confirmation: false })

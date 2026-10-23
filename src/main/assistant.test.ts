@@ -18,6 +18,11 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('passes the original application snapshot to Ask without detecting another foreground window', async () => {
+    const context = { appName: 'code', windowTitle: 'Original document', processId: 42, windowHandle: '1234' }
+    await session.send('Which application am I using?', undefined, undefined, now, context)
+    expect(ask.mock.calls[0][2]).toEqual(context)
+  })
   it('uses the configured provider, existing Ask and its own bounded conversation', async () => {
     await session.send('Hello')
     const firstConversation = ask.mock.calls[0][5]!.conversation

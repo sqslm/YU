@@ -84,6 +84,16 @@ describe('shared reminder delivery and entry points', () => {
       expect(service.store.list()).toHaveLength(0)
     } finally { service.stop() }
   })
+  it('saves an explicit untimed todo without requiring a notification time and can undo it', async () => {
+    const { service, open } = harness()
+    try {
+      mock.extract.mockResolvedValue([draft({ intent: 'todo', dueAt: null, time_expression: null })])
+      const result = await service.voice('添加待办：检查数据库备份', new AbortController().signal)
+      expect(result).toMatchObject({ undo: true, reminder: { dueAt: null, status: 'pending' } })
+      expect(service.store.list()).toHaveLength(1); expect(open).not.toHaveBeenCalled()
+      service.undo(); expect(service.store.list()).toHaveLength(0)
+    } finally { service.stop() }
+  })
   it('does not persist a cancelled parser response', async () => {
     const { service } = harness(), controller = new AbortController()
     try { mock.extract.mockResolvedValue([draft()]); controller.abort(); await expect(service.voice('提醒我', controller.signal)).rejects.toThrow(); expect(service.store.list()).toHaveLength(0) }

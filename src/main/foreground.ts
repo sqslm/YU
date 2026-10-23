@@ -133,6 +133,7 @@ export interface ForegroundRect {
 }
 
 export interface ForegroundInfo {
+  handle?: string
   title: string
   className: string
   pid: number
@@ -187,6 +188,7 @@ export function foregroundWindow(): ForegroundInfo {
   const image = pid ? processImage(pid, kernel32, new Map()) : { name: '', path: '' }
 
   return {
+    handle: String(koffi.address(hwnd)),
     title: titleBuf.toString('utf16le', 0, titleLen * 2),
     className: classBuf.toString('utf16le', 0, classLen * 2),
     pid,

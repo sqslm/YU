@@ -75,23 +75,24 @@ export class ReminderService {
     notice.on('failed', (_event, error) => this.log(`[reminders] notification failed: ${error}`))
     notice.show()
   }
-  async voice(text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt = Date.now()): Promise<{ message: string; undo?: boolean }> {
+  async voice(text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt = Date.now()): Promise<{ message: string; undo?: boolean; reminder?: Reminder }> {
     const drafts = await extractReminders(this.settings(), text, 'voice', AbortSignal.any([signal, AbortSignal.timeout(60_000)]), onProgress, submittedAt)
     signal.throwIfAborted()
     this.log(`[reminders] voice parsed: ${drafts.length} item(s), intents=${drafts.map(item => item.intent).join(',')}`)
     if (!drafts.length) return { message: mt('没有可创建的提醒，本次未保存') }
     if (drafts.every(item => item.intent !== 'create_reminder' && item.intent !== 'todo')) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
     const draft = drafts[0]!
-    if (drafts.length !== 1 || draft.intent !== 'create_reminder' || draft.needs_confirmation || draft.dueAt === null || draft.dueAt <= Date.now()) {
+    const untimedTodo = draft.intent === 'todo' && draft.time_expression === null && draft.rule === null
+    if (drafts.length !== 1 || draft.needs_confirmation || (!untimedTodo && (draft.intent !== 'create_reminder' || draft.dueAt === null || draft.dueAt <= Date.now()))) {
       this.open({ drafts }); return { message: mt('请确认提醒事项与时间') }
     }
     const row = this.save({ title: draft.title, description: draft.description, dueAt: draft.dueAt, level: draft.level, recurrence: draft.rule,
       source: 'voice', timeExpression: draft.time_expression ?? undefined })
     this.undoId = row.id
-    const time = new Date(row.dueAt!).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN', {
+    const time = row.dueAt === null ? mt('未设置提醒时间') : new Date(row.dueAt).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN', {
       year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
     })
-    return { message: `${time} · ${mt(row.level === 'strong' ? '强提醒' : '普通提醒')} · ${row.title}`, undo: true }
+    return { message: `${time} · ${mt(row.level === 'strong' ? '强提醒' : '普通提醒')} · ${row.title}`, undo: true, reminder: row }
   }
   undo(): void {
     if (this.undoId) this.remove(this.undoId)

@@ -243,6 +243,7 @@ describe('creation', () => {
     const note = store.list().notes[0]!
     expect(note.transcript).toBe('你好世界')
     expect(note.polished).toBe('你好，世界。')
+    expect(mocks.complete.mock.calls[0][1].messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'system', content: expect.stringContaining('personal voice note') })]))
     expect(note.polishError).toBeUndefined()
     // Written to disk as well, so a restart does not lose the text.
     expect(readDb(dir).notes[0]!.polished).toBe('你好，世界。')
