@@ -4,6 +4,15 @@ import { defaultSearchProviders } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL } from './local-asr'
 
 describe('mergeSettings', () => {
+  it('adds a nonconflicting assistant chord and preserves disabled bindings and background preference', () => {
+    expect(mergeSettings({}).hotkeys.assistantKeys.keys).toEqual(['LeftCtrl', 'RightShift', 'A'])
+    const conflict = mergeSettings({ hotkeys: { notesKeys: { keys: ['LeftCtrl', 'RightShift', 'A'] } } as never })
+    expect(conflict.hotkeys.assistantKeys.keys).toEqual(['LeftCtrl', 'RightShift', 'F8'])
+    expect(mergeSettings({ hotkeys: { assistantKeys: { keys: [] } } as never }).hotkeys.assistantKeys.keys).toEqual([])
+    expect(mergeSettings({}).closeBehavior).toBe('background')
+    expect(mergeSettings({ closeBehavior: 'quit' }).closeBehavior).toBe('quit')
+    expect(mergeSettings({ closeBehavior: 'invalid' as never }).closeBehavior).toBe('background')
+  })
   it('defaults old installations to fidelity capture and preserves the voice-processing choice', () => {
     expect(mergeSettings({}).audioProcessing).toBe('fidelity')
     expect(mergeSettings({ audioProcessing: 'voice' }).audioProcessing).toBe('voice')

@@ -36,6 +36,7 @@ import { mt } from '@shared/mainI18n'
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
+  allowedTools?: readonly string[]
   settings: Settings
   /** The spoken question, for tools that can fall back to it for arguments. */
   question: string
@@ -600,8 +601,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 export const TOOL_NAMES: string[] = TOOL_DEFINITIONS.map((tool) => tool.name)
 
 /** OpenAI `tools` array. */
-export function toolSchemas(): Array<Record<string, unknown>> {
-  return TOOL_DEFINITIONS.map((tool) => ({
+export function toolSchemas(allowed?: readonly string[]): Array<Record<string, unknown>> {
+  return TOOL_DEFINITIONS.filter(tool => !allowed || allowed.includes(tool.name)).map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -662,6 +663,7 @@ export async function runTool(
   ctx: ToolContext
 ): Promise<ToolOutcome> {
   const tool = getTool(name)
+  if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (!tool) return fail(mt('未知工具：{{name}}', { name }))
   const input = args ?? {}
   const key = CACHEABLE.has(name) && ctx.cache ? cacheKey(name, input) : ''

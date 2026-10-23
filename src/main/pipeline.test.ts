@@ -501,6 +501,36 @@ describe('busy guard', () => {
 })
 
 describe('surrounding-text injection', () => {
+  it('delivers assistant voice through the existing ASR without UIA, polish, insertion, cards or voice history', async () => {
+    const readContext = vi.fn(), onAssistant = vi.fn(async () => {}), onAnswer = vi.fn()
+    const { pipeline, entries, sent } = harness({}, { readContext, onAssistant, onAnswer })
+    pipeline.start('ask', { handsFree: true, purpose: 'assistant' })
+    pipeline.pushAudio(tone(800))
+    expect(sent.some(state => state.phase === 'recording' && state.taskLabel === 'AI 助手')).toBe(true)
+    const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
+    expect(onAssistant).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal))
+    expect(mocks.transcribe).toHaveBeenCalledOnce()
+    expect(readContext).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.askAgent).not.toHaveBeenCalled()
+    expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(onAnswer).not.toHaveBeenCalled()
+    expect(entries).toEqual([])
+  })
+
+  it('does not deliver a cancelled assistant recording or a failed ASR result', async () => {
+    const onAssistant = vi.fn(async () => {})
+    const { pipeline, entries, sent } = harness({}, { onAssistant })
+    pipeline.start('ask', { purpose: 'assistant' }); pipeline.pushAudio(tone(800)); pipeline.cancel()
+    expect(onAssistant).not.toHaveBeenCalled()
+    pipeline.start('ask', { purpose: 'assistant' }); pipeline.pushAudio(tone(800))
+    mocks.transcribe.mockRejectedValueOnce(Error('ASR offline'))
+    const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
+    expect(onAssistant).not.toHaveBeenCalled()
+    expect(entries).toEqual([])
+    expect(alerts(sent).flatMap(state => state.alert.actions ?? []).some(action => action.id === 'retry')).toBe(false)
+  })
+
   it('hands the complete vendor ASR configuration to the provider', async () => {
     const profile = { ...TEST_PROFILES[0], asrAdapter: 'azure', requestPath: '/custom/transcribe', vendor: { deployment: 'speech' } }
     const { pipeline } = harness({ profiles: [profile, TEST_PROFILES[1]] })

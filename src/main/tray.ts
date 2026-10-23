@@ -3,6 +3,10 @@ import { join } from 'node:path'
 import { mt } from '@shared/mainI18n'
 
 export interface TrayHandlers {
+  openAssistant: () => void
+  openNotes: () => void
+  openReminders: () => void
+  status: () => string
   openSettings: () => void
   toggleHotkeys: () => boolean
   hotkeysEnabled: () => boolean
@@ -24,14 +28,23 @@ function iconPath(): string {
   return join(app.getAppPath(), 'resources', 'icon.png')
 }
 
-export function createTray(handlers: TrayHandlers): Tray {
+export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void } {
   const image = nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16 })
   const tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image)
-  tray.setToolTip(mt('Typeless Rebuild — 按住右 Alt 说话'))
 
+  let menuKey = ''
   const rebuild = (): void => {
+    const key = `${handlers.status()}|${handlers.hotkeysEnabled()}|${mt('设置…')}`
+    if (key === menuKey) return
+    menuKey = key
+    tray.setToolTip(`Typeless Rebuild — ${handlers.status()}`)
     tray.setContextMenu(
       Menu.buildFromTemplate([
+        { label: handlers.status(), enabled: false },
+        { type: 'separator' },
+        { label: mt('AI 助手'), click: handlers.openAssistant },
+        { label: mt('随记'), click: handlers.openNotes },
+        { label: mt('提醒'), click: handlers.openReminders },
         { label: mt('设置…'), click: handlers.openSettings },
         { type: 'separator' },
         {
@@ -70,6 +83,6 @@ export function createTray(handlers: TrayHandlers): Tray {
   }
 
   rebuild()
-  tray.on('click', handlers.openSettings)
-  return tray
+  tray.on('click', handlers.openAssistant)
+  return Object.assign(tray, { refresh: rebuild })
 }

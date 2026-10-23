@@ -17,6 +17,38 @@ import type { AnswerCardPayload, TypelessApi } from '@shared/api'
 let lastCard: AnswerCardPayload | null = null
 
 const api: TypelessApi = {
+  assistant: {
+    open: () => ipcRenderer.invoke('assistant:open'),
+    hide: () => ipcRenderer.invoke('assistant:hide'),
+    state: () => ipcRenderer.invoke('assistant:state'),
+    send: text => ipcRenderer.invoke('assistant:send', text),
+    cancel: () => ipcRenderer.invoke('assistant:cancel'),
+    clear: () => ipcRenderer.invoke('assistant:clear'),
+    record: () => ipcRenderer.invoke('assistant:record'),
+    activity: () => ipcRenderer.invoke('assistant:activity'),
+    onActivity: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, phase: 'idle' | 'recording' | 'working'): void => callback(phase)
+      ipcRenderer.on('assistant:activity', listener)
+      return () => ipcRenderer.removeListener('assistant:activity', listener)
+    },
+    onFocus: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('assistant:focus', listener)
+      return () => ipcRenderer.removeListener('assistant:focus', listener)
+    },
+    navigate: page => ipcRenderer.invoke('assistant:navigate', page),
+    hubView: () => ipcRenderer.invoke('assistant:hub-view'),
+    onNavigate: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('assistant:navigate', listener)
+      return () => ipcRenderer.removeListener('assistant:navigate', listener)
+    },
+    onChanged: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, state: import('@shared/assistant').AssistantState): void => callback(state)
+      ipcRenderer.on('assistant:changed', listener)
+      return () => ipcRenderer.removeListener('assistant:changed', listener)
+    }
+  },
   reminders: {
     list: () => ipcRenderer.invoke('reminders:list'),
     save: (input, id) => ipcRenderer.invoke('reminders:save', input, id),

@@ -1,5 +1,13 @@
 # Typeless Rebuild
 
+Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。当前新增助手中心复用 Ask，支持文字和语音问答、查询工具及独立临时追问；应用启动、文件操作、截图、日程、长期记忆、简报、TTS 和唤醒尚未接入助手，不能宣称已执行。原有语音输入、随记和提醒入口继续保留。
+
+AI 助手可从侧边栏、托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起；快捷键可录制或清空，升级时避让已有相同绑定。点击录音开始，共用现有麦克风/ASR，右 Alt 或「结束录音」提交，Esc 取消；已有任务运行时不会抢占录音。窗口里可停止、新对话、复制回答及直达随记/提醒/设置。关闭助手取消当前任务；最近 12 个界面轮次仅存内存，模型保留最近三个完整问答及工具摘要，闲置 15 分钟后下次访问清理，退出程序即丢弃。助手与旧 Ask 上下文隔离，不自动读取剪贴板、选区或截图，不写长期记忆。发送的输入和相关临时会话会交给用户配置的远程或本地模型。
+
+「设置 → 通用 → 关闭主窗口时」可选保留后台或完全退出。默认后台保留快捷键、提醒与托盘；最小化也可收至托盘。隐藏的助手和主窗口在 60 秒后回收界面（主窗口录随记时不回收），需要时再创建；会话不依赖界面存活。托盘显示待命/录音/处理/快捷键暂停状态。开机启动仍为用户可选；默认不持续录音、截图或读取剪贴板。
+
+The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). The current assistant reuses Ask for text/voice questions, existing query tools and a separate temporary conversation. Open it from the sidebar, tray or configurable `Left Ctrl + Right Shift + A`. Voice uses the existing recorder and ASR; Right Alt submits and Esc cancels. Other recordings are never taken over. New conversation clears the session; idle context expires on access after 15 minutes, and no conversation is saved as long-term memory. Closing the assistant cancels its task. Clipboard, selected text and screenshots are not read automatically. Input and relevant conversation are sent to the configured model. Local system tools, calendar, memory, briefings, TTS and wake words remain later stages. Closing the main window can keep background services or quit completely; hidden interfaces retire after 60 seconds when safe.
+
 Windows 上的语音输入客户端，界面与交互对齐 Typeless（hub 三页 + 设置弹层 + 底部胶囊悬浮条）：按一下热键开始说话，再按一下结束，自动「识别 → 润色 → 整段插入到当前焦点位置」，另提供翻译模式、Ask Anything（可联网检索）与「粘贴上一条」。
 
 后端不绑定厂商：通用 ASR / LLM 支持 OpenAI 兼容协议，也提供厂商专用 ASR 适配器。通过「模型 → 添加配置」选择服务商并填写地址、密钥、模型及需要的专用字段。也可以切到**多模态链路**，把 WAV 直接丢给 Gemini `generateContent` 一条龙出文本。

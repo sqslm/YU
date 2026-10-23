@@ -54,6 +54,16 @@ export function App(): JSX.Element {
   /** Scene name the home page asked to look up; history seeds its search box with it. */
   const [historyQuery, setHistoryQuery] = useState<string | undefined>(undefined)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  useEffect(() => {
+    const navigate = (): void => { void window.api.assistant.hubView().then(view => {
+      if (!view) return
+      setSettingsOpen(view === 'settings')
+      if (view !== 'settings') setPage(view)
+    }) }
+    const off = window.api.assistant.onNavigate(navigate)
+    navigate()
+    return off
+  }, [])
   /**
    * Bumped every time the global 随记录音 chord fires. The notes page owns the
    * recorder, so the hub only has to switch pages and hand it a fresh ticket —
@@ -202,6 +212,10 @@ export function App(): JSX.Element {
           </Box>
 
           <List dense sx={{ px: 1, py: 1 }}>
+            <ListItemButton data-assistant-entry onClick={() => { void window.api.assistant.open() }} sx={{ borderRadius: '8px', mb: 0.25 }}>
+              <ListItemIcon sx={{ minWidth: 28 }}><IconMic /></ListItemIcon>
+              <ListItemText primary={translate('AI 助手')} primaryTypographyProps={{ fontSize: 12.5 }} />
+            </ListItemButton>
             {NAV.map((item) => (
               <ListItemButton
                 key={item.id}

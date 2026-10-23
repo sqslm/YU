@@ -435,6 +435,7 @@ export interface Settings {
     selectionKeys: ShortcutBinding
     selectionTranslateKeys: ShortcutBinding
     reminderKeys: ShortcutBinding
+    assistantKeys: ShortcutBinding
     /**
      * Starts and stops a 随记 (voice note) take from anywhere: the hub opens on
      * the notes page and the recorder toggles. Kept out of `bindings` because a
@@ -490,6 +491,7 @@ export interface Settings {
   multiline: MultilineMode
   restoreClipboard: boolean
   launchAtStartup: boolean
+  closeBehavior: 'background' | 'quit'
   /**
    * Set once the first-run tour is finished or skipped. Kept in settings rather
    * than `localStorage` so it survives a cache clear and can be reset from the

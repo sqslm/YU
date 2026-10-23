@@ -28,6 +28,7 @@ import { Pipeline } from './pipeline'
 import { buildBarAlert, classifyError } from './errors'
 import { RingLog, describeSecret, diagnosticsFileName, renderDiagnostics } from './diagnostics'
 import { NotesStore } from './notes'
+import { AssistantSession } from './assistant'
 import { registerNotesIpc } from './notes-ipc'
 import { LocalAsrHost } from './local-asr/host'
 import { registerLocalAsrIpc } from './local-asr/ipc'
@@ -46,6 +47,7 @@ import {
   createCardWindow,
   closeLoginWindow,
   createSettingsWindow,
+  createAssistantWindow,
   openLoginWindow,
   positionCardWindow,
   recordingBarBounds,
@@ -93,6 +95,18 @@ let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
 let reminders: ReminderService | null = null
+let assistantWindow: BrowserWindow | null = null
+let assistantRetireTimer: NodeJS.Timeout | null = null
+let hubRetireTimer: NodeJS.Timeout | null = null
+let quitting = false
+let assistantVoice = false
+let tray: ReturnType<typeof createTray> | null = null
+let hubView: 'notes' | 'reminders' | 'settings' | null = null
+const assistant = new AssistantSession({ settings: () => store.get(), log: line => log(line),
+  changed: state => {
+    if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.webContents.send('assistant:changed', state)
+    tray?.refresh()
+  } })
 
 function broadcastReminders(): void {
   for (const win of [settingsWindow, barWindow]) {
@@ -224,6 +238,9 @@ let notesRecording = false
 
 function refreshHotkeyActivity(): void {
   hotkeys?.setActivity(notesRecording || pipeline?.isRecording ? 'recording' : pipeline?.isBusy ? 'working' : 'idle')
+  if (!pipeline?.isBusy) assistantVoice = false
+  tray?.refresh()
+  if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.webContents.send('assistant:activity', assistantVoice ? pipeline?.isRecording ? 'recording' : 'working' : 'idle')
 }
 
 /**
@@ -354,6 +371,7 @@ function ensureSettingsWindow(): BrowserWindow {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     // The theme may have flipped while the window was hidden behind the tray.
     applyHubTheme(settingsWindow, store.get().themeMode, chromeDimmed)
+    if (settingsWindow.isMinimized()) settingsWindow.restore()
     settingsWindow.show()
     settingsWindow.focus()
     return settingsWindow
@@ -361,6 +379,23 @@ function ensureSettingsWindow(): BrowserWindow {
   // A fresh window starts with a dialogue-free page, whatever the old one left.
   chromeDimmed = false
   settingsWindow = createSettingsWindow(store.get().themeMode)
+  const win = settingsWindow
+  win.on('close', event => {
+    if (quitting) return
+    if (store.get().closeBehavior === 'quit') { app.quit(); return }
+    event.preventDefault()
+    win.hide()
+  })
+  win.on('minimize', () => { if (store.get().closeBehavior === 'background') win.hide() })
+  win.on('hide', () => {
+    if (hubRetireTimer) clearTimeout(hubRetireTimer)
+    hubRetireTimer = setTimeout(() => {
+      hubRetireTimer = null
+      if (!win.isDestroyed() && !win.isVisible() && !notesRecording) win.destroy()
+    }, 60_000)
+    hubRetireTimer.unref?.()
+  })
+  win.on('show', () => { if (hubRetireTimer) clearTimeout(hubRetireTimer); hubRetireTimer = null })
   settingsWindow.on('blur', () => hotkeys?.setCapturing(false))
   settingsWindow.webContents.on('render-process-gone', () => {
     hotkeys?.setCapturing(false)
@@ -374,6 +409,50 @@ function ensureSettingsWindow(): BrowserWindow {
     refreshHotkeyActivity()
   })
   return settingsWindow
+}
+
+function navigateHub(page: 'notes' | 'reminders' | 'settings'): void {
+  hubView = page
+  const win = ensureSettingsWindow()
+  win.webContents.send('assistant:navigate')
+}
+
+function cancelAssistant(): void {
+  assistant.cancel()
+  if (assistantVoice) pipeline?.cancel('assistant')
+  assistantVoice = false
+}
+
+function hideAssistant(): void {
+  cancelAssistant()
+  const win = assistantWindow
+  if (!win || win.isDestroyed()) return
+  win.hide()
+  if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
+  assistantRetireTimer = setTimeout(() => {
+    assistantRetireTimer = null
+    if (!win.isDestroyed() && !win.isVisible()) win.destroy()
+  }, 60_000)
+  assistantRetireTimer.unref?.()
+}
+
+function openAssistant(): boolean {
+  if (notesRecording || pipeline?.isBusy || selectionEditor?.isBusy) return false
+  if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
+  assistantRetireTimer = null
+  assistant.snapshot()
+  if (assistantWindow && !assistantWindow.isDestroyed()) {
+    if (assistantWindow.isMinimized()) assistantWindow.restore()
+    assistantWindow.show(); assistantWindow.focus()
+    assistantWindow.webContents.send('assistant:focus')
+    return true
+  }
+  const win = createAssistantWindow(store.get().themeMode)
+  assistantWindow = win
+  win.on('close', event => { if (!quitting) { event.preventDefault(); hideAssistant() } })
+  win.on('closed', () => { cancelAssistant(); assistantWindow = null })
+  win.webContents.on('render-process-gone', () => { cancelAssistant(); win.destroy() })
+  return true
 }
 
 /**
@@ -613,6 +692,38 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  ipcMain.handle('assistant:open', () => openAssistant())
+  ipcMain.handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
+  ipcMain.handle('assistant:navigate', (_event, page: unknown) => {
+    if (page !== 'notes' && page !== 'reminders' && page !== 'settings') throw new Error('Invalid page')
+    navigateHub(page)
+  })
+  const assistantOnly = (event: Electron.IpcMainInvokeEvent): void => {
+    if (event.sender !== assistantWindow?.webContents) throw new Error('Assistant window required')
+  }
+  ipcMain.handle('assistant:state', event => { assistantOnly(event); return assistant.snapshot() })
+  ipcMain.handle('assistant:hide', event => { assistantOnly(event); hideAssistant() })
+  ipcMain.handle('assistant:cancel', event => { assistantOnly(event); cancelAssistant() })
+  ipcMain.handle('assistant:clear', event => { assistantOnly(event); cancelAssistant(); assistant.clear() })
+  ipcMain.handle('assistant:activity', event => {
+    assistantOnly(event)
+    return assistantVoice ? pipeline?.isRecording ? 'recording' : 'working' : 'idle'
+  })
+  ipcMain.handle('assistant:send', async (event, text: string) => {
+    assistantOnly(event)
+    if (pipeline?.isBusy || notesRecording || selectionEditor?.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
+    await assistant.send(text)
+  })
+  ipcMain.handle('assistant:record', async event => {
+    assistantOnly(event)
+    if (assistantVoice && pipeline?.isRecording) { await pipeline.stop(); return true }
+    if (!pipeline || pipeline.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy) return false
+    hideCard()
+    pipeline.start('ask', { handsFree: true, purpose: 'assistant' })
+    assistantVoice = pipeline.isRecording
+    refreshHotkeyActivity()
+    return assistantVoice
+  })
   ipcMain.handle('net:probe-search', (_event, input) => probeSearch(input))
   ipcMain.handle('settings:capture-shortcut', (event, active: boolean) => {
     if (event.sender === settingsWindow?.webContents) hotkeys?.setCapturing(active === true)
@@ -622,6 +733,11 @@ function registerIpc(): void {
     const previous = store.get()
     const next = await store.update(patch)
     setMainLanguage(next.uiLanguage)
+    tray?.refresh()
+    if (assistantWindow && !assistantWindow.isDestroyed()) {
+      applyHubTheme(assistantWindow, next.themeMode)
+      assistantWindow.webContents.send('settings:changed', next)
+    }
     reminders?.settingsChanged()
     hotkeys?.apply(next)
     if (next.launchAtStartup !== previous.launchAtStartup) {
@@ -811,6 +927,11 @@ function registerIpc(): void {
       pendingCard = null
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
+    if (assistantWindow && !assistantWindow.isDestroyed() && !assistantWindow.isVisible()) {
+      if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
+      assistantRetireTimer = null
+      assistantWindow.destroy()
+    }
     return resources()
   })
 
@@ -1148,6 +1269,10 @@ function wireHotkeys(): void {
         case 'notes-toggle':
           void toggleNotesRecording()
           break
+        case 'assistant-toggle':
+          if (assistantWindow?.isVisible()) hideAssistant()
+          else openAssistant()
+          break
         case 'paste-last':
           // A failed "paste the last one" must not become an unhandled rejection:
           // in the main process that is a warning at best and a crash guard away
@@ -1218,6 +1343,7 @@ async function bootstrap(): Promise<void> {
   }, broadcastReminders, log)
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+    onAssistant: async (text, signal) => { await assistant.send(text, signal) },
     onActivity: () => refreshHotkeyActivity(),
     onVoiceNote: async (pcm, transcript, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript) },
     onReminder: (text, signal, progress, submittedAt) => reminders!.voice(text, signal, progress, submittedAt),
@@ -1292,9 +1418,11 @@ async function bootstrap(): Promise<void> {
    * covers what the reference client reads through its `isLidOpen` native export.
    */
   powerMonitor.on('suspend', () => {
+    hideAssistant()
     pipeline?.cancel('suspend')
   })
   powerMonitor.on('lock-screen', () => {
+    hideAssistant()
     pipeline?.cancel('lock')
   })
   powerMonitor.on('resume', () => reminders?.refresh())
@@ -1342,6 +1470,7 @@ async function bootstrap(): Promise<void> {
    */
   let appliedSystemTheme: 'dark' | 'light' | null = null
   nativeTheme.on('updated', () => {
+    if (assistantWindow && !assistantWindow.isDestroyed() && store.get().themeMode === 'system') applyHubTheme(assistantWindow, 'system')
     if (store.get().themeMode !== 'system') return
     const next: 'dark' | 'light' = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
     if (next === appliedSystemTheme) return
@@ -1380,7 +1509,11 @@ async function bootstrap(): Promise<void> {
   // configured only. Development builds log "skipped" instead of failing.
   setTimeout(() => void updater?.check(), 8000)
 
-  createTray({
+  tray = createTray({
+    openAssistant: () => { openAssistant() },
+    openNotes: () => navigateHub('notes'),
+    openReminders: () => navigateHub('reminders'),
+    status: () => notesRecording || pipeline?.isRecording ? mt('录音中') : pipeline?.isBusy || assistant.busy ? mt('处理中') : store.get().hotkeys.enabled ? mt('待命') : mt('快捷键已暂停'),
     pasteLast: () => void pipeline?.pasteLast(),
     openSettings: () => ensureSettingsWindow(),
     hotkeysEnabled: () => store.get().hotkeys.enabled,
@@ -1410,7 +1543,7 @@ async function bootstrap(): Promise<void> {
     toggleHotkeys: () => {
       const current = store.get()
       const next = { ...current, hotkeys: { ...current.hotkeys, enabled: !current.hotkeys.enabled } }
-      store.update(next).then((saved) => hotkeys?.apply(saved))
+      store.update(next).then((saved) => { hotkeys?.apply(saved); tray?.refresh() })
       return !current.hotkeys.enabled
     },
     quit: () => {
@@ -1641,6 +1774,12 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    quitting = true
+    if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
+    if (hubRetireTimer) clearTimeout(hubRetireTimer)
+    cancelAssistant()
+    tray?.destroy()
+    tray = null
     selectionEditor?.cancel()
     pipeline?.cancel('quit')
     reminders?.stop()

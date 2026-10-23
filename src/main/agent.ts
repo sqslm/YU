@@ -81,6 +81,8 @@ export interface AgentResult {
 }
 
 export interface AgentOptions {
+  conversation?: AgentConversation
+  allowedTools?: readonly string[]
   /** Start a fresh conversation (the default for a new take). */
   reset?: boolean
   onStatus?: (status: string) => void
@@ -454,30 +456,31 @@ export function parseIntent(raw: string): AgentIntent | null {
 // Conversation state
 // ---------------------------------------------------------------------------
 
-let thread: ChatMessage[] = []
-/** Compact record of the last tool payload, so a follow-up can still quote it. */
-let threadToolNotes = ''
+export interface AgentConversation { messages: ChatMessage[]; toolNotes: string }
+const defaultConversation: AgentConversation = { messages: [], toolNotes: '' }
 
-export function resetThread(): void {
-  thread = []
-  threadToolNotes = ''
+export function resetThread(conversation = defaultConversation): void {
+  conversation.messages = []
+  conversation.toolNotes = ''
 }
 
-function pushThread(question: string, answer: string, notes?: string): void {
+function pushThread(question: string, answer: string, notes?: string, conversation = defaultConversation): void {
   if (!question.trim() || !answer.trim()) return
+  const thread = conversation.messages
   thread.push({ role: 'user', content: question }, { role: 'assistant', content: answer })
   while (thread.length > MAX_THREAD_MESSAGES) thread.shift()
   while (thread.length > 0 && thread[0].role !== 'user') thread.shift()
-  if (notes) threadToolNotes = notes
+  if (notes) conversation.toolNotes = notes
 }
 
-function conversationMessages(system: string, question: string): ChatMessage[] {
+function conversationMessages(system: string, question: string, conversation = defaultConversation): ChatMessage[] {
+  const threadToolNotes = conversation.toolNotes
   // The stored notes came from a page, so they can carry their own closing tag.
   // Defusing it keeps the "[仅作参考]" block from swallowing the rest of the prompt.
   const content = threadToolNotes
     ? `${system}\n\n# 上一轮的工具结果（仅作参考，可能已过期）\n<tool_results>\n${neutralize(threadToolNotes)}\n</tool_results>`
     : system
-  return [{ role: 'system', content }, ...thread, { role: 'user', content: question }]
+  return [{ role: 'system', content }, ...conversation.messages, { role: 'user', content: question }]
 }
 
 // ---------------------------------------------------------------------------
@@ -704,6 +707,7 @@ async function postNative(
   messages: unknown[],
   options: {
     tools: boolean
+    allowedTools?: readonly string[]
     signal?: AbortSignal
     fetchImpl: typeof fetch
     maxTokens?: number
@@ -722,7 +726,7 @@ async function postNative(
     max_tokens: Math.max(256, Math.round(options.maxTokens ?? ROUTER_MAX_TOKENS))
   }
   if (options.tools) {
-    body.tools = toolSchemas()
+    body.tools = toolSchemas(options.allowedTools)
     body.tool_choice = 'auto'
   }
   adaptChatBody(settings.polish, body, settings.polish.effort)
@@ -935,10 +939,10 @@ async function nativeToolLoop(
   ctx: ToolContext,
   signal: AbortSignal,
   log: (line: string) => void,
-  options: { onDelta?: (chunk: string) => void; llmTimeoutMs: number }
+  options: { onDelta?: (chunk: string) => void; llmTimeoutMs: number; conversation?: AgentConversation }
 ): Promise<NativeOutcome | null> {
   const fetchImpl = ctx.fetchImpl ?? globalThis.fetch
-  const messages: unknown[] = conversationMessages(system, question)
+  const messages: unknown[] = conversationMessages(system, question, options.conversation)
   const runs: ToolRun[] = []
   const actions: CardAction[] = []
 
@@ -947,6 +951,7 @@ async function nativeToolLoop(
     const started = Date.now()
     const reply = await postNative(settings, messages, {
       tools: allowTools,
+      allowedTools: ctx.allowedTools,
       signal,
       fetchImpl,
       maxTokens: allowTools ? ROUTER_MAX_TOKENS : ANSWER_MAX_TOKENS,
@@ -1322,6 +1327,7 @@ function notesFor(runs: ToolRun[]): string {
 }
 
 interface AnswerCallOptions {
+  conversation?: AgentConversation
   signal: AbortSignal
   maxTokens: number
   /** `[perf]` label: `llm answer`, `llm plain`, `llm weather`, … */
@@ -1436,7 +1442,7 @@ async function answerText(
   question: string,
   options: AnswerCallOptions
 ): Promise<string> {
-  const messages = conversationMessages(system, question)
+  const messages = conversationMessages(system, question, options.conversation)
   if (options.onDelta) {
     const streamed = await streamAnswerText(settings, messages, options)
     if (streamed !== null && streamed.trim()) return streamed
@@ -1460,11 +1466,12 @@ function plainAnswer(
   settings: Settings,
   question: string,
   context: PromptContext,
-  options: { signal: AbortSignal; log: (line: string) => void; llmTimeoutMs: number; onDelta?: (chunk: string) => void }
+  options: { signal: AbortSignal; log: (line: string) => void; llmTimeoutMs: number; onDelta?: (chunk: string) => void; conversation?: AgentConversation }
 ): Promise<string> {
   const system = withAskExtra(settings, buildAskPrompt(context))
   return answerText(settings, system, question, {
     signal: options.signal,
+    conversation: options.conversation,
     maxTokens: ANSWER_MAX_TOKENS,
     label: 'llm plain',
     log: options.log,
@@ -1493,7 +1500,7 @@ export async function askAgent(
   options: AgentOptions = {}
 ): Promise<AgentResult> {
   cachedSettings = settings
-  if (options.reset) resetThread()
+  if (options.reset) resetThread(options.conversation)
 
   const question = transcript.replace(/\s+/g, ' ').trim()
   if (!question) return { text: '', sources: [], searched: false }
@@ -1513,6 +1520,7 @@ export async function askAgent(
   if (options.timeouts?.read !== undefined) toolTimeouts.read_webpage = options.timeouts.read
 
   const ctx: ToolContext = {
+    allowedTools: options.allowedTools,
     settings,
     question,
     signal: abort,
@@ -1537,7 +1545,7 @@ export async function askAgent(
     // Single choke point for anything that reaches the card or the cursor: tool
     // markup is never part of an answer, whoever produced it.
     const text = scrubToolCallMarkup(result.text)
-    pushThread(question, text, result.tools ? notesFor(lastRuns) : undefined)
+    pushThread(question, text, result.tools ? notesFor(lastRuns) : undefined, options.conversation)
     const network = lastRuns.filter(run => ['web_search', 'read_webpage', 'get_weather'].includes(run.name))
     if (network.length) {
       result = { ...result, retrieval: {
@@ -1554,6 +1562,7 @@ export async function askAgent(
 
   const plain = async (): Promise<AgentResult> => {
     const text = await plainAnswer(settings, question, context, {
+      conversation: options.conversation,
       signal: abort,
       log,
       llmTimeoutMs,
@@ -1572,6 +1581,7 @@ export async function askAgent(
     const sources = collectSources(rawRuns)
     const system = systemForRuns(settings, context, runs)
     const answer = await answerText(settings, system, question, {
+      conversation: options.conversation,
       signal: abort,
       maxTokens: isNewsDigest(question) ? 4096 : ANSWER_MAX_TOKENS,
       label: 'llm answer',
@@ -1621,6 +1631,7 @@ export async function askAgent(
           ]
           const system = systemForSources(settings, context, cited, formatWeather(report))
           const spoken = await answerText(settings, system, question, {
+            conversation: options.conversation,
             signal: abort,
             maxTokens: ANSWER_MAX_TOKENS,
             label: 'llm weather',
@@ -1663,6 +1674,7 @@ export async function askAgent(
       onStatus?.('正在思考…')
       const system = withAskExtra(settings, buildToolInstructionPrompt(formatToday(), context))
       const native = await nativeToolLoop(settings, question, system, ctx, abort, log, {
+        conversation: options.conversation,
         onDelta: options.onDelta,
         llmTimeoutMs
       })
@@ -1692,7 +1704,7 @@ export async function askAgent(
             settings,
             [
               { role: 'system', content: buildIntentPrompt(formatToday()) },
-              ...thread,
+              ...(options.conversation ?? defaultConversation).messages,
               { role: 'user', content: question }
             ],
             { temperature: 0, maxTokens: 200, signal: abort }

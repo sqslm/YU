@@ -37,7 +37,7 @@ function configure(): void {
   native.receive!({ data: { type: 'config', bindings: {
     dictation: ['RightAlt'], ask: ['RightAlt', 'Space'], translate: ['RightAlt', 'RightShift']
   }, pasteLast: ['LeftCtrl', 'RightShift', 'V'], selection: ['LeftCtrl', 'RightShift', 'S'],
-    selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], notes: [] } })
+    selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], assistant: ['LeftCtrl', 'RightShift', 'A'], notes: [] } })
   native.post.mockClear()
 }
 function key(vk: number, down: boolean): number {
@@ -50,6 +50,16 @@ function key(vk: number, down: boolean): number {
 function events(type: string): unknown[] {
   return native.post.mock.calls.map(([event]) => event).filter(event => event.type === type)
 }
+
+it('opens the assistant only after the full chord releases, without a voice start', () => {
+  key(0xa2, true); key(0xa1, true)
+  expect(key(0x41, true)).toBe(1)
+  expect(events('assistant-toggle')).toHaveLength(0)
+  expect(key(0x41, false)).toBe(1)
+  key(0xa2, false); key(0xa1, false)
+  expect(events('assistant-toggle')).toHaveLength(1)
+  expect(events('start')).toHaveLength(0)
+})
 
 describe('action shortcut release ordering', () => {
   it.each(['stop', 'cancel'])('owns controls for a notes recording reported by the actual recorder: %s', action => {

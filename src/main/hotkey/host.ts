@@ -32,6 +32,7 @@ export type HotkeyHostEvent =
   | HotkeyNotesEvent
   | HotkeyEscapeEvent
   | { type: 'selection' | 'selection-translate'; at: number }
+  | { type: 'assistant-toggle'; at: number }
   | { type: 'capture-key'; token: string; down: boolean }
 
 export type HotkeyMessage =
@@ -153,6 +154,7 @@ export class HotkeyHost {
       bindings,
       pasteLast: settings.hotkeys.pasteLastKeys.keys,
       notes: settings.hotkeys.notesKeys?.keys ?? [],
+      assistant: settings.hotkeys.assistantKeys?.keys ?? [],
       selection: settings.hotkeys.selectionKeys.keys,
       selectionTranslate: settings.hotkeys.selectionTranslateKeys.keys,
       reminder: settings.hotkeys.reminderKeys.keys,

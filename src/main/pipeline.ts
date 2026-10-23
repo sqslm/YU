@@ -123,6 +123,7 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  onAssistant?: (text: string, signal: AbortSignal) => Promise<void>
   onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal) => Promise<void>
   onActivity?: (recording: boolean, busy: boolean) => void
   onReminder?: (text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt?: number) => Promise<{ message: string; undo?: boolean }>
@@ -212,8 +213,8 @@ function stripAppendedSources(text: string): string {
 export class Pipeline {
   private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
-  private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo; purpose?: 'reminder' } | null = null
-  private takePurpose: 'reminder' | 'notes' | undefined
+  private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo; purpose?: 'reminder' | 'assistant' } | null = null
+  private takePurpose: 'reminder' | 'notes' | 'assistant' | undefined
   private takeVoiceCommands: VoiceCommandsSettings | null = null
   private stage: Stage = 'idle'
   /** Mode of the current or most recent take, for bar labels. */
@@ -368,7 +369,7 @@ export class Pipeline {
     if (!win) return
     const live = state.phase === 'recording' || state.phase === 'working'
     if (!win.isDestroyed()) win.webContents.send('bar:state', live
-      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : undefined }
+      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('AI 助手') : undefined }
       : state)
     this.barPhase = state.phase
     if (live || state.phase === 'alert' || state.phase === 'error') {
@@ -589,7 +590,7 @@ export class Pipeline {
     }, capMs)
   }
 
-  start(mode: Mode, options: { handsFree?: boolean; purpose?: 'reminder' } = {}): void {
+  start(mode: Mode, options: { handsFree?: boolean; purpose?: 'reminder' | 'assistant' } = {}): void {
     // The stage stays `recording` while `stop()` waits for the renderer to flush
     // its tail, so a press in that window must be reported as busy instead of
     // being ignored as a duplicate start.
@@ -1118,7 +1119,7 @@ export class Pipeline {
     pcm: Int16Array,
     token: number,
     openingTarget?: ForegroundInfo,
-    purpose?: 'reminder' | 'notes',
+    purpose?: 'reminder' | 'notes' | 'assistant',
     submittedAt = Date.now()
   ): Promise<HistoryEntry | null> {
     this.stage = 'working'
@@ -1199,6 +1200,18 @@ export class Pipeline {
         if (!this.options.onVoiceNote) throw new Error(mt('随记服务尚未就绪'))
         await this.options.onVoiceNote(pcm, transcript, controller.signal)
         if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), taskLabel: mt('随记'), showMode: settings.showModeInBar }, DONE_HIDE_MS)
+        return null
+      }
+
+      if (purpose === 'assistant') {
+        transcript = route === 'multimodal'
+          ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
+          : await this.asrTranscript(settings, wav, controller.signal, progress)
+        if (token !== this.runToken) return null
+        if (!transcript.trim()) throw new Error(mt('模型返回了空文本'))
+        if (!this.options.onAssistant) throw new Error(mt('助手尚未就绪'))
+        await this.options.onAssistant(transcript, controller.signal)
+        if (token === this.runToken) this.setBarState({ phase: 'idle' }, DONE_HIDE_MS)
         return null
       }
 
@@ -1370,7 +1383,11 @@ export class Pipeline {
       recordingLog.end({ status: 'error', audioMs: spokenMs, error: message })
       // Failures remain visible as alerts and diagnostics, without a history row.
       const classified = classifyError(err)
-      this.showAlert(buildBarAlert(classified))
+      const alert = buildBarAlert(classified)
+      // Assistant voice has no legacy history row to retry. Do not reopen an
+      // unrelated older failed take through the shared bar's retry action.
+      if (purpose === 'assistant') alert.actions = alert.actions?.filter(action => action.id !== 'retry')
+      this.showAlert(alert)
       return null
     } finally {
       // Every early return above still has to close the per-take log, or the

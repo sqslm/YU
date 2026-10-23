@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
     selectionKeys: { keys: ['LeftCtrl', 'RightShift', 'S'] },
     selectionTranslateKeys: { keys: ['LeftCtrl', 'RightShift', 'T'] },
     reminderKeys: { keys: ['LeftCtrl', 'RightShift', 'R'] },
+    assistantKeys: { keys: ['LeftCtrl', 'RightShift', 'A'] },
     // Ctrl+Alt+N: no modifier of the dictation gesture, so a note take can never
     // be mistaken for one and a note chord cannot start a dictation on its way in.
     notesKeys: { keys: ['LeftCtrl', 'LeftAlt', 'N'] },
@@ -120,6 +121,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   multiline: 'space',
   restoreClipboard: true,
   launchAtStartup: false,
+  closeBehavior: 'background',
   onboarded: false,
   /**
    * Deprecated: the pill is the only place that reports what the app is doing,
@@ -233,9 +235,10 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   const used = [
     ...Object.values(merged.hotkeys.bindings), merged.hotkeys.pasteLastKeys,
     merged.hotkeys.selectionKeys, input.hotkeys?.notesKeys ?? base.hotkeys.notesKeys,
-    input.hotkeys?.selectionTranslateKeys ?? { keys: [] }, input.hotkeys?.reminderKeys ?? { keys: [] }
+    input.hotkeys?.selectionTranslateKeys ?? { keys: [] }, input.hotkeys?.reminderKeys ?? { keys: [] },
+    input.hotkeys?.assistantKeys ?? { keys: [] }
   ].map(binding => [...(Array.isArray(binding) ? binding : binding.keys ?? [])].sort().join('+'))
-  for (const [field, letters] of [['selectionTranslateKeys', ['T', 'Y', 'F9']], ['reminderKeys', ['R', 'F10', 'F11']]] as const) {
+  for (const [field, letters] of [['selectionTranslateKeys', ['T', 'Y', 'F9']], ['reminderKeys', ['R', 'F10', 'F11']], ['assistantKeys', ['A', 'F8', 'F12']]] as const) {
     const stored = input.hotkeys?.[field]
     const keys = stored?.keys ?? letters.map(letter => ['LeftCtrl', 'RightShift', letter])
       .find(chord => !used.includes([...chord].sort().join('+'))) ?? []
@@ -294,6 +297,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     ? merged.search.decideWithModel : base.search.decideWithModel
   merged.restoreClipboard = typeof input.restoreClipboard === 'boolean' ? input.restoreClipboard : base.restoreClipboard
   merged.launchAtStartup = typeof input.launchAtStartup === 'boolean' ? input.launchAtStartup : base.launchAtStartup
+  merged.closeBehavior = input.closeBehavior === 'quit' ? 'quit' : 'background'
   merged.language = typeof input.language === 'string' ? input.language.trim() : base.language
   merged.notesDir = typeof input.notesDir === 'string' ? input.notesDir.trim() : base.notesDir
   merged.notePlaybackRate = typeof input.notePlaybackRate === 'number' && Number.isFinite(input.notePlaybackRate)

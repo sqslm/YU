@@ -24,11 +24,28 @@ import type {
 import type { StatsFile } from './stats'
 import type { LocalAsrMirror, LocalAsrStatus, LocalDownloadProgress } from './local-asr'
 import type { Reminder, ReminderAction, ReminderInput, ReminderView } from './reminders'
+import type { AssistantState } from './assistant'
 
 export type { AnswerCardPayload } from './types'
 
 /** The bridge exposed by the preload script as `window.api`. */
 export interface TypelessApi {
+  assistant: {
+    open(): Promise<boolean>
+    hide(): Promise<void>
+    state(): Promise<AssistantState>
+    send(text: string): Promise<void>
+    cancel(): Promise<void>
+    clear(): Promise<void>
+    record(): Promise<boolean>
+    activity(): Promise<'idle' | 'recording' | 'working'>
+    onActivity(callback: (phase: 'idle' | 'recording' | 'working') => void): () => void
+    onFocus(callback: () => void): () => void
+    navigate(page: 'notes' | 'reminders' | 'settings'): Promise<void>
+    hubView(): Promise<'notes' | 'reminders' | 'settings' | null>
+    onNavigate(callback: () => void): () => void
+    onChanged(callback: (state: AssistantState) => void): () => void
+  }
   reminders: {
     list(): Promise<Reminder[]>
     save(input: ReminderInput, id?: string): Promise<Reminder>

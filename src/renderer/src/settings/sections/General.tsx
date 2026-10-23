@@ -903,6 +903,13 @@ export function GeneralSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
       <SettingsGroup icon={<IconGear />} title={i18n.t('启动与反馈')}>
+        <SettingsRow label={i18n.t('关闭主窗口时')} description={i18n.t('后台运行保留快捷键和提醒；退出会停止所有后台服务。')}>
+          <TextField select size="small" value={settings.closeBehavior} sx={controlSx}
+            inputProps={{ 'aria-label': i18n.t('关闭主窗口时') }} onChange={event => patch({ closeBehavior: event.target.value as Settings['closeBehavior'] })}>
+            <MenuItem value="background">{i18n.t('保留后台运行')}</MenuItem>
+            <MenuItem value="quit">{i18n.t('完全退出')}</MenuItem>
+          </TextField>
+        </SettingsRow>
         <SettingsRow label={i18n.t('开机自动启动')} description={i18n.t('登录 Windows 后在后台常驻')}>
           <Switch
             size="small"

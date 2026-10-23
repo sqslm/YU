@@ -71,6 +71,25 @@ function jsonResponse(payload: unknown, status = 200): Response {
   })
 }
 
+it('keeps assistant sessions and legacy Ask follow-ups isolated', async () => {
+  const settings = makeSettings({ enabled: false })
+  const left = { messages: [], toolNotes: '' }, right = { messages: [], toolNotes: '' }
+  mocks.complete.mockResolvedValue('Answer')
+  await askAgent(settings, 'LEFT_ONLY', {}, signal, undefined, { conversation: left })
+  await askAgent(settings, 'LEGACY_ONLY', {}, signal)
+  await askAgent(settings, 'RIGHT_ONLY', {}, signal, undefined, { conversation: right })
+  await askAgent(settings, 'Follow left', {}, signal, undefined, { conversation: left })
+  const request = mocks.complete.mock.calls.at(-1)![1]
+  const content = JSON.stringify(request.messages)
+  expect(content).toContain('LEFT_ONLY')
+  expect(content).not.toContain('LEGACY_ONLY')
+  expect(content).not.toContain('RIGHT_ONLY')
+  resetThread(left)
+  expect(right.messages).toHaveLength(2)
+  await askFollowUp('Follow legacy', settings, {}, signal)
+  expect(JSON.stringify(mocks.complete.mock.calls.at(-1)![1].messages)).toContain('LEGACY_ONLY')
+})
+
 /** A native reply that asks for one tool call. */
 function toolCallResponse(name: string, args: unknown, id = 'call_1'): Response {
   return jsonResponse({
