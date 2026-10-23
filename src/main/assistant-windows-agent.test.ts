@@ -45,3 +45,19 @@ it('does not execute an oversized tool batch and bounds planning rounds', async 
   expect(windows.run).toHaveBeenCalledTimes(4)
   expect(fetch).toHaveBeenCalledTimes(5)
 })
+
+
+it('uses personal tools through the same constrained JSON fallback when native calls are rejected', async () => {
+  const windows = { run: vi.fn() } as unknown as WindowsTools
+  const createNote = vi.fn().mockResolvedValue({ id: 'saved-note' })
+  const personal = { createNote, confirm: vi.fn().mockResolvedValue(true) } as unknown as import('./tools/personal').PersonalTools
+  const fetch = vi.fn().mockResolvedValue(new Response('', { status: 400 }))
+  mocks.complete.mockResolvedValueOnce('{"tool":"create_note","args":{"text":"Actual requested note"}}').mockResolvedValueOnce('{"tool":"answer","args":{}}').mockResolvedValueOnce('The note was saved.')
+  const receipts = vi.fn()
+  const result = await askAgent(settings, 'Save a note: Actual requested note', {}, undefined, undefined, { windows, personal,
+    allowedTools: ['create_note'], fetchImpl: fetch, onLocalResult: receipts, conversation: { messages: [], toolNotes: '' } })
+  expect(createNote).toHaveBeenCalledExactlyOnceWith('Actual requested note')
+  expect(windows.run).not.toHaveBeenCalled()
+  expect(result.tools).toEqual(['create_note'])
+  expect(receipts).toHaveBeenCalledWith(expect.objectContaining({ tool: 'create_note', ok: true }))
+})

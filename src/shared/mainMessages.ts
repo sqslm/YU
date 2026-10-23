@@ -7,6 +7,22 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '将这段文字保存到随记？': 'Save this text to Notes?',
+  '恢复': 'Restore',
+  '本次请求未授权读取选区': 'This request did not authorize reading selected text',
+  '请先检索并确认真实官网地址，不能猜测网址': 'Search and verify the official website first; do not guess its URL',
+  '读取匹配的历史记录并发送给当前模型？': 'Read matching history and send the excerpts to the current model?',
+  '将助手结果复制到剪贴板？': 'Copy the assistant result to the clipboard?',
+  '找到 {{count}} 条记录': 'Found {{count}} records',
+  '此应用不允许自动读取选区': 'Automatic selection access is disabled for this app',
+  '识别任务中…': 'Understanding your request…',
+  '确认本次操作': 'Confirm this action',
+  '找到 {{count}} 个事项': 'Found {{count}} tasks',
+  '找到 {{count}} 条随记': 'Found {{count}} notes',
+  '事项已更新': 'Task updated',
+  '已打开功能页面': 'Page opened',
+  '读取匹配的随记内容并发送给当前模型？': 'Read matching notes and send their content to the current model?',
+  '读取这条随记并提取待办与提醒？': 'Read this note and extract tasks and reminders?',
   '打开主界面': 'Open main window',
   '工具参数无效：{{name}}': 'Invalid tool argument: {{name}}',
   'Windows 索引不可用，仅检查当前目录。': 'Windows Search is unavailable; only the immediate folder was checked.',

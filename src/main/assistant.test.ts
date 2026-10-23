@@ -95,3 +95,16 @@ it('filters tool schemas and rejects unauthorized selection access before touchi
   expect(result.ok).toBe(false)
   expect(readClipboard).not.toHaveBeenCalled()
 })
+
+
+it('shares only completed Ask answers with the bounded temporary session', async () => {
+  session.rememberAnswer('Why?', 'Actual explanation')
+  session.rememberAnswer('Why?', 'Actual explanation')
+  expect(session.snapshot().turns).toHaveLength(1)
+  await session.send('Save that answer to my notes')
+  expect(ask.mock.calls[0][5]?.conversation?.messages).toEqual([
+    { role: 'user', content: 'Why?' }, { role: 'assistant', content: 'Actual explanation' }
+  ])
+  now += 15 * 60_000
+  expect(session.snapshot().turns).toEqual([])
+})

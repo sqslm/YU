@@ -81,6 +81,9 @@ export interface AgentResult {
 }
 
 export interface AgentOptions {
+  submittedAt?: number
+  selectionGuard?: ToolContext['selectionGuard']
+  personal?: ToolContext['personal']
   windows?: ToolContext['windows']
   onLocalResult?: ToolContext['onLocalResult']
   conversation?: AgentConversation
@@ -1540,6 +1543,9 @@ export async function askAgent(
   if (options.timeouts?.read !== undefined) toolTimeouts.read_webpage = options.timeouts.read
 
   const ctx: ToolContext = {
+    submittedAt: options.submittedAt,
+    selectionGuard: options.selectionGuard,
+    personal: options.personal,
     windows: options.windows,
     onLocalResult: options.onLocalResult,
     allowedTools: options.allowedTools,

@@ -59,7 +59,7 @@ export function App(): JSX.Element {
     const navigate = (): void => { void window.api.assistant.hubView().then(view => {
       if (!view) return
       setSettingsOpen(view === 'settings')
-      if (view !== 'settings') setPage(view)
+      if (view !== 'settings') setPage(view === 'overview' ? 'home' : view === 'corrections' ? 'dictionary' : view)
     }) }
     const off = window.api.assistant.onNavigate(navigate)
     navigate()

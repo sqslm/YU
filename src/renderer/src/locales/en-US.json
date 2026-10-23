@@ -1,4 +1,9 @@
 {
+  "统一语音入口": "Unified voice entry",
+  "智能识别语音意图": "Understand voice requests",
+  "用听写快捷键说出需求，自动选择问答、翻译、提醒、随记或助手操作；普通口述继续自动路由润色。": "Use your dictation shortcut to ask, translate, create reminders or notes, or run assistant actions. Ordinary dictation keeps automatic prompt routing.",
+  "默认开启。明确的模式快捷键和自定义关键词优先。意图判断使用现有文本模型，可能增加一次调用；多模态入口需要先转写。关闭后恢复纯听写。": "On by default. Dedicated shortcuts and custom activation phrases take priority. Intent detection uses your existing text model and may add one request; multimodal audio is transcribed first. Turn off for plain dictation.",
+
   "assistant": { "record": "Record", "send": "Send" },
   "AI 助手": "AI Assistant",
   "新对话": "New conversation",

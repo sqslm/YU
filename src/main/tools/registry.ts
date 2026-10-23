@@ -35,9 +35,13 @@ import { getSelection, type SelectionDeps } from './selection'
 import { mt } from '@shared/mainI18n'
 import { WINDOWS_DEFINITIONS, WINDOWS_TOOLS, type WindowsTools } from './windows'
 import type { AssistantLocalResult } from '@shared/assistant'
+import { PERSONAL_DEFINITIONS, PERSONAL_TOOLS, type PersonalTools } from './personal'
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
+  submittedAt?: number
+  selectionGuard?: () => void
+  personal?: PersonalTools
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
   allowedTools?: readonly string[]
@@ -115,8 +119,8 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   get_weather: 8000
 }
 
-/** Tools whose result is a pure function of their arguments within one take. */
-const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate'])
+/** Reuse reads and identical personal writes within one task, never across tasks. */
+const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder'])
 
 /** Planned queries in flight at once. The plan is two; more is throttling bait. */
 const SEARCH_PLAN_CONCURRENCY = 2
@@ -425,7 +429,11 @@ async function runGetSelection(
   ctx: ToolContext
 ): Promise<ToolOutcome> {
   ctx.onStatus?.('正在读取选中文字…')
+  ctx.signal?.throwIfAborted()
+  ctx.selectionGuard?.()
   const selection = await getSelection({ deps: ctx.selectionDeps })
+  ctx.signal?.throwIfAborted()
+  ctx.selectionGuard?.()
   if (!selection.ok) return fail(selection.error ?? '无法读取选中文字')
   const text = selection.text ?? ''
   return {
@@ -498,6 +506,7 @@ async function runOpenSearch(args: Record<string, unknown>, ctx: ToolContext): P
 // ---------------------------------------------------------------------------
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
+  ...PERSONAL_DEFINITIONS,
   ...WINDOWS_DEFINITIONS,
   {
     name: 'get_weather',
@@ -607,7 +616,7 @@ export const TOOL_NAMES: string[] = TOOL_DEFINITIONS.map((tool) => tool.name)
 
 /** OpenAI `tools` array. */
 export function toolSchemas(allowed?: readonly string[]): Array<Record<string, unknown>> {
-  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : !WINDOWS_TOOLS.includes(tool.name as typeof WINDOWS_TOOLS[number])).map((tool) => ({
+  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS].includes(tool.name as typeof WINDOWS_TOOLS[number])).map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -668,10 +677,17 @@ export async function runTool(
   ctx: ToolContext
 ): Promise<ToolOutcome> {
   const tool = getTool(name)
+  if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number]) && (!ctx.personal || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) && (!ctx.windows || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (!tool) return fail(mt('未知工具：{{name}}', { name }))
   const input = args ?? {}
+  if (name === 'open_url' && /官网|官方网站|official (?:web)?site/iu.test(ctx.question) && !ctx.question.includes(textArg(input, 'url'))) {
+    const evidence = await Promise.all([...(ctx.cache?.entries() ?? [])].filter(([key]) => key.startsWith('web_search?') || key.startsWith('read_webpage?')).map(([, result]) => result))
+    const normalize = (value: string): string => { try { const url = new URL(value); url.hash = ''; return url.href.replace(/\/$/, '') } catch { return '' } }
+    const requested = normalize(textArg(input, 'url'))
+    if (!requested || !evidence.some(result => result.ok && result.sources?.some(source => normalize(source.url) === requested))) return fail(mt('请先检索并确认真实官网地址，不能猜测网址'))
+  }
   const key = CACHEABLE.has(name) && ctx.cache ? cacheKey(name, input) : ''
   if (key) {
     const cached = ctx.cache?.get(key)
@@ -684,8 +700,8 @@ export async function runTool(
   const attempt = attemptTool(tool, input, ctx)
   if (key) ctx.cache?.set(key, attempt)
   const outcome = await attempt
-  if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number])) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
-    items: outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined,
+  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS].includes(name as typeof WINDOWS_TOOLS[number])) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
+    items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
     detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，仅检查当前目录。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[perf] tool:${name} ${Date.now() - started}ms ok=${outcome.ok}`)
   return outcome

@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BarAlert, BarState, HistoryEntry, Settings , ProviderProfile} from '@shared/types'
+import { DEFAULT_VOICE_COMMANDS } from '@shared/voiceCommands'
 import { mergeSettings } from '@shared/defaults'
 import type { PipelineOptions } from './pipeline'
 import type { UiaSnapshot } from './uia/reader'
@@ -143,6 +144,7 @@ function makeSettings(overrides: Partial<Settings>): Settings {
   return mergeSettings({
     language: 'zh',
     liveCaptions: false,
+    voiceCommands: { ...DEFAULT_VOICE_COMMANDS, smartRouting: false },
     profiles: TEST_PROFILES,
     chains: { asr: ['asr-test'], llm: ['llm-test'], multimodal: [] },
     ...overrides
@@ -508,7 +510,7 @@ describe('surrounding-text injection', () => {
     pipeline.pushAudio(tone(800))
     expect(sent.some(state => state.phase === 'recording' && state.taskLabel === 'AI 助手')).toBe(true)
     const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
-    expect(onAssistant).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal))
+    expect(onAssistant).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Number))
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(readContext).not.toHaveBeenCalled()
     expect(mocks.complete).not.toHaveBeenCalled()
@@ -1126,7 +1128,7 @@ describe('dedicated voice reminder capture', () => {
 })
 
 describe('opening phrase mode activation', () => {
-  const commands = (): Settings['voiceCommands'] => ({ ...mergeSettings({}).voiceCommands, enabled: true })
+  const commands = (): Settings['voiceCommands'] => ({ ...mergeSettings({}).voiceCommands, enabled: true, smartRouting: false })
   async function finish(pipeline: InstanceType<typeof Pipeline>): Promise<HistoryEntry | null> {
     const task = pipeline.stop(); pipeline.audioStopped(); return task
   }
@@ -1304,5 +1306,135 @@ describe('opening phrase mode activation', () => {
     expect(mocks.transcribe).not.toHaveBeenCalled()
     expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '随记', promptName: undefined })
     pipeline.cancel()
+  })
+})
+
+
+describe('unified voice entry', () => {
+  const smart = { ...DEFAULT_VOICE_COMMANDS, smartRouting: true }
+  const finish = async (pipeline: InstanceType<typeof Pipeline>): Promise<HistoryEntry | null> => {
+    pipeline.pushAudio(tone(1200)); const pending = pipeline.stop(); pipeline.audioStopped(); return pending
+  }
+  it.each(['明天提醒我上午十点去银行办一张银行卡。', 'Remind me in twenty minutes to clean up.'])('reuses reminder parsing, audio and cancellation without inserting a command: %s', async text => {
+    mocks.transcribe.mockResolvedValue({ text })
+    const onReminder = vi.fn().mockResolvedValue({ message: 'saved', undo: true })
+    const h = harness({ voiceCommands: smart }, { onReminder })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(onReminder).toHaveBeenCalledWith(text, expect.any(AbortSignal), expect.any(Function), expect.any(Number))
+    expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0)
+    expect(h.sent.at(-1)).toMatchObject({ phase: 'alert', alert: { actions: [{ id: 'undo-reminder', label: '撤销' }] } })
+    expect(h.sent).toEqual(expect.arrayContaining([expect.objectContaining({ phase: 'working', taskLabel: '快速提醒' })]))
+  })
+  it('answers ordinary questions through the real Ask branch and keeps its history/card', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '为什么天空是蓝色的？' })
+    mocks.complete.mockResolvedValueOnce('{"kind":"ask"}')
+    mocks.askAgent.mockResolvedValue({ text: '散射的原因。', sources: [], searched: false })
+    const onAnswer = vi.fn(), h = harness({ voiceCommands: smart }, { onAnswer })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(mocks.askAgent.mock.calls[0][1]).toBe('为什么天空是蓝色的？')
+    expect(onAnswer).toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(h.entries[0]).toMatchObject({ mode: 'ask', final: '散射的原因。' })
+  })
+  it('opens the assistant with the original system request and no duplicate ASR', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '帮我打开卡巴斯基的官方网站' })
+    mocks.complete.mockResolvedValueOnce('{"kind":"assistant"}')
+    const onAssistant = vi.fn().mockResolvedValue(undefined), h = harness({ voiceCommands: smart }, { onAssistant })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(onAssistant).toHaveBeenCalledWith('帮我打开卡巴斯基的官方网站', expect.any(AbortSignal), expect.any(Number))
+    expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(h.entries).toHaveLength(0); expect(h.pipeline.isBusy).toBe(false)
+  })
+  it('translates only the content and never persists a spoken target language', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '帮我翻译成英语，今天晚上我们一起去吃烧烤吧。' })
+    mocks.complete.mockResolvedValueOnce('{"kind":"translate","text":"今天晚上我们一起去吃烧烤吧。","target":"en"}').mockResolvedValueOnce('Let us have barbecue tonight.')
+    const h = harness({ voiceCommands: smart, translateTarget: 'ja', translateTargets: ['ja'] })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    const request = mocks.complete.mock.calls[1][1]
+    expect(request.messages.at(-1).content).toBe('今天晚上我们一起去吃烧烤吧。')
+    expect(request.messages[0].content).toContain('Target language: en')
+    expect(h.settings.translateTargets).toEqual(['ja'])
+    expect(h.entries[0]).toMatchObject({ mode: 'translate', transcript: '今天晚上我们一起去吃烧烤吧。' })
+  })
+  it('keeps the source recording when creating a voice note', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '帮我保存到随记：明天研究这个问题。' })
+    const onVoiceNote = vi.fn().mockResolvedValue(undefined), h = harness({ voiceCommands: smart }, { onVoiceNote })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array), '明天研究这个问题。', expect.any(AbortSignal))
+    expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0)
+  })
+  it('keeps development requirements on the opening-window prompt route even after switching apps', async () => {
+    const text = '给 Agent 写提示词：帮我打开下载目录，然后创建一个提醒。'
+    mocks.transcribe.mockResolvedValue({ text }); mocks.complete.mockResolvedValue('润色后的需求')
+    const onAssistant = vi.fn(), onReminder = vi.fn(), h = harness({ voiceCommands: smart }, { onAssistant, onReminder })
+    h.pipeline.start('dictation')
+    mocks.foregroundWindow.mockReturnValue({ title: 'WeChat', className: 'WeChat', appName: 'wechat', pid: 100 })
+    await finish(h.pipeline)
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(mocks.complete.mock.calls[0][1].messages.at(-1).content).toBe(text)
+    expect(h.entries[0]).toMatchObject({ mode: 'dictation', focusedWindowTitle: 'Editor', final: '润色后的需求' })
+    expect(onAssistant).not.toHaveBeenCalled(); expect(onReminder).not.toHaveBeenCalled()
+  })
+  it('respects explicit keyword dictation and explicit shortcut upgrades over natural intent', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '指令输入，明天提醒我开会' })
+    const h = harness({ voiceCommands: { ...smart, enabled: true } })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(h.entries[0]).toMatchObject({ mode: 'dictation', transcript: '明天提醒我开会' })
+    mocks.complete.mockClear()
+    h.pipeline.start('dictation'); h.pipeline.upgrade('translate'); await finish(h.pipeline)
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(h.entries[1]?.mode).toBe('translate')
+  })
+  it('does not execute on cancellation, empty ASR or invalid model output', async () => {
+    const onAssistant = vi.fn(), onReminder = vi.fn(), h = harness({ voiceCommands: smart }, { onAssistant, onReminder })
+    h.pipeline.start('dictation'); h.pipeline.pushAudio(tone(1200)); h.pipeline.cancel('test')
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+    mocks.transcribe.mockResolvedValue({ text: '' })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    mocks.transcribe.mockResolvedValue({ text: '今天有什么AI新闻？' }); mocks.complete.mockResolvedValue('invalid')
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(onAssistant).not.toHaveBeenCalled(); expect(onReminder).not.toHaveBeenCalled()
+    expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0); expect(h.pipeline.isBusy).toBe(false)
+  })
+  it('does not keep the previous intent or reclassify a take after a settings change', async () => {
+    const onReminder = vi.fn().mockResolvedValue({ message: 'saved' }), h = harness({ voiceCommands: smart }, { onReminder })
+    mocks.transcribe.mockResolvedValue({ text: '明天提醒我开会' })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    mocks.transcribe.mockResolvedValue({ text: '你好世界' }); mocks.complete.mockResolvedValueOnce('{"kind":"dictation"}').mockResolvedValueOnce('你好世界')
+    h.pipeline.start('dictation'); h.settings.voiceCommands.smartRouting = false; await finish(h.pipeline)
+    expect(onReminder).toHaveBeenCalledOnce(); expect(h.entries[0]?.mode).toBe('dictation')
+    mocks.complete.mockClear()
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(mocks.complete).toHaveBeenCalledOnce()
+  })
+  it('shares selection prompts and append setting, refusing a changed foreground target', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '帮我润色选中的内容' })
+    mocks.complete.mockResolvedValueOnce('{"kind":"selection","operation":"polish"}').mockResolvedValueOnce('Better text')
+    const apply = vi.fn(), captureSelection = vi.fn().mockResolvedValue({ text: 'Original', context: {}, apply })
+    const h = harness({ voiceCommands: smart, selectionInsertMode: 'append' }, { captureSelection })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(mocks.complete.mock.calls[1][1].messages.at(-1).content).toBe('Original')
+    expect(apply).toHaveBeenCalledWith('Better text', true, expect.any(AbortSignal))
+    mocks.complete.mockResolvedValueOnce('{"kind":"selection","operation":"polish"}'); captureSelection.mockClear()
+    h.pipeline.start('dictation'); mocks.foregroundWindow.mockReturnValue({ title: 'Another app', pid: 2 }); await finish(h.pipeline)
+    expect(captureSelection).not.toHaveBeenCalled()
+  })
+  it('supplies real selected text to normal Ask with web search disabled', async () => {
+    mocks.transcribe.mockResolvedValue({ text: 'Explain the selected code' })
+    mocks.complete.mockResolvedValueOnce('{"kind":"ask"}')
+    mocks.askAgent.mockResolvedValue({ text: 'Explanation', sources: [], searched: false })
+    const captureSelection = vi.fn().mockResolvedValue({ text: 'const x = 1;', context: {}, apply: vi.fn() })
+    const h = harness({ voiceCommands: smart, search: { enabled: false } as Settings['search'] }, { captureSelection })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(captureSelection).toHaveBeenCalledOnce()
+    expect(mocks.askAgent.mock.calls[0][2]).toMatchObject({ selectedText: 'const x = 1;' })
+  })
+  it('does not require a text model to polish multimodal dictation after a protected requirement', async () => {
+    mocks.generateFromAudio.mockResolvedValueOnce('请帮我实现这个功能，打开网站。').mockResolvedValueOnce('整理后的开发需求')
+    const h = harness({ voiceCommands: smart, pipelineMode: 'multimodal', profiles: [{ ...TEST_PROFILES[0], id: 'mm', kind: 'multimodal' }], chains: { llm: [], asr: [], multimodal: ['mm'] } })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(mocks.generateFromAudio).toHaveBeenCalledTimes(2); expect(mocks.complete).not.toHaveBeenCalled()
+    expect(h.entries[0]).toMatchObject({ mode: 'dictation', final: '整理后的开发需求' })
   })
 })

@@ -108,7 +108,7 @@ let hubRetireTimer: NodeJS.Timeout | null = null
 let quitting = false
 let assistantVoice = false
 let tray: ReturnType<typeof createTray> | null = null
-let hubView: 'notes' | 'reminders' | 'settings' | null = null
+let hubView: import('./tools/personal').HubPage | null = null
 const windowsTools = new WindowsTools({
   folders: { downloads: app.getPath('downloads'), desktop: app.getPath('desktop'), documents: app.getPath('documents') },
   native: windowsNative, openPath: path => shell.openPath(path), openUrl: url => shell.openExternal(url),
@@ -123,6 +123,24 @@ const windowsTools = new WindowsTools({
   }
 })
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
+  personal: {
+    remind: (text, signal, submittedAt) => reminders!.voice(text, signal, undefined, submittedAt),
+    reminders: () => reminders!.store.list(),
+    action: (id, action, minutes) => { if (action === 'delete') reminders!.remove(id); else reminders!.action(id, action, minutes) },
+    notes: () => notes.list().notes,
+    createNote: text => notes.createText({ text }),
+    extract: (id, signal) => reminders!.extractNote(notes, id, signal),
+    history: query => history.list(query, 40),
+    copy: text => clipboard.writeText(text),
+    open: page => navigateHub(page),
+    confirm: async (description, signal) => {
+      signal?.throwIfAborted()
+      if (!assistantWindow || assistantWindow.isDestroyed()) return false
+      const { response } = await dialog.showMessageBox(assistantWindow, { type: 'question', signal, title: mt('确认本次操作'),
+        message: description, buttons: [mt('取消'), mt('确认')], defaultId: 0, cancelId: 0, noLink: true })
+      return !signal?.aborted && response === 1
+    }
+  },
   changed: state => {
     if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.webContents.send('assistant:changed', state)
     tray?.refresh()
@@ -431,7 +449,7 @@ function ensureSettingsWindow(): BrowserWindow {
   return settingsWindow
 }
 
-function navigateHub(page: 'notes' | 'reminders' | 'settings'): void {
+function navigateHub(page: import('./tools/personal').HubPage): void {
   hubView = page
   const win = ensureSettingsWindow()
   win.webContents.send('assistant:navigate')
@@ -458,6 +476,12 @@ function hideAssistant(): void {
 
 function openAssistant(): boolean {
   if (notesRecording || pipeline?.isBusy || selectionEditor?.isBusy) return false
+  showAssistant()
+  return true
+}
+
+/** Also used after a unified voice take has finished capturing its audio. */
+function showAssistant(): void {
   if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
   assistantRetireTimer = null
   assistant.snapshot()
@@ -465,14 +489,13 @@ function openAssistant(): boolean {
     if (assistantWindow.isMinimized()) assistantWindow.restore()
     assistantWindow.show(); assistantWindow.focus()
     assistantWindow.webContents.send('assistant:focus')
-    return true
+    return
   }
   const win = createAssistantWindow(store.get().themeMode)
   assistantWindow = win
   win.on('close', event => { if (!quitting) { event.preventDefault(); hideAssistant() } })
   win.on('closed', () => { cancelAssistant(); assistantWindow = null })
   win.webContents.on('render-process-gone', () => { cancelAssistant(); win.destroy() })
-  return true
 }
 
 /**
@@ -715,8 +738,8 @@ function registerIpc(): void {
   ipcMain.handle('assistant:open', () => openAssistant())
   ipcMain.handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
   ipcMain.handle('assistant:navigate', (_event, page: unknown) => {
-    if (page !== 'notes' && page !== 'reminders' && page !== 'settings') throw new Error('Invalid page')
-    navigateHub(page)
+    if (!['overview', 'history', 'notes', 'reminders', 'corrections', 'settings'].includes(page as string)) throw new Error('Invalid page')
+    navigateHub(page as import('./tools/personal').HubPage)
   })
   const assistantOnly = (event: Electron.IpcMainInvokeEvent): void => {
     if (event.sender !== assistantWindow?.webContents) throw new Error('Assistant window required')
@@ -1369,13 +1392,19 @@ async function bootstrap(): Promise<void> {
   }, broadcastReminders, log)
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
-    onAssistant: async (text, signal) => { await assistant.send(text, signal) },
+    captureSelection: () => captureSelectionTarget(store.get()),
+    voiceContext: () => {
+      const last = assistant.snapshot().turns.at(-1)
+      return last?.state === 'done' ? JSON.stringify({ question: last.question.slice(0, 500), answer: last.answer.slice(0, 1000) }) : ''
+    },
+    onAssistant: async (text, signal, submittedAt) => { signal.throwIfAborted(); showAssistant(); await assistant.send(text, signal, undefined, submittedAt) },
     onActivity: () => refreshHotkeyActivity(),
     onVoiceNote: async (pcm, transcript, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript) },
     onReminder: (text, signal, progress, submittedAt) => reminders!.voice(text, signal, progress, submittedAt),
     // Ask mode answers land in the card window; dictation/translate keep
     // typing straight into the foreground app.
     onAnswer: (payload) => showAnswerCard(payload),
+    onCompletedAnswer: (question, answer) => assistant.rememberAnswer(question, answer),
     // The card is anchored to the pill and animates out of it, so the pill must
     // survive the usual "hide once idle" timeout while the card is on screen.
     holdBar: () => Boolean(cardWindow && !cardWindow.isDestroyed() && cardWindow.isVisible()),

@@ -2,6 +2,7 @@ export type Mode = 'dictation' | 'translate' | 'ask'
 export type VoiceCommandMode = Mode | 'reminder' | 'notes'
 export interface VoiceCommandsSettings {
   enabled: boolean
+  smartRouting: boolean
   keywords: Record<VoiceCommandMode, string[]>
 }
 

@@ -410,3 +410,11 @@ describe('open_search', () => {
     expect(opened).toEqual([])
   })
 })
+
+
+it('does not read a new foreground selection after the original voice target changed', async () => {
+  const sendCopy = vi.fn()
+  const result = await runTool('get_selection', {}, { ...makeContext(), selectionGuard: () => { throw Error('Target changed') },
+    selectionDeps: { sendCopy } })
+  expect(result.ok).toBe(false); expect(result.error).toContain('Target changed'); expect(sendCopy).not.toHaveBeenCalled()
+})

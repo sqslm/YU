@@ -51,7 +51,7 @@ export class WindowsTools {
       return { name: item?.kind === 'application' ? 'open_application' : 'open_file', args: { id: item?.id ?? '' } }
     }
     const app = /^(?:请|帮我)?打开\s*([^。！？\n]{1,80})[。！!]?$/i.exec(input) || /^open (?:the )?([\w .+()-]{1,80})[.!]?$/i.exec(input)
-    if (app && !/[\\/:]|然后|再|并且|and |then /i.test(app[1])) return { name: 'open_application', args: { name: app[1] } }
+    if (app && !/[\\/:]|然后|再|并且|官网|网站|网页|website|webpage|homepage|official|\.(?:com|org|net)\b|and |then /i.test(app[1])) return { name: 'open_application', args: { name: app[1] } }
     return null
   }
   async run(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<ToolOutcome> {

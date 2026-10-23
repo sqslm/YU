@@ -3,6 +3,7 @@ import type { VoiceCommandMode, VoiceCommandsSettings } from './types'
 export const VOICE_COMMAND_MODES: VoiceCommandMode[] = ['dictation', 'translate', 'ask', 'reminder', 'notes']
 export const DEFAULT_VOICE_COMMANDS: VoiceCommandsSettings = {
   enabled: false,
+  smartRouting: true,
   keywords: {
     dictation: ['指令输入', 'command dictation'],
     translate: ['指令翻译', 'command translate'],
@@ -22,7 +23,7 @@ export function normalizeVoiceCommands(input?: Partial<VoiceCommandsSettings>): 
       ? [...new Set(values.filter((v): v is string => typeof v === 'string').map(v => v.trim()).filter(v => identity(v).length > 0))]
       : [...DEFAULT_VOICE_COMMANDS.keywords[mode]]
   }
-  return { enabled: input?.enabled === true, keywords }
+  return { enabled: input?.enabled === true, smartRouting: input?.smartRouting !== false, keywords }
 }
 
 export function voiceCommandConflict(mode: VoiceCommandMode, keywords: string[], settings: VoiceCommandsSettings): boolean {

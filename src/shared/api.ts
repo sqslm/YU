@@ -43,7 +43,7 @@ export interface TypelessApi {
     onActivity(callback: (phase: 'idle' | 'recording' | 'working') => void): () => void
     onFocus(callback: () => void): () => void
     navigate(page: 'notes' | 'reminders' | 'settings'): Promise<void>
-    hubView(): Promise<'notes' | 'reminders' | 'settings' | null>
+    hubView(): Promise<'overview' | 'history' | 'notes' | 'reminders' | 'corrections' | 'settings' | null>
     onNavigate(callback: () => void): () => void
     onChanged(callback: (state: AssistantState) => void): () => void
   }

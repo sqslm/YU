@@ -123,3 +123,17 @@ describe('Windows tools permissions and real result selection', () => {
     expect(openPath).not.toHaveBeenCalled()
   })
 })
+
+
+it('does not confuse website names or domains with registered applications', () => {
+  for (const query of ['帮我打开卡巴斯基的官方网站', 'Open the official Kaspersky website', '打开 github.com']) expect(tools.command(query)).toBeNull()
+  expect(tools.command('打开 VS Code')).toEqual({ name: 'open_application', args: { name: 'VS Code' } })
+})
+it('opens official URLs only from explicit input or actual tool evidence', async () => {
+  const base = { settings: mergeSettings({}), windows: tools, allowedTools: WINDOWS_TOOLS, question: '帮我打开卡巴斯基的官方网站', log: vi.fn(), cache: new Map() }
+  expect((await runTool('open_url', { url: 'https://invented.example' }, base)).ok).toBe(false)
+  expect(openUrl).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled()
+  base.cache.set('web_search?query=official', Promise.resolve({ ok: true, data: {}, summary: 'Found', sources: [{ title: 'Official site', url: 'https://official.example/', snippet: '' }] }))
+  expect((await runTool('open_url', { url: 'https://official.example/' }, base)).ok).toBe(true)
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith('https://official.example/')
+})

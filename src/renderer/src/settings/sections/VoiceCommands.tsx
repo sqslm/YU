@@ -29,7 +29,13 @@ function KeywordRow({ mode, settings, save }: { mode: VoiceCommandMode; settings
 export function VoiceCommandsSection({ settings, patch }: { settings: Settings; patch: (delta: Partial<Settings>) => void }): JSX.Element {
   const { t } = useTranslation()
   const commands = settings.voiceCommands
-  return <SettingsGroup icon={<IconSparkle />} title={t('语音关键词切换模式')}>
+  return <><SettingsGroup icon={<IconSparkle />} title={t('统一语音入口')}>
+    <SettingsRow label={t('智能识别语音意图')} description={t('用听写快捷键说出需求，自动选择问答、翻译、提醒、随记或助手操作；普通口述继续自动路由润色。')}>
+      <Switch size="small" checked={commands.smartRouting} inputProps={{ 'aria-label': t('智能识别语音意图') }} data-smart-routing-toggle
+        onChange={event => patch({ voiceCommands: { smartRouting: event.target.checked } as VoiceCommandsSettings })} />
+    </SettingsRow>
+    <SettingsHint>{t('默认开启。明确的模式快捷键和自定义关键词优先。意图判断使用现有文本模型，可能增加一次调用；多模态入口需要先转写。关闭后恢复纯听写。')}</SettingsHint>
+  </SettingsGroup><SettingsGroup icon={<IconSparkle />} title={t('语音关键词切换模式')}>
     <SettingsRow label={t('启用关键词切换')} description={t('用听写快捷键开麦，先说关键词，再说正文；其他模式快捷键保持原样。')}>
       <Switch size="small" checked={commands.enabled} inputProps={{ 'aria-label': t('启用关键词切换') }} data-voice-commands-toggle
         onChange={event => patch({ voiceCommands: { enabled: event.target.checked } as VoiceCommandsSettings })} />
@@ -40,5 +46,5 @@ export function VoiceCommandsSection({ settings, patch }: { settings: Settings; 
       <SettingsHint>{t('仅识别开头关键词，不做模糊匹配。用分号或换行分隔，留空停用该模式；失焦后保存。')}</SettingsHint>
       <SettingsHint>{t('识别到关键词后语音条实时更新模式，结束后以完整转写确认。关闭字幕时仍识别开头短片段，可能增加 ASR 调用。多模态录音先转写，再使用文本模型处理。')}</SettingsHint>
     </>}
-  </SettingsGroup>
+  </SettingsGroup></>
 }

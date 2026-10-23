@@ -1,10 +1,10 @@
 # 轻令（Qinly）
 
-Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。助手中心复用 Ask，支持文字/语音问答、独立临时追问，以及经授权的 Windows 应用启动、文件夹/文档/网页打开和限定目录文件查找。原有语音输入、随记和提醒入口继续保留。截图、事务工具、日程、长期记忆、简报、TTS 和唤醒尚未接入助手。
+Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。助手中心复用 Ask，支持文字/语音问答、独立临时追问，以及经授权的 Windows 应用启动、文件夹/文档/网页打开和限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询及页面导航已接入；截图、日程、长期记忆、简报、TTS 和唤醒尚未接入助手。
 
 Windows 工具使用 App Paths 和开始菜单的真实应用登记，不让模型猜 exe 路径。比如“打开 VS Code”“打开下载文件夹”“查找下载目录最新修改的 PDF”。简单打开请求和“打开第二个”直接由程序处理；复杂任务沿用现有 function calling，不支持时使用结构化 JSON，每次任务最多 4 轮工具、8 次调用、90 秒（包括授权等待）。工具按顺序执行，失败时停止后续操作；界面显示真实执行回执。打开成功表示 Windows 接受请求，不保证目标应用已加载完成。
 
-每次本地操作先显示实际范围，授权默认取消；文件名、路径、修改日期、大小可能发送至配置的模型，文件正文不会读取。搜索优先查询 Windows Search，再补查当前目录；未索引子目录不递归遍历，最多展示 40 项，截断或索引不可用会说明。日期指修改时间，不代表下载时间。多个候选必须由用户点击选择或明确说“打开第二个”；只允许打开实际结果 ID，支持常见文档/图片/音视频，不运行脚本和安装程序。清空或过期会话会使旧 ID 失效。本阶段不提供删除、安装或任意命令执行工具；原 Ask 不会自动获得这些本地工具。
+每次本地操作先显示实际范围，授权默认取消；文件名、路径、修改日期、大小可能发送至配置的模型，文件正文不会读取。搜索优先查询 Windows Search，再补查当前目录；未索引子目录不递归遍历，最多展示 40 项，截断或索引不可用会说明。日期指修改时间，不代表下载时间。多个候选必须由用户点击选择或明确说“打开第二个”；只允许打开实际结果 ID，支持常见文档/图片/音视频，不运行脚本和安装程序。清空或过期会话会使旧 ID 失效。本阶段不提供文件删除、软件安装或任意命令执行工具；原 Ask 不会自动获得这些本地工具。
 
 AI 助手可从侧边栏、托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起；快捷键可录制或清空，升级时避让已有相同绑定。点击录音开始，共用现有麦克风/ASR，右 Alt 或「结束录音」提交，Esc 取消；已有任务运行时不会抢占录音。窗口里可停止、新对话、复制回答及直达随记/提醒/设置。关闭助手取消当前任务；最近 12 个界面轮次仅存内存，模型保留最近三个完整问答及工具摘要，闲置 15 分钟后下次访问清理，退出程序即丢弃。助手与旧 Ask 上下文隔离，不自动读取剪贴板、选区或截图，不写长期记忆。发送的输入和相关临时会话会交给用户配置的远程或本地模型。
 
@@ -46,8 +46,25 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\轻令（Qinly）-0.33.1-setup.exe
+pnpm package          # → release\轻令（Qinly）-0.34.0-setup.exe
 ```
+
+
+## 统一语音入口 / Unified voice entry（0.34.0）
+
+默认用听写快捷键（右 Alt）说需求，结束后基于完整转写选择实际功能：普通/联网 Ask、计算/天气/时间、翻译、语音随记、提醒/待办、应用/网站/文件操作、个人数据查询或管理。原有专用快捷键与启用的自定义开头关键词优先；「指令输入」可明确保留为口述。取消、静音、识别失败或非法意图结果不执行动作。语音条在实际决策后显示对应模式/任务；自然语言意图不使用字幕片段提前执行。
+
+「设置 → 快捷键 → 统一语音入口」默认开启，可关闭恢复纯听写。明确的提醒/随记及可识别的开发需求不额外分类；其他内容使用既有文本模型判断意图，可能增加一次调用，受 12 秒期限约束。多模态先转写；普通多模态听写继续以原音频和实际自动路由卡片处理，翻译使用本次指定目标语言或原有目标设置，不改动保存的设置。开发需求、引用命令继续按录音开始时的窗口路由润色；意图判断不是绝对无误，需明确口述时可用「指令输入」或关闭智能分流。
+
+例：“明天提醒我上午十点去银行”复用完整内置提醒模板和本地时间校验；“帮我翻译成英语，今晚一起吃烧烤吧”只翻译正文；“为什么天空是蓝色的”走原 Ask 回答卡；“打开卡巴斯基官方网站”由助手先检索真实地址再申请本次打开授权，不猜域名。“帮我保存到随记：……”保留本次原始录音并复用已识别正文。
+
+助手已接入现有提醒创建/查询/完成/取消/稍后/恢复/删除、随记创建/检索/提取候选、历史检索、确认后复制结果，以及概览/历史/随记/提醒/纠正规则/设置页面。没有单独为每项设置提供自动修改接口；配置仍在原设置页完成。本地数据读取、助手文字随记写入和已有事项修改保留逐次授权；提醒创建有歧义时打开原确认界面，不能把候选当作已保存。随记提取仍用完整模板并由用户确认，不覆盖原文。同任务重复的相同创建/修改调用复用回执，避免重复写入。
+
+明确说“润色/翻译选中文字”复用选区捕获、原提示词及覆盖/追加设置；读取前检查录音起始窗口，应用前复核选区。选区解释/总结走原 Ask，读取前后均验证目标；敏感密码应用拒绝自动读取。正常 Ask 的成功答案进入现有 15 分钟临时助手会话，支持后续请求引用“刚才的回答”；失败、停止的内容不加入。没有常驻录音、剪贴板监听、额外窗口轮询或后台模型请求。
+
+Use your dictation shortcut (Right Alt by default) for normal or web-enabled Ask, translation, voice notes, reminders/todos, Windows actions, personal-data queries and existing application pages. Dedicated shortcuts and enabled activation phrases take priority. Ordinary dictation and development requirements retain automatic prompt routing. Turn **Understand voice requests** off in Settings → Shortcuts for plain dictation. Classification uses your current text model and may add one request; multimodal audio is transcribed first. Commands are executed only after the final transcript, never from captions. Invalid/failed/cancelled takes perform no action.
+
+Voice selection polish/translation reuses existing replace/append preferences and verifies the original window. Ask remains in its answer card; successful answers share the assistant's temporary session so follow-up requests can reference them. Notes retain original audio. Reminder creation and note extraction reuse the complete built-in template and program-side time validation. Personal data reads and existing task changes require explicit permission, official URLs must come from real search evidence, and ambiguous reminders still need review. Calendar, persistent memory, screenshots, TTS and wake words remain unimplemented; opening Settings does not automatically change individual options.
 
 ## 使用
 
@@ -69,7 +86,7 @@ pnpm package          # → release\轻令（Qinly）-0.33.1-setup.exe
 
 「设置 → 快捷键 → 语音关键词切换模式」默认关闭，开启后使用听写启动键（默认右 Alt）开麦，先说关键词，再说正文。听写、翻译、问答、提醒和随记分别默认使用「指令输入」「指令翻译」「指令问答」「指令提醒」「指令笔记」，英文对应 `command dictation` / `command translate` / `command ask` / `command reminder` / `command note`。每个模式可自定义多个短语，用分号或换行分隔，失焦保存；留空停用该模式，跨模式重复关键词会提示冲突并保留原配置。
 
-关键词只匹配语音开头，不做模糊匹配，也不扫描正文；没命中仍按正常听写处理。实时识别到开头关键词后，语音条立即更新模式和对应卡片/任务标签，保持同一段录音与计时；窗口路由继续使用录音开始时的窗口快照。最终执行以完整转写再次匹配为准，关键词不进入正文；只有关键词、识别失败或取消时不执行空任务。显式使用其他模式的快捷键，或录音中通过快捷键升级模式时，以快捷键为准。关键词配置在录音开始时快照，修改从下一次新录音生效；历史重试、随记重新转写不重新选择模式。
+关键词只匹配语音开头，不做模糊匹配，也不扫描正文；没命中时，统一入口开启则继续判断自然语言意图；统一入口关闭仍按正常听写处理。实时识别到开头关键词后，语音条立即更新模式和对应卡片/任务标签，保持同一段录音与计时；窗口路由继续使用录音开始时的窗口快照。最终执行以完整转写再次匹配为准，关键词不进入正文；只有关键词、识别失败或取消时不执行空任务。显式使用其他模式的快捷键，或录音中通过快捷键升级模式时，以快捷键为准。关键词配置在录音开始时快照，修改从下一次新录音生效；历史重试、随记重新转写不重新选择模式。
 
 实时切换复用现有字幕的开头识别结果，仅接受仍包含首次有效声音起点的片段，避免六秒滑动字幕把正文误当指令。开麦后先保持安静不会耗掉关键词窗口，静音等待仅保留 200 毫秒预缓冲；已识别出的模式不会因后续不完整预览而闪回，最终仍以完整转写为准。关闭字幕时识别首次有效声音起点起至多六秒的音频来更新模式，可能增加少量 ASR 请求，不会在录音后半段持续轮询；实际反馈速度取决于识别接口，预览失败时仍由最终转写决定。多模态入口开启此功能后先用既有多模态服务转写，再走既有文本模型处理；传统路径只做一次最终 ASR。提醒复用原解析器，随记复用原存储、录音和润色流程及已识别文本，不重复整段 ASR。空闲时不监听唤醒词，不新增服务或模型配置。
 
@@ -93,7 +110,7 @@ Ask cards support **Pin** to stay open when switching apps, **Save to Notes** to
 
 AI 提醒通过「快速提醒」快捷键复用现有录音和 ASR，开始/结束方式跟随录音设置，点按模式使用同一个完整快捷键再次结束。所有模式（听写、翻译、问答、提醒、随记）的录音也可统一按右 Alt 结束并提交，按 Esc 取消；这两个录音控制键的按下、重复和松开不会向当前应用透传，空闲时 Esc 恢复原行为。识别后使用文本模型备用链的独立结构化 Prompt，不使用润色卡片，也不插入原输入框。快速提醒入口本身表达提醒意图，支持直接说「20分钟后打扫卫生」，无需重复「提醒我」；模型仅识别为待办时进入确认，不丢弃内容、不自动创建。明确且有效的提醒自动保存，悬浮条显示实际日期、时间及等级并提供短时撤销；缺失或有歧义的时间打开确认界面，失败、取消及普通陈述不创建提醒。默认快捷键如与已有绑定冲突，会选择可用备用键并在设置中显示。
 
-语音提醒和随记提取共用「完整内置提示词提炼 → 结构化提取 → 程序时间校验」链路。第一阶段直接使用 [完整提醒提示词](src/main/prompts/reminder-refinement.md) 全文，不摘取、不改写、不使用用户润色卡片，模板随主进程打包，设置中无显示或编辑入口。中英文保持原语言；随记仅额外注明来源，避免将普通陈述或可能计划升级为明确提醒。第二阶段参考原文核对改口、否定、数字及条件，第一阶段的不确定性不能被清除。通常调用现有文本模型两次；已撤回或没有可提炼事项时只调用一次。没有新增服务或模型配置。语音条显示两阶段进度；相对时间以结束录音的提交时刻为基准，不随 ASR 或模型耗时向后漂移。失败或任一阶段取消均不保存提醒，撤回请求显示未保存反馈；随记原文不会被改写。
+语音提醒和随记提取共用「完整内置提示词提炼 → 结构化提取 → 程序时间校验」链路。第一阶段直接使用 [完整提醒提示词](src/main/prompts/reminder-refinement.md) 全文，不摘取、不改写、不使用用户润色卡片，模板随主进程打包，设置中无显示或编辑入口。中英文保持原语言；随记仅额外注明来源，避免将普通陈述或可能计划升级为明确提醒。第二阶段参考原文核对改口、否定、数字及条件，第一阶段的不确定性不能被清除。通常调用现有文本模型两次；已撤回或没有可提炼事项时只调用一次。没有新增服务或模型配置。语音条显示两阶段进度；相对时间以结束录音的提交时刻为基准，不随 ASR、意图判断或多步骤工具耗时向后漂移。失败或任一阶段取消均不保存提醒，撤回请求显示未保存反馈；随记原文不会被改写。
 
 提醒支持中文、繁体中文和英文常见时间表达，由 Chrono 2.10.3 识别，再由程序校验明确的日期/时刻并计算本地时间戳。例如「20 分钟后提醒我打扫卫生」「明天上午 10 点提醒我打电话」「每周一上午 9 点提醒我开会」，以及 “Remind me in twenty minutes to clean up”, “Tomorrow at three thirty PM”, “Every Monday at 9 AM”。含糊的上午/下午、数字日期、日期范围和缺少时刻的事项要求确认，不使用模型生成的 Unix 时间戳。重复规则目前支持每天和每周单个星期；月度、年度、多星期和限定次数/截止日期等规则保留原文并要求人工确认，不转换为一次性或无限重复。夏令时不存在的单次时刻要求修改，重复提醒跳过不存在的本地时刻。
 

@@ -108,25 +108,29 @@ export class ReminderService {
     ipcMain.handle('reminders:view', () => { const view = this.view; this.view = null; return view })
     ipcMain.handle('reminders:strong', () => this.strongRows())
     ipcMain.on('reminders:close-strong', () => this.strong?.close())
-    ipcMain.handle('reminders:extract-note', async (_event, id: string) => {
-      if (this.extracting) throw new Error(mt('正在提取待办，请稍候'))
-      const note = notes.list().notes.find(item => item.id === id)
-      if (!note) throw new Error(mt('随记不存在'))
-      const text = note.transcript.trim() || note.polished.trim()
-      this.extracting = true
-      const controller = new AbortController()
-      this.noteAbort = controller
-      try {
-        const drafts = await extractReminders(this.settings(), text, 'note', AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
-        controller.signal.throwIfAborted()
-        const current = notes.list().notes.find(item => item.id === id)
-        if (!current) throw new Error(mt('随记不存在'))
-        if ((current.transcript.trim() || current.polished.trim()) !== text) throw new Error(mt('随记内容已更改，请重新提取'))
-        if (!drafts.length) throw new Error(mt('没有发现待办或提醒事项'))
-        this.open({ drafts, noteId: id })
-      } finally { this.extracting = false; if (this.noteAbort === controller) this.noteAbort = null }
-    })
+    ipcMain.handle('reminders:extract-note', (_event, id: string) => this.extractNote(notes, id))
   }
+  async extractNote(notes: NotesStore, id: string, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
+    if (this.extracting) throw new Error(mt('正在提取待办，请稍候'))
+    const note = notes.list().notes.find(item => item.id === id)
+    if (!note) throw new Error(mt('随记不存在'))
+    const text = note.transcript.trim() || note.polished.trim()
+    this.extracting = true
+    const controller = new AbortController()
+    this.noteAbort = controller
+    try {
+      const drafts = await extractReminders(this.settings(), text, 'note', AbortSignal.any([controller.signal, ...(signal ? [signal] : []), AbortSignal.timeout(60_000)]))
+      controller.signal.throwIfAborted()
+      signal?.throwIfAborted()
+      const current = notes.list().notes.find(item => item.id === id)
+      if (!current) throw new Error(mt('随记不存在'))
+      if ((current.transcript.trim() || current.polished.trim()) !== text) throw new Error(mt('随记内容已更改，请重新提取'))
+      if (!drafts.length) throw new Error(mt('没有发现待办或提醒事项'))
+      this.open({ drafts, noteId: id })
+    } finally { this.extracting = false; if (this.noteAbort === controller) this.noteAbort = null }
+  }
+
   stop(): void {
     this.noteAbort?.abort()
     this.scheduler.stop()
