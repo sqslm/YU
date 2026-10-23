@@ -11,7 +11,8 @@
  * (grey, the user cancelled). Entries written before v0.9 carry no `status`;
  * the only signal they have is `error`, so that is what they fall back to.
  */
-import type { HistoryEntry, HistoryStatus, Mode } from '@shared/types'
+import type { HistoryEntry, HistoryStatus, Mode, SearchResult } from '@shared/types'
+import { isSafeLink } from '@shared/links'
 import { PROMPT_KIND_LABEL } from '@shared/promptLibrary'
 import i18n from '../../i18n'
 
@@ -614,7 +615,7 @@ export function countLabel(filterId: HistoryFilterId, total: number): string {
 // Empty state — "nothing matches" is not the same screen as "nothing recorded"
 // ---------------------------------------------------------------------------
 
-export type HistoryEmptyKind = 'records' | 'search' | 'filter' | 'app'
+export type HistoryEmptyKind = 'records' | 'search' | 'filter' | 'app' | 'date'
 
 export interface EmptyStateInput {
   /** Raw search text; `trim` decides whether it counts as a search at all. */
@@ -625,6 +626,7 @@ export interface EmptyStateInput {
   matches: number
   /** Selected window; blank (or absent) when the whole history is in scope. */
   app?: string
+  dateFiltered?: boolean
 }
 
 /**
@@ -639,6 +641,7 @@ export function emptyStateKind(input: EmptyStateInput): HistoryEmptyKind | null 
   if (input.query.trim() !== '') return 'search'
   if (appFilterActive(input.app ?? '')) return 'app'
   if (input.filter !== 'all') return 'filter'
+  if (input.dateFiltered) return 'date'
   return 'records'
 }
 
@@ -656,6 +659,8 @@ export function emptyStateCopy(kind: HistoryEmptyKind): EmptyStateCopy {
       return { title: i18n.t('这个分类下还没有记录'), hint: '' }
     case 'app':
       return { title: i18n.t('这个窗口下还没有记录'), hint: i18n.t('换一个窗口，或者切回「全部」。') }
+    case 'date':
+      return { title: i18n.t('这个日期范围内没有记录'), hint: i18n.t('换一个日期范围试试。') }
     default:
       return { title: i18n.t('还没有记录'), hint: i18n.t('按下快捷键说一句，记录会出现在这里。') }
   }
@@ -666,6 +671,52 @@ export const ORIGINAL_SHOW_LABEL = '显示原文'
 export const ORIGINAL_HIDE_LABEL = '收起原文'
 /** Appended when the reveal would show the same string twice. */
 export const ORIGINAL_SAME_SUFFIX = '（与结果相同）'
+
+export type HistoryPeriod = 'all' | 'today' | 'week' | 'month' | 'custom'
+export function historyDateBounds(period: HistoryPeriod, from = '', to = '', now = Date.now()): { start: number; end: number; error?: string } {
+  const invalid = (error: string): ReturnType<typeof historyDateBounds> => ({ start: 0, end: 0, error })
+  const date = (value: string): Date | null => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+    if (!match) return null
+    const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    return d.getFullYear() === Number(match[1]) && d.getMonth() + 1 === Number(match[2]) && d.getDate() === Number(match[3]) ? d : null
+  }
+  if (period === 'all') return { start: -Infinity, end: Infinity }
+  if (period === 'custom') {
+    if (!from && !to) return invalid('请选择起始或结束日期')
+    const start = from ? date(from) : null, end = to ? date(to) : null
+    if (from && !start || to && !end) return invalid('日期无效，请重新选择')
+    if (start && end && start > end) return invalid('起始日期不能晚于结束日期')
+    if (end) end.setDate(end.getDate() + 1)
+    return { start: start?.getTime() ?? -Infinity, end: end?.getTime() ?? Infinity }
+  }
+  const today = new Date(now), start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const end = new Date(start); end.setDate(end.getDate() + 1)
+  start.setDate(start.getDate() - (period === 'week' ? 6 : period === 'month' ? 29 : 0))
+  return { start: start.getTime(), end: end.getTime() }
+}
+
+/** Filter before paging; use calendar boundaries so DST days are not forced to 24h. */
+export function historyDateView(entries: readonly HistoryEntry[], bounds: { start: number; end: number }, order: 'newest' | 'oldest'): HistoryEntry[] {
+  return entries.filter(entry => entry.createdAt >= bounds.start && entry.createdAt < bounds.end)
+    .sort((a, b) => order === 'oldest' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt)
+}
+
+export function historySources(sources: readonly SearchResult[]): Array<{ source: SearchResult; number: number }> {
+  return sources.flatMap((source, index) => isSafeLink(source.url) ? [{ source, number: index + 1 }] : [])
+}
+
+export function historyNote(entry: HistoryEntry): string {
+  const literal = (text: string): string => text.replace(/[\r\n]+/g, ' ').replace(/[\\`*_{}\[\]<>#!|]/g, '\\$&')
+  const sources = historySources(entry.sources ?? [])
+  return [
+    `## ${i18n.t('模式')} · ${modeLabel(entry.mode)}`,
+    ...(entry.promptName ? [`${i18n.t('卡片')}：${literal(entry.promptName)}`] : []),
+    `### ${i18n.t('原始转写')}`, entry.transcript,
+    `### ${i18n.t('识别结果')}`, entry.final,
+    ...(sources.length ? [`### ${i18n.t('来源')}`, sources.map(({ source, number }) => `${number}. ${literal(source.title || source.url)} — ${source.url}`).join('\n')] : [])
+  ].join('\n\n')
+}
 
 /**
  * The transcript exactly as the recogniser returned it — before cards, cleanup

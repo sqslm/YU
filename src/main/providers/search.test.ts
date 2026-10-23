@@ -301,6 +301,19 @@ describe('dates and recency', () => {
 })
 
 describe('scoreSource and rankSources', () => {
+  it('keeps case-sensitive paths and query values distinct in adapters and ranking', async () => {
+    const results = [
+      { title: 'Upper path article', url: 'https://Example.com/News/AI?q=One', content: 'Upper page' },
+      { title: 'Lower path document', url: 'https://example.com/news/ai?q=One', content: 'Lower page' },
+      { title: 'Different query page', url: 'https://example.com/News/AI?q=one', content: 'Different query' },
+      { title: 'Query slash value', url: 'https://example.com/News/AI?q=One/', content: 'Query value includes a slash' },
+      { title: 'Same page anchor', url: 'https://EXAMPLE.com/News/AI?q=One#section', content: 'Duplicate' }
+    ]
+    fetchMock.mockResolvedValue(jsonResponse({ results }))
+    const hits = await searchTavily(cfg({ provider: 'tavily', maxResults: 10 }), 'case-sensitive URLs')
+    expect(hits).toHaveLength(4)
+    expect(rankSources(results.map(row => ({ title: row.title, url: row.url, snippet: row.content })))).toHaveLength(4)
+  })
   const official: SearchResult = {
     title: 'Introducing GPT-5.2',
     url: 'https://openai.com/index/gpt-5-2/',

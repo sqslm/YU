@@ -134,7 +134,13 @@ const DEFAULT_LIMIT = 5
 
 /** Dedupe key: same page even if the trailing slash or the fragment differs. */
 function sourceKey(url: string): string {
-  return url.trim().toLowerCase().replace(/#.*$/, '').replace(/\/+$/, '')
+  try {
+    const parsed = new URL(url.trim())
+    parsed.hash = ''
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/'
+    // URL normalizes the host; paths and query values can be case-sensitive.
+    return parsed.toString()
+  } catch { return url.trim().replace(/#.*$/, '').replace(/\/+$/, '') }
 }
 
 function limit(results: SearchResult[], max: number): SearchResult[] {
@@ -1956,7 +1962,7 @@ export function dedupeSyndicated(results: SearchResult[]): SearchResult[] {
 }
 
 function urlKey(url: string): string {
-  return String(url ?? '').trim().toLowerCase().replace(/#.*$/, '').replace(/\/+$/, '')
+  return sourceKey(String(url ?? ''))
 }
 
 export interface RankOptions {

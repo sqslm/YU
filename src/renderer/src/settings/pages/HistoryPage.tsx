@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
+  Alert,
   Button,
   ButtonBase,
   Chip,
@@ -16,7 +17,6 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import type { HistoryEntry, Mode, Settings } from '@shared/types'
-import { isSafeLink } from '@shared/links'
 import { IconBook, IconCheck, IconCopy, IconSearch, IconTrash } from '../icons'
 import {
   APP_FILTER_ALL,
@@ -43,6 +43,9 @@ import {
   formatAttempts,
   hasCardName,
   hintText,
+  historyDateBounds,
+  historyDateView,
+  historyNote,
   modeLabel,
   normalizeRefreshSeconds,
   providerTitle,
@@ -53,12 +56,15 @@ import {
   slicePage,
   statusLabel,
   statusTone,
+  statusOf,
+  type HistoryPeriod,
   type HistoryFilterId,
   type RowActionId
 } from './historyView'
 import i18n from '../../i18n'
 import { Pager } from '../Pagination'
 import { MarkdownView } from '../../card/MarkdownView'
+import { HistorySources } from './HistorySources'
 
 /** The tabs above the list, left to right. Captions come from historyView. */
 const FILTERS: HistoryFilterId[] = ['all', 'dictation', 'ask', 'translate']
@@ -130,6 +136,13 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
    */
   const [appFilter, setAppFilter] = useState<string>(APP_FILTER_ALL)
   const [query, setQuery] = useState(initialQuery ?? '')
+  const [period, setPeriod] = useState<HistoryPeriod>('all')
+  const [dateFrom, setDateFrom] = useState(''), [dateTo, setDateTo] = useState('')
+  const [order, setOrder] = useState<'newest' | 'oldest'>('newest')
+  const [loadError, setLoadError] = useState('')
+  const [saveNoteId, setSaveNoteId] = useState<string | null>(null)
+  const [savedNoteIds, setSavedNoteIds] = useState(new Set<string>())
+  const saveNoteInFlight = useRef(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   // Which rows have their raw transcript open. Collapsed by default: the rows
   // stay scannable and the original is one click away when a rule is in question.
@@ -192,8 +205,12 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
         const next = queuedSearch.current
         if (next === null) break
         queuedSearch.current = null
-        setEntries(await window.api.history.list(next))
-        setLoadedQuery(next)
+        try {
+          const rows = await window.api.history.list(next)
+          setEntries(rows); setLoadedQuery(next); setLoadError('')
+        } catch (error) {
+          setLoadError(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(error))
+        }
       }
     } finally {
       inFlight.current = false
@@ -255,7 +272,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   // of the previous result set means nothing for a different one.
   useEffect(() => {
     setPage(1)
-  }, [query, filter, refreshSeconds, appFilter])
+  }, [query, filter, refreshSeconds, appFilter, period, dateFrom, dateTo, order, showArchived])
 
   // A retry produces its new entry only after ASR+LLM finish, so one delayed
   // re-read is what makes the fresh take show up without a manual refresh.
@@ -281,6 +298,17 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
     })
   }, [])
 
+  const saveToNotes = async (entry: HistoryEntry): Promise<void> => {
+    if (saveNoteInFlight.current) return
+    saveNoteInFlight.current = true; setSaveNoteId(entry.id); clearNotice(entry.id)
+    try {
+      await window.api.notes.createText({ text: historyNote(entry) })
+      setSavedNoteIds(previous => new Set(previous).add(entry.id))
+    } catch (error) {
+      notify(entry.id, { tone: 'error', text: i18n.t(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(error)) })
+    } finally { saveNoteInFlight.current = false; setSaveNoteId(null) }
+  }
+
   /**
    * The window dropdown lists what the loaded list actually contains, so a
    * window that has no take left is not offered at all. Built from `entries`
@@ -294,16 +322,17 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
    * the slice, so a page that starts in the middle of a day still carries that
    * day's header instead of opening with an unlabelled block of rows.
    */
+  const dateBounds = historyDateBounds(period, dateFrom, dateTo)
   const visible = useMemo(() => {
     const byArchive = entries.filter((item) => (item.status === 'archived') === showArchived)
     const byMode =
       filter === 'all' ? byArchive : byArchive.filter((item) => item.mode === filter)
-    return filterByApp(byMode, appFilter)
-  }, [entries, filter, appFilter, showArchived])
+    return historyDateView(filterByApp(byMode, appFilter), dateBounds, order)
+  }, [entries, filter, appFilter, showArchived, dateBounds.start, dateBounds.end, order])
   const total = visible.length
   const exportCurrent = async (format: 'markdown' | 'text'): Promise<void> => {
     setExportMenu(null)
-    if (exportBusy || refreshing || loadedQuery !== query || !visible.length) return
+    if (exportBusy || refreshing || loadError || dateBounds.error || loadedQuery !== query || !visible.length) return
     const ids = visible.map(entry => entry.id)
     setExportBusy(true)
     setExportNotice('')
@@ -347,7 +376,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
    * asks the user to change the search or the tab, the second asks for a first
    * take. The decision lives in historyView so it is testable without a DOM.
    */
-  const emptyKind = emptyStateKind({ query, filter, matches: total, app: appFilter })
+  const emptyKind = emptyStateKind({ query, filter, matches: total, app: appFilter, dateFiltered: period !== 'all' })
   const empty = emptyKind ? emptyStateCopy(emptyKind) : null
 
   /**
@@ -659,8 +688,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               {showArchived ? i18n.t('看全部记录') : i18n.t('已归档')}
             </Button>
           </Box>
-          <Tooltip title={i18n.t('导出当前搜索、模式、应用和归档筛选下的全部正常记录，包含所有分页。')}>
-            <span><Button size="small" data-history-export disabled={exportBusy || refreshing || loadedQuery !== query || !total}
+          <Tooltip title={i18n.t('导出当前筛选和排序下的全部正常记录，包含所有分页。')}>
+            <span><Button size="small" data-history-export disabled={exportBusy || refreshing || !!loadError || !!dateBounds.error || loadedQuery !== query || !total}
               sx={{ fontSize: 12 }} onClick={event => setExportMenu(event.currentTarget)}>
               {exportBusy ? i18n.t('正在导出…') : i18n.t('导出')}
             </Button></span>
@@ -733,6 +762,29 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
 
       {cleanupNotice && <Typography role="status" data-history-clean-result sx={{ mt: 1, fontSize: 12, color: 'text.secondary' }}>{cleanupNotice}</Typography>}
       {exportNotice && <Typography role="status" data-history-export-result sx={{ mt: 1, fontSize: 12, color: 'text.secondary' }}>{exportNotice}</Typography>}
+      <Box data-history-date-toolbar sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mt: 1.5 }}>
+        <TextField select size="small" label={i18n.t('日期范围')} value={period} sx={{ width: 145 }}
+          inputProps={{ 'aria-label': i18n.t('日期范围') }} onChange={event => setPeriod(event.target.value as HistoryPeriod)}>
+          {[['all', '全部时间'], ['today', '今天'], ['week', '近 7 天'], ['month', '近 30 天'], ['custom', '自定义日期']].map(([value, label]) =>
+            <MenuItem key={value} value={value}>{i18n.t(label!)}</MenuItem>)}
+        </TextField>
+        {period === 'custom' && <>
+          <TextField type="date" size="small" label={i18n.t('起始日期')} value={dateFrom} onChange={event => setDateFrom(event.target.value)}
+            InputLabelProps={{ shrink: true }} sx={theme => ({ width: 165, '& input': { colorScheme: theme.palette.mode } })} />
+          <TextField type="date" size="small" label={i18n.t('结束日期')} value={dateTo} onChange={event => setDateTo(event.target.value)}
+            InputLabelProps={{ shrink: true }} sx={theme => ({ width: 165, '& input': { colorScheme: theme.palette.mode } })} />
+        </>}
+        <TextField select size="small" label={i18n.t('时间排序')} value={order} sx={{ width: 145 }}
+          inputProps={{ 'aria-label': i18n.t('时间排序') }} onChange={event => setOrder(event.target.value as 'newest' | 'oldest')}>
+          <MenuItem value="newest">{i18n.t('最新在前')}</MenuItem><MenuItem value="oldest">{i18n.t('最早在前')}</MenuItem>
+        </TextField>
+        {(period !== 'all' || order !== 'newest' || query || appFilter !== APP_FILTER_ALL || filter !== 'all' || showArchived) &&
+          <Button size="small" onClick={() => { setPeriod('all'); setDateFrom(''); setDateTo(''); setOrder('newest'); setQuery(''); setAppFilter(APP_FILTER_ALL); setFilter('all'); setShowArchived(false) }}>{i18n.t('重置筛选')}</Button>}
+      </Box>
+      {dateBounds.error && <Alert severity="warning" sx={{ mt: 1 }}>{i18n.t(dateBounds.error)}</Alert>}
+      {loadError && <Alert severity="error" data-history-load-error sx={{ mt: 1 }} action={<Button color="inherit" size="small" onClick={refreshNow}>{i18n.t('刷新')}</Button>}>
+        {i18n.t('历史记录读取失败：{{error}}', { error: loadError })}
+      </Alert>}
 
       {/* Section header for the list: one 13px heading on the left, the active
           tab's count on the right. The page title above it was removed so
@@ -1044,6 +1096,9 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                       >
                         {copiedId === entry.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
                       </IconButton>
+                      <Button size="small" data-history-save-note={entry.id} sx={{ minWidth: 0, px: 0.75, fontSize: 11 }}
+                        disabled={saveNoteId !== null || savedNoteIds.has(entry.id) || !entry.final.trim() || !!entry.error?.trim() || !['completed', 'archived'].includes(statusOf(entry))}
+                        onClick={() => void saveToNotes(entry)}>{i18n.t(saveNoteId === entry.id ? '保存中…' : savedNoteIds.has(entry.id) ? '已保存到随记' : '保存到随记')}</Button>
                       <IconButton
                         size="small"
                         aria-label={archived ? i18n.t('取消归档') : i18n.t('归档')}
@@ -1196,37 +1251,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                     </Typography>
                   )}
 
-                  {expanded[entry.id] && entry.sources && entry.sources.length > 0 && (
-                    <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {entry.sources
-                        // Stored URLs came from a search result, so they are still
-                        // external text: a `file://` entry here would be one click
-                        // away from launching a local program.
-                        .filter((source) => isSafeLink(source.url))
-                        .slice(0, 4)
-                        .map((source, index) => (
-                        <Typography
-                          key={`${index}-${source.url}`}
-                          component="a"
-                          href={source.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          sx={{
-                            fontSize: 10.5,
-                            color: 'primary.main',
-                            textDecoration: 'none',
-                            maxWidth: 220,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            '&:hover': { textDecoration: 'underline' }
-                          }}
-                        >
-                          {source.title}
-                        </Typography>
-                      ))}
-                    </Box>
-                  )}
+                  {expanded[entry.id] && entry.sources?.length ? <HistorySources id={entry.id} sources={entry.sources} /> : null}
                 </Box>
               )
             })}

@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.29.0-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.30.0-setup.exe
 ```
 
 ## 使用
@@ -54,6 +54,10 @@ pnpm package          # → release\Typeless Rebuild-0.29.0-setup.exe
 搜索页的单一服务、保存的连接以及连接编辑框都提供「测试连接」，仅测试该条配置，不走备用链、不修改保存的密钥，显示结果数和耗时或具体错误。测试只在手动点击时发送一次真实搜索请求，可能计入供应商额度；编辑密钥、地址或服务后旧结果不再显示。
 
 历史页「导出」可保存当前搜索、模式、应用和归档筛选下的全部正常记录，跨全部分页，支持 Markdown / TXT。导出包含本地时间、模式、应用、卡片、原始文字、结果和安全的来源地址，不带本机录音路径或同步信息；取消保存不写文件，记录已删除或写入失败会明确提示。历史读取范围跟随已配置的保存上限，不再固定截取前 200 条。历史页工具栏分为刷新和筛选两行，长结果默认收起，展开可读 Markdown 和来源；每条显示当前筛选下跨页连续的序号，顶部、底部均可翻页。
+
+历史页可按今天、近 7 天、近 30 天或自定义日期筛选，按最新或最早排序；自定义范围包含结束日期整天，也可只填起始或结束日期。日期按本地日历计算，筛选和排序先于分页，导出保留相同范围及顺序；「重置筛选」恢复默认条件。普通结果和归档结果可单条保存到随记，保留原文、结果、模式、卡片名称及全部安全来源，不调用模型或读取剪贴板。历史详情默认预览四个来源，可展开完整来源并按全局每页数量分页，保留原引用编号。历史读取失败会保留上次结果并提示刷新，失败不丢弃期间排队的新搜索；失败恢复前禁用导出。搜索去重只规范化 URL 主机和片段，保留路径和查询值的大小写，避免误合并不同页面。
+
+History supports local-calendar date filters (today, last 7/30 days or custom inclusive dates), oldest/newest ordering, and saving an individual successful record to Notes without another model call. Filtering and sorting apply before pagination and carry through to export. Full source lists expand and paginate with their original citation numbers. Read failures show a recoverable error and retain the last successful results; a newer queued search still runs. URL deduplication preserves case-sensitive paths and query values.
 
 Ask 回答卡片右上角「固定」可保持卡片在切换应用后显示；关闭或按 Esc 仍可退出，隐藏后取消固定。回答结束后可「保存到随记」，保留问题、Markdown 回答及安全的来源地址和原引用编号；主动停止的部分回答会标注未完成。同一份当前回答保存成功后按钮禁用，避免重复创建；复用随记存储，不读取剪贴板、不额外调用模型。代码块可单独复制，不带正文或 Markdown 围栏。新问题和卡片隐藏后清理未发送的追问草稿。回答中的转义标点、含下划线的英文标识符及代码围栏按字面内容显示。
 
