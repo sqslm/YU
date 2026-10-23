@@ -1431,5 +1431,16 @@
   "复制不会自动创建，请确认时间后保存。": "No copy is created yet. Review the time and save to create it.",
   "未来的提醒保留时间；过期事项恢复为待办，重复提醒安排下一次。": "Future reminders keep their time. Expired items become untimed to-dos; recurring reminders resume at the next occurrence.",
   "仅可恢复已完成或已取消的提醒": "Only completed or cancelled reminders can be restored",
-  "随记内容已更改，请重新提取": "The note has changed. Please extract reminders again."
+  "随记内容已更改，请重新提取": "The note has changed. Please extract reminders again.",
+  "固定显示": "Keep card open",
+  "取消固定": "Unpin card",
+  "已固定": "Pinned",
+  "固定": "Pin",
+  "保存到随记": "Save to Notes",
+  "已保存到随记": "Saved to Notes",
+  "保存中…": "Saving…",
+  "复制代码": "Copy code",
+  "代码": "Code",
+  "问题": "Question",
+  "已停止生成，以下为部分回答。": "Generation stopped. The answer below is incomplete."
 }

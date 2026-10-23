@@ -6,6 +6,7 @@ import type { CardAction, Settings } from '@shared/types'
 import { isSafeLink } from '@shared/links'
 import { MarkdownView } from './MarkdownView'
 import i18n, { applyUiLanguage } from '../i18n'
+import { answerNote } from './answerNote'
 
 /** Entrance/exit timings shared with the bar's own "appear" language. */
 const ENTER_MS = 200
@@ -86,6 +87,12 @@ export function AnswerCard(): JSX.Element | null {
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
   const [sourcePage, setSourcePage] = useState(1)
   const [sourceSize, setSourceSize] = useState(30)
+  const [pinned, setPinned] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState<AnswerCardPayload | null>(null)
+  const [saveError, setSaveError] = useState('')
+  const dataRef = useRef<AnswerCardPayload | null>(null)
+  const saveInFlight = useRef(false)
 
   /** True once this mount has played `cardIn`; reset when the window hides. */
   const enteredRef = useRef(false)
@@ -124,6 +131,7 @@ export function AnswerCard(): JSX.Element | null {
 
   useEffect(() => {
     const off = bridge().onData((payload) => {
+      dataRef.current = payload
       setData(payload)
       setCopied(null)
       // Any payload — the answer itself, or a tool status for it — ends the
@@ -147,21 +155,22 @@ export function AnswerCard(): JSX.Element | null {
     return off
   }, [])
 
-  // A hidden window reports `visibilitychange`; the next answer then animates
-  // in again instead of popping into place.
+  // Native hide is authoritative on Windows; visibilitychange is also handled.
   useEffect(() => {
-    const onVisibility = (): void => {
-      if (document.visibilityState === 'hidden') {
-        enteredRef.current = false
-        focusedRef.current = false
-        if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
-        closeTimer.current = null
-        closingRef.current = false
-        setClosing(false)
-      }
+    const resetHidden = (): void => {
+      enteredRef.current = false
+      focusedRef.current = false
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+      closeTimer.current = null
+      closingRef.current = false
+      setClosing(false)
+      setPinned(false); setDraft(''); setPending(null); setSaved(null); setSaveError('')
+      dataRef.current = null
     }
+    const onVisibility = (): void => { if (document.visibilityState === 'hidden') resetHidden() }
+    const offHidden = window.api.card.onHidden(resetHidden)
     document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
+    return () => { offHidden(); document.removeEventListener('visibilitychange', onVisibility) }
   }, [])
 
   useEffect(() => setSourcePage(1), [data?.question, sourceSize])
@@ -186,6 +195,7 @@ export function AnswerCard(): JSX.Element | null {
       focusedRef.current = true
     }
     const onBlur = (): void => {
+      if (pinned) return
       if (!focusedRef.current || document.visibilityState === 'hidden') return
       focusedRef.current = false
       requestClose()
@@ -196,7 +206,7 @@ export function AnswerCard(): JSX.Element | null {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('blur', onBlur)
     }
-  }, [requestClose])
+  }, [requestClose, pinned])
 
   // The window is sized by the main process, so the card reports the height its
   // content actually needs. `reportHeight` becomes `card:height` in the main
@@ -222,6 +232,7 @@ export function AnswerCard(): JSX.Element | null {
 
   useEffect(() => {
     setSourcesExpanded(false)
+    setDraft(''); setSaved(null); setSaveError('')
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }, [data?.question])
 
@@ -278,6 +289,20 @@ export function AnswerCard(): JSX.Element | null {
     runAction({ id: 'copy', label: i18n.t('复制'), payload: answer }, 'answer')
   }
 
+  const saveAnswer = async (): Promise<void> => {
+    if (saveInFlight.current || busy || !answer.trim()) return
+    const snapshot = data
+    saveInFlight.current = true; setSaving(true); setSaveError('')
+    try {
+      await window.api.notes.createText({ text: answerNote(snapshot) })
+      if (dataRef.current?.question === snapshot.question && dataRef.current?.answer === snapshot.answer) setSaved(snapshot)
+    } catch (error) {
+      if (dataRef.current?.question === snapshot.question && dataRef.current?.answer === snapshot.answer) {
+        setSaveError(i18n.t(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(error)))
+      }
+    } finally { saveInFlight.current = false; setSaving(false) }
+  }
+
   const submitFollowUp = (): void => {
     const text = draft.trim()
     if (text === '' || busy) return
@@ -308,6 +333,9 @@ export function AnswerCard(): JSX.Element | null {
             {!busy && !data.selection && <span style={chip} data-card-retrieval>{data.stopped ? i18n.t('已停止') : searchLabel}</span>}
           </div>
           <div style={headerActions}>
+            <button type="button" data-card-pin aria-pressed={pinned} title={i18n.t(pinned ? '取消固定' : '固定显示')}
+              aria-label={i18n.t(pinned ? '取消固定' : '固定显示')} style={{ ...iconButton, width: 'auto', padding: '0 6px', color: pinned ? '#a8bcff' : '#8b93a4' }}
+              onClick={() => setPinned(value => !value)}>{i18n.t(pinned ? '已固定' : '固定')}</button>
             <button
               type="button"
               title={i18n.t('关闭')}
@@ -346,7 +374,8 @@ export function AnswerCard(): JSX.Element | null {
             <span style={answerTitle}>{i18n.t(data.selection ? '处理结果' : '回答')}</span>
           </div>
           <div style={answerBody} data-card-body>
-            <MarkdownView text={answer} streaming={streaming} sources={sourceList} />
+            <MarkdownView text={answer} streaming={streaming} sources={sourceList} copiedCode={copied}
+              onCopyCode={busy ? undefined : (text, key) => runAction({ id: 'copy', label: i18n.t('复制代码'), payload: text }, key)} />
           </div>
 
           {sourceList.length > 0 && (
@@ -402,6 +431,10 @@ export function AnswerCard(): JSX.Element | null {
           <button type="button" style={primaryButton} onClick={copyAnswer} disabled={!answer}>
             {copied === 'answer' ? i18n.t('已复制') : i18n.t(data.selection ? '复制结果' : '复制回答')}
           </button>
+          {!data.selection && <button type="button" data-card-save-note style={primaryButton}
+            disabled={busy || saving || !answer.trim() || saved?.question === data.question && saved?.answer === answer} onClick={() => void saveAnswer()}>
+            {i18n.t(saving ? '保存中…' : saved?.question === data.question && saved?.answer === answer ? '已保存到随记' : '保存到随记')}
+          </button>}
           {actions.filter(action => action.id !== 'copy').map((action, index) => {
               const key = `action-${index}`
               return (
@@ -417,6 +450,7 @@ export function AnswerCard(): JSX.Element | null {
               )
             })}
         </div>
+        {saveError && <div role="alert" style={{ padding: '0 14px 8px', fontSize: 12, color: '#ffb4aa' }}>{saveError}</div>}
 
         {!data.selection && <div style={askRow}>
           <InputBase

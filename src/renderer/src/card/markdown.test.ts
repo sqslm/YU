@@ -26,6 +26,9 @@ const ANSWER = `用户提到的应该是**平陆运河**，不过它并非“前
 更多细节可以问。`
 
 describe('parseInline', () => {
+  it('keeps escaped punctuation and identifiers literal', () => {
+    expect(parseInline('Use \\*literal\\* and snake_case_value.')).toEqual([{ kind: 'text', text: 'Use *literal* and snake_case_value.' }])
+  })
   it('marks bold, code, links and citations', () => {
     const runs = parseInline('见 **重点** 与 `npm test` 和 [文档](https://example.com) 以及[3]。')
     expect(runs.map((run) => run.kind)).toEqual([
@@ -81,6 +84,11 @@ describe('comparison tables', () => {
 })
 
 describe('parseMarkdown', () => {
+  it('does not treat a fence followed by code text as the closing delimiter', () => {
+    expect(parseMarkdown('```text\nfirst\n```not a closing fence\nlast\n```')).toEqual([
+      { kind: 'code', lang: 'text', text: 'first\n```not a closing fence\nlast' }
+    ])
+  })
   it('reads headings, paragraphs, lists, code, quotes and rules', () => {
     const blocks = parseMarkdown(ANSWER)
     expect(blocks.map((block) => block.kind)).toEqual([

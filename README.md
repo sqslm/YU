@@ -22,7 +22,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\Typeless Rebuild-0.28.0-setup.exe
+pnpm package          # → release\Typeless Rebuild-0.29.0-setup.exe
 ```
 
 ## 使用
@@ -54,6 +54,10 @@ pnpm package          # → release\Typeless Rebuild-0.28.0-setup.exe
 搜索页的单一服务、保存的连接以及连接编辑框都提供「测试连接」，仅测试该条配置，不走备用链、不修改保存的密钥，显示结果数和耗时或具体错误。测试只在手动点击时发送一次真实搜索请求，可能计入供应商额度；编辑密钥、地址或服务后旧结果不再显示。
 
 历史页「导出」可保存当前搜索、模式、应用和归档筛选下的全部正常记录，跨全部分页，支持 Markdown / TXT。导出包含本地时间、模式、应用、卡片、原始文字、结果和安全的来源地址，不带本机录音路径或同步信息；取消保存不写文件，记录已删除或写入失败会明确提示。历史读取范围跟随已配置的保存上限，不再固定截取前 200 条。历史页工具栏分为刷新和筛选两行，长结果默认收起，展开可读 Markdown 和来源；每条显示当前筛选下跨页连续的序号，顶部、底部均可翻页。
+
+Ask 回答卡片右上角「固定」可保持卡片在切换应用后显示；关闭或按 Esc 仍可退出，隐藏后取消固定。回答结束后可「保存到随记」，保留问题、Markdown 回答及安全的来源地址和原引用编号；主动停止的部分回答会标注未完成。同一份当前回答保存成功后按钮禁用，避免重复创建；复用随记存储，不读取剪贴板、不额外调用模型。代码块可单独复制，不带正文或 Markdown 围栏。新问题和卡片隐藏后清理未发送的追问草稿。回答中的转义标点、含下划线的英文标识符及代码围栏按字面内容显示。
+
+Ask cards support **Pin** to stay open when switching apps, **Save to Notes** to preserve the question, Markdown answer and numbered sources, and **Copy code** for individual code blocks. Closing or pressing Esc still dismisses a pinned card. Stopped partial answers are labelled incomplete; saving uses the existing notes store without a clipboard round trip or another model request. Unsent follow-up drafts clear for a new question or after the card hides. Notes recordings stream only requested byte ranges, including suffix ranges, instead of buffering the whole recording for every seek.
 
 「设置 → 通用 → 列表每页条数」可选择 10 / 20 / 30 / 50 / 100（默认 30），历史页底部分页栏也可直接修改，顶部只保留翻页按钮。随记及分类管理、纠正规则与候选词、各类提示词卡片、窗口路由规则与窗口选择器、模型连接、搜索连接、热门场景分布明细、进程详情、提醒与提醒提取结果、Ask 来源列表在超出每页数量时分页；筛选先于分页，批量操作和导出仍针对完整筛选结果。随记新建或选中记录时自动定位所在页，删除导致末页缩减会返回有效页。菜单中的选项、固定设置行和概览摘要不拆页。
 

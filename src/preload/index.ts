@@ -264,6 +264,11 @@ const api: TypelessApi = {
   // Every renderer shares this one preload, so the card page gets the same
   // bridge — `window.api.card` is what AnswerCard.tsx subscribes to.
   card: {
+    onHidden: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('card:hidden', listener)
+      return () => ipcRenderer.removeListener('card:hidden', listener)
+    },
     onData: (callback: (payload: AnswerCardPayload) => void): (() => void) => {
       const listener = (_event: unknown, payload: AnswerCardPayload): void => {
         lastCard = payload

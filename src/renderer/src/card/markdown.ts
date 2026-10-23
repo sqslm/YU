@@ -68,7 +68,8 @@ function isBlank(line: string): boolean {
 
 /** Finds `marker` in `text` at or after `from`; -1 when it is not (yet) there. */
 function findClose(text: string, marker: string, from: number): number {
-  const at = text.indexOf(marker, from)
+  let at = text.indexOf(marker, from)
+  while (at >= 0 && marker[0] === '_' && /[a-z0-9]/i.test(text[at - 1] ?? '') && /[a-z0-9]/i.test(text[at + marker.length] ?? '')) at = text.indexOf(marker, at + marker.length)
   if (at <= from) return -1
   // `**` must not close on the first half of a `***` run, and a marker that is
   // immediately followed by the same character is part of a longer run; letting
@@ -99,6 +100,10 @@ export function parseInline(text: string): Inline[] {
 
   while (i < text.length) {
     const char = text[i]!
+
+    if (char === '\\' && /[\\`*_{}[\]()#+.!|>~-]/.test(text[i + 1] ?? '')) {
+      buffer += text[i + 1]; i += 2; continue
+    }
 
     if (char === '`') {
       const close = findClose(text, '`', i + 1)
@@ -141,6 +146,7 @@ export function parseInline(text: string): Inline[] {
     }
 
     if (char === '*' || char === '_') {
+      if (char === '_' && /[a-z0-9]/i.test(text[i - 1] ?? '')) { buffer += char; i++; continue }
       const marker = char.repeat(2)
       if (text.startsWith(marker, i)) {
         const close = findClose(text, marker, i + 2)
@@ -223,7 +229,8 @@ export function parseMarkdown(source: string): Block[] {
       let closed = false
       for (index += 1; index < lines.length; index += 1) {
         const next = lines[index]!
-        if (next.trim().startsWith(marker)) {
+        const closing = next.trim()
+        if (closing[0] === marker[0] && closing.length >= marker.length && /^(?:`+|~+)$/.test(closing)) {
           closed = true
           break
         }

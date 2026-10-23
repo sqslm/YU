@@ -457,6 +457,7 @@ function ensureCardWindow(): BrowserWindow {
     win.webContents.send('card:data', payload)
   })
   win.on('hide', () => {
+    win.webContents.send('card:hidden')
     // Anything queued for a card the user already dismissed is stale; the next
     // answer sends its own payload the moment the window is shown again.
     pendingCard = null

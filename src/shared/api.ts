@@ -148,7 +148,7 @@ export interface TypelessApi {
   }
   notes: {
     list(): Promise<NoteStore>
-    createText(input?: { categoryId?: string; fromClipboard?: boolean }): Promise<NoteEntry>
+    createText(input?: { categoryId?: string; fromClipboard?: boolean; text?: string }): Promise<NoteEntry>
     importAudio(categoryId?: string): Promise<NoteEntry | null>
     retranscribe(id: string): Promise<NoteEntry | null>
     cancelAudioJob(): Promise<void>
@@ -316,6 +316,8 @@ export interface TypelessApi {
   card: {
     /** `card:data` — one answer at a time, newest wins. */
     onData(callback: (payload: import('./types').AnswerCardPayload) => void): () => void
+    /** Real BrowserWindow hide; visibilitychange alone is unreliable on Windows. */
+    onHidden(callback: () => void): () => void
     /** `card:hide` — asks the main process to hide the card window. */
     hide(): void
     /** `card:action` — copy / replace-selection / follow-up question. */

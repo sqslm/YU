@@ -3,6 +3,7 @@ import { parseMarkdown } from './markdown'
 import type { Block, Inline } from './markdown'
 import type { SearchResult } from '@shared/types'
 import { isSafeLink } from '@shared/links'
+import i18n from '../i18n'
 
 /**
  * Turns the card's answer text into readable prose.
@@ -180,11 +181,15 @@ function renderInline(inlines: Inline[], keyBase: string, sources: SearchResult[
 export function MarkdownView({
   text,
   streaming = false,
-  sources = []
+  sources = [],
+  onCopyCode,
+  copiedCode
 }: {
   text: string
   streaming?: boolean
   sources?: SearchResult[]
+  onCopyCode?: (text: string, key: string) => void
+  copiedCode?: string | null
 }): JSX.Element {
   const blocks: Block[] = parseMarkdown(text)
   const caret = streaming ? <span style={caretStyle} aria-hidden="true" /> : null
@@ -228,10 +233,17 @@ export function MarkdownView({
             )
           case 'code':
             return (
-              <pre key={key} style={codeStyle} data-lang={block.lang || undefined}>
+              <div key={key}>
+              {onCopyCode && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', fontSize: 11, color: '#9aa2b1' }}>
+                <span>{block.lang || i18n.t('代码')}</span>
+                <button type="button" data-copy-code style={{ border: 'none', background: 'transparent', color: '#8fb4ff', cursor: 'pointer', fontSize: 11, padding: '3px 6px' }}
+                  onClick={() => onCopyCode(block.text, key)}>{i18n.t(copiedCode === key ? '已复制' : '复制代码')}</button>
+              </div>}
+              <pre style={codeStyle} data-lang={block.lang || undefined}>
                 <code>{block.text}</code>
                 {withCaret}
               </pre>
+              </div>
             )
           case 'rule':
             return <hr key={key} style={ruleStyle} />

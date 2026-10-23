@@ -1,5 +1,6 @@
 import { clipboard, dialog, ipcMain, protocol } from 'electron'
-import { readFile } from 'node:fs/promises'
+import { open } from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
 import type { NotesStore } from './notes'
 import { mt } from '@shared/mainI18n'
@@ -35,38 +36,30 @@ function asPcm(value: unknown): Int16Array {
 /**
  * Serves one audio file with byte-range support. `<audio>` asks for ranges when
  * the user drags the progress bar; answering 200 for every request makes the
- * scrubber look alive but seek nowhere. Notes audio is small (tens of KB to a
- * few MB), so reading it whole costs less than a streaming helper.
+ * scrubber look alive but seek nowhere. Stream only the requested bytes, so
+ * seeking a long imported recording does not buffer the whole file each time.
  */
 async function serveAudio(file: string, range: string | null): Promise<Response> {
-  const data = await readFile(file)
+  const handle = await open(file, 'r')
   const type = file.toLowerCase().endsWith('.ogg') ? 'audio/ogg' : 'audio/wav'
-  const header = range ? /bytes=(\d*)-(\d*)/i.exec(range) : null
-  if (header) {
-    const total = data.length
-    const start = header[1] ? Number(header[1]) : 0
-    const rawEnd = header[2] ? Number(header[2]) : total - 1
-    const end = Math.min(rawEnd, total - 1)
-    if (!Number.isFinite(start) || start > end || start >= total) {
-      return new Response(null, {
-        status: 416,
-        headers: { 'Content-Range': `bytes */${total}` }
-      })
+  try {
+    const info = await handle.stat()
+    if (!info.isFile()) throw new Error('Not a recording file')
+    const total = info.size
+    const header = range?.trim().match(/^bytes=(\d*)-(\d*)$/i)
+    const suffix = header && !header[1] ? Number(header[2]) : null
+    const start = header ? header[1] ? Number(header[1]) : Math.max(0, total - suffix!) : 0
+    const end = header?.[1] && header[2] ? Math.min(Number(header[2]), total - 1) : total - 1
+    if (header && (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= total || suffix !== null && suffix <= 0)) {
+      await handle.close()
+      return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } })
     }
-    const slice = new Uint8Array(data.subarray(start, end + 1))
-    return new Response(slice, {
-      status: 206,
-      headers: {
-        'Content-Type': type,
-        'Content-Length': String(slice.byteLength),
-        'Content-Range': `bytes ${start}-${end}/${total}`,
-        'Accept-Ranges': 'bytes'
-      }
-    })
-  }
-  return new Response(new Uint8Array(data), {
-    headers: { 'Content-Type': type, 'Content-Length': String(data.length), 'Accept-Ranges': 'bytes' }
-  })
+    const headers = { 'Content-Type': type, 'Content-Length': String(Math.max(0, end - start + 1)), 'Accept-Ranges': 'bytes',
+      ...(header ? { 'Content-Range': `bytes ${start}-${end}/${total}` } : {}) }
+    if (!total) { await handle.close(); return new Response(null, { headers }) }
+    const body = Readable.toWeb(handle.createReadStream({ start, end, autoClose: true })) as ReadableStream<Uint8Array>
+    return new Response(body, { status: header ? 206 : 200, headers })
+  } catch (error) { await handle.close(); throw error }
 }
 
 export function registerNotesIpc(options: NotesIpcOptions): void {
@@ -121,9 +114,9 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
   ipcMain.handle('notes:list', () => store.list())
   ipcMain.handle('notes:exportText', (_event, ids: string[], format: NoteExportFormat) => exportNoteText(store, ids, format))
   ipcMain.handle('notes:exportAudio', (_event, id: string) => exportNoteAudio(store, id))
-  ipcMain.handle('notes:createText', async (_event, input?: { categoryId?: string; fromClipboard?: boolean }) => {
+  ipcMain.handle('notes:createText', async (_event, input?: { categoryId?: string; fromClipboard?: boolean; text?: string }) => {
     const fromClipboard = input?.fromClipboard === true
-    const text = fromClipboard ? clipboard.readText() : ''
+    const text = fromClipboard ? clipboard.readText() : input?.text ?? ''
     if (fromClipboard && !text.trim()) throw new Error(mt('剪贴板中没有可用的文字'))
     const note = await store.createText({ text, categoryId: input?.categoryId })
     broadcast()
