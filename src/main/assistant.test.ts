@@ -4,6 +4,7 @@ import { AssistantSession, ASSISTANT_TOOLS } from './assistant'
 import { askAgent } from './agent'
 import { runTool, toolSchemas } from './tools/registry'
 import type { PersonalTools } from './tools/personal'
+import { WindowsTools } from './tools/windows'
 
 const settings = mergeSettings({ profiles: [{ id: 'text', kind: 'llm', name: 'Text', enabled: true,
   preset: '', baseUrl: 'https://example.com/v1', apiKey: 'private', model: 'model' }], chains: { llm: ['text'], asr: [], multimodal: [] } })
@@ -19,6 +20,26 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('answers consecutive current-window questions from each take, without a model or old ChatGPT context', async () => {
+    const windows = new WindowsTools({ folders: { downloads: '.', desktop: '.', documents: '.' }, native: vi.fn(),
+      confirm: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), windows })
+    await current.send('这是什么窗口？', undefined, undefined, now, { appName: 'ChatGPT', windowTitle: 'ChatGPT conversation', processId: 123 })
+    expect(current.snapshot().turns.at(-1)?.answer).toContain('ChatGPT')
+    await current.send('这是什么窗口？', undefined, undefined, now, { appName: '飞书', windowTitle: '项目群', processId: 456 })
+    expect(current.snapshot().turns.at(-1)?.answer).toContain('飞书')
+    expect(current.snapshot().turns.at(-1)?.answer).not.toContain('ChatGPT')
+    expect(ask).not.toHaveBeenCalled()
+  })
+
+  it('uses conversation only for references and follow-ups, not a fresh self-contained task', async () => {
+    session.rememberAnswer('Old question', 'Private old answer', { savedNote: { id: 'old-note' } })
+    await session.send('What is the capital of France?')
+    expect(ask.mock.calls.at(-1)?.[5]?.conversation).toEqual({ messages: [], toolNotes: '' })
+    session.rememberAnswer('Recent question', 'Actual recent answer')
+    await session.send('Explain that answer in more detail')
+    expect(JSON.stringify(ask.mock.calls.at(-1)?.[5]?.conversation)).toContain('Actual recent answer')
+  })
   it('never displays a model-only cancellation as an executed mutation', async () => {
     const action = vi.fn(), reminders = () => [{ id: 'real-task', title: 'Clean', level: 'normal', status: 'pending', dueAt: null }]
     const personal = { reminders, action } as unknown as PersonalTools

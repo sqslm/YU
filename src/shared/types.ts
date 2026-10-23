@@ -816,6 +816,7 @@ export type BarAlertLevel = 'info' | 'warn' | 'error'
 
 /** Buttons a bar alert may carry; each one has a real handler in main (REQ-01). */
 export type BarActionId =
+  | 'open_assistant'
   | 'retry'
   | 'cancel'
   | 'copy'
@@ -869,7 +870,9 @@ export type BarState =
       taskLabel?: string
     }
   | { phase: 'working'; mode: Mode; hint?: string; showMode?: boolean; promptName?: string; taskLabel?: string }
-  | { phase: 'done'; mode: Mode; text: string; showMode?: boolean; taskLabel?: string }
+  | { phase: 'done'; mode: Mode; text: string; showMode?: boolean; taskLabel?: string;
+      /** Task receipt shown above the strip, separate from live ASR captions. */
+      feedback?: { failed?: boolean; details?: boolean } }
   /** A non-fatal notice (busy, language detected, mic advice) — REQ-01. */
   | { phase: 'alert'; alert: BarAlert }
   | { phase: 'error'; message: string; alert?: BarAlert }

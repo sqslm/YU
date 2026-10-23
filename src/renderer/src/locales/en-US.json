@@ -6,6 +6,9 @@
 
   "assistant": { "record": "Record", "send": "Send" },
   "AI 助手": "AI Assistant",
+  "任务失败": "Task failed",
+  "当前窗口：{{name}}": "Current window: {{name}}",
+  "查看详情": "View details",
   "新对话": "New conversation",
   "有什么可以帮你？": "How can I help?",
   "输入问题或点击录音，继续追问同一个话题。": "Type a question or record your voice, then follow up on the same topic.",

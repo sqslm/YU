@@ -73,8 +73,9 @@ export function alertOf(state: BarState): BarAlert | null {
  * button, so the bar only receives clicks during that short confirmation.
  */
 export function hasAlertActions(state: BarState): boolean {
+  if (state.phase === 'done' && state.feedback) return true
   const alert = alertOf(state)
-  return alert?.kind === 'reminder' && Boolean(alert.actions?.some(action => action.id === 'undo-reminder'))
+  return alert?.kind === 'reminder'
 }
 
 export interface AlertRowProps {

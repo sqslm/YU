@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { directVoiceIntent, parseVoiceIntent } from './voice-intent'
+import { directVoiceIntent, parseVoiceIntent, isCurrentWindowQuestion, needsAssistantContext } from './voice-intent'
 
 describe('unified voice decisions', () => {
+  it.each(['这是什么窗口？', '我在什么窗口？', '告诉我当前是什么应用', '现在用的什么软件？', 'What app am I using?', 'Which window is active?', 'What is this window?'])('uses the new task window without conversational context: %s', text => {
+    expect(isCurrentWindowQuestion(text)).toBe(true)
+    expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })
+    expect(needsAssistantContext(text)).toBe(false)
+  })
+  it.each(['What app should I use for screenshots?', '为什么这个应用关闭了？', '刚才是什么窗口？', '给 Agent 写提示词：识别当前是什么窗口。'])('does not mistake advice, old references or dictation for current-window identification: %s', text => {
+    expect(isCurrentWindowQuestion(text)).toBe(false)
+  })
+  it.each(['打开第二个', '把刚才的答案存到随记', '那我要怎么解决？', 'Explain that answer', 'Open the second one'])('retains real follow-up context: %s', text => expect(needsAssistantContext(text)).toBe(true))
   it.each(['明天提醒我上午十点去银行办一张银行卡。', '20分钟后提醒我打扫卫生，强提醒。', '二十分钟后提醒我喝水，不对，半小时后。', 'Remind me to call Sam in twenty minutes.'])('keeps the complete original reminder: %s', text => {
     expect(directVoiceIntent(text)).toEqual({ kind: 'reminder' })
   })

@@ -5,6 +5,7 @@ import { mt } from '@shared/mainI18n'
 import type { AssistantItem } from '@shared/assistant'
 import type { ToolDefinition, ToolOutcome } from './registry'
 import type { PromptContext } from '@shared/prompts'
+import { isCurrentWindowQuestion } from '../voice-intent'
 
 export const WINDOWS_TOOLS = ['open_application', 'open_folder', 'open_file', 'open_url', 'search_files', 'get_active_window', 'get_disk_space', 'get_current_folder', 'get_current_page'] as const
 const documents = new Set(['.pdf', '.txt', '.md', '.csv', '.json', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.rtf', '.mp3', '.wav', '.mp4'])
@@ -40,6 +41,7 @@ export class WindowsTools {
   }
   /** Deliberately narrow deterministic commands: no model/network needed. */
   command(input: string): { name: string; args: Record<string, unknown> } | null {
+    if (isCurrentWindowQuestion(input)) return { name: 'get_active_window', args: {} }
     // A compound request belongs to the existing tool loop, not an app-name match.
     if (/[,，;；\n]|然后|并且|同时|\b(?:and then|then|also)\b|\band (?:open|find|save|create|search|calculate)\b/iu.test(input)) return null
     const url = /^(?:请|帮我)?(?:打开|open )\s*(https?:\/\/\S+)$/i.exec(input)
@@ -125,7 +127,7 @@ export class WindowsTools {
     if (name === 'get_active_window') {
       if (!context?.processId) return failed(mt('没有可用的原窗口信息，请从目标应用重新呼出助手'))
       if (/1password|keepass|bitwarden|lastpass|password/i.test(`${context.appName} ${context.appPath}`)) return failed(mt('敏感应用不允许读取上下文'))
-      return ok(mt('已获取本次任务的原窗口信息'), { appName: context.appName, title: context.windowTitle,
+      return ok(mt('当前窗口：{{name}}', { name: [context.appName, context.windowTitle].filter(Boolean).join(' · ') || mt('未知应用') }), { appName: context.appName, title: context.windowTitle,
         processId: context.processId, appPath: context.appPath, windowRect: context.windowRect })
     }
     if (name === 'get_disk_space') {

@@ -113,7 +113,7 @@ export function Bar(): JSX.Element {
       // updates) must not re-beep.
       if (next.phase !== previous) {
         if (next.phase === 'recording') playCue('start', soundsRef.current)
-        else if (next.phase === 'done') playCue('done', soundsRef.current)
+        else if (next.phase === 'done') playCue(next.feedback?.failed ? 'error' : 'done', soundsRef.current)
         else if (next.phase === 'error') playCue('error', soundsRef.current)
       }
       if (next.phase === 'recording') {
@@ -163,7 +163,10 @@ export function Bar(): JSX.Element {
   const phase = state.phase
   const promptName = phase === 'recording' || phase === 'working' ? state.promptName : undefined
   const showCaption = phase === 'recording' && caption.active && Boolean(caption.text)
-  useLayoutEffect(() => { window.api.bar.captionVisible(showCaption) }, [showCaption])
+  const feedback = phase === 'done' ? state.feedback : undefined
+  const feedbackText = phase === 'done' && feedback ? state.text : alert?.kind === 'reminder' ? alert.text : ''
+  const showBubble = showCaption || Boolean(feedbackText)
+  useLayoutEffect(() => { window.api.bar.captionVisible(showBubble) }, [showBubble])
   useEffect(() => () => window.api.bar.captionVisible(false), [])
   // A main process that knows the flag can ship it with the state itself; the
   // settings channel is the fallback so the tag also works without that.
@@ -206,12 +209,14 @@ export function Bar(): JSX.Element {
 
       <div data-bar-strip style={{ position: 'absolute', left: 0, top: layout.barTop, width: 340, height: 60,
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 8 }}>
-      <div style={{ position: 'relative', maxWidth: 300 }}>
-      {showCaption && (layout.barTop > 0 || layout.captionSide === 'below') && <div data-caption-bubble data-caption-side={layout.captionSide}
+      <div style={{ position: 'relative', maxWidth: 300, ...(feedbackText ? { minWidth: 264 } : {}) }}>
+      {showBubble && (layout.barTop > 0 || layout.captionSide === 'below') && <div data-caption-bubble data-task-feedback={feedbackText ? true : undefined} data-caption-side={layout.captionSide}
         style={{ ...captionBubble, ...(layout.captionSide === 'above' ? { bottom: 48 } : { top: 48 }),
           '--caption-launch-y': layout.captionSide === 'above' ? '42px' : '-42px',
           transformOrigin: `center ${layout.captionSide === 'above' ? 'bottom' : 'top'}` } as React.CSSProperties & { '--caption-launch-y': string }}>
-        <CaptionTicker text={caption.text} />
+        {feedbackText ? <span title={feedbackText} role="status" style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical',
+          WebkitLineClamp: 2, overflow: 'hidden', overflowWrap: 'anywhere', whiteSpace: 'pre-line', fontSize: 12, lineHeight: '15px',
+          color: feedback?.failed ? '#ffc6c6' : undefined }}>{feedbackText}</span> : <CaptionTicker text={caption.text} />}
         <span aria-hidden="true" style={{ position: 'absolute', left: 'calc(50% - 4.5px)',
           ...(layout.captionSide === 'above' ? { bottom: -5, borderRight: '1px solid rgba(255,255,255,.12)', borderBottom: '1px solid rgba(255,255,255,.12)' }
             : { top: -5, borderLeft: '1px solid rgba(255,255,255,.12)', borderTop: '1px solid rgba(255,255,255,.12)' }),
@@ -276,7 +281,10 @@ export function Bar(): JSX.Element {
             </>
           )}
 
-          {phase === 'done' && <span style={result}>{truncate(state.text)}</span>}
+          {phase === 'done' && <span style={{ ...result, ...(feedback?.failed ? { color: '#ffc6c6' } : {}) }}>
+            {feedback ? i18n.t(feedback.failed ? '任务失败' : '已完成') : truncate(state.text)}</span>}
+          {feedback?.details && <button data-bar-action="open_assistant" style={feedbackButton}
+            onClick={() => window.api.bar.action('open_assistant')}>{i18n.t('查看详情')}</button>}
 
           {/* A failure that carries an alert gets the same row as the notice
               phase — dot, clamp, buttons — so retry/open-settings are always in
@@ -289,7 +297,9 @@ export function Bar(): JSX.Element {
             ))}
 
           {/* Non-fatal notices: busy, network advice, cancelled, session cap. */}
-          {phase === 'alert' && alert && <AlertRow alert={alert} />}
+          {phase === 'alert' && alert && <AlertRow alert={feedbackText ? { ...alert, text: i18n.t('快速提醒') } : alert} title={alert.text} />}
+          {feedbackText && <button data-bar-action="dismiss" aria-label={i18n.t('关闭')} style={feedbackButton}
+            onClick={() => window.api.bar.action('dismiss')}>×</button>}
 
           {promptName && <span data-bar-prompt title={promptName} aria-label={promptName} style={promptTag}>{promptName}</span>}
 
@@ -321,6 +331,11 @@ const captionBubble: React.CSSProperties = {
   color: '#eef1f7', background: '#202228', border: '1px solid rgba(255,255,255,.12)',
   boxShadow: '0 3px 10px rgba(0,0,0,.12)', animation: 'caption-launch .24s cubic-bezier(.2,.8,.25,1) both'
 }
+
+const feedbackButton: React.CSSProperties = {
+  flexShrink: 0, border: 'none', borderRadius: 6, background: 'rgba(127,157,255,.16)', color: '#b8c9ff',
+  padding: '4px 7px', fontSize: 11, cursor: 'pointer', WebkitAppRegion: 'no-drag'
+} as React.CSSProperties
 
 const idlePill: React.CSSProperties = {
   width: 40,

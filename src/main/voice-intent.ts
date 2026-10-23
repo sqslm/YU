@@ -20,11 +20,25 @@ function isReadOnlySelectionRequest(text: string): boolean {
     !/润色|改写|修改|替换|翻译|\b(?:polish|rewrite|edit|replace|translate)\b/iu.test(text)
 }
 
+/** Current-environment questions never refer to an older conversation window. */
+export function isCurrentWindowQuestion(text: string): boolean {
+  if (isDictatedContent(text) || /刚才|之前|上次|先前|\b(?:previous|earlier|last|before)\b/iu.test(text)) return false
+  return /^(?:(?:请|帮我|请帮我)?(?:告诉我|看一下|看看|识别一下)?[，,\s]*)?(?:(?:这|这个|当前|现在|我).{0,12}(?:什么|哪个).{0,6}(?:窗口|应用|软件|程序)|(?:这|这个|当前|现在).{0,6}(?:窗口|应用|软件|程序).{0,4}(?:什么|哪个))[？?。\s]*$/u.test(text.trim()) ||
+    /^(?:please\s+)?(?:tell me\s+)?(?:(?:what|which)\s+(?:app(?:lication)?|program|window)\s+(?:am I(?: currently)?\s+(?:using|in)|is (?:this|active|current|in focus))|what is (?:this|the (?:current|active))\s+(?:app(?:lication)?|program|window))[?.\s]*$/iu.test(text.trim())
+}
+
+/** Keep only explicitly referential requests attached to the temporary session. */
+export function needsAssistantContext(text: string): boolean {
+  if (isCurrentWindowQuestion(text) || isDictatedContent(text)) return false
+  return /刚才|之前|上一(?:个|条|次|段|轮)|那(?:个|条|些|段|份)|第[一二三四五六七八九十\d]+(?:个|项)|(?:把|将|修改|改成|改为|取消|删除).{0,6}(?:这条|这个)|^(?:继续|再试|重试|再改|改成|改为)|^(?:那|那么|所以).{0,8}(?:怎么|如何)|(?:用|换成)(?:英文|中文|英语|汉语).{0,5}(?:回答|解释|说)|\b(?:that|it|those|these|them|previous|earlier|second|third|last (?:answer|result|task)|continue|retry|try again)\b/iu.test(text)
+}
+
 /** Unambiguous whole-utterance commands avoid a second model round trip. */
 export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceIntent | null {
   const value = text.trim()
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
+  if (isCurrentWindowQuestion(value)) return { kind: 'assistant' }
   if (isReadOnlySelectionRequest(value)) return { kind: 'ask' }
   if (hasRecentAnswer && /^(?:那|那么|所以).{0,8}(?:怎么|如何)|^(?:so\s+)?(?:how\b.{0,30}\b(?:it|that)\b|what should I do(?: next)?\b)/iu.test(value)) return { kind: 'assistant' }
   const existingTask = /^(?:(?:请|帮我|请帮我)\s*)?(?:把|将|算了|刚才|之前|那个|这条|这个|修改|更改|调整|取消|删除|恢复|延后|推迟|提前|再改|改成|改为)/u.test(value) &&

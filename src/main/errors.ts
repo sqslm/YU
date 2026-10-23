@@ -145,6 +145,7 @@ export function actionsFor(classified: ClassifiedError): BarActionId[] {
 /** Builds the `BarAlert` pushed to the renderer, with Chinese button labels. */
 export function buildBarAlert(classified: ClassifiedError): BarAlert {
   const labels: Record<BarActionId, string> = {
+    open_assistant: mt('查看详情'),
     retry: mt('重试'),
     cancel: mt('取消'),
     copy: mt('复制'),

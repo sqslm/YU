@@ -7,6 +7,8 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '当前窗口：{{name}}': 'Current window: {{name}}',
+  '查看详情': 'View details',
   '将这段文字保存到随记？': 'Save this text to Notes?',
   '恢复': 'Restore',
   '本次请求未授权读取选区': 'This request did not authorize reading selected text',

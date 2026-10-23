@@ -129,7 +129,7 @@ export interface PipelineOptions {
   captureSelection?: () => Promise<SelectionTarget>
   voiceContext?: (text: string) => { recent: { question: string; answer: string } | null; activeTasks?: { id: string; title: string }[] }
   onCompletedAnswer?: (question: string, answer: string) => void
-  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext) => Promise<void>
+  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext) => Promise<{ text: string; failed?: boolean } | void>
   onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal) => Promise<void>
   onActivity?: (recording: boolean, busy: boolean) => void
   onReminder?: (text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt?: number) => Promise<{ message: string; undo?: boolean }>
@@ -1256,7 +1256,7 @@ export class Pipeline {
         progress(mt('保存随记中…'))
         if (!this.options.onVoiceNote) throw new Error(mt('随记服务尚未就绪'))
         await this.options.onVoiceNote(pcm, transcript, controller.signal)
-        if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), taskLabel: mt('随记'), showMode: settings.showModeInBar }, DONE_HIDE_MS)
+        if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), feedback: {}, taskLabel: mt('随记'), showMode: settings.showModeInBar }, 10_000, { force: true })
         return null
       }
 
@@ -1267,10 +1267,14 @@ export class Pipeline {
         if (token !== this.runToken) return null
         if (!transcript.trim()) throw new Error(mt('模型返回了空文本'))
         if (!this.options.onAssistant) throw new Error(mt('助手尚未就绪'))
-        await this.options.onAssistant(transcript, controller.signal, submittedAt, {
+        const result = await this.options.onAssistant(transcript, controller.signal, submittedAt, {
           appName: target.appName || target.className, windowHandle: target.handle, windowTitle: target.title,
           processId: target.pid || undefined, appPath: target.appPath || undefined, windowRect: target.rect ?? undefined })
-        if (token === this.runToken) this.setBarState({ phase: 'idle' }, DONE_HIDE_MS)
+        if (token === this.runToken) {
+          if (result?.text) this.setBarState({ phase: 'done', mode, text: result.text,
+            feedback: { failed: result.failed, details: true }, taskLabel: mt('AI 助手'), showMode: settings.showModeInBar }, 10_000, { force: true })
+          else this.setBarState({ phase: 'idle' }, DONE_HIDE_MS)
+        }
         return null
       }
 

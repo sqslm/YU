@@ -231,6 +231,7 @@ function snapshot(overrides: Partial<UiaSnapshot> = {}): UiaSnapshot {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  for (const mock of Object.values(mocks)) mock.mockReset()
   mocks.foregroundWindow.mockReturnValue({ title: 'Editor', className: 'code', appName: '', pid: 0 })
   mocks.transcribe.mockResolvedValue({ text: '你好世界', model: 'whisper-1' })
   mocks.complete.mockResolvedValue('你好世界')
@@ -503,6 +504,17 @@ describe('busy guard', () => {
 })
 
 describe('surrounding-text injection', () => {
+  it('reports the real assistant result on the bar without inserting it or opening an Ask card', async () => {
+    const onAssistant = vi.fn().mockResolvedValue({ text: '已打开官方网站', failed: false })
+    const onAnswer = vi.fn()
+    const h = harness({}, { onAssistant, onAnswer })
+    h.pipeline.start('ask', { purpose: 'assistant' }); h.pipeline.pushAudio(tone(800))
+    const stopping = h.pipeline.stop(); h.pipeline.audioStopped(); await stopping
+    expect(h.sent.at(-1)).toMatchObject({ phase: 'done', text: '已打开官方网站', feedback: { failed: false }, taskLabel: 'AI 助手' })
+    expect(onAnswer).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(h.entries).toEqual([])
+  })
+
   it('delivers assistant voice through the existing ASR without UIA, polish, insertion, cards or voice history', async () => {
     const readContext = vi.fn(), onAssistant = vi.fn(async () => {}), onAnswer = vi.fn()
     const { pipeline, entries, sent } = harness({}, { readContext, onAssistant, onAnswer })

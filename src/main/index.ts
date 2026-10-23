@@ -116,8 +116,13 @@ let hubView: import('./tools/personal').HubPage | null = null
 let assistantTarget: ForegroundInfo | undefined
 let screenshotSequence = 0
 let screenshotReview: { id: number; finish: (accepted: boolean) => void } | null = null
+function taskDialog(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
+  const parent = [assistantWindow, settingsWindow].find(win => win && !win.isDestroyed() && win.isVisible())
+  return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options)
+}
 async function previewScreenshot(image: WindowScreenshot, detail: string, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted()
+  showAssistant()
   const win = assistantWindow
   if (!win || win.isDestroyed()) throw new Error(mt('助手尚未就绪'))
   if (win.webContents.isLoading()) await new Promise<void>(resolve => win.webContents.once('did-finish-load', () => resolve()))
@@ -146,9 +151,7 @@ const windowsTools = new WindowsTools({
   native: windowsNative, openPath: path => shell.openPath(path), openUrl: url => shell.openExternal(url),
   confirm: async (description, signal) => {
     signal?.throwIfAborted()
-    if (!assistantWindow || assistantWindow.isDestroyed()) return false
-    assistantWindow.show(); assistantWindow.focus()
-    const { response } = await dialog.showMessageBox(assistantWindow, { type: 'question', signal, title: mt('授权本次系统操作'),
+    const { response } = await taskDialog({ type: 'question', signal, title: mt('授权本次系统操作'),
       message: description, detail: mt('仅授权本次操作。可以取消；不会执行任意命令、删除文件或读取正文。'),
       buttons: [mt('取消'), mt('允许本次')], defaultId: 0, cancelId: 0, noLink: true })
     return !signal?.aborted && response === 1
@@ -174,16 +177,15 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   },
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
-    if (!assistantWindow || assistantWindow.isDestroyed()) throw new Error(mt('助手尚未就绪'))
-    const win = assistantWindow
-    const { response } = await dialog.showMessageBox(win, { type: 'question', signal, title: mt('确认本次操作'),
+    const win = assistantWindow?.isVisible() ? assistantWindow : null
+    const { response } = await taskDialog({ type: 'question', signal, title: mt('确认本次操作'),
       message: mt('读取原窗口的选中文字并发送给配置的模型？'), detail: context.appName || '', buttons: [mt('取消'), mt('确认')], defaultId: 0, cancelId: 0, noLink: true })
     signal.throwIfAborted()
     if (response !== 1) throw new Error(mt('已取消本次系统操作'))
     try {
       const target = await captureSelectionTarget(store.get(), context, signal)
       signal.throwIfAborted(); return target.text
-    } finally { if (!win.isDestroyed()) win.focus() }
+    } finally { if (win && !win.isDestroyed() && win.isVisible()) win.focus() }
   },
   personal: {
     remind: (text, signal, submittedAt) => reminders!.voice(text, signal, undefined, submittedAt),
@@ -200,8 +202,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     open: page => navigateHub(page),
     confirm: async (description, signal) => {
       signal?.throwIfAborted()
-      if (!assistantWindow || assistantWindow.isDestroyed()) return false
-      const { response } = await dialog.showMessageBox(assistantWindow, { type: 'question', signal, title: mt('确认本次操作'),
+      const { response } = await taskDialog({ type: 'question', signal, title: mt('确认本次操作'),
         message: description, buttons: [mt('取消'), mt('确认')], defaultId: 0, cancelId: 0, noLink: true })
       return !signal?.aborted && response === 1
     }
@@ -437,6 +438,10 @@ async function appendFeedback(input: {
  */
 function handleBarAction(id: BarActionId): void {
   switch (id) {
+    case 'open_assistant':
+      showAssistant()
+      pipeline?.dismissAlert()
+      break
     case 'undo-reminder':
       reminders?.undo()
       pipeline?.dismissAlert()
@@ -489,12 +494,11 @@ function ensureSettingsWindow(): BrowserWindow {
     event.preventDefault()
     win.hide()
   })
-  win.on('minimize', () => { if (store.get().closeBehavior === 'background') win.hide() })
   win.on('hide', () => {
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     hubRetireTimer = setTimeout(() => {
       hubRetireTimer = null
-      if (!win.isDestroyed() && !win.isVisible() && !notesRecording) win.destroy()
+      if (!win.isDestroyed() && !win.isVisible() && !win.isMinimized() && !notesRecording) win.destroy()
     }, 60_000)
     hubRetireTimer.unref?.()
   })
@@ -546,7 +550,7 @@ function openAssistant(): boolean {
   return true
 }
 
-/** Also used after a unified voice take has finished capturing its audio. */
+/** Explicit assistant entry, result details and screenshot approval. */
 function showAssistant(): void {
   if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
   assistantRetireTimer = null
@@ -1476,7 +1480,14 @@ async function bootstrap(): Promise<void> {
       return { recent: last?.state === 'done' ? { question: last.question.slice(0, 500), answer: last.answer.slice(0, 2000) } : null,
         ...(completion ? { activeTasks: reminders!.store.list().filter(row => row.status === 'pending' || row.status === 'due').slice(0, 20).map(row => ({ id: row.id, title: row.title })) } : {}) }
     },
-    onAssistant: async (text, signal, submittedAt, context) => { signal.throwIfAborted(); showAssistant(); await assistant.send(text, signal, undefined, submittedAt, context) },
+    onAssistant: async (text, signal, submittedAt, context) => {
+      signal.throwIfAborted()
+      await assistant.send(text, signal, undefined, submittedAt, context)
+      signal.throwIfAborted()
+      const turn = assistant.snapshot().turns.at(-1)
+      if (!turn || turn.state === 'cancelled') return
+      return { text: turn.answer, failed: turn.state === 'error' || Boolean(turn.localResults?.some(result => !result.ok)) }
+    },
     onActivity: () => refreshHotkeyActivity(),
     onVoiceNote: async (pcm, transcript, signal) => {
       const note = await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript)

@@ -7,7 +7,7 @@ import { chainFor } from './providers/chain'
 import { WINDOWS_TOOLS, type WindowsTools } from './tools/windows'
 import { runTool } from './tools/registry'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
-import { directVoiceIntent } from './voice-intent'
+import { directVoiceIntent, needsAssistantContext } from './voice-intent'
 
 export const ASSISTANT_TOOLS = ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'open_search']
 const SESSION_TTL = 15 * 60_000
@@ -86,6 +86,7 @@ export class AssistantSession {
     if (typeof input !== 'string' || !input.trim() || input.length > 10_000) throw new Error(mt('请输入 1–10000 字的请求'))
     signal?.throwIfAborted()
     this.snapshot()
+    if (!operation && !needsAssistantContext(input)) this.conversation = { messages: [], toolNotes: '' }
     const settings = this.deps.settings()
     const windows = this.deps.windows
     windows?.beginTask()
