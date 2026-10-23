@@ -4,6 +4,10 @@ Windows 上的语音输入客户端，界面与交互对齐 Typeless（hub 三�
 
 后端不绑定厂商：通用 ASR / LLM 支持 OpenAI 兼容协议，也提供厂商专用 ASR 适配器。通过「模型 → 添加配置」选择服务商并填写地址、密钥、模型及需要的专用字段。也可以切到**多模态链路**，把 WAV 直接丢给 Gemini `generateContent` 一条龙出文本。
 
+随记支持按文字、录音或处理失败筛选，也可按最近修改排序；筛选和排序先于分页、批量操作及导出。录音随记即使尚未下载音频，也归入录音类型。详情可分别复制当前原文、润色稿（含尚未保存的编辑），播放器可前后跳转 10 秒并停在录音边界。手动编辑、批量修改和删除保存失败时会报告错误并恢复内存记录；删除写入成功后才清理录音。编辑未保存成功时，切换随记和重新润色会暂停，保留当前草稿供重试。
+
+Notes can be filtered by text, voice or processing failure and sorted by last modification before pagination, bulk operations and export. Voice notes without a downloaded recording still count as voice notes. Copy the current original or polished draft directly, and skip recordings backward or forward by 10 seconds. Failed manual edits, bulk changes and deletions preserve the stored rows and recordings. Switching notes or polishing again waits for unsaved edits to succeed.
+
 ## 快速开始
 
 ```powershell

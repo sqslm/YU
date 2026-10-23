@@ -510,6 +510,7 @@ export class NotesStore {
   async update(id: string, patch: NotePatch): Promise<NoteEntry | undefined> {
     const note = this.find(id)
     if (!note) return undefined
+    const before = cloneNote(note)
 
     let edited = false
     if (patch.transcript !== undefined && patch.transcript !== note.transcript) {
@@ -533,20 +534,14 @@ export class NotesStore {
     // Any user edit is a change to push; the server compares `version` before it
     // takes it, so this flag never decides *whether* the server accepts it.
     note.pending = true
-    this.save(true)
+    try { this.save(true) }
+    catch (error) { this.data.notes[this.data.notes.indexOf(note)] = before; throw error }
     return cloneNote(note)
   }
 
   /** Drop a note and its recording. A missing audio file is not an error. */
   async remove(id: string): Promise<void> {
-    const index = this.data.notes.findIndex((note) => note.id === id)
-    if (index < 0) return
-    const [note] = this.data.notes.splice(index, 1)
-    // Any in-flight step for this note is now stale and writes nothing.
-    this.bump(id)
-    if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
-    this.tombstone(note)
-    this.save()
+    await this.applyBulk([id], { delete: true })
   }
 
   /**
@@ -563,23 +558,22 @@ export class NotesStore {
     if (wanted.size === 0) return { matched: 0, changed: 0 }
 
     if (bulk?.delete) {
-      let removed = 0
-      for (let index = this.data.notes.length - 1; index >= 0; index -= 1) {
-        const note = this.data.notes[index]
-        if (!wanted.has(note.id)) continue
-        this.data.notes.splice(index, 1)
-        // In-flight transcription/polish for this note is stale now and must not
-        // resurrect the row through a late write.
-        this.bump(note.id)
-        if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
-        this.tombstone(note)
-        removed += 1
+      const before = this.data.notes
+      const deletedBefore = this.data.deleted?.slice()
+      const removed = before.filter(note => wanted.has(note.id))
+      if (removed.length > 0) {
+        this.data.notes = before.filter(note => !wanted.has(note.id))
+        for (const note of removed) this.tombstone(note)
+        try { this.save(true) }
+        catch (error) { this.data.notes = before; this.data.deleted = deletedBefore; throw error }
+        // Only destroy recordings and invalidate jobs after deletion reaches disk.
+        for (const note of removed) {
+          this.bump(note.id)
+          if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
+        }
+        this.options.log(`[notes] 批量删除 ${removed.length} 条随记`)
       }
-      if (removed > 0) {
-        this.options.log(`[notes] 批量删除 ${removed} 条随记`)
-        this.save()
-      }
-      return { matched: removed, changed: removed }
+      return { matched: removed.length, changed: removed.length }
     }
 
     const wantsCategory = bulk?.categoryId !== undefined
@@ -591,6 +585,7 @@ export class NotesStore {
     const now = Date.now()
     let matched = 0
     let changed = 0
+    const before = this.data.notes.map(note => wanted.has(note.id) ? cloneNote(note) : note)
 
     for (const note of this.data.notes) {
       if (!wanted.has(note.id)) continue
@@ -627,8 +622,9 @@ export class NotesStore {
     }
 
     if (changed > 0) {
+      try { this.save(true) }
+      catch (error) { this.data.notes = before; throw error }
       this.options.log(`[notes] 批量修改 ${changed} 条随记`)
-      this.save()
     }
     return { matched, changed }
   }

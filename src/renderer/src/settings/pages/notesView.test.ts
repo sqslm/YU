@@ -41,6 +41,18 @@ const CATEGORIES: NoteCategory[] = [
   { id: 'c2', name: '灵感' }
 ]
 
+it('filters note types before ordering without losing recordings missing their local file', () => {
+  const text = entry({ id: 'text', durationMs: 0, updatedAt: 300 })
+  const audio = entry({ id: 'audio', audioPath: 'notes/audio/a.ogg', updatedAt: 200 })
+  const remoteAudio = entry({ id: 'remote', updatedAt: 400, polishStatus: 'failed' })
+  const rows = [text, audio, remoteAudio]
+  expect(filterNotes(rows, { kind: 'text' }).map(n => n.id)).toEqual(['text'])
+  expect(filterNotes(rows, { kind: 'audio', sort: 'updated' }).map(n => n.id)).toEqual(['remote', 'audio'])
+  expect(filterNotes(rows, { kind: 'failed' }).map(n => n.id)).toEqual(['remote'])
+  expect(filterNotes(rows, { sort: 'updated' }).map(n => n.id)).toEqual(['remote', 'text', 'audio'])
+  expect(rows.map(n => n.id)).toEqual(['text', 'audio', 'remote'])
+})
+
 describe('summarize', () => {
   it('prefers the polished text over the raw transcript', () => {
     const note = entry({ polished: '今天下午三点开会。', transcript: '嗯 今天 下午 三点 开会' })

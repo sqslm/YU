@@ -15,7 +15,8 @@ export const ALL_CATEGORIES = ''
 /** What the player offers. `1` is the identity, so a stored rate is never a surprise. */
 export const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2] as const
 
-export type NoteSort = 'newest' | 'oldest'
+export type NoteSort = 'newest' | 'oldest' | 'updated'
+export type NoteKind = 'all' | 'text' | 'audio' | 'failed'
 
 /** A note carries at most this many tags, and the filter row shows at most as many. */
 export const MAX_TAGS = 12
@@ -28,6 +29,7 @@ export interface NotesFilter {
   /** Every listed tag must be present; an empty list means no tag constraint. */
   tags?: readonly string[]
   sort?: NoteSort
+  kind?: NoteKind
 }
 
 export interface TagCount {
@@ -90,7 +92,7 @@ function sortNotes(notes: readonly NoteEntry[], sort: NoteSort): NoteEntry[] {
   const decorated = notes.map((note, index) => ({
     note,
     index,
-    at: finite(note.createdAt)
+    at: finite(sort === 'updated' ? note.updatedAt : note.createdAt)
   }))
   decorated.sort((a, b) => {
     const byTime = sort === 'oldest' ? a.at - b.at : b.at - a.at
@@ -116,6 +118,9 @@ export function filterNotes(
   const tags = filter.tags ?? []
   const sort = filter.sort ?? 'newest'
   const rows = notes.filter((note) => {
+    if (filter.kind === 'text' && (note.audioPath || note.durationMs > 0)) return false
+    if (filter.kind === 'audio' && !note.audioPath && note.durationMs <= 0) return false
+    if (filter.kind === 'failed' && note.polishStatus !== 'failed') return false
     if (categoryId !== ALL_CATEGORIES && (note.categoryId ?? '') !== categoryId) return false
     if (tags.length > 0 && !tags.every((tag) => (note.tags ?? []).includes(tag))) return false
     return matchesQuery(note, query, categoryNameOf(categories, note.categoryId))

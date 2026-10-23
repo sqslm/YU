@@ -28,6 +28,8 @@ import PauseIcon from '@mui/icons-material/Pause'
 import PlayIcon from '@mui/icons-material/PlayArrow'
 import DownloadIcon from '@mui/icons-material/Download'
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
+import Replay10Icon from '@mui/icons-material/Replay10'
+import Forward10Icon from '@mui/icons-material/Forward10'
 import { useTranslation } from 'react-i18next'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
 import { MicCapture } from '../../bar/capture'
@@ -53,6 +55,7 @@ import {
   summarize,
   toggleTag,
   type NoteSort,
+  type NoteKind,
   type SaveState
 } from './notesView'
 
@@ -152,6 +155,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   const [categoryId, setCategoryId] = useState(ALL_CATEGORIES)
   const [activeTags, setActiveTags] = useState<string[]>([])
   const [sort, setSort] = useState<NoteSort>('newest')
+  const [kind, setKind] = useState<NoteKind>('all')
 
   const [transcriptDraft, setTranscriptDraft] = useState('')
   const [polishedDraft, setPolishedDraft] = useState('')
@@ -254,8 +258,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
 
   const ordered = useMemo(() => filterNotes(notes, { sort }), [notes, sort])
   const visible = useMemo(
-    () => filterNotes(notes, { query, categoryId, tags: activeTags, sort }, categories),
-    [notes, query, categoryId, activeTags, sort, categories]
+    () => filterNotes(notes, { query, categoryId, tags: activeTags, sort, kind }, categories),
+    [notes, query, categoryId, activeTags, sort, kind, categories]
   )
   const tagOptions = useMemo(() => collectTags(notes, TAG_FILTER_LIMIT), [notes])
   const selected = useMemo(() => notes.find((note) => note.id === selectedId) ?? null, [notes, selectedId])
@@ -378,6 +382,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
       setQueryInput('')
       setQuery('')
       setActiveTags([])
+      setKind('all')
       setSelection([])
       setFlash(t(fromClipboard ? 'notes.createdFromClipboard' : 'notes.textCreated'))
     } catch (err) { setNotice(messageOf(err)) }
@@ -407,6 +412,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
       setQueryInput('')
       setQuery('')
       setActiveTags([])
+      setKind('all')
       setSelection([])
       setFlash(t('notes.audioImported'))
     } catch (err) { setNotice(messageOf(err)) }
@@ -487,10 +493,12 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   const selectNote = useCallback(
     (id: string | null): void => {
       if (id === selectedId) return
-      void flushNow()
-      setSelectedId(id)
+      void flushNow().then(() => {
+        if (pendingRef.current) { setNotice(t('notes.createSaveFailed')); return }
+        setSelectedId(id)
+      })
     },
-    [flushNow, selectedId]
+    [flushNow, selectedId, t]
   )
 
   // ---- microphone -------------------------------------------------------
@@ -580,6 +588,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
         categoryId: categoryId || undefined
       })
       setNotes((prev) => [created, ...prev.filter((note) => note.id !== created.id)])
+      setQueryInput('')
+      setQuery('')
+      setActiveTags([])
+      setKind('all')
       setSelectedId(created.id)
       void reload()
     } catch (err) {
@@ -704,12 +716,23 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   }
 
   const commitSeek = (value: number | number[]): void => {
-    const ms = Array.isArray(value) ? value[0] : value
+    const el = audioRef.current
+    if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return
+    const ms = Math.max(0, Math.min(Array.isArray(value) ? value[0] : value, el.duration * 1000))
     setScrubMs(null)
     setPositionMs(ms)
+    el.currentTime = ms / 1000
+  }
+
+  const skipAudio = (seconds: number): void => {
     const el = audioRef.current
-    if (!el || !Number.isFinite(el.duration)) return
-    el.currentTime = Math.min(ms / 1000, el.duration)
+    if (el) commitSeek(el.currentTime * 1000 + seconds * 1000)
+  }
+
+  const copyDraft = async (text: string): Promise<void> => {
+    setNotice(''); setFlash('')
+    try { await window.api.app.copyText(text); setFlash(t('notes.textCopied')) }
+    catch (error) { setNotice(messageOf(error)) }
   }
 
   // ---- note mutations ---------------------------------------------------
@@ -786,11 +809,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     const note = selectedRef.current
     setRepolishOpen(false)
     if (!note) return
-    // Flush first: the fresh polish must not race an older transcript write.
-    await flushNow()
     setBusy(true)
     setNotice('')
     try {
+      await flushNow()
+      if (Boolean(pendingRef.current)) throw new Error(t('notes.createSaveFailed'))
       const updated = await window.api.notes.repolish(note.id)
       if (!updated) return
       patchEntry(updated)
@@ -941,6 +964,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
           <TextField
             data-notes-category-filter
             select
+            SelectProps={{ displayEmpty: true }}
             size="small"
             value={categoryId}
             onChange={(event) => setCategoryId(event.target.value)}
@@ -970,22 +994,23 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
             </IconButton>
           </Tooltip>
 
-          <Box
-            role="button"
-            tabIndex={0}
+          <TextField select size="small" value={kind} data-notes-kind-filter
+            onChange={event => setKind(event.target.value as NoteKind)}
+            aria-label={t('notes.kindFilter')}
+            sx={{ width: 128, '& .MuiInputBase-input': { fontSize: 12.5 } }}>
+            {(['all', 'text', 'audio', 'failed'] as const).map(value =>
+              <MenuItem key={value} value={value}>{t(`notes.kind_${value}`)}</MenuItem>)}
+          </TextField>
+
+          <TextField select size="small" value={sort}
             data-notes-sort={sort}
-            aria-pressed={sort === 'newest'}
-            onClick={() => setSort((prev) => (prev === 'newest' ? 'oldest' : 'newest'))}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                setSort((prev) => (prev === 'newest' ? 'oldest' : 'newest'))
-              }
-            }}
-            sx={pillSx(false)}
-          >
-            {sort === 'newest' ? t('notes.sortNewest') : t('notes.sortOldest')}
-          </Box>
+            onChange={event => setSort(event.target.value as NoteSort)}
+            aria-label={t('notes.sortLabel')}
+            sx={{ width: 142, '& .MuiInputBase-input': { fontSize: 12.5 } }}>
+            <MenuItem value="newest">{t('notes.sortNewest')}</MenuItem>
+            <MenuItem value="oldest">{t('notes.sortOldest')}</MenuItem>
+            <MenuItem value="updated">{t('notes.sortUpdated')}</MenuItem>
+          </TextField>
 
           <Box sx={{ flex: 1 }} />
 
@@ -1239,7 +1264,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
             </Box>
           )}
 
-          <PagedList name="NotesPage-visible" resetKey={`${query}|${categoryId}|${activeTags.join(",")}`} revealKey={selectedId}>{!loading &&
+          <PagedList name="NotesPage-visible" resetKey={`${query}|${categoryId}|${activeTags.join(",")}|${kind}|${sort}`} revealKey={selectedId}>{!loading &&
             visible.map((note) => {
               const active = note.id === selectedId
               const picked = selectedSet.has(note.id)
@@ -1392,6 +1417,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                 <TextField
                   data-notes-category
                   select
+                  SelectProps={{ displayEmpty: true }}
                   size="small"
                   value={selected.categoryId ?? ALL_CATEGORIES}
                   onChange={(event) => void changeCategory(event.target.value)}
@@ -1456,6 +1482,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                     placeholder={t(selected.durationMs === 0 && !audioKey ? 'notes.bodyPlaceholder' : 'notes.transcriptPlaceholder')}
                     InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }}
                   />
+                  <Button data-notes-copy="transcript" size="small" disabled={!transcriptDraft.trim()}
+                    onClick={() => void copyDraft(transcriptDraft)} sx={{ mt: 0.5, fontSize: 11.5 }}>{t('notes.copyOriginal')}</Button>
                 </Box>
 
                 <Box>
@@ -1474,6 +1502,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                     placeholder={t('notes.polishedPlaceholder')}
                     InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }}
                   />
+                  <Button data-notes-copy="polished" size="small" disabled={!polishedDraft.trim()}
+                    onClick={() => void copyDraft(polishedDraft)} sx={{ mt: 0.5, fontSize: 11.5 }}>{t('notes.copyPolished')}</Button>
                 </Box>
               </Stack>
 
@@ -1528,6 +1558,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                 }}
               >
                 <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Tooltip title={t('notes.skipBack')}>
+                    <IconButton data-notes-skip="back" size="small" aria-label={t('notes.skipBack')}
+                      disabled={durationMs <= 0} onClick={() => skipAudio(-10)}><Replay10Icon sx={{ fontSize: 20 }} /></IconButton>
+                  </Tooltip>
                   <IconButton
                     data-notes-play
                     data-notes-playing={playing ? 'on' : 'off'}
@@ -1538,6 +1572,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                   >
                     {playing ? <PauseIcon sx={{ fontSize: 18 }} /> : <PlayIcon sx={{ fontSize: 18 }} />}
                   </IconButton>
+                  <Tooltip title={t('notes.skipForward')}>
+                    <IconButton data-notes-skip="forward" size="small" aria-label={t('notes.skipForward')}
+                      disabled={durationMs <= 0} onClick={() => skipAudio(10)}><Forward10Icon sx={{ fontSize: 20 }} /></IconButton>
+                  </Tooltip>
                   <Typography
                     data-notes-clock="position"
                     sx={{

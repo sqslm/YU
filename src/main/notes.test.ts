@@ -414,6 +414,7 @@ describe('editing', () => {
     mkdirSync(temp)
     await expect(store.update(entry.id, { transcript: '人工修订' })).rejects.toThrow()
     expect(readDb(dir).notes[0].transcript).toBe('你好世界')
+    expect(store.list().notes).toEqual(readDb(dir).notes)
     rmSync(temp, { recursive: true })
     await store.update(entry.id, { transcript: '人工修订' })
     expect(readDb(dir).notes[0].transcript).toBe('人工修订')
@@ -610,6 +611,41 @@ describe('data directory', () => {
 })
 
 describe('batch operations', () => {
+  it.each(['single', 'batch'] as const)('keeps rows, tombstones and audio when %s deletion cannot be saved', async (kind) => {
+    settings.polish.enabled = false
+    const store = await loadedStore()
+    const first = await store.create({ pcm: pcm(), durationMs: 1000 })
+    await vi.waitFor(() => expect(store.list().notes[0].polishStatus).toBe('skipped'))
+    const before = store.list()
+    const diskBefore = readDb(dir)
+    const pendingBefore = store.pendingCount()
+    const file = store.audioPathOf(first.id)!
+    const temp = join(dir, `notes.json.${process.pid}.tmp`)
+    mkdirSync(temp)
+    const remove = () => kind === 'single' ? store.remove(first.id) : store.applyBulk([first.id], { delete: true })
+    await expect(remove()).rejects.toThrow()
+    expect(store.list()).toEqual(before)
+    expect(store.pendingCount()).toBe(pendingBefore)
+    expect(readDb(dir)).toEqual(diskBefore)
+    expect(existsSync(file)).toBe(true)
+    rmSync(temp, { recursive: true })
+    await remove()
+    expect(store.list().notes).toHaveLength(0)
+    expect(readDb(dir).deleted?.map(row => row.id)).toContain(first.id)
+    expect(existsSync(file)).toBe(false)
+  })
+
+  it('does not acknowledge or retain batch tag edits when saving fails', async () => {
+    const store = await loadedStore()
+    const note = await store.createText({ text: 'keep me' })
+    const before = store.list()
+    const diskBefore = readDb(dir)
+    mkdirSync(join(dir, `notes.json.${process.pid}.tmp`))
+    await expect(store.applyBulk([note.id], { addTags: ['work'] })).rejects.toThrow()
+    expect(store.list()).toEqual(before)
+    expect(readDb(dir)).toEqual(diskBefore)
+  })
+
   it('deletes every selected note together with its recording', async () => {
     const store = await loadedStore()
     const first = await store.create({ pcm: pcm(), durationMs: 1000 })
