@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next'
 import { PaginationSettings } from './Pagination'
 import { applyUiLanguage } from '../i18n'
 import i18n from '../i18n'
+import { BrandLogo } from '../BrandLogo'
 
 type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders'
 
@@ -188,23 +189,8 @@ export function App(): JSX.Element {
           }}
         >
           <Box sx={{ px: 2, pb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box
-              sx={{
-                width: 26,
-                height: 26,
-                borderRadius: '8px',
-                display: 'grid',
-                placeItems: 'center',
-                background: 'linear-gradient(140deg,#4c8dff,#8f7cff)',
-                color: '#fff'
-              }}
-            >
-              <IconMic size={15} />
-            </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.2 }}>
-                Typeless Rebuild
-              </Typography>
+              <BrandLogo mode={mode} width={150} />
               <Typography sx={{ fontSize: 10.5, color: t.textFaint, mt: 0.25 }}>
                 {i18n.t('自建后端 · 本地')}
               </Typography>

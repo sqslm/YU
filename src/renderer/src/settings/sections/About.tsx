@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Box, Button, Typography } from '@mui/material'
+import { Box, Button, Typography, useTheme } from '@mui/material'
+import { BrandLogo } from '../../BrandLogo'
 import { profilesOf } from '@shared/profiles'
 import type { RecordingSessionInfo, Settings } from '@shared/types'
 import { IconCode, IconInfo, SettingsField, SettingsGroup, SettingsRow } from './General'
@@ -55,6 +56,7 @@ export function useAppVersion(): string {
 }
 
 export function AboutSection({ settings }: SectionProps): JSX.Element {
+  const theme = useTheme()
   const version = useAppVersion()
   const [diagnostics, setDiagnostics] = useState<{ busy: boolean; message: string }>({
     busy: false,
@@ -128,8 +130,9 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
     <Box>
       <SettingsGroup icon={<IconInfo />} title={i18n.t('版本')}>
         <Box sx={{ px: 2, py: 2 }}>
+          <BrandLogo mode={theme.palette.mode} width={220} />
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Typeless Rebuild</Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>轻令（Qinly）</Typography>
             <Typography sx={{ fontSize: 11.5, color: 'text.disabled' }}>{version}</Typography>
           </Box>
           <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.75, lineHeight: 1.55 }}>

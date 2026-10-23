@@ -1,5 +1,5 @@
 appId: com.typeless.rebuild
-productName: Typeless Rebuild
+productName: 轻令（Qinly）
 electronLanguages:
   - zh-CN
   - en-US
@@ -13,6 +13,11 @@ files:
   - LICENSE
   - THIRD_PARTY_NOTICES.md
   - licenses/**
+extraResources:
+  - from: resources/windows-tools.ps1
+    to: windows-tools.ps1
+  - from: resources/installer.ico
+    to: shortcut.ico
 asar: true
 # Placeholder feed: a build with no real server still has to boot, and the URL can
 # be overridden at runtime with TYPELESS_UPDATE_URL or <userData>/update-feed.txt.
@@ -25,7 +30,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: resources/icon.png
+  icon: resources/app.ico
   artifactName: ${productName}-${version}-setup.${ext}
 nsis:
   # Keeps `models\` alive across upgrades — see build/installer.nsh.
@@ -35,5 +40,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Typeless Rebuild
+  shortcutName: 轻令（Qinly）
+  installerIcon: resources/installer.ico
+  uninstallerIcon: resources/installer.ico
   deleteAppDataOnUninstall: false

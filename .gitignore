@@ -17,12 +17,14 @@
 !/src/
 !/build/
 !/resources/
+!/logo/
 !/licenses/
 !/server/
 !/scripts/
 /scripts/*
 !/scripts/mock-openai.mjs
 !/scripts/make-icon.mjs
+!/scripts/make-icon.py
 !/scripts/release.mjs
 **/node_modules/
 **/data/

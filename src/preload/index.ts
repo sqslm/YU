@@ -22,6 +22,7 @@ const api: TypelessApi = {
     hide: () => ipcRenderer.invoke('assistant:hide'),
     state: () => ipcRenderer.invoke('assistant:state'),
     send: text => ipcRenderer.invoke('assistant:send', text),
+    openItem: id => ipcRenderer.invoke('assistant:open-item', id),
     cancel: () => ipcRenderer.invoke('assistant:cancel'),
     clear: () => ipcRenderer.invoke('assistant:clear'),
     record: () => ipcRenderer.invoke('assistant:record'),

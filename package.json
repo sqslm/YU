@@ -1,9 +1,9 @@
 {
   "name": "typeless-rebuild",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "license": "MIT",
   "private": true,
-  "description": "Typeless-style push-to-talk dictation client with pluggable ASR and LLM providers",
+  "description": "Qinly Windows AI assistant with voice input and local tools",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

@@ -33,9 +33,13 @@ import { getDateTime } from './datetime'
 import { readWebpage, runWithDeadline } from './read-webpage'
 import { getSelection, type SelectionDeps } from './selection'
 import { mt } from '@shared/mainI18n'
+import { WINDOWS_DEFINITIONS, WINDOWS_TOOLS, type WindowsTools } from './windows'
+import type { AssistantLocalResult } from '@shared/assistant'
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
+  windows?: WindowsTools
+  onLocalResult?: (result: AssistantLocalResult) => void
   allowedTools?: readonly string[]
   settings: Settings
   /** The spoken question, for tools that can fall back to it for arguments. */
@@ -494,6 +498,7 @@ async function runOpenSearch(args: Record<string, unknown>, ctx: ToolContext): P
 // ---------------------------------------------------------------------------
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
+  ...WINDOWS_DEFINITIONS,
   {
     name: 'get_weather',
     description:
@@ -602,7 +607,7 @@ export const TOOL_NAMES: string[] = TOOL_DEFINITIONS.map((tool) => tool.name)
 
 /** OpenAI `tools` array. */
 export function toolSchemas(allowed?: readonly string[]): Array<Record<string, unknown>> {
-  return TOOL_DEFINITIONS.filter(tool => !allowed || allowed.includes(tool.name)).map((tool) => ({
+  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : !WINDOWS_TOOLS.includes(tool.name as typeof WINDOWS_TOOLS[number])).map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -663,6 +668,7 @@ export async function runTool(
   ctx: ToolContext
 ): Promise<ToolOutcome> {
   const tool = getTool(name)
+  if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) && (!ctx.windows || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (!tool) return fail(mt('未知工具：{{name}}', { name }))
   const input = args ?? {}
@@ -678,6 +684,9 @@ export async function runTool(
   const attempt = attemptTool(tool, input, ctx)
   if (key) ctx.cache?.set(key, attempt)
   const outcome = await attempt
+  if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number])) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
+    items: outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined,
+    detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，仅检查当前目录。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[perf] tool:${name} ${Date.now() - started}ms ok=${outcome.ok}`)
   return outcome
 }

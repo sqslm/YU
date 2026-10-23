@@ -93,8 +93,8 @@ beforeEach(() => {
 })
 
 describe('tool schema', () => {
-  it('exposes the eight tools to the model', () => {
-    expect(TOOL_NAMES).toEqual([
+  it('keeps legacy Ask tools unchanged and registers explicit assistant tools', () => {
+    expect(toolSchemas().map(schema => (schema.function as { name: string }).name)).toEqual([
       'get_weather',
       'web_search',
       'read_webpage',
@@ -104,11 +104,13 @@ describe('tool schema', () => {
       'replace_selection',
       'open_search'
     ])
+    expect(TOOL_NAMES).toEqual(expect.arrayContaining(['open_application', 'open_folder', 'open_file', 'open_url', 'search_files']))
   })
 
   it('serialises as OpenAI function definitions', () => {
     const schemas = toolSchemas()
-    expect(schemas).toHaveLength(TOOL_DEFINITIONS.length)
+    expect(toolSchemas(TOOL_NAMES)).toHaveLength(TOOL_DEFINITIONS.length)
+    expect(schemas).toHaveLength(8)
     for (const schema of schemas) {
       expect(schema.type).toBe('function')
       const fn = schema.function as Record<string, unknown>

@@ -1,4 +1,11 @@
 ; Installer hooks.
+!macro customInstall
+  ; Preserve the builder's shortcut policy; only change icons on links it created.
+  ${if} ${FileExists} "$newDesktopLink"
+    CreateShortCut "$newDesktopLink" "$appExe" "" "$INSTDIR\resources\shortcut.ico" 0 "" "" "${APP_DESCRIPTION}"
+    WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
+  ${endif}
+!macroend
 ;
 ; One job: let the downloaded speech models survive an update.
 ;

@@ -12,7 +12,7 @@ const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).ver
 const serverVersion = JSON.parse(readFileSync(join(root, 'server/package.json'), 'utf8')).version
 const output = join(root, 'release')
 mkdirSync(output, { recursive: true })
-const installer = `Typeless Rebuild-${version}-setup.exe`
+const installer = `轻令（Qinly）-${version}-setup.exe`
 if (!existsSync(join(output, installer))) throw new Error('Run pnpm package before creating release archives.')
 const source = `typeless-rebuild-${version}-source.zip`
 const server = `typeless-server-${serverVersion}.tar.gz`

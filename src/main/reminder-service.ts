@@ -42,7 +42,7 @@ export class ReminderService {
   refresh(): void { this.scheduler.check(); this.updateStrong(); this.changed() }
   settingsChanged(): void {
     if (this.strong && !this.strong.isDestroyed()) {
-      this.strong.setTitle(`${mt('强提醒')} · Typeless Rebuild`)
+      this.strong.setTitle(`${mt('强提醒')} · 轻令（Qinly）`)
       this.strong.webContents.send('settings:changed', this.settings())
     }
   }

@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, screen } from 'electron'
+import { app, BrowserWindow, nativeTheme, screen } from 'electron'
 import { join } from 'node:path'
 import type { BarWindowLayout, ThemeMode } from '@shared/types'
 import { BAR_HEIGHT, BAR_WIDTH, barCaptionRect } from './barLayout'
@@ -31,7 +31,7 @@ export function createAssistantWindow(mode: ThemeMode): BrowserWindow {
   const chrome = HUB_CHROME[resolveThemeMode(mode)]
   const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
   const width = Math.min(620, area.width), height = Math.min(460, area.height)
-  const win = new BrowserWindow({ width, height,
+  const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'), width, height,
     x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 3),
     minWidth: 420, minHeight: 360, title: mt('AI 助手'), show: false,
     backgroundColor: chrome.color, titleBarStyle: 'hidden',
@@ -48,8 +48,8 @@ export function createAssistantWindow(mode: ThemeMode): BrowserWindow {
 /** A desktop-sized backdrop with one centred reminder card; never a kiosk/keyboard lock. */
 export function createReminderWindow(_mode: ThemeMode): BrowserWindow {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-  const win = new BrowserWindow({ ...display.bounds,
-    title: `${mt('强提醒')} · Typeless Rebuild`, show: false, alwaysOnTop: true, autoHideMenuBar: true,
+  const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'), ...display.bounds,
+    title: `${mt('强提醒')} · 轻令（Qinly）`, show: false, alwaysOnTop: true, autoHideMenuBar: true,
     frame: false, transparent: true, hasShadow: false, resizable: false, movable: false,
     minimizable: false, maximizable: false, fullscreenable: false,
     backgroundColor: '#00000000',
@@ -138,12 +138,12 @@ export function applyHubTheme(win: BrowserWindow, mode: ThemeMode, dimmed = fals
  */
 export function createSettingsWindow(mode: ThemeMode = 'dark'): BrowserWindow {
   const chrome = HUB_CHROME[resolveThemeMode(mode)]
-  const win = new BrowserWindow({
+  const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'),
     width: 1080,
     height: 750,
     minWidth: 940,
     minHeight: 620,
-    title: 'Typeless Rebuild',
+    title: '轻令（Qinly）',
     backgroundColor: chrome.color,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -191,12 +191,12 @@ export function openLoginWindow(mode: ThemeMode = 'dark'): BrowserWindow {
     return loginWindow
   }
   const chrome = HUB_CHROME[resolveThemeMode(mode)]
-  const win = new BrowserWindow({
+  const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'),
     width: 460,
     height: 640,
     minWidth: 420,
     minHeight: 560,
-    title: 'Typeless Rebuild',
+    title: '轻令（Qinly）',
     backgroundColor: chrome.color,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -271,7 +271,7 @@ export function clampBarPlacement(position: BarPlacement | null): BarPlacement {
 export function createBarWindow(position: BarPlacement | null): BrowserWindow {
   const spot = clampBarPlacement(position)
 
-  const win = new BrowserWindow({
+  const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'),
     width: BAR_WIDTH,
     height: BAR_HEIGHT,
     x: spot.x,
@@ -481,7 +481,7 @@ export function positionCardWindow(win: BrowserWindow): void {
  * min/max width pinning keeps the user from dragging the card sideways.
  */
 export function createCardWindow(): BrowserWindow {
-  const win = new BrowserWindow({
+  const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'),
     width: CARD_WIDTH,
     height: CARD_INITIAL_HEIGHT,
     minWidth: CARD_WIDTH,

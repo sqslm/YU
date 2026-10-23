@@ -305,7 +305,7 @@
   "到期后不再续费": "到期后不再续费",
   "登录": "登录",
   "登录 / 注册": "登录 / 注册",
-  "登录 Typeless Rebuild": "登录 Typeless Rebuild",
+  "登录 轻令（Qinly）": "登录 轻令（Qinly）",
   "登录 Windows 后在后台常驻": "登录 Windows 后在后台常驻",
   "登录后，历史和随记会在你的几台机器之间自动对齐": "登录后，历史和随记会在你的几台机器之间自动对齐",
   "登录后从服务器读取": "登录后从服务器读取",
@@ -1116,7 +1116,7 @@
     "processingFailed": "上次处理失败"
   },
   "onboarding": {
-    "welcomeTitle": "欢迎使用 Typeless Rebuild",
+    "welcomeTitle": "欢迎使用 轻令（Qinly）",
     "welcomeBody": "按住右 Alt 说话，松开即插入。你的音频与历史只留在这台电脑上。",
     "step": "第 {{current}} / {{total}} 步",
     "next": "下一步",
@@ -1193,7 +1193,7 @@
   "sherpa-onnx · 在这台电脑上跑，不联网也不花 token": "sherpa-onnx · 在这台电脑上跑，不联网也不花 token",
   "Shift + Enter 软换行": "Shift + Enter 软换行",
   "SQLite（node:sqlite）+ 子串检索，仅本机；可选同步到自建服务": "SQLite（node:sqlite）+ 子串检索，仅本机；可选同步到自建服务",
-  "Typeless Rebuild · 全部统计只在本机": "Typeless Rebuild · 全部统计只在本机",
+  "轻令（Qinly） · 全部统计只在本机": "轻令（Qinly） · 全部统计只在本机",
   "WH_KEYBOARD_LL（utilityProcess + koffi，吞键）": "WH_KEYBOARD_LL（utilityProcess + koffi，吞键）",
   "whisper-1 / gpt-4o-mini / 你的本地模型名": "whisper-1 / gpt-4o-mini / 你的本地模型名",
   "悬浮条上的提示与报错自动隐藏的秒数": "悬浮条上的提示与报错自动隐藏的秒数",

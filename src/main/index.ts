@@ -10,7 +10,7 @@ import {
   shell
 } from 'electron'
 import { appendFile, mkdir, rm, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import os from 'node:os'
 import type { BrowserWindow } from 'electron'
 import type { BarActionId, BarState, CardAction, ModelListResult, Settings } from '@shared/types'
@@ -29,6 +29,8 @@ import { buildBarAlert, classifyError } from './errors'
 import { RingLog, describeSecret, diagnosticsFileName, renderDiagnostics } from './diagnostics'
 import { NotesStore } from './notes'
 import { AssistantSession } from './assistant'
+import { WindowsTools } from './tools/windows'
+import { windowsNative } from './windows-native'
 import { registerNotesIpc } from './notes-ipc'
 import { LocalAsrHost } from './local-asr/host'
 import { registerLocalAsrIpc } from './local-asr/ipc'
@@ -72,6 +74,11 @@ app.commandLine.appendSwitch('disable-features', 'AudioServiceOutOfProcess')
 // surface pool after the small recording bar has returned to the background.
 if (process.platform === 'win32') app.disableHardwareAcceleration()
 
+// Display branding may change; the existing profile, credentials and QA overrides must not.
+if (resolve(app.getPath('userData')) === resolve(join(app.getPath('appData'), app.getName()))) {
+  app.setPath('userData', join(app.getPath('appData'), 'typeless-rebuild'))
+}
+app.setName('轻令（Qinly）')
 const store = new SettingsStore()
 const history = new HistoryStore()
 /**
@@ -102,7 +109,20 @@ let quitting = false
 let assistantVoice = false
 let tray: ReturnType<typeof createTray> | null = null
 let hubView: 'notes' | 'reminders' | 'settings' | null = null
-const assistant = new AssistantSession({ settings: () => store.get(), log: line => log(line),
+const windowsTools = new WindowsTools({
+  folders: { downloads: app.getPath('downloads'), desktop: app.getPath('desktop'), documents: app.getPath('documents') },
+  native: windowsNative, openPath: path => shell.openPath(path), openUrl: url => shell.openExternal(url),
+  confirm: async (description, signal) => {
+    signal?.throwIfAborted()
+    if (!assistantWindow || assistantWindow.isDestroyed()) return false
+    assistantWindow.show(); assistantWindow.focus()
+    const { response } = await dialog.showMessageBox(assistantWindow, { type: 'question', signal, title: mt('授权本次系统操作'),
+      message: description, detail: mt('仅授权本次操作。可以取消；不会执行任意命令、删除文件或读取正文。'),
+      buttons: [mt('取消'), mt('允许本次')], defaultId: 0, cancelId: 0, noLink: true })
+    return !signal?.aborted && response === 1
+  }
+})
+const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
   changed: state => {
     if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.webContents.send('assistant:changed', state)
     tray?.refresh()
@@ -702,6 +722,12 @@ function registerIpc(): void {
     if (event.sender !== assistantWindow?.webContents) throw new Error('Assistant window required')
   }
   ipcMain.handle('assistant:state', event => { assistantOnly(event); return assistant.snapshot() })
+  ipcMain.handle('assistant:open-item', async (event, id: unknown) => {
+    assistantOnly(event)
+    if (typeof id !== 'string' || id.length > 64) throw new Error('Invalid result')
+    if (pipeline?.isBusy || notesRecording || selectionEditor?.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
+    await assistant.openItem(id)
+  })
   ipcMain.handle('assistant:hide', event => { assistantOnly(event); hideAssistant() })
   ipcMain.handle('assistant:cancel', event => { assistantOnly(event); cancelAssistant() })
   ipcMain.handle('assistant:clear', event => { assistantOnly(event); cancelAssistant(); assistant.clear() })
@@ -741,7 +767,7 @@ function registerIpc(): void {
     reminders?.settingsChanged()
     hotkeys?.apply(next)
     if (next.launchAtStartup !== previous.launchAtStartup) {
-      app.setLoginItemSettings({ openAtLogin: next.launchAtStartup, args: ['--background'] })
+      app.setLoginItemSettings({ name: 'typeless-rebuild', openAtLogin: next.launchAtStartup, args: ['--background'] })
     }
     if (next.localAsr.modelId !== previous.localAsr.modelId ||
         next.localAsr.language !== previous.localAsr.language ||
@@ -1456,7 +1482,7 @@ async function bootstrap(): Promise<void> {
 
   hotkeys!.start(store.get())
   uia.start()
-  app.setLoginItemSettings({ openAtLogin: settings.launchAtStartup, args: ['--background'] })
+  app.setLoginItemSettings({ name: 'typeless-rebuild', openAtLogin: settings.launchAtStartup, args: ['--background'] })
 
   /**
    * `themeMode: 'system'` is resolved twice on purpose: the renderer follows

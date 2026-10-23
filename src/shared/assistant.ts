@@ -1,10 +1,14 @@
 import type { SearchResult } from './types'
 
+export interface AssistantItem { id: string; name: string; path: string; kind: 'file' | 'application'; bytes?: number; modified?: string }
+export interface AssistantLocalResult { tool: string; ok: boolean; summary: string; items?: AssistantItem[]; detail?: string }
+
 export interface AssistantTurn {
   id: number
   question: string
   answer: string
   sources: SearchResult[]
+  localResults?: AssistantLocalResult[]
   state: 'working' | 'done' | 'cancelled' | 'error'
 }
 

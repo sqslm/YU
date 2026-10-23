@@ -83,7 +83,7 @@ export function renderDiagnostics(input: DiagnosticsInput): string {
   const at = (input.now ?? new Date()).toISOString()
   const settings = redactSecrets(JSON.stringify(input.settings ?? {}, null, 2))
   const lines: string[] = [
-    mt('Typeless Rebuild 诊断报告'),
+    mt('轻令（Qinly） 诊断报告'),
     mt('生成时间: {{at}}', { at }),
     '',
     mt('== 版本 =='),

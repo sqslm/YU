@@ -35,6 +35,7 @@ export interface TypelessApi {
     hide(): Promise<void>
     state(): Promise<AssistantState>
     send(text: string): Promise<void>
+    openItem(id: string): Promise<void>
     cancel(): Promise<void>
     clear(): Promise<void>
     record(): Promise<boolean>

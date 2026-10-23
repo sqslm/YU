@@ -67,7 +67,7 @@ describe('renderDiagnostics', () => {
   })
 
   it('contains the sections a support engineer needs', () => {
-    expect(report).toContain('Typeless Rebuild 诊断报告')
+    expect(report).toContain('轻令（Qinly） 诊断报告')
     expect(report).toContain('Electron: 38.1.0')
     expect(report).toContain('麦克风 (Realtek)')
     expect(report).toContain('asr: GET api.test -> 200')

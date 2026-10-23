@@ -219,7 +219,7 @@ export function AccountForm({
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 14, fontWeight: 600, lineHeight: 1.35 }}>
-              {i18n.t('登录 Typeless Rebuild')}
+              {i18n.t('登录 轻令（Qinly）')}
             </Typography>
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.25, lineHeight: 1.45 }}>
               {i18n.t('登录后，历史和随记会在你的几台机器之间自动对齐')}

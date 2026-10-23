@@ -54,7 +54,7 @@ function Assistant(): JSX.Element {
     <PaginationSettings.Provider value={{ size: settings?.listPageSize ?? 30, change: size => { void window.api.settings.update({ listPageSize: size }) } }}>
     <Box data-assistant-page sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <Box sx={{ height: 40, flexShrink: 0, px: 2, display: 'flex', alignItems: 'center', WebkitAppRegion: 'drag' }}>
-        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{t('AI 助手')} · Typeless Rebuild</Typography>
+        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{t('AI 助手')} · 轻令（Qinly）</Typography>
       </Box>
       <Stack direction="row" spacing={0.5} sx={{ px: 1.5, pb: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Button size="small" data-assistant-clear onClick={() => { void window.api.assistant.clear().catch(reportError); setDraft(''); setError(''); input.current?.focus() }}>{t('新对话')}</Button>
@@ -78,6 +78,18 @@ function Assistant(): JSX.Element {
             '& [data-card-markdown] a': { color: 'primary.main !important' },
             '& [data-card-markdown] pre': { bgcolor: 'action.hover !important', overflowX: 'auto' }
           }}><MarkdownView text={turn.answer} streaming={turn.state === 'working'} sources={turn.sources} /></Box>
+          {turn.localResults?.map((result, index) => <Box data-local-result key={index} sx={{ mt: 1, p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+            <Typography sx={{ fontSize: 12, color: result.ok ? 'text.secondary' : 'error.main', overflowWrap: 'anywhere' }}>{result.ok ? '✓' : '×'} {result.summary}</Typography>
+            {result.detail && <Typography sx={{ fontSize: 10.5, color: 'text.disabled', mt: 0.5 }}>{result.detail}</Typography>}
+            {!!result.items?.length && <PagedList name={`assistant-results-${turn.id}-${index}`}>
+              {result.items.map((item, i) => <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontSize: 12, overflowWrap: 'anywhere' }}>{i + 1}. {item.name}</Typography>
+                  <Typography sx={{ fontSize: 10.5, color: 'text.disabled', overflowWrap: 'anywhere' }}>{item.path}</Typography>
+                  {item.modified && <Typography sx={{ fontSize: 10.5, color: 'text.disabled' }}>{new Date(item.modified).toLocaleString()} · {((item.bytes || 0) / 1024).toFixed(1)} KB</Typography>}
+                </Box><Button size="small" disabled={busy} onClick={() => { setError(''); void window.api.assistant.openItem(item.id).catch(reportError) }}>{t('打开')}</Button>
+              </Box>)}
+            </PagedList>}
+          </Box>)}
           {turn.sources.length > 0 && <PagedList name={`assistant-sources-${turn.id}`}>
             {turn.sources.map((source, i) => isSafeLink(source.url) ? <Typography key={String(i)} component="a" href={source.url} target="_blank" rel="noreferrer" sx={{ display: 'block', fontSize: 11, color: 'primary.main', overflowWrap: 'anywhere', mt: 0.5 }}>[{i + 1}] {source.title || source.url}</Typography> : null)}
           </PagedList>}
