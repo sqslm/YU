@@ -7,6 +7,7 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '打开主界面': 'Open main window',
   '工具参数无效：{{name}}': 'Invalid tool argument: {{name}}',
   'Windows 索引不可用，仅检查当前目录。': 'Windows Search is unavailable; only the immediate folder was checked.',
   '结果已截断，最多显示 40 项；请缩小范围。': 'Results are limited to 40 items. Narrow the search.',

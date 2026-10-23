@@ -8,13 +8,15 @@ Windows 工具使用 App Paths 和开始菜单的真实应用登记，不让模�
 
 AI 助手可从侧边栏、托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起；快捷键可录制或清空，升级时避让已有相同绑定。点击录音开始，共用现有麦克风/ASR，右 Alt 或「结束录音」提交，Esc 取消；已有任务运行时不会抢占录音。窗口里可停止、新对话、复制回答及直达随记/提醒/设置。关闭助手取消当前任务；最近 12 个界面轮次仅存内存，模型保留最近三个完整问答及工具摘要，闲置 15 分钟后下次访问清理，退出程序即丢弃。助手与旧 Ask 上下文隔离，不自动读取剪贴板、选区或截图，不写长期记忆。发送的输入和相关临时会话会交给用户配置的远程或本地模型。
 
-「设置 → 通用 → 关闭主窗口时」可选保留后台或完全退出。默认后台保留快捷键、提醒与托盘；最小化也可收至托盘。隐藏的助手和主窗口在 60 秒后回收界面（主窗口录随记时不回收），需要时再创建；会话不依赖界面存活。托盘显示待命/录音/处理/快捷键暂停状态。开机启动仍为用户可选；默认不持续录音、截图或读取剪贴板。
+「设置 → 通用 → 关闭主窗口时」可选保留后台或完全退出。默认后台保留快捷键、提醒与托盘；最小化也可收至托盘。隐藏的助手和主窗口在 60 秒后回收界面（主窗口录随记时不回收），需要时再创建；会话不依赖界面存活。托盘左键单击恢复主窗口并保留当前页面及编辑状态；主窗口重新创建时默认显示概览；右键菜单分别提供「打开主界面」「AI 助手」「随记」「提醒」「设置」，其中「设置」直接打开设置面板。托盘显示待命/录音/处理/快捷键暂停状态。开机启动仍为用户可选；默认不持续录音、截图或读取剪贴板。
 
 The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). Qinly reuses Ask for text/voice questions and a separate temporary conversation. Open it from the sidebar, tray or configurable `Left Ctrl + Right Shift + A`. Voice uses the existing recorder and ASR; Right Alt submits and Esc cancels. Other recordings are never taken over. New conversation clears the session; idle context expires on access after 15 minutes. Closing the assistant cancels its task. Clipboard, selected text and screenshots are not read automatically. Input and relevant conversation are sent to the configured model. Hidden interfaces retire after 60 seconds when safe.
 
 Windows tools discover real registered applications, open folders/documents/web addresses and search scoped file metadata. Each operation requires an explicit, cancel-by-default authorization. Only file names, paths, modification times and sizes may reach the configured model; file contents are not read. Windows Search is supplemented with an immediate-folder check, never a whole-disk crawl. Unindexed subfolders, a 40-item result limit and unavailable indexing are reported. Multiple results require a user choice; “Open second” uses the actual previous ordering. Model output cannot supply an arbitrary executable or document path. Dependent operations are sequential and stop on failure, with at most four tool rounds, eight calls and a 90-second task deadline. Scripts, installers, deletion and arbitrary commands are unavailable. Calendar, memory, briefings, TTS and wake words remain future stages.
 
-品牌资源位于 `logo/`，转换产物位于 `resources/`：`-1.png` 纯图标用于应用、任务栏和托盘；`-2.png` 浅色完整 Logo 和 `-3.png` 深色完整 Logo 用于对应主题侧边栏及关于页面；`-4.png` 方形图标用于安装包和桌面快捷方式；白底「轻令 Qinly 智能助手标志.png」用于本页品牌展示。原图保留，未重新绘制。开发时安装 Pillow 后运行 `pnpm icon`；可用 `QINLY_PYTHON` 指定已有 Python。ICO 含 16–256 像素多尺寸。显示名称改为轻令（Qinly），技术包名、App ID 和原 `typeless-rebuild` 用户目录继续沿用，以保留配置、登录与升级身份。
+品牌资源位于 `logo/`，转换产物位于 `resources/`：`-1.png` 纯图标用于应用、任务栏和托盘；`-2.png` 浅色完整 Logo 和「轻令 Qinly 智能助手标志2.png」深色透明 Logo 用于对应主题侧边栏及关于页面，两者使用相同的 2:1 透明画布与显示尺寸；`-4.png` 方形图标用于安装包和桌面快捷方式；白底「轻令 Qinly 智能助手标志.png」用于本页品牌展示。原图保留，未重新绘制。开发时安装 Pillow 后运行 `pnpm icon`；可用 `QINLY_PYTHON` 指定已有 Python。ICO 含 16–256 像素多尺寸。显示名称改为轻令（Qinly），技术包名、App ID 和原 `typeless-rebuild` 用户目录继续沿用，以保留配置、登录与升级身份。
+
+Tray left-click restores the main window and preserves the current page or editor. Its context menu keeps Open main window, AI Assistant and Settings as separate actions. Light and dark wordmarks use matching transparent canvases and sizing.
 
 ![轻令 Qinly 品牌标志](resources/brand/brand-board.png)
 
@@ -44,7 +46,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\轻令（Qinly）-0.33.0-setup.exe
+pnpm package          # → release\轻令（Qinly）-0.33.1-setup.exe
 ```
 
 ## 使用

@@ -25,13 +25,13 @@ def icon(image, png, ico):
 
 icon(supplied('-1.png'), 'icon.png', 'app.ico')
 icon(supplied('-4.png'), 'shortcut.png', 'installer.ico')
-light = trim(supplied('-2.png'))
-light.thumbnail((720, 300), Image.Resampling.LANCZOS)
-light.save(brand / 'logo-light.png', optimize=True)
-# Preserve the dark artwork's intentional background and glow; crop only margins.
-dark = supplied('-3.png').crop((205, 270, 1250, 805))
-dark.thumbnail((720, 300), Image.Resampling.LANCZOS)
-dark.save(brand / 'logo-dark.png', optimize=True)
+for mode, image in [('light', supplied('-2.png')),
+                    ('dark', Image.open(source / '轻令 Qinly 智能助手标志2.png').convert('RGBA'))]:
+    image = trim(image)
+    image.thumbnail((720, 360), Image.Resampling.LANCZOS)
+    canvas = Image.new('RGBA', (720, 360))
+    canvas.alpha_composite(image, ((720-image.width)//2, (360-image.height)//2))
+    canvas.save(brand / ('logo-' + mode + '.png'), optimize=True)
 reference = Image.open(source / '轻令 Qinly 智能助手标志.png')
 reference.thumbnail((640, 640), Image.Resampling.LANCZOS)
 reference.save(brand / 'brand-board.png', optimize=True)

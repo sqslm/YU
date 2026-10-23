@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { mt } from '@shared/mainI18n'
 
 export interface TrayHandlers {
+  openMain: () => void
   openAssistant: () => void
   openNotes: () => void
   openReminders: () => void
@@ -42,6 +43,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
       Menu.buildFromTemplate([
         { label: handlers.status(), enabled: false },
         { type: 'separator' },
+        { label: mt('打开主界面'), click: handlers.openMain },
         { label: mt('AI 助手'), click: handlers.openAssistant },
         { label: mt('随记'), click: handlers.openNotes },
         { label: mt('提醒'), click: handlers.openReminders },
@@ -83,6 +85,6 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
   }
 
   rebuild()
-  tray.on('click', handlers.openAssistant)
+  tray.on('click', handlers.openMain)
   return Object.assign(tray, { refresh: rebuild })
 }

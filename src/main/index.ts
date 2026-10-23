@@ -1536,12 +1536,13 @@ async function bootstrap(): Promise<void> {
   setTimeout(() => void updater?.check(), 8000)
 
   tray = createTray({
+    openMain: () => { ensureSettingsWindow() },
     openAssistant: () => { openAssistant() },
     openNotes: () => navigateHub('notes'),
     openReminders: () => navigateHub('reminders'),
     status: () => notesRecording || pipeline?.isRecording ? mt('录音中') : pipeline?.isBusy || assistant.busy ? mt('处理中') : store.get().hotkeys.enabled ? mt('待命') : mt('快捷键已暂停'),
     pasteLast: () => void pipeline?.pasteLast(),
-    openSettings: () => ensureSettingsWindow(),
+    openSettings: () => navigateHub('settings'),
     hotkeysEnabled: () => store.get().hotkeys.enabled,
     resetKeyboard: () => {
       // Also drop the hook's own view of what is held: after a reset the app must
