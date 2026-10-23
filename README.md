@@ -1,10 +1,10 @@
 # 轻令（Qinly）
 
-Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。助手中心复用 Ask，支持文字/语音问答、独立临时追问，以及经授权的 Windows 应用启动、文件夹/文档/网页打开和限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询及页面导航已接入；截图、日程、长期记忆、简报、TTS 和唤醒尚未接入助手。
+Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。助手中心复用 Ask，支持文字/语音问答、独立临时追问，以及直接打开用户要求的 Windows 应用、文件夹、文档或网页，以及经授权的限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询及页面导航已接入；截图、日程、长期记忆、简报、TTS 和唤醒尚未接入助手。
 
 Windows 工具使用 App Paths 和开始菜单的真实应用登记，不让模型猜 exe 路径。比如“打开 VS Code”“打开下载文件夹”“查找下载目录最新修改的 PDF”。简单打开请求和“打开第二个”直接由程序处理；复杂任务沿用现有 function calling，不支持时使用结构化 JSON，每次任务最多 4 轮工具、8 次调用、90 秒（包括授权等待）。工具按顺序执行，失败时停止后续操作；界面显示真实执行回执。打开成功表示 Windows 接受请求，不保证目标应用已加载完成。
 
-每次本地操作先显示实际范围，授权默认取消；文件名、路径、修改日期、大小可能发送至配置的模型，文件正文不会读取。搜索优先查询 Windows Search，再补查当前目录；未索引子目录不递归遍历，最多展示 40 项，截断或索引不可用会说明。日期指修改时间，不代表下载时间。多个候选必须由用户点击选择或明确说“打开第二个”；只允许打开实际结果 ID，支持常见文档/图片/音视频，不运行脚本和安装程序。清空或过期会话会使旧 ID 失效。本阶段不提供文件删除、软件安装或任意命令执行工具；原 Ask 不会自动获得这些本地工具。
+用户明确要求打开软件、网页、文件夹或已有文档结果时直接执行，不再重复弹授权框。文件元数据搜索仍先显示范围并确认；文件名、路径、修改日期、大小可能发送至配置的模型，文件正文不会读取。搜索优先查询 Windows Search，再补查当前目录；未索引子目录不递归遍历，最多展示 40 项，截断或索引不可用会说明。日期指修改时间，不代表下载时间。多个候选必须由用户点击选择或明确说“打开第二个”；只允许打开实际结果 ID，支持常见文档/图片/音视频，不运行脚本和安装程序。清空或过期会话会使旧 ID 失效。本阶段不提供文件删除、软件安装或任意命令执行工具；原 Ask 不会自动获得这些本地工具。
 
 AI 助手可从侧边栏、托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起；快捷键可录制或清空，升级时避让已有相同绑定。点击录音开始，共用现有麦克风/ASR，右 Alt 或「结束录音」提交，Esc 取消；已有任务运行时不会抢占录音。窗口里可停止、新对话、复制回答及直达随记/提醒/设置。关闭助手取消当前任务；最近 12 个界面轮次仅存内存，模型保留最近三个完整问答及工具摘要，闲置 15 分钟后下次访问清理，退出程序即丢弃。助手与旧 Ask 上下文隔离，不自动读取剪贴板、选区或截图，不写长期记忆。发送的输入和相关临时会话会交给用户配置的远程或本地模型。
 
@@ -12,7 +12,7 @@ AI 助手可从侧边栏、托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收
 
 The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). Qinly reuses Ask for text/voice questions and a separate temporary conversation. Open it from the sidebar, tray or configurable `Left Ctrl + Right Shift + A`. Voice uses the existing recorder and ASR; Right Alt submits and Esc cancels. Other recordings are never taken over. New conversation clears the session; idle context expires on access after 15 minutes. Closing the assistant cancels its task. Clipboard, selected text and screenshots are not read automatically. Input and relevant conversation are sent to the configured model. Hidden interfaces retire after 60 seconds when safe.
 
-Windows tools discover real registered applications, open folders/documents/web addresses and search scoped file metadata. Each operation requires an explicit, cancel-by-default authorization. Only file names, paths, modification times and sizes may reach the configured model; file contents are not read. Windows Search is supplemented with an immediate-folder check, never a whole-disk crawl. Unindexed subfolders, a 40-item result limit and unavailable indexing are reported. Multiple results require a user choice; “Open second” uses the actual previous ordering. Model output cannot supply an arbitrary executable or document path. Dependent operations are sequential and stop on failure, with at most four tool rounds, eight calls and a 90-second task deadline. Scripts, installers, deletion and arbitrary commands are unavailable. Calendar, memory, briefings, TTS and wake words remain future stages.
+Windows tools discover real registered applications, open folders/documents/web addresses and search scoped file metadata. Requested application, folder, document and website opens run directly without a second confirmation. File metadata searches retain their explicit, cancel-by-default authorization. Only file names, paths, modification times and sizes may reach the configured model; file contents are not read. Windows Search is supplemented with an immediate-folder check, never a whole-disk crawl. Unindexed subfolders, a 40-item result limit and unavailable indexing are reported. Multiple results require a user choice; “Open second” uses the actual previous ordering. Model output cannot supply an arbitrary executable or document path. Dependent operations are sequential and stop on failure, with at most four tool rounds, eight calls and a 90-second task deadline. Scripts, installers, deletion and arbitrary commands are unavailable. Calendar, memory, briefings, TTS and wake words remain future stages.
 
 品牌资源位于 `logo/`，转换产物位于 `resources/`：`-1.png` 纯图标用于应用、任务栏和托盘；`-2.png` 浅色完整 Logo 和「轻令 Qinly 智能助手标志2.png」深色透明 Logo 用于对应主题侧边栏及关于页面，两者使用相同的 2:1 透明画布与显示尺寸；`-4.png` 方形图标用于安装包和桌面快捷方式；白底「轻令 Qinly 智能助手标志.png」用于本页品牌展示。原图保留，未重新绘制。开发时安装 Pillow 后运行 `pnpm icon`；可用 `QINLY_PYTHON` 指定已有 Python。ICO 含 16–256 像素多尺寸。显示名称改为轻令（Qinly），技术包名、App ID 和原 `typeless-rebuild` 用户目录继续沿用，以保留配置、登录与升级身份。
 
@@ -46,7 +46,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\轻令（Qinly）-0.34.0-setup.exe
+pnpm package          # → release\轻令（Qinly）-0.34.1-setup.exe
 ```
 
 
@@ -56,7 +56,7 @@ pnpm package          # → release\轻令（Qinly）-0.34.0-setup.exe
 
 「设置 → 快捷键 → 统一语音入口」默认开启，可关闭恢复纯听写。明确的提醒/随记及可识别的开发需求不额外分类；其他内容使用既有文本模型判断意图，可能增加一次调用，受 12 秒期限约束。多模态先转写；普通多模态听写继续以原音频和实际自动路由卡片处理，翻译使用本次指定目标语言或原有目标设置，不改动保存的设置。开发需求、引用命令继续按录音开始时的窗口路由润色；意图判断不是绝对无误，需明确口述时可用「指令输入」或关闭智能分流。
 
-例：“明天提醒我上午十点去银行”复用完整内置提醒模板和本地时间校验；“帮我翻译成英语，今晚一起吃烧烤吧”只翻译正文；“为什么天空是蓝色的”走原 Ask 回答卡；“打开卡巴斯基官方网站”由助手先检索真实地址再申请本次打开授权，不猜域名。“帮我保存到随记：……”保留本次原始录音并复用已识别正文。
+例：“明天提醒我上午十点去银行”复用完整内置提醒模板和本地时间校验；“帮我翻译成英语，今晚一起吃烧烤吧”只翻译正文；“为什么天空是蓝色的”走原 Ask 回答卡；“打开卡巴斯基官方网站”由助手先检索真实地址，再直接在默认浏览器打开，不猜域名或重复弹确认框。“帮我保存到随记：……”保留本次原始录音并复用已识别正文。
 
 助手已接入现有提醒创建/查询/完成/取消/稍后/恢复/删除、随记创建/检索/提取候选、历史检索、确认后复制结果，以及概览/历史/随记/提醒/纠正规则/设置页面。没有单独为每项设置提供自动修改接口；配置仍在原设置页完成。本地数据读取、助手文字随记写入和已有事项修改保留逐次授权；提醒创建有歧义时打开原确认界面，不能把候选当作已保存。随记提取仍用完整模板并由用户确认，不覆盖原文。同任务重复的相同创建/修改调用复用回执，避免重复写入。
 

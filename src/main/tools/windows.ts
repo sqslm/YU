@@ -73,7 +73,7 @@ export class WindowsTools {
       if (item.kind === 'file' && !documents.has(extname(item.path).toLowerCase())) return failed(mt('此文件类型不支持自动打开；不会运行脚本、安装程序或未知可执行文件'))
       const current = await realpath(item.path)
       if (current.toLowerCase() !== item.path.toLowerCase()) return failed(mt('目标路径已变化，请重新查找'))
-      await approve(mt('打开以下目标：\n{{path}}', { path: current }))
+      signal?.throwIfAborted()
       const error = await this.deps.openPath(current)
       if (error) return failed(error)
       return ok(mt('已向 Windows 提交打开请求：{{name}}', { name: item.name }), { path: current })
@@ -87,7 +87,6 @@ export class WindowsTools {
     if (name === 'open_application') {
       const query = string(args.name).replace(/\.exe$/i, '').toLowerCase()
       if (!query || query.length > 80 || /[\\/:\x00-\x1f]/.test(query)) return failed(mt('请输入应用名称'))
-      await approve(mt('查找本机登记的应用并打开唯一匹配项：{{name}}。匹配名称和路径可能发送给配置的模型。', { name: query }))
       const response = await this.deps.native({ action: 'applications' }, signal)
       const apps = (Array.isArray(response.applications) ? response.applications : []) as { name: string; path: string }[]
       const alias = query === 'vs code' || query === 'vscode' ? 'code' : query
@@ -109,7 +108,7 @@ export class WindowsTools {
       let url: URL
       try { url = new URL(string(args.url)) } catch { return failed(mt('请输入有效的 HTTP/HTTPS 网页地址')) }
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.href.length > 2000) return failed(mt('请输入有效的 HTTP/HTTPS 网页地址'))
-      await approve(mt('在默认浏览器打开：\n{{path}}', { path: url.href }))
+      signal?.throwIfAborted()
       await this.deps.openUrl(url.href)
       return ok(mt('已向 Windows 提交打开请求：{{name}}', { name: url.href }))
     }
@@ -119,7 +118,7 @@ export class WindowsTools {
     const root = await realpath(this.deps.folders[input as keyof typeof this.deps.folders] || input)
     if (!isAbsolute(root) || root === parse(root).root || root.startsWith('\\\\') || !(await stat(root)).isDirectory()) return failed(mt('请选择本地的具体文件夹，不支持全盘或网络目录'))
     if (name === 'open_folder') {
-      await approve(mt('打开以下目标：\n{{path}}', { path: root }))
+      signal?.throwIfAborted()
       const error = await this.deps.openPath(root)
       return error ? failed(error) : ok(mt('已向 Windows 提交打开请求：{{name}}', { name: root }), { path: root })
     }
@@ -160,7 +159,7 @@ const properties = {
   search_files: { folder: { type: 'string' }, name: { type: 'string' }, extension: { type: 'string' }, day: { type: 'string', enum: ['today', 'yesterday'] }, after: { type: 'string', description: 'Inclusive modification instant, ISO 8601 with timezone. Prefer day for local today/yesterday.' }, before: { type: 'string', description: 'Exclusive modification instant, ISO 8601 with timezone.' }, minBytes: { type: 'integer', minimum: 0 }, sort: { type: 'string', enum: ['modified', 'size'] } }
 }
 export const WINDOWS_DEFINITIONS: ToolDefinition[] = WINDOWS_TOOLS.map(name => ({ name,
-  description: ({ open_application: 'Find registered Windows applications by name; launch only a unique match. Multiple candidates require user choice by returned id.', open_folder: 'Open a specific local folder in Explorer.', open_file: 'Open an actual document result by id. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open an HTTP/HTTPS URL in the default browser, after user authorization.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus immediate-directory fallback. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.' })[name],
+  description: ({ open_application: 'Find registered Windows applications by name; launch a unique match directly without another confirmation. Multiple candidates require user choice by returned id.', open_folder: 'Open a requested specific local folder in Explorer directly, without another confirmation.', open_file: 'Open a requested actual document result by id directly, without another confirmation. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open a requested HTTP/HTTPS URL directly in the default browser, without another confirmation.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus immediate-directory fallback. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.' })[name],
   parameters: { type: 'object', properties: properties[name], additionalProperties: false, required: name === 'open_file' ? ['id'] : name === 'open_url' ? ['url'] : [] },
   run: (args, ctx) => ctx.windows!.run(name, args, ctx.signal)
 }))

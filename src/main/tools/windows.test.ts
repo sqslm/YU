@@ -26,6 +26,36 @@ const file = async (name: string): Promise<string> => { const path = join(root, 
 const row = (path: string) => ({ name: path.split(/[\\/]/).at(-1)!, path, bytes: 5, modified: '2026-10-22T01:00:00Z' })
 
 describe('Windows tools permissions and real result selection', () => {
+  it('opens a requested website without asking for authorization again', async () => {
+    confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
+    expect((await tools.run('open_url', { url: 'https://example.com/' })).ok).toBe(true)
+    expect(openUrl).toHaveBeenCalledExactlyOnceWith('https://example.com/')
+    expect(confirm).not.toHaveBeenCalled()
+  })
+  it('opens a requested registered application without another confirmation', async () => {
+    const path = await file('Example.exe')
+    native.mockResolvedValue({ applications: [{ name: 'Example', path }] })
+    confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
+    expect((await tools.run('open_application', { name: 'Example' })).ok).toBe(true)
+    expect(openPath).toHaveBeenCalledExactlyOnceWith(path)
+    expect(confirm).not.toHaveBeenCalled()
+  })
+  it('opens a requested folder without another confirmation', async () => {
+    confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
+    expect((await tools.run('open_folder', { folder: 'downloads' })).ok).toBe(true)
+    expect(openPath).toHaveBeenCalledExactlyOnceWith(root)
+    expect(confirm).not.toHaveBeenCalled()
+  })
+  it('opens a selected real document without repeating the search authorization', async () => {
+    const path = await file('selected.pdf')
+    native.mockResolvedValue({ files: [row(path)] })
+    const found = await tools.run('search_files', {})
+    const id = (found.data.items as { id: string }[])[0].id
+    confirm.mockClear(); confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
+    expect((await tools.run('open_file', { id })).ok).toBe(true)
+    expect(openPath).toHaveBeenCalledExactlyOnceWith(path)
+    expect(confirm).not.toHaveBeenCalled()
+  })
   it('does not expose local tools to legacy Ask even if model guesses a name', async () => {
     expect(toolSchemas().map(t => (t.function as { name: string }).name)).not.toContain('search_files')
     const result = await runTool('search_files', {}, { windows: tools, settings: mergeSettings({}), question: '', log: vi.fn() })
@@ -38,14 +68,23 @@ describe('Windows tools permissions and real result selection', () => {
     expect(await tools.run('open_folder', { folder: 'downloads' })).toMatchObject({ ok: false, error: 'Access denied' })
     expect(openPath).toHaveBeenCalledWith(root)
   })
-  it('does not discover or launch after declined authorization or cancellation', async () => {
+  it('keeps metadata-search authorization and respects cancelled opening tasks', async () => {
     confirm.mockResolvedValueOnce(false)
-    await expect(tools.run('open_application', { name: 'Code' })).rejects.toThrow('取消')
+    await expect(tools.run('search_files', {})).rejects.toThrow('取消')
     expect(native).not.toHaveBeenCalled(); expect(openPath).not.toHaveBeenCalled()
     const controller = new AbortController()
-    confirm.mockImplementationOnce(async () => { controller.abort(); return true })
+    controller.abort()
     await expect(tools.run('open_folder', { folder: 'downloads' }, controller.signal)).rejects.toThrow()
+    await expect(tools.run('open_url', { url: 'https://example.com' }, controller.signal)).rejects.toThrow()
+    await expect(tools.run('open_application', { name: 'Code' }, controller.signal)).rejects.toThrow()
+    expect(native).not.toHaveBeenCalled(); expect(openUrl).not.toHaveBeenCalled()
     expect(openPath).not.toHaveBeenCalled()
+  })
+  it('does not launch if cancelled while application discovery is in flight', async () => {
+    const path = await file('Code.exe'), controller = new AbortController()
+    native.mockImplementation(async () => { controller.abort(); return { applications: [{ name: 'Code', path }] } })
+    await expect(tools.run('open_application', { name: 'Code' }, controller.signal)).rejects.toThrow()
+    expect(openPath).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled()
   })
   it('launches only a real unique registered application, deduplicating aliases', async () => {
     const path = await file('Code.exe')
@@ -116,11 +155,12 @@ describe('Windows tools permissions and real result selection', () => {
     } finally { await rmdir(link).catch(() => {}); await unlink(target); await rmdir(outside) }
   })
   it('reports real failures in receipts without writing sensitive metadata to logs', async () => {
-    confirm.mockResolvedValue(false)
+    openPath.mockResolvedValue('Access denied')
     const receipt = vi.fn(), log = vi.fn()
     const result = await runTool('open_folder', {}, { windows: tools, allowedTools: WINDOWS_TOOLS, settings: mergeSettings({}), question: 'open', log, onLocalResult: receipt })
     expect(result.ok).toBe(false); expect(receipt).toHaveBeenCalledWith(expect.objectContaining({ ok: false }))
-    expect(openPath).not.toHaveBeenCalled()
+    expect(openPath).toHaveBeenCalledWith(root)
+    expect(log.mock.calls.every(([line]) => !line.includes(root))).toBe(true)
   })
 })
 
