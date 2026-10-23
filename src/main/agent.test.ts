@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SearchSettings, Settings } from '@shared/types'
+import type { PersonalTools } from './tools/personal'
+import type { WindowsTools } from './tools/windows'
 
 /**
  * The agent has exactly two dispatch paths:
@@ -182,6 +184,17 @@ beforeEach(() => {
 })
 
 describe('native function calling', () => {
+  it('delivers string arrays from a native tool call to the existing tag mutation', async () => {
+    const note = { id: 'note-1', tags: [], transcript: 'Owned note', updatedAt: 1 }
+    const updateNoteTags = vi.fn().mockResolvedValue({ ...note, tags: ['development'] })
+    const personal = { notes: () => [note], confirm: async () => true, updateNoteTags } as unknown as PersonalTools
+    const fetchImpl = makeFetch(toolCallResponse('update_note_tags', { id: 'note-1', add_tags: ['development'] }), textResponse('Tag saved'))
+    await askAgent(makeSettings(), 'Add the development tag to that note', {}, signal, () => {}, {
+      reset: true, personal, windows: {} as WindowsTools, allowedTools: ['update_note_tags'], fetchImpl: fetchImpl as unknown as typeof fetch
+    })
+    expect(updateNoteTags).toHaveBeenCalledWith('note-1', ['development'])
+    expect(JSON.parse(bodies[1]).messages.find((message: { role: string }) => message.role === 'tool').content).toContain('"ok":true')
+  })
   it('does not issue a fallback request or remember a cancelled answer', async () => {
     const controller = new AbortController()
     let resolve!: (text: string) => void
@@ -793,6 +806,12 @@ describe('conversation thread', () => {
 })
 
 describe('parseIntent', () => {
+  it('preserves tag arrays for the tool schema to validate instead of silently dropping them', () => {
+    expect(parseIntent('{"tool":"update_note_tags","args":{"id":"note-1","add_tags":["development"],"remove_tags":[]}}'))
+      .toMatchObject({ tool: 'update_note_tags', args: { id: 'note-1', add_tags: ['development'], remove_tags: [] } })
+    expect(parseIntent('{"tool":"update_note_tags","args":{"id":"note-1","add_tags":[{"unexpected":"object"}]}}')?.args)
+      .toEqual({ id: 'note-1' })
+  })
   it('reads the tool/args/reason shape', () => {
     expect(parseIntent('{"tool":"web_search","args":{"query":"a"},"reason":"r"}')).toEqual({
       tool: 'web_search',

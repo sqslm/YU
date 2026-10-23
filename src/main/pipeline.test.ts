@@ -1442,8 +1442,17 @@ describe('unified voice entry', () => {
     expect(onAssistant.mock.calls[0][3]).toMatchObject({ appName: 'code', windowTitle: 'Original code', processId: 42, windowHandle: '1234' })
     expect(onAssistant.mock.calls[0][3]).not.toHaveProperty('fieldContent')
   })
-  it('supplies real selected text to normal Ask with web search disabled', async () => {
-    mocks.transcribe.mockResolvedValue({ text: 'Explain the selected code' })
+  it('uses the existing assistant answer for a voice follow-up instead of starting an empty Ask thread', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '那我要怎么解决？' })
+    const onAssistant = vi.fn().mockResolvedValue(undefined)
+    const h = harness({ voiceCommands: smart }, { onAssistant,
+      voiceContext: () => ({ recent: { question: 'Analyze the current error', answer: 'Connection refused on port 8080' } }) })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(onAssistant).toHaveBeenCalledWith('那我要怎么解决？', expect.any(AbortSignal), expect.any(Number), expect.any(Object))
+    expect(mocks.askAgent).not.toHaveBeenCalled(); expect(mocks.complete).not.toHaveBeenCalled()
+  })
+  it.each(['Explain the selected code', '这段英文是什么意思？顺便翻译成中文。'])('supplies real selected text to normal Ask with web search disabled: %s', async text => {
+    mocks.transcribe.mockResolvedValue({ text })
     mocks.complete.mockResolvedValueOnce('{"kind":"ask"}')
     mocks.askAgent.mockResolvedValue({ text: 'Explanation', sources: [], searched: false })
     const captureSelection = vi.fn().mockResolvedValue({ text: 'const x = 1;', context: {}, apply: vi.fn() })
@@ -1451,6 +1460,16 @@ describe('unified voice entry', () => {
     h.pipeline.start('dictation'); await finish(h.pipeline)
     expect(captureSelection).toHaveBeenCalledOnce()
     expect(mocks.askAgent.mock.calls[0][2]).toMatchObject({ selectedText: 'const x = 1;' })
+  })
+  it('recognizes explicit read-only selection requests before the intent model can route them to an edit', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '帮我解释一下选中的这段代码。' })
+    mocks.complete.mockResolvedValueOnce('{"kind":"selection","operation":"polish"}')
+    mocks.askAgent.mockResolvedValue({ text: 'This returns the sum.', sources: [], searched: false })
+    const apply = vi.fn(), captureSelection = vi.fn().mockResolvedValue({ text: 'return a + b;', context: {}, apply })
+    const h = harness({ voiceCommands: smart }, { captureSelection })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(mocks.askAgent.mock.calls[0][2]).toMatchObject({ selectedText: 'return a + b;' })
+    expect(apply).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
   })
   it('does not require a text model to polish multimodal dictation after a protected requirement', async () => {
     mocks.generateFromAudio.mockResolvedValueOnce('请帮我实现这个功能，打开网站。').mockResolvedValueOnce('整理后的开发需求')

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { directVoiceIntent, parseVoiceIntent } from './voice-intent'
 
 describe('unified voice decisions', () => {
-  it.each(['明天提醒我上午十点去银行办一张银行卡。', '20分钟后提醒我打扫卫生，强提醒。', 'Remind me to call Sam in twenty minutes.'])('keeps the complete original reminder: %s', text => {
+  it.each(['明天提醒我上午十点去银行办一张银行卡。', '20分钟后提醒我打扫卫生，强提醒。', '二十分钟后提醒我喝水，不对，半小时后。', 'Remind me to call Sam in twenty minutes.'])('keeps the complete original reminder: %s', text => {
     expect(directVoiceIntent(text)).toEqual({ kind: 'reminder' })
   })
   it.each(['给 Agent 写提示词：帮我打开下载目录，然后创建提醒。', '请帮我实现一个功能，每天提醒用户开会。', '“打开 VS Code”，把这句写在需求里。', 'Write a prompt for Codex: open the folder, then create a note.'])('protects dictated requirements and quotations: %s', text => {
@@ -16,13 +16,51 @@ describe('unified voice decisions', () => {
     expect(directVoiceIntent('Take a note: My idea.')).toEqual({ kind: 'notes', text: 'My idea.' })
   })
   it('keeps normal Ask and arbitrary supported assistant requests available to the model', () => {
-    for (const kind of ['ask', 'assistant', 'dictation', 'reminder']) expect(parseVoiceIntent(JSON.stringify({ kind }), 'input')).toEqual({ kind })
+    for (const kind of ['ask', 'assistant', 'dictation', 'reminder']) expect(parseVoiceIntent(JSON.stringify({ kind }), 'Remind me in ten minutes')).toEqual({ kind })
+  })
+  it.each(['我明天得把旧文件整理一下。', 'Tomorrow afternoon I have a meeting.'])('does not let a date alone authorize a reminder: %s', text => {
+    expect(parseVoiceIntent('{"kind":"reminder"}', text)).toEqual({ kind: 'dictation' })
+  })
+  it('retains the actual supplied note when classification rewrites fillers or punctuation', () => {
+    const input = '呃，帮我记一下。我想做一个功能，就是，嗯，整理文件。'
+    expect(parseVoiceIntent('{"kind":"notes","text":"我想做一个整理文件的功能。"}', input)).toEqual({ kind: 'notes', text: input })
+  })
+  it('does not substitute a reminder or note for an unavailable assistant capability', () => {
+    expect(directVoiceIntent('记住，以后写开发提示词尽量简洁。')).toEqual({ kind: 'assistant' })
+    expect(directVoiceIntent('Remember that I prefer short prompts.')).toEqual({ kind: 'assistant' })
+    expect(parseVoiceIntent('{"kind":"reminder"}', '每天早上给我一份任务简报。')).toEqual({ kind: 'assistant' })
+    expect(parseVoiceIntent('{"kind":"reminder"}', 'Schedule a meeting tomorrow afternoon.')).toEqual({ kind: 'assistant' })
+  })
+  it('resolves a reminder referring to a prior task through the existing assistant instead of creating a generic new task', () => {
+    expect(directVoiceIntent('明天十点提醒我做这件事，强提醒。')).toEqual({ kind: 'assistant' })
+    expect(directVoiceIntent('Remind me about that in twenty minutes.')).toEqual({ kind: 'assistant' })
+  })
+  it.each(['把明天取东西的提醒改成下午两点。', '刚才那个强提醒改成普通提醒。', '再改成强提醒。', '算了，这个提醒不要了。', 'Cancel the bank reminder.', 'Update that task to 2 PM.'])('never creates a second task for an existing-task edit: %s', text => {
+    expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })
+  })
+  it('keeps a real answer available for a voice follow-up without assuming unrelated speech refers to it', () => {
+    expect(directVoiceIntent('那我要怎么解决？', true)).toEqual({ kind: 'assistant' })
+    expect(directVoiceIntent('So how do I fix that?', true)).toEqual({ kind: 'assistant' })
+    expect(directVoiceIntent('那我要怎么解决？', false)).toBeNull()
+    expect(directVoiceIntent('今天晚上吃烧烤。', true)).toBeNull()
+  })
+  it.each(['我想让我的软件支持自动打开程序，你觉得怎么实现？', 'How would you implement support for opening applications?'])('answers an explicit request for advice instead of dictating or executing it: %s', text => {
+    expect(directVoiceIntent(text)).toEqual({ kind: 'ask' })
   })
   it('accepts a supplied translation passage and explicit per-take target', () => {
     expect(parseVoiceIntent('{"kind":"translate","text":"今天一起吃烧烤吧。","target":"en"}', '帮我翻译成英语，今天一起吃烧烤吧。'))
       .toEqual({ kind: 'translate', text: '今天一起吃烧烤吧。', target: 'en' })
     expect(parseVoiceIntent('{"kind":"selection","operation":"translate","target":"zh"}', 'Translate my selection into Chinese'))
       .toEqual({ kind: 'selection', operation: 'translate', target: 'zh' })
+  })
+  it('keeps read-only selection questions out of the editing branch and reads a referenced translation source', () => {
+    expect(directVoiceIntent('帮我解释一下选中的这段代码。')).toEqual({ kind: 'ask' })
+    expect(parseVoiceIntent('{"kind":"dictation"}', 'Explain the selected code')).toEqual({ kind: 'ask' })
+    expect(parseVoiceIntent('{"kind":"selection","operation":"polish"}', '帮我解释一下选中的这段代码。')).toEqual({ kind: 'ask' })
+    expect(parseVoiceIntent('{"kind":"selection","operation":"explain"}', 'Explain the selected code')).toEqual({ kind: 'ask' })
+    expect(parseVoiceIntent('{"kind":"translate","text":null,"target":"zh"}', '这段英文是什么意思，翻译成中文。'))
+      .toEqual({ kind: 'selection', operation: 'translate', target: 'zh' })
+    expect(() => parseVoiceIntent('{"kind":"translate","text":null,"target":"run script"}', 'Translate this text')).toThrow()
   })
   it.each(['{"kind":"shell"}', '{"kind":"translate","text":"invented"}', '{"kind":"translate","text":"input","target":"English; exec"}', '{"kind":"selection","operation":"delete"}', 'not json', 'null'])('rejects invalid or invented model output: %s', raw => {
     expect(() => parseVoiceIntent(raw, 'input')).toThrow()

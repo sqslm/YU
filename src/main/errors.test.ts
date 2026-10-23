@@ -8,6 +8,9 @@ import { actionsFor, buildBarAlert, classifyError } from './errors'
  */
 
 describe('classifyError — provider failures', () => {
+  it.each(['没有选中文字', '目标窗口已变化，请重新选择文字', '选区已变化，未修改文字；请重新选择'])('shows an actionable selection failure without blaming the model: %s', message => {
+    expect(classifyError(new Error(message))).toEqual({ kind: 'selection', message, retryable: false })
+  })
   it('treats a 401 as a credential problem the user must fix in settings', () => {
     const result = classifyError(new Error('ASR HTTP 401'))
     expect(result).toEqual({ kind: 'auth', message: '密钥无效或没有权限', retryable: false })

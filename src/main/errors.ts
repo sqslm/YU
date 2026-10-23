@@ -112,6 +112,11 @@ const FALLBACK: ClassifiedError = {
 export function classifyError(err: unknown): ClassifiedError {
   const message =
     err instanceof Error ? err.message : typeof err === 'string' ? err : String(err ?? '')
+  const selectionMessages = ['没有选中文字', '目标窗口已变化，请重新选择文字', '无法返回原输入框，请重新选择文字',
+    '选区已变化，未修改文字；请重新选择', '此应用不允许自动读取选区', '敏感应用不允许读取上下文']
+  if (selectionMessages.some(text => message === text || message === mt(text))) {
+    return { kind: 'selection', message: mt(message), retryable: false }
+  }
   for (const rule of RULES) {
     if (rule.test.test(message)) {
       return { kind: rule.kind, message: rule.message, retryable: rule.retryable }

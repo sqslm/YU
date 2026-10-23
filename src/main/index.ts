@@ -1473,18 +1473,18 @@ async function bootstrap(): Promise<void> {
     voiceContext: text => {
       const last = assistant.snapshot().turns.at(-1)
       const completion = /已经|做完|完成|检查完|\b(?:finished|completed|done)\b/iu.test(text)
-      return JSON.stringify({ recent: last?.state === 'done' ? { question: last.question.slice(0, 500), answer: last.answer.slice(0, 2000) } : null,
-        ...(completion ? { activeTasks: reminders!.store.list().filter(row => row.status === 'pending' || row.status === 'due').slice(0, 20).map(row => ({ id: row.id, title: row.title })) } : {}) })
+      return { recent: last?.state === 'done' ? { question: last.question.slice(0, 500), answer: last.answer.slice(0, 2000) } : null,
+        ...(completion ? { activeTasks: reminders!.store.list().filter(row => row.status === 'pending' || row.status === 'due').slice(0, 20).map(row => ({ id: row.id, title: row.title })) } : {}) }
     },
     onAssistant: async (text, signal, submittedAt, context) => { signal.throwIfAborted(); showAssistant(); await assistant.send(text, signal, undefined, submittedAt, context) },
     onActivity: () => refreshHotkeyActivity(),
     onVoiceNote: async (pcm, transcript, signal) => {
       const note = await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript)
-      assistant.rememberAnswer(transcript, JSON.stringify({ savedNote: { id: note.id, text: transcript.slice(0, 1500), createdAt: note.createdAt } }))
+      assistant.rememberAnswer(transcript, mt('随记已保存'), { savedNote: { id: note.id, text: transcript.slice(0, 1500), createdAt: note.createdAt } })
     },
     onReminder: async (text, signal, progress, submittedAt) => {
       const result = await reminders!.voice(text, signal, progress, submittedAt)
-      if (result.reminder) assistant.rememberAnswer(text, JSON.stringify({ savedReminder: result.reminder }))
+      if (result.reminder) assistant.rememberAnswer(text, result.message, { savedReminder: result.reminder })
       return result
     },
     // Ask mode answers land in the card window; dictation/translate keep

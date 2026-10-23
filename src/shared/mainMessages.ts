@@ -20,6 +20,8 @@ export const MAIN_MESSAGES: Record<string, string> = {
   '找到 {{count}} 个事项': 'Found {{count}} tasks',
   '找到 {{count}} 条随记': 'Found {{count}} notes',
   '事项已更新': 'Task updated',
+  '本次请求不应创建新提醒，请查询或修改已有事项': 'This request should not create a new reminder. Query or update the existing item instead.',
+  '本次未修改提醒或待办，请明确事项后重试': 'No reminder or task was changed. Specify the item and try again.',
   '已打开功能页面': 'Page opened',
   '读取匹配的随记内容并发送给当前模型？': 'Read matching notes and send their content to the current model?',
   '读取这条随记并提取待办与提醒？': 'Read this note and extract tasks and reminders?',

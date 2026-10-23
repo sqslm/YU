@@ -40,6 +40,8 @@ export class WindowsTools {
   }
   /** Deliberately narrow deterministic commands: no model/network needed. */
   command(input: string): { name: string; args: Record<string, unknown> } | null {
+    // A compound request belongs to the existing tool loop, not an app-name match.
+    if (/[,，;；\n]|然后|并且|同时|\b(?:and then|then|also)\b|\band (?:open|find|save|create|search|calculate)\b/iu.test(input)) return null
     const url = /^(?:请|帮我)?(?:打开|open )\s*(https?:\/\/\S+)$/i.exec(input)
     if (url) return { name: 'open_url', args: { url: url[1] } }
     const folder = /^(?:请|帮我)?打开(?:我的)?(下载(?:目录|文件夹)?|桌面|文档)(?:目录|文件夹)?[。！!]?$/i.exec(input)

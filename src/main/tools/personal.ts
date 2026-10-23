@@ -2,6 +2,7 @@ import type { HistoryEntry, NoteEntry } from '@shared/types'
 import type { Reminder, ReminderAction, ReminderInput } from '@shared/reminders'
 import { mainLanguage, mt } from '@shared/mainI18n'
 import { nextOccurrence, resolveReminderTime } from '../reminder-time'
+import { directVoiceIntent } from '../voice-intent'
 import type { ToolDefinition, ToolOutcome } from './registry'
 
 export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_reminder', 'create_note', 'search_notes', 'update_note_tags', 'extract_note_tasks', 'search_history', 'read_clipboard', 'copy_to_clipboard', 'open_page'] as const
@@ -67,6 +68,9 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
   if (name === 'create_reminder') {
     // The established full-template refinement / time parser is authoritative.
     // Never accept a model-invented timestamp or silently drop a correction.
+    const intent = directVoiceIntent(question)
+    if (intent?.kind === 'assistant' || intent?.kind === 'dictation') throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
+    if (!/提醒|待办|代办|(?:添加|创建|新建|加个|记个).{0,8}任务|\b(?:remind|reminder|to-?do|notify|alert)\b|\b(?:create|add|save)\b.{0,30}\btask\b/iu.test(question)) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
     const result = await api.remind(question, signal, submittedAt)
     return ok(result.message, { confirmationRequired: !result.undo, ...(result.reminder ? { item: reminderDetails(result.reminder, Date.now()) } : {}) })
   }

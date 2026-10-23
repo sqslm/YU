@@ -30,6 +30,10 @@ describe('personal tools share real application services', () => {
     expect(result).toMatchObject({ ok: true, data: { confirmationRequired: true }, summary: 'Please confirm the time' })
     expect((await runTool('create_reminder', { dueAt: Date.now() + 60000 }, ctx)).ok).toBe(false)
   })
+  it.each(['每天八点给我当天的任务简报。', 'Schedule a project meeting tomorrow.', '把明天取东西的提醒改成下午两点。', '记住，我喜欢简单的方案。'])('does not let a model substitute new reminders for a different action: %s', async question => {
+    expect((await runTool('create_reminder', {}, { ...ctx, question })).ok).toBe(false)
+    expect(api.remind).not.toHaveBeenCalled()
+  })
   it('does not duplicate a model-repeated create operation in one task', async () => {
     await runTool('create_note', { text: 'My note' }, ctx); await runTool('create_note', { text: 'My note' }, ctx)
     expect(api.createNote).toHaveBeenCalledExactlyOnceWith('My note')

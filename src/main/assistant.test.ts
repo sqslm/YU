@@ -3,6 +3,7 @@ import { mergeSettings } from '@shared/defaults'
 import { AssistantSession, ASSISTANT_TOOLS } from './assistant'
 import { askAgent } from './agent'
 import { runTool, toolSchemas } from './tools/registry'
+import type { PersonalTools } from './tools/personal'
 
 const settings = mergeSettings({ profiles: [{ id: 'text', kind: 'llm', name: 'Text', enabled: true,
   preset: '', baseUrl: 'https://example.com/v1', apiKey: 'private', model: 'model' }], chains: { llm: ['text'], asr: [], multimodal: [] } })
@@ -18,6 +19,32 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('never displays a model-only cancellation as an executed mutation', async () => {
+    const action = vi.fn(), reminders = () => [{ id: 'real-task', title: 'Clean', level: 'normal', status: 'pending', dueAt: null }]
+    const personal = { reminders, action } as unknown as PersonalTools
+    ask.mockResolvedValueOnce({ text: '已经取消了这条提醒。', sources: [], searched: false })
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), personal })
+    await current.send('算了，这个提醒不要了。')
+    expect(current.snapshot().turns[0]).toMatchObject({ state: 'error', answer: '本次未修改提醒或待办，请明确事项后重试' })
+    expect(action).not.toHaveBeenCalled(); expect(reminders()[0].status).toBe('pending')
+  })
+  it('queries current task IDs for edits without a new model round or a second selector', async () => {
+    const reminders = vi.fn().mockReturnValue([{ id: 'actual-strong-id', title: 'Call', level: 'strong', status: 'pending', dueAt: null }])
+    const personal = { reminders } as unknown as PersonalTools
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), personal })
+    await current.send('刚才那个强提醒改成普通提醒。')
+    expect(reminders).toHaveBeenCalledOnce(); expect(ask).toHaveBeenCalledOnce()
+    expect(ask.mock.calls[0][5]?.conversation?.toolNotes).toContain('actual-strong-id')
+    expect(current.snapshot().turns[0].localResults).toContainEqual(expect.objectContaining({ tool: 'list_reminders', ok: true }))
+  })
+  it('keeps saved IDs available to follow-ups without showing raw receipts as the answer', async () => {
+    session.rememberAnswer('Save my idea', 'Note saved', { savedNote: { id: 'actual-note-id' } })
+    expect(session.snapshot().turns[0].answer).toBe('Note saved')
+    await session.send('Tag that note')
+    expect(JSON.stringify(ask.mock.calls[0][5]?.conversation?.messages)).toContain('actual-note-id')
+    session.clear()
+    expect(session.snapshot().turns).toEqual([])
+  })
   it('only offers screenshot capture for explicit screen/image requests, preserving the original target', async () => {
     const analyzeScreenshot = vi.fn().mockResolvedValue('Actual screen content')
     const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), analyzeScreenshot })
@@ -25,10 +52,22 @@ describe('assistant session', () => {
     expect(ask.mock.calls[0][5]?.allowedTools).not.toContain('analyze_screenshot')
     const context = { appName: 'code', processId: 42, windowHandle: '1234' }
     await current.send('Analyze this screenshot', undefined, undefined, now, context)
-    const options = ask.mock.calls[1][5]!
-    expect(options.allowedTools).toContain('analyze_screenshot')
-    await options.analyzeScreenshot!('Visible error', false)
-    expect(analyzeScreenshot).toHaveBeenCalledWith(context, 'Visible error', false, expect.any(AbortSignal))
+    expect(ask).toHaveBeenCalledOnce()
+    expect(analyzeScreenshot).toHaveBeenCalledWith(context, 'Analyze this screenshot', false, expect.any(AbortSignal))
+    expect(current.snapshot().turns.at(-1)?.answer).toBe('Actual screen content')
+    await current.send('截一下当前窗口，帮我看看这个错误。', undefined, undefined, now, context)
+    expect(analyzeScreenshot).toHaveBeenCalledTimes(2)
+    await current.send('这张图表里的数据主要反映什么？', undefined, undefined, now, context)
+    expect(analyzeScreenshot).toHaveBeenCalledTimes(3)
+    await current.send('What is a screenshot?')
+    expect(analyzeScreenshot).toHaveBeenCalledTimes(3)
+    await current.send('Which application is this window?')
+    expect(analyzeScreenshot).toHaveBeenCalledTimes(3)
+    await current.send('Extract text from this image', undefined, undefined, now, context)
+    expect(analyzeScreenshot).toHaveBeenLastCalledWith(context, 'Extract text from this image', true, expect.any(AbortSignal))
+    await current.send('How do I fix that?')
+    expect(ask.mock.calls.at(-1)?.[5]?.conversation?.toolNotes).toContain('Actual screen content')
+    expect(ask.mock.calls.at(-1)?.[5]?.conversation?.toolNotes).toContain('"ok":true')
   })
   it('passes the original application snapshot to Ask without detecting another foreground window', async () => {
     const context = { appName: 'code', windowTitle: 'Original document', processId: 42, windowHandle: '1234' }

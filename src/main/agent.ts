@@ -415,7 +415,8 @@ function asArgs(value: unknown): Record<string, unknown> {
   const args: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     if (item === null || item === undefined) continue
-    if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+    if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean' ||
+      Array.isArray(item) && item.length <= 30 && item.every(value => typeof value === 'string')) {
       args[key] = item
     }
   }

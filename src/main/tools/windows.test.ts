@@ -26,6 +26,11 @@ const file = async (name: string): Promise<string> => { const path = join(root, 
 const row = (path: string) => ({ name: path.split(/[\\/]/).at(-1)!, path, bytes: 5, modified: '2026-10-22T01:00:00Z' })
 
 describe('Windows tools permissions and real result selection', () => {
+  it('leaves compound requests to the tool loop instead of using the whole sentence as an app name', () => {
+    expect(tools.command('打开计算器，帮我算一下 258 乘以 36。')).toBeNull()
+    expect(tools.command('Open Calculator and calculate 258 times 36.')).toBeNull()
+    expect(tools.command('打开计算器。')).toEqual({ name: 'open_application', args: { name: '计算器' } })
+  })
   it('uses a custom Downloads getter on each task and requests bounded recursion and archive extensions', async () => {
     let folder = root
     const dynamic = new WindowsTools({ folders: () => ({ downloads: folder, desktop: root, documents: root }), native, confirm, openPath, openUrl })
