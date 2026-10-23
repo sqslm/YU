@@ -32,6 +32,8 @@ import { AssistantSession } from './assistant'
 import { WindowsTools } from './tools/windows'
 import { windowsNative } from './windows-native'
 import { captureOriginalWindow, type WindowScreenshot } from './screenshot'
+import { ScreenshotTool } from './screenshot-tool'
+import { needsAssistantContext } from './voice-intent'
 import { generateFromImage } from './providers/gemini'
 import { chainFor, withFailover } from './providers/chain'
 import { registerNotesIpc } from './notes-ipc'
@@ -116,6 +118,16 @@ let hubView: import('./tools/personal').HubPage | null = null
 let assistantTarget: ForegroundInfo | undefined
 let screenshotSequence = 0
 let screenshotReview: { id: number; finish: (accepted: boolean) => void } | null = null
+const screenshotTool = new ScreenshotTool(() => store.get(), active => hotkeys?.setSuspended(active))
+async function openScreenshot(): Promise<boolean> {
+  if (pipeline?.isBusy || notesRecording || assistant.busy || selectionEditor?.isBusy) return false
+  try { await screenshotTool.open(); return true }
+  catch (error) {
+    log('[screenshot] capture failed')
+    pipeline?.showAlert({ kind: 'selection', level: 'error', text: error instanceof Error ? error.message : String(error), actions: [] })
+    return false
+  }
+}
 function taskDialog(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
   const parent = [assistantWindow, settingsWindow].find(win => win && !win.isDestroyed() && win.isVisible())
   return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options)
@@ -544,7 +556,7 @@ function hideAssistant(): void {
 }
 
 function openAssistant(): boolean {
-  if (notesRecording || pipeline?.isBusy || selectionEditor?.isBusy) return false
+  if (screenshotTool.isOpen || notesRecording || pipeline?.isBusy || selectionEditor?.isBusy) return false
   if (!assistantWindow?.isFocused()) assistantTarget = foregroundWindow()
   showAssistant()
   return true
@@ -564,8 +576,8 @@ function showAssistant(): void {
   const win = createAssistantWindow(store.get().themeMode)
   assistantWindow = win
   win.on('close', event => { if (!quitting) { event.preventDefault(); hideAssistant() } })
-  win.on('closed', () => { cancelAssistant(); assistantWindow = null })
-  win.webContents.on('render-process-gone', () => { cancelAssistant(); win.destroy() })
+  win.on('closed', () => { assistantWindow = null })
+  win.webContents.on('render-process-gone', () => { if (win.isVisible()) cancelAssistant(); win.destroy() })
 }
 
 /**
@@ -805,6 +817,8 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  screenshotTool.register()
+  ipcMain.handle('screenshot:open', () => openScreenshot())
   ipcMain.handle('assistant:open', () => openAssistant())
   ipcMain.handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
   ipcMain.handle('assistant:navigate', (_event, page: unknown) => {
@@ -1403,6 +1417,9 @@ function wireHotkeys(): void {
           if (assistantWindow?.isVisible()) hideAssistant()
           else openAssistant()
           break
+        case 'screenshot':
+          void openScreenshot()
+          break
         case 'paste-last':
           // A failed "paste the last one" must not become an unhandled rejection:
           // in the main process that is a warning at best and a crash guard away
@@ -1475,14 +1492,16 @@ async function bootstrap(): Promise<void> {
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
     captureSelection: () => captureSelectionTarget(store.get()),
     voiceContext: text => {
-      const last = assistant.snapshot().turns.at(-1)
+      const last = needsAssistantContext(text) ? assistant.snapshot().turns.at(-1) : undefined
       const completion = /已经|做完|完成|检查完|\b(?:finished|completed|done)\b/iu.test(text)
       return { recent: last?.state === 'done' ? { question: last.question.slice(0, 500), answer: last.answer.slice(0, 2000) } : null,
         ...(completion ? { activeTasks: reminders!.store.list().filter(row => row.status === 'pending' || row.status === 'due').slice(0, 20).map(row => ({ id: row.id, title: row.title })) } : {}) }
     },
-    onAssistant: async (text, signal, submittedAt, context) => {
+    onAssistant: async (text, signal, submittedAt, context, useContext) => {
       signal.throwIfAborted()
-      await assistant.send(text, signal, undefined, submittedAt, context)
+      assistantTarget = context ? { handle: context.windowHandle, title: context.windowTitle ?? '', appName: context.appName ?? '',
+        className: '', pid: context.processId ?? 0, appPath: context.appPath ?? '', rect: context.windowRect ?? null } : undefined
+      await assistant.send(text, signal, undefined, submittedAt, context, useContext)
       signal.throwIfAborted()
       const turn = assistant.snapshot().turns.at(-1)
       if (!turn || turn.state === 'cancelled') return
@@ -1931,6 +1950,7 @@ if (!gotLock) {
     if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()
+    screenshotTool.close()
     tray?.destroy()
     tray = null
     selectionEditor?.cancel()

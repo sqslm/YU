@@ -17,6 +17,13 @@ import type { AnswerCardPayload, TypelessApi } from '@shared/api'
 let lastCard: AnswerCardPayload | null = null
 
 const api: TypelessApi = {
+  screenshot: {
+    open: () => ipcRenderer.invoke('screenshot:open'),
+    frame: () => ipcRenderer.invoke('screenshot:frame'),
+    close: () => ipcRenderer.invoke('screenshot:close'),
+    copyText: text => ipcRenderer.invoke('screenshot:copy-text', text),
+    run: (action, dataUrl, question, target) => ipcRenderer.invoke('screenshot:run', action, dataUrl, question, target)
+  },
   assistant: {
     reviewScreenshot: (id, accepted) => ipcRenderer.invoke('assistant:screenshot-response', id, accepted),
     onScreenshot: callback => {

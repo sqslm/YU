@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
     selectionTranslateKeys: { keys: ['LeftCtrl', 'RightShift', 'T'] },
     reminderKeys: { keys: ['LeftCtrl', 'RightShift', 'R'] },
     assistantKeys: { keys: ['LeftCtrl', 'RightShift', 'A'] },
+    screenshotKeys: { keys: ['LeftCtrl', 'RightShift', 'X'] },
     // Ctrl+Alt+N: no modifier of the dictation gesture, so a note take can never
     // be mistaken for one and a note chord cannot start a dictation on its way in.
     notesKeys: { keys: ['LeftCtrl', 'LeftAlt', 'N'] },
@@ -237,9 +238,9 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     ...Object.values(merged.hotkeys.bindings), merged.hotkeys.pasteLastKeys,
     merged.hotkeys.selectionKeys, input.hotkeys?.notesKeys ?? base.hotkeys.notesKeys,
     input.hotkeys?.selectionTranslateKeys ?? { keys: [] }, input.hotkeys?.reminderKeys ?? { keys: [] },
-    input.hotkeys?.assistantKeys ?? { keys: [] }
+    input.hotkeys?.assistantKeys ?? { keys: [] }, input.hotkeys?.screenshotKeys ?? { keys: [] }
   ].map(binding => [...(Array.isArray(binding) ? binding : binding.keys ?? [])].sort().join('+'))
-  for (const [field, letters] of [['selectionTranslateKeys', ['T', 'Y', 'F9']], ['reminderKeys', ['R', 'F10', 'F11']], ['assistantKeys', ['A', 'F8', 'F12']]] as const) {
+  for (const [field, letters] of [['selectionTranslateKeys', ['T', 'Y', 'F9']], ['reminderKeys', ['R', 'F10', 'F11']], ['assistantKeys', ['A', 'F8', 'F12']], ['screenshotKeys', ['X', 'F7']]] as const) {
     const stored = input.hotkeys?.[field]
     const keys = stored?.keys ?? letters.map(letter => ['LeftCtrl', 'RightShift', letter])
       .find(chord => !used.includes([...chord].sort().join('+'))) ?? []

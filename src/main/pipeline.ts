@@ -129,7 +129,7 @@ export interface PipelineOptions {
   captureSelection?: () => Promise<SelectionTarget>
   voiceContext?: (text: string) => { recent: { question: string; answer: string } | null; activeTasks?: { id: string; title: string }[] }
   onCompletedAnswer?: (question: string, answer: string) => void
-  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext) => Promise<{ text: string; failed?: boolean } | void>
+  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext, useContext?: boolean) => Promise<{ text: string; failed?: boolean } | void>
   onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal) => Promise<void>
   onActivity?: (recording: boolean, busy: boolean) => void
   onReminder?: (text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt?: number) => Promise<{ message: string; undo?: boolean }>
@@ -1176,6 +1176,7 @@ export class Pipeline {
     }
 
     let transcript = ''
+    let assistantUseContext: boolean | undefined
     try {
       const speech = trimSilencePcm(pcm)
       if (speech.length !== pcm.length) this.encoded = null
@@ -1216,6 +1217,7 @@ export class Pipeline {
             signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)])
           }), transcript)
           if (token !== this.runToken) return null
+          assistantUseContext = intent.kind === 'assistant' ? intent.useContext : undefined
           mode = intent.kind === 'ask' || intent.kind === 'translate' ? intent.kind : 'dictation'
           purpose = intent.kind === 'reminder' || intent.kind === 'notes' || intent.kind === 'assistant' ? intent.kind : undefined
           if (intent.text) transcript = intent.text
@@ -1269,7 +1271,7 @@ export class Pipeline {
         if (!this.options.onAssistant) throw new Error(mt('助手尚未就绪'))
         const result = await this.options.onAssistant(transcript, controller.signal, submittedAt, {
           appName: target.appName || target.className, windowHandle: target.handle, windowTitle: target.title,
-          processId: target.pid || undefined, appPath: target.appPath || undefined, windowRect: target.rect ?? undefined })
+          processId: target.pid || undefined, appPath: target.appPath || undefined, windowRect: target.rect ?? undefined }, assistantUseContext)
         if (token === this.runToken) {
           if (result?.text) this.setBarState({ phase: 'done', mode, text: result.text,
             feedback: { failed: result.failed, details: true }, taskLabel: mt('AI 助手'), showMode: settings.showModeInBar }, 10_000, { force: true })

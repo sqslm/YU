@@ -10,7 +10,12 @@ describe('unified voice decisions', () => {
   it.each(['What app should I use for screenshots?', '为什么这个应用关闭了？', '刚才是什么窗口？', '给 Agent 写提示词：识别当前是什么窗口。'])('does not mistake advice, old references or dictation for current-window identification: %s', text => {
     expect(isCurrentWindowQuestion(text)).toBe(false)
   })
-  it.each(['打开第二个', '把刚才的答案存到随记', '那我要怎么解决？', 'Explain that answer', 'Open the second one'])('retains real follow-up context: %s', text => expect(needsAssistantContext(text)).toBe(true))
+  it.each(['打开第二个', '把刚才的答案存到随记', '那我要怎么解决？', '为什么？', '那明天呢？', '再详细一点', 'Why?', 'Tell me more', 'Explain that answer', 'Open the second one', 'Copy it', 'How do I fix it?'])('retains real follow-up context: %s', text => expect(needsAssistantContext(text)).toBe(true))
+  it.each(['How long does it take to boil an egg?', 'What is the weather in London?', '今天有什么 AI 新闻？'])('does not attach unrelated prior data to a self-contained question: %s', text => expect(needsAssistantContext(text)).toBe(false))
+  it('carries the existing intent model context decision without another classification request', () => {
+    expect(parseVoiceIntent('{"kind":"assistant","useContext":true}', '再详细一点')).toEqual({ kind: 'assistant', useContext: true })
+    expect(parseVoiceIntent('{"kind":"assistant","useContext":false}', '打开飞书')).toEqual({ kind: 'assistant', useContext: false })
+  })
   it.each(['明天提醒我上午十点去银行办一张银行卡。', '20分钟后提醒我打扫卫生，强提醒。', '二十分钟后提醒我喝水，不对，半小时后。', 'Remind me to call Sam in twenty minutes.'])('keeps the complete original reminder: %s', text => {
     expect(directVoiceIntent(text)).toEqual({ kind: 'reminder' })
   })

@@ -12,11 +12,17 @@ Windows 工具使用 App Paths 和开始菜单的真实应用登记，不让模�
 
 助手复用任务开始时的原窗口快照，不以助手窗口替代当前应用。明确请求后可读取原窗口选区或当前剪贴板文字，沿用权限提示和剪贴板恢复，不监控历史；代码注释润色仅提交注释正文，程序保留注释符号、缩进、换行和其他代码。资源管理器目录通过原 HWND 查询 Shell，浏览器地址通过原窗口的地址栏可访问性信息读取，再使用原网页工具读取公开内容；目标变化、登录内容或无法读取地址时明确提示，不根据标题猜路径或编造摘要。
 
-明确请求分析截图、屏幕图表或界面时，只捕获任务起始的目标窗口，先显示预览，可取消；确认后才调用已启用的 Gemini-compatible 多模态配置。普通文本模型不会被当作视觉模型。图片文字提取可使用 Windows 本地 OCR，依赖系统已安装的识别语言；图片保留在内存，提取文字可进入当前模型对话。默认不保存截图，也不截图其他屏幕作为失败兜底；窗口关闭、内容标题改变或最小化时要求重新操作。当前未提供全屏框选工具。
+明确请求分析截图、屏幕图表或界面时，只捕获任务起始的目标窗口，先显示预览，可取消；确认后才调用已启用的 Gemini-compatible 多模态配置。普通文本模型不会被当作视觉模型。图片文字提取可使用 Windows 本地 OCR，依赖系统已安装的识别语言；图片保留在内存，提取文字可进入当前模型对话。默认不保存截图，也不截图其他屏幕作为失败兜底；窗口关闭、内容标题改变或最小化时要求重新操作。
+
+**截图工具（0.36.0）**：默认 `左 Ctrl + 右 Shift + X`，在「设置 → 快捷键」可修改/清空，升级避让已有绑定。仅在主动触发时冻结鼠标所在显示器，拖动框选，拖动选区可移动，右下角可调整大小；支持矩形、椭圆、箭头、画笔、文字、马赛克和撤销。「完成」复制带标注的选区图片到剪贴板并关闭；「另存为」打开系统保存窗口，可自选位置和文件名，取消保存返回编辑。`Enter` / `Ctrl+C` 完成，`Ctrl+S` 另存为，`Ctrl+Z` 撤销，`Esc` 退出；文字输入时保留常规编辑快捷键。右键撤掉选区，再次右键退出。
+
+OCR 只在本机提取所选图片文字。默认「智能翻译」识别外语并译成应用界面主语言；无明确界面语言时使用系统语言，已有目标语言内容保留，也可手动选语言。翻译仅把 OCR 文字提交现有文本模型；点击 Ask 才把所选图片发送给已启用的多模态模型，截图问题可自填。结果可编辑、复制。未配置模型、OCR 无文字或缺少系统识别语言时明确报错，不编造结果。编辑器使用现有中英文和明暗主题，关闭即释放截图、窗口及未完成请求，不后台截图或自动保存。当前不含滚动长截图、贴图常驻或跨显示器框选。
+
+The screenshot shortcut is **Left Ctrl + Right Shift + X**, configurable in Settings → Shortcuts. Select a region on the cursor's display; move/resize it, annotate or undo. **Done** copies the annotated PNG and closes; **Save as** opens the native location/name picker, and cancellation preserves editing. Enter/Ctrl+C copies; Ctrl+S saves; Ctrl+Z undoes; Esc closes. OCR uses installed Windows recognition languages locally. Smart translation defaults to the interface language (system locale fallback), with manual target selection; only recognized text goes to the text model. Explicit Ask sends the selected image to the configured vision model. No automatic capture, uploads, persistence or resident editor. Scrolling capture, pinned images and cross-monitor selections are not implemented. Display IDs and source pixel sizes follow Electron's [desktop capture API](https://www.electronjs.org/docs/latest/api/structures/desktop-capturer-source).
 
 AI 助手可从侧边栏、托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起；快捷键可录制或清空，升级时避让已有相同绑定。点击录音开始，共用现有麦克风/ASR，右 Alt 或「结束录音」提交，Esc 取消；已有任务运行时不会抢占录音。窗口里可停止、新对话、复制回答及直达随记/提醒/设置。关闭助手取消当前任务；最近 12 个界面轮次仅存内存，模型保留最近三个完整问答及工具摘要，闲置 15 分钟后下次访问清理，退出程序即丢弃。助手与旧 Ask 上下文隔离，不自动读取剪贴板、选区或截图，不写长期记忆。发送的输入和相关临时会话会交给用户配置的远程或本地模型。
 
-「设置 → 通用 → 关闭主窗口时」可选保留后台或完全退出。默认后台保留快捷键、提醒与托盘；最小化也可收至托盘。隐藏的助手和主窗口在 60 秒后回收界面（主窗口录随记时不回收），需要时再创建；会话不依赖界面存活。托盘左键单击恢复主窗口并保留当前页面及编辑状态；主窗口重新创建时默认显示概览；右键菜单分别提供「打开主界面」「AI 助手」「随记」「提醒」「设置」，其中「设置」直接打开设置面板。托盘显示待命/录音/处理/快捷键暂停状态。开机启动仍为用户可选；默认不持续录音、截图或读取剪贴板。
+「设置 → 通用 → 关闭主窗口时」可选保留后台或完全退出。默认关闭后后台保留快捷键、提醒与托盘；最小化保留任务栏窗口，不隐藏到托盘。隐藏的助手和主窗口在 60 秒后回收界面（主窗口录随记时、主窗口最小化时不回收），需要时再创建；隐藏界面回收不取消独立的后台助手任务。普通统一语音任务在语音条上方显示结果气泡，10 秒后收起，必要时点击「查看详情」，不自动打开助手或抢焦点；截图审批等必需交互仍保留。独立请求不携带旧对话，明确追问可引用必要的最近上下文；当前窗口查询直接使用本次录音开始的快照。托盘左键单击恢复主窗口并保留当前页面及编辑状态；主窗口重新创建时默认显示概览；右键菜单分别提供「打开主界面」「AI 助手」「随记」「提醒」「设置」，其中「设置」直接打开设置面板。托盘显示待命/录音/处理/快捷键暂停状态。开机启动仍为用户可选；默认不持续录音、截图或读取剪贴板。
 
 The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). Qinly reuses Ask for text/voice questions and a separate temporary conversation. Open it from the sidebar, tray or configurable `Left Ctrl + Right Shift + A`. Voice uses the existing recorder and ASR; Right Alt submits and Esc cancels. Other recordings are never taken over. New conversation clears the session; idle context expires on access after 15 minutes. Closing the assistant cancels its task. Clipboard, selected text and screenshots are not read automatically. Input and relevant conversation are sent to the configured model. Hidden interfaces retire after 60 seconds when safe.
 
@@ -74,7 +80,7 @@ pnpm package          # → release\轻令（Qinly）-0.34.1-setup.exe
 
 Use your dictation shortcut (Right Alt by default) for normal or web-enabled Ask, translation, voice notes, reminders/todos, Windows actions, personal-data queries and existing application pages. Dedicated shortcuts and enabled activation phrases take priority. Ordinary dictation and development requirements retain automatic prompt routing. Turn **Understand voice requests** off in Settings → Shortcuts for plain dictation. Classification uses your current text model and may add one request; multimodal audio is transcribed first. Commands are executed only after the final transcript, never from captions. Invalid/failed/cancelled takes perform no action.
 
-Voice selection polish/translation reuses existing replace/append preferences and verifies the original window. Ask remains in its answer card; successful answers share the assistant's temporary session so follow-up requests can reference them. Notes retain original audio. Reminder creation and note extraction reuse the complete built-in template and program-side time validation. Personal data reads and existing task changes require explicit permission, official URLs must come from real search evidence, and ambiguous reminders still need review. Calendar, persistent memory, screenshots, TTS and wake words remain unimplemented; opening Settings does not automatically change individual options.
+Voice selection polish/translation reuses existing replace/append preferences and verifies the original window. Ask remains in its answer card; successful answers share the assistant's temporary session so follow-up requests can reference them. Notes retain original audio. Reminder creation and note extraction reuse the complete built-in template and program-side time validation. Personal data reads and existing task changes require explicit permission, official URLs must come from real search evidence, and ambiguous reminders still need review. Calendar, persistent memory, TTS and wake words remain unimplemented; opening Settings does not automatically change individual options.
 
 ## 使用
 
@@ -87,6 +93,7 @@ Voice selection polish/translation reuses existing replace/append preferences an
 | 选区润色（直接应用） | `左 Ctrl + 右 Shift + S` |
 | 选区翻译（直接应用） | `左 Ctrl + 右 Shift + T` |
 | 快速语音提醒 | `左 Ctrl + 右 Shift + R` |
+| 框选截图 / OCR / 智能翻译 | `左 Ctrl + 右 Shift + X` |
 
 触发方式可在「快捷键」页切成**按一下开始 / 结束**（默认，和 Typeless 一致）或**按住说话**；热键用录制方式改，托盘菜单可临时停用全部快捷键。切到「按一下」后，**听写、Ask 和语音翻译都只按一下右 Alt 就结束**——包括用 `Space + 右 Alt` 起头的 Ask，不必再重复起手组合。悬浮条不再重复显示「免提」标签或录音锁定提示，录音时保留波形和计时。
 

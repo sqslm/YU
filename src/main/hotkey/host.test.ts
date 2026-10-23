@@ -8,6 +8,20 @@ import { HotkeyHost } from './host'
 
 describe('shortcut recording suspension', () => {
   beforeEach(() => vi.clearAllMocks())
+  it('suspends voice shortcuts during screenshot editing and preserves suspension across config updates', () => {
+    const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+    mock.fork.mockReturnValue(child)
+    const host = new HotkeyHost(vi.fn()), settings = mergeSettings({})
+    host.start(settings); child.emit('message', { type: 'ready' })
+    host.setSuspended(true)
+    host.setCapturing(false)
+    expect(child.postMessage).toHaveBeenLastCalledWith({ type: 'enabled', value: false })
+    host.apply(settings)
+    expect(child.postMessage.mock.calls.filter(([msg]) => msg.type === 'enabled').at(-1)?.[0]).toMatchObject({ value: false })
+    host.setSuspended(false)
+    expect(child.postMessage).toHaveBeenLastCalledWith({ type: 'enabled', value: true })
+    host.stop()
+  })
   it('acknowledges a rejected start with the unchanged actual processing state', () => {
     const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
     mock.fork.mockReturnValue(child)

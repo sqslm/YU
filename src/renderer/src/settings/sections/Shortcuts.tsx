@@ -59,7 +59,7 @@ export function ShortcutsSection({
     const hotkeys = settingsRef.current.hotkeys
     const duplicate = shortcutConflict(hotkeys, target, keys)
     if (duplicate) {
-      const label = MODE_ROWS.find(row => row.mode === duplicate)?.label ?? ({ notes: '随记录音', selection: '选区润色', selectionTranslate: '选区翻译', reminder: '快速提醒', assistant: 'AI 助手', pasteLast: '粘贴上一条' }[duplicate] ?? duplicate)
+      const label = MODE_ROWS.find(row => row.mode === duplicate)?.label ?? ({ notes: '随记录音', selection: '选区润色', selectionTranslate: '选区翻译', reminder: '快速提醒', assistant: 'AI 助手', screenshot: '截图', pasteLast: '粘贴上一条' }[duplicate] ?? duplicate)
       setConflict(i18n.t('该快捷键已用于「{{name}}」，已保留原快捷键。', { name: i18n.t(label) }))
       return
     }
@@ -68,6 +68,7 @@ export function ShortcutsSection({
     else if (target === 'selectionTranslate') patch({ hotkeys: { ...hotkeys, selectionTranslateKeys: { keys } } })
     else if (target === 'reminder') patch({ hotkeys: { ...hotkeys, reminderKeys: { keys } } })
     else if (target === 'assistant') patch({ hotkeys: { ...hotkeys, assistantKeys: { keys } } })
+    else if (target === 'screenshot') patch({ hotkeys: { ...hotkeys, screenshotKeys: { keys } } })
     else if (target === 'pasteLast') patch({ hotkeys: { ...hotkeys, pasteLastKeys: { keys } } })
     else if (target === 'notes') patch({ hotkeys: { ...hotkeys, notesKeys: { keys } } })
     else patch({ hotkeys: { ...hotkeys, bindings: { ...hotkeys.bindings, [target]: { keys } } } })
@@ -194,6 +195,7 @@ export function ShortcutsSection({
         {renderRow('selectionTranslate', '选区翻译', '直接翻译选中文字，沿用已设置的翻译目标', settings.hotkeys.selectionTranslateKeys.keys)}
         {renderRow('reminder', '快速提醒', '录下提醒事项和时间，按现有录音方式开始和结束', settings.hotkeys.reminderKeys.keys)}
         {renderRow('assistant', 'AI 助手', '打开或收起助手，不会开始录音', settings.hotkeys.assistantKeys.keys)}
+        {renderRow('screenshot', '截图', '框选屏幕、标注、复制、OCR 或翻译；Esc 退出', settings.hotkeys.screenshotKeys.keys)}
         {renderRow(
           'notes',
           i18n.t('随记录音'),

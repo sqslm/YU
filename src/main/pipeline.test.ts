@@ -522,7 +522,7 @@ describe('surrounding-text injection', () => {
     pipeline.pushAudio(tone(800))
     expect(sent.some(state => state.phase === 'recording' && state.taskLabel === 'AI 助手')).toBe(true)
     const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
-    expect(onAssistant).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ appName: 'code', windowTitle: 'Editor' }))
+    expect(onAssistant).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ appName: 'code', windowTitle: 'Editor' }), undefined)
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(readContext).not.toHaveBeenCalled()
     expect(mocks.complete).not.toHaveBeenCalled()
@@ -1327,6 +1327,16 @@ describe('unified voice entry', () => {
   const finish = async (pipeline: InstanceType<typeof Pipeline>): Promise<HistoryEntry | null> => {
     pipeline.pushAudio(tone(1200)); const pending = pipeline.stop(); pipeline.audioStopped(); return pending
   }
+  it.each([true, false])('reuses the intent classification context decision without another model request: %s', async useContext => {
+    mocks.transcribe.mockResolvedValue({ text: '再详细一点' })
+    mocks.complete.mockResolvedValueOnce(JSON.stringify({ kind: 'assistant', useContext }))
+    const onAssistant = vi.fn().mockResolvedValue({ text: 'Actual answer' })
+    const h = harness({ voiceCommands: smart }, { onAssistant })
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(onAssistant.mock.calls[0][4]).toBe(useContext)
+    expect(mocks.complete).toHaveBeenCalledOnce(); expect(mocks.transcribe).toHaveBeenCalledOnce()
+    expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.entries).toEqual([])
+  })
   it.each(['明天提醒我上午十点去银行办一张银行卡。', 'Remind me in twenty minutes to clean up.'])('reuses reminder parsing, audio and cancellation without inserting a command: %s', async text => {
     mocks.transcribe.mockResolvedValue({ text })
     const onReminder = vi.fn().mockResolvedValue({ message: 'saved', undo: true })
@@ -1353,7 +1363,7 @@ describe('unified voice entry', () => {
     mocks.complete.mockResolvedValueOnce('{"kind":"assistant"}')
     const onAssistant = vi.fn().mockResolvedValue(undefined), h = harness({ voiceCommands: smart }, { onAssistant })
     h.pipeline.start('dictation'); await finish(h.pipeline)
-    expect(onAssistant).toHaveBeenCalledWith('帮我打开卡巴斯基的官方网站', expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ appName: 'code', windowTitle: 'Editor' }))
+    expect(onAssistant).toHaveBeenCalledWith('帮我打开卡巴斯基的官方网站', expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ appName: 'code', windowTitle: 'Editor' }), undefined)
     expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.insertText).not.toHaveBeenCalled()
     expect(h.entries).toHaveLength(0); expect(h.pipeline.isBusy).toBe(false)
   })
@@ -1460,7 +1470,7 @@ describe('unified voice entry', () => {
     const h = harness({ voiceCommands: smart }, { onAssistant,
       voiceContext: () => ({ recent: { question: 'Analyze the current error', answer: 'Connection refused on port 8080' } }) })
     h.pipeline.start('dictation'); await finish(h.pipeline)
-    expect(onAssistant).toHaveBeenCalledWith('那我要怎么解决？', expect.any(AbortSignal), expect.any(Number), expect.any(Object))
+    expect(onAssistant).toHaveBeenCalledWith('那我要怎么解决？', expect.any(AbortSignal), expect.any(Number), expect.any(Object), undefined)
     expect(mocks.askAgent).not.toHaveBeenCalled(); expect(mocks.complete).not.toHaveBeenCalled()
   })
   it.each(['Explain the selected code', '这段英文是什么意思？顺便翻译成中文。'])('supplies real selected text to normal Ask with web search disabled: %s', async text => {

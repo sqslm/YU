@@ -37,7 +37,7 @@ function configure(): void {
   native.receive!({ data: { type: 'config', bindings: {
     dictation: ['RightAlt'], ask: ['RightAlt', 'Space'], translate: ['RightAlt', 'RightShift']
   }, pasteLast: ['LeftCtrl', 'RightShift', 'V'], selection: ['LeftCtrl', 'RightShift', 'S'],
-    selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], assistant: ['LeftCtrl', 'RightShift', 'A'], notes: [] } })
+    selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], assistant: ['LeftCtrl', 'RightShift', 'A'], screenshot: ['LeftCtrl', 'RightShift', 'X'], notes: [] } })
   native.post.mockClear()
 }
 function key(vk: number, down: boolean): number {
@@ -50,6 +50,15 @@ function key(vk: number, down: boolean): number {
 function events(type: string): unknown[] {
   return native.post.mock.calls.map(([event]) => event).filter(event => event.type === type)
 }
+
+it('opens screenshot capture once after all modifiers release and never starts audio', () => {
+  key(0xa2, true); key(0xa1, true)
+  expect(key(0x58, true)).toBe(1)
+  expect(events('screenshot')).toHaveLength(0)
+  key(0x58, false); key(0xa1, false); key(0xa2, false)
+  expect(events('screenshot')).toHaveLength(1)
+  expect(events('start')).toHaveLength(0)
+})
 
 it('opens the assistant only after the full chord releases, without a voice start', () => {
   key(0xa2, true); key(0xa1, true)

@@ -7,6 +7,12 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '屏幕截图失败，请重试': 'Screen capture failed. Please try again.',
+  '截图数据无效或过大': 'The screenshot is invalid or too large.',
+  '请输入截图问题': 'Enter a question about the screenshot',
+  '图片过大，请缩小选区后重试': 'The image is too large. Select a smaller region.',
+  '无效的翻译语言': 'Invalid translation language',
+  '截图': 'Screenshot',
   '当前窗口：{{name}}': 'Current window: {{name}}',
   '查看详情': 'View details',
   '将这段文字保存到随记？': 'Save this text to Notes?',

@@ -81,12 +81,12 @@ export class AssistantSession {
     await this.send(operation.title, undefined, operation)
   }
 
-  async send(input: string, signal?: AbortSignal, operation?: { name: string; args: Record<string, unknown> }, submittedAt = this.now(), context: PromptContext = {}): Promise<void> {
+  async send(input: string, signal?: AbortSignal, operation?: { name: string; args: Record<string, unknown> }, submittedAt = this.now(), context: PromptContext = {}, useContext?: boolean): Promise<void> {
     if (this.busy) throw new Error(mt('助手正在处理，请先停止当前任务'))
     if (typeof input !== 'string' || !input.trim() || input.length > 10_000) throw new Error(mt('请输入 1–10000 字的请求'))
     signal?.throwIfAborted()
     this.snapshot()
-    if (!operation && !needsAssistantContext(input)) this.conversation = { messages: [], toolNotes: '' }
+    if (!operation && !(useContext ?? needsAssistantContext(input))) this.conversation = { messages: [], toolNotes: '' }
     const settings = this.deps.settings()
     const windows = this.deps.windows
     windows?.beginTask()

@@ -20,6 +20,14 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('honors the intent model decision for ambiguous follow-ups and self-contained requests', async () => {
+    session.rememberAnswer('Old question', 'Actual old answer')
+    await session.send('How long does it take to boil an egg?', undefined, undefined, now, {}, false)
+    expect(ask.mock.calls.at(-1)?.[5]?.conversation).toEqual({ messages: [], toolNotes: '' })
+    session.rememberAnswer('Weather in Paris', 'Actual weather result')
+    await session.send('And tomorrow?', undefined, undefined, now, {}, true)
+    expect(JSON.stringify(ask.mock.calls.at(-1)?.[5]?.conversation)).toContain('Actual weather result')
+  })
   it('answers consecutive current-window questions from each take, without a model or old ChatGPT context', async () => {
     const windows = new WindowsTools({ folders: { downloads: '.', desktop: '.', documents: '.' }, native: vi.fn(),
       confirm: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })

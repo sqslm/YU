@@ -33,6 +33,7 @@ export type HotkeyHostEvent =
   | HotkeyEscapeEvent
   | { type: 'selection' | 'selection-translate'; at: number }
   | { type: 'assistant-toggle'; at: number }
+  | { type: 'screenshot'; at: number }
   | { type: 'capture-key'; token: string; down: boolean }
 
 export type HotkeyMessage =
@@ -155,12 +156,13 @@ export class HotkeyHost {
       pasteLast: settings.hotkeys.pasteLastKeys.keys,
       notes: settings.hotkeys.notesKeys?.keys ?? [],
       assistant: settings.hotkeys.assistantKeys?.keys ?? [],
+      screenshot: settings.hotkeys.screenshotKeys?.keys ?? [],
       selection: settings.hotkeys.selectionKeys.keys,
       selectionTranslate: settings.hotkeys.selectionTranslateKeys.keys,
       reminder: settings.hotkeys.reminderKeys.keys,
       activation: settings.activationMode
     })
-    this.proc.postMessage({ type: 'enabled', value: settings.hotkeys.enabled && !this.capturing })
+    this.proc.postMessage({ type: 'enabled', value: settings.hotkeys.enabled && !this.capturing && !this.suspended })
     // A re-spawned child starts with the card flag cleared; restore it so ESC
     // keeps working on a card that was already up when the hook restarted.
     this.proc.postMessage({ type: 'card', open: this.cardOpen })
@@ -187,10 +189,16 @@ export class HotkeyHost {
     this.proc?.postMessage({ type: 'activity', value })
   }
 
+  private suspended = false
+  setSuspended(value: boolean): void {
+    this.suspended = value
+    this.proc?.postMessage({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !this.capturing && !value })
+  }
+
   setCapturing(active: boolean): void {
     this.capturing = active
     this.proc?.postMessage({ type: 'capture', active })
-    this.proc?.postMessage({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !active })
+    this.proc?.postMessage({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !active && !this.suspended })
   }
 
   /**
