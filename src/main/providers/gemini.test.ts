@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mergeSettings } from '@shared/defaults'
-import { generateFromAudio } from './gemini'
+import { generateFromAudio, generateFromImage } from './gemini'
 
 afterEach(() => vi.restoreAllMocks())
 describe('Gemini audio wire contract', () => {
+  it('reuses the configured multimodal endpoint for an inline PNG with its real MIME type', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Visible interface' }] } }] })))
+    const cfg = { ...mergeSettings({}).multimodal, baseUrl: 'http://127.0.0.1:8080', model: 'existing-vision', apiKey: '' }
+    expect(await generateFromImage(cfg, { png: new Uint8Array([1, 2, 3]), prompt: 'Describe this screenshot' })).toBe('Visible interface')
+    expect(JSON.parse(String(transport.mock.calls[0][1]!.body))).toMatchObject({ contents: [{ parts: [{ inline_data: { mime_type: 'image/png', data: 'AQID' } }, { text: 'Describe this screenshot' }] }] })
+  })
   it('sends inline WAV with header authentication and excludes thought text from the result', async () => {
     const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'internal reasoning', thought: true }, { text: '识别结果' }] } }] })))
     const cfg = { ...mergeSettings({}).multimodal, baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'models/gemini-3.8-flash', apiKey: 'test-key' }

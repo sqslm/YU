@@ -20,6 +20,15 @@ export async function generateFromAudio(
   cfg: MultimodalSettings,
   req: AudioRequest
 ): Promise<string> {
+  return generateInlineMedia(cfg, req, req.wav, 'audio/wav', mt('请按系统指令处理这段音频。'))
+}
+
+/** Uses the same configured Gemini-compatible provider; images stay inline for this request. */
+export async function generateFromImage(cfg: MultimodalSettings, req: { png: Uint8Array; prompt: string; signal?: AbortSignal }): Promise<string> {
+  return generateInlineMedia(cfg, req, req.png, 'image/png', req.prompt)
+}
+
+async function generateInlineMedia(cfg: MultimodalSettings, req: { prompt: string; temperature?: number; signal?: AbortSignal }, data: Uint8Array, mime: string, userText: string): Promise<string> {
   if (!cfg.baseUrl) throw new ProviderError(mt('多模态 base URL 为空'))
   if (!cfg.model) throw new ProviderError(mt('多模态模型为空'))
   if (!cfg.apiKey && new URL(cfg.baseUrl).hostname === 'generativelanguage.googleapis.com') throw new ProviderError(mt('多模态 API Key 为空'))
@@ -42,11 +51,11 @@ export async function generateFromAudio(
         parts: [
           {
             inline_data: {
-              mime_type: 'audio/wav',
-              data: Buffer.from(req.wav).toString('base64')
+              mime_type: mime,
+              data: Buffer.from(data).toString('base64')
             }
           },
-          { text: mt('请按系统指令处理这段音频。') }
+          { text: userText }
         ]
       }
     ],

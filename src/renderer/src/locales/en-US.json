@@ -1509,5 +1509,8 @@
   "助手文件搜索": "Assistant file search",
   "下载目录": "Download folder",
   "使用 Windows 下载目录；浏览器另设目录时可在这里指定": "Uses the Windows Downloads folder. Choose a folder here if your browser downloads elsewhere.",
-  "选择目录": "Choose folder"
+  "选择目录": "Choose folder",
+  "确认本次截图": "Review this screenshot",
+  "本次截图预览": "Screenshot preview",
+  "使用本次截图": "Use this screenshot"
 }

@@ -17,3 +17,5 @@ export interface AssistantState {
   busy: boolean
   status: string
 }
+
+export interface ScreenshotPreview { id: number; title: string; dataUrl: string; detail: string }

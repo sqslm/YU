@@ -831,5 +831,14 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "无法读取原浏览器的网页地址，请粘贴链接": "Unable to read the original browser's page URL. Paste its link.",
   "已读取原浏览器的网页地址": "Read the original browser's page URL",
   "仅获取地址；使用网页读取工具获取公开正文，不读取浏览器登录信息。": "Only the URL was read. Use the webpage tool for public content; browser login data is not accessed.",
-  "Windows 索引不可用，已使用限定目录搜索。": "Windows Search is unavailable. A bounded folder search was used."
+  "Windows 索引不可用，已使用限定目录搜索。": "Windows Search is unavailable. A bounded folder search was used.",
+  "窗口截图失败，请恢复目标窗口后重试": "Window capture failed. Restore the target window and try again.",
+  "窗口截图无效或过大，请缩小窗口后重试": "The window image is invalid or too large. Make the window smaller and retry.",
+  "已处理本次窗口截图": "Processed this window screenshot",
+  "请先在模型设置中启用支持图片的多模态模型；当前文本模型不能查看截图": "Enable an image-capable multimodal model in settings first. The current text model cannot view screenshots.",
+  "图片仅在本机进行 OCR；提取的文字会交给当前对话模型。": "The image is processed locally with OCR. Extracted text is sent to the current conversation model.",
+  "确认后将此截图发送给已启用的多模态服务：{{name}}。仅用于本次任务，不自动保存。": "After approval, this screenshot is sent to your enabled multimodal services: {{name}}. It is used only for this task and is not saved automatically.",
+  "截图中没有识别到文字": "No text was recognized in this screenshot",
+  "截图预览已过期，请重新截图": "This screenshot preview has expired. Capture it again.",
+  "正在处理窗口截图…": "Processing the window screenshot…"
 }

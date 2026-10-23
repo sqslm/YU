@@ -418,3 +418,18 @@ it('does not read a new foreground selection after the original voice target cha
     selectionDeps: { sendCopy } })
   expect(result.ok).toBe(false); expect(result.error).toContain('Target changed'); expect(sendCopy).not.toHaveBeenCalled()
 })
+
+it('requires screenshot capability and valid arguments, shares one request, and never captures on cancellation', async () => {
+  const analyzeScreenshot = vi.fn().mockResolvedValue('Actual visible content')
+  const ctx = { ...makeContext(), analyzeScreenshot, allowedTools: ['analyze_screenshot'], cache: new Map() }
+  expect(toolSchemas().map(schema => (schema.function as { name: string }).name)).not.toContain('analyze_screenshot')
+  expect((await runTool('analyze_screenshot', { question: 'Explain screenshot' }, { ...ctx, allowedTools: [] })).ok).toBe(false)
+  expect((await runTool('analyze_screenshot', { question: 'Explain', path: 'C:\\secret.png' }, ctx)).ok).toBe(false)
+  const args = { question: 'Explain screenshot', task: 'analyze' }
+  expect((await runTool('analyze_screenshot', args, ctx)).data.text).toBe('Actual visible content')
+  await runTool('analyze_screenshot', args, ctx)
+  expect(analyzeScreenshot).toHaveBeenCalledExactlyOnceWith('Explain screenshot', false)
+  const controller = new AbortController(); controller.abort()
+  await runTool('analyze_screenshot', { question: 'New screenshot' }, { ...ctx, cache: new Map(), signal: controller.signal })
+  expect(analyzeScreenshot).toHaveBeenCalledOnce()
+})

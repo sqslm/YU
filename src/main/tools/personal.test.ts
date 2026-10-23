@@ -86,7 +86,7 @@ describe('personal tools share real application services', () => {
     expect((await runTool('list_reminders', { kind: 'todo' }, ctx)).data.total).toBe(1)
     expect((await runTool('list_reminders', { today: true, kind: 'reminder' }, ctx)).data.total).toBe(2)
   })
-  it.each(['下午两点', '2 PM'])('edits the original reminder at %s without moving its date or losing its note link', async time => {
+  it.each(['下午两点', '2 PM', 'at two PM'])('edits the original reminder at %s without moving its date or losing its note link', async time => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 8))
     const row = { id: 'pickup', title: 'Pickup', description: 'Receipt', noteId: 'source-note', source: 'note',
       dueAt: new Date(2026, 9, 24, 8).getTime(), recurrence: null, status: 'pending', level: 'strong', updatedAt: 1 } as Reminder

@@ -81,6 +81,7 @@ export interface AgentResult {
 }
 
 export interface AgentOptions {
+  analyzeScreenshot?: ToolContext['analyzeScreenshot']
   readSelection?: ToolContext['readSelection']
   submittedAt?: number
   selectionGuard?: ToolContext['selectionGuard']
@@ -1546,6 +1547,7 @@ export async function askAgent(
   const ctx: ToolContext = {
     taskContext: context,
     readSelection: options.readSelection,
+    analyzeScreenshot: options.analyzeScreenshot,
     submittedAt: options.submittedAt,
     selectionGuard: options.selectionGuard,
     personal: options.personal,

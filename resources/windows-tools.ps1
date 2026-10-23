@@ -3,13 +3,48 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
-if ($request.action -in @('explorer-folder','browser-url')) {
+if ($request.action -eq 'ocr') {
+  Add-Type -AssemblyName System.Runtime.WindowsRuntime
+  [void][Windows.Storage.Streams.InMemoryRandomAccessStream,Windows.Storage.Streams,ContentType=WindowsRuntime]
+  [void][Windows.Storage.Streams.DataWriter,Windows.Storage.Streams,ContentType=WindowsRuntime]
+  [void][Windows.Graphics.Imaging.BitmapDecoder,Windows.Graphics.Imaging,ContentType=WindowsRuntime]
+  [void][Windows.Graphics.Imaging.SoftwareBitmap,Windows.Graphics.Imaging,ContentType=WindowsRuntime]
+  [void][Windows.Media.Ocr.OcrEngine,Windows.Foundation,ContentType=WindowsRuntime]
+  [void][Windows.Media.Ocr.OcrResult,Windows.Foundation,ContentType=WindowsRuntime]
+  $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetGenericArguments().Count -eq 1 -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
+  function Await-Result($operation, [Type]$type) {
+    $task = $asTask.MakeGenericMethod($type).Invoke($null, @($operation))
+    $task.Wait()
+    return $task.Result
+  }
+  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+  if (!$engine) { throw 'Windows OCR language support is unavailable' }
+  $bytes = [Convert]::FromBase64String([string]$request.png)
+  if (!$bytes.Length -or $bytes.Length -gt 6291456) { throw 'Invalid OCR image size' }
+  $stream = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream
+  $writer = New-Object Windows.Storage.Streams.DataWriter($stream.GetOutputStreamAt(0))
+  $bitmap = $null
+  try {
+    $writer.WriteBytes($bytes)
+    [void](Await-Result ($writer.StoreAsync()) ([uint32]))
+    [void]$writer.DetachStream()
+    $stream.Seek(0)
+    $decoder = Await-Result ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $bitmap = Await-Result ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+    if ($bitmap.PixelWidth -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension -or $bitmap.PixelHeight -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension) { throw 'Image exceeds Windows OCR dimensions' }
+    $result = Await-Result ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+    @{text=$result.Text;language=$engine.RecognizerLanguage.LanguageTag} | ConvertTo-Json -Compress
+  } finally { if ($bitmap) { $bitmap.Dispose() }; $writer.Dispose(); $stream.Dispose() }
+  exit
+}
+if ($request.action -in @('explorer-folder','browser-url','window-check')) {
   Add-Type -TypeDefinition @'
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
 public static class QinlyWindow {
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
 }
@@ -24,6 +59,11 @@ public static class QinlyWindow {
     if (![QinlyWindow]::IsWindow($script:hwnd) -or $windowPid -ne [uint32]$request.pid -or $title.ToString() -cne [string]$request.title) { throw 'Original window has changed or closed' }
   }
   Assert-OriginalWindow
+  if ($request.action -eq 'window-check') {
+    if ([QinlyWindow]::IsIconic($hwnd)) { throw 'Original window is minimized; restore it before capture' }
+    @{valid=$true} | ConvertTo-Json -Compress
+    exit
+  }
   if ($request.action -eq 'explorer-folder') {
     $shell = New-Object -ComObject Shell.Application
     $windows = $shell.Windows()

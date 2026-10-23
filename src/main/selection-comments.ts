@@ -5,7 +5,7 @@ export function commentSelection(text: string): { items: { line: number; text: s
   const lines = text.split(/\r?\n/), endings = text.match(/\r?\n/g) ?? []
   const comments = lines.map((line, index) => {
     if (/^\s*(?:\*\/|-->)\s*$/.test(line)) return null
-    const match = /^(\s*(?:\/\/+|#|--|\/\*+|\*|<!--)\s*)(.*?)(\s*(?:\*\/|-->)\s*)?$/.exec(line)
+    const match = /^(\s*(?:\/\/+|#+|--|\/\*+|\*|<!--)\s*)(.*?)(\s*(?:\*\/|-->)\s*)?$/.exec(line)
     return match && match[2].trim() ? { line: index, prefix: match[1], text: match[2], suffix: match[3] ?? '' } : null
   }).filter((row): row is NonNullable<typeof row> => row !== null)
   if (!comments.length) return null

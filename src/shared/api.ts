@@ -31,6 +31,8 @@ export type { AnswerCardPayload } from './types'
 /** The bridge exposed by the preload script as `window.api`. */
 export interface TypelessApi {
   assistant: {
+    reviewScreenshot(id: number, accepted: boolean): Promise<void>
+    onScreenshot(callback: (preview: import('./assistant').ScreenshotPreview | null) => void): () => void
     open(): Promise<boolean>
     hide(): Promise<void>
     state(): Promise<AssistantState>

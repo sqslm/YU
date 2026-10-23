@@ -43,6 +43,7 @@ export interface ToolContext {
   submittedAt?: number
   selectionGuard?: () => void
   readSelection?: () => Promise<string>
+  analyzeScreenshot?: (question: string, ocr: boolean) => Promise<string>
   personal?: PersonalTools
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
@@ -122,7 +123,7 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
 }
 
 /** Reuse reads and identical personal writes within one task, never across tasks. */
-const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder', 'update_note_tags', 'get_selection', 'read_clipboard'])
+const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder', 'update_note_tags', 'get_selection', 'read_clipboard', 'analyze_screenshot'])
 
 /** Planned queries in flight at once. The plan is two; more is throttling bait. */
 const SEARCH_PLAN_CONCURRENCY = 2
@@ -508,6 +509,18 @@ async function runOpenSearch(args: Record<string, unknown>, ctx: ToolContext): P
 // ---------------------------------------------------------------------------
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: 'analyze_screenshot',
+    description: 'Capture ONLY the original task window on an explicit screenshot/image request. User previews and can cancel before sending to the configured multimodal provider. task=ocr uses local Windows OCR instead. No automatic screenshot storage. Never pretend a text-only model saw an image.',
+    parameters: { type: 'object', properties: { question: { type: 'string' }, task: { type: 'string', enum: ['analyze', 'ocr'] } }, required: ['question'], additionalProperties: false },
+    run: async (args, ctx) => {
+      ctx.signal?.throwIfAborted()
+      if (!ctx.allowedTools?.includes('analyze_screenshot') || !ctx.analyzeScreenshot || typeof args.question !== 'string' || !args.question.trim() || args.question.length > 10000 || Object.keys(args).some(key => !['question', 'task'].includes(key)) || args.task !== undefined && !['analyze', 'ocr'].includes(String(args.task))) return fail(mt('本次任务未授权此工具：{{name}}', { name: 'analyze_screenshot' }))
+      ctx.onStatus?.(mt('正在处理窗口截图…'))
+      const text = await ctx.analyzeScreenshot(args.question, args.task === 'ocr')
+      return { ok: true, summary: mt('已处理本次窗口截图'), data: { ok: true, text, source: 'original-window', method: args.task === 'ocr' ? 'windows-ocr' : 'vision-provider' } }
+    }
+  },
   ...PERSONAL_DEFINITIONS,
   ...WINDOWS_DEFINITIONS,
   {
@@ -618,7 +631,7 @@ export const TOOL_NAMES: string[] = TOOL_DEFINITIONS.map((tool) => tool.name)
 
 /** OpenAI `tools` array. */
 export function toolSchemas(allowed?: readonly string[]): Array<Record<string, unknown>> {
-  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS].includes(tool.name as typeof WINDOWS_TOOLS[number])).map((tool) => ({
+  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS, 'analyze_screenshot'].includes(tool.name)).map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -702,7 +715,7 @@ export async function runTool(
   const attempt = attemptTool(tool, input, ctx)
   if (key) ctx.cache?.set(key, attempt)
   const outcome = await attempt
-  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS].includes(name as typeof WINDOWS_TOOLS[number])) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
+  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
     items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
     detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[perf] tool:${name} ${Date.now() - started}ms ok=${outcome.ok}`)

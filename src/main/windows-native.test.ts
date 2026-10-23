@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtemp, realpath, writeFile, unlink, rmdir, utimes, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 vi.mock('electron', () => ({ app: { isPackaged: false, getAppPath: () => process.cwd() } }))
 import { windowsNative } from './windows-native'
 
@@ -64,4 +66,22 @@ it.skipIf(process.platform !== 'win32')('returns real local drive capacities and
     expect(drive.usedBytes + drive.freeBytes).toBe(drive.totalBytes)
   }
   await expect(windowsNative({ action: 'activate', appId: 'nonexistent-qinly-test-app!App' })).rejects.toThrow('no longer available')
+}, 25000)
+
+it.skipIf(process.platform !== 'win32')('recognizes actual generated text using installed Windows OCR without uploading or saving the image', async context => {
+  const script = `Add-Type -AssemblyName System.Drawing
+$bitmap = New-Object Drawing.Bitmap 640,100
+$graphics = [Drawing.Graphics]::FromImage($bitmap)
+$font = New-Object Drawing.Font 'Arial',32
+$stream = New-Object IO.MemoryStream
+try { $graphics.Clear([Drawing.Color]::White); $graphics.DrawString('QINLY OCR 123',$font,[Drawing.Brushes]::Black,10,10); $bitmap.Save($stream,[Drawing.Imaging.ImageFormat]::Png); [Console]::Write([Convert]::ToBase64String($stream.ToArray())) }
+finally { $stream.Dispose(); $font.Dispose(); $graphics.Dispose(); $bitmap.Dispose() }`
+  const image = await promisify(execFile)(join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true })
+  let result: Record<string, unknown>
+  try { result = await windowsNative({ action: 'ocr', png: image.stdout.trim() }) }
+  catch (error) {
+    if (error instanceof Error && error.message.includes('Windows OCR language support is unavailable')) { context.skip(); return }
+    throw error
+  }
+  expect(String(result.text)).toMatch(/QINLY\s+OCR\s+123/i)
 }, 25000)

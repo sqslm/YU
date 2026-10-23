@@ -93,8 +93,11 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
         // A clock-only edit inherits this task's date, never the assistant window's date.
         const clockOnly = /^(?:凌晨|早上|早晨|上午|中午|下午|傍晚|晚上)\s*[零〇一二两三四五六七八九十\d:：点點时時分半刻\s]+$/.test(expression) || /^(?:at\s+)?\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?$/i.test(expression)
         const base = row.dueAt === null ? null : new Date(row.dueAt)
-        const reference = clockOnly && row.recurrence && base ? Math.min(Date.now(), +new Date(base.getFullYear(), base.getMonth(), base.getDate()) - 1) : Date.now()
-        const resolved = resolveReminderTime(clockOnly && base ? `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')} ${expression}` : expression, reference)
+        let resolved = resolveReminderTime(expression, Date.now())
+        if (base && (clockOnly || resolved.issue === mt('请补充具体日期'))) {
+          const reference = row.recurrence ? Math.min(Date.now(), +new Date(base.getFullYear(), base.getMonth(), base.getDate()) - 1) : Date.now()
+          resolved = resolveReminderTime(`${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')} ${expression}`, reference)
+        }
         if (resolved.issue || resolved.dueAt === null) throw new Error(resolved.issue || mt('请补充具体提醒时间'))
         dueAt = resolved.dueAt
         if (row.recurrence && !resolved.recurrence) {

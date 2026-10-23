@@ -18,6 +18,18 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('only offers screenshot capture for explicit screen/image requests, preserving the original target', async () => {
+    const analyzeScreenshot = vi.fn().mockResolvedValue('Actual screen content')
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), analyzeScreenshot })
+    await current.send('Explain KISS')
+    expect(ask.mock.calls[0][5]?.allowedTools).not.toContain('analyze_screenshot')
+    const context = { appName: 'code', processId: 42, windowHandle: '1234' }
+    await current.send('Analyze this screenshot', undefined, undefined, now, context)
+    const options = ask.mock.calls[1][5]!
+    expect(options.allowedTools).toContain('analyze_screenshot')
+    await options.analyzeScreenshot!('Visible error', false)
+    expect(analyzeScreenshot).toHaveBeenCalledWith(context, 'Visible error', false, expect.any(AbortSignal))
+  })
   it('passes the original application snapshot to Ask without detecting another foreground window', async () => {
     const context = { appName: 'code', windowTitle: 'Original document', processId: 42, windowHandle: '1234' }
     await session.send('Which application am I using?', undefined, undefined, now, context)

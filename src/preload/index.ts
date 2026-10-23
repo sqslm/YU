@@ -18,6 +18,12 @@ let lastCard: AnswerCardPayload | null = null
 
 const api: TypelessApi = {
   assistant: {
+    reviewScreenshot: (id, accepted) => ipcRenderer.invoke('assistant:screenshot-response', id, accepted),
+    onScreenshot: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, preview: import('@shared/assistant').ScreenshotPreview | null): void => callback(preview)
+      ipcRenderer.on('assistant:screenshot-preview', listener)
+      return () => ipcRenderer.removeListener('assistant:screenshot-preview', listener)
+    },
     open: () => ipcRenderer.invoke('assistant:open'),
     hide: () => ipcRenderer.invoke('assistant:hide'),
     state: () => ipcRenderer.invoke('assistant:state'),

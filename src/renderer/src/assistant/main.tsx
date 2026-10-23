@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Alert, Box, Button, CssBaseline, Stack, TextField, ThemeProvider, Typography } from '@mui/material'
+import { Alert, Box, Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, ThemeProvider, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import type { AssistantState } from '@shared/assistant'
+import type { AssistantState, ScreenshotPreview } from '@shared/assistant'
 import { isSafeLink } from '@shared/links'
 import { MarkdownView } from '../card/MarkdownView'
 import { useSettings } from '../settings/useSettings'
@@ -22,6 +22,7 @@ function Assistant(): JSX.Element {
   const [phase, setPhase] = useState<'idle' | 'recording' | 'working'>('idle')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
+  const [screenshot, setScreenshot] = useState<ScreenshotPreview | null>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const pinnedToBottom = useRef(true)
@@ -32,6 +33,7 @@ function Assistant(): JSX.Element {
     const off = window.api.assistant.onChanged(value => { if (alive) setState(value) })
     const offActivity = window.api.assistant.onActivity(setPhase)
     const offFocus = window.api.assistant.onFocus(() => input.current?.focus())
+    const offScreenshot = window.api.assistant.onScreenshot(setScreenshot)
     void window.api.assistant.state().then(value => { if (alive) setState(value) }).catch(reportError)
     void window.api.assistant.activity().then(setPhase).catch(reportError)
     input.current?.focus()
@@ -39,7 +41,7 @@ function Assistant(): JSX.Element {
       if (event.key === 'Escape') { event.preventDefault(); void window.api.assistant.hide() }
     }
     window.addEventListener('keydown', key)
-    return () => { alive = false; off(); offActivity(); offFocus(); window.removeEventListener('keydown', key) }
+    return () => { alive = false; off(); offActivity(); offFocus(); offScreenshot(); window.removeEventListener('keydown', key) }
   }, [])
   useEffect(() => { if (pinnedToBottom.current) content.current?.scrollTo({ top: content.current.scrollHeight }) }, [state])
   const send = async (): Promise<void> => {
@@ -51,6 +53,18 @@ function Assistant(): JSX.Element {
     input.current?.focus()
   }
   return <ThemeProvider theme={theme}><CssBaseline />
+    <Dialog open={screenshot !== null} maxWidth="md" fullWidth onClose={() => { if (screenshot) void window.api.assistant.reviewScreenshot(screenshot.id, false).catch(reportError) }}>
+      <DialogTitle>{t('确认本次截图')}</DialogTitle>
+      <DialogContent>
+        <Typography sx={{ fontSize: 12, mb: 1, overflowWrap: 'anywhere' }}>{screenshot?.title}</Typography>
+        {screenshot && <Box component="img" data-screenshot-preview src={screenshot.dataUrl} alt={t('本次截图预览')} sx={{ display: 'block', width: '100%', maxHeight: '50vh', objectFit: 'contain', bgcolor: 'action.hover', borderRadius: 1 }} />}
+        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 1 }}>{screenshot?.detail}</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => { if (screenshot) void window.api.assistant.reviewScreenshot(screenshot.id, false).catch(reportError) }}>{t('取消')}</Button>
+        <Button variant="contained" onClick={() => { if (screenshot) void window.api.assistant.reviewScreenshot(screenshot.id, true).catch(reportError) }}>{t('使用本次截图')}</Button>
+      </DialogActions>
+    </Dialog>
     <PaginationSettings.Provider value={{ size: settings?.listPageSize ?? 30, change: size => { void window.api.settings.update({ listPageSize: size }) } }}>
     <Box data-assistant-page sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <Box sx={{ height: 40, flexShrink: 0, px: 2, display: 'flex', alignItems: 'center', WebkitAppRegion: 'drag' }}>

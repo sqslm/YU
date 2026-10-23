@@ -8,7 +8,7 @@ describe('selected comment polishing preserves the document structure', () => {
     expect(plan.restore('[{"line":2,"text":"Save the result."},{"line":0,"text":"Validate the data."}]'))
       .toBe('  // Validate the data.\r\nconst value = 1;\r\n  // Save the result.\r\n')
   })
-  it.each(['#', '--', '//', '///', '*'])('preserves the %s marker even when the model returns prose without it', prefix => {
+  it.each(['#', '##', '###', '--', '//', '///', '*'])('preserves the %s marker even when the model returns prose without it', prefix => {
     const plan = commentSelection(`    ${prefix} old comment`)!
     expect(plan.restore('[{"line":0,"text":"Clear comment."}]')).toBe(`    ${prefix} Clear comment.`)
   })
