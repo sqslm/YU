@@ -397,6 +397,35 @@ GET /api/v1/stats/devices
 
 新客户端应优先用第 5 节的随记接口（结构化字段、真实冲突检测）。
 
+## 8.5 日程与提醒同步（1.0.0-rc.6）
+
+日程和提醒各有一对接口，协议与随记同源：**递增 `seq` 作拉取游标、删除是墓碑、一次推送一个事务**。写入是 upsert，**不做版本检查**——日程和待办是用户随手在哪台设备上改的个人数据，服务端没有比刚提交那次编辑更权威的版本，「别人改过」的答复只会为用户的自己的修改弹一个冲突框。因此同一 `id` 上的顺序是「后写覆盖」，而删除保留墓碑，离线设备推送旧副本也不会让这一行复活。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/calendar?since=&limit=` | 增量拉取，返回 `cursor,events,hasMore,serverTime`；`limit` 默认 200、上限 500 |
+| GET | `/api/v1/calendar/changes?since=&limit=` | 同上，随记客户端已在用的别名 |
+| POST | `/api/v1/calendar` | 单条事件，或 `{changes:[…]}` 批量；一次最多 200 条 |
+| GET | `/api/v1/reminders?since=&limit=` | 增量拉取，返回 `cursor,reminders,hasMore,serverTime` |
+| GET | `/api/v1/reminders/changes?since=&limit=` | 同上 |
+| POST | `/api/v1/reminders` | 单条提醒，或 `{changes:[…]}` 批量；一次最多 200 条 |
+
+推送响应（两者一致）：
+
+```json
+{ "applied": ["id"], "duplicates": ["id"], "conflicts": [{ "id": "…", "error": "…_id_taken" }], "cursor": 42 }
+```
+
+`duplicates` 表示内容与既有行相同、**不推进 `seq`**，因此重复推送不会制造无意义的游标前进。`conflicts` 只在这一行已属于别的账号时出现。
+
+**游标约定**：`since` 大于该账号历史上得到过的最大 `seq`（换机器、恢复备份、服务端换库）时服务端**从 0 重来**，否则那个客户端会永远拿到空数组。客户端只在整页处理成功后才持久化新游标。
+
+**日程事件**：`id,title,start,end,allDay,location,notes,leadMinutes,source,uid,status,updatedAt,deletedAt,seq`。`start`/`end` 是毫秒时间戳，`allDay` 为布尔，`leadMinutes` 可为 `null`（用户显式「这次别提醒」），`status` 取 `confirmed`/`cancelled`，`source` 取 `voice`/`manual`/`import`。`title` 上限 200 字符、`notes` 2000、`location` 300、`uid` 300。
+
+**提醒**：`id,title,dueAt,level,priority,deadlineAt,recurrence,status,data,updatedAt,deletedAt,seq`。`dueAt` 是「什么时候弹提醒」，`deadlineAt` 是「必须完成的时刻」，两者分开，只设截止时间不会被当成提醒时刻；`priority` 取 `low`/`normal`/`high`。整行原始内容同时放进 `data` 保存，这样重复规则、稍后提醒等字段往返不丢。
+
+**墓碑**：`deletedAt` 有值时该行的内容不再返回（`data`/`notes` 为空），只剩身份与时间戳——删除的那台设备已经把内容丢掉了，把内容回显给别的设备只会让它一直活着。
+
 ## 9. 错误码
 
 | HTTP | `error` | 含义 / 客户端动作 |
