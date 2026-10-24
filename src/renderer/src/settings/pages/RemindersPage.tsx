@@ -2,19 +2,19 @@ import { useEffect, useState } from 'react'
 import { Alert, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, Menu, MenuItem, Stack, Tab, Tabs, TextField, Tooltip, Typography } from '@mui/material'
 import { Add, ArrowDropDown, CheckCircleOutline, MoreHoriz, RadioButtonUnchecked } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
-import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderView } from '@shared/reminders'
-import { localDateTime } from '@shared/reminders'
+import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderView, TodoPriority } from '@shared/reminders'
+import { isOverdue, localDateTime, normalizePriority, PRIORITY_LABELS, TODO_PRIORITIES } from '@shared/reminders'
 import { PagedList } from '../Pagination'
 import { ReminderDateTime } from './ReminderDateTime'
 import { SnoozeButton } from '../../reminder/SnoozeButton'
-import { reminderDateBounds, reminderView, type ReminderKind, type ReminderPeriod } from './reminderView'
+import { formatDeadline, reminderDateBounds, reminderView, type ReminderKind, type ReminderPeriod, type ReminderPriorityFilter } from './reminderView'
 
-interface Form { kind: 'reminder' | 'todo'; title: string; description: string; timeExpression: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | 'daily' | 'weekly'; weekday: number }
-const empty = (kind: Form['kind'] = 'reminder'): Form => ({ kind, title: '', description: '', timeExpression: '', date: '', level: 'normal', repeat: 'none', weekday: 1 })
+interface Form { kind: 'reminder' | 'todo'; title: string; description: string; timeExpression: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | 'daily' | 'weekly'; weekday: number; priority: TodoPriority; deadline: string }
+const empty = (kind: Form['kind'] = 'reminder'): Form => ({ kind, title: '', description: '', timeExpression: '', date: '', level: 'normal', repeat: 'none', weekday: 1, priority: 'normal', deadline: '' })
 const fromReminder = (row: Reminder): Form => ({ kind: row.dueAt === null ? 'todo' : 'reminder', title: row.title, description: row.description ?? '', timeExpression: row.timeExpression ?? '', date: localDateTime(row.dueAt), level: row.level,
-  repeat: row.recurrence?.frequency ?? 'none', weekday: row.recurrence?.weekdays?.[0] ?? 1 })
+  repeat: row.recurrence?.frequency ?? 'none', weekday: row.recurrence?.weekdays?.[0] ?? 1, priority: normalizePriority(row.priority), deadline: localDateTime(row.deadlineAt ?? null) })
 const fromDraft = (row: ReminderDraft): Form => ({ kind: row.dueAt === null ? 'todo' : 'reminder', title: row.title, description: row.description ?? '', timeExpression: row.time_expression ?? '', date: localDateTime(row.dueAt), level: row.level,
-  repeat: row.dueAt === null ? 'none' : row.rule?.frequency ?? row.recurrence ?? 'none', weekday: row.rule?.weekdays?.[0] ?? -1 })
+  repeat: row.dueAt === null ? 'none' : row.rule?.frequency ?? row.recurrence ?? 'none', weekday: row.rule?.weekdays?.[0] ?? -1, priority: 'normal', deadline: '' })
 
 function input(form: Form, source: ReminderInput['source'], noteId?: string, original?: Reminder): ReminderInput {
   const sameDate = original && form.date === localDateTime(original.dueAt)
@@ -24,8 +24,14 @@ function input(form: Form, source: ReminderInput['source'], noteId?: string, ori
   if (dueAt !== null && (!Number.isFinite(dueAt) || dueAt <= Date.now() && !(sameDate && original.status !== 'pending'))) throw new Error('请选择将来的提醒时间')
   if (form.repeat !== 'none' && dueAt === null) throw new Error('重复提醒需要具体时刻')
   if (form.repeat === 'weekly' && form.weekday < 0) throw new Error('请选择每周的星期')
+  // An empty box means "no deadline", which the store spells `null`; a filled one
+  // may legitimately be in the past (an overdue task being edited), so only the
+  // parse is validated here.
+  const deadlineAt = form.deadline ? new Date(form.deadline).getTime() : null
+  if (deadlineAt !== null && !Number.isFinite(deadlineAt)) throw new Error('截止时间格式不正确')
   const date = new Date(dueAt ?? Date.now())
   return { title: form.title, description: form.description, timeExpression: form.timeExpression || undefined, dueAt, level: form.kind === 'todo' ? 'normal' : form.level, source, noteId,
+    priority: form.priority, deadlineAt,
     recurrence: sameDate && form.repeat === (original.recurrence?.frequency ?? 'none') && form.weekday === (original.recurrence?.weekdays?.[0] ?? 1) ? original.recurrence : form.repeat === 'none' ? null : { frequency: form.repeat, hour: date.getHours(), minute: date.getMinutes(),
       ...(form.repeat === 'weekly' ? { weekdays: [form.weekday] } : {}) } }
 }
@@ -39,6 +45,16 @@ function Fields({ form, change }: { form: Form; change: (form: Form) => void }):
     <TextField label={t(form.kind === 'todo' ? '待办事项' : '提醒事项')} size="small" value={form.title} onChange={e => change({ ...form, title: e.target.value })} inputProps={{ maxLength: 300 }} />
     <TextField label={t('提醒备注（可选）')} size="small" multiline minRows={2} maxRows={4} value={form.description}
       onChange={e => change({ ...form, description: e.target.value })} inputProps={{ maxLength: 4000 }} />
+    {/* Both kinds carry these two: a reminder with a deadline is a real case, and
+        the store already stores them for every row. */}
+    <Stack direction="row" spacing={1}>
+      <TextField select label={t('优先级')} size="small" value={form.priority} sx={{ width: 130 }}
+        onChange={e => change({ ...form, priority: e.target.value as TodoPriority })}>
+        {TODO_PRIORITIES.map(priority => <MenuItem key={priority} value={priority}>{t(PRIORITY_LABELS[priority])}</MenuItem>)}
+      </TextField>
+      <TextField type="datetime-local" label={t('截止时间（可选）')} size="small" value={form.deadline} sx={{ flex: 1, colorScheme: theme => theme.palette.mode }}
+        InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-deadline-editor': true }} onChange={e => change({ ...form, deadline: e.target.value })} />
+    </Stack>
     {form.kind === 'reminder' && <><ReminderDateTime required value={form.date} onChange={date => change({ ...form, date,
       weekday: form.repeat === 'weekly' && date ? new Date(date).getDay() : form.weekday })} />
     <Stack direction="row" spacing={1}>
@@ -66,6 +82,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
   const [rows, setRows] = useState<Reminder[]>([]), [error, setError] = useState(''), [query, setQuery] = useState('')
   const [filter, setFilter] = useState('active'), [busy, setBusy] = useState(false)
   const [kind, setKind] = useState<ReminderKind>('all'), [period, setPeriod] = useState<ReminderPeriod>('all')
+  const [priority, setPriority] = useState<ReminderPriorityFilter>('all')
   const [from, setFrom] = useState(''), [to, setTo] = useState('')
   const [editor, setEditor] = useState<{ id?: string; form: Form; source: ReminderInput['source']; noteId?: string; duplicate?: boolean } | null>(null)
   const [review, setReview] = useState<{ drafts: ReminderDraft[]; forms: Form[]; selected: boolean[]; noteId?: string } | null>(null)
@@ -78,7 +95,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
   useEffect(() => {
     if (!view) return
     setHighlightId(view.id)
-    if (view?.id) { setQuery(''); setFilter('all'); setKind('all'); setPeriod('all') }
+    if (view?.id) { setQuery(''); setFilter('all'); setKind('all'); setPeriod('all'); setPriority('all') }
     if (view?.drafts?.length) {
       setFilter('active'); setQuery('')
       setReview({ drafts: view.drafts, forms: view.drafts.map(fromDraft),
@@ -94,19 +111,21 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
   }
   const act = (id: string, action: ReminderAction, minutes?: number): void => {
     void perform(() => window.api.reminders.action(id, action, minutes)).then(ok => {
-      if (ok && action === 'restore') { setKind('all'); setPeriod('all'); setFilter('active'); setQuery(''); setHighlightId(id) }
+      if (ok && action === 'restore') { setKind('all'); setPeriod('all'); setFilter('active'); setQuery(''); setPriority('all'); setHighlightId(id) }
     })
   }
   const format = (stamp: number | null): string => stamp === null ? t('未设置时间 · 待办') : new Date(stamp).toLocaleString(i18n.language === 'en' ? 'en-US' : 'zh-CN')
   const sourceLabel = { manual: '手动', voice: '语音快捷键', note: '随记' }
   const statusLabel = { pending: '待处理', due: '已到期', completed: '已完成', cancelled: '已取消' }
   const bounds = reminderDateBounds(period, from, to)
-  const filtered = reminderView(rows, { status: filter, kind, query, bounds })
+  const filtered = reminderView(rows, { status: filter, kind, query, bounds, priority })
+  const language: 'zh' | 'en' = i18n.language === 'en' ? 'en' : 'zh'
   const create = (type: Form['kind']): void => { setCreateMenu(null); setError(''); setEditor({ form: empty(type), source: 'manual' }) }
   const edit = (row: Reminder): void => { setRowMenu(null); setError(''); setEditor({ id: row.id, form: fromReminder(row), source: row.source, noteId: row.noteId }) }
   const duplicate = (row: Reminder): void => {
     const form = fromReminder(row)
     if (form.date && new Date(form.date).getTime() <= Date.now()) form.date = ''
+    if (form.deadline && new Date(form.deadline).getTime() <= Date.now()) form.deadline = ''
     setRowMenu(null); setError(''); setEditor({ form, source: 'manual', noteId: row.noteId, duplicate: true })
   }
   return <Box sx={{ p: 3 }} data-reminders-page>
@@ -136,6 +155,10 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
         <TextField select size="small" label={t('时间')} value={period} onChange={e => setPeriod(e.target.value as ReminderPeriod)} sx={{ width: 145 }} inputProps={{ 'data-reminder-period-filter': true }}>
           {([['all', '全部时间'], ['today', '今日'], ['week', '近一周'], ['nextWeek', '未来一周'], ['custom', '自定义']] as const).map(([value, label]) => <MenuItem key={value} value={value}>{t(label)}</MenuItem>)}
         </TextField>
+        {/* `all` first so the default reads as "no narrowing", matching 状态/时间. */}
+        <TextField select size="small" label={t('优先级')} value={priority} onChange={e => setPriority(e.target.value as ReminderPriorityFilter)} sx={{ width: 120 }} inputProps={{ 'data-reminder-priority-filter': true }}>
+          {([['all', '全部'], ['high', '高'], ['normal', '普通'], ['low', '低']] as const).map(([value, label]) => <MenuItem key={value} value={value}>{t(label)}</MenuItem>)}
+        </TextField>
     </Stack>
     {period === 'custom' && <Stack direction="row" spacing={1} sx={{ mb: 2 }} data-reminder-time-filter>
         <TextField type="date" size="small" label={t('开始日期')} value={from} onChange={e => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-date': 'from' }} sx={{ width: 170, colorScheme: theme => theme.palette.mode }} />
@@ -144,8 +167,13 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
     {bounds.error && <Alert severity="warning" sx={{ mb: 2 }}>{t(bounds.error)}</Alert>}
     {!filtered.length && <Typography color="text.secondary" sx={{ py: 4, fontSize: 13 }}>{t('没有符合条件的事项')}</Typography>}
     <Stack spacing={1}>
-      <PagedList name="reminders" resetKey={`${filter}/${kind}/${period}/${from}/${to}/${query}`} revealKey={highlightId}>
-        {filtered.map(row => <Box key={row.id} data-reminder-row={row.id} sx={{ p: 1.5, border: 1, borderColor: highlightId === row.id ? 'primary.main' : 'divider', borderRadius: 2, bgcolor: 'background.paper', display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+      <PagedList name="reminders" resetKey={`${filter}/${kind}/${period}/${priority}/${from}/${to}/${query}`} revealKey={highlightId}>
+        {filtered.map(row => {
+          const overdue = isOverdue(row, Date.now())
+          const level = normalizePriority(row.priority)
+          // `normal` is the default every row starts at, so only an explicit rank
+          // earns a badge; `high` shouts, `low` recedes.
+          return <Box key={row.id} data-reminder-row={row.id} sx={{ p: 1.5, border: 1, borderColor: highlightId === row.id ? 'primary.main' : 'divider', borderRadius: 2, bgcolor: 'background.paper', display: 'flex', alignItems: 'flex-start', gap: 1 }}>
           <Tooltip title={t(['pending', 'due'].includes(row.status) ? '确认完成' : '恢复为待处理')}>
             <IconButton size="small" disabled={busy} aria-label={t(['pending', 'due'].includes(row.status) ? '确认完成' : '恢复为待处理')} onClick={() => act(row.id, ['pending', 'due'].includes(row.status) ? 'complete' : 'restore')} sx={{ mt: -.25 }}>
               {row.status === 'completed' ? <CheckCircleOutline fontSize="small" color="primary" /> : <RadioButtonUnchecked fontSize="small" />}
@@ -154,12 +182,17 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
           <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1}>
             <Typography component="button" disabled={busy} onClick={() => edit(row)} sx={{ fontFamily: 'inherit', background: 'none', border: 0, p: 0, color: 'text.primary', textAlign: 'left', cursor: 'pointer', fontSize: 14, fontWeight: 600, flex: 1, overflowWrap: 'anywhere', textDecoration: row.status === 'completed' ? 'line-through' : 'none' }}>{row.title}</Typography>
+            {level !== 'normal' && <Chip size="small" variant="outlined" data-reminder-priority={level} color={level === 'high' ? 'warning' : undefined}
+              label={t(PRIORITY_LABELS[level])} sx={level === 'low' ? { color: 'text.secondary', borderColor: 'divider' } : undefined} />}
             {row.level === 'strong' && <Chip size="small" color="warning" variant="outlined" label={t('强提醒')} />}
             {row.status !== 'pending' && <Chip size="small" label={t(statusLabel[row.status])} />}
           </Stack>
           {row.description && <Typography data-reminder-description title={row.description} sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflow: 'hidden' }}>{row.description}</Typography>}
           {row.dueAt === null && row.timeExpression && <Typography sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary' }}>{t('原始时间表达：{{text}}', { text: row.timeExpression })}</Typography>}
           <Typography sx={{ fontSize: 12, color: row.status === 'due' ? 'warning.main' : 'text.secondary', mt: 0.75 }}>{row.dueAt === null ? t('待办') : `${t('提醒')} · ${format(row.dueAt)}`}</Typography>
+          {row.deadlineAt !== null && <Typography data-reminder-deadline={overdue ? 'overdue' : 'ok'} sx={{ mt: 0.75, fontSize: 12, fontWeight: overdue ? 600 : 400, color: overdue ? 'error.main' : 'text.secondary' }}>
+            {t('截止 {{time}}', { time: formatDeadline(row.deadlineAt, language) })}{overdue ? ` · ${t('已逾期')}` : ''}
+          </Typography>}
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5, flexWrap: 'wrap' }}>
             <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{row.dueAt === null ? t('创建于 {{date}}', { date: format(row.createdAt) }) : row.recurrence ? `${t(row.recurrence.frequency === 'daily' ? '每天' : '每周')}${row.recurrence.weekdays?.map(day => ` ${t(['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][day]!)}`).join('') ?? ''}` : t(sourceLabel[row.source])}</Typography>
             {row.noteId && <Button size="small" onClick={() => onOpenNote(row.noteId!)}>{t('查看原始随记')}</Button>}
@@ -167,7 +200,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
           </Box>
           {['pending', 'due'].includes(row.status) && row.dueAt !== null && <SnoozeButton label={t('稍后提醒')} disabled={busy} onSnooze={minutes => act(row.id, 'snooze', minutes)} />}
           <IconButton size="small" data-reminder-more={row.id} aria-label={t('更多操作')} onClick={e => setRowMenu({ anchor: e.currentTarget, row })}><MoreHoriz fontSize="small" /></IconButton>
-        </Box>)}
+        </Box>})}
       </PagedList>
     </Stack>
     <Menu anchorEl={rowMenu?.anchor} open={Boolean(rowMenu)} onClose={() => setRowMenu(null)}>
@@ -184,7 +217,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
       <DialogActions><Button disabled={busy} onClick={() => setEditor(null)}>{t('取消')}</Button><Button disabled={busy} variant="contained" onClick={() => {
         if (editor) void perform(async () => {
           const row = await window.api.reminders.save(input(editor.form, editor.source, editor.noteId, rows.find(row => row.id === editor.id)), editor.id)
-          setKind(row.dueAt === null ? 'todo' : 'reminder'); setPeriod('all'); setFilter(['pending', 'due'].includes(row.status) ? 'active' : row.status); setQuery(''); setHighlightId(row.id)
+          setKind(row.dueAt === null ? 'todo' : 'reminder'); setPeriod('all'); setFilter(['pending', 'due'].includes(row.status) ? 'active' : row.status); setQuery(''); setPriority('all'); setHighlightId(row.id)
         }).then(ok => { if (ok) setEditor(null) })
       }}>{t(editor?.form.kind === 'reminder' ? '保存提醒' : '保存为待办')}</Button></DialogActions>
     </Dialog>
@@ -203,7 +236,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
       <DialogActions><Button disabled={busy} onClick={() => setReview(null)}>{t('取消')}</Button><Button variant="contained" disabled={busy || !review?.selected.some(Boolean)} onClick={() => {
         if (review) void perform(async () => {
           const saved = await window.api.reminders.saveMany(review.forms.filter((_v, n) => review.selected[n]).map(form => input(form, review.noteId ? 'note' : 'voice', review.noteId)))
-          setKind('all'); setPeriod('all'); setFilter('active'); setQuery(''); setHighlightId(saved[0]?.id)
+          setKind('all'); setPeriod('all'); setFilter('active'); setQuery(''); setPriority('all'); setHighlightId(saved[0]?.id)
         }).then(ok => { if (ok) setReview(null) })
       }}>{t('保存所选事项')}</Button></DialogActions>
     </Dialog>

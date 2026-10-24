@@ -69,7 +69,13 @@ export interface TypelessApi {
    * from one answer instead of guessing whether its cache is still valid.
    */
   life: {
-    events(range: import('./calendar').CalendarRange): Promise<import('./calendar').CalendarEvent[]>
+    /**
+     * `anchor` only moves the `'month'` range, so paging the month view asks for
+     * the month on screen instead of the month of the main process's clock.
+     */
+    events(range: import('./calendar').CalendarRange, anchor?: { year: number; month: number }): Promise<import('./calendar').CalendarEvent[]>
+    /** Events overlapping a window the caller computed with `rangeFor`/`monthRangeFor`. */
+    eventsBetween(from: number, until: number): Promise<import('./calendar').CalendarEvent[]>
     cancelEvent(id: string, action: 'cancel' | 'restore'): Promise<import('./calendar').CalendarEvent | null>
     /**
      * Creates or replaces one event. The caller passes every field it wants kept:
@@ -84,6 +90,8 @@ export interface TypelessApi {
     speak(text: string): Promise<{ spoken: number; skipped: boolean }>
     briefing(): Promise<import('./briefing').Briefing>
     refreshBriefing(): Promise<import('./briefing').Briefing>
+    /** What was actually delivered, newest last: the page shows real history, not a recomposition. */
+    briefingHistory(): Promise<import('./briefing').BriefingRecord[]>
     onBriefing(callback: (briefing: import('./briefing').Briefing) => void): () => void
   }
   /**

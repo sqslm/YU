@@ -82,6 +82,13 @@ export interface ReminderDraft {
   needs_confirmation: boolean
   dueAt: number | null
   rule: ReminderRecurrence | null
+  /**
+   * The model never invents these two; the calling tool fills them in from the
+   * user's own words. They live on the draft so the voice path can carry them
+   * to `saveMany` instead of dropping them when a row is not stored yet.
+   */
+  priority?: TodoPriority
+  deadlineAt?: number | null
   issue?: string
 }
 export interface ReminderView { id?: string; drafts?: ReminderDraft[]; noteId?: string }

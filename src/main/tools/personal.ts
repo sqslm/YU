@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { Reminder, ReminderAction, ReminderInput, TodoPriority } from '@shared/reminders'
 import { isOverdue, normalizePriority, PRIORITY_LABELS, sortTodos, TODO_PRIORITIES } from '@shared/reminders'
 import { mainLanguage, mt } from '@shared/mainI18n'
-import { nextOccurrence, resolveReminderTime } from '../reminder-time'
+import { nextOccurrence, resolveDeadline, resolveReminderTime } from '../reminder-time'
 import { directVoiceIntent } from '../voice-intent'
 import type { ToolDefinition, ToolOutcome } from './registry'
 
@@ -18,7 +18,12 @@ export function personalCommand(text: string): { name: string; args: Record<stri
   return { name: 'open_page', args: { page } }
 }
 export interface PersonalTools {
-  remind(text: string, signal: AbortSignal, submittedAt?: number): Promise<{ message: string; undo?: boolean; reminder?: Reminder }>
+  /**
+   * `extra` carries what the tool read from the user's own words. The extractor
+   * cannot produce these fields, and dropping them on the pending path used to
+   * lose the priority and deadline the user asked for.
+   */
+  remind(text: string, signal: AbortSignal, submittedAt?: number, extra?: { priority?: TodoPriority; deadlineAt?: number | null }): Promise<{ message: string; undo?: boolean; reminder?: Reminder; saved?: number }>
   reminders(): Reminder[]
   saveReminder(input: ReminderInput, id: string): Reminder
   action(id: string, action: ReminderAction | 'delete', minutes?: number): void
@@ -94,24 +99,50 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     const intent = directVoiceIntent(question)
     if (intent?.kind === 'assistant' || intent?.kind === 'dictation') throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
     if (!/提醒|待办|代办|(?:添加|创建|新建|加个|记个).{0,8}任务|\b(?:remind|reminder|to-?do|notify|alert)\b|\b(?:create|add|save)\b.{0,30}\btask\b/iu.test(question)) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
-    // Resolve the deadline before anything is stored: a failed parse must abort
-    // instead of quietly saving a task without the deadline the user asked for.
+    const now = Date.now()
+    // A deadline names a day, not an instant: "by Friday" is a usable target, and
+    // failing the whole reminder because no clock was spoken loses a task the user
+    // did state. `resolveDeadline` returns null only when the date itself is
+    // unclear, which becomes a note in the receipt instead of a failed call.
     const deadlineExpression = string(args.deadline)
-    let deadlineAt: number | null = null
-    if (deadlineExpression) {
-      const resolved = resolveReminderTime(deadlineExpression, Date.now())
-      if (resolved.issue || resolved.dueAt === null) throw new Error(resolved.issue || mt('请补充具体截止时间'))
-      deadlineAt = resolved.dueAt
-    }
+    const deadlineAt = deadlineExpression ? resolveDeadline(deadlineExpression, now) : null
     const priority = args.priority === undefined ? 'normal' : normalizePriority(args.priority)
-    const result = await api.remind(question, signal, submittedAt)
-    // The parser already persisted the row; re-save only to attach the explicit fields.
-    const reminder = result.reminder && (args.priority !== undefined || deadlineAt !== null)
-      ? api.saveReminder({ ...result.reminder, priority, deadlineAt }, result.reminder.id) : result.reminder
-    // A pending confirmation has no stored row yet, so claiming these values would be a lie.
-    const tags = !reminder ? [] : [...(args.priority === undefined ? [] : [priorityName(priority)]),
-      ...(deadlineAt === null ? [] : [mt('截止 {{time}}', { time: deadlineText(deadlineAt, Date.now()) })])]
-    return ok(tags.length ? `${result.message} · ${tags.join(' · ')}` : result.message, { ...(reminder ? { item: reminderDetails(reminder, Date.now()) } : {}) })
+    const fields = {
+      ...(args.priority === undefined ? {} : { priority }),
+      ...(deadlineAt === null ? {} : { deadlineAt })
+    }
+    // The fields ride along with the extraction so the pending and multi-item
+    // paths keep them; the parser itself can never invent them.
+    const explicit = args.priority !== undefined || deadlineAt !== null
+    const recorded = explicit
+      ? await api.remind(question, signal, submittedAt, fields)
+      : await api.remind(question, signal, submittedAt)
+    // The parser already persisted the row, so this re-save only patches the extra
+    // fields. A deadline with no alert time would notify nobody, so the alert moves
+    // onto the deadline instead of the task sitting silent forever.
+    const silent = (recorded.reminder?.dueAt ?? null) === null
+    const onDeadline = silent && deadlineAt !== null
+    const reminder = recorded.reminder && (onDeadline || args.priority !== undefined || deadlineAt !== null)
+      ? api.saveReminder({ ...recorded.reminder, ...fields, ...(onDeadline ? { dueAt: deadlineAt } : {}) }, recorded.reminder.id)
+      : recorded.reminder
+    const notes: string[] = []
+    if (reminder) {
+      if (args.priority !== undefined) notes.push(priorityName(priority))
+      if (deadlineAt !== null) notes.push(mt('截止 {{time}}', { time: deadlineText(deadlineAt, now) }))
+      if (onDeadline) notes.push(mt('会在截止时提醒'))
+      // The task exists but the date did not parse: say which part is missing
+      // rather than letting the user believe the deadline was set.
+      if (deadlineExpression && deadlineAt === null) notes.push(mt('截止时间没听清，这条没有设截止'))
+    } else if (args.priority !== undefined || deadlineAt !== null) {
+      // A pending confirmation has no stored row at all, so a receipt would be a
+      // lie; a multi-item take did store the fields, so report that instead.
+      const saved = recorded.saved ?? 0
+      notes.push(saved > 0
+        ? mt(deadlineAt === null ? '优先级已应用到本次的 {{count}} 个事项' : '优先级和截止时间已应用到本次的 {{count}} 个事项', { count: saved })
+        : mt('这次没有落库，优先级和截止时间没有记住'))
+    }
+    return ok(notes.length ? `${recorded.message} · ${notes.join(' · ')}` : recorded.message,
+      { ...(reminder ? { item: reminderDetails(reminder, now) } : {}) })
   }
   if (name === 'list_reminders') {
     const status = string(args.status) || 'active', query = string(args.query).toLowerCase()
@@ -259,7 +290,7 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
 
 const schemas: Record<typeof PERSONAL_TOOLS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
   update_note: { description: 'Rename or categorize an actual existing note ID, preserving its original transcript, polished text, audio and tags. title sets or clears its custom name. category_id uses a real returned ID (empty clears it); category_name uses an existing exact name or creates that category. Do not provide both category fields. Resolve latest/previous references with search_notes first. Executes directly without a confirmation popup.', properties: { id: { type: 'string' }, title: { type: 'string' }, category_id: { type: 'string' }, category_name: { type: 'string' } }, required: ['id'] },
-  create_reminder: { description: 'Create clear reminders/todos directly from the actual user request using the existing parser. Ask for missing details in text; never invent times or open confirmation dialogs. No timestamp arguments: due times still come from the request. Optional priority (low/normal/high, default normal) and optional deadline, a natural-language expression for when the work must be finished, which is independent of when the alert fires. An unparsable deadline fails the call.', properties: { priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } } },
+  create_reminder: { description: 'Create clear reminders/todos directly from the actual user request using the existing parser. Ask for missing details in text; never invent times or open confirmation dialogs. No timestamp arguments: due times still come from the request. Optional priority (low/normal/high, default normal) and optional deadline, a natural-language expression for when the work must be finished, which is independent of when the alert fires. A date-only deadline is put at the end of that day, a deadline with no alert time becomes the alert time, and an unclear deadline still creates the task while the receipt says the deadline was not set.', properties: { priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } } },
   list_reminders: { description: 'Query actual reminders and untimed todos, including untimed active tasks in day queries. kind=todo means only untimed tasks, reminder means timed, omitted means both. day: today/yesterday/tomorrow/YYYY-MM-DD. Returns real IDs, level, priority, priorityLabel, deadlineAt, status, absolute triggerTime, remainingSeconds at asOf. overdue is judged on deadlineAt when present and otherwise on the alert time, and never on completed/cancelled tasks. Ordered open first, then priority, then deadline. Do not use the original relative timeExpression as a countdown.', properties: { query: { type: 'string' }, status: { type: 'string', enum: ['active', 'pending', 'due', 'completed', 'cancelled', 'all'] }, today: { type: 'boolean' }, day: { type: 'string' }, kind: { type: 'string', enum: ['todo', 'reminder', 'all'] } } },
   manage_reminder: { description: 'Modify a real task ID from query/create results. action=update edits time_expression, level, priority and/or deadline in place, preserving ID and unrelated fields. Clock-only edits preserve its date and weekly rule. deadline is a natural-language expression for when the work must be finished; it does not move the alert. Other actions: complete/cancel/snooze/restore/delete. Never guess the target; query first if unknown.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['complete', 'cancel', 'snooze', 'restore', 'delete', 'update'] }, minutes: { type: 'number' }, time_expression: { type: 'string' }, level: { type: 'string', enum: ['normal', 'strong'] }, priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } }, required: ['id', 'action'] },
   create_note: { description: 'Save explicitly requested text or a previous answer as a local text note. Do not claim it includes an audio recording.', properties: { text: { type: 'string' } }, required: ['text'] },

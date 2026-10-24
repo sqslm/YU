@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarEvent } from '@shared/calendar'
 import { localDayKey } from '@shared/calendar'
-import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, monthGrid, shiftDayKey, sortEvents } from './calendarView'
+import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
 
 /** Fixed "now" so the relative prefixes never depend on the machine clock. */
 const NOW = new Date(2026, 9, 25, 10, 30).getTime()
@@ -150,6 +150,61 @@ describe('formatDayHeading', () => {
 
   it('falls back to the raw key when the day is malformed', () => {
     expect(formatDayHeading('2026-10-99', 'zh', NOW)).toBe('2026-10-99')
+  })
+})
+
+describe('rangeForCursor', () => {
+  it('asks for the whole visible grid, filler included', () => {
+    // October 2026 starts on a Thursday, so the grid opens on Monday 09-28 and
+    // ends on 11-08: the request has to match those cells, not "October".
+    const range = rangeForCursor({ year: 2026, month: 10 })
+    expect(localDayKey(range.from)).toBe('2026-09-28')
+    expect(localDayKey(range.until)).toBe('2026-11-09')
+    expect(range.from).toBe(at(9, 28, 0))
+    expect(range.until).toBe(at(11, 9, 0))
+  })
+
+  it('spans exactly the 42 cells the grid draws, for every month it can show', () => {
+    const cursors = [
+      { year: 2026, month: 6 },
+      { year: 2028, month: 2 },
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => ({ year: 2026, month }))
+    ]
+    for (const cursor of cursors) {
+      const range = rangeForCursor(cursor)
+      const cells = monthGrid(cursor.year, cursor.month).flat()
+      // The first cell and one past the last one: no dot can fall outside the request,
+      // and a request wider than the grid would refetch on every reload for nothing.
+      expect(range.from).toBe(cells[0])
+      expect(localDayKey(range.until)).toBe(shiftDayKey(localDayKey(cells[41]!), 1))
+    }
+  })
+
+  it('crosses the year on December and starts a Monday month on its 1st', () => {
+    const december = rangeForCursor({ year: 2026, month: 12 })
+    expect(december.from).toBe(at(11, 30, 0))
+    // 2026-12-28 + 14 days spills into the new year, so the tail is January 2027.
+    expect(localDayKey(december.until)).toBe('2027-01-11')
+    expect(december.until).toBe(new Date(2027, 0, 11).getTime())
+
+    // 2026-06-01 is a Monday: no leading filler, so the window opens on the 1st.
+    const june = rangeForCursor({ year: 2026, month: 6 })
+    expect(localDayKey(june.from)).toBe('2026-06-01')
+    expect(localDayKey(june.until)).toBe('2026-07-13')
+  })
+})
+
+describe('listRangeFor', () => {
+  it('covers a week behind today and two months ahead of it', () => {
+    const range = listRangeFor(NOW)
+    expect(range.from).toBe(at(10, 18, 0))
+    expect(range.until).toBe(at(12, 24, 0))
+    expect(localDayKey(range.until)).toBe(shiftDayKey(localDayKey(range.from), 67))
+  })
+
+  it('does not depend on the clock: the same instant always gives the same window', () => {
+    expect(listRangeFor(at(10, 25, 23))).toEqual(listRangeFor(at(10, 25, 0)))
+    expect(listRangeFor(at(10, 26, 0)).from).toBe(at(10, 19, 0))
   })
 })
 

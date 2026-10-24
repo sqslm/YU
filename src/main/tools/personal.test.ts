@@ -182,10 +182,54 @@ describe('personal tools share real application services', () => {
     expect(result.data).toMatchObject({ item: { priority: 'high', priorityLabel: '高', deadlineAt, dueAt: reminder.dueAt } })
     expect(result.summary).toContain('高优先级'); expect(result.summary).toContain('截止')
   })
-  it('refuses an unparsable deadline without saving anything', async () => {
+  it('keeps an unrecognisable deadline from failing the whole reminder', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
     const result = await runTool('create_reminder', { deadline: '尽快' }, ctx)
-    expect(result.ok).toBe(false); expect(result.error).toContain('时间不够精确，请选择日期和时间')
-    expect(api.remind).not.toHaveBeenCalled(); expect(api.saveReminder).not.toHaveBeenCalled()
+    // No date to fall back on, so nothing is invented — but the task is still created.
+    expect(result.ok).toBe(true)
+    expect(api.remind).toHaveBeenCalledWith(ctx.question, expect.any(AbortSignal), ctx.submittedAt)
+    expect(api.saveReminder).not.toHaveBeenCalled()
+    expect(result.summary).toBe('Please confirm the time')
+  })
+  it('turns a bare date deadline into the end of that day', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
+    const reminder = { id: 'new', title: 'Send the deck', dueAt: new Date(2026, 9, 24, 14, 50).getTime(), level: 'normal',
+      recurrence: null, source: 'manual', status: 'pending', createdAt: 1, updatedAt: 1, deliveredAt: null, priority: 'normal', deadlineAt: null } as Reminder
+    vi.mocked(api.remind).mockResolvedValue({ message: '提醒已创建', reminder })
+    const result = await runTool('create_reminder', { deadline: '明天' }, ctx)
+    const deadlineAt = new Date(2026, 9, 24, 23, 59, 59, 999).getTime()
+    expect(result.ok).toBe(true)
+    expect(api.saveReminder).toHaveBeenCalledWith(expect.objectContaining({ deadlineAt, dueAt: reminder.dueAt }), 'new')
+    expect(result.summary).toContain('截止 明天 23:59')
+  })
+  it('moves the alert onto a deadline that would otherwise never fire', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
+    const reminder = { id: 'new', title: 'File the report', dueAt: null, level: 'normal',
+      recurrence: null, source: 'manual', status: 'pending', createdAt: 1, updatedAt: 1, deliveredAt: null, priority: 'normal', deadlineAt: null } as Reminder
+    vi.mocked(api.remind).mockResolvedValue({ message: '待办已创建', reminder })
+    const result = await runTool('create_reminder', { deadline: '今天18点' }, ctx)
+    const deadlineAt = new Date(2026, 9, 23, 18).getTime()
+    expect(api.saveReminder).toHaveBeenCalledWith(expect.objectContaining({ dueAt: deadlineAt, deadlineAt }), 'new')
+    expect(result.summary).toContain('会在截止时提醒')
+    expect(result.data).toMatchObject({ item: { dueAt: deadlineAt, deadlineAt } })
+  })
+  it('never claims a priority or deadline it could not store', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
+    // Pending confirmation: the extractor stored nothing, so the fields have nowhere to go.
+    vi.mocked(api.remind).mockResolvedValue({ message: '请补充明确的事项和提醒时间，本次未保存' })
+    const result = await runTool('create_reminder', { priority: 'high', deadline: '今天18点' }, ctx)
+    expect(api.remind).toHaveBeenCalledWith(ctx.question, expect.any(AbortSignal), ctx.submittedAt,
+      { priority: 'high', deadlineAt: new Date(2026, 9, 23, 18).getTime() })
+    expect(result.ok).toBe(true)
+    expect(result.summary).toContain('这次没有落库')
+    expect(result.data.item).toBeUndefined()
+  })
+  it('reports a multi-item take as stored instead of assuming nothing happened', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
+    vi.mocked(api.remind).mockResolvedValue({ message: '已创建 2 个待办', saved: 2 })
+    const result = await runTool('create_reminder', { priority: 'high', deadline: '今天18点' }, ctx)
+    expect(result.ok).toBe(true)
+    expect(result.summary).toContain('优先级和截止时间已应用到本次的 2 个事项')
   })
   it('judges list_reminders overdue on the deadline and reports the priority label', async () => {
     vi.useFakeTimers(); const now = new Date(2026, 9, 23, 18, 30).getTime(); vi.setSystemTime(now)

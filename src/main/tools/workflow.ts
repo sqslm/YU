@@ -95,20 +95,31 @@ async function runWorkflow(
 ): Promise<ToolOutcome> {
   const workflow = resolve(api, args)
   if (workflow.archivedAt !== undefined) throw new Error(mt('这个工作流已归档，先恢复再运行'))
-  // The replay authorises the tools it was saved with. Without this a workflow
-  // saved from the Ask card would fail every step in a dictation turn, because
-  // that turn's allowlist is narrower than the one it was built under.
-  const replay: ToolContext = {
-    ...ctx,
-    allowedTools: [...new Set([...(ctx.allowedTools ?? []), ...workflow.steps.map(step => step.tool)])]
-  }
+  // Authorization is decided per step. The old code unioned every step's tool into
+  // the round's allowlist, so a saved `web_search` step ran in a turn where the
+  // user had said "don't go online", and a narrow turn could reach tools it was
+  // never granted. `ctx.allowedTools` is the only grant this round has, so a tool
+  // it does not name is refused; the step's own tool is added just for the replay
+  // so the inner registry gate sees the same round plus that one step.
+  const granted = ctx.allowedTools
   // Imported lazily: `registry` imports this module for its definitions, and a
   // top-level import back would be a cycle at load time.
   const { runTool } = await import('./registry')
   const results: Array<{ label: string; tool: string; ok: boolean; summary: string }> = []
-  for (const step of workflow.steps) {
+  for (const [index, step] of workflow.steps.entries()) {
     ctx.log(`[workflow] ${workflow.name}: ${step.tool}`)
-    const outcome = await runTool(step.tool, step.args, replay)
+    // A hand-edited store must not reach a non-step tool even if the load-time
+    // filter was bypassed, so the whitelist is asserted again right before use.
+    if (!WORKFLOW_STEP_TOOLS.includes(step.tool)) {
+      results.push({ label: step.label, tool: step.tool, ok: false, summary: mt('这一步的工具不在允许范围内：{{tool}}', { tool: step.tool }) })
+      break
+    }
+    if (granted && !granted.includes(step.tool)) {
+      results.push({ label: step.label, tool: step.tool, ok: false, summary: mt('第 {{step}} 步未获本轮授权', { step: index + 1 }) })
+      break
+    }
+    const stepCtx: ToolContext = { ...ctx, allowedTools: [...(granted ?? []), step.tool] }
+    const outcome = await runTool(step.tool, step.args, stepCtx)
     results.push({ label: step.label, tool: step.tool, ok: outcome.ok, summary: outcome.summary })
     if (!outcome.ok) break
   }

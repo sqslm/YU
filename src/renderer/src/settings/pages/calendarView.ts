@@ -12,7 +12,7 @@
  * the offset is.
  */
 import type { CalendarEvent } from '@shared/calendar'
-import { localDayKey, sortEvents, startOfLocalDay } from '@shared/calendar'
+import { localDayKey, monthRangeFor, sortEvents, startOfLocalDay } from '@shared/calendar'
 
 export type UiLanguage = 'zh' | 'en'
 
@@ -70,6 +70,43 @@ export function shiftDayKey(dayKey: string, days: number): string {
 
 export function dayKeyOf(epoch: number): string {
   return localDayKey(epoch)
+}
+
+/** The month the toolbar is showing: `month` is 1–12, the number the user reads. */
+export interface MonthCursor {
+  year: number
+  month: number
+}
+
+/**
+ * The half-open window that has to be fetched to paint `cursor`.
+ *
+ * The store is asked for exactly what the grid draws — the 42 cells, leading and
+ * trailing filler included — instead of for "the month": a named `'month'` range
+ * is anchored on *today* in the main process, so flipping to November kept
+ * showing October's events and every cell lost its dot. Keeping this function
+ * next to `monthGrid` is deliberate; one cursor, one window, one test.
+ */
+export function rangeForCursor(cursor: MonthCursor): { from: number; until: number } {
+  // The cursor counts months the way the toolbar label does (1–12); `monthRangeFor`
+  // takes the zero-based number `Date` uses. Converting here keeps that off-by-one
+  // in one place instead of in every caller.
+  return monthRangeFor(cursor.year, cursor.month - 1)
+}
+
+/**
+ * The window behind the list view: a week of history for context, two months of
+ * what is coming up.
+ *
+ * Anchored on today rather than on `cursor` because the list answers "what is
+ * next", and browsing a far-away month should not blank it out.
+ */
+export function listRangeFor(now: number = Date.now()): { from: number; until: number } {
+  const today = dayKeyOf(startOfLocalDay(now))
+  return {
+    from: dayStart(shiftDayKey(today, -7)) ?? startOfLocalDay(now),
+    until: dayStart(shiftDayKey(today, 60)) ?? startOfLocalDay(now) + 60 * DAY_MS
+  }
 }
 
 /**

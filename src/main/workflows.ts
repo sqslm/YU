@@ -15,6 +15,8 @@ import { basename, dirname, join } from 'node:path'
 import { mt } from '@shared/mainI18n'
 import {
   MAX_WORKFLOWS,
+  MAX_WORKFLOW_STEPS,
+  WORKFLOW_STEP_TOOLS,
   activeWorkflows,
   normalizeWorkflowName,
   normalizeWorkflowSteps,
@@ -30,25 +32,40 @@ interface WorkflowFile {
   workflows: Workflow[]
 }
 
-/** Cheap structural check: one bad row makes the whole document suspect. */
-function isStoredStep(value: unknown): value is WorkflowStep {
-  if (!value || typeof value !== 'object') return false
+/**
+ * Load-time whitelist for one stored step, or `null` when it must be dropped.
+ *
+ * `workflows.json` is a plain file the user can edit, so a structural check is not
+ * enough: a hand-written `open_search` step really opened a browser on replay.
+ * Anything outside `WORKFLOW_STEP_TOOLS` never reaches the registry, and a missing
+ * or malformed `args` reads as the empty object the tool then validates itself.
+ */
+function sanitizeStep(value: unknown): WorkflowStep | null {
+  if (!value || typeof value !== 'object') return null
   const step = value as Partial<WorkflowStep>
-  return typeof step.tool === 'string' && step.tool.length > 0
-    && typeof step.label === 'string'
-    && !!step.args && typeof step.args === 'object' && !Array.isArray(step.args)
+  if (typeof step.tool !== 'string' || !WORKFLOW_STEP_TOOLS.includes(step.tool)) return null
+  const label = typeof step.label === 'string' && step.label.trim() ? step.label : step.tool
+  const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args)
+    ? step.args as Record<string, unknown> : {}
+  return { tool: step.tool, args, label }
 }
 
-function isStoredWorkflow(value: unknown): value is Workflow {
-  if (!value || typeof value !== 'object') return false
+/** `null` when the row has no usable step left, so `load` can drop the whole row. */
+function sanitizeWorkflow(value: unknown): Workflow | null {
+  if (!value || typeof value !== 'object') return null
   const row = value as Partial<Workflow>
-  return typeof row.id === 'string' && row.id.length > 0
-    && typeof row.name === 'string'
-    && Array.isArray(row.steps) && row.steps.length > 0 && row.steps.every(isStoredStep)
-    && Number.isFinite(row.createdAt) && Number.isFinite(row.updatedAt)
-    && Number.isFinite(row.runs)
-    && (row.archivedAt === undefined || Number.isFinite(row.archivedAt))
-    && (row.lastRunAt === undefined || Number.isFinite(row.lastRunAt))
+  if (typeof row.id !== 'string' || !row.id.length
+    || typeof row.name !== 'string'
+    || !Array.isArray(row.steps) || !row.steps.length
+    || !Number.isFinite(row.createdAt) || !Number.isFinite(row.updatedAt) || !Number.isFinite(row.runs)
+    || (row.archivedAt !== undefined && !Number.isFinite(row.archivedAt))
+    || (row.lastRunAt !== undefined && !Number.isFinite(row.lastRunAt))) return null
+  const steps = row.steps.map(sanitizeStep).filter((step): step is WorkflowStep => step !== null)
+  if (!steps.length) return null
+  if (steps.length !== row.steps.length) {
+    console.warn(`[workflows] dropped ${row.steps.length - steps.length} step(s) outside the allowlist from ${row.id}`)
+  }
+  return { ...row as Workflow, steps: steps.slice(0, MAX_WORKFLOW_STEPS) }
 }
 
 /**
@@ -209,11 +226,18 @@ export class WorkflowStore {
     if (!existsSync(this.file)) return
     try {
       const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<WorkflowFile>
-      if (!parsed || typeof parsed !== 'object'
-        || !Array.isArray(parsed.workflows) || !parsed.workflows.every(isStoredWorkflow)) {
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.workflows)) {
         throw new Error('unexpected workflow document shape')
       }
-      this.workflows = parsed.workflows
+      // Filtering per row beats rejecting the whole document: one hand-edited step
+      // should not cost the user every workflow they saved.
+      const kept: Workflow[] = []
+      for (const row of parsed.workflows) {
+        const clean = sanitizeWorkflow(row)
+        if (clean) kept.push(clean)
+        else console.warn('[workflows] dropped a workflow row with no allowlisted step')
+      }
+      this.workflows = kept.slice(0, MAX_WORKFLOWS)
     } catch (error) {
       // The file vanished between the exists check and the read: that is an empty
       // store, not a damaged one worth quarantining.

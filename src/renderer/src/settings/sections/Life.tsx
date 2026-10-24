@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Box, Button, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
 import type { CalendarEvent, CalendarRange } from '@shared/calendar'
 import { formatEventTime } from '@shared/calendar'
-import type { Briefing } from '@shared/briefing'
-import { normalizeBriefingTime } from '@shared/briefing'
+import type { Briefing, BriefingRecord } from '@shared/briefing'
+import { MAX_BRIEFING_HISTORY, isWithinQuietHours, nextAllowedAt, normalizeBriefingTime } from '@shared/briefing'
 import { MAX_EVENT_LEAD_MINUTES } from '@shared/calendar'
 import { SettingsGroup, SettingsHint, SettingsRow, controlSx, narrowControlSx } from './General'
 import i18n from '../../i18n'
@@ -17,12 +17,38 @@ import i18n from '../../i18n'
  * there is no sync to reconcile.
  */
 
+// Labels are keys, translated at render time: a module-level i18n.t() would
+// freeze whichever language was active when the module first loaded.
 const RANGES: { value: CalendarRange; label: string }[] = [
   { value: 'upcoming', label: '接下来的' },
   { value: 'today', label: '今天' },
   { value: 'week', label: '本周' },
   { value: 'tomorrow', label: '明天' }
 ]
+
+/**
+ * Quiet-hour slots: the night hours plus the shipped default `07:30`, because a
+ * select whose value is not one of its options renders blank.
+ *
+ * The current pair is merged in at render time as well, so a settings file written
+ * by an older build (or by hand) still shows what it holds instead of an empty box.
+ */
+const QUIET_CLOCKS = ['20:00', '21:00', '22:00', '23:00', '00:00', '01:00', '02:00', '03:00', '04:00', '05:00', '06:00', '07:00', '07:30', '08:00', '09:00']
+
+/** `HH:mm` in the user's local zone, for the "arrives after …" hint. */
+function clockText(epoch: number): string {
+  const date = new Date(epoch)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+/** `2026-10-25` → `10 月 25 日 周日` / `Sun, Oct 25`; malformed keys stay as they are. */
+function historyDayText(dayKey: string, language: 'zh' | 'en'): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey)
+  if (!match) return dayKey
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (language === 'en') return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(date)
+  return `${date.getMonth() + 1} 月 ${date.getDate()} 日 ${new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(date)}`
+}
 
 function dayLabel(event: CalendarEvent, language: 'zh' | 'en'): string {
   const start = new Date(event.start)
@@ -31,7 +57,15 @@ function dayLabel(event: CalendarEvent, language: 'zh' | 'en'): string {
   const day = new Date(start)
   day.setHours(0, 0, 0, 0)
   const diff = Math.round((+day - +today) / (24 * 60 * 60_000))
-  const prefix = diff === 0 ? '今天' : diff === 1 ? '明天' : diff === 2 ? '后天' : `${start.getMonth() + 1} 月 ${start.getDate()} 日`
+  const prefix = diff === 0
+    ? i18n.t('今天')
+    : diff === 1
+      ? i18n.t('明天')
+      : diff === 2
+        ? i18n.t('后天')
+        : language === 'en'
+          ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(start)
+          : `${start.getMonth() + 1} 月 ${start.getDate()} 日`
   return `${prefix} ${formatEventTime(event, language)}`
 }
 
@@ -45,6 +79,33 @@ export function LifeSection({ settings, patch }: {
   const [voices, setVoices] = useState<string[]>([])
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [history, setHistory] = useState<BriefingRecord[]>([])
+  const [openDay, setOpenDay] = useState<string | null>(null)
+
+  const language: 'zh' | 'en' = i18n.language === 'en' ? 'en' : 'zh'
+  const quiet = settings.briefing.quietHours
+  const clocks = useMemo(() => [...new Set([...QUIET_CLOCKS, quiet.start, quiet.end])].sort(), [quiet.start, quiet.end])
+
+  /** Today at the configured delivery time: the instant the quiet window can swallow. */
+  const deliveryAt = useMemo(() => {
+    const [hour, minute] = normalizeBriefingTime(settings.briefing.time).split(':').map(Number)
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour ?? 0, minute ?? 0).getTime()
+  }, [settings.briefing.time])
+  // Asking `nextAllowedAt` instead of comparing the two clock strings keeps the
+  // midnight wrap in one place: this hint and the scheduler cannot disagree.
+  const pushedTo = isWithinQuietHours(settings.briefing, deliveryAt) ? nextAllowedAt(settings.briefing, deliveryAt) : null
+
+  /** Newest first, capped like the store: the list is a reading surface, not an archive. */
+  const recent = useMemo(() => [...history].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_BRIEFING_HISTORY), [history])
+  const lastGenerated = recent[0] ?? null
+
+  const patchQuiet = (next: Partial<Settings['briefing']['quietHours']>): void =>
+    patch({ briefing: { ...settings.briefing, quietHours: { ...quiet, ...next } } })
+
+  const loadHistory = useCallback(async (): Promise<void> => {
+    try { setHistory(await window.api.life.briefingHistory()) } catch (error) { setNotice({ error: true, text: String(error) }) }
+  }, [])
 
   const loadEvents = useCallback(async (next: CalendarRange) => {
     try { setEvents(await window.api.life.events(next)) } catch (error) { setNotice({ error: true, text: String(error) }) }
@@ -64,15 +125,21 @@ export function LifeSection({ settings, patch }: {
       (result) => { if (alive && result.ok && result.voices) setVoices(result.voices) },
       () => undefined
     )
+    void loadHistory()
     return () => { alive = false }
-  }, [])
+  }, [loadHistory])
 
   const cancelEvent = async (id: string, action: 'cancel' | 'restore'): Promise<void> => {
     try { await window.api.life.cancelEvent(id, action); await loadEvents(range) } catch (error) { setNotice({ error: true, text: String(error) }) }
   }
   const compose = async (): Promise<void> => {
     setBusy(true)
-    try { setBriefing(await window.api.life.refreshBriefing()) } catch (error) { setNotice({ error: true, text: String(error) }) }
+    try {
+      setBriefing(await window.api.life.refreshBriefing())
+      // The fresh run is written to the history too, and that is what proves the
+      // feature is alive — so reload it in the same click.
+      await loadHistory()
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
     finally { setBusy(false) }
   }
   const preview = async (): Promise<void> => {
@@ -94,7 +161,9 @@ export function LifeSection({ settings, patch }: {
             onChange={e => patch({ calendar: { ...settings.calendar, enabled: e.target.checked } })} />
         </SettingsRow>
         <SettingsRow label={i18n.t('默认提前提醒')} description={i18n.t('单条日程可以单独设置；设为 0 表示到点才提醒。')}>
-          <TextField select size="small" sx={{ width: 140 }} value={settings.calendar.defaultLeadMinutes}
+          {/* Wide enough for "10 minutes before" and "整点提醒": a fixed 140px
+              clipped the English label to "10 minutes bef…". */}
+          <TextField select size="small" sx={{ minWidth: 180 }} value={settings.calendar.defaultLeadMinutes}
             onChange={e => patch({ calendar: { ...settings.calendar, defaultLeadMinutes: Number(e.target.value) } })}>
             {[0, 5, 10, 15, 30, 60, MAX_EVENT_LEAD_MINUTES].filter((n, index, all) => all.indexOf(n) === index).map(n => (
               <MenuItem key={n} value={n}>{n === 0 ? i18n.t('不提前') : i18n.t('{{n}} 分钟前', { n })}</MenuItem>
@@ -118,7 +187,7 @@ export function LifeSection({ settings, patch }: {
       </SettingsGroup>
 
       <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🌤</Box>} title={i18n.t('每日简报')}>
-        <SettingsRow label={i18n.t('每天定时生成简报')} description={i18n.t('汇总今天的日程、到期待办、已经过期的事、明天预览和你让我记住的内容。')}>
+        <SettingsRow label={i18n.t('每天定时生成简报')} description={i18n.t('汇总今天的日程、到期待办、已经过期的事和明天的预览。')}>
           <Switch size="small" checked={settings.briefing.enabled}
             onChange={e => patch({ briefing: { ...settings.briefing, enabled: e.target.checked } })} />
         </SettingsRow>
@@ -142,6 +211,23 @@ export function LifeSection({ settings, patch }: {
           <Switch size="small" checked={settings.briefing.skipEmpty}
             onChange={e => patch({ briefing: { ...settings.briefing, skipEmpty: e.target.checked } })} />
         </SettingsRow>
+        <SettingsRow label={i18n.t('免打扰')} description={i18n.t('这段时间不弹通知、不朗读。到点的简报会等到窗口结束后再送达，不会被丢掉。')}>
+          <Switch size="small" checked={quiet.enabled} onChange={e => patchQuiet({ enabled: e.target.checked })} />
+        </SettingsRow>
+        <SettingsRow label={i18n.t('免打扰时段')} description={i18n.t('可以跨零点，例如从晚上十点到早上七点半。')}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <TextField select size="small" sx={{ width: 104 }} value={quiet.start} disabled={!quiet.enabled}
+              inputProps={{ 'data-briefing-quiet': 'start' }} onChange={e => patchQuiet({ start: e.target.value })}>
+              {clocks.map(clock => <MenuItem key={clock} value={clock}>{clock}</MenuItem>)}
+            </TextField>
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>–</Typography>
+            <TextField select size="small" sx={{ width: 104 }} value={quiet.end} disabled={!quiet.enabled}
+              inputProps={{ 'data-briefing-quiet': 'end' }} onChange={e => patchQuiet({ end: e.target.value })}>
+              {clocks.map(clock => <MenuItem key={clock} value={clock}>{clock}</MenuItem>)}
+            </TextField>
+          </Stack>
+        </SettingsRow>
+        {pushedTo !== null && <SettingsHint>{i18n.t('该时间在免打扰内，会在 {{time}} 之后送达', { time: clockText(pushedTo) })}</SettingsHint>}
         <Box sx={{ px: 2, py: 1.5 }}>
           <Button size="small" variant="outlined" disabled={busy} onClick={() => void compose()}>{i18n.t('立即生成一份看看')}</Button>
           {briefing && (
@@ -151,6 +237,43 @@ export function LifeSection({ settings, patch }: {
             </Box>
           )}
         </Box>
+        {/* The scheduler skips empty days silently, so without a line like this a
+            quiet week reads as a broken feature. */}
+        <SettingsRow label={i18n.t('最近一次生成')} description={i18n.t('空简报被跳过的日子不会留下记录。')}>
+          <Typography data-briefing-last sx={{ fontSize: 12, color: lastGenerated ? 'text.primary' : 'text.secondary' }}>
+            {lastGenerated ? new Date(lastGenerated.createdAt).toLocaleString(language === 'en' ? 'en-US' : 'zh-CN') : i18n.t('还没有生成过')}
+          </Typography>
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🗂</Box>} title={i18n.t('最近的简报')}
+        hint={i18n.t('只读。最多保留最近 {{n}} 份。', { n: MAX_BRIEFING_HISTORY })}>
+        {recent.length === 0 && <SettingsHint>{i18n.t('还没有生成过简报。开启后每天会在这里留一份，方便回看。')}</SettingsHint>}
+        {recent.map(record => (
+          <Box key={record.dayKey} sx={{ px: 2, py: 1.25 }}>
+            <Box
+              role="button"
+              tabIndex={0}
+              aria-expanded={openDay === record.dayKey}
+              onClick={() => setOpenDay(openDay === record.dayKey ? null : record.dayKey)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenDay(openDay === record.dayKey ? null : record.dayKey) }
+              }}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 1, mx: -0.5, px: 0.5, py: 0.5, borderRadius: '8px', cursor: 'pointer',
+                transition: 'background-color 120ms', '&:hover': { bgcolor: 'action.hover' },
+                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 }
+              }}
+            >
+              <Typography sx={{ fontSize: 12, fontWeight: 650, flex: '0 0 auto' }}>{historyDayText(record.dayKey, language)}</Typography>
+              <Typography sx={{ fontSize: 11.5, color: 'text.secondary', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{record.title}</Typography>
+              <Box component="span" aria-hidden sx={{ display: 'grid', placeItems: 'center', width: 16, height: 16, color: 'text.secondary', transform: openDay === record.dayKey ? 'none' : 'rotate(-90deg)', transition: 'transform 120ms' }}>▾</Box>
+            </Box>
+            {openDay === record.dayKey && (
+              <Typography data-briefing-history-body sx={{ mt: 1, fontSize: 11.5, whiteSpace: 'pre-wrap', lineHeight: 1.6, color: 'text.secondary' }}>{record.body}</Typography>
+            )}
+          </Box>
+        ))}
       </SettingsGroup>
 
       <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🔊</Box>} title={i18n.t('朗读')}>

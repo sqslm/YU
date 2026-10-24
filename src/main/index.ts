@@ -186,7 +186,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     signal.throwIfAborted(); return target.text
   },
   personal: {
-    remind: (text, signal, submittedAt) => reminders!.voice(text, signal, undefined, submittedAt),
+    remind: (text, signal, submittedAt, extra) => reminders!.voice(text, signal, undefined, submittedAt, extra),
     reminders: () => reminders!.store.list(),
     saveReminder: (input, id) => reminders!.save(input, id),
     action: (id, action, minutes) => { if (action === 'delete') reminders!.remove(id); else reminders!.action(id, action, minutes) },
@@ -216,9 +216,17 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     events: range => calendar!.range(range.from, range.until),
     saveEvent: (input, id) => {
       if (!store.get().calendar.enabled) throw new Error(mt('日程已在设置里关闭，这次没有保存'))
-      return calendar!.save(input, id)
+      const saved = calendar!.save(input, id)
+      // A tool write is otherwise invisible: the open calendar page keeps showing
+      // the list it fetched before the assistant spoke.
+      announceCalendar()
+      return saved
     },
-    controlEvent: (id, action) => calendar!.action(id, action),
+    controlEvent: (id, action) => {
+      const saved = calendar!.action(id, action)
+      announceCalendar()
+      return saved
+    },
     briefing: () => composeDailyBriefing(),
     speak: text => speech!.speak(text),
     stopSpeaking: () => speech!.stop(),
@@ -239,7 +247,9 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     save: (input, id) => { const saved = workflows!.save(input, id); announceWorkflows(); return saved },
     archive: id => { workflows?.archive(id); announceWorkflows() },
     restore: id => { workflows?.restore(id); announceWorkflows() },
-    recordRun: id => workflows?.recordRun(id)
+    // A replay touches `runs`/`lastRunAt` on every step, so the announce is
+    // throttled instead of firing twice for one saved workflow.
+    recordRun: id => { const run = workflows?.recordRun(id); announceWorkflowsSoon(); return run }
   },
   changed: state => {
     const turn = state.turns.at(-1)
@@ -252,6 +262,30 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
 function announceWorkflows(): void {
   for (const win of [settingsWindow, barWindow]) {
     if (win && !win.isDestroyed()) win.webContents.send('workflow:changed')
+  }
+}
+
+let workflowsAnnounceTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * One announce window per replay. The store writes on every step and the run
+ * counter changes on each of them, so an unthrottled send would repaint the list
+ * several times for a single user action.
+ */
+function announceWorkflowsSoon(): void {
+  if (workflowsAnnounceTimer) return
+  workflowsAnnounceTimer = setTimeout(() => {
+    workflowsAnnounceTimer = null
+    announceWorkflows()
+  }, 200)
+  // Never keep the process alive for a repaint.
+  workflowsAnnounceTimer.unref?.()
+}
+
+/** Any calendar write, from the tools or from the settings page, lands here. */
+function announceCalendar(): void {
+  for (const win of [settingsWindow, barWindow]) {
+    if (win && !win.isDestroyed()) win.webContents.send('life:event-changed')
   }
 }
 
@@ -1106,23 +1140,25 @@ function registerIpc(): void {
   // two composers would drift apart on what "today" means.
   ipcMain.handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())
   ipcMain.handle('briefing:refresh', () => { const value = composeDailyBriefing(); latestBriefing = value; return value })
+  // Delivery history is stored by the scheduler and used to be invisible: the page
+  // could only show the latest briefing, never what was actually delivered.
+  ipcMain.handle('briefing:history', () => briefing?.status().history ?? [])
   /**
    * Calendar and read-aloud for the settings page.
    *
    * These return whole lists so a click never needs a second round trip to
    * redraw the table it just changed.
    */
-  ipcMain.handle('life:events', (_event, range: CalendarRange) => {
-    const { from, until } = rangeFor(range, Date.now())
+  ipcMain.handle('life:events', (_event, range: CalendarRange, anchor?: { year: number; month: number }) => {
+    const { from, until } = rangeFor(range, Date.now(), anchor)
     return calendar?.range(from, until) ?? []
   })
-  // Every calendar write announces itself: the hub page and the settings page can
-  // both be open, and neither should have to poll to notice the other's edit.
-  const announceCalendar = (): void => {
-    for (const win of [settingsWindow, barWindow]) {
-      if (win && !win.isDestroyed()) win.webContents.send('life:event-changed')
-    }
-  }
+  // Paging the month view hands in a window the renderer computed from its own
+  // cursor: which month the user is looking at is renderer state, not a clock.
+  ipcMain.handle('life:events-between', (_event, from: number, until: number) => {
+    if (!Number.isFinite(from) || !Number.isFinite(until) || until <= from) return []
+    return calendar?.range(from, until) ?? []
+  })
   ipcMain.handle('life:event-cancel', (_event, id: string, action: 'cancel' | 'restore') => {
     const changed = action === 'restore' ? calendar?.action(id, 'restore') : calendar?.action(id, 'cancel')
     if (changed) announceCalendar()
@@ -2025,11 +2061,14 @@ async function bootstrap(): Promise<void> {
           const shot = await hub.webContents.capturePage()
           await writeFile(join(dir, file), shot.toPNG())
         }
-        const clickNav = async (label: string): Promise<boolean> =>
+        // Labels are matched against every language the hub may be running in:
+        // a capture taken in English used to silently write the same page twice.
+        const clickNav = async (...labels: string[]): Promise<boolean> =>
           (await hub.webContents.executeJavaScript(
             `(() => {
+               const wanted = ${JSON.stringify(labels)}
                const item = [...document.querySelectorAll('.MuiListItemButton-root')]
-                 .find((node) => node.textContent.trim() === ${JSON.stringify(label)})
+                 .find((node) => wanted.includes(node.textContent.trim()))
                if (!item) return false
                item.click()
                return true
@@ -2045,15 +2084,16 @@ async function bootstrap(): Promise<void> {
            })`
         )
         log(`[capture] sidebar rects ${rects}`)
-        for (const [label, file] of [
-          ['历史记录', 'hub-history.png'],
-          ['纠正规则', 'hub-corrections.png']
+        for (const [labels, file] of [
+          [['历史记录', 'History'], 'hub-history.png'],
+          [['日程', 'Events'], 'hub-calendar.png'],
+          [['纠正规则', 'Corrections'], 'hub-corrections.png']
         ] as const) {
-          if (!(await clickNav(label))) log(`[capture] nav not found: ${label}`)
+          if (!(await clickNav(...labels))) log(`[capture] nav not found: ${labels.join('/')}`)
           await new Promise((resolve) => setTimeout(resolve, 400))
           await shoot(file)
         }
-        await clickNav('概览')
+        await clickNav('概览', 'Overview')
 
         // Open the preferences dialog through its real keyboard shortcut.
         await hub.webContents.executeJavaScript(
@@ -2068,6 +2108,7 @@ async function bootstrap(): Promise<void> {
           ['speech', 'prefs-speech.png'],
           ['models', 'prefs-models.png'],
           ['life', 'prefs-life.png'],
+          ['automation', 'prefs-automation.png'],
           ['storage', 'prefs-storage.png'],
           ['about', 'prefs-about.png']
         ] as const) {

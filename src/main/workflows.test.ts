@@ -213,10 +213,36 @@ describe('workflow store', () => {
   })
 
   it('treats a well-formed JSON document with the wrong shape as damaged', () => {
-    writeFileSync(file, JSON.stringify({ version: 1, workflows: [{ id: 'x' }] }), 'utf8')
+    writeFileSync(file, JSON.stringify({ version: 1, workflows: 'not an array' }), 'utf8')
     const workflows = store()
     expect(workflows.list()).toEqual([])
     expect(workflows.damagedPath()).toMatch(/\.broken-\d{14}\.json$/)
+  })
+
+  it('drops hand-edited steps and rows outside the allowlist instead of replaying them', () => {
+    // `workflows.json` is a plain file: a row-level filter beats rejecting the whole
+    // document, and a step naming a real app tool (`open_search`, `replace_selection`)
+    // must never reach the registry.
+    const row = (id: string, name: string, steps: unknown[]): unknown => ({ id, name, runs: 0, createdAt: NOW, updatedAt: NOW, steps })
+    writeFileSync(file, JSON.stringify({
+      version: 1,
+      workflows: [
+        row('mixed', '混入危险步骤', [
+          { tool: 'open_search', args: { query: 'x' }, label: '搜' },
+          { tool: 'get_datetime', label: '时间' },
+          { tool: 'replace_selection', args: { text: 'x' } }
+        ]),
+        row('hostile', '全是危险步骤', [{ tool: 'replace_selection' }, { tool: 'press_keys' }]),
+        row('shape', '参数坏了', [{ tool: 'calculate', args: 'not an object' }])
+      ]
+    }), 'utf8')
+    const workflows = store()
+    expect(workflows.list().map(row => row.id)).toEqual(['mixed', 'shape'])
+    expect(workflows.get('mixed')?.steps.map(step => step.tool)).toEqual(['get_datetime'])
+    // Unusable args read as the empty call the tool then validates itself.
+    expect(workflows.get('shape')?.steps[0]).toEqual({ tool: 'calculate', args: {}, label: 'calculate' })
+    // Filtering is not damage: the user's other rows survive unquarantined.
+    expect(workflows.damagedPath()).toBeNull()
   })
 
   it('writes atomically and leaves no temp file behind', () => {

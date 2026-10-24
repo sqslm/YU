@@ -67,7 +67,8 @@ const api: TypelessApi = {
     }
   },
   life: {
-    events: range => ipcRenderer.invoke('life:events', range),
+    events: (range, anchor) => ipcRenderer.invoke('life:events', range, anchor),
+    eventsBetween: (from, until) => ipcRenderer.invoke('life:events-between', from, until),
     cancelEvent: (id, action) => ipcRenderer.invoke('life:event-cancel', id, action),
     saveEvent: (input, id) => ipcRenderer.invoke('life:event-save', input, id),
     importIcs: () => ipcRenderer.invoke('life:ics-import'),
@@ -81,6 +82,7 @@ const api: TypelessApi = {
     speak: text => ipcRenderer.invoke('life:speak', text),
     briefing: () => ipcRenderer.invoke('briefing:latest'),
     refreshBriefing: () => ipcRenderer.invoke('briefing:refresh'),
+    briefingHistory: () => ipcRenderer.invoke('briefing:history'),
     onBriefing: callback => {
       const listener = (_event: unknown, value: import('@shared/briefing').Briefing): void => callback(value)
       ipcRenderer.on('briefing:changed', listener)

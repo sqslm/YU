@@ -413,12 +413,28 @@ describe('BriefingScheduler quiet hours', () => {
     expect(h.deliver).not.toHaveBeenCalled()
     expect(h.scheduler.status().lastDay).toBeUndefined()
     expect(h.scheduler.status().nextAt).toBe(at(26, 23, 30))
-    expect(h.log).toHaveBeenCalledWith(expect.stringContaining('skipped'))
+    // 23:30 never escapes a 22:00–07:30 window, so the cause is named, not "skipped".
+    expect(h.log).toHaveBeenCalledWith(expect.stringContaining('23:30 is inside quiet hours until'))
     // Reaching the window end must not fire yesterday's stale copy.
     h.clock.now = at(26, 7, 30)
     h.scheduler.check()
     expect(h.deliver).not.toHaveBeenCalled()
     expect(h.scheduler.status().lastDay).toBeUndefined()
+  })
+  it('names a briefing time that quiet hours can never allow, once, instead of one skipped line a day', () => {
+    // 23:30 is inside 22:00–07:30 and the window always outlasts the day, so no day
+    // is ever deliverable: the log has to say why rather than report a silent skip.
+    const h = harness({ now: at(25, 20), settings: settingsWith({ start: '22:00', end: '07:30' }, { enabled: true, time: '23:30' }) })
+    h.scheduler.start()
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().nextAt).toBe(at(26, 23, 30))
+    expect(h.log).toHaveBeenCalledWith(expect.stringContaining('23:30 is inside quiet hours until'))
+    // The 30 s poll recomputes the same target: one line, not one per tick.
+    h.clock.now = at(25, 20) + 30_000
+    h.scheduler.check()
+    h.clock.now = at(25, 20) + 60_000
+    h.scheduler.check()
+    expect(h.log.mock.calls.filter(([line]) => String(line).includes('inside quiet hours'))).toHaveLength(1)
   })
   it('does not recover a missed slot into the middle of the night', () => {
     const h = harness({ now: at(25, 23), state: { lastDay: '2026-08-24' }, settings: settingsWith({ start: '22:00', end: '07:30' }, { enabled: true, time: '08:00' }) })

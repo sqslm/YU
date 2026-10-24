@@ -123,7 +123,22 @@ describe('shared reminder delivery and entry points', () => {
       expect(open).not.toHaveBeenCalled()
     } finally { service.stop() }
   })
+  it('carries a caller-supplied priority and deadline through both save paths', async () => {
+    const { service } = harness()
+    try {
+      const deadlineAt = Date.now() + 86400000
+      mock.extract.mockResolvedValueOnce([draft({ intent: 'todo', dueAt: null, time_expression: null })])
+      const single = await service.voice('添加待办：检查数据库备份', new AbortController().signal, undefined, Date.now(), { priority: 'high', deadlineAt })
+      expect(single.reminder).toMatchObject({ priority: 'high', deadlineAt })
+      // Multi-item takes hand back no single row, so the stored count is the proof.
+      mock.extract.mockResolvedValueOnce([draft(), draft({ intent: 'todo', title: 'Check backup', dueAt: null, time_expression: null })])
+      const many = await service.voice('两个待办', new AbortController().signal, undefined, Date.now(), { priority: 'low', deadlineAt })
+      expect(many.saved).toBe(2)
+      expect(service.store.list().filter(row => row.priority === 'low' && row.deadlineAt === deadlineAt)).toHaveLength(2)
+    } finally { service.stop() }
+  })
   it('keeps refinement details when saving and reports a withdrawn request without an error or record', async () => {
+
     const { service, open } = harness(), progress = vi.fn()
     try {
       mock.extract.mockResolvedValueOnce([draft({ description: 'Ask whether the repair is complete; do not replace parts yet.' })])

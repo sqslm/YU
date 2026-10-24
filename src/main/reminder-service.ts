@@ -1,6 +1,6 @@
 import { Notification, ipcMain, type BrowserWindow } from 'electron'
 import type { Settings } from '@shared/types'
-import type { Reminder, ReminderAction, ReminderInput, ReminderView } from '@shared/reminders'
+import type { Reminder, ReminderAction, ReminderInput, ReminderView, TodoPriority } from '@shared/reminders'
 import type { NotesStore } from './notes'
 import { ReminderScheduler, ReminderStore } from './reminders'
 import { extractReminders } from './reminder-parser'
@@ -77,7 +77,14 @@ export class ReminderService {
     notice.on('failed', (_event, error) => this.log(`[reminders] notification failed: ${error}`))
     notice.show()
   }
-  async voice(text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt = Date.now()): Promise<{ message: string; undo?: boolean; reminder?: Reminder }> {
+  /**
+   * `extra` carries the fields the caller read from the user's own words
+   * (priority, deadline). The parser never produces them, and attaching them
+   * only after a single stored row came back used to drop them on the pending and
+   * multi-item paths.
+   */
+  async voice(text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt = Date.now(),
+    extra?: { priority?: TodoPriority; deadlineAt?: number | null }): Promise<{ message: string; undo?: boolean; reminder?: Reminder; saved?: number }> {
     const drafts = await extractReminders(this.settings(), text, 'voice', AbortSignal.any([signal, AbortSignal.timeout(60_000)]), onProgress, submittedAt)
     signal.throwIfAborted()
     this.log(`[reminders] voice parsed: ${drafts.length} item(s), intents=${drafts.map(item => item.intent).join(',')}`)
@@ -91,7 +98,10 @@ export class ReminderService {
       return { message: mt('请补充明确的事项和提醒时间，本次未保存') }
     }
     const rows = this.store.saveMany(drafts.map(draft => ({ title: draft.title, description: draft.description, dueAt: draft.dueAt, level: draft.level, recurrence: draft.rule,
-      source: 'voice', timeExpression: draft.time_expression ?? undefined })))
+      source: 'voice', timeExpression: draft.time_expression ?? undefined,
+      // Omitted keys fall back to the store defaults instead of resetting them.
+      ...(extra?.priority === undefined ? {} : { priority: extra.priority }),
+      ...(extra?.deadlineAt === undefined || extra.deadlineAt === null ? {} : { deadlineAt: extra.deadlineAt }) })))
     this.refresh()
     this.undoId = rows.length === 1 ? rows[0].id : null
     const message = rows.map(row => {
@@ -100,7 +110,9 @@ export class ReminderService {
       })
       return `${time} · ${mt(row.dueAt === null ? '待办' : row.level === 'strong' ? '强提醒' : '普通提醒')} · ${row.title}`
     }).join('\n')
-    return { message, undo: rows.length === 1, ...(rows.length === 1 ? { reminder: rows[0] } : {}) }
+    // A multi-item take has no single row to report, but the caller still has to
+    // know the fields were stored rather than guess from a missing `reminder`.
+    return { message, undo: rows.length === 1, ...(rows.length === 1 ? { reminder: rows[0] } : {}), ...(rows.length > 1 ? { saved: rows.length } : {}) }
   }
   undo(): void {
     if (this.undoId) this.remove(this.undoId)

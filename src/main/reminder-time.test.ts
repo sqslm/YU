@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { nextOccurrence, resolveReminderTime } from './reminder-time'
+import { nextOccurrence, resolveDeadline, resolveReminderTime } from './reminder-time'
 import { parseReminderOutput } from './reminder-parser'
 const now = new Date(2026, 9, 23, 8, 0).getTime()
 afterEach(() => vi.unstubAllEnvs())
@@ -7,7 +7,24 @@ const local = (day: number, hour: number, minute = 0): number => new Date(2026, 
 function draft(time_expression: string | null, overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({ items: [{ intent: 'create_reminder', title: '打扫卫生', time_expression, level: 'normal', recurrence: null, needs_confirmation: false, ...overrides }] })
 }
+describe('lenient deadline resolution', () => {
+  const endOfDay = (day: number, month = 9): number => new Date(2026, month, day, 23, 59, 59, 999).getTime()
+  it('keeps a spoken clock time when the strict resolver accepts it', () => {
+    expect(resolveDeadline('今天18点', now)).toBe(local(23, 18))
+  })
+  it.each([['明天', 9, 24], ['tomorrow', 9, 24], ['11月6日', 10, 6], ['November 6', 10, 6]] as const)(
+    'extends a bare date to the end of that local day: %s', (text, month, day) => {
+      expect(resolveDeadline(text, now)).toBe(endOfDay(day, month))
+    })
+  it.each([null, '', '   ', '尽快', '晚点', 'sometime soon'])('refuses a phrase that names no date: %s', text => {
+    expect(resolveDeadline(text, now)).toBeNull()
+  })
+  it('never returns a deadline that has already passed', () => {
+    expect(resolveDeadline('昨天', now)).toBeNull()
+  })
+})
 describe('bilingual reminder time interpretation', () => {
+
   it.each(['20分钟后', '二十分钟后', 'in 20 minutes', 'in twenty minutes', '20 minutes from now'])('calculates %s locally', text => {
     expect(resolveReminderTime(text, now)).toMatchObject({ dueAt: now + 20 * 60000, recurrence: null })
   })

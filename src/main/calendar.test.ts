@@ -8,6 +8,7 @@ import {
   MAX_EVENTS,
   formatEventTime,
   localDayKey,
+  monthRangeFor,
   normalizeEventInput,
   overlaps,
   parseIcs,
@@ -147,6 +148,18 @@ describe('calendar store', () => {
     expect(store.range(from, until)).toHaveLength(2)
     // 'upcoming' starts at now, so a late-evening entry today still counts.
     expect(store.onDay('upcoming').map(row => row.id)).toEqual([late.id, tomorrow.id])
+  })
+
+  it('anchors the month grid to the month on screen, not to the clock', () => {
+    // November 2026 starts on a Sunday, so its Monday-first grid opens on 10-26.
+    expect(monthRangeFor(2026, 10)).toEqual({ from: new Date(2026, 9, 26).getTime(), until: new Date(2026, 11, 7).getTime() })
+    // Without an anchor nothing changed: "month" still means the clock's month.
+    expect(rangeFor('month', NOW)).toEqual(monthRangeFor(2026, 9))
+    expect(rangeFor('month', NOW, { year: 2026, month: 10 })).toEqual(monthRangeFor(2026, 10))
+    // The anchor is scoped to the month grid: paging must not move "today".
+    expect(rangeFor('today', NOW, { year: 2026, month: 10 })).toEqual(rangeFor('today', NOW))
+    // A malformed anchor falls back to the clock instead of blanking the page.
+    expect(rangeFor('month', NOW, { year: Number.NaN, month: 42 })).toEqual(rangeFor('month', NOW))
   })
 
   it('answers onDay for an explicit YYYY-MM-DD key', () => {
@@ -460,6 +473,31 @@ describe('calendar reminder scheduler', () => {
     expect(r.scheduler.status().nextAt).toBeNull()
     // The chain keeps running after a delivery, for the next event of the day.
     expect(r.delay()).toBe(30_000)
+    r.scheduler.stop()
+  })
+
+  it('reminds for an all-day event on the morning of its own day, not the night before', () => {
+    const store = new CalendarStore(file, () => NOW)
+    // An all-day row stores local midnight, so a 10-minute lead used to fire at 23:50
+    // the day before: a reminder for tomorrow delivered today.
+    const event = store.save(input({ title: '全天培训', allDay: true, start: at(22, 13), end: at(22, 15) }))
+    const r = rig(store)
+    r.scheduler.start()
+    expect(r.scheduler.status().nextAt).toBe(at(22, 8, 50))
+
+    r.state.clock = at(22, 8, 50)
+    r.tick()
+    expect(r.delivered).toEqual([{ id: event.id, at: at(22, 8, 50) }])
+    expect(store.get(event.id)?.notifiedAt).toBe(at(22, 8, 50))
+    r.scheduler.stop()
+  })
+
+  it.each([[0, 9, 0], [30, 8, 30]] as const)('anchors an all-day event at 09:00 minus a %i-minute lead', (lead, hour, minute) => {
+    const store = new CalendarStore(file, () => NOW)
+    store.save(input({ title: '全天培训', allDay: true, leadMinutes: lead, start: at(22, 13), end: at(22, 15) }))
+    const r = rig(store)
+    r.scheduler.start()
+    expect(r.scheduler.status().nextAt).toBe(at(22, hour, minute))
     r.scheduler.stop()
   })
 

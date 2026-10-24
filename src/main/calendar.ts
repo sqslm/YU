@@ -278,20 +278,35 @@ export interface CalendarSchedulerDeps {
   clearTimer?: (handle: ReturnType<typeof setTimeout>) => void
 }
 
+/** An all-day event has no clock of its own, so its reminder hangs off this hour. */
+const ALL_DAY_REMINDER_HOUR = 9
+
+/**
+ * Where the event "happens" as far as a reminder is concerned.
+ *
+ * An all-day row stores local midnight — subtracting a lead from that fired at 23:50
+ * the night before, and the "already started" guard below would also have treated a
+ * 09:00 reminder as stale two hours into the day. Both use this anchor instead.
+ */
+function reminderAnchor(event: Pick<CalendarEvent, 'start' | 'allDay'>): number {
+  return event.allDay ? new Date(event.start).setHours(ALL_DAY_REMINDER_HOUR, 0, 0, 0) : event.start
+}
+
 /**
  * When this event's pre-reminder is due, or null when the event must stay silent.
  *
  * `leadMinutes: null` is the user's explicit "不提醒" and outranks the setting; a
  * lead longer than a day is clamped because a warning that fires before the event
- * was even created cannot be honoured.
+ * was even created cannot be honoured. All-day rows hang off `reminderAnchor`, so a
+ * 09:00 reminder still counts as "not started yet".
  */
-function triggerFor(event: Pick<CalendarEvent, 'start' | 'leadMinutes'>, defaultLeadMinutes: number): number | null {
+function triggerFor(event: Pick<CalendarEvent, 'start' | 'allDay' | 'leadMinutes'>, defaultLeadMinutes: number): number | null {
   if (event.leadMinutes === null) return null
   const lead = typeof event.leadMinutes === 'number' && Number.isFinite(event.leadMinutes)
     ? event.leadMinutes
     : defaultLeadMinutes
   const minutes = Math.min(MAX_EVENT_LEAD_MINUTES, Math.max(0, lead))
-  return event.start - minutes * 60_000
+  return reminderAnchor(event) - minutes * 60_000
 }
 
 /**
@@ -343,7 +358,7 @@ export class CalendarScheduler {
         if (trigger === null) continue
         // Long past its start: the user would be told about something that already
         // began, so the reminder is dropped rather than replayed.
-        if (event.start <= now - GRACE_MS) continue
+        if (reminderAnchor(event) <= now - GRACE_MS) continue
         if (event.notifiedAt !== undefined) continue
         if (trigger > now) {
           next = Math.min(next, trigger)
@@ -368,7 +383,7 @@ export class CalendarScheduler {
     const now = this.now()
     let nextAt: number | null = null
     for (const event of this.deps.store.active()) {
-      if (event.notifiedAt !== undefined || event.start <= now - GRACE_MS) continue
+      if (event.notifiedAt !== undefined || reminderAnchor(event) <= now - GRACE_MS) continue
       const trigger = triggerFor(event, defaults.defaultLeadMinutes)
       if (trigger === null) continue
       if (nextAt === null || trigger < nextAt) nextAt = trigger

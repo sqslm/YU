@@ -109,7 +109,10 @@ export class BriefingScheduler {
       // The slot is still ahead today: a quiet window can only push it back.
       const allowed = nextAllowedAt(settings, slot)
       if (allowed === slot) return slot
-      if (briefingDayKey(allowed) !== today) return this.missedToday(allowed, now, settings)
+      // The window outlasts the day, so this clock time lands inside the window
+      // again tomorrow: it can never be delivered, and reporting one quiet
+      // "skipped" line per day hides the real cause.
+      if (briefingDayKey(allowed) !== today) return this.neverDelivers(allowed, now, settings)
       this.noteQuiet(allowed, `[briefing] quiet hours, delaying to ${iso(allowed)}`)
       return allowed
     }
@@ -123,6 +126,18 @@ export class BriefingScheduler {
       return allowed
     }
     return this.attempt(now, settings, today) ? this.tomorrowSlot(now, settings.time) : now + RETRY_MS
+  }
+
+  /**
+   * The configured clock time sits inside the silence window and the window only
+   * lifts after the next slot (23:30 with quiet hours until 07:30), so no day is
+   * ever deliverable. `nextAt` still moves to tomorrow so the 30 s poll cannot
+   * spin, and the log names the cause — `noteQuiet` keeps it to one line per
+   * detected target instead of one per tick.
+   */
+  private neverDelivers(allowed: number, now: number, settings: BriefingSettings): number {
+    this.noteQuiet(allowed, `[briefing] ${settings.time} is inside quiet hours until ${iso(allowed)}; no briefing can be delivered, move the time or disable quiet hours`)
+    return this.tomorrowSlot(now, settings.time)
   }
 
   /**

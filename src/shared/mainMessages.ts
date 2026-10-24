@@ -938,5 +938,16 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "先填邮箱": "Enter the email address first",
   "导入日程（ICS）": "Import events (ICS)",
   "所有文件": "All files",
-  "导出日程（ICS）": "Export events (ICS)"
+  "导出日程（ICS）": "Export events (ICS)",
+  "先填有效的 HTTP 或 HTTPS 服务器地址": "Enter a valid HTTP or HTTPS server address first",
+  "录音上传失败": "Audio upload failed",
+  "录音下载失败": "Audio download failed",
+  "未知应用": "Unknown app",
+  "正在检索…": "Searching…",
+  "会在截止时提醒": "You'll be reminded when it is due",
+  "截止时间没听清，这条没有设截止": "I did not catch the deadline, so this one has none",
+  "第 {{step}} 步未获本轮授权": "Step {{step}} is not authorised in this turn",
+  "优先级已应用到本次的 {{count}} 个事项": "Priority applied to all {{count}} items",
+  "优先级和截止时间已应用到本次的 {{count}} 个事项": "Priority and deadline applied to all {{count}} items",
+  "这次没有落库，优先级和截止时间没有记住": "Nothing was saved yet, so the priority and deadline were not kept"
 }

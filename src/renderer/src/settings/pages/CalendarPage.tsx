@@ -21,9 +21,9 @@ import {
 import Add from '@mui/icons-material/Add'
 import ChevronLeft from '@mui/icons-material/ChevronLeft'
 import ChevronRight from '@mui/icons-material/ChevronRight'
-import type { CalendarEvent, CalendarEventInput, CalendarRange } from '@shared/calendar'
+import type { CalendarEvent, CalendarEventInput } from '@shared/calendar'
 import { MAX_EVENT_LEAD_MINUTES, MAX_EVENT_NOTES, MAX_EVENT_TITLE, formatEventTime } from '@shared/calendar'
-import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, monthGrid, shiftDayKey, sortEvents } from './calendarView'
+import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
 import i18n from '../../i18n'
 
 /**
@@ -33,17 +33,13 @@ import i18n from '../../i18n'
  * Two things shape the code more than the layout does. First, the store is owned
  * by the main process and the assistant writes to it too, so every mutation is
  * followed by a reload and `onChanged` resubscribes the page to writes it never
- * made itself. Second, the IPC speaks named ranges, so the page asks for the one
- * range that matches what it paints: the whole visible grid.
+ * made itself. Second, the IPC speaks absolute epoch windows (`eventsBetween`),
+ * so the page asks for the two windows it actually paints: the visible grid and
+ * the list view's span around today. Asking for a named range instead meant the
+ * request stayed anchored on today's month while the grid moved on.
  */
 
 const DAY_MS = 24 * 60 * 60_000
-
-/**
- * The whole visible month grid, leading and trailing days included: a dot on the
- * 1st has to be there while the grid still shows the previous month's tail.
- */
-const RANGES: readonly CalendarRange[] = ['month']
 
 /** Lead-time choices, per product spec: `null` means "do not remind me at all". */
 const LEADS: readonly (number | null)[] = [null, 0, 5, 10, 15, 30, 60, MAX_EVENT_LEAD_MINUTES]
@@ -230,23 +226,40 @@ export function CalendarPage(): JSX.Element {
   const [notice, setNotice] = useState<{ severity: 'success' | 'info' | 'error'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
+  /**
+   * One round trip, two windows: the grid the user is looking at and the list
+   * view's span around today. A union of the two would drag years of events into
+   * memory as soon as somebody browses to 2029, so they are asked separately and
+   * merged by id — the same row can legitimately arrive in both.
+   *
+   * Keyed on the cursor, which is what makes a month flip refetch. It is a
+   * `useCallback` so the subscription below is not torn down on every render; the
+   * month it depends on is exactly the month the effect watches.
+   */
   const reload = useCallback(async (): Promise<void> => {
     try {
-      const lists = await Promise.all(RANGES.map(range => window.api.life.events(range)))
+      const monthRange = rangeForCursor(cursor)
+      const listRange = listRangeFor()
+      const batches = await Promise.all([
+        window.api.life.eventsBetween(monthRange.from, monthRange.until),
+        window.api.life.eventsBetween(listRange.from, listRange.until)
+      ])
       const byId = new Map<string, CalendarEvent>()
-      for (const list of lists) for (const row of list) byId.set(row.id, row)
+      for (const batch of batches) for (const row of batch) byId.set(row.id, row)
       setRows(sortEvents([...byId.values()]))
     } catch (error) {
       setNotice({ severity: 'error', text: messageOf(error) })
     }
-  }, [])
+  }, [cursor])
 
   // The assistant and the settings section write to the same store, so the page
-  // refreshes on any broadcast instead of trusting its own copy.
+  // refreshes on any broadcast instead of trusting its own copy. The cursor is in
+  // the dependency list as well as inside `reload`: flipping to another month has
+  // to refetch even when the store never changed.
   useEffect(() => {
     void reload()
     return window.api.life.onChanged(() => { void reload() })
-  }, [reload])
+  }, [cursor.year, cursor.month, reload])
 
   const byDay = useMemo(() => groupByDay(rows), [rows])
   const dots = useMemo(() => dotDays(rows), [rows])
@@ -341,7 +354,10 @@ export function CalendarPage(): JSX.Element {
   const emptyHint = i18n.t('对语说「明天下午三点到四点安排项目讨论」，日程会出现在这里。')
 
   return (
-    <Box sx={{ p: 3 }} data-calendar-page>
+    // The page fills the content area: a month grid that stops halfway leaves a
+    // dead band under the cards, and rows that cannot grow waste the height a
+    // calendar is best at showing.
+    <Box sx={{ p: 3, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }} data-calendar-page>
       <Stack direction="row" alignItems="center" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
         <Typography variant="h6" sx={{ fontWeight: 650, mr: 1 }}>{i18n.t('日程')}</Typography>
         <Tooltip title={i18n.t('上一周')}>
@@ -370,20 +386,26 @@ export function CalendarPage(): JSX.Element {
         <Alert severity={notice.severity} sx={{ mb: 1.5 }} onClose={() => setNotice(null)}>{notice.text}</Alert>
       )}
 
-      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.55fr) minmax(280px, .8fr)' } }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.55fr) minmax(280px, .8fr)' } }}>
         {view === 'month' ? (
-          <Box sx={{ border: 1, borderColor: 'divider', borderRadius: '10px', bgcolor: 'background.paper', p: 1.25 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, border: 1, borderColor: 'divider', borderRadius: '10px', bgcolor: 'background.paper', p: 1.25 }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 0.5, mb: 0.75 }}>
               <Typography sx={{ fontSize: 14, fontWeight: 650 }}>{`${cursor.year} ${i18n.t('年')} ${cursor.month} ${i18n.t('月')}`}</Typography>
               <Box>
-                <IconButton size="small" aria-label={i18n.t('上个月')}
-                  onClick={() => setCursor(({ year, month }) => month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 })}>
-                  <ChevronLeft fontSize="small" />
-                </IconButton>
-                <IconButton size="small" aria-label={i18n.t('下个月')}
-                  onClick={() => setCursor(({ year, month }) => month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 })}>
-                  <ChevronRight fontSize="small" />
-                </IconButton>
+                {/* Two arrow pairs sit close together: the toolbar steps a week,
+                    the grid header steps a month, so both carry a tooltip. */}
+                <Tooltip title={i18n.t('上个月')}>
+                  <IconButton size="small" aria-label={i18n.t('上个月')}
+                    onClick={() => setCursor(({ year, month }) => month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 })}>
+                    <ChevronLeft fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={i18n.t('下个月')}>
+                  <IconButton size="small" aria-label={i18n.t('下个月')}
+                    onClick={() => setCursor(({ year, month }) => month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 })}>
+                    <ChevronRight fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               </Box>
             </Stack>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 0.25, mb: 0.25 }}>
@@ -391,7 +413,7 @@ export function CalendarPage(): JSX.Element {
                 <Typography key={`${label}-${index}`} data-calendar-weekday={label} color="text.secondary" sx={{ textAlign: 'center', fontSize: 11, py: 0.5 }}>{label}</Typography>
               ))}
             </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 0.5 }}>
+            <Box sx={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridTemplateRows: 'repeat(6, minmax(54px, 1fr))', gap: 0.5 }}>
               {grid.flat().map(cell => {
                 const key = dayKeyOf(cell)
                 const date = new Date(cell)
@@ -472,21 +494,35 @@ export function CalendarPage(): JSX.Element {
           </Box>
         )}
 
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: '10px', bgcolor: 'background.paper', p: 1.25, alignSelf: 'start' }}>
+        <Box sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: '10px',
+          bgcolor: 'background.paper',
+          p: 1.25
+        }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 0.5, mb: 0.5 }}>
             <Typography sx={{ fontSize: 13.5, fontWeight: 650 }}>{formatDayHeading(selected, language)}</Typography>
             <Button size="small" sx={{ minWidth: 0, fontSize: 12, px: 1 }}
               onClick={() => { setDialogError(''); setEditor({ form: emptyForm(selected) }) }}>{i18n.t('新建')}</Button>
           </Stack>
-          {dayRows.length === 0
-            ? <Typography color="text.secondary" sx={{ fontSize: 12, px: 0.5, py: 2 }}>
-              {rows.length === 0 ? emptyHint : i18n.t('这一天没有安排。')}
-            </Typography>
-            : dayRows.map(row => (
-              <EventRow key={row.id} row={row} language={language} busy={busy}
-                onEdit={target => { setDialogError(''); setEditor({ id: target.id, form: formOf(target) }) }}
-                onSettle={(target, action) => void settle(target, action)} />
-            ))}
+          {/* The list scrolls inside the card so a busy day cannot push the grid
+              around; the card itself stretches to the grid's height instead of
+              floating as a short block next to it. */}
+          <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pr: 0.25 }}>
+            {dayRows.length === 0
+              ? <Typography color="text.secondary" sx={{ fontSize: 12, px: 0.5, py: 2 }}>
+                {rows.length === 0 ? emptyHint : i18n.t('这一天没有安排。')}
+              </Typography>
+              : dayRows.map(row => (
+                <EventRow key={row.id} row={row} language={language} busy={busy}
+                  onEdit={target => { setDialogError(''); setEditor({ id: target.id, form: formOf(target) }) }}
+                  onSettle={(target, action) => void settle(target, action)} />
+              ))}
+          </Box>
         </Box>
       </Box>
 

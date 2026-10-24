@@ -71,6 +71,33 @@ function weeklyDays(text: string): { text: string; days?: number[] } {
   return { text: text.replace(match[0], chinese ? `每${match[0].includes('週') ? '週' : '周'}${'日一二三四五六'[unique[0]]}` : `every ${names[unique[0]]}`), days: unique }
 }
 
+/**
+ * Lenient parsing for a deadline, which is a target day rather than an alert
+ * moment: "by Friday" is usable even though it names no clock.
+ *
+ * The strict resolver runs first because it also owns recurrence and the
+ * daylight-saving checks. Only when it refuses do we fall back to the day Chrono
+ * recognised and put the deadline at the local end of that day, so a spoken date
+ * can never cost the user the whole reminder.
+ */
+export function resolveDeadline(expression: string | null, now: number): number | null {
+  if (!expression?.trim()) return null
+  const strict = resolveReminderTime(expression, now)
+  if (!strict.issue && strict.dueAt !== null) return strict.dueAt
+  const text = normalizeTimeExpression(expression.trim())
+  const parser = /[\u4e00-\u9fff]/.test(text) ? /[後週時鐘號兩]/.test(text) ? zh.hant : zh.hans : en
+  const results = parser.parse(text, new Date(now), { forwardDate: true })
+  if (results.length !== 1 || results[0]!.end) return null
+  const start = results[0]!.start
+  // No day means no date to extend: "尽快" or "晚点" must stay refused instead of
+  // silently becoming tonight's deadline.
+  if (!start.isCertain('day') && !start.isCertain('weekday')) return null
+  const day = start.date()
+  // End of the local day, not UTC midnight, for the same DST reason as nextOccurrence.
+  const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999).getTime()
+  return at > now ? at : null
+}
+
 export function resolveReminderTime(expression: string | null, now: number): {
   dueAt: number | null; recurrence: ReminderRecurrence | null; issue?: string
 } {

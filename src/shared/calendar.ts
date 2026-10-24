@@ -102,7 +102,30 @@ function shiftDays(at: number, days: number): number {
   return date.getTime()
 }
 
-export function rangeFor(range: CalendarRange, now: number): { from: number; until: number } {
+/**
+ * The 42-day grid a month view paints, for an arbitrary month.
+ *
+ * `month` is zero-based like `Date`, because the renderer's cursor comes from a
+ * `Date` too. Exported so the page can prefetch the neighbouring month with the
+ * same arithmetic instead of re-deriving the Monday-first offset itself.
+ */
+export function monthRangeFor(year: number, month: number): { from: number; until: number } {
+  const first = new Date(year, month, 1)
+  const offset = (first.getDay() + 6) % 7
+  const from = shiftDays(first.getTime(), -offset)
+  return { from, until: shiftDays(from, 42) }
+}
+
+/**
+ * `anchor` only moves `'month'`: paging the calendar changes which month the
+ * grid shows, while "today" must still mean today for every other range. Rows
+ * that pass no anchor keep the old today-based behaviour.
+ */
+export function rangeFor(
+  range: CalendarRange,
+  now: number,
+  anchor?: { year: number; month: number }
+): { from: number; until: number } {
   const today = startOfLocalDay(now)
   switch (range) {
     case 'today':
@@ -123,10 +146,11 @@ export function rangeFor(range: CalendarRange, now: number): { from: number; unt
     // the user is looking at the trailing days of the previous month.
     case 'month': {
       const cursor = new Date(today)
-      const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
-      const offset = (first.getDay() + 6) % 7
-      const from = shiftDays(first.getTime(), -offset)
-      return { from, until: shiftDays(from, 42) }
+      // A malformed anchor must not throw away the whole page: fall back to today.
+      const year = Number.isInteger(anchor?.year) ? anchor!.year : cursor.getFullYear()
+      const month = Number.isInteger(anchor?.month) && anchor!.month >= 0 && anchor!.month <= 11
+        ? anchor!.month : cursor.getMonth()
+      return monthRangeFor(year, month)
     }
   }
 }
