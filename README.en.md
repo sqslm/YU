@@ -32,13 +32,13 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | --- | --- |
 | ![Bar](resources/screenshots/bar-recording.png) | ![Answer card](resources/screenshots/card-answer.png) |
 
-| History | Model configuration |
+| History | Settings (general) |
 | --- | --- |
-| ![History](resources/screenshots/hub-history.png) | ![Models](resources/screenshots/prefs-models.png) |
+| ![History](resources/screenshots/hub-history.png) | ![Settings](resources/screenshots/prefs-general.png) |
 
-| Shortcuts | |
-| --- | --- |
-| ![Shortcuts](resources/screenshots/prefs-shortcuts.png) | Permissions are requested only when needed; the bar is always resident but records only on demand, and it always shows whether it is idle, recording or processing. |
+![AI & models](resources/screenshots/prefs-models.png)
+
+A fresh install has no working connections: this is where you add a recognition and a text connection — address, key, model — test it, then save. Records shown in these screenshots are demo content.
 
 ## Quick start
 

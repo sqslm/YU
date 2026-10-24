@@ -32,13 +32,13 @@ Windows 上的语音输入与本地 AI 助手：按一下热键说话，松手�
 | --- | --- |
 | ![悬浮条](resources/screenshots/bar-recording.png) | ![回答卡](resources/screenshots/card-answer.png) |
 
-| 历史记录 | 模型配置 |
+| 历史记录 | 设置（通用） |
 | --- | --- |
-| ![历史](resources/screenshots/hub-history.png) | ![模型配置](resources/screenshots/prefs-models.png) |
+| ![历史](resources/screenshots/hub-history.png) | ![设置](resources/screenshots/prefs-general.png) |
 
-| 快捷键 |  |
-| --- | --- |
-| ![快捷键](resources/screenshots/prefs-shortcuts.png) | 权限全部按需申请；悬浮条常驻但只在触发时录音，界面上能直接看到当前是待命、录音还是处理中。 |
+![AI 与模型](resources/screenshots/prefs-models.png)
+
+首次运行没有可用连接：在这个页面添加语音识别与文本处理两条连接，填地址、密钥、模型，测试通过后保存。截图里的记录是演示用的示例内容。
 
 ## 快速开始
 
