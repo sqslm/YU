@@ -2,7 +2,11 @@
 
 **Use your own words to work with your computer.** [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md)
 
-YU is a Windows desktop voice assistant. It preserves quick dictation while bringing questions, notes, reminders and registered local tools into the same voice entry. Version **1.0.0-rc.1** is a release candidate, not a claim that every roadmap feature is finished.
+YU is a Windows desktop voice assistant. It preserves quick dictation while bringing questions, notes, reminders and registered local tools into the same voice entry. Version **1.0.0-rc.2** is a release candidate, not a claim that every roadmap feature is finished.
+
+RC.2 fixes the distinction between a failed search and a successful empty search. Just after midnight, recent reports remain available with their actual dates when no report is verified as today’s news. Local calendar dates are used consistently. Release-candidate version comparisons now follow prerelease precedence.
+
+Provider forms include official platform/documentation and key application links, opened with the default browser. Local/custom connections do not claim an unrelated vendor. Wake detection accepts moderately confident complete long phrases while keeping stricter short-phrase checks, exact grammar matching, ordinary-speech competition and the cooldown. Synthesized speech tests do not guarantee performance for every microphone or noisy room.
 
 ## Available today
 
@@ -28,7 +32,7 @@ pnpm dev
 pnpm package
 ```
 
-`pnpm icon` copies the supplied brand assets into their runtime/build destinations and needs Python 3 (standard library only). `pnpm package` creates `release/YU-1.0.0-rc.1-setup.exe`. Native keyboard, screenshot and local speech features require Windows. FFmpeg is optional for importing non-PCM recordings and is not bundled.
+`pnpm icon` copies the supplied brand assets into their runtime/build destinations and needs Python 3 (standard library only). `pnpm package` creates `release/YU-1.0.0-rc.2-setup.exe`. Native keyboard, screenshot and local speech features require Windows. FFmpeg is optional for importing non-PCM recordings and is not bundled.
 
 After committing, `pnpm release:archives` creates the server archive and release checksums from Git. It does not create a source ZIP unless `--source` is explicitly supplied. GitHub publishing and update hosting require separate configuration. Installers are unsigned unless a code-signing identity is configured.
 

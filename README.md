@@ -4,12 +4,18 @@
 
 ![语 / YU](resources/brand/logo-light.png)
 
-当前发布候选版 **1.0.0-rc.1**。Electron 运行时更新至 42.11.18，测试工具更新至 Vitest 4.1.12，修复发布审计发现的已知依赖漏洞。中文界面显示「语」，英文界面显示「YU」。主题 Logo、应用/任务栏/托盘与安装图标使用统一资源；设置只保留「关于」，介绍设计理念并按需展开诊断工具。登录页默认隐藏服务器地址，不预设个人部署；导出诊断时遮蔽凭据、网址、邮箱、内网地址及本机路径。已有安装沿用原配置、登录态和稳定的应用标识，避免改名造成数据丢失。
+当前发布候选版 **1.0.0-rc.2**。Electron 运行时更新至 42.11.18，测试工具更新至 Vitest 4.1.12，修复发布审计发现的已知依赖漏洞。中文界面显示「语」，英文界面显示「YU」。主题 Logo、应用/任务栏/托盘与安装图标使用统一资源；设置只保留「关于」，介绍设计理念并按需展开诊断工具。登录页默认隐藏服务器地址，不预设个人部署；导出诊断时遮蔽凭据、网址、邮箱、内网地址及本机路径。已有安装沿用原配置、登录态和稳定的应用标识，避免改名造成数据丢失。
 
 
 Ask 首次加载等待回答界面订阅完成后再发送内容，保留早到消息；关闭会清理旧内容，完成后空闲语音条按原时限隐藏，回答卡独立保留。普通任务仍只使用语音条反馈。侧边栏移除“自建后端 · 本地”，历史标题不再显示“仅本地”；同步与隐私说明保留在账户和数据设置。
 
 设置初始读取不会覆盖更新后的连接配置。顺序备用从上到下使用启用的连接，不按账户数平分每个请求的期限；单个连接最多 8 秒，整轮最多 24 秒，外层工具采用相应的有限预算。合并来源仍最多并发两个连接、合并去重，达到整轮期限时保留已完成的结果；全部失败会明确报错，取消不会把部分结果伪装为完成。新闻多方向查询不再强制每方向仅 4 秒，连接密钥和顺序保持原配置。
+
+**RC.2 修复**：今天新闻查询会区分“服务故障”和“查询成功但没有匹配内容”。刚过零点没有已确认的当天报道时，保留 48 小时范围内的近期报道并注明真实日期，不把昨天的内容冒充今天，也不把有结果的搜索误报为不可用。来源的发布日期与今天判断使用同一本地时区。候选版本的数字顺序与正式版优先级得到修正。
+
+模型配置选择提供商后显示其官方平台、文档以及 API Key 申请入口；已有配置展开后同样可访问。链接使用内置提供商资料，不会根据用户自定义 Base URL 猜测官网；本地服务不显示不适用的 Key 申请入口。点击通过默认浏览器打开。
+
+语音唤醒降低完整长短语的整句/逐词置信度门槛至 0.80 / 0.50；短中文词和英文单词仍采用 0.94 / 0.75 的严格门槛。完整短语、竞争听写、300 ms–9 秒长度和 5 秒冷却继续有效，标点不计入短语长度。无需新增设置或持续云端识别。原生合成语音正反例不等于所有真人麦克风和噪声环境均通过。
 
 Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。问答统一使用 Ask 窗口，支持文字/语音提问和临时追问；独立 AI 助手窗口与主页入口已删除。本地助手工具在后台继续运行，可直接打开用户要求的 Windows 应用、文件夹、文档或网页，并支持用户要求的限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询、页面导航及当前窗口截图已接入；日程、长期记忆、简报和 TTS 尚未接入助手；可选 Windows 离线唤醒已接入统一语音入口。
 
@@ -81,7 +87,7 @@ Notes can be filtered by text, voice or processing failure and sorted by last mo
 
 Recording starts with a bounded TCP availability check, without sending test audio or consuming ASR quota. An enabled built-in model loads automatically from existing files. External ASR servers must still be started by the user. An open port does not certify credentials or model readiness. Final transcription failures preserve audio in Notes for retranscription; cancelled or silent takes are discarded, and failed history rows are not added. Voice notes devote the main editor to the polished draft. The original transcript is not rendered until Show original transcript is clicked; switching notes hides it again. Text-only or unpolished notes retain editable content.
 
-Optional **Settings → Voice & input → Speech & translation → Voice wake** uses offline Windows desktop speech recognition and a custom 2–40 character phrase. It is off by default and requires the matching Chinese/English speech recognition language pack. It uses the Windows default microphone. Say the phrase, wait for the recording strip, then speak your request. Wake-triggered recording submits after about 1.4 seconds of silence or cancels after 10 seconds without speech; Right Alt submits and Esc cancels. Tasks, screenshots, lock and sleep pause listening. No pre-wake audio is uploaded or saved. Existing recognition and providers process the request after waking. Recognition accuracy and false activations depend on the installed Windows recognizer and microphone environment; enabling it adds a local recognition process.
+Optional **Settings → Voice & input → Speech & translation → Voice wake** uses offline Windows desktop speech recognition and a custom 2–40 character phrase. It is off by default and requires the matching Chinese/English speech recognition language pack. It uses the Windows default microphone. Say the phrase, wait for the recording strip, then speak your request. Wake-triggered recording submits after about 2 seconds of silence or ends after 15 seconds without speech; Right Alt submits and Esc cancels. Tasks, screenshots, lock and sleep pause listening. No pre-wake audio is uploaded or saved. Existing recognition and providers process the request after waking. Recognition accuracy and false activations depend on the installed Windows recognizer and microphone environment; enabling it adds a local recognition process.
 
 ## 截图改进（0.37.0） / Screenshot improvements
 
@@ -125,7 +131,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\YU-1.0.0-rc.1-setup.exe
+pnpm package          # → release\YU-1.0.0-rc.2-setup.exe
 ```
 
 

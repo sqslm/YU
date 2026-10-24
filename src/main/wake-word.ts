@@ -32,6 +32,8 @@ export class WakeWordHost {
     if (this.phrase === settings.phrase && (this.child || this.status.phase === 'error') && !retry) return
     this.stop()
     this.phrase = settings.phrase
+    const letters = this.phrase.replace(/[^\p{L}\p{N}]/gu, '')
+    const shortPhrase = /[\u3400-\u9fff]/u.test(letters) ? letters.length < 4 : this.phrase.trim().split(/\s+/).length < 2
     if (process.platform !== 'win32') { this.publish({ phase: 'error', error: 'unavailable' }); return }
     this.publish({ phase: 'starting' })
     const script = app.isPackaged ? join(process.resourcesPath, 'voice-wake.ps1') : join(app.getAppPath(), 'resources/voice-wake.ps1')
@@ -61,8 +63,8 @@ export class WakeWordHost {
             this.publish({ phase: 'listening' })
           }
           else if (event.type === 'wake' && this.status.phase === 'listening' &&
-            event.phrase === this.phrase && event.confidence >= (this.phrase.replace(/\s/g, '').length < 4 ? 0.97 : 0.93) &&
-            event.wordConfidence >= 0.80 && event.durationMs >= 300 && event.durationMs <= 9000 && Date.now() - this.lastWake >= 5000) {
+            event.phrase === this.phrase && event.confidence >= (shortPhrase ? 0.94 : 0.80) &&
+            event.wordConfidence >= (shortPhrase ? 0.75 : 0.50) && event.durationMs >= 300 && event.durationMs <= 9000 && Date.now() - this.lastWake >= 5000) {
             this.lastWake = Date.now()
             this.stop(); this.publish({ phase: 'paused' }); this.deps.wake(); return
           } else if (event.type === 'error') failed(['language', 'microphone'].includes(event.error) ? event.error : 'unavailable')

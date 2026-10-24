@@ -41,13 +41,25 @@ describe('offline custom wake lifecycle', () => {
     const settings = { enabled: true, phrase: '你好轻令' }
     host.update(settings, false); children[0].stdout.write('{"type":"ready"}\n')
     const event = { type: 'wake', phrase: settings.phrase, confidence: .98, wordConfidence: .95, durationMs: 700 }
-    for (const patch of [{ confidence: .88 }, { wordConfidence: .6 }, { durationMs: 100 }, { phrase: '你好清理' }]) children[0].stdout.write(JSON.stringify({ ...event, ...patch }) + '\n')
+    for (const patch of [{ confidence: .6 }, { wordConfidence: .3 }, { durationMs: 100 }, { phrase: '你好清理' }]) children[0].stdout.write(JSON.stringify({ ...event, ...patch }) + '\n')
     expect(wake).not.toHaveBeenCalled()
     children[0].stdout.write(JSON.stringify(event) + '\n'); expect(wake).toHaveBeenCalledOnce()
     host.update(settings, false); children[1].stdout.write('{"type":"ready"}\n' + JSON.stringify(event) + '\n')
     expect(wake).toHaveBeenCalledOnce()
     vi.advanceTimersByTime(5000); children[1].stdout.write(JSON.stringify(event) + '\n')
     expect(wake).toHaveBeenCalledTimes(2)
+  })
+  it('accepts a clearly matched normal long phrase without requiring near-perfect confidence', () => {
+    host.update({ enabled: true, phrase: '你好语助手' }, false)
+    children[0].stdout.write('{"type":"ready"}\n')
+    children[0].stdout.write(JSON.stringify({ type: 'wake', phrase: '你好语助手', confidence: .86, wordConfidence: .65, durationMs: 1000 }) + '\n')
+    expect(wake).toHaveBeenCalledOnce()
+  })
+  it('keeps a stricter confidence gate for short phrases', () => {
+    host.update({ enabled: true, phrase: '小语' }, false)
+    children[0].stdout.write('{"type":"ready"}\n')
+    children[0].stdout.write(JSON.stringify({ type: 'wake', phrase: '小语', confidence: .86, wordConfidence: .65, durationMs: 450 }) + '\n')
+    expect(wake).not.toHaveBeenCalled()
   })
   it('surfaces a missing language pack and retries only when requested', () => {
     const settings = { enabled: true, phrase: 'Hey Qinly' }
