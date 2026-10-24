@@ -17,8 +17,9 @@ const settings = () => mergeSettings({ profiles: [profile('primary')], chains: {
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks() })
 
 describe('fixed full-document reminder refinement', () => {
-  it('contains the complete user-supplied prompt, including all examples and final checks', () => {
-    expect(createHash('sha256').update(REFINEMENT_PROMPT.replace(/\r\n/g, '\n')).digest('hex'))
+  it('preserves the complete user prompt with only the authorized product-name substitutions', () => {
+    expect(REFINEMENT_PROMPT.match(/语（YU）/g)).toHaveLength(2)
+    expect(createHash('sha256').update(REFINEMENT_PROMPT.replace(/语（YU）/g, 'Typeless Rebuild').replace(/\r\n/g, '\n')).digest('hex'))
       .toBe('282fe51c08e1e731484f441a96eeb31eb502e2bc712a4332c2a87733af7140f6')
   })
   it.each(['voice', 'note'] as const)('uses the full template before extraction for %s, with one reference time and no user polish prompt', async source => {

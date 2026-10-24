@@ -3,3 +3,7 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   koffi: true
+
+# Security fix for the packaging schema validator dependency.
+overrides:
+  fast-uri: 3.1.9

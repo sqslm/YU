@@ -3,6 +3,7 @@ import { mergeSettings } from '@shared/defaults'
 import { AssistantSession, ASSISTANT_TOOLS } from './assistant'
 import { askAgent } from './agent'
 import { runTool, toolSchemas } from './tools/registry'
+import type { AssistantState } from '@shared/assistant'
 import type { PersonalTools } from './tools/personal'
 import { WindowsTools } from './tools/windows'
 
@@ -10,7 +11,7 @@ const settings = mergeSettings({ profiles: [{ id: 'text', kind: 'llm', name: 'Te
   preset: '', baseUrl: 'https://example.com/v1', apiKey: 'private', model: 'model' }], chains: { llm: ['text'], asr: [], multimodal: [] } })
 let now = 1000
 let ask: ReturnType<typeof vi.fn<typeof askAgent>>
-let changed: ReturnType<typeof vi.fn>
+let changed: ReturnType<typeof vi.fn<(state: AssistantState) => void>>
 let session: AssistantSession
 beforeEach(() => {
   now = 1000

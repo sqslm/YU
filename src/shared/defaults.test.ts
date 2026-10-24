@@ -335,3 +335,10 @@ it('keeps new shortcut defaults free and preserves explicitly cleared or custom 
   expect(custom.hotkeys.reminderKeys.keys).toEqual(['F8'])
   expect(mergeSettings({ selectionInsertMode: 'append' }).selectionInsertMode).toBe('append')
 })
+
+
+it('migrates only legacy factory wake phrases to YU and preserves custom choices',()=>{
+  expect(mergeSettings({uiLanguage:'en',wakeWord:{enabled:true,phrase:'Hey Qinly'}}).wakeWord.phrase).toBe('Hello YU assistant')
+  expect(mergeSettings({wakeWord:{enabled:true,phrase:'你好轻令'}}).wakeWord.phrase).toBe('你好语助手')
+  expect(mergeSettings({wakeWord:{enabled:true,phrase:'我的自定义唤醒词'}}).wakeWord.phrase).toBe('我的自定义唤醒词')
+})

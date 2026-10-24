@@ -10,7 +10,7 @@ export async function probeSearch(input: Pick<SearchConnection, 'provider' | 'ap
   try {
     if (!isSearchProvider(input.provider)) throw new Error(mt('不支持的搜索服务'))
     const cfg = { ...mergeSettings({}).search, ...input, strategy: 'single' as const, maxResults: 1 }
-    const results = await searchWeb(cfg, '轻令（Qinly）')
+    const results = await searchWeb(cfg, '语')
     return { ok: true, count: results.length, durationMs: Date.now() - started }
   } catch (error) {
     return { ok: false, count: 0, durationMs: Date.now() - started, message: error instanceof Error ? error.message : String(error) }

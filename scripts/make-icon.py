@@ -1,38 +1,27 @@
-"""Deterministic conversion of the supplied Qinly artwork (requires Pillow)."""
+"""Copy the supplied YU brand assets without redrawing or adding runtime dependencies."""
 from pathlib import Path
-from PIL import Image
+from shutil import copyfile
 
 root = Path(__file__).resolve().parent.parent
-source = root / 'logo'
+source = root / 'logo' / 'YU_语_品牌图标资源包'
 output = root / 'resources'
 brand = output / 'brand'
+tray = output / 'tray'
 brand.mkdir(parents=True, exist_ok=True)
-
-def supplied(suffix):
-    return Image.open(next(source.glob('*' + suffix))).convert('RGBA')
-
-def trim(image):
-    mask = image.getchannel('A').point(lambda value: 255 if value > 64 else 0)
-    return image.crop(mask.getbbox())
-
-def icon(image, png, ico):
-    image = trim(image)
-    image.thumbnail((464, 464), Image.Resampling.LANCZOS)
-    canvas = Image.new('RGBA', (512, 512))
-    canvas.alpha_composite(image, ((512-image.width)//2, (512-image.height)//2))
-    canvas.save(output / png, optimize=True)
-    canvas.save(output / ico, sizes=[(s, s) for s in (16, 20, 24, 32, 48, 64, 128, 256)])
-
-icon(supplied('-1.png'), 'icon.png', 'app.ico')
-icon(supplied('-4.png'), 'shortcut.png', 'installer.ico')
-for mode, image in [('light', supplied('-2.png')),
-                    ('dark', Image.open(source / '轻令 Qinly 智能助手标志2.png').convert('RGBA'))]:
-    image = trim(image)
-    image.thumbnail((720, 360), Image.Resampling.LANCZOS)
-    canvas = Image.new('RGBA', (720, 360))
-    canvas.alpha_composite(image, ((720-image.width)//2, (360-image.height)//2))
-    canvas.save(brand / ('logo-' + mode + '.png'), optimize=True)
-reference = Image.open(source / '轻令 Qinly 智能助手标志.png')
-reference.thumbnail((640, 640), Image.Resampling.LANCZOS)
-reference.save(brand / 'brand-board.png', optimize=True)
-print('Generated Qinly application, installer/shortcut and themed brand assets.')
+tray.mkdir(parents=True, exist_ok=True)
+assets = {
+    '02_应用图标与任务栏/YU_任务栏_256.png': output / 'icon.png',
+    '02_应用图标与任务栏/YU_Windows主图标.ico': output / 'app.ico',
+    '02_应用图标与任务栏/YU_应用图标_白底_512.png': output / 'shortcut.png',
+    '04_展示预览/YU_素材用途展示.png': brand / 'brand-board.png',
+    '03_托盘图标/YU_托盘_暗色托盘_白色线条.ico': tray / 'dark.ico',
+    '03_托盘图标/YU_托盘_亮色托盘_深色线条.ico': tray / 'light.ico',
+}
+for mode, label in [('light', '浅色界面'), ('dark', '深色界面')]:
+    assets[f'01_应用内Logo/YU_侧边栏紧凑版_{label}.png'] = brand / f'logo-{mode}.png'
+    assets[f'01_应用内Logo/YU_横版_{label}.png'] = brand / f'about-{mode}.png'
+    assets[f'01_应用内Logo/YU_纯符号透明_{label}.png'] = brand / f'symbol-{mode}.png'
+for original, target in assets.items():
+    copyfile(source / original, target)
+copyfile(output / 'app.ico', output / 'installer.ico')
+print('Updated YU application, taskbar, shortcut, installer, tray and themed brand assets.')

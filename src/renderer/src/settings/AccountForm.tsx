@@ -8,8 +8,7 @@
  * a validation rule that exists only in onboarding would let a tour-passed
  * account fail the first real sign-in.
  *
- * The server address is shown on an unconfigured install and folded away once
- * configured. No personal deployment is chosen for an open-source install.
+ * The server address is always folded away until explicitly expanded. No personal deployment is chosen for an open-source install.
  */
 import { useEffect, useState } from 'react'
 import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material'
@@ -17,6 +16,7 @@ import type { AccountView, ServerMeta } from '@shared/types'
 import { normalizeServerUrl } from '@shared/defaults'
 import { Segmented } from './sections/General'
 import i18n from '../i18n'
+import appIcon from '../../../../resources/icon.png'
 
 export type AccountMode = 'login' | 'register' | 'reset'
 
@@ -49,15 +49,6 @@ function IconEye({ off }: { off: boolean }): JSX.Element {
   )
 }
 
-/** The address a deployment lives at, as a host name people can recognise. */
-function shortHost(server: string): string {
-  try {
-    return new URL(server).host || server
-  } catch {
-    return server.replace(/^https?:\/\//, '').replace(/\/+$/, '') || server
-  }
-}
-
 export function AccountForm({
   server,
   onSignedIn,
@@ -70,7 +61,7 @@ export function AccountForm({
   const [password, setPassword] = useState('')
   const [reveal, setReveal] = useState(false)
   const [address, setAddress] = useState(server)
-  const [advanced, setAdvanced] = useState(server.trim() === '')
+  const [advanced, setAdvanced] = useState(false)
   const [meta, setMeta] = useState<ServerMeta | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -201,25 +192,10 @@ export function AccountForm({
     <Box sx={{ px: dense ? 0 : 2, py: dense ? 0 : 2 }} data-account-form>
       {!dense && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              flex: '0 0 auto',
-              borderRadius: '50%',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'linear-gradient(140deg,#4c8dff,#8f7cff)',
-              color: '#fff',
-              fontSize: 17,
-              fontWeight: 700
-            }}
-          >
-            T
-          </Box>
+          <Box component="img" src={appIcon} alt="" sx={{ width: 44, height: 44, objectFit: 'contain' }} />
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 14, fontWeight: 600, lineHeight: 1.35 }}>
-              {i18n.t('登录 轻令（Qinly）')}
+              {i18n.t('登录 语')}
             </Typography>
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.25, lineHeight: 1.45 }}>
               {i18n.t('登录后，历史和随记会在你的几台机器之间自动对齐')}
@@ -277,9 +253,7 @@ export function AccountForm({
             ]}
           />
           <Box sx={{ flex: 1 }} />
-          <Typography sx={{ fontSize: 11, color: 'text.disabled' }} noWrap>
-            {shortHost(address)}
-          </Typography>
+
         </Box>
       )}
 
@@ -533,7 +507,7 @@ export function AccountForm({
               fullWidth
               size="small"
               value={address}
-              placeholder="https://typeless.example.com"
+              placeholder={i18n.t('输入你的服务器地址')}
               onChange={(event) => {
                 setAddress(event.target.value)
                 onServerChange?.(event.target.value)

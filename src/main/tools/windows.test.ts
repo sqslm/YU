@@ -7,9 +7,9 @@ import { runTool, toolSchemas } from './registry'
 import { mergeSettings } from '@shared/defaults'
 
 let root: string
-let native: ReturnType<typeof vi.fn>
-let openPath: ReturnType<typeof vi.fn>
-let openUrl: ReturnType<typeof vi.fn>
+let native: ReturnType<typeof vi.fn<(request: Record<string, unknown>, signal?: AbortSignal) => Promise<Record<string, unknown>>>>
+let openPath: ReturnType<typeof vi.fn<(path: string) => Promise<string>>>
+let openUrl: ReturnType<typeof vi.fn<(url: string) => Promise<void>>>
 let tools: WindowsTools
 const owned: string[] = []
 beforeEach(async () => {
@@ -168,7 +168,7 @@ describe('Windows tools permissions and real result selection', () => {
     const path = await file('report.pdf'); native.mockResolvedValue({ files: [row(path)], backend: 'windows-search+folder' })
     const result = await tools.run('search_files', { day: 'yesterday', sort: 'size', minBytes: 1 })
     const request = native.mock.calls[0][0]
-    expect(Date.parse(request.before) - Date.parse(request.after)).toBe(86_400_000)
+    expect(Date.parse(request.before as string) - Date.parse(request.after as string)).toBe(86_400_000)
     expect(request).toMatchObject({ root, action: 'search', minBytes: 1, sort: 'size' })
     const items = result.data.items as { id: string }[]
     expect((await tools.run('open_file', { id: items[0].id })).ok).toBe(true)

@@ -1,4 +1,4 @@
-# Typeless 自建服务端 API
+# 语（YU）自建服务端 API
 
 协议版本：`1`（`GET /api/v1/meta` → `protocolVersion`）。所有接口在 `/api/v1/` 下，除 `meta`、`health`、`auth/*` 外都要求 `Authorization: Bearer <accessToken>`。
 

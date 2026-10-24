@@ -1,6 +1,6 @@
-# Typeless Rebuild 自建服务端
+# YU 自建服务端
 
-给 [Typeless Rebuild](../) 桌面客户端用的自建服务端：账号、邮箱验证码、会话、随记云同步、录音（Opus）备份，全部跑在**你自己的机器**上，不依赖任何商业云。
+给 [YU](../) 桌面客户端用的自建服务端：账号、邮箱验证码、会话、随记云同步、录音（Opus）备份，全部跑在**你自己的机器**上，不依赖任何商业云。
 
 - **单进程、零 npm 依赖**：只用 `node:http`、`node:sqlite`、`node:crypto`、`node:net/tls`。没有 `npm install` 会在离线机器上失败的问题，镜像也小。
 - **一个容器搞定**：`docker compose up -d` 就有数据库、文件存储、SMTP 发信和 Web API，不需要 Redis、Postgres、消息队列。
@@ -11,7 +11,7 @@
 
 ---
 
-当前版本 **2.0.2**，协议版本 **1**。新增可选随记标题字段，支持重命名与显式清空；旧客户端省略标题时保留已存名称。数据库启动时自动迁移，无需重建。保留 2.0.1 的音频增量游标修复。更新前使用管理员 CLI 备份数据库和录音，保留原数据卷与私有 `.env`，然后重建容器。
+当前版本 **2.0.3**，协议版本 **1**。新增可选随记标题字段，支持重命名与显式清空；旧客户端省略标题时保留已存名称。数据库启动时自动迁移，无需重建。保留 2.0.1 的音频增量游标修复。更新前使用管理员 CLI 备份数据库和录音，保留原数据卷与私有 `.env`，然后重建容器。
 
 ## 1. 功能
 
@@ -42,7 +42,7 @@ server/
 │   ├── storage.mjs     音频路径、流式落盘、配额统计、发送
 │   ├── routes/         auth / meta / notes / user / sync(旧版)
 │   └── cli.mjs         管理员命令
-├── test/               node:test，35 个用例，含本地假 SMTP
+├── test/               node:test，36 个用例，含本地假 SMTP
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example
@@ -74,7 +74,7 @@ docker compose exec typeless-server node src/cli.mjs create-admin \
   --email you@example.com --password '换成你的强密码'
 ```
 
-然后在客户端「账号 → 服务器地址」填 `http://你的地址:8787`，用这个邮箱登录。
+然后在客户端登录页主动展开「高级」里的服务器地址，填 `http://你的地址:8787`，用这个邮箱登录。
 
 > 没有 SMTP 也能用：把 `EMAIL_VERIFICATION_REQUIRED` 保持默认，注册会被关闭，只用 CLI 建号即可（`create-admin` 之后还可以 `promote` 别人）。
 

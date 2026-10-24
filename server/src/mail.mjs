@@ -40,7 +40,7 @@ function clientName() {
   return name || 'localhost'
 }
 
-/** `Typeless <no-reply@example.com>` → `no-reply@example.com`. */
+/** `YU <no-reply@example.com>` → `no-reply@example.com`. */
 export function bareAddress(from) {
   const match = /<([^>]+)>/.exec(from)
   return (match ? match[1] : from).trim()
@@ -231,14 +231,14 @@ async function deliver(smtp, message) {
 export function verificationEmail({ code, minutes, purpose }) {
   const action = purpose === 'reset' ? '重置密码' : '注册账号'
   return {
-    subject: `Typeless ${action}验证码：${code}`,
+    subject: `YU ${action}验证码：${code}`,
     text: [
-      `你的 Typeless ${action}验证码是：${code}`,
+      `你的 YU ${action}验证码是：${code}`,
       '',
       `验证码 ${minutes} 分钟内有效，只能用一次。`,
       '如果不是你本人操作，忽略这封邮件即可，你的账号没有任何变化。',
       '',
-      '—— Typeless 自建服务端'
+      '—— YU 自建服务端'
     ].join('\n')
   }
 }

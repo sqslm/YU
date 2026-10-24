@@ -12,6 +12,7 @@
  * would look like a broken build, so the tour and chrome come first.
  */
 import { setMainLanguage } from '@shared/mainI18n'
+import { productName } from '@shared/brand'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import enUS from './locales/en-US.json'
@@ -53,7 +54,7 @@ export function currentUiLanguage(): UiLanguage {
  */
 export function applyUiLanguage(language: string | undefined): UiLanguage {
   const next = normalizeUiLanguage(language)
-  if (typeof document !== 'undefined') document.documentElement.lang = next === 'en' ? 'en' : 'zh-CN'
+  if (typeof document !== 'undefined') { document.documentElement.lang = next === 'en' ? 'en' : 'zh-CN'; document.title = productName(next) }
   setMainLanguage(next)
   if (i18n.resolvedLanguage !== next) void i18n.changeLanguage(next)
   return next

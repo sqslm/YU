@@ -10,7 +10,6 @@ import { SearchSection } from './sections/Search'
 import { ResourcesSection } from './sections/Resources'
 import { AccountSection } from './sections/Account'
 import { AboutSection, useAppVersion } from './sections/About'
-import { GuidePage } from './pages/Guide'
 import { useTranslation } from 'react-i18next'
 import {
   IconClose,
@@ -44,12 +43,12 @@ const SECTIONS = [
   { id: 'models', labelKey: 'AI 与模型', hintKey: '连接模型，管理提示词、自动路由与搜索', icon: <IconCpu />, pages: ['models', 'prompts', 'routing', 'search'] },
   { id: 'storage', labelKey: '数据与性能', hintKey: '本地数据、历史保留与资源使用', icon: <IconFolder />, pages: ['storage', 'resources'] },
   { id: 'account', labelKey: 'settings.nav.account', hintKey: 'settings.hint.account', icon: <IconUser />, pages: ['account'] },
-  { id: 'about', labelKey: '帮助与关于', hintKey: '使用说明、版本信息与问题诊断', icon: <IconInfo />, pages: ['about', 'guide', 'diagnostics'] }
+  { id: 'about', labelKey: 'settings.nav.about', hintKey: '产品理念、版本与诊断', icon: <IconInfo />, pages: ['about'] }
 ]
 const PAGE_LABELS: Record<string, string> = {
   speech: 'settings.nav.speech', input: 'settings.nav.input', shortcuts: 'settings.nav.shortcuts',
   models: 'settings.nav.models', prompts: 'settings.nav.prompts', routing: 'settings.nav.routing', search: 'settings.nav.search',
-  storage: 'settings.nav.storage', resources: 'settings.nav.resources', about: 'settings.nav.about', guide: 'settings.nav.guide', diagnostics: '诊断'
+  storage: 'settings.nav.storage', resources: 'settings.nav.resources', about: 'settings.nav.about',
 }
 
 export function SettingsDialog({
@@ -229,8 +228,7 @@ export function SettingsDialog({
           {section === 'routing' && <RoutingSection settings={settings} patch={patch} />}
           {section === 'search' && <SearchSection settings={settings} patch={patch} />}
           {section === 'resources' && <ResourcesSection settings={settings} patch={patch} />}
-          {section === 'guide' && <GuidePage embedded />}
-          {(section === 'about' || section === 'diagnostics') && <AboutSection diagnosticsOnly={section === 'diagnostics'} />}
+          {section === 'about' && <AboutSection />}
         </Box>
       </Box>
     </Dialog>

@@ -281,7 +281,7 @@ const MAX_REDIRECTS = 5
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308])
 const FETCH_HEADERS = {
   accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5',
-  'user-agent': 'Mozilla/5.0 (compatible; Typeless/1.0; +https://typeless.local)'
+  'user-agent': 'Mozilla/5.0 (compatible; YU/1.0)'
 }
 
 type Fetched =

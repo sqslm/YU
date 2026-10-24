@@ -1,4 +1,11 @@
-# 轻令（Qinly）
+# 语 / YU
+
+**用你的方式，与电脑交流。** [English](README.en.md) · [完整设计理念](resources/brand/PHILOSOPHY.zh-CN.md)
+
+![语 / YU](resources/brand/logo-light.png)
+
+当前发布候选版 **1.0.0-rc.1**。Electron 运行时更新至 42.11.18，测试工具更新至 Vitest 4.1.12，修复发布审计发现的已知依赖漏洞。中文界面显示「语」，英文界面显示「YU」。主题 Logo、应用/任务栏/托盘与安装图标使用统一资源；设置只保留「关于」，介绍设计理念并按需展开诊断工具。登录页默认隐藏服务器地址，不预设个人部署；导出诊断时遮蔽凭据、网址、邮箱、内网地址及本机路径。已有安装沿用原配置、登录态和稳定的应用标识，避免改名造成数据丢失。
+
 
 Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。问答统一使用 Ask 窗口，支持文字/语音提问和临时追问；独立 AI 助手窗口与主页入口已删除。本地助手工具在后台继续运行，可直接打开用户要求的 Windows 应用、文件夹、文档或网页，并支持用户要求的限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询、页面导航及当前窗口截图已接入；日程、长期记忆、简报和 TTS 尚未接入助手；可选 Windows 离线唤醒已接入统一语音入口。
 
@@ -46,11 +53,11 @@ The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). 
 
 Windows tools discover real registered applications, open folders/documents/web addresses and search scoped file metadata. Requested application, folder, document and website opens run directly without a second confirmation. File metadata searches retain their explicit, cancel-by-default authorization. Only file names, paths, modification times and sizes may reach the configured model; file contents are not read. Windows Search is supplemented with an immediate-folder check, never a whole-disk crawl. Unindexed subfolders, a 40-item result limit and unavailable indexing are reported. Multiple results require a user choice; “Open second” uses the actual previous ordering. Model output cannot supply an arbitrary executable or document path. Dependent operations are sequential and stop on failure, with at most four tool rounds, eight calls and a 90-second task deadline. Scripts, installers, deletion and arbitrary commands are unavailable. Calendar, memory, briefings and TTS remain future stages. Optional offline Windows wake phrases now use the existing unified voice entry.
 
-品牌资源位于 `logo/`，转换产物位于 `resources/`：`-1.png` 纯图标用于应用、任务栏和托盘；`-2.png` 浅色完整 Logo 和「轻令 Qinly 智能助手标志2.png」深色透明 Logo 用于对应主题侧边栏及关于页面，两者使用相同的 2:1 透明画布与显示尺寸；`-4.png` 方形图标用于安装包和桌面快捷方式；白底「轻令 Qinly 智能助手标志.png」用于本页品牌展示。原图保留，未重新绘制。开发时安装 Pillow 后运行 `pnpm icon`；可用 `QINLY_PYTHON` 指定已有 Python。ICO 含 16–256 像素多尺寸。显示名称改为轻令（Qinly），技术包名、App ID 和原 `typeless-rebuild` 用户目录继续沿用，以保留配置、登录与升级身份。
+品牌源文件位于 `logo/YU_语_品牌图标资源包`，运行资源位于 `resources/`。纯图标用于应用与任务栏，多尺寸 ICO 用于 Windows 程序、安装器和快捷方式；系统托盘按 Windows 托盘主题切换深浅线条图标。侧边栏用紧凑 Logo，关于页用横版完整 Logo，均跟随应用主题。原始资源保留，未重新绘制。`pnpm icon` 使用 Python 3 标准库直接复制资源，无需 Pillow；可用 `YU_PYTHON` 指定已有 Python。中文显示「语」、英文显示「YU」，静态 Windows 安装器与快捷方式名为 YU。技术包名、App ID 和原 `typeless-rebuild` 用户目录沿用，以保留配置、登录与升级身份。
 
 Tray left-click restores the main window and preserves the current page or editor. Its context menu keeps Open main window, Ask and Settings as separate actions. Light and dark wordmarks use matching transparent canvases and sizing.
 
-![轻令 Qinly 品牌标志](resources/brand/brand-board.png)
+![语 / YU 品牌标志](resources/brand/brand-board.png)
 
 Windows 上的语音输入客户端，界面与交互对齐 Typeless（hub 三页 + 设置弹层 + 底部胶囊悬浮条）：按一下热键开始说话，再按一下结束，自动「识别 → 润色 → 整段插入到当前焦点位置」，另提供翻译模式、Ask Anything（可联网检索）与「粘贴上一条」。
 
@@ -66,7 +73,7 @@ Notes can be filtered by text, voice or processing failure and sorted by last mo
 
 语音随记默认突出润色结果，原始转写区域默认完全隐藏，点击“查看原始转写”才显示，可编辑、复制；切换随记重新隐藏。文字随记直接编辑正文；未生成润色稿时显示已有正文，不冒充润色结果。
 
-「设置 → 语音与输入 → 语音与翻译 → 语音唤醒」默认关闭，启用后通过 Windows 本地 System.Speech 的限定词语法等待用户自定义的 2–40 字符唤醒词。默认中文“你好轻令”，英文新配置“Hey Qinly”；对应的 Windows **桌面语音识别**语言包必须可用，中文/英文缺失会明确报错，不会降级为持续云端 ASR。使用 Windows 默认麦克风，默认设备与听写自选设备可以不同。先说唤醒词，看到录音条后再说需求；本版不承诺同一句连说唤醒词和正文。之后复用统一语音分流、ASR 与模型配置，停顿约 1.4 秒自动提交；无语音 10 秒取消，右 Alt 提交，Esc 取消。任务、截图、锁屏或休眠期间暂停监听，恢复空闲后继续；唤醒前不上传音频，不保存监听内容。误唤醒和识别率仍受系统语言包、发音、噪声影响；可随时关闭，启用会增加本地麦克风与识别进程资源占用。参见 [Windows SpeechRecognitionEngine](https://learn.microsoft.com/en-us/dotnet/api/system.speech.recognition.speechrecognitionengine)。
+「设置 → 语音与输入 → 语音与翻译 → 语音唤醒」默认关闭，启用后通过 Windows 本地 System.Speech 的限定词语法等待用户自定义的 2–40 字符唤醒词。默认中文“你好语助手”，英文“Hello YU assistant”；仅旧版出厂唤醒词自动迁移，用户自定义词保留；对应的 Windows **桌面语音识别**语言包必须可用，中文/英文缺失会明确报错，不会降级为持续云端 ASR。使用 Windows 默认麦克风，默认设备与听写自选设备可以不同。先说唤醒词，看到录音条后再说需求；本版不承诺同一句连说唤醒词和正文。之后复用统一语音分流、ASR 与模型配置，连续有声约 320 ms 后停顿约 2 秒自动提交；无语音等待 15 秒后结束，右 Alt 提交，Esc 取消。任务、截图、锁屏或休眠期间暂停监听，恢复空闲后继续；唤醒前不上传音频，不保存监听内容。误唤醒和识别率仍受系统语言包、发音、噪声影响；可随时关闭，启用会增加本地麦克风与识别进程资源占用。参见 [Windows SpeechRecognitionEngine](https://learn.microsoft.com/en-us/dotnet/api/system.speech.recognition.speechrecognitionengine)。
 
 Recording starts with a bounded TCP availability check, without sending test audio or consuming ASR quota. An enabled built-in model loads automatically from existing files. External ASR servers must still be started by the user. An open port does not certify credentials or model readiness. Final transcription failures preserve audio in Notes for retranscription; cancelled or silent takes are discarded, and failed history rows are not added. Voice notes devote the main editor to the polished draft. The original transcript is not rendered until Show original transcript is clicked; switching notes hides it again. Text-only or unpolished notes retain editable content.
 
@@ -114,7 +121,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\轻令（Qinly）-0.39.0-setup.exe
+pnpm package          # → release\YU-1.0.0-rc.1-setup.exe
 ```
 
 
@@ -329,9 +336,9 @@ React、MUI、Emotion 和界面国际化库由 Vite 编译进前端资源，仅�
 
 ## 开源范围与许可
 
-本项目以 MIT 许可证发布，是独立实现，不隶属于 Typeless，也不包含其客户端源码、录音、原始历史、截图或逆向取证产物。应用图标由 `scripts/make-icon.mjs` 生成。第三方依赖保留各自许可证，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 `licenses/`。
+本项目以 MIT 许可证发布，是独立实现，不隶属于 Typeless，也不包含其客户端源码、录音、原始历史、截图或逆向取证产物。应用图标来自 `logo/YU_语_品牌图标资源包`，`pnpm icon` 从原始资源复制适用图标。第三方依赖保留各自许可证，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 `licenses/`。
 
-首次安装不会预设任何个人服务器地址。从「设置 → 账户」打开登录页，填写自己的 HTTP / HTTPS 地址后登录；已有安装保留其保存的地址。客户端会读取服务端能力：关闭公开注册时隐藏注册入口，未配置邮件时隐藏密码找回入口。不需要验证码的私有实例可直接注册。
+首次安装不会预设任何个人服务器地址。从「设置 → 账户」打开登录页，主动展开高级选项、填写自己的 HTTP / HTTPS 地址后登录；已有安装保留其保存的地址。客户端会读取服务端能力：关闭公开注册时隐藏注册入口，未配置邮件时隐藏密码找回入口。不需要验证码的私有实例可直接注册。
 
 应用启动时会恢复用户数据目录中保存的登录态；同一系统用户重启、覆盖安装或普通卸载后重装，无需因安装操作重新登录。Windows 令牌使用系统加密，访问令牌过期时沿用现有刷新流程；主动退出、服务端撤销或刷新令牌到期后仍需登录。手动清除用户数据、换系统用户或换电脑不属于登录态保留范围。
 
@@ -339,7 +346,7 @@ React、MUI、Emotion 和界面国际化库由 Vite 编译进前端资源，仅�
 
 源码仓库只跟踪可编辑工程、测试、构建配置和许可。`.env`、密钥、API 凭据、用户数据、日志、安装包和本机取证目录都不进入源码发布。`private: true` 用于防止意外发布到 npm，不影响代码开源。
 
-本地验证后执行 `pnpm package` 生成 Windows x64 NSIS 安装器。开发过程使用本地 Git 管理，源码压缩包按需生成，推送 GitHub 须明确授权。需要完整归档时，在提交后运行 `pnpm release:archives` 生成源码 ZIP、服务端 tar.gz 及 SHA-256 清单；归档来自已提交的 Git 内容。安装器未配置代码签名时为未签名版本。
+本地验证后执行 `pnpm package` 生成 Windows x64 NSIS 安装器。开发过程使用本地 Git 管理，源码压缩包按需生成，推送 GitHub 须明确授权。提交后运行 `pnpm release:archives` 只生成服务端 tar.gz、发布清单及 SHA-256 校验文件；需要源码 ZIP 时显式追加 `--source`；归档来自已提交的 Git 内容。安装器未配置代码签名时为未签名版本。
 
 服务端部署见 [server/README.md](server/README.md)。Docker 只提供账号与同步；ASR、语言模型和可选本地模型由客户端独立配置。语音模型权重不包含在安装器和源码包中，下载后遵循各模型自己的许可。
 

@@ -101,7 +101,7 @@ export class ScreenshotTool {
     try {
       const png = image.toPNG()
       if (action === 'save') {
-        const result = await dialog.showSaveDialog(win, { defaultPath: join(app.getPath('pictures'), `Qinly-${new Date().toISOString().replace(/[:.]/g, '-')}.png`),
+        const result = await dialog.showSaveDialog(win, { defaultPath: join(app.getPath('pictures'), `YU-${new Date().toISOString().replace(/[:.]/g, '-')}.png`),
           filters: [{ name: 'PNG', extensions: ['png'] }] })
         signal.throwIfAborted()
         if (result.canceled || !result.filePath) return { saved: false }

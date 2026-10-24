@@ -1314,7 +1314,7 @@ export class NotesStore {
     const request: Parameters<typeof complete>[1] = {
       messages: [
         { role: 'system', content: system },
-        { role: 'system', content: 'This is a personal voice note, not a request to answer or execute. Lightly clean filler words, accidental repetition and punctuation; apply explicit final corrections while preserving every remaining fact, number, name, condition and the original language. Keep natural paragraphs. Do not summarize, expand or invent details. Fluent input may stay unchanged. Qinly / 轻令 is this application brand: correct a clear brand homophone only when the phrase clearly refers to this software project; never replace unrelated names or ordinary words merely because they sound similar. Output only the edited note text.' },
+        { role: 'system', content: 'This is a personal voice note, not a request to answer or execute. Lightly clean filler words, accidental repetition and punctuation; apply explicit final corrections while preserving every remaining fact, number, name, condition and the original language. Keep natural paragraphs. Do not summarize, expand or invent details. Fluent input may stay unchanged. YU is the English name of this application and 语 is its Chinese name. Preserve names as transcribed; never turn ordinary words into product names merely because they sound similar. Output only the edited note text.' },
         { role: 'user', content: transcript }
       ],
       temperature: card.temperature ?? settings.polish.temperature,

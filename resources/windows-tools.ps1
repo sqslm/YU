@@ -56,7 +56,7 @@ if ($request.action -in @('explorer-folder','browser-url','window-check')) {
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
-public static class QinlyWindow {
+public static class YUWindow {
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
@@ -67,14 +67,14 @@ public static class QinlyWindow {
     if ([string]$request.handle -notmatch '^\d+$' -or [long]$request.handle -le 0) { throw 'Original window is unavailable' }
     $script:hwnd = [IntPtr][long]$request.handle
     [uint32]$windowPid = 0
-    [void][QinlyWindow]::GetWindowThreadProcessId($script:hwnd, [ref]$windowPid)
+    [void][YUWindow]::GetWindowThreadProcessId($script:hwnd, [ref]$windowPid)
     $title = New-Object Text.StringBuilder 1024
-    [void][QinlyWindow]::GetWindowText($script:hwnd, $title, 1024)
-    if (![QinlyWindow]::IsWindow($script:hwnd) -or $windowPid -ne [uint32]$request.pid -or $title.ToString() -cne [string]$request.title) { throw 'Original window has changed or closed' }
+    [void][YUWindow]::GetWindowText($script:hwnd, $title, 1024)
+    if (![YUWindow]::IsWindow($script:hwnd) -or $windowPid -ne [uint32]$request.pid -or $title.ToString() -cne [string]$request.title) { throw 'Original window has changed or closed' }
   }
   Assert-OriginalWindow
   if ($request.action -eq 'window-check') {
-    if ([QinlyWindow]::IsIconic($hwnd)) { throw 'Original window is minimized; restore it before capture' }
+    if ([YUWindow]::IsIconic($hwnd)) { throw 'Original window is minimized; restore it before capture' }
     @{valid=$true} | ConvertTo-Json -Compress
     exit
   }

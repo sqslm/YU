@@ -77,7 +77,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
 let dir = ''
 let other = ''
 let settings: Settings
-let notify: ReturnType<typeof vi.fn>
+let notify: ReturnType<typeof vi.fn<(...args: unknown[]) => void>>
 let lines: string[]
 
 /** 16 kHz mono, so `pcmDurationMs` is exactly `samples / 16` ms. */

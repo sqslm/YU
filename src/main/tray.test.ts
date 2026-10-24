@@ -2,12 +2,12 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { setMainLanguage } from '@shared/mainI18n'
 import { createTray } from './tray'
 
-const mocks = vi.hoisted(() => ({ on: vi.fn(), menu: vi.fn(), tooltip: vi.fn() }))
+const mocks = vi.hoisted(() => ({ on: vi.fn(), menu: vi.fn(), tooltip: vi.fn(), image: vi.fn(), theme: vi.fn(), dark: true }))
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/app' },
-  nativeImage: { createFromPath: () => ({ resize: () => ({ isEmpty: () => false }) }) },
+  nativeTheme: { get shouldUseDarkColorsForSystemIntegratedUI() { return mocks.dark }, on: mocks.theme },
   Menu: { buildFromTemplate: (items: unknown) => items },
-  Tray: class { on = mocks.on; setContextMenu = mocks.menu; setToolTip = mocks.tooltip },
+  Tray: class { on = mocks.on; setContextMenu = mocks.menu; setToolTip = mocks.tooltip; setImage = mocks.image },
   Notification: class { show(): void {} }
 }))
 const handlers = () => ({ openMain: vi.fn(), openAsk: vi.fn(), openNotes: vi.fn(), openReminders: vi.fn(), openSettings: vi.fn(),
@@ -21,6 +21,16 @@ it('opens the main application on a left click, independently of the assistant',
   click()
   expect(actions.openMain).toHaveBeenCalledOnce()
   expect(actions.openAsk).not.toHaveBeenCalled()
+})
+it('uses dedicated theme-aware tray assets and a localized product tooltip', () => {
+  mocks.dark = true
+  const tray = createTray(handlers())
+  expect(mocks.tooltip).toHaveBeenLastCalledWith('语 — Ready')
+  mocks.dark = false
+  mocks.theme.mock.calls.at(-1)![1]()
+  expect(mocks.image.mock.calls.at(-1)![0]).toMatch(/light\.ico$/)
+  setMainLanguage('en'); tray.refresh()
+  expect(mocks.tooltip).toHaveBeenLastCalledWith('YU — Ready')
 })
 
 it('provides separate main-window, assistant and settings menu actions', () => {

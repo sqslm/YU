@@ -7,6 +7,7 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '语': 'YU',
   '分类数量已达上限，请使用已有分类': 'Category limit reached. Use an existing category.',
   "未听到语音，已结束本次录音": "No speech detected. Recording ended.",
   "请补充明确的事项和提醒时间，本次未保存": "Please specify the task and reminder time. Nothing was saved.",
@@ -392,7 +393,7 @@ export const MAIN_MESSAGES: Record<string, string> = {
   '登录状态已失效，请重新登录': 'Your session has expired. Sign in again.',
   '登录状态已过期，请重新登录': 'Your session has expired. Sign in again.',
   '未设置': 'Not set',
-  '轻令（Qinly） 诊断报告': '轻令（Qinly） diagnostics',
+  '语 诊断报告': 'YU diagnostics',
   '== 版本 ==': '== Version ==',
   '== 系统 ==': '== System ==',
   '== 麦克风 ==': '== Microphone ==',
@@ -571,7 +572,7 @@ export const MAIN_MESSAGES: Record<string, string> = {
   '替换选中': 'Replace selection',
   '只支持 github / google / youtube / bing，且需要检索词': 'Only github / google / youtube / bing are supported, and they need a query',
   '检索词': 'Query',
-  '轻令（Qinly） — 按住右 Alt 说话': '轻令（Qinly） — hold Right Alt to talk',
+  '语 — 按住右 Alt 说话': 'YU — hold Right Alt to talk',
   '启用快捷键': 'Enable hotkeys',
   '粘贴上一条听写': 'Paste the last dictation',
   '重置键盘状态': 'Reset keyboard state',

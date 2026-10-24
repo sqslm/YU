@@ -1388,7 +1388,13 @@ const KIND_HINTS: Array<{ kind: QuestionKind; pattern: RegExp }> = [
 export function classifyQuestion(text: string): QuestionKind {
   const source = String(text ?? '')
   for (const hint of KIND_HINTS) {
-    if (hint.pattern.test(source)) return hint.kind
+    if (hint.pattern.test(source)) {
+      // Model/version lookups need the documentation window. Earlier language,
+      // weather and other explicit task matches retain their original priority.
+      if (hint.kind === 'news' && /(?:最新|latest|newest).{0,30}(?:模型|版本|\bmodel\b|\bversion\b)/i.test(source) &&
+          !/新闻|头条|资讯|\b(?:news|headlines|roundup)\b/i.test(source)) return 'technical'
+      return hint.kind
+    }
   }
   return 'stable'
 }
@@ -1871,7 +1877,7 @@ export function entityTokens(question: string): string[] {
 
 /** Documentation, code and paper hosts rank above journalism for their topic. */
 const PRIMARY_HOST =
-  /(?:^|\.)(?:docs|developer|developers|dev|api|platform|support|opensource|research|engineering)\.[a-z0-9-]+\.[a-z.]+$/i
+  /(?:^|\.)(?:docs|api-docs|developer|developers|dev|api|platform|support|opensource|research|engineering)\.[a-z0-9-]+\.[a-z.]+$/i
 const RESEARCH_HOST =
   /pubmed\.ncbi\.nlm\.nih\.gov|ncbi\.nlm\.nih\.gov|arxiv\.org|nature\.com|science\.org|thelancet\.com|nejm\.org|bmj\.com|jamanetwork\.com|cochranelibrary\.com|who\.int$/i
 const VENDOR_SELF_REPORT = /\b(?:we|our)\b.{0,40}\b(?:measured|benchmark|outperforms)\b/i

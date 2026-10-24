@@ -33,7 +33,7 @@ function request(
   redirects = 0
 ): void {
   const get = url.startsWith('http:') ? getHttp : getHttps
-  const req = get(url, { headers: { 'user-agent': 'Qinly', accept: '*/*' } }, (response) => {
+  const req = get(url, { headers: { 'user-agent': 'YU', accept: '*/*' } }, (response) => {
     const status = response.statusCode ?? 0
     const location = response.headers.location
     if (status >= 300 && status < 400 && location) {

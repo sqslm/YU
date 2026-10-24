@@ -54,7 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   selectionInsertMode: 'replace',
   assistantDownloadFolder: '',
   voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
-  wakeWord: { enabled: false, phrase: '你好轻令' },
+  wakeWord: { enabled: false, phrase: '你好语助手' },
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
     baseUrl: '',
@@ -252,7 +252,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   merged.assistantDownloadFolder = typeof input.assistantDownloadFolder === 'string' ? input.assistantDownloadFolder.trim() : ''
   merged.voiceCommands = normalizeVoiceCommands(input.voiceCommands)
   const phrase = typeof input.wakeWord?.phrase === 'string' ? input.wakeWord.phrase.trim().replace(/\s+/g, ' ') : ''
-  merged.wakeWord = { enabled: input.wakeWord?.enabled === true, phrase: phrase.length >= 2 && phrase.length <= 40 ? phrase : input.uiLanguage === 'en' ? 'Hey Qinly' : '你好轻令' }
+  merged.wakeWord = { enabled: input.wakeWord?.enabled === true, phrase: phrase.length >= 2 && phrase.length <= 40 && !['你好轻令', 'Hey Qinly'].includes(phrase) ? phrase : input.uiLanguage === 'en' ? 'Hello YU assistant' : '你好语助手' }
   merged.reminders = {
     notifications: input.reminders?.notifications !== false,
     strongSound: input.reminders?.strongSound !== false,

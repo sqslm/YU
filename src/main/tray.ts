@@ -1,4 +1,4 @@
-import { Menu, Notification, Tray, app, nativeImage } from 'electron'
+import { Menu, Notification, Tray, app, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { mt } from '@shared/mainI18n'
 
@@ -26,19 +26,18 @@ export interface TrayHandlers {
 }
 
 function iconPath(): string {
-  return join(app.getAppPath(), 'resources', 'icon.png')
+  return join(app.getAppPath(), 'resources', 'tray', nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? 'dark.ico' : 'light.ico')
 }
 
 export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void } {
-  const image = nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16 })
-  const tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image)
+  const tray = new Tray(iconPath())
 
   let menuKey = ''
   const rebuild = (): void => {
     const key = `${handlers.status()}|${handlers.hotkeysEnabled()}|${mt('设置…')}`
     if (key === menuKey) return
     menuKey = key
-    tray.setToolTip(`轻令（Qinly） — ${handlers.status()}`)
+    tray.setToolTip(`${mt('语')} — ${handlers.status()}`)
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: handlers.status(), enabled: false },
@@ -67,7 +66,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
           label: mt('重置键盘状态'),
           click: () => {
             const message = handlers.resetKeyboard?.() ?? mt('未处理')
-            new Notification({ title: '轻令（Qinly）', body: message }).show()
+            new Notification({ title: mt('语'), body: message }).show()
           }
         },
         {
@@ -75,7 +74,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
           click: () => {
             // A tray item must always answer: a silent click looks like a hang.
             void (handlers.checkUpdate?.() ?? Promise.resolve('更新不可用')).then((message) => {
-              new Notification({ title: '轻令（Qinly）', body: message }).show()
+              new Notification({ title: mt('语'), body: message }).show()
             })
           }
         },
@@ -85,6 +84,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
   }
 
   rebuild()
+  nativeTheme.on('updated', () => tray.setImage(iconPath()))
   tray.on('click', handlers.openMain)
   return Object.assign(tray, { refresh: rebuild })
 }

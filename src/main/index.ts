@@ -86,7 +86,7 @@ if (process.platform === 'win32') app.disableHardwareAcceleration()
 if (resolve(app.getPath('userData')) === resolve(join(app.getPath('appData'), app.getName()))) {
   app.setPath('userData', join(app.getPath('appData'), 'typeless-rebuild'))
 }
-app.setName('轻令（Qinly）')
+app.setName('YU')
 const store = new SettingsStore()
 const history = new HistoryStore()
 /**
@@ -1844,7 +1844,7 @@ async function bootstrap(): Promise<void> {
         // Markdown on purpose: this fixture is also the visual regression for
         // the card's reader (headings, bold labels, a bullet list, a citation).
         showAnswerCard({
-          question: 'Typeless 的悬浮条为什么不再有阴影？',
+          question: '语的悬浮条为什么不再有阴影？',
           answer:
             '因为窗口本身设置了 **hasShadow: false**，并且渲染层去掉了胶囊上的 box-shadow[1]。\n\n' +
             '## 为什么不能在透明窗口里加阴影\n\n' +

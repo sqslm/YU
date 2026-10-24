@@ -80,8 +80,10 @@
   "智能识别语音意图": "Understand voice requests",
   "用听写快捷键说出需求，自动选择问答、翻译、提醒、随记或助手操作；普通口述继续自动路由润色。": "Use your dictation shortcut to ask, translate, create reminders or notes, or run assistant actions. Ordinary dictation keeps automatic prompt routing.",
   "默认开启。明确的模式快捷键和自定义关键词优先。意图判断使用现有文本模型，可能增加一次调用；多模态入口需要先转写。关闭后恢复纯听写。": "On by default. Dedicated shortcuts and custom activation phrases take priority. Intent detection uses your existing text model and may add one request; multimodal audio is transcribed first. Turn off for plain dictation.",
-
-  "assistant": { "record": "Record", "send": "Send" },
+  "assistant": {
+    "record": "Record",
+    "send": "Send"
+  },
   "AI 助手": "AI Assistant",
   "任务失败": "Task failed",
   "当前窗口：{{name}}": "Current window: {{name}}",
@@ -390,7 +392,7 @@
   "到期后不再续费": "No renewal at period end",
   "登录": "Sign in",
   "登录 / 注册": "Sign in / Sign up",
-  "登录 轻令（Qinly）": "Sign in to 轻令（Qinly）",
+  "登录 语": "Sign in to YU",
   "登录 Windows 后在后台常驻": "Stays resident after you sign in",
   "登录后，历史和随记会在你的几台机器之间自动对齐": "Sign in and your history and notes line up across your machines",
   "登录后从服务器读取": "Read from the server once signed in",
@@ -551,7 +553,6 @@
   "近 30 天": "Last 30 days",
   "近 7 天": "Last 7 days",
   "进程名": "Process name",
-  "净室复刻：自建 ASR + LLM 后端，界面与交互对齐原版 Typeless。": "Clean-room rebuild: own ASR and LLM backends, UI and flow matched to the original Typeless.",
   "纠正规则": "Correction rules",
   "纠正规则数量": "Correction rule count",
   "决定每个前台窗口用哪一类卡片，顺序是：手动规则 → 内置分类表 → 兜底润色。": "Decides which kind of card a foreground window gets, in order: manual rules → built-in table → polish fallback.",
@@ -1207,7 +1208,7 @@
     "processingFailed": "The last processing attempt failed"
   },
   "onboarding": {
-    "welcomeTitle": "Welcome to 轻令（Qinly）",
+    "welcomeTitle": "Welcome to YU",
     "welcomeBody": "Hold Right Alt and speak, release to insert. Audio and history stay on this machine.",
     "step": "Step {{current}} of {{total}}",
     "next": "Next",
@@ -1284,7 +1285,7 @@
   "sherpa-onnx · 在这台电脑上跑，不联网也不花 token": "sherpa-onnx · runs on this machine; no network, no tokens",
   "Shift + Enter 软换行": "Shift + Enter soft line break",
   "SQLite（node:sqlite）+ 子串检索，仅本机；可选同步到自建服务": "SQLite (node:sqlite) with substring search, local only; optional sync to your own server",
-  "轻令（Qinly） · 全部统计只在本机": "轻令（Qinly） · every figure stays on this machine",
+  "语 · 全部统计只在本机": "YU · every figure stays on this machine",
   "WH_KEYBOARD_LL（utilityProcess + koffi，吞键）": "WH_KEYBOARD_LL (utilityProcess + koffi, swallows keys)",
   "whisper-1 / gpt-4o-mini / 你的本地模型名": "whisper-1 / gpt-4o-mini / your local model name",
   "悬浮条上的提示与报错自动隐藏的秒数": "Seconds before notices and errors on the floating bar disappear",
@@ -1615,5 +1616,23 @@
   "截图数据无效或过大": "The screenshot is invalid or too large.",
   "请输入截图问题": "Enter a question about the screenshot",
   "图片过大，请缩小选区后重试": "The image is too large. Select a smaller region.",
-  "无效的翻译语言": "Invalid translation language"
+  "无效的翻译语言": "Invalid translation language",
+  "product.name": "YU",
+  "用你的方式，与电脑交流。": "Communicate with your computer, your way.",
+  "设计理念": "Our philosophy",
+  "自然表达": "Natural expression",
+  "保留你的原意，让口头表达成为清晰文字。": "Keep your meaning while turning spoken thoughts into clear text.",
+  "一个入口": "One entry point",
+  "用自然语言连接信息、随记、待办与本地工具。": "Connect information, notes, tasks and local tools through natural language.",
+  "本地优先": "Local first",
+  "记录与提醒可在本机使用；按需调用你配置的模型与云同步。": "Keep notes and reminders on your computer. Use your configured models and optional cloud sync when needed.",
+  "安静陪伴": "Quiet support",
+  "需要时出现，任务完成后回到后台，减少打扰。": "Be available when needed and return to the background when the task is done.",
+  "为什么叫「语」？": "The idea behind YU",
+  "语言连接人与世界。打开的门，象征从表达走向工具与更多可能的入口。": "Language connects us with the world. The open door represents an entry from expression to tools and new possibilities.",
+  "产品理念、版本与诊断": "Philosophy, version and diagnostics",
+  "诊断工具": "Diagnostic tools",
+  "收起诊断工具": "Hide diagnostic tools",
+  "输入你的服务器地址": "Enter your server address",
+  "本机语音识别与模型推理。": "On-device speech recognition and model inference."
 }

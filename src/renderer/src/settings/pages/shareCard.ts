@@ -137,7 +137,7 @@ export function buildShareCard(
       .map((app) => i18n.t('{{name}} {{n}} 次', { name: app.name, n: app.count })),
     heat,
     legend: i18n.t('少 ▢▢▢▢▢ 多'),
-    footer: i18n.t('轻令（Qinly） · 全部统计只在本机'),
+    footer: i18n.t('语 · 全部统计只在本机'),
     empty
   }
 }

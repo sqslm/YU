@@ -78,6 +78,13 @@ afterEach(() => {
 })
 
 describe('classifyQuestion', () => {
+  it.each(['DeepSeek 最新的模型是哪个','What is the latest DeepSeek model?'])('keeps current-model documentation in the technical lookup window: %s', question => {
+    expect(classifyQuestion(question)).toBe('technical')
+    expect(planSearch(question,question).freshness).toBe('month')
+  })
+  it.each(['翻译一下最新模型的介绍','Translate the latest model documentation'])('does not route language tasks into documentation search: %s', text=>expect(classifyQuestion(text)).toBe('language'))
+  it('retains daily model news as news', () => {expect(classifyQuestion('今天有哪些最新模型新闻')).toBe('news')})
+
   it('routes language tasks away from the web', () => {
     expect(classifyQuestion('帮我把这句话翻译成英文')).toBe('language')
     expect(classifyQuestion('润色一下这段话')).toBe('language')
@@ -330,6 +337,11 @@ describe('scoreSource and rankSources', () => {
     snippet: '转载自 OpenAI 新闻稿，正文相同。'
   }
 
+  it('recognizes API documentation subdomains when comparing first-party sources', () => {
+    const docs={title:'DeepSeek latest model',url:'https://api-docs.deepseek.com/news/latest',snippet:'DeepSeek official model documentation.'}
+    const repository={...docs,url:'https://github.com/deepseek-ai/model'}
+    expect(scoreSource(docs,'DeepSeek latest model',NOW)).toBeGreaterThan(scoreSource(repository,'DeepSeek latest model',NOW))
+  })
   it('scores a first-party page above an aggregator', () => {
     expect(scoreSource(official, 'OpenAI 最新模型', NOW)).toBeGreaterThan(
       scoreSource(aggregator, 'OpenAI 最新模型', NOW)

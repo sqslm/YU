@@ -67,7 +67,7 @@ describe('renderDiagnostics', () => {
   })
 
   it('contains the sections a support engineer needs', () => {
-    expect(report).toContain('轻令（Qinly） 诊断报告')
+    expect(report).toContain('语 诊断报告')
     expect(report).toContain('Electron: 38.1.0')
     expect(report).toContain('麦克风 (Realtek)')
     expect(report).toContain('asr: GET api.test -> 200')
@@ -79,6 +79,13 @@ describe('renderDiagnostics', () => {
     expect(report).not.toContain('tok_abcdefgh')
   })
 
+  it('hides deployment URLs, private network addresses, email and local paths in shared reports', () => {
+    const shared=renderDiagnostics({version:'1.0.0-rc.1',electron:'38',chrome:'140',node:'22',platform:'win32',arch:'x64',release:'Windows',
+      dataDir:'C:\\Users\\Alice\\AppData\\Roaming\\app',settings:{syncServerUrl:'https://private.example.test:9443',notesDir:'C:\\Users\\Alice\\Notes'},
+      devices:[],connectivity:['GET https://private.example.test:9443/api -> 200'],logTail:['contact=person@example.test peer=192.168.11.12 path=C:\\Users\\Alice\\Notes']})
+    for(const value of ['private.example.test','Alice','person@example.test','192.168.11.12'])expect(shared).not.toContain(value)
+    expect(shared).toContain('1.0.0-rc.1');expect(shared).toContain('-> 200')
+  })
   it('says so when nothing was enumerated', () => {
     const empty = renderDiagnostics({
       version: '0.9.0',

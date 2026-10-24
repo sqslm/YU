@@ -30,7 +30,7 @@ function loadPage(win: BrowserWindow, page: Page): void {
 export function createReminderWindow(_mode: ThemeMode): BrowserWindow {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
   const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'), ...display.bounds,
-    title: `${mt('强提醒')} · 轻令（Qinly）`, show: false, alwaysOnTop: true, autoHideMenuBar: true,
+    title: `${mt('强提醒')} · ${mt('语')}`, show: false, alwaysOnTop: true, autoHideMenuBar: true,
     frame: false, transparent: true, hasShadow: false, resizable: false, movable: false,
     minimizable: false, maximizable: false, fullscreenable: false,
     backgroundColor: '#00000000',
@@ -124,7 +124,7 @@ export function createSettingsWindow(mode: ThemeMode = 'dark'): BrowserWindow {
     height: 750,
     minWidth: 940,
     minHeight: 620,
-    title: '轻令（Qinly）',
+    title: mt('语'),
     backgroundColor: chrome.color,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -177,7 +177,7 @@ export function openLoginWindow(mode: ThemeMode = 'dark'): BrowserWindow {
     height: 640,
     minWidth: 420,
     minHeight: 560,
-    title: '轻令（Qinly）',
+    title: mt('语'),
     backgroundColor: chrome.color,
     titleBarStyle: 'hidden',
     titleBarOverlay: {

@@ -799,7 +799,7 @@ function NotesDataGroup({
               fullWidth
               data-notes-migrate-target
               label={i18n.t('目标目录')}
-              placeholder="D:\\Typeless\\notes"
+              placeholder="D:\\Notes"
               value={migrateTarget}
               disabled={migrating}
               onChange={(event) => {

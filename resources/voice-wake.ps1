@@ -11,7 +11,7 @@ using System.Globalization;
 using System.Speech.Recognition;
 using System.Threading;
 using System.Web.Script.Serialization;
-public static class QinlyWake {
+public static class YUWake {
   static readonly object OutputLock = new object();
   static void Emit(object value) {
     lock (OutputLock) { Console.WriteLine(new JavaScriptSerializer().Serialize(value)); Console.Out.Flush(); }
@@ -52,7 +52,7 @@ public static class QinlyWake {
 '@
   if (-not $request.phrase -or $request.phrase.Length -gt 40) { throw 'Invalid phrase' }
   # Test input is never exposed as a user setting. Production always uses the microphone.
-  [QinlyWake]::Run([string]$request.phrase, [string]$request.language, [string]$request.wave)
+  [YUWake]::Run([string]$request.phrase, [string]$request.language, [string]$request.wave)
 } catch {
   [Console]::WriteLine('{"type":"error","error":"unavailable"}')
   exit 1

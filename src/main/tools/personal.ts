@@ -10,8 +10,8 @@ export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_remi
 export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'corrections', 'settings'] as const
 export type HubPage = typeof HUB_PAGES[number]
 export function personalCommand(text: string): { name: string; args: Record<string, unknown> } | null {
-  const match = /^(?:请|帮我)?(?:打开|进入)(?:轻令的|软件的)?(概览|首页|历史记录|随记|提醒|待办|纠正规则|设置)(?:页面|页)?[。！!]?$/iu.exec(text.trim()) ||
-    /^open (?:the )?(home|overview|history|notes|reminders|todos|corrections|settings)(?: page)?[.!]?$/iu.exec(text.trim())
+  const match = /^(?:请|帮我)?(?:打开|进入)(?:语的|YU的|轻令的|软件的)?(概览|首页|历史记录|随记|提醒|待办|纠正规则|设置)(?:页面|页)?[。！!]?$/iu.exec(text.trim()) ||
+    /^open (?:the )?(?:YU )?(home|overview|history|notes|reminders|todos|corrections|settings)(?: page)?[.!]?$/iu.exec(text.trim())
   if (!match) return null
   const page = ({ 概览: 'overview', 首页: 'overview', 历史记录: 'history', 随记: 'notes', 提醒: 'reminders', 待办: 'reminders', 纠正规则: 'corrections', 设置: 'settings', home: 'overview', todos: 'reminders' } as Record<string, string>)[match[1].toLowerCase()] || match[1].toLowerCase()
   return { name: 'open_page', args: { page } }

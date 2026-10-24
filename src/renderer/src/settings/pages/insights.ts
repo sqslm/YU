@@ -30,7 +30,7 @@ import { streakFromStats, type StreakInfo } from './overview'
  * the user works — it is the app talking to itself. The reference product excludes
  * its own windows for the same reason (`is_own_application` in its context capture).
  */
-const NOT_AN_APP = new Set(['typeless', 'typeless rebuild', 'typeless rebuild.exe'])
+const NOT_AN_APP = new Set(['yu', 'yu.exe', '语', 'typeless', 'typeless rebuild', 'typeless rebuild.exe'])
 
 export interface AppUsage {
   /** Display label of the foreground app, with a `.exe` suffix stripped. */

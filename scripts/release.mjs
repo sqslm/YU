@@ -12,15 +12,17 @@ const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).ver
 const serverVersion = JSON.parse(readFileSync(join(root, 'server/package.json'), 'utf8')).version
 const output = join(root, 'release')
 mkdirSync(output, { recursive: true })
-const installer = `轻令（Qinly）-${version}-setup.exe`
+const installer = `YU-${version}-setup.exe`
 if (!existsSync(join(output, installer))) throw new Error('Run pnpm package before creating release archives.')
-const source = `typeless-rebuild-${version}-source.zip`
-const server = `typeless-server-${serverVersion}.tar.gz`
-git('archive', '--format=zip', `--prefix=typeless-rebuild-${version}/`, `--output=${join(output, source)}`, 'HEAD')
-git('archive', '--format=tar.gz', `--prefix=typeless-server-${serverVersion}/`, `--output=${join(output, server)}`, 'HEAD:server')
+const feed = `${version.includes('-') ? version.split('-')[1].split('.')[0] : 'latest'}.yml`
+const source = `yu-${version}-source.zip`
+const server = `yu-server-${serverVersion}.tar.gz`
+const includeSource = process.argv.includes('--source')
+if (includeSource) git('archive', '--format=zip', `--prefix=yu-${version}/`, `--output=${join(output, source)}`, 'HEAD')
+git('archive', '--format=tar.gz', `--prefix=yu-server-${serverVersion}/`, `--output=${join(output, server)}`, 'HEAD:server')
 
 const files = []
-for (const name of [installer, `${installer}.blockmap`, 'latest.yml', source, server]) {
+for (const name of [installer, `${installer}.blockmap`, feed, ...(includeSource ? [source] : []), server]) {
   const file = join(output, name)
   if (!existsSync(file)) throw new Error(`Missing release artifact: ${name}`)
   const hash = createHash('sha256')
@@ -31,4 +33,4 @@ writeFileSync(join(output, `SHA256SUMS-${version}.txt`), files.map(({ name, sha2
 writeFileSync(join(output, `release-${version}.json`), JSON.stringify({
   clientVersion: version, serverVersion, protocolVersion: 1, commit: git('rev-parse', 'HEAD'), files
 }, null, 2) + '\n')
-console.log(`Created ${source}, ${server}, SHA256SUMS-${version}.txt and release-${version}.json`)
+console.log(`Created ${server}, SHA256SUMS-${version}.txt and release-${version}.json${includeSource ? `, ${source}` : ""}`)

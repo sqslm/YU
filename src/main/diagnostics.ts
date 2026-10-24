@@ -83,7 +83,7 @@ export function renderDiagnostics(input: DiagnosticsInput): string {
   const at = (input.now ?? new Date()).toISOString()
   const settings = redactSecrets(JSON.stringify(input.settings ?? {}, null, 2))
   const lines: string[] = [
-    mt('轻令（Qinly） 诊断报告'),
+    mt('语 诊断报告'),
     mt('生成时间: {{at}}', { at }),
     '',
     mt('== 版本 =='),
@@ -114,7 +114,14 @@ export function renderDiagnostics(input: DiagnosticsInput): string {
     mt('== 最近日志（{{n}} 行）==', { n: input.logTail.length }),
     ...input.logTail.map((line) => redactSecrets(line))
   ]
-  return `${lines.join('\n')}\n`
+  // Reports are intended to be shared; deployment and workstation identifiers
+  // are private even when they are not authentication credentials.
+  return redactSecrets(`${lines.join('\n')}\n`)
+    .replace(/https?:\/\/[^\s"'<>]+/gi, '[URL]')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
+    .replace(/\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2})\b/g, '[private IP]')
+    .replace(/\b[A-Z]:[\\/][^\r\n"<>|]+/gi, '[local path]')
+    .replace(/\/(?:home|Users)\/[^/\s]+/g, '/home/[user]')
 }
 
 function shortId(id: string): string {
