@@ -233,6 +233,7 @@ let updater: Updater | null = null
 let micDevices: MediaDeviceSummary[] = []
 /** Answer that arrived before the card renderer finished loading. */
 let pendingCard: AnswerCardPayload | null = null
+let cardReady = false
 
 interface MediaDeviceSummary {
   deviceId: string
@@ -602,23 +603,17 @@ function sendBarState(state: BarState): void {
 /**
  * The Ask Anything card. It is created lazily, kept alive between answers (a
  * hidden window re-shows instantly and avoids a load flash) and only shown once
- * the renderer is ready to receive `card:data`.
+ * the subscribed renderer signals that it can receive `card:data`.
  */
 function ensureCardWindow(): BrowserWindow {
   if (cardWindow && !cardWindow.isDestroyed()) return cardWindow
+  cardReady = false
   const win = createCardWindow()
   cardWindow = win
   win.on('closed', () => {
     cardWindow = null
     pendingCard = null
-  })
-  // The renderer subscribes on mount, which happens during this load; sending
-  // before `did-finish-load` would drop the payload on the floor.
-  win.webContents.on('did-finish-load', () => {
-    const payload = pendingCard
-    pendingCard = null
-    if (!payload || win.isDestroyed()) return
-    win.webContents.send('card:data', payload)
+    cardReady = false
   })
   win.on('hide', () => {
     win.webContents.send('card:hidden')
@@ -650,18 +645,14 @@ function showAnswerCard(payload: AnswerCardPayload): void {
   // nothing in the renderer can see the key, and a card that is still loading
   // would otherwise have nobody listening.
   hotkeys?.setCardOpen(true)
-  log('[card] shown; ESC is routed through the hook while it is up')
-  if (win.webContents.isLoading()) {
-    // `did-finish-load` delivers it and `ready-to-show` performs the show.
+  if (!cardReady) {
+    // loadFile() can still report isLoading() === false before navigation starts.
+    // Only the subscribed renderer can declare the card ready for its payload.
     pendingCard = payload
     return
   }
   win.webContents.send('card:data', payload)
-  // A selection preview has no voice take or bar lifetime. Re-showing its
-  // hidden anchor would resurrect the previous dictation result indefinitely.
-  if (!payload.selection && barWindow && !barWindow.isDestroyed() && !barWindow.isVisible()) {
-    barWindow.showInactive()
-  }
+  log('[card] shown; ESC is routed through the hook while it is up')
   // showInactive: the card must never steal the caret from the app the user
   // was dictating into.
   if (!win.isVisible()) win.showInactive()
@@ -1266,6 +1257,13 @@ function registerIpc(): void {
     })
   })
   // The card reports its rendered height so the window fits a long answer.
+  ipcMain.on('card:ready', (event) => {
+    if (event.sender !== cardWindow?.webContents) return
+    cardReady = true
+    const payload = pendingCard
+    pendingCard = null
+    if (payload) showAnswerCard(payload)
+  })
   ipcMain.on('card:height', (_event, height: number) => {
     if (typeof height !== 'number' || !Number.isFinite(height)) return
     if (cardWindow && !cardWindow.isDestroyed()) resizeCardToContent(cardWindow, height)
@@ -1454,9 +1452,6 @@ async function bootstrap(): Promise<void> {
     // typing straight into the foreground app.
     onAnswer: (payload) => showAnswerCard(payload),
     onCompletedAnswer: (question, answer) => assistant.rememberAnswer(question, answer),
-    // The card is anchored to the pill and animates out of it, so the pill must
-    // survive the usual "hide once idle" timeout while the card is on screen.
-    holdBar: () => Boolean(cardWindow && !cardWindow.isDestroyed() && cardWindow.isVisible()),
     // Surrounding text comes from a utility process: a crashing accessibility
     // provider must cost us one context read, never the UI.
     readContext: () => uia.read(),

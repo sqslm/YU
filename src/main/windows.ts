@@ -516,11 +516,7 @@ export function createCardWindow(): BrowserWindow {
     if (cardWindow === win) cardWindow = null
   })
 
-  win.on('ready-to-show', () => {
-    positionCardWindow(win)
-    win.showInactive()
-  })
-
+  // The owner shows the card only after it has an answer/composer payload.
   loadPage(win, 'card')
   return win
 }

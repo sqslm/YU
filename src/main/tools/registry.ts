@@ -23,6 +23,7 @@ import {
   runPool,
   searchInputOf,
   searchWeb,
+  searchDeadlineMs,
   type Freshness,
   type SearchQuery,
   type SearchRound
@@ -257,7 +258,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
     seenQueries.add(key)
     unique.push(planned)
   }
-  const searchTimeout = ctx.timeouts?.web_search ?? (plan.digest ? 4000 : undefined)
+  const searchTimeout = ctx.timeouts?.web_search ?? (plan.digest ? searchDeadlineMs(searchSettings) : undefined)
   const rounds: SearchRound[] = new Array(unique.length)
   await runPool(unique, SEARCH_PLAN_CONCURRENCY, async (planned, index) => {
     try {
@@ -659,8 +660,10 @@ async function attemptTool(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolOutcome> {
-  const timeoutMs = ctx.timeouts?.[tool.name] ??
-    (tool.name === 'web_search' && planSearch(ctx.question, textArg(args, 'query')).digest ? 15_000 : TOOL_TIMEOUTS[tool.name]) ?? 0
+  const searchPlan = tool.name === 'web_search' ? planSearch(ctx.question, textArg(args, 'query')) : null
+  const timeoutMs = ctx.timeouts?.[tool.name] ?? (searchPlan
+    ? searchDeadlineMs(ctx.settings.search) * Math.ceil(searchPlan.queries.length / SEARCH_PLAN_CONCURRENCY) + 2000
+    : TOOL_TIMEOUTS[tool.name]) ?? 0
   const outcome = await runWithDeadline(
     (signal) => tool.run(args, { ...ctx, signal }),
     ctx.signal,

@@ -410,7 +410,6 @@
   "都没命中 → 润色": "nothing matches → polish",
   "兜底": "Fallback",
   "读取设置…": "Loading settings…",
-  "读取随记目录失败：主进程还没有就绪，稍后重试": "Could not read the notes folder: the main process is not ready yet, try again shortly",
   "读取网页": "Read page",
   "读取选中": "Read selection",
   "读取中…": "Reading…",
@@ -1052,7 +1051,6 @@
   "自动刷新已关闭": "Auto-refresh off",
   "自动同步间隔": "Auto-sync interval",
   "自建服务的地址，例如 http://192.168.1.5:8787；留空就只在本机使用": "Address of your own server, e.g. http://192.168.1.5:8787; leave empty to stay local only",
-  "自建后端 · 本地": "Self-hosted backend · local",
   "自建转写网关，任何 OpenAI 兼容接口都能接入": "Self-hosted transcription gateways: any OpenAI-compatible endpoint works",
   "最多 {{n}} 个目标语言": "At most {{n}} target languages",
   "最多 40 个配置；链里靠前的失败会先耗掉时间再切换，把最稳的放最前面。": "At most 40 profiles; an early failure costs time before the switch, so put the most reliable first.",
@@ -1634,5 +1632,6 @@
   "诊断工具": "Diagnostic tools",
   "收起诊断工具": "Hide diagnostic tools",
   "输入你的服务器地址": "Enter your server address",
-  "本机语音识别与模型推理。": "On-device speech recognition and model inference."
+  "本机语音识别与模型推理。": "On-device speech recognition and model inference.",
+  "无法读取随记目录，请稍后重试。": "Unable to read the notes folder. Please try again."
 }

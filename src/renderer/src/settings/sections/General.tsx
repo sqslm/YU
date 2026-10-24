@@ -592,7 +592,7 @@ function NotesDataGroup({
     void window.api.notes
       .dataDir()
       .then(setInfo)
-      .catch(() => setMessage(i18n.t('读取随记目录失败：主进程还没有就绪，稍后重试')))
+      .catch(() => setMessage(i18n.t('无法读取随记目录，请稍后重试。')))
   }
 
   /**
@@ -611,7 +611,7 @@ function NotesDataGroup({
         if (alive) setInfo(next)
       })
       .catch(() => {
-        if (alive) setMessage(i18n.t('读取随记目录失败：主进程还没有就绪，稍后重试'))
+        if (alive) setMessage(i18n.t('无法读取随记目录，请稍后重试。'))
       })
     // A migration or a delete can move the directory without the settings
     // pointer changing, so follow the store instead of polling.

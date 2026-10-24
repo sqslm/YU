@@ -192,9 +192,6 @@ export function App(): JSX.Element {
           <Box sx={{ px: 2, pb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ minWidth: 0 }}>
               <BrandLogo mode={mode} width={150} />
-              <Typography sx={{ fontSize: 10.5, color: t.textFaint, mt: 0.25 }}>
-                {i18n.t('自建后端 · 本地')}
-              </Typography>
             </Box>
           </Box>
 

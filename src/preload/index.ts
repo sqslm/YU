@@ -10,11 +10,11 @@ import type { StatsFile } from '@shared/stats'
 import type { LocalAsrMirror, LocalDownloadProgress } from '@shared/local-asr'
 import type { AnswerCardPayload, TypelessApi } from '@shared/api'
 
-// The card window is created on demand and shown after `ready-to-show`, while
-// the main process pushes `card:data` on `did-finish-load`. React effects can
-// still be a tick behind the load event, so the last payload is cached here and
-// replayed to any late subscriber instead of being lost.
+// Cache from preload startup, including before React subscribes. A hidden card
+// clears its payload; a late or StrictMode subscription only replays live data.
 let lastCard: AnswerCardPayload | null = null
+ipcRenderer.on('card:data', (_event, payload: AnswerCardPayload) => { lastCard = payload })
+ipcRenderer.on('card:hidden', () => { lastCard = null })
 
 const api: TypelessApi = {
   checkAsr: () => ipcRenderer.invoke('asr:check'),
@@ -298,25 +298,24 @@ const api: TypelessApi = {
   // Every renderer shares this one preload, so the card page gets the same
   // bridge — `window.api.card` is what AnswerCard.tsx subscribes to.
   card: {
+    ready: () => ipcRenderer.send('card:ready'),
     onHidden: callback => {
       const listener = (): void => callback()
       ipcRenderer.on('card:hidden', listener)
       return () => ipcRenderer.removeListener('card:hidden', listener)
     },
     onData: (callback: (payload: AnswerCardPayload) => void): (() => void) => {
-      const listener = (_event: unknown, payload: AnswerCardPayload): void => {
-        lastCard = payload
-        callback(payload)
-      }
+      let subscribed = true
+      const listener = (_event: unknown, payload: AnswerCardPayload): void => callback(payload)
       ipcRenderer.on('card:data', listener)
       if (lastCard !== null) {
         const pending = lastCard
         // Replay what already arrived before this page subscribed.
         queueMicrotask(() => {
-          if (lastCard === pending) callback(pending)
+          if (subscribed && lastCard === pending) callback(pending)
         })
       }
-      return () => ipcRenderer.off('card:data', listener)
+      return () => { subscribed = false; ipcRenderer.off('card:data', listener) }
     },
     hide: (): void => {
       ipcRenderer.send('card:hide')

@@ -17,10 +17,14 @@ export class SearchError extends Error {
 }
 
 /**
- * A single provider call must never outlive the take. Eight seconds is longer
- * than any of these endpoints needs and still leaves room for the answer pass.
+ * Bound one provider request while allowing sequential backups their own turn.
  */
 export const SEARCH_TIMEOUT_MS = 8000
+
+/** A backup pool gets up to three provider deadlines, never an unbounded wait. */
+export function searchDeadlineMs(cfg: SearchSettings): number {
+  return SEARCH_TIMEOUT_MS * (cfg.strategy === 'fallback' ? Math.min(3, Math.max(1, cfg.connections.filter(connection => connection.enabled).length)) : 1)
+}
 
 /**
  * Queries the planner may have in flight at once. The plan is at most two
@@ -1123,7 +1127,7 @@ export async function searchWeb(
 ): Promise<SearchResult[]> {
   const request = normalizeQuery(query)
   if (!request.text) return []
-  const timeoutMs = options.timeoutMs ?? SEARCH_TIMEOUT_MS
+  const timeoutMs = options.timeoutMs ?? searchDeadlineMs(cfg)
   const label = `${cfg.provider}/${request.kind ?? 'web'}`
   const started = Date.now()
   const completed: SearchResult[] = []
@@ -1157,9 +1161,10 @@ async function searchConnections(cfg: SearchSettings, query: SearchQuery, signal
   const connections = (cfg.connections ?? []).filter(connection => connection.enabled)
   if (!connections.length) throw new SearchError(mt('没有启用的搜索连接'))
   const errors: string[] = []
+  const started = Date.now()
   const attempt = async (connection: typeof connections[number]): Promise<SearchResult[]> => {
     if (signal.aborted) return []
-    const perConnectionMs = budgetMs > 0 ? Math.max(1, Math.floor(budgetMs / Math.ceil(connections.length / (cfg.strategy === 'aggregate' ? 2 : 1)))) : 0
+    const perConnectionMs = budgetMs > 0 ? Math.max(1, Math.min(SEARCH_TIMEOUT_MS, budgetMs - (Date.now() - started))) : 0
     const outcome = await runWithDeadline(bounded => dispatchSearch({ ...cfg, ...connection, maxResults: maxResults ?? connection.maxResults }, query, bounded), signal, perConnectionMs)
     if (outcome.ok && outcome.value.length) { completed.push(...outcome.value); return outcome.value }
     errors.push(`${connection.name}: ${outcome.ok ? mt('没有检索到结果') : outcome.reason === 'error' ? String(outcome.error instanceof Error ? outcome.error.message : outcome.error) : outcome.reason}`)

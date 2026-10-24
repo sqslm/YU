@@ -804,19 +804,6 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
         <Typography sx={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.1 }}>
           {i18n.t('历史记录')}
         </Typography>
-        <Chip
-          size="small"
-          label={i18n.t(i18n.t('仅本地'))}
-          sx={{
-            height: 18,
-            fontSize: 10,
-            bgcolor: 'action.hover',
-            color: 'text.secondary',
-            border: 1,
-            borderColor: 'divider',
-            '& .MuiChip-label': { px: 0.75 }
-          }}
-        />
         <Typography
           data-history-count={total}
           data-history-total={total}

@@ -55,6 +55,7 @@ function toolLabel(id: string): string {
  * behave — instead of throwing on `undefined` until that wiring lands.
  */
 interface CardBridge {
+  ready(): void
   onData(callback: (payload: AnswerCardPayload) => void): () => void
   hide(): void
   action?(action: CardAction): void
@@ -153,6 +154,7 @@ export function AnswerCard(): JSX.Element | null {
         }, ENTER_MS)
       }
     })
+    bridge().ready()
     return off
   }, [])
 

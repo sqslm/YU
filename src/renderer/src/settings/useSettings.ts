@@ -62,10 +62,12 @@ export function useSettings(): UseSettingsResult {
   useEffect(() => {
     alive.current = true
     let live = true
+    let receivedChange = false
     void window.api.settings.get().then((loaded) => {
-      if (live) setSettings(applySettingsPatch(loaded, pending.current))
+      if (live && !receivedChange) setSettings(applySettingsPatch(loaded, pending.current))
     })
     const off = window.api.settings.onChanged((next) => {
+      receivedChange = true
       if (live) setSettings(applySettingsPatch(applySettingsPatch(next, writing.current ?? {}), pending.current))
     })
     return () => {

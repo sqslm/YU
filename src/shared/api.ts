@@ -336,6 +336,8 @@ export interface TypelessApi {
   }
   /** Answer card window (Ask Anything results). */
   card: {
+    /** Renderer subscribed and can receive the first payload. */
+    ready(): void
     /** `card:data` — one answer at a time, newest wins. */
     onData(callback: (payload: import('./types').AnswerCardPayload) => void): () => void
     /** Real BrowserWindow hide; visibilitychange alone is unreliable on Windows. */
