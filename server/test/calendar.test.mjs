@@ -91,6 +91,83 @@ test('重复推送同样内容不推进游标', async (t) => {
   assert.equal(replay.body.cursor, cursor)
 })
 
+test('推来更旧的数据时被拒为 stale，不落库也不推进游标', async (t) => {
+  const { app, alice } = await setup(t)
+  const NEWER = 2_000_000_000_000
+  const OLDER = 1_000_000_000_000
+
+  const first = await app.call('POST', '/api/v1/calendar', {
+    token: alice.accessToken,
+    body: { changes: [event({ title: '周会（新）', updatedAt: NEWER })] }
+  })
+  assert.deepEqual(first.body.applied, ['evt-1'])
+  const cursor = first.body.cursor
+
+  // A device that was offline writes an older edit; arrival order must not decide.
+  const late = await app.call('POST', '/api/v1/calendar', {
+    token: alice.accessToken,
+    body: { changes: [event({ title: '周会（旧）', updatedAt: OLDER })] }
+  })
+  assert.equal(late.status, 200, JSON.stringify(late.body))
+  assert.deepEqual(late.body.applied, [])
+  assert.deepEqual(late.body.duplicates, [])
+  assert.deepEqual(late.body.stale, ['evt-1'])
+  assert.equal(late.body.cursor, cursor)
+
+  const pull = await app.call('GET', '/api/v1/calendar?since=0', { token: alice.accessToken })
+  assert.equal(pull.body.events.length, 1)
+  assert.equal(pull.body.events[0].title, '周会（新）')
+  assert.equal(Number(pull.body.events[0].updatedAt), NEWER)
+
+  // A genuinely newer change still goes through, and only then does seq move.
+  const next = await app.call('POST', '/api/v1/calendar', {
+    token: alice.accessToken,
+    body: { changes: [event({ title: '周会（更新）', updatedAt: NEWER + 1 })] }
+  })
+  assert.deepEqual(next.body.applied, ['evt-1'])
+  assert.ok(next.body.cursor > cursor)
+})
+
+test('同一时间戳的第二次写入也是 stale：先到的那份留下', async (t) => {
+  const { app, alice } = await setup(t)
+  const STAMP = 1_700_000_000_000
+  await app.call('POST', '/api/v1/calendar', {
+    token: alice.accessToken,
+    body: { changes: [event({ title: '先到', updatedAt: STAMP })] }
+  })
+
+  const tie = await app.call('POST', '/api/v1/calendar', {
+    token: alice.accessToken,
+    body: { changes: [event({ title: '后到', updatedAt: STAMP })] }
+  })
+  assert.equal(tie.status, 200, JSON.stringify(tie.body))
+  assert.deepEqual(tie.body.stale, ['evt-1'])
+
+  const pull = await app.call('GET', '/api/v1/calendar?since=0', { token: alice.accessToken })
+  assert.equal(pull.body.events[0].title, '先到')
+})
+
+test('删除输给更新的服务器版本时也是 stale，游标不动', async (t) => {
+  const { app, alice } = await setup(t)
+  await app.call('POST', '/api/v1/calendar', {
+    token: alice.accessToken,
+    body: { changes: [event({ updatedAt: 2_000_000_000_000 })] }
+  })
+
+  // A tombstone from a device that last saw the row at an older stamp.
+  const remove = await app.call('POST', '/api/v1/calendar', {
+    token: alice.accessToken,
+    body: { changes: [{ id: 'evt-1', updatedAt: 1_500_000_000_000, deletedAt: 1_500_000_000_000 }] }
+  })
+  assert.equal(remove.status, 200, JSON.stringify(remove.body))
+  assert.deepEqual(remove.body.stale, ['evt-1'])
+  assert.deepEqual(remove.body.applied, [])
+
+  const pull = await app.call('GET', '/api/v1/calendar?since=0', { token: alice.accessToken })
+  assert.equal(pull.body.events[0].deleted, false)
+  assert.equal(pull.body.events[0].title, '周会')
+})
+
 test('修改内容会递增 seq 并被游标之后的拉取看到', async (t) => {
   const { app, alice } = await setup(t)
   const first = await app.call('POST', '/api/v1/calendar', {

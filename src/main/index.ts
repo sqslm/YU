@@ -55,6 +55,7 @@ import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
 import { CalendarStore, CalendarScheduler } from './calendar'
+import { safeFetch } from './safe-fetch'
 import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
 import { RemindersSync } from './reminders-sync'
 import { BriefingScheduler, type BriefingState } from './briefing'
@@ -416,7 +417,7 @@ async function refreshFeeds(): Promise<{ feeds: number; added: number; updated: 
   const settings = store.get()
   const result = await refreshExternalCalendars({
     getCalendars: () => settings.calendar.externalCalendars ?? [],
-    fetchImpl: (url, init) => fetch(url, init),
+    fetchImpl: (url, init) => safeFetch(url, init),
     store: { importIcs: text => calendar!.importIcs(text) },
     log,
     // The stamp is bookkeeping for the settings page ("last checked"), so it is

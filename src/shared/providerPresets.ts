@@ -45,6 +45,15 @@ export interface ProviderPreset {
   dropIn: boolean
 }
 
+/**
+ * Every `notes` below is a getter, never a `mt()` call evaluated at module load.
+ *
+ * This module is imported long before the renderer has read `settings.uiLanguage`
+ * and called `setMainLanguage()`, so a string captured here would keep whatever
+ * language was active at import time — the English UI showed Chinese caveats for
+ * the whole session. A getter re-translates on every read and still types as
+ * `string`, so no caller has to know.
+ */
 const ASR_PRESETS: ProviderPreset[] = [
   {
     id: 'openai',
@@ -56,7 +65,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['gpt-transcribe', 'whisper-1', 'gpt-4o-transcribe'],
     keyUrl: 'https://platform.openai.com/settings/organization/api-keys',
     docsUrl: 'https://platform.openai.com/docs/guides/speech-to-text',
-    notes: mt('multipart 上传 /audio/transcriptions；单文件 25 MB 上限。'),
+    get notes() { return mt('multipart 上传 /audio/transcriptions；单文件 25 MB 上限。') },
     dropIn: true
   },
   {
@@ -69,7 +78,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['whisper-large-v3', 'whisper-large-v3-turbo'],
     keyUrl: 'https://console.groq.com/keys',
     docsUrl: 'https://console.groq.com/docs/speech-to-text',
-    notes: mt('极快、有免费额度；turbo 更便宜，中文准确率低于 large-v3。'),
+    get notes() { return mt('极快、有免费额度；turbo 更便宜，中文准确率低于 large-v3。') },
     dropIn: true
   },
   {
@@ -81,7 +90,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'FunAudioLLM/SenseVoiceSmall',
     keyUrl: 'https://cloud.siliconflow.cn/account/ak',
     docsUrl: 'https://docs.siliconflow.cn/docs/api/audio-transcriptions-post',
-    notes: mt('国内直连；SenseVoice 中文强、带情感/事件标签时会被一并转写。'),
+    get notes() { return mt('国内直连；SenseVoice 中文强、带情感/事件标签时会被一并转写。') },
     dropIn: true
   },
   {
@@ -93,7 +102,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'openai/whisper-large-v3',
     keyUrl: 'https://api.together.ai/settings/projects/~current/api-keys',
     docsUrl: 'https://docs.together.ai/reference/audio-transcriptions',
-    notes: mt('支持长音频（单文件 4 小时 / 80 MB），适合整段会议。'),
+    get notes() { return mt('支持长音频（单文件 4 小时 / 80 MB），适合整段会议。') },
     dropIn: true
   },
   {
@@ -106,7 +115,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['voxtral-mini-latest', 'voxtral-small-latest'],
     keyUrl: 'https://console.mistral.ai/api-keys',
     docsUrl: 'https://docs.mistral.ai/capabilities/audio/',
-    notes: mt('使用 Bearer 鉴权，multipart 文件字段 file、模型字段 model；与 OpenAI 转写兼容。'),
+    get notes() { return mt('使用 Bearer 鉴权，multipart 文件字段 file、模型字段 model；与 OpenAI 转写兼容。') },
     dropIn: true
   },
   {
@@ -118,7 +127,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'stepaudio-2.5-asr',
     keyUrl: 'https://platform.stepfun.com/interface-key',
     docsUrl: 'https://platform.stepfun.com/docs/zh/api-reference/audio/create-audio-transcriptions',
-    notes: mt('国内直连、中文口音稳；response_format 是必填项（模板已固定发 json）。'),
+    get notes() { return mt('国内直连、中文口音稳；response_format 是必填项（模板已固定发 json）。') },
     dropIn: true
   },
   {
@@ -130,7 +139,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'glm-asr-2512',
     keyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
     docsUrl: 'https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr',
-    notes: mt('与 OpenAI 同形状；单条上限 25 MB 且时长不超过 30 秒，长录音要分次说。'),
+    get notes() { return mt('与 OpenAI 同形状；单条上限 25 MB 且时长不超过 30 秒，长录音要分次说。') },
     dropIn: true
   },
   {
@@ -143,7 +152,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'elevenlabs/scribe-v2',
     keyUrl: 'https://openrouter.ai/settings/keys',
     docsUrl: 'https://openrouter.ai/docs/cookbook/audio/push-to-talk-button',
-    notes: mt('转写使用 JSON input_audio（Base64 WAV），模型须来自 OpenRouter 语音转文字目录。'),
+    get notes() { return mt('转写使用 JSON input_audio（Base64 WAV），模型须来自 OpenRouter 语音转文字目录。') },
     dropIn: true
   },
   {
@@ -153,8 +162,9 @@ const ASR_PRESETS: ProviderPreset[] = [
     protocol: 'openai',
     baseUrl: 'http://127.0.0.1:8000/v1',
     model: 'Systran/faster-whisper-small',
-    notes:
-      mt('本机跑的 OpenAI 兼容转写服务：Speaches（faster-whisper-server 的继任者，默认 8000）、faster-whisper-server、带 /v1/audio/transcriptions 的 GGUF 转写网关（如 llama-server 的 ASR 分支）。注意 llama.cpp 官方 server 本身没有音频路由。端口与模型名按服务实际改；不需要 API Key 时留空。'),
+    get notes() {
+      return mt('本机跑的 OpenAI 兼容转写服务：Speaches（faster-whisper-server 的继任者，默认 8000）、faster-whisper-server、带 /v1/audio/transcriptions 的 GGUF 转写网关（如 llama-server 的 ASR 分支）。注意 llama.cpp 官方 server 本身没有音频路由。端口与模型名按服务实际改；不需要 API Key 时留空。')
+    },
     dropIn: true
   },
   {
@@ -167,7 +177,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['accounts/fireworks/models/whisper-v3', 'whisper-v3'],
     keyUrl: 'https://app.fireworks.ai/settings/users/api-keys',
     docsUrl: 'https://docs.fireworks.ai/api-reference/audio-transcriptions',
-    notes: mt('当前官方音频接口文档不可用；请先向供应商确认可用的语音端点与模型，聊天地址不代表支持转写。'),
+    get notes() { return mt('当前官方音频接口文档不可用；请先向供应商确认可用的语音端点与模型，聊天地址不代表支持转写。') },
     dropIn: true
   },
   {
@@ -181,7 +191,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['openai/whisper-large-v3'],
     keyUrl: 'https://deepinfra.com/dash/api_keys',
     docsUrl: 'https://docs.deepinfra.com/apis/speech',
-    notes: mt('使用原生 /v1/inference/{模型} 接口和 audio 文件字段；与聊天的 OpenAI 兼容接口不同。'),
+    get notes() { return mt('使用原生 /v1/inference/{模型} 接口和 audio 文件字段；与聊天的 OpenAI 兼容接口不同。') },
     dropIn: true
   },
 
@@ -198,7 +208,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['cohere-transcribe-03-2026'],
     keyUrl: 'https://dashboard.cohere.com/api-keys',
     docsUrl: 'https://docs.cohere.com/docs/compatibility-api',
-    notes: mt('使用 Cohere 转写接口；需要在语音设置中指定识别语言，不支持自动检测。'),
+    get notes() { return mt('使用 Cohere 转写接口；需要在语音设置中指定识别语言，不支持自动检测。') },
     dropIn: true
   },
   {
@@ -211,7 +221,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'asr-1.0',
     requestPath: 'speech_to_text',
     docsUrl: 'https://platform.minimax.io/docs/api-reference/speech-to-text',
-    notes: mt('使用 /v1/speech_to_text，语言放在 language 请求头，默认模型 asr-1.0。'),
+    get notes() { return mt('使用 /v1/speech_to_text，语言放在 language 请求头，默认模型 asr-1.0。') },
     dropIn: true
   },
   {
@@ -224,7 +234,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'scribe_v1',
     keyUrl: 'https://elevenlabs.io/app/settings/api-keys',
     docsUrl: 'https://elevenlabs.io/docs/api-reference/speech-to-text/convert',
-    notes: mt('适配器用 xi-api-key 鉴权、model_id / language_code 字段，路径 /v1/speech-to-text。'),
+    get notes() { return mt('适配器用 xi-api-key 鉴权、model_id / language_code 字段，路径 /v1/speech-to-text。') },
     dropIn: true
   },
   {
@@ -237,7 +247,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'nova-3',
     keyUrl: 'https://console.deepgram.com',
     docsUrl: 'https://developers.deepgram.com/docs/pre-recorded-audio',
-    notes: mt('适配器发裸音频字节（audio/wav），模型与参数走 query，鉴权是 Token 而不是 Bearer。'),
+    get notes() { return mt('适配器发裸音频字节（audio/wav），模型与参数走 query，鉴权是 Token 而不是 Bearer。') },
     dropIn: true
   },
   {
@@ -251,7 +261,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     models: ['universal-2', 'universal-3-5-pro'],
     keyUrl: 'https://www.assemblyai.com/app/api-keys',
     docsUrl: 'https://www.assemblyai.com/docs/pre-recorded-audio/api-reference/transcripts/submit',
-    notes: mt('适配器先 /v2/upload 再提交 transcript，然后轮询到 completed。'),
+    get notes() { return mt('适配器先 /v2/upload 再提交 transcript，然后轮询到 completed。') },
     dropIn: true
   },
   {
@@ -265,7 +275,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.gladia.io/v2',
     keyUrl: 'https://app.gladia.io/account',
     docsUrl: 'https://docs.gladia.io/api-reference',
-    notes: mt('模型留空即可（引擎由这家接口自己决定）；适配器先 /v2/upload 拿 audio_url，再提交 pre-recorded 并轮询结果。'),
+    get notes() { return mt('模型留空即可（引擎由这家接口自己决定）；适配器先 /v2/upload 拿 audio_url，再提交 pre-recorded 并轮询结果。') },
     dropIn: true
   },
   {
@@ -277,7 +287,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://asr.api.speechmatics.com/v2',
     model: 'enhanced',
     docsUrl: 'https://docs.speechmatics.com/batch/requests',
-    notes: mt('适配器发 data_file + JSON config 的 multipart，并按 Job-ID 轮询转写文本。'),
+    get notes() { return mt('适配器发 data_file + JSON config 的 multipart，并按 Job-ID 轮询转写文本。') },
     dropIn: true
   },
   {
@@ -290,7 +300,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: '',
     baseUrl: 'https://api.rev.ai/speechtotext/v1',
     docsUrl: 'https://docs.rev.ai/api/speech-to-text',
-    notes: mt('模型留空即可（引擎由这家接口自己决定）；适配器提交 job 后轮询状态，再取 transcript 拼装文本。'),
+    get notes() { return mt('模型留空即可（引擎由这家接口自己决定）；适配器提交 job 后轮询状态，再取 transcript 拼装文本。') },
     dropIn: true
   },
   {
@@ -305,7 +315,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'whisper',
     keyUrl: 'https://portal.azure.com',
     docsUrl: 'https://learn.microsoft.com/azure/ai-foundry/openai/reference',
-    notes: mt('适配器把部署名拼进路径、补 api-version，并用 api-key 头鉴权；下面填「Azure 部署名」。'),
+    get notes() { return mt('适配器把部署名拼进路径、补 api-version，并用 api-key 头鉴权；下面填「Azure 部署名」。') },
     dropIn: true
   },
   {
@@ -318,7 +328,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: 'qwen3-asr-flash',
     keyUrl: 'https://bailian.console.aliyun.com/model/settings/api-key',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/qwen-asr',
-    notes: mt('Qwen ASR Flash 直接提交音频；Paraformer / Filetrans 使用上传地址和异步任务。地域和业务空间须与密钥匹配。'),
+    get notes() { return mt('Qwen ASR Flash 直接提交音频；Paraformer / Filetrans 使用上传地址和异步任务。地域和业务空间须与密钥匹配。') },
     dropIn: true
   },
   {
@@ -331,7 +341,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: '',
     baseUrl: 'https://asr.tencentcloudapi.com',
     docsUrl: 'https://cloud.tencent.com/document/product/1093/35646',
-    notes: mt('模型留空即可（引擎由这家接口自己决定，16k_zh 已在适配器里定好）；适配器自己算 TC3-HMAC-SHA256 签名。'),
+    get notes() { return mt('模型留空即可（引擎由这家接口自己决定，16k_zh 已在适配器里定好）；适配器自己算 TC3-HMAC-SHA256 签名。') },
     dropIn: true
   },
   {
@@ -344,7 +354,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: '',
     baseUrl: 'https://iat-api.xfyun.cn/v2',
     docsUrl: 'https://www.xfyun.cn/doc/spark/asr_llm/API.html',
-    notes: mt('模型留空即可（引擎由这家接口自己决定）；适配器走 wss://iat-api.xfyun.cn/v2/iat 的帧协议，签名与分帧都在本机完成。'),
+    get notes() { return mt('模型留空即可（引擎由这家接口自己决定）；适配器走 wss://iat-api.xfyun.cn/v2/iat 的帧协议，签名与分帧都在本机完成。') },
     dropIn: true
   },
   {
@@ -357,7 +367,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: '',
     baseUrl: 'https://vop.baidu.com/server_api',
     docsUrl: 'https://ai.baidu.com/ai-doc/SPEECH/Jk5dll5g2',
-    notes: mt('模型留空即可（引擎由这家接口自己决定，dev_pid 由适配器选）；适配器先用两个 Key 换 access_token。'),
+    get notes() { return mt('模型留空即可（引擎由这家接口自己决定，dev_pid 由适配器选）；适配器先用两个 Key 换 access_token。') },
     dropIn: true
   },
   {
@@ -370,7 +380,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     model: '',
     baseUrl: 'https://api.replicate.com/v1',
     docsUrl: 'https://replicate.com/docs/reference/http',
-    notes: mt('模型填 owner/name（默认 openai/whisper），留空即用默认；适配器用 data URI 提交预测，必要时轮询状态。'),
+    get notes() { return mt('模型填 owner/name（默认 openai/whisper），留空即用默认；适配器用 data URI 提交预测，必要时轮询状态。') },
     dropIn: true
   },
   {
@@ -382,7 +392,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://fal.run',
     model: 'fal-ai/whisper',
     docsUrl: 'https://fal.ai/models/fal-ai/whisper/api',
-    notes: mt('适配器用 data URI 走 fal.run 的 whisper 端点。'),
+    get notes() { return mt('适配器用 data URI 走 fal.run 的 whisper 端点。') },
     dropIn: true
   }
 ]
@@ -398,7 +408,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'],
     keyUrl: 'https://platform.deepseek.com/api_keys',
     docsUrl: 'https://api-docs.deepseek.com/',
-    notes: mt('官方根地址不带 /v1，直接 POST /chat/completions。国内直连。'),
+    get notes() { return mt('官方根地址不带 /v1，直接 POST /chat/completions。国内直连。') },
     dropIn: true
   },
   {
@@ -411,7 +421,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['gpt-5.5', 'gpt-4o-mini'],
     keyUrl: 'https://platform.openai.com/settings/organization/api-keys',
     docsUrl: 'https://platform.openai.com/docs/api-reference/introduction',
-    notes: mt('国内需代理。'),
+    get notes() { return mt('国内需代理。') },
     dropIn: true
   },
   {
@@ -424,7 +434,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5'],
     keyUrl: 'https://platform.claude.com/settings/keys',
     docsUrl: 'https://platform.claude.com/docs/en/cli-sdks-libraries/libraries/openai-sdk',
-    notes: mt('走官方 OpenAI 兼容层（base 带尾斜杠）；忽略 response_format，n 必须为 1。'),
+    get notes() { return mt('走官方 OpenAI 兼容层（base 带尾斜杠）；忽略 response_format，n 必须为 1。') },
     dropIn: true
   },
   {
@@ -439,7 +449,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-pro'],
     keyUrl: 'https://aistudio.google.com/app/apikey',
     docsUrl: 'https://ai.google.dev/gemini-api/docs/openai',
-    notes: mt('走 Gemini 的 OpenAI 兼容层（/v1beta/openai），Bearer 鉴权。'),
+    get notes() { return mt('走 Gemini 的 OpenAI 兼容层（/v1beta/openai），Bearer 鉴权。') },
     dropIn: true
   },
   {
@@ -452,7 +462,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile'],
     keyUrl: 'https://console.groq.com/keys',
     docsUrl: 'https://console.groq.com/docs/openai',
-    notes: mt('忽略 logprobs/logit_bias，n 必须为 1。'),
+    get notes() { return mt('忽略 logprobs/logit_bias，n 必须为 1。') },
     dropIn: true
   },
   {
@@ -464,7 +474,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'deepseek-ai/DeepSeek-V4-Flash',
     models: ['deepseek-ai/DeepSeek-V4-Flash', 'zai-org/GLM-5.2'],
     docsUrl: 'https://docs.siliconflow.cn/docs/api/chat-completions-post',
-    notes: mt('国内直连，模型 id 带命名空间前缀。'),
+    get notes() { return mt('国内直连，模型 id 带命名空间前缀。') },
     dropIn: true
   },
   {
@@ -476,7 +486,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'kimi-k3',
     models: ['kimi-k3', 'kimi-k2.6'],
     docsUrl: 'https://platform.kimi.com/docs/api/chat',
-    notes: mt('国内直连；content 支持 image_url/video_url。'),
+    get notes() { return mt('国内直连；content 支持 image_url/video_url。') },
     dropIn: true
   },
   {
@@ -489,7 +499,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx'],
     keyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
     docsUrl: 'https://docs.bigmodel.cn/cn/guide/develop/openai/introduction',
-    notes: mt('国内直连；官方 base 带尾斜杠。'),
+    get notes() { return mt('国内直连；官方 base 带尾斜杠。') },
     dropIn: true
   },
   {
@@ -502,7 +512,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['qwen3.8-max', 'qwen3.7-plus', 'qwen3.5-flash'],
     keyUrl: 'https://bailian.console.aliyun.com/model/settings/api-key',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope',
-    notes: mt('国内直连；Key 与地域绑定，跨地域会 401。'),
+    get notes() { return mt('国内直连；Key 与地域绑定，跨地域会 401。') },
     dropIn: true
   },
   {
@@ -514,7 +524,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'doubao-seed-2-1-pro-260915',
     models: ['doubao-seed-2-1-pro-260915'],
     docsUrl: 'https://docs.volcengine.com/docs/ark/compatible-with-openai-sdk?lang=zh',
-    notes: mt('国内直连；model 必须是已开通的模型或推理接入点 id。'),
+    get notes() { return mt('国内直连；model 必须是已开通的模型或推理接入点 id。') },
     dropIn: true
   },
   {
@@ -526,7 +536,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'hunyuan-turbos-latest',
     models: ['hunyuan-turbos-latest'],
     docsUrl: 'https://cloud.tencent.com/document/product/1729/111007',
-    notes: mt('国内直连；stop 语义与 OpenAI 相反（停在匹配内容之后）。'),
+    get notes() { return mt('国内直连；stop 语义与 OpenAI 相反（停在匹配内容之后）。') },
     dropIn: true
   },
   {
@@ -538,7 +548,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'deepseek-v3.1-250821',
     models: ['deepseek-v3.1-250821'],
     docsUrl: 'https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb',
-    notes: mt('Key 形如 bce-v3/ALTAK-...，支持 thinking 与 web_search。'),
+    get notes() { return mt('Key 形如 bce-v3/ALTAK-...，支持 thinking 与 web_search。') },
     dropIn: true
   },
   {
@@ -550,7 +560,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: '',
     keyUrl: 'https://openrouter.ai/settings/keys',
     docsUrl: 'https://openrouter.ai/docs/api-reference/overview',
-    notes: mt('模型 id 形如 vendor/model；点「获取模型列表」再选。可选 HTTP-Referer 头。'),
+    get notes() { return mt('模型 id 形如 vendor/model；点「获取模型列表」再选。可选 HTTP-Referer 头。') },
     dropIn: true
   },
   {
@@ -563,7 +573,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct-Turbo'],
     keyUrl: 'https://api.together.ai/settings/projects/~current/api-keys',
     docsUrl: 'https://docs.together.ai/docs/inference/openai-compatibility',
-    notes: mt('不支持 assistants/moderations；logit_bias 多数模型不支持。'),
+    get notes() { return mt('不支持 assistants/moderations；logit_bias 多数模型不支持。') },
     dropIn: true
   },
   {
@@ -576,7 +586,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['accounts/fireworks/models/llama-v3p1-8b-instruct'],
     keyUrl: 'https://app.fireworks.ai/settings/users/api-keys',
     docsUrl: 'https://docs.fireworks.ai/tools-sdks/openai-compatibility',
-    notes: mt('模型 id 形如 accounts/fireworks/models/<name>。'),
+    get notes() { return mt('模型 id 形如 accounts/fireworks/models/<name>。') },
     dropIn: true
   },
   {
@@ -589,7 +599,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
     keyUrl: 'https://deepinfra.com/dash/api_keys',
     docsUrl: 'https://docs.deepinfra.com/chat/overview',
-    notes: mt('兼容根是 /v1/openai，不是 /v1。'),
+    get notes() { return mt('兼容根是 /v1/openai，不是 /v1。') },
     dropIn: true
   },
   {
@@ -602,7 +612,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['gpt-oss-120b', 'qwen-3.8-27b'],
     keyUrl: 'https://cloud.cerebras.ai',
     docsUrl: 'https://inference-docs.cerebras.ai/api-reference/chat-completions',
-    notes: mt('速度极快；n 只支持 1。'),
+    get notes() { return mt('速度极快；n 只支持 1。') },
     dropIn: true
   },
   {
@@ -615,7 +625,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['mistral-medium-3-5', 'mistral-large-4', 'mistral-small-2603'],
     keyUrl: 'https://console.mistral.ai/api-keys',
     docsUrl: 'https://docs.mistral.ai/api/',
-    notes: mt('国际站，国内需代理。'),
+    get notes() { return mt('国际站，国内需代理。') },
     dropIn: true
   },
   {
@@ -628,7 +638,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['grok-4.7', 'grok-4.6'],
     keyUrl: 'https://console.x.ai',
     docsUrl: 'https://docs.x.ai/developers/models.md',
-    notes: mt('国际站；-latest 是滚动别名。'),
+    get notes() { return mt('国际站；-latest 是滚动别名。') },
     dropIn: true
   },
   {
@@ -641,7 +651,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['sonar'],
     keyUrl: 'https://www.perplexity.ai/settings/api',
     docsUrl: 'https://docs.perplexity.ai/getting-started/quickstart',
-    notes: mt('OpenAI 兼容 chat（/chat/completions）。新的 Agent API 在 /router/v1，形状不同，本客户端不用它。'),
+    get notes() { return mt('OpenAI 兼容 chat（/chat/completions）。新的 Agent API 在 /router/v1，形状不同，本客户端不用它。') },
     dropIn: true
   },
   {
@@ -654,7 +664,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['Meta-Llama-3.3-70B-Instruct'],
     keyUrl: 'https://cloud.sambanova.ai/apis',
     docsUrl: 'https://docs.sambanova.ai/docs/en/get-started/api-keys-urls',
-    notes: mt('官方明示可配 OpenAI 客户端。'),
+    get notes() { return mt('官方明示可配 OpenAI 客户端。') },
     dropIn: true
   },
   {
@@ -665,7 +675,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.novita.ai/openai',
     model: '',
     docsUrl: 'https://novita.ai/docs/api-reference/model-apis-llm-create-chat-completion.md',
-    notes: mt('兼容根是 /openai；模型 id 请点「获取模型列表」。'),
+    get notes() { return mt('兼容根是 /openai；模型 id 请点「获取模型列表」。') },
     dropIn: true
   },
   {
@@ -677,7 +687,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'solar-pro4',
     models: ['solar-pro4', 'solar-mini-4'],
     docsUrl: 'https://developers.upstage.ai/docs/getting-started/quick-start',
-    notes: mt('Solar Pro 2/3 已下线，用 solar-pro4。'),
+    get notes() { return mt('Solar Pro 2/3 已下线，用 solar-pro4。') },
     dropIn: true
   },
   {
@@ -690,7 +700,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
     keyUrl: 'https://platform.minimax.cn/user-center/basic-information/interface-key',
     docsUrl: 'https://platform.minimax.io/docs/api-reference/text-chat-openai',
-    notes: mt('使用 /v1/chat/completions；M3 推理默认开启，最低深度为 low。'),
+    get notes() { return mt('使用 /v1/chat/completions；M3 推理默认开启，最低深度为 low。') },
     dropIn: true
   },
   {
@@ -701,7 +711,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.tokenfactory.nebius.com/v1/',
     model: '',
     docsUrl: 'https://docs.nebius.com/studio/inference/api',
-    notes: mt('官方 base 带尾斜杠；模型 id 请点「获取模型列表」。'),
+    get notes() { return mt('官方 base 带尾斜杠；模型 id 请点「获取模型列表」。') },
     dropIn: true
   },
   {
@@ -713,7 +723,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'qwen2.5-7b-instruct',
     keyUrl: '',
     docsUrl: 'https://platform.openai.com/docs/api-reference/chat',
-    notes: mt('本机不需要 API Key，留空即可；地址和模型名按你实际起的服务改（LM Studio 默认 1234 端口，Ollama 是 11434）。'),
+    get notes() { return mt('本机不需要 API Key，留空即可；地址和模型名按你实际起的服务改（LM Studio 默认 1234 端口，Ollama 是 11434）。') },
     dropIn: true
   },
   {
@@ -725,7 +735,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: 'qwen3:8b',
     models: ['qwen3:8b', 'llama3.2:3b', 'gemma3:4b'],
     docsUrl: 'https://github.com/ollama/ollama/blob/main/docs/openai.md',
-    notes: mt('Ollama 自带的 /v1 兼容层，不需要 Key；模型名就是 `ollama list` 里那一列（要带 :tag）。'),
+    get notes() { return mt('Ollama 自带的 /v1 兼容层，不需要 Key；模型名就是 `ollama list` 里那一列（要带 :tag）。') },
     dropIn: true
   },
   {
@@ -736,7 +746,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     baseUrl: 'http://127.0.0.1:1234/v1',
     model: '',
     docsUrl: 'https://lmstudio.ai/docs/app/api/endpoints/openai',
-    notes: mt('要先在 LM Studio 里 Start Server；模型 id 随加载的那个变，点「获取模型列表」取。'),
+    get notes() { return mt('要先在 LM Studio 里 Start Server；模型 id 随加载的那个变，点「获取模型列表」取。') },
     dropIn: true
   },
   {
@@ -747,7 +757,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     baseUrl: 'http://127.0.0.1:8000/v1',
     model: '',
     docsUrl: 'https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html',
-    notes: mt('vLLM 默认 8000 端口；模型名 = 启动时 --served-model-name 的值，不确定就点「获取模型列表」。'),
+    get notes() { return mt('vLLM 默认 8000 端口；模型名 = 启动时 --served-model-name 的值，不确定就点「获取模型列表」。') },
     dropIn: true
   },
   {
@@ -760,7 +770,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['command-a-plus-05-2026', 'command-r-plus-08-2024'],
     keyUrl: 'https://dashboard.cohere.com/api-keys',
     docsUrl: 'https://docs.cohere.com/docs/compatibility-api',
-    notes: mt('兼容层只认 reasoning_effort=none/high（medium、low 会 400），系统提示走 developer 角色而不是 system。'),
+    get notes() { return mt('兼容层只认 reasoning_effort=none/high（medium、low 会 400），系统提示走 developer 角色而不是 system。') },
     dropIn: true
   },
   {
@@ -773,7 +783,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     models: ['step-3.7-flash', 'step-3.5-flash', 'step-5-preview', 'step-1o-turbo-vision'],
     keyUrl: 'https://platform.stepfun.com/interface-key',
     docsUrl: 'https://platform.stepfun.com/docs/zh/guides/models/list',
-    notes: mt('和上面的转写预设共用一个 Key；step-5-preview 上下文 1M，step-3.7-flash 支持图片输入。'),
+    get notes() { return mt('和上面的转写预设共用一个 Key；step-5-preview 上下文 1M，step-3.7-flash 支持图片输入。') },
     dropIn: true
   },
   {
@@ -785,7 +795,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: '',
     keyUrl: 'https://console.xfyun.cn/services/cbm',
     docsUrl: 'https://www.xfyun.cn/doc/spark/HTTP%E8%B0%83%E7%94%A8%E6%96%87%E6%A1%A3.html',
-    notes: mt('这是星火的 HTTP 版（不是 wss 实时接口，那个连不上）；模型 id 按控制台手填，如 generalv3.5、4.0Ultra。'),
+    get notes() { return mt('这是星火的 HTTP 版（不是 wss 实时接口，那个连不上）；模型 id 按控制台手填，如 generalv3.5、4.0Ultra。') },
     dropIn: true
   },
   {
@@ -797,7 +807,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: '',
     keyUrl: 'https://platform.lingyiwanwu.com/apikeys',
     docsUrl: 'https://platform.lingyiwanwu.com/docs',
-    notes: mt('模型 id 形如 yi-lightning / yi-large，按控制台手填（各账号可见的型号不同）。'),
+    get notes() { return mt('模型 id 形如 yi-lightning / yi-large，按控制台手填（各账号可见的型号不同）。') },
     dropIn: true
   },
   {
@@ -809,7 +819,7 @@ const LLM_PRESETS: ProviderPreset[] = [
     model: '',
     keyUrl: 'https://platform.baichuan-ai.com/console/apikey',
     docsUrl: 'https://platform.baichuan-ai.com/docs/api',
-    notes: mt('模型 id 按控制台手填（Baichuan4 系列），接口本身是 OpenAI 兼容的 /chat/completions。'),
+    get notes() { return mt('模型 id 按控制台手填（Baichuan4 系列），接口本身是 OpenAI 兼容的 /chat/completions。') },
     dropIn: true
   }
 ]
@@ -825,7 +835,7 @@ const MULTIMODAL_PRESETS: ProviderPreset[] = [
     models: ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-pro'],
     keyUrl: 'https://aistudio.google.com/app/apikey',
     docsUrl: 'https://ai.google.dev/gemini-api/docs/audio',
-    notes: mt('原生 generateContent，音频直接进模型（无需 ASR）。'),
+    get notes() { return mt('原生 generateContent，音频直接进模型（无需 ASR）。') },
     dropIn: true
   }
 ]

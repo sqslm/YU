@@ -31,40 +31,48 @@ interface SearchProviderMeta {
   caveat?: string
 }
 
+/**
+ * Every translated field below is a getter, never a `mt()` call evaluated here.
+ *
+ * The table is built at import time, which is before the renderer has loaded
+ * `settings.uiLanguage` and called `setMainLanguage()`; a copied string kept the
+ * language the process started in, so the English UI described every backend in
+ * Chinese. A getter re-translates on each read and still types as `string`.
+ */
 const META: Record<SearchProvider, SearchProviderMeta> = {
   duckduckgo: {
     label: 'DuckDuckGo',
-    hint: mt('免 Key，直接抓 HTML 结果页；量大时会被限流。'),
-    keyHint: mt('该服务直接抓取结果页，不需要 API Key'),
-    keyPlaceholder: mt('该服务不使用'),
-    endpointHint: mt('该服务固定走官方结果页，不需要自定义地址'),
+    get hint() { return mt('免 Key，直接抓 HTML 结果页；量大时会被限流。') },
+    get keyHint() { return mt('该服务直接抓取结果页，不需要 API Key') },
+    get keyPlaceholder() { return mt('该服务不使用') },
+    get endpointHint() { return mt('该服务固定走官方结果页，不需要自定义地址') },
     needsKey: false,
     needsEndpoint: false
   },
   tavily: {
     label: 'Tavily',
-    hint: mt('为 LLM 设计的搜索 API，需要 API Key。'),
-    keyHint: mt('必填；只保存在本机，切回 Tavily 时自动恢复'),
+    get hint() { return mt('为 LLM 设计的搜索 API，需要 API Key。') },
+    get keyHint() { return mt('必填；只保存在本机，切回 Tavily 时自动恢复') },
     keyPlaceholder: 'tvly-…',
-    endpointHint: mt('可留空；留空则使用 Tavily 官方地址'),
+    get endpointHint() { return mt('可留空；留空则使用 Tavily 官方地址') },
     needsKey: true,
     needsEndpoint: false
   },
   brave: {
     label: 'Brave',
-    hint: mt('Brave Search API，需要订阅令牌；新闻类会走 news 端点。'),
-    keyHint: mt('必填；填 Brave Search 的订阅令牌'),
-    keyPlaceholder: mt('订阅令牌'),
-    endpointHint: mt('可留空；留空则使用 Brave 官方地址'),
+    get hint() { return mt('Brave Search API，需要订阅令牌；新闻类会走 news 端点。') },
+    get keyHint() { return mt('必填；填 Brave Search 的订阅令牌') },
+    get keyPlaceholder() { return mt('订阅令牌') },
+    get endpointHint() { return mt('可留空；留空则使用 Brave 官方地址') },
     needsKey: true,
     needsEndpoint: false
   },
   searxng: {
     label: 'SearXNG',
-    hint: mt('自建实例，填实例地址即可（形如 http://127.0.0.1:8080）。'),
-    keyHint: mt('可选；实例开启鉴权时才需要'),
-    keyPlaceholder: mt('可选；实例开启鉴权时填写'),
-    endpointHint: mt('必填，形如 http://127.0.0.1:8080（实例需开启 format=json）'),
+    get hint() { return mt('自建实例，填实例地址即可（形如 http://127.0.0.1:8080）。') },
+    get keyHint() { return mt('可选；实例开启鉴权时才需要') },
+    get keyPlaceholder() { return mt('可选；实例开启鉴权时填写') },
+    get endpointHint() { return mt('必填，形如 http://127.0.0.1:8080（实例需开启 format=json）') },
     needsKey: false,
     needsEndpoint: true
   },
@@ -79,84 +87,84 @@ const META: Record<SearchProvider, SearchProviderMeta> = {
    * shape of product: one call, snippets plus optional page text.
    */
   deepseek: {
-    label: mt('DeepSeek 搜索'),
-    hint: mt('DeepSeek 官方检索接口，返回摘要，可额外索取正文；与模型共用一个 Key。'),
-    keyHint: mt('必填；DeepSeek 开放平台的 API Key'),
+    get label() { return mt('DeepSeek 搜索') },
+    get hint() { return mt('DeepSeek 官方检索接口，返回摘要，可额外索取正文；与模型共用一个 Key。') },
+    get keyHint() { return mt('必填；DeepSeek 开放平台的 API Key') },
     keyPlaceholder: 'sk-…',
-    endpointHint: mt('可留空；留空则用 https://api.deepseek.com（自动补 /v1/tools/search）'),
+    get endpointHint() { return mt('可留空；留空则用 https://api.deepseek.com（自动补 /v1/tools/search）') },
     needsKey: true,
     needsEndpoint: false
   },
   exa: {
     label: 'Exa',
-    hint: mt('语义检索，/search 直接返回整页正文，适合当资料喂给模型。'),
-    keyHint: mt('必填；Exa 控制台的 API Key'),
+    get hint() { return mt('语义检索，/search 直接返回整页正文，适合当资料喂给模型。') },
+    get keyHint() { return mt('必填；Exa 控制台的 API Key') },
     keyPlaceholder: 'Exa API Key',
-    endpointHint: mt('可留空；留空则用 https://api.exa.ai/search'),
+    get endpointHint() { return mt('可留空；留空则用 https://api.exa.ai/search') },
     needsKey: true,
     needsEndpoint: false
   },
   serper: {
-    label: mt('Serper（Google 结果）'),
-    hint: mt('按次计费的 Google 结果代理，返回结构接近官方。'),
-    keyHint: mt('必填；请求头是 X-API-KEY，不是 Bearer'),
+    get label() { return mt('Serper（Google 结果）') },
+    get hint() { return mt('按次计费的 Google 结果代理，返回结构接近官方。') },
+    get keyHint() { return mt('必填；请求头是 X-API-KEY，不是 Bearer') },
     keyPlaceholder: 'Serper API Key',
-    endpointHint: mt('可留空；留空则用 https://google.serper.dev/search'),
+    get endpointHint() { return mt('可留空；留空则用 https://google.serper.dev/search') },
     needsKey: true,
     needsEndpoint: false
   },
   bing: {
     label: 'Bing Web Search',
-    hint: mt('Azure 的 Web Search v7，需要订阅密钥。'),
-    keyHint: mt('必填；Azure 资源里的 Ocp-Apim-Subscription-Key'),
-    keyPlaceholder: mt('Azure 订阅密钥'),
-    endpointHint: mt('可留空；留空则用 https://api.bing.microsoft.com/v7.0/search'),
+    get hint() { return mt('Azure 的 Web Search v7，需要订阅密钥。') },
+    get keyHint() { return mt('必填；Azure 资源里的 Ocp-Apim-Subscription-Key') },
+    get keyPlaceholder() { return mt('Azure 订阅密钥') },
+    get endpointHint() { return mt('可留空；留空则用 https://api.bing.microsoft.com/v7.0/search') },
     needsKey: true,
     needsEndpoint: false
   },
   'google-cse': {
-    label: mt('Google 可编程搜索'),
-    hint: mt('官方 Custom Search JSON API，每日免费额度很小。'),
-    keyHint: mt('必填；Google Cloud 里的 API Key'),
+    get label() { return mt('Google 可编程搜索') },
+    get hint() { return mt('官方 Custom Search JSON API，每日免费额度很小。') },
+    get keyHint() { return mt('必填；Google Cloud 里的 API Key') },
     keyPlaceholder: 'Google API Key',
-    endpointHint: mt('填搜索引擎 ID：可只写 cx，也可写 https://www.googleapis.com/customsearch/v1?cx=…'),
+    get endpointHint() { return mt('填搜索引擎 ID：可只写 cx，也可写 https://www.googleapis.com/customsearch/v1?cx=…') },
     needsKey: true,
     needsEndpoint: true,
-    caveat: mt('这家除了 API Key 还要 cx（搜索引擎 ID），写在自定义地址里即可。')
+    get caveat() { return mt('这家除了 API Key 还要 cx（搜索引擎 ID），写在自定义地址里即可。') }
   },
   jina: {
-    label: mt('Jina Reader 搜索'),
-    hint: mt('s.jina.ai 先检索再把正文抽干净，Key 可以不填。'),
-    keyHint: mt('可选；不带 Key 也能用，只是限流更早'),
-    keyPlaceholder: mt('可选；jina_…'),
-    endpointHint: mt('可留空；留空则用 https://s.jina.ai'),
+    get label() { return mt('Jina Reader 搜索') },
+    get hint() { return mt('s.jina.ai 先检索再把正文抽干净，Key 可以不填。') },
+    get keyHint() { return mt('可选；不带 Key 也能用，只是限流更早') },
+    get keyPlaceholder() { return mt('可选；jina_…') },
+    get endpointHint() { return mt('可留空；留空则用 https://s.jina.ai') },
     needsKey: false,
     needsEndpoint: false
   },
   perplexity: {
     label: 'Perplexity Search',
-    hint: mt('Perplexity 的 sonar 模型，直接给出带引用的答案。'),
-    keyHint: mt('必填；Perplexity 控制台的 API Key'),
+    get hint() { return mt('Perplexity 的 sonar 模型，直接给出带引用的答案。') },
+    get keyHint() { return mt('必填；Perplexity 控制台的 API Key') },
     keyPlaceholder: 'pplx-…',
-    endpointHint: mt('可留空；留空则用 https://api.perplexity.ai/chat/completions'),
+    get endpointHint() { return mt('可留空；留空则用 https://api.perplexity.ai/chat/completions') },
     needsKey: true,
     needsEndpoint: false
   },
   'zhipu-web': {
-    label: mt('智谱 Web 搜索'),
-    hint: mt('智谱开放平台的 web_search 接口，和 GLM 共用一个 Key。'),
-    keyHint: mt('必填；智谱开放平台的 API Key（与 GLM 通用）'),
-    keyPlaceholder: mt('智谱 API Key'),
-    endpointHint: mt('可留空；留空则用 https://open.bigmodel.cn/api/paas/v4/web_search'),
+    get label() { return mt('智谱 Web 搜索') },
+    get hint() { return mt('智谱开放平台的 web_search 接口，和 GLM 共用一个 Key。') },
+    get keyHint() { return mt('必填；智谱开放平台的 API Key（与 GLM 通用）') },
+    get keyPlaceholder() { return mt('智谱 API Key') },
+    get endpointHint() { return mt('可留空；留空则用 https://open.bigmodel.cn/api/paas/v4/web_search') },
     needsKey: true,
     needsEndpoint: false
   },
   baidu: {
-    label: mt('百度网页'),
-    hint: mt('免 Key，抓百度结果页；连续请求会跳验证码。'),
-    keyHint: mt('该服务抓取公开结果页，不需要 API Key'),
-    keyPlaceholder: mt('该服务不使用'),
-    endpointHint: mt('可留空；留空则用 https://www.baidu.com/s'),
+    get label() { return mt('百度网页') },
+    get hint() { return mt('免 Key，抓百度结果页；连续请求会跳验证码。') },
+    get keyHint() { return mt('该服务抓取公开结果页，不需要 API Key') },
+    get keyPlaceholder() { return mt('该服务不使用') },
+    get endpointHint() { return mt('可留空；留空则用 https://www.baidu.com/s') },
     needsKey: false,
     needsEndpoint: false
   }
@@ -165,10 +173,17 @@ const META: Record<SearchProvider, SearchProviderMeta> = {
 /** Every backend the UI can switch between, in menu order. */
 export const SEARCH_PROVIDERS = Object.keys(META) as SearchProvider[]
 
-/** Reads one field out of every row, keeping `Record<SearchProvider, …>` shape. */
+/**
+ * Reads one field out of every row, keeping `Record<SearchProvider, …>` shape.
+ *
+ * The column is installed as an accessor rather than copied, so the `mt()` behind
+ * `META` runs when the UI reads the row, not when this module was first imported.
+ */
 function derived<T>(read: (meta: SearchProviderMeta) => T): Record<SearchProvider, T> {
   const table = {} as Record<SearchProvider, T>
-  for (const provider of SEARCH_PROVIDERS) table[provider] = read(META[provider])
+  for (const provider of SEARCH_PROVIDERS) {
+    Object.defineProperty(table, provider, { enumerable: true, get: () => read(META[provider]) })
+  }
   return table
 }
 
@@ -202,13 +217,17 @@ export const SEARCH_PROVIDER_NEEDS_ENDPOINT: Record<SearchProvider, boolean> = d
  * is nothing to say. Every entry here is a setup note ("also needs cx"), never a
  * statement that the backend cannot be queried: there is no such backend left.
  */
-export const SEARCH_PROVIDER_CAVEAT: Partial<Record<SearchProvider, string>> =
-  Object.fromEntries(
-    SEARCH_PROVIDERS.flatMap((provider) => {
-      const caveat = META[provider].caveat
-      return caveat ? [[provider, caveat]] : []
-    })
-  )
+export const SEARCH_PROVIDER_CAVEAT: Partial<Record<SearchProvider, string>> = caveats()
+
+/** Accessors for the rows that have a caveat; see `derived()` for the reason. */
+function caveats(): Partial<Record<SearchProvider, string>> {
+  const table: Partial<Record<SearchProvider, string>> = {}
+  for (const provider of SEARCH_PROVIDERS) {
+    if (!META[provider].caveat) continue
+    Object.defineProperty(table, provider, { enumerable: true, get: () => META[provider].caveat })
+  }
+  return table
+}
 
 /**
  * Runtime guard, deliberately wider than the persisted union: an id that the

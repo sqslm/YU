@@ -75,4 +75,30 @@ describe('offline custom wake lifecycle', () => {
     await vi.advanceTimersByTimeAsync(15_000)
     expect(host.snapshot()).toEqual({ phase: 'error', error: 'unavailable' })
   })
+  it('reports the silent default-microphone fallback instead of just listening', () => {
+    // The script falls back on purpose when the saved device index is gone; the UI
+    // has to say so, otherwise the user talks into a microphone that never hears it.
+    host.update({ enabled: true, phrase: '你好语助手', deviceId: '9' }, false)
+    children[0].stdout.write('{"type":"log","reason":"device-missing","device":9}\n')
+    expect(changed).toHaveBeenLastCalledWith({ phase: 'starting', deviceNotice: 'device-missing' })
+    children[0].stdout.write('{"type":"ready"}\n')
+    expect(host.snapshot()).toEqual({ phase: 'listening', deviceNotice: 'device-missing' })
+  })
+  it('clears the fallback notice on pause and re-reports it only from a real log', () => {
+    const settings = { enabled: true, phrase: '你好语助手', deviceId: '9' }
+    host.update(settings, false)
+    children[0].stdout.write('{"type":"log","reason":"device-missing","device":9}\n{"type":"ready"}\n')
+    expect(host.snapshot().deviceNotice).toBe('device-missing')
+    host.update(settings, true)
+    expect(host.snapshot()).toEqual({ phase: 'paused' })
+    host.update(settings, false)
+    expect(host.snapshot()).toEqual({ phase: 'starting' })
+    children[1].stdout.write('{"type":"ready"}\n')
+    expect(host.snapshot()).toEqual({ phase: 'listening' })
+  })
+  it('ignores other log events so unrelated script chatter cannot fake a notice', () => {
+    host.update({ enabled: true, phrase: '你好语助手' }, false)
+    children[0].stdout.write('{"type":"log","reason":"device-opened","device":0}\n{"type":"ready"}\n')
+    expect(host.snapshot()).toEqual({ phase: 'listening' })
+  })
 })

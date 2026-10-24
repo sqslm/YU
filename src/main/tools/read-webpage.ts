@@ -3,10 +3,10 @@
  *
  * Two rules this file exists to enforce:
  *
- * 1. **SSRF guard.** Only http(s) leaves the machine, and only to a public
- *    host — `localhost`, RFC1918 ranges, link-local, IPv6 loopback and the
- *    `.local` / `.internal` suffixes are refused before a socket is opened.
- *    Redirects are re-validated, so a public URL cannot bounce into the LAN.
+ * 1. **SSRF guard.** Delegated to `safe-fetch`: only http(s) leaves the machine,
+ *    only to a public host (the name is resolved and every address judged, so a
+ *    public-looking name that points at 127.0.0.1 is refused too), and every
+ *    redirect hop is re-validated before it is requested.
  * 2. **The page is data, never instructions.** The extractor keeps prose only
  *    (script/style/nav/header/footer/aside/form/iframe/svg are dropped) and the
  *    caller wraps the result in `<untrusted_page>` before it reaches a prompt.
@@ -15,7 +15,20 @@
  * the article body", and "roughly" is all an answer needs.
  */
 import { mt } from '@shared/mainI18n'
+import {
+  MAX_SAFE_REDIRECTS,
+  inspectUrl,
+  safeFetch,
+  type HostResolver,
+  type UrlCheck
+} from '../safe-fetch'
 
+/**
+ * The guard now lives in `safe-fetch` so the ICS subscriber can share it. It is
+ * re-exported here because this module was its first home and callers (and tests)
+ * import it from this path.
+ */
+export { inspectUrl, type UrlCheck }
 
 const DEFAULT_MAX_BYTES = 600 * 1024
 const DEFAULT_MAX_CHARS = 6000
@@ -28,14 +41,17 @@ const MAX_TITLE_CHARS = 300
  */
 export const DEFAULT_READ_TIMEOUT_MS = 6000
 
-/** Hosts that must never be reachable from a model-chosen URL. */
-const PRIVATE_HOST =
-  /^(?:localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.)/
-
 export interface ReadWebpageOptions {
   signal?: AbortSignal
   /** Injected in tests; defaults to the global fetch. */
   fetchImpl?: typeof fetch
+  /**
+   * Injected in tests; defaults to a real DNS lookup. When it is absent but
+   * `fetchImpl` is a test double, the address check is skipped: a stub is driven by
+   * fictional hostnames that no resolver could answer for. A real transport — even
+   * passed explicitly — is still checked.
+   */
+  resolveHost?: HostResolver
   maxBytes?: number
   maxChars?: number
   /**
@@ -52,60 +68,6 @@ export interface WebpageContent {
   text?: string
   truncated?: boolean
   error?: string
-}
-
-export interface UrlCheck {
-  ok: boolean
-  url?: URL
-  error?: string
-}
-
-/** Protocol + host allow-list. Exported so the tool and its tests agree. */
-export function inspectUrl(raw: string): UrlCheck {
-  let url: URL
-  try {
-    url = new URL(String(raw ?? '').trim())
-  } catch {
-    return { ok: false, error: 'URL 无法解析' }
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return { ok: false, error: '只允许 http/https 链接' }
-  }
-  const host = url.hostname.toLowerCase()
-  if (!host) return { ok: false, error: 'URL 缺少主机名' }
-  if (PRIVATE_HOST.test(host)) return { ok: false, error: '拒绝访问内网地址' }
-  // CGNAT (100.64.0.0/10) is not RFC1918 but is still carrier-internal, and
-  // 100.100.100.200 is the Alibaba Cloud metadata endpoint.
-  if (/^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host)) {
-    return { ok: false, error: '拒绝访问内网地址' }
-  }
-  // WHATWG URL accepts several spellings of an IPv4 literal: decimal
-  // (2130706433), hex (0x7f000001), octal (0177.0.0.1) and mixed. All of them
-  // resolve to a real address while looking like a name, so any host whose
-  // labels are only digits or hex is treated as an address literal. The dotted
-  // private ranges above are the normal form; this is the alias form.
-  if (host.split('.').every((label) => /^(?:\d+|0x[0-9a-f]+)$/i.test(label))) {
-    return { ok: false, error: '拒绝访问 IP 直连地址，请使用域名' }
-  }
-  if (/\.(?:local|internal|lan|home\.arpa)$/.test(host)) {
-    return { ok: false, error: '拒绝访问内网域名' }
-  }
-  if (host.startsWith('[')) {
-    // URL#hostname keeps the brackets for IPv6 literals.
-    if (
-      host === '[::1]' ||
-      host === '[::]' ||
-      host.startsWith('[::ffff:') ||
-      host.startsWith('[fe80:') ||
-      // Unique local addresses (fc00::/7) and site-local (fec0::/10).
-      host.startsWith('[fc') ||
-      host.startsWith('[fd') ||
-      host.startsWith('[fec')
-    ) {
-      return { ok: false, error: '拒绝访问内网地址' }
-    }
-  }
-  return { ok: true, url }
 }
 
 const NAMED_ENTITIES: Record<string, string> = {
@@ -277,8 +239,6 @@ export async function readWebpage(
 }
 
 /** Redirects followed by hand, so every hop is checked before it is requested. */
-const MAX_REDIRECTS = 5
-const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308])
 const FETCH_HEADERS = {
   accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5',
   'user-agent': 'Mozilla/5.0 (compatible; YU/1.0)'
@@ -289,54 +249,47 @@ type Fetched =
   | { ok: false; error: string }
 
 /**
+ * True for a hand-written transport, i.e. a test double.
+ *
+ * The address check resolves the host name, and a double is driven by fictional
+ * names (`example.test`) that no resolver can answer for. The *real* `fetch` — even
+ * when a caller passes it explicitly, as the tool context does — still gets the
+ * check: skipping it there would leave the guard comparing strings only, which is
+ * the hole this file exists to close.
+ */
+function isStubTransport(impl: typeof fetch | undefined): boolean {
+  return impl !== undefined && impl !== globalThis.fetch
+}
+
+/**
  * Fetches `target` with every hop validated **before** the request is issued.
  *
- * `redirect: 'follow'` asked the runtime to fetch whatever the server pointed at
- * and only then compared the landing URL: a redirect to `http://127.0.0.1:8080/`
- * or to a cloud metadata endpoint had already been requested by the time the
- * check ran. Following redirects by hand puts `inspectUrl` in front of each one.
+ * The hop loop itself lives in `safe-fetch`: `redirect: 'follow'` asked the
+ * runtime to fetch whatever the server pointed at and only then compared the
+ * landing URL, and the ICS subscriber had the same hole with a bare `fetch`. One
+ * implementation, one place to keep right.
  */
 async function fetchChecked(
   target: string,
   doFetch: typeof fetch,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  options: ReadWebpageOptions
 ): Promise<Fetched> {
-  let url = target
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const check = inspectUrl(url)
-    if (!check.ok) return { ok: false, error: mt('不允许的地址：{{url}}', { url }) }
-    let response: Response
-    try {
-      response = await doFetch(url, { signal, redirect: 'manual', headers: FETCH_HEADERS })
-    } catch (err) {
-      return { ok: false, error: mt('抓取失败：{{message}}', { message: messageOf(err) }) }
-    }
-    const location = response.headers.get('location')
-    if (REDIRECT_STATUS.has(response.status) && location) {
-      // Release the empty redirect body so the connection is not held.
-      await response.body?.cancel().catch(() => undefined)
-      try {
-        url = new URL(location, url).toString()
-      } catch {
-        return { ok: false, error: mt('重定向地址无法解析：{{location}}', { location }) }
-      }
-      continue
-    }
-    if (!response.ok) return { ok: false, error: `HTTP ${response.status}` }
-    /**
-     * `redirect: 'manual'` covers a plain fetch, but a system proxy or a wrapped
-     * fetch can still follow on its own: `response.url` is then where the bytes
-     * actually came from, and that address has to pass the same check.
-     */
-    const landed = response.url || url
-    if (landed !== url) {
-      const recheck = inspectUrl(landed)
-      if (!recheck.ok) return { ok: false, error: mt('重定向到不允许的地址：{{url}}', { url: landed }) }
-      url = landed
-    }
-    return { ok: true, response, url }
+  let response: Response
+  try {
+    response = await safeFetch(target, { signal, headers: FETCH_HEADERS }, {
+      fetchImpl: doFetch,
+      maxRedirects: MAX_SAFE_REDIRECTS,
+      skipAddressCheck: options.resolveHost === undefined && isStubTransport(options.fetchImpl),
+      ...(options.resolveHost === undefined ? {} : { resolveHost: options.resolveHost })
+    })
+  } catch (err) {
+    // `safeFetch` already prefixes its own failures ("抓取失败：…", "重定向…"), so
+    // wrapping again would print the prefix twice.
+    return { ok: false, error: messageOf(err) }
   }
-  return { ok: false, error: '重定向次数过多' }
+  if (!response.ok) return { ok: false, error: `HTTP ${response.status}` }
+  return { ok: true, response, url: response.url || target }
 }
 
 /**
@@ -381,7 +334,7 @@ async function loadPage(
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
   const maxChars = options.maxChars ?? DEFAULT_MAX_CHARS
 
-  const fetched = await fetchChecked(target, doFetch, signal)
+  const fetched = await fetchChecked(target, doFetch, signal, options)
   if (!fetched.ok) return fetched
   const { response, url: landed } = fetched
 

@@ -440,7 +440,7 @@ export async function narrateBriefing(data: BriefingData, deps: BriefingNarratio
   const timeoutMs = deps.timeoutMs ?? BRIEFING_NARRATION_TIMEOUT_MS
   let raw: string
   try {
-    raw = await deps.ask(briefingNarrationPrompt(data), { signal: AbortSignal.timeout(timeoutMs) })
+    raw = await settle(deps, briefingNarrationPrompt(data), timeoutMs)
   } catch (error) {
     deps.log?.(`briefing: narration failed: ${describeError(error)}`)
     return template
@@ -451,4 +451,31 @@ export async function narrateBriefing(data: BriefingData, deps: BriefingNarratio
     return template
   }
   return { ...template, body: raw.trim(), source: 'model' }
+}
+
+/**
+ * The narration call under a ceiling this function owns.
+ *
+ * The signal handed to `ask` is a courtesy, not a guarantee: an adapter that
+ * forgets to pass it to its own fetch leaves the promise pending forever, and the
+ * caller in `src/main/briefing.ts` only clears its `settling` flag when this
+ * promise settles — so the day's briefing would never arrive and never retry. A
+ * race that aborts the same signal keeps the ceiling real either way.
+ */
+async function settle(deps: BriefingNarrationDeps, prompt: string, timeoutMs: number): Promise<string> {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort(new Error('narration timeout'))
+      reject(new Error(`narration timed out after ${timeoutMs}ms`))
+    }, Math.max(1, timeoutMs))
+    // A pending deadline must not keep the process alive on its own.
+    ;(timer as unknown as { unref?: () => void }).unref?.()
+  })
+  try {
+    return await Promise.race([deps.ask(prompt, { signal: controller.signal }), expired])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }

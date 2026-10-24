@@ -170,14 +170,19 @@ export function durationLabel(ms: number): string {
 /**
  * Value/unit pair for the "saved time" card: the number stays at display size
  * and the unit goes into the caption, so "节省 18 分钟" reads as one phrase.
+ *
+ * `unit` is the dictionary key, not a translated word: the card memoises this
+ * result on the duration alone, so translating here would freeze the language
+ * that happened to be active when the memo first ran (and on a reload the UI
+ * language arrives after the first render, which froze "分钟" even in English).
+ * The caller translates at render time instead.
  */
 export function savedLabel(ms: number): { value: string; unit: string } {
-  if (!Number.isFinite(ms) || ms <= 0) return { value: '—', unit: i18n.t('分钟') }
-  if (ms < 60_000)
-    return { value: group(Math.max(1, Math.round(ms / 1000))), unit: i18n.t('秒') }
+  if (!Number.isFinite(ms) || ms <= 0) return { value: '—', unit: '分钟' }
+  if (ms < 60_000) return { value: group(Math.max(1, Math.round(ms / 1000))), unit: '秒' }
   const minutes = Math.round(ms / 60_000)
-  if (minutes < 600) return { value: group(minutes), unit: i18n.t('分钟') }
-  return { value: (minutes / 60).toFixed(1), unit: i18n.t('小时') }
+  if (minutes < 600) return { value: group(minutes), unit: '分钟' }
+  return { value: (minutes / 60).toFixed(1), unit: '小时' }
 }
 
 /** Weighted rate, `—` while nothing has been measured. */

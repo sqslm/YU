@@ -59,11 +59,17 @@ export function WakeWordSection({ settings, patch }: { settings: Settings; patch
         {(devices ?? []).map(item => <option key={item.id} value={item.id}>{item.name || i18n.t('麦克风')}</option>)}
       </TextField>
     </SettingsRow>
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 1.5 }}>
-      <Typography sx={{ fontSize: 12, color: status.phase === 'error' ? 'error.main' : 'text.secondary' }} role="status">
-        {i18n.t(labels[status.phase])}{status.error ? ` · ${i18n.t(errors[status.error])}` : ''}
-      </Typography>
-      {status.phase === 'error' && <Button size="small" onClick={() => void window.api.wakeWord.retry().then(setStatus)}>{i18n.t('重试')}</Button>}
+    <Stack direction="column" spacing={0.5} sx={{ p: 1.5 }}>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Typography sx={{ fontSize: 12, color: status.phase === 'error' ? 'error.main' : 'text.secondary' }} role="status">
+          {i18n.t(labels[status.phase])}{status.error ? ` · ${i18n.t(errors[status.error])}` : ''}
+        </Typography>
+        {status.phase === 'error' && <Button size="small" onClick={() => void window.api.wakeWord.retry().then(setStatus)}>{i18n.t('重试')}</Button>}
+      </Stack>
+      {/* The fallback itself is correct; only the silence about it was the bug. */}
+      {status.deviceNotice === 'device-missing' && <Typography sx={{ fontSize: 12, color: 'warning.main' }} role="status">
+        {i18n.t('选中的麦克风已不可用，已改用系统默认麦克风；如需指定设备，请在上方重新选择。')}
+      </Typography>}
     </Stack>
   </SettingsGroup>
 }

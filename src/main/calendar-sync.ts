@@ -23,7 +23,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { mt } from '@shared/mainI18n'
 import type { CalendarEvent } from '@shared/calendar'
-import { inspectUrl } from './tools/read-webpage'
+import { inspectUrl, safeFetch } from './safe-fetch'
 
 /** Generous for a text file, and short enough that a stuck feed cannot block a sync. */
 export const DEFAULT_ICS_TIMEOUT_MS = 15_000
@@ -62,8 +62,15 @@ export interface IcsMerge {
 
 export interface ExternalCalendarOptions {
   getCalendars: () => ReadonlyArray<ExternalCalendar>
-  /** Injected so the module never reaches for the global fetch (and a test can fake it). */
-  fetchImpl: IcsFetch
+  /**
+   * Injected so a test can fake the transport.
+   *
+   * When it is absent the module fetches through `safeFetch`, which follows
+   * redirects by hand and re-validates every hop. A bare `fetch` here used to
+   * inherit undici's `redirect: 'follow'`, so a subscription could bounce into the
+   * user's LAN and nothing would look at the address it landed on.
+   */
+  fetchImpl?: IcsFetch
   /** `CalendarStore`, structurally: importing the class would drag the stored file in. */
   store: { importIcs(text: string): IcsMerge }
   log: (line: string) => void
@@ -94,9 +101,9 @@ export function resolveFeedUrl(raw: string): string {
 /**
  * The URL a subscription may point at, or the reason it may not.
  *
- * Reuses the `read_webpage` guard: the feed is fetched by the main process, which
- * sits inside the user's network, so a URL from a synced settings file could
- * otherwise probe `localhost` or an intranet host.
+ * This is the cheap half of the guard (protocol and host string); `safeFetch`
+ * adds the address check and repeats both on every redirect hop. It stays here
+ * because settings validation has to answer synchronously, before any DNS lookup.
  */
 export function checkFeedUrl(raw: string): { ok: true; url: string } | { ok: false; reason: string } {
   const resolved = resolveFeedUrl(raw)
@@ -110,6 +117,16 @@ export function checkFeedUrl(raw: string): { ok: true; url: string } | { ok: fal
   }
   return { ok: true, url: check.url.toString() }
 }
+
+/**
+ * The transport used when the caller injected none.
+ *
+ * Only `ok`, `status` and `text()` are consumed here, so `safeFetch`'s real
+ * `Response` already satisfies `IcsResponse` — no wrapper and no cast. A URL the
+ * guard refuses throws, and `refreshOne` turns that into one log line like any
+ * other failure.
+ */
+const defaultFeedFetch: IcsFetch = async (url, init) => safeFetch(url, init)
 
 function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -157,10 +174,11 @@ async function refreshOne(
     return null
   }
   const timeoutMs = options.timeoutMs ?? DEFAULT_ICS_TIMEOUT_MS
+  const doFetch = options.fetchImpl ?? defaultFeedFetch
   const controller = new AbortController()
   try {
     const response = await withTimeout(
-      options.fetchImpl(checked.url, {
+      doFetch(checked.url, {
         signal: controller.signal,
         headers: { accept: 'text/calendar, text/plain;q=0.9, */*;q=0.5' }
       }),
@@ -237,6 +255,14 @@ interface CalendarChange {
 export interface CalendarPushResult {
   applied?: string[]
   duplicates?: string[]
+  /**
+   * Ids the server already holds a *newer* version of.
+   *
+   * Distinct from `conflicts`: a conflict is "this id belongs to another account",
+   * stale is "your copy is older than mine". Treating the two the same on purpose —
+   * see `push` — because the local row must not be dropped either way.
+   */
+  stale?: string[]
   conflicts?: Array<{ id?: string; error?: string; server?: Record<string, unknown> | null }>
   cursor?: number
 }
@@ -460,6 +486,38 @@ export class CalendarSync {
         if (entry?.tombstone !== undefined) delete this.state.tombstones[id]
         else if (entry) this.state.pushed[id] = entry.signature
         accepted += 1
+      }
+      /**
+       * A `stale` answer means the server holds a newer version of this id, so our
+       * copy is the one that loses. Losing quietly is not an option — the user's
+       * edit would vanish with no trace — so the local row is kept as a conflict
+       * copy first, exactly like a pull-side clash. The id is then marked as
+       * delivered: re-pushing the same older content would earn the same answer
+       * forever and mint one copy per pass.
+       */
+      const stale = payload.stale ?? []
+      if (stale.length > 0) {
+        const local = new Map(this.options.store.list().map((event) => [event.id, event]))
+        for (const rawId of stale) {
+          const id = String(rawId ?? '')
+          if (!id) continue
+          const entry = slice.find((item) => item.id === id)
+          if (!entry) continue
+          if (entry.tombstone !== undefined) {
+            // The row exists on the server in a newer form, so the deletion is not
+            // ours to apply. Dropping the tombstone is what stops it being retried.
+            delete this.state.tombstones[id]
+            this.options.log(mt('日程 {{id}} 的删除未生效：服务端有更新的版本', { id }))
+          } else {
+            const row = local.get(id)
+            if (row) {
+              this.options.log(mt('日程《{{title}}》的服务端版本更新，本机改动不覆盖它', { title: row.title }))
+              this.keepCopy(row, local)
+            }
+            this.state.pushed[id] = entry.signature
+          }
+          accepted += 1
+        }
       }
       this.writeState()
       if (slice.length < PAGE) break

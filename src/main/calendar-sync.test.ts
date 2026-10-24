@@ -100,6 +100,8 @@ class FakeRemote implements CalendarRemote {
   duplicate = false
   /** False when the server answers 200 but takes nothing, keeping the rows dirty. */
   accept = true
+  /** Ids the server rejects because its own copy is newer, like a late push. */
+  stale: string[] = []
   error: unknown = null
   page: (since: number) => CalendarPage = () => ({ cursor: 0, events: [], hasMore: false })
 
@@ -108,11 +110,13 @@ class FakeRemote implements CalendarRemote {
     this.pushes.push(rows)
     if (this.error) throw this.error
     const ids = rows.map((row) => String(row.id))
+    const stale = ids.filter((id) => this.stale.includes(id))
+    const fresh = ids.filter((id) => !this.stale.includes(id))
     const payload: CalendarPushResult = !this.accept
-      ? { applied: [], duplicates: [], conflicts: [], cursor: 0 }
+      ? { applied: [], duplicates: [], conflicts: [], stale, cursor: 0 }
       : this.duplicate
-        ? { applied: [], duplicates: ids, conflicts: [], cursor: ids.length }
-        : { applied: ids, duplicates: [], conflicts: [], cursor: ids.length }
+        ? { applied: [], duplicates: fresh, conflicts: [], stale, cursor: ids.length }
+        : { applied: fresh, duplicates: [], conflicts: [], stale, cursor: ids.length }
     return { status: 200, payload }
   }
 
@@ -464,6 +468,48 @@ describe('日程双向同步', () => {
     expect(copy?.title).toBe('周会（本机）（冲突副本）')
     expect(copy?.uid).toBeUndefined()
     expect(lines.join('\n')).toContain('已另存')
+  })
+
+  it('服务器版本更新时把本机改动另存为副本，而不是静默丢掉', async () => {
+    const store = memoryStore([makeEvent({ title: '周会（本机）' })])
+    const remote = new FakeRemote()
+    // A server that holds a newer version of this id: our push loses.
+    remote.stale = ['evt-1']
+    const lines: string[] = []
+    const engine = sync(store, join(tempDir(), 'sync.json'), (line) => lines.push(line))
+    expect(await engine.run(remote, 'http://server.test:8787')).toEqual({ pushed: 1, pulled: 0 })
+
+    // Losing must not be silent: the local edit survives under a new id.
+    const copy = [...store.rows.values()].find((event) => event.id !== 'evt-1')
+    expect(copy?.title).toBe('周会（本机）（冲突副本）')
+    expect(lines.join('\n')).toContain('服务端版本更新')
+
+    // Recorded as delivered, so the older content never overwrites the newer copy.
+    await engine.run(remote, 'http://server.test:8787')
+    expect(remote.pushes).toHaveLength(2)
+    expect(remote.pushes[1].map((row) => String(row.id))).not.toContain('evt-1')
+  })
+
+  it('删除输给服务端更新的版本时放弃这个删除，不反复重试', async () => {
+    const store = memoryStore([makeEvent()])
+    const lines: string[] = []
+    const engine = sync(store, join(tempDir(), 'sync.json'), (line) => lines.push(line))
+    const remote = new FakeRemote()
+    await engine.run(remote, 'http://server.test:8787')
+    expect(engine.pendingCount()).toBe(0)
+
+    // Deleted here, changed elsewhere: the server refuses the tombstone.
+    store.rows.delete('evt-1')
+    remote.stale = ['evt-1']
+    await engine.run(remote, 'http://server.test:8787')
+    expect(lines.join('\n')).toContain('删除未生效')
+
+    // The tombstone is dropped, so the deletion is neither retried forever nor
+    // replayed over the newer server row.
+    expect(engine.pendingCount()).toBe(0)
+    const pushes = remote.pushes.length
+    await engine.run(remote, 'http://server.test:8787')
+    expect(remote.pushes).toHaveLength(pushes)
   })
 
   it('已确认的本地日程被其他设备修改时直接采纳服务器版本，不产生副本', async () => {

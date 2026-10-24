@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import i18n from '../../i18n'
 import type { HistoryEntry } from '@shared/types'
 import { statsFromEntries } from '@shared/stats'
 import {
@@ -140,7 +141,7 @@ describe('monthLabels', () => {
     const labels = monthLabels(weeks, today)
     const current = labels.filter((item) => item.current)
     expect(current).toHaveLength(1)
-    expect(current[0].label).toBe('10月')
+    expect(current[0].label).toBe(i18n.t('10月'))
   })
 
   it('drops labels that would overlap in 11px columns', () => {
@@ -155,14 +156,14 @@ describe('monthLabels', () => {
     const { weeks } = heatWeeks([], today)
     const labels = monthLabels(weeks, today).map((item) => item.label)
     expect(new Set(labels).size).toBe(labels.length)
-    expect(labels.filter((label) => label === '10月')).toHaveLength(1)
+    expect(labels.filter((label) => label === i18n.t('10月'))).toHaveLength(1)
   })
 
   it('keeps November even though October crowds it', () => {
     const { weeks } = heatWeeks([], today)
     const labels = monthLabels(weeks, today).map((item) => item.label)
-    expect(labels).toContain('11月')
-    expect(labels).toContain('12月')
+    expect(labels).toContain(i18n.t('11月'))
+    expect(labels).toContain(i18n.t('12月'))
   })
 
   it('pulls the last caption inwards so it is not clipped', () => {

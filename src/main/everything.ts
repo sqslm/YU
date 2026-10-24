@@ -51,6 +51,11 @@ export interface EverythingResult {
   truncated: boolean
   /** Human-readable why-was-it-unavailable sentence; empty on success. */
   reason: string
+  /**
+   * Set only when `hits` are the rows a deadline cut short. Callers that need to
+   * branch on the cause get a stable value instead of parsing Chinese prose.
+   */
+  failure?: 'timeout'
 }
 
 /** The stream slice of a child process this module listens to. */
@@ -172,14 +177,14 @@ export function normalizeEverythingJson(payload: unknown, limit: number): Everyt
   return hits
 }
 
-type Bounded<T> = { ok: true; value: T } | { ok: false; error: string }
+type Bounded<T> = { ok: true; value: T } | { ok: false; error: string; timedOut: boolean }
 
 /** Races `work` against a deadline; the loser is aborted, never awaited forever. */
 async function bounded<T>(
   work: (signal: AbortSignal) => Promise<T>,
   parent: AbortSignal | undefined,
   timeoutMs: number
-): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+): Promise<Bounded<T>> {
   const controller = new AbortController()
   const forward = (): void => controller.abort(parent?.reason)
   if (parent) {
@@ -187,25 +192,37 @@ async function bounded<T>(
     else parent.addEventListener('abort', forward, { once: true })
   }
   let timer: ReturnType<typeof setTimeout> | null = null
-  const expired = new Promise<{ ok: false; error: string }>(resolve => {
+  // The abort can surface as the work's own rejection a microtask before the
+  // deadline settles, so the flag — not the race winner — decides what happened.
+  let expired = false
+  const deadline = new Promise<{ ok: false; error: string; timedOut: boolean }>(resolve => {
     timer = setTimeout(() => {
+      expired = true
       controller.abort(new Error('timeout'))
-      resolve({ ok: false, error: mt('{{ms}} 毫秒内没有响应', { ms: timeoutMs }) })
+      resolve({ ok: false, error: mt('{{ms}} 毫秒内没有响应', { ms: timeoutMs }), timedOut: true })
     }, Math.max(1, timeoutMs))
     // A pending deadline must not keep the process alive on its own.
     ;(timer as unknown as { unref?: () => void }).unref?.()
   })
   const task = work(controller.signal).then(
     (value): Bounded<T> => ({ ok: true, value }),
-    (error): Bounded<T> => ({ ok: false, error: messageOf(error) })
+    (error): Bounded<T> => ({ ok: false, error: messageOf(error), timedOut: expired })
   )
   try {
-    return await Promise.race([task, expired])
+    return await Promise.race([task, deadline])
   } finally {
     if (timer) clearTimeout(timer)
     parent?.removeEventListener('abort', forward)
   }
 }
+
+/**
+ * Why a tier produced nothing usable. The distinction is the whole point of the
+ * wording below: "no answer at all", "something answered but it is not
+ * Everything" and "es.exe is not installed" send the user to three different
+ * places, and the old single sentence sent all of them to the firewall.
+ */
+type TierFailure = 'timeout' | 'no-response' | 'not-everything' | 'missing' | 'failed'
 
 interface TierResult {
   ok: boolean
@@ -213,35 +230,122 @@ interface TierResult {
   total: number
   truncated: boolean
   error: string
+  code: TierFailure | ''
+}
+
+const parseJson = (text: string): unknown => {
+  try { return JSON.parse(text) as unknown } catch { return undefined }
+}
+
+/**
+ * Complete row objects inside a JSON body that arrived cut short.
+ *
+ * Everything streams one flat `results` array, so every row is a balanced object
+ * at brace depth 2. Scanning for those — and skipping over strings, so a brace in
+ * a file name cannot close a row early — is what lets a slow server still answer
+ * with the rows that did arrive instead of nothing at all.
+ */
+function salvageRows(text: string): unknown[] {
+  const rows: unknown[] = []
+  let depth = 0
+  let start = -1
+  let quoted = false
+  let escaped = false
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (quoted) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') quoted = false
+      continue
+    }
+    if (char === '"') { quoted = true; continue }
+    if (char === '{') {
+      depth += 1
+      if (depth === 2) start = index
+      continue
+    }
+    if (char !== '}') continue
+    if (depth === 2 && start >= 0) {
+      const row = parseJson(text.slice(start, index + 1))
+      if (row !== undefined) rows.push(row)
+      start = -1
+    }
+    depth = Math.max(0, depth - 1)
+  }
+  return rows
+}
+
+/**
+ * Reads the body incrementally so a caller that times out can look at what had
+ * already arrived. `Response.body` is typed differently by the DOM and the Node
+ * typings, hence the structural cast; a body-less fake falls back to `text()`.
+ */
+async function readBody(response: Response, onProgress: (text: string) => void): Promise<string> {
+  const body = response.body as unknown as
+    | { getReader?: () => { read: () => Promise<{ done: boolean; value?: Uint8Array }> } }
+    | null
+    | undefined
+  if (!body || typeof body.getReader !== 'function') {
+    const text = await response.text()
+    onProgress(text)
+    return text
+  }
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  for (;;) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    if (!chunk.value) continue
+    text += decoder.decode(chunk.value, { stream: true })
+    onProgress(text)
+  }
+  return text + decoder.decode()
 }
 
 /** Tier 1: the HTTP service. */
 async function queryHttp(query: string, options: EverythingOptions, limit: number): Promise<TierResult> {
   const doFetch = options.fetchImpl ?? globalThis.fetch
-  if (typeof doFetch !== 'function') return { ok: false, hits: [], total: 0, truncated: false, error: 'no fetch' }
+  if (typeof doFetch !== 'function') return { ok: false, hits: [], total: 0, truncated: false, error: 'no fetch', code: 'no-response' }
   const url = everythingUrl(query, options.port, limit)
+  const fail = (error: string, code: TierFailure): TierResult => ({ ok: false, hits: [], total: 0, truncated: false, error, code })
+  let received = ''
+  let code: TierFailure = 'no-response'
   const outcome = await bounded(async signal => {
     // `redirect: 'error'` keeps a hypothetical bounce off-loopback impossible.
     const response = await doFetch(url, { signal, redirect: 'error', headers: { accept: 'application/json' } })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return { text: await response.text(), url: response.url }
+    if (!response.ok) {
+      // Something is listening, it just is not Everything: say so instead of
+      // letting a connection-level sentence send the user to the firewall.
+      code = 'not-everything'
+      throw new Error(`HTTP ${response.status}`)
+    }
+    const text = await readBody(response, partial => { received = partial })
+    return { text, url: response.url }
   }, options.signal, options.timeoutMs ?? EVERYTHING_TIMEOUT_MS)
-  if (!outcome.ok) return { ok: false, hits: [], total: 0, truncated: false, error: outcome.error }
+  if (!outcome.ok) {
+    // A deadline is the only case worth salvaging: a caller cancelling the take
+    // asked for no answer at all.
+    if (outcome.timedOut && received) {
+      const hits = normalizeEverythingJson({ results: salvageRows(received) }, limit)
+      if (hits.length > 0) return { ok: true, hits, total: hits.length, truncated: true, error: outcome.error, code: 'timeout' }
+    }
+    return fail(outcome.error, code)
+  }
   const landed = outcome.value.url
   if (landed) {
     let host = ''
     try { host = new URL(landed).hostname } catch { host = '' }
-    if (host && !isLoopbackHost(host)) return { ok: false, hits: [], total: 0, truncated: false, error: `non-loopback response host ${host}` }
+    if (host && !isLoopbackHost(host)) return fail(`non-loopback response host ${host}`, 'not-everything')
   }
-  let payload: unknown
-  try { payload = JSON.parse(outcome.value.text) as unknown } catch {
-    // A service answering HTML means "json=1 was ignored" — treat as absent.
-    return { ok: false, hits: [], total: 0, truncated: false, error: 'response is not JSON' }
-  }
+  const payload = parseJson(outcome.value.text)
+  // A service answering HTML means "json=1 was ignored" — not Everything.
+  if (payload === undefined) return fail('response is not JSON', 'not-everything')
   const hits = normalizeEverythingJson(payload, limit)
   const reported = Number((payload as { totalResults?: unknown } | null)?.totalResults)
   const total = Number.isFinite(reported) && reported > 0 ? reported : hits.length
-  return { ok: true, hits, total, truncated: total > hits.length, error: '' }
+  return { ok: true, hits, total, truncated: total > hits.length, error: '', code: '' }
 }
 
 /** Candidate `es.exe` locations: PATH first, then the two conventional installs. */
@@ -279,16 +383,23 @@ async function describePath(path: string, options: EverythingOptions): Promise<E
   }
 }
 
+/** es.exe prints one path per line; a deadline may leave the last line cut. */
+function cliPaths(text: string, complete: boolean): string[] {
+  const lines = text.split(/\r?\n/)
+  if (!complete) lines.pop()
+  return lines.map(line => line.trim()).filter(Boolean)
+}
+
 /** Tier 2: the Everything command-line client. */
 async function queryCli(query: string, options: EverythingOptions, limit: number): Promise<TierResult> {
   const exe = await findEs(options)
-  if (!exe) return { ok: false, hits: [], total: 0, truncated: false, error: 'es.exe not found' }
+  if (!exe) return { ok: false, hits: [], total: 0, truncated: false, error: 'es.exe not found', code: 'missing' }
   const run = options.spawnImpl ?? spawn
+  let output = ''
   const outcome = await bounded(signal => new Promise<string>((resolve, reject) => {
     // Only stable, documented flags: `-n` caps the result count, the query is a
     // separate argv entry so no shell quoting is involved anywhere.
     const child = run(exe, ['-n', String(limit), query], { windowsHide: true, signal })
-    let output = ''
     let failure = ''
     child.stdout?.setEncoding('utf8')
     child.stdout?.on('data', (text: string) => { if (output.length < 200_000) output += text })
@@ -300,11 +411,17 @@ async function queryCli(query: string, options: EverythingOptions, limit: number
       else reject(new Error(failure.trim() || `es.exe exit ${code}`))
     })
   }), options.signal, options.cliTimeoutMs ?? EVERYTHING_CLI_TIMEOUT_MS)
-  if (!outcome.ok) return { ok: false, hits: [], total: 0, truncated: false, error: outcome.error }
-  const paths = outcome.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
-  const hits: EverythingHit[] = []
-  for (const path of paths.slice(0, limit)) hits.push(await describePath(path, options))
-  return { ok: true, hits, total: hits.length, truncated: paths.length > hits.length, error: '' }
+  const paths = cliPaths(output, outcome.ok)
+  const hits = await Promise.all(paths.slice(0, limit).map(path => describePath(path, options)))
+  if (!outcome.ok) {
+    // Rows that already printed are real hits: return them instead of throwing
+    // away a slow machine's whole answer.
+    if (outcome.timedOut && hits.length > 0) {
+      return { ok: true, hits, total: hits.length, truncated: true, error: outcome.error, code: 'timeout' }
+    }
+    return { ok: false, hits: [], total: 0, truncated: false, error: outcome.error, code: outcome.timedOut ? 'timeout' : 'failed' }
+  }
+  return { ok: true, hits, total: hits.length, truncated: paths.length > hits.length, error: '', code: '' }
 }
 
 /**
@@ -316,25 +433,43 @@ export async function searchEverything(query: string, options: EverythingOptions
   const limit = clampLimit(options.limit)
   const unavailable = (reason: string): EverythingResult =>
     ({ available: false, backend: 'none', query: trimmed, hits: [], total: 0, truncated: false, reason })
+  const answered = (backend: 'http' | 'cli', tier: TierResult): EverythingResult => {
+    // A partial answer keeps its own explanation: the card has to say that more
+    // rows exist, otherwise a timeout looks like a complete result set.
+    const partial = tier.code === 'timeout'
+    return {
+      available: true,
+      backend,
+      query: trimmed,
+      hits: tier.hits,
+      total: tier.total,
+      truncated: tier.truncated || partial,
+      reason: partial ? mt('超时前只拿到 {{count}} 条结果，可能还有更多', { count: tier.hits.length }) : '',
+      ...(partial ? { failure: 'timeout' as const } : {})
+    }
+  }
   if (!trimmed) return unavailable(mt('缺少要搜索的文件名关键词'))
 
+  const port = everythingPort(options.port)
   const reasons: string[] = []
   if (options.http === false) {
     reasons.push(mt('已按设置关闭 Everything 的 HTTP 服务'))
   } else {
     const http = await queryHttp(trimmed, options, limit)
-    if (http.ok) {
-      return { available: true, backend: 'http', query: trimmed, hits: http.hits, total: http.total, truncated: http.truncated, reason: '' }
-    }
-    reasons.push(mt('HTTP 服务 {{port}} 端口未响应（{{message}}）', { port: everythingPort(options.port), message: http.error }))
+    if (http.ok) return answered('http', http)
+    reasons.push(http.code === 'not-everything'
+      // A JSON/HTML mismatch means the port is busy with some other service; the
+      // old "端口未响应" here is what sent users hunting for a firewall rule.
+      ? mt('{{port}} 端口有服务在应答，但返回的不是 Everything 的 JSON（{{message}}）', { port, message: http.error })
+      : mt('{{port}} 端口没有响应（{{message}}）', { port, message: http.error }))
     // A caller cancelling the take must not be re-interpreted as "try es.exe".
     options.signal?.throwIfAborted()
   }
 
   const cli = await queryCli(trimmed, options, limit)
-  if (cli.ok) {
-    return { available: true, backend: 'cli', query: trimmed, hits: cli.hits, total: cli.total, truncated: cli.truncated, reason: '' }
-  }
-  reasons.push(mt('也没有找到 es.exe（{{message}}）', { message: cli.error }))
+  if (cli.ok) return answered('cli', cli)
+  reasons.push(cli.code === 'missing'
+    ? mt('没有找到 es.exe（{{message}}）', { message: cli.error })
+    : mt('es.exe 运行失败（{{message}}）', { message: cli.error }))
   return unavailable(mt('这台机器没有 Everything（{{detail}}），已改用内置文件搜索', { detail: reasons.join('；') }))
 }

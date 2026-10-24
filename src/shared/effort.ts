@@ -14,8 +14,19 @@ import { mt } from './mainI18n'
 /** The one value the UI invents; every other value comes from the gateway. */
 export const EFFORT_OFF = 'off'
 
+/**
+ * The Chinese source sentence of the hint.
+ *
+ * Deliberately not the display string: this module is imported before the renderer
+ * has chosen a language, so translating here would freeze the hint in whatever
+ * language the process started in. Read the copy through `effortUnavailableHint()`.
+ */
+export const EFFORT_UNAVAILABLE_HINT = '该模型不支持关闭思考'
+
 /** Shown under the select when the gateway cannot switch thinking off. */
-export const EFFORT_UNAVAILABLE_HINT = mt('该模型不支持关闭思考')
+export function effortUnavailableHint(): string {
+  return mt(EFFORT_UNAVAILABLE_HINT)
+}
 
 /** Trims, drops blanks and de-duplicates while keeping the gateway's order. */
 function cleanEfforts(values: readonly string[] | undefined): string[] {
@@ -62,5 +73,5 @@ export function defaultEffort(model?: ModelInfo | null): string {
  * The UI renders this as helper text next to the disabled `off` menu item.
  */
 export function effortUnavailable(model?: ModelInfo | null): string | null {
-  return model?.canDisableThinking === true ? null : EFFORT_UNAVAILABLE_HINT
+  return model?.canDisableThinking === true ? null : effortUnavailableHint()
 }

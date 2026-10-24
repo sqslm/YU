@@ -357,6 +357,113 @@ describe('calendar store', () => {
     expect(target.list()[0].uid).toBe('cancel-roundtrip')
   })
 
+  it('re-imports a feed whose events have no UID without duplicating them', () => {
+    const store = new CalendarStore(file, () => NOW)
+    const text = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'SUMMARY:没有 UID 的周会',
+      'DTSTART:20261022T090000',
+      'DTEND:20261022T100000',
+      'END:VEVENT',
+      'BEGIN:VEVENT',
+      'SUMMARY:没有 UID 的评审',
+      'DTSTART:20261022T140000',
+      'DTEND:20261022T150000',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n')
+
+    expect(store.importIcs(text)).toEqual({ added: 2, updated: 0, skipped: 0 })
+    // The same feed again: nothing in it changed, so nothing may be added. Before the
+    // fingerprint existed this pass doubled the calendar, and every copy fired its
+    // own reminder.
+    expect(store.importIcs(text)).toEqual({ added: 0, updated: 2, skipped: 0 })
+    expect(store.list()).toHaveLength(2)
+
+    // The synthesised identity is persisted, so a restart does not re-import either.
+    const reloaded = new CalendarStore(file, () => NOW)
+    expect(reloaded.importIcs(text)).toEqual({ added: 0, updated: 2, skipped: 0 })
+    expect(reloaded.list()).toHaveLength(2)
+    expect(reloaded.list().every(row => (row.uid ?? '').startsWith('yu-fp:'))).toBe(true)
+  })
+
+  it('follows a no-UID event the feed retitled instead of adding a second copy', () => {
+    const store = new CalendarStore(file, () => NOW)
+    const text = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'SUMMARY:没有 UID 的周会',
+      'DTSTART:20261022T090000',
+      'DTEND:20261022T100000',
+      'END:VEVENT',
+      'BEGIN:VEVENT',
+      'SUMMARY:没有 UID 的评审',
+      'DTSTART:20261022T140000',
+      'DTEND:20261022T150000',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n')
+    expect(store.importIcs(text)).toEqual({ added: 2, updated: 0, skipped: 0 })
+
+    // A retitle changes the fingerprint, so the row is paired by its slot in the
+    // feed (same start, same all-day flag) rather than being treated as new.
+    const retitled = text.replace('SUMMARY:没有 UID 的周会', 'SUMMARY:没有 UID 的周会（改期）')
+    expect(store.importIcs(retitled)).toEqual({ added: 0, updated: 2, skipped: 0 })
+    const rows = store.list()
+    expect(rows).toHaveLength(2)
+    expect(rows.map(row => row.title)).toContain('没有 UID 的周会（改期）')
+    expect(rows.map(row => row.title)).not.toContain('没有 UID 的周会')
+  })
+
+  it('applies a cancellation the feed reports', () => {
+    const store = new CalendarStore(file, () => NOW)
+    const base = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'UID:meeting-1',
+      'SUMMARY:评审',
+      'DTSTART:20261022T100000',
+      'DTEND:20261022T110000',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n')
+    expect(store.importIcs(base)).toEqual({ added: 1, updated: 0, skipped: 0 })
+    const imported = store.list()[0]
+    expect(imported.status).toBe('confirmed')
+
+    // The organiser withdrew the meeting: the feed is the authority on that.
+    const cancelled = base.replace('END:VEVENT', 'STATUS:CANCELLED\r\nEND:VEVENT')
+    expect(store.importIcs(cancelled)).toEqual({ added: 0, updated: 1, skipped: 0 })
+    expect(store.list()).toHaveLength(1)
+    expect(store.list()[0].id).toBe(imported.id)
+    expect(store.list()[0].status).toBe('cancelled')
+    expect(store.active()).toEqual([])
+  })
+
+  it('never lets a feed resurrect a cancellation the user made locally', () => {
+    const store = new CalendarStore(file, () => NOW)
+    // A row the user owns, carrying the uid a feed will later use for the same slot.
+    const local = store.save(input({ title: '我自己的会', uid: 'shared-uid' }))
+    store.action(local.id, 'cancel')
+
+    const text = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'UID:shared-uid',
+      'SUMMARY:我自己的会',
+      'DTSTART:20261021T100000',
+      'DTEND:20261021T110000',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n')
+    expect(store.importIcs(text)).toEqual({ added: 0, updated: 1, skipped: 0 })
+    expect(store.list()).toHaveLength(1)
+    // Source `voice`, not `import`: the feed may refresh the text, never the status.
+    expect(store.list()[0].source).toBe('voice')
+    expect(store.list()[0].status).toBe('cancelled')
+  })
+
   it('formats event times in both languages', () => {
     expect(formatEventTime({ start: at(21, 9) + 5 * 60_000, end: at(21, 10) + 30 * 60_000, allDay: false }, 'zh'))
       .toBe('09:05–10:30')

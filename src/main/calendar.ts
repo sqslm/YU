@@ -11,7 +11,7 @@
  * JSON object. A file we cannot parse is moved aside, never overwritten — it may
  * be the only copy of the user's schedule.
  */
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { mt } from '@shared/mainI18n'
@@ -57,6 +57,28 @@ function isStoredEvent(value: unknown): value is CalendarEvent {
     && (row.source === 'voice' || row.source === 'manual' || row.source === 'import')
 }
 
+/**
+ * Identity the store mints for an imported event whose feed carries no `UID`.
+ *
+ * An event without a UID has no identity of its own, so "no uid" made every
+ * refresh of the same feed look like a brand-new event: the calendar grew by one
+ * row per pass until it hit MAX_EVENTS, and every duplicate fired its own
+ * reminder. A hash of what the feed delivered is stable while that content is
+ * stable — which is the deduplication the UID would have provided. The prefix
+ * keeps a real UID from ever colliding with a minted one, and lets the merge tell
+ * a row it owns from one the user created.
+ */
+const SYNTHETIC_UID_PREFIX = 'yu-fp:'
+
+function fingerprintOf(input: { title: string; start: number; allDay?: boolean }): string {
+  const payload = `${input.title}|${input.start}|${input.allDay === true ? 'all-day' : 'timed'}`
+  return `${SYNTHETIC_UID_PREFIX}${createHash('sha1').update(payload).digest('hex')}`
+}
+
+function isSyntheticUid(uid: string | undefined): boolean {
+  return typeof uid === 'string' && uid.startsWith(SYNTHETIC_UID_PREFIX)
+}
+
 export class CalendarStore {
   private events: CalendarEvent[] = []
   /** Path of the preserved unreadable document, when the last load found one. */
@@ -83,7 +105,20 @@ export class CalendarStore {
     return this.events.find(row => row.id === id)
   }
 
-  save(input: CalendarEventInput, id?: string): CalendarEvent {
+  /**
+   * Creates or edits one row.
+   *
+   * `options.fromSource` marks a write that came from a subscription feed rather
+   * than from the user. A feed is allowed to move an event into `cancelled` (the
+   * organiser withdrew it) but never to move it back out: a cancellation the user
+   * made by voice or by hand is their decision, and a later confirmed copy of the
+   * same uid must not resurrect it.
+   */
+  save(
+    input: CalendarEventInput,
+    id?: string,
+    options: { fromSource?: boolean } = {}
+  ): CalendarEvent {
     const existing = id ? this.get(id) : undefined
     if (id && !existing) throw new Error(mt('日程不存在'))
     const normalized = normalizeEventInput(input, this.now())
@@ -94,6 +129,11 @@ export class CalendarStore {
     // Moving an event must re-arm its reminder: keeping the old stamp would silence
     // the new time forever, which is the worst possible failure for a reminder.
     const rescheduled = existing !== undefined && existing.start !== normalized.start
+    // Only the source's own rows may be cancelled by the source; a local row keeps
+    // whatever the user decided, even if a feed happens to carry the same uid.
+    const sourceCancels = options.fromSource === true
+      && normalized.status === 'cancelled'
+      && (existing === undefined || existing.source === 'import')
     const event: CalendarEvent = {
       id: existing?.id ?? randomUUID(),
       title: normalized.title,
@@ -110,7 +150,7 @@ export class CalendarStore {
       updatedAt: at,
       // Editing a cancelled entry must not silently resurrect it; `action('restore')` does that.
       // The same rule makes an import unable to undo a local cancellation by changing the time.
-      status: existing?.status ?? normalized.status ?? 'confirmed',
+      status: sourceCancels ? 'cancelled' : existing?.status ?? normalized.status ?? 'confirmed',
       ...((normalized.uid ?? existing?.uid) === undefined ? {} : { uid: normalized.uid ?? existing?.uid }),
       ...(existing?.notifiedAt === undefined || rescheduled ? {} : { notifiedAt: existing.notifiedAt })
     }
@@ -188,25 +228,51 @@ export class CalendarStore {
   /**
    * Merges an ICS document into the store.
    *
-   * Deduplication is by `uid`, because that is the only identity two calendar
-   * apps share: re-importing the same file must update rows rather than double
-   * them. Everything else already in the store (reminder lead, location, the
-   * confirmed/cancelled state) is left alone — the import only owns what the file
-   * actually says.
+   * Deduplication is by identity, because that is what two calendar apps share:
+   * re-importing the same file must update rows rather than double them. A feed
+   * that carries `UID` supplies the identity; one that does not gets a
+   * fingerprint of the event's content, because "no uid" used to mean "a new
+   * event on every refresh". Everything else already in the store (reminder
+   * lead, location) is left alone — but the feed is authoritative about one
+   * thing, `STATUS:CANCELLED`, so that has to be handed to `save`.
    */
   importIcs(text: string): { added: number; updated: number; skipped: number } {
     const inputs = parseIcs(text)
-    const known = (input: CalendarEventInput): CalendarEvent | undefined =>
-      input.uid ? this.events.find(row => row.uid === input.uid) : undefined
+    // Exact identity first. A minted uid that no longer matches — the feed retitled
+    // the event, so its fingerprint changed — then falls back to the slot it came
+    // from: same start, same all-day flag, still an import row. Rows the user
+    // created are never adopted by a feed, so a hand-made event cannot be
+    // overwritten by a coincidence.
+    const claimed = new Set<string>()
+    const matchOne = (input: CalendarEventInput, identity: string): CalendarEvent | undefined => {
+      const exact = this.events.find(row => !claimed.has(row.id) && row.uid === identity)
+      if (exact) {
+        claimed.add(exact.id)
+        return exact
+      }
+      if (input.uid) return undefined
+      const drifted = this.events.find(row =>
+        !claimed.has(row.id)
+        && row.source === 'import'
+        && isSyntheticUid(row.uid)
+        && row.start === input.start
+        && row.allDay === input.allDay
+      )
+      if (drifted) claimed.add(drifted.id)
+      return drifted
+    }
+    const pairs = inputs.map((input) => {
+      const identity = input.uid ?? fingerprintOf(input)
+      return { input, identity, existing: matchOne(input, identity) }
+    })
     // Checked before the first write: a half-imported file is worse than a refused one.
-    const additions = inputs.filter(input => !known(input)).length
+    const additions = pairs.filter(pair => pair.existing === undefined).length
     if (this.events.length + additions > MAX_EVENTS) {
       throw new Error(mt('日程数量已达上限（{{count}} 条），请先取消不再需要的日程', { count: MAX_EVENTS }))
     }
     let added = 0
     let updated = 0
-    for (const input of inputs) {
-      const existing = known(input)
+    for (const { input, identity, existing } of pairs) {
       if (existing) {
         this.save({
           title: input.title,
@@ -217,12 +283,15 @@ export class CalendarStore {
           location: existing.location,
           leadMinutes: existing.leadMinutes,
           source: existing.source,
-          uid: input.uid
-        }, existing.id)
+          uid: identity,
+          // A withdrawn meeting has to be able to stop looking confirmed; `save`
+          // refuses the reverse (a confirmed copy cannot revive a cancellation).
+          status: input.status
+        }, existing.id, { fromSource: true })
         updated++
         continue
       }
-      this.save({ ...input, source: 'import' })
+      this.save({ ...input, source: 'import', uid: identity }, undefined, { fromSource: true })
       added++
     }
     return { added, updated, skipped: Math.max(0, countEventBlocks(text) - inputs.length) }

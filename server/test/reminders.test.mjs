@@ -97,6 +97,41 @@ test('重复推送同样内容不推进游标，改动则递增', async (t) => {
   assert.equal(delta.body.reminders[0].title, '给妈妈打电话（改）')
 })
 
+test('推来更旧的提醒时被拒为 stale，不落库也不推进游标', async (t) => {
+  const { app, alice } = await setup(t)
+  const NEWER = 2_000_000_000_000
+  const OLDER = 1_000_000_000_000
+
+  const first = await app.call('POST', '/api/v1/reminders', {
+    token: alice.accessToken,
+    body: { changes: [reminder({ title: '提醒（新）', updatedAt: NEWER })] }
+  })
+  assert.deepEqual(first.body.applied, ['rem-1'])
+  const cursor = first.body.cursor
+
+  const late = await app.call('POST', '/api/v1/reminders', {
+    token: alice.accessToken,
+    body: { changes: [reminder({ title: '提醒（旧）', updatedAt: OLDER })] }
+  })
+  assert.equal(late.status, 200, JSON.stringify(late.body))
+  assert.deepEqual(late.body.applied, [])
+  assert.deepEqual(late.body.duplicates, [])
+  assert.deepEqual(late.body.stale, ['rem-1'])
+  assert.equal(late.body.cursor, cursor)
+
+  const pull = await app.call('GET', '/api/v1/reminders?since=0', { token: alice.accessToken })
+  assert.equal(pull.body.reminders.length, 1)
+  assert.equal(pull.body.reminders[0].title, '提醒（新）')
+  assert.equal(Number(pull.body.reminders[0].updatedAt), NEWER)
+
+  const next = await app.call('POST', '/api/v1/reminders', {
+    token: alice.accessToken,
+    body: { changes: [reminder({ title: '提醒（更新）', updatedAt: NEWER + 1 })] }
+  })
+  assert.deepEqual(next.body.applied, ['rem-1'])
+  assert.ok(next.body.cursor > cursor)
+})
+
 test('删除是 tombstone：状态取消、内容清空', async (t) => {
   const { app, alice } = await setup(t)
   const first = await app.call('POST', '/api/v1/reminders', {

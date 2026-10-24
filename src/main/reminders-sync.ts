@@ -46,6 +46,8 @@ export interface ReminderChange {
 export interface ReminderPushResult {
   applied?: string[]
   duplicates?: string[]
+  /** Ids the server already holds a newer version of (see `CalendarPushResult`). */
+  stale?: string[]
   conflicts?: Array<{ id?: string; error?: string }>
   cursor?: number
 }
@@ -291,6 +293,34 @@ export class RemindersSync {
         if (entry?.tombstone !== undefined) delete this.state.tombstones[id]
         else if (entry) this.state.pushed[id] = entry.signature
         accepted += 1
+      }
+      /**
+       * `stale`: the server holds a newer version of this id, so ours is the copy
+       * that loses. It is kept as a conflict copy first — a silently dropped task
+       * is a task the user will never be reminded about — and the id is then
+       * recorded as delivered so the same older content is not re-pushed forever.
+       */
+      const stale = payload.stale ?? []
+      if (stale.length > 0) {
+        const local = new Map(this.options.store.list().map((row) => [row.id, row]))
+        for (const rawId of stale) {
+          const id = String(rawId ?? '')
+          if (!id) continue
+          const entry = slice.find((item) => item.id === id)
+          if (!entry) continue
+          if (entry.tombstone !== undefined) {
+            delete this.state.tombstones[id]
+            this.options.log(mt('提醒 {{id}} 的删除未生效：服务端有更新的版本', { id }))
+          } else {
+            const row = local.get(id)
+            if (row) {
+              this.options.log(mt('提醒《{{title}}》的服务端版本更新，本机改动不覆盖它', { title: row.title }))
+              this.keepCopy(row, local)
+            }
+            this.state.pushed[id] = entry.signature
+          }
+          accepted += 1
+        }
       }
       this.writeState()
       if (slice.length < PAGE) break

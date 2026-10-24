@@ -38,6 +38,8 @@ export class WakeWordHost {
   private phrase = ''
   private deviceId = ''
   private status: WakeWordStatus = { phase: 'off' }
+  /** Set once the script reports it could not open the chosen device. */
+  private deviceNotice: '' | 'device-missing' = ''
   private startup: NodeJS.Timeout | null = null
   private lastWake = -Infinity
   /** Why the last `listDevices()` came back empty: 'unavailable' | 'timeout' | '' when it worked. */
@@ -84,8 +86,11 @@ export class WakeWordHost {
     })
   }
   private publish(status: WakeWordStatus): void {
-    if (JSON.stringify(status) === JSON.stringify(this.status)) return
-    this.status = status; this.deps.changed(this.snapshot())
+    // The notice outlives the phase it was discovered in: "ready" follows the
+    // script's fallback log, and dropping the notice there would hide it again.
+    const next: WakeWordStatus = this.deviceNotice ? { ...status, deviceNotice: this.deviceNotice } : status
+    if (JSON.stringify(next) === JSON.stringify(this.status)) return
+    this.status = next; this.deps.changed(this.snapshot())
   }
   stop(): void {
     if (this.startup) clearTimeout(this.startup)
@@ -94,6 +99,9 @@ export class WakeWordHost {
     this.child = null
     child?.kill()
     this.phrase = ''
+    // A new run re-reports the fallback if it still applies; a stale notice from
+    // the previous run must not survive into the next phase.
+    this.deviceNotice = ''
   }
   update(settings: WakeWordInput, paused: boolean, retry = false): void {
     if (!settings.enabled || paused) {
@@ -140,6 +148,12 @@ export class WakeWordHost {
             this.lastWake = Date.now()
             this.stop(); this.publish({ phase: 'paused' }); this.deps.wake(); return
           } else if (event.type === 'error') failed(['language', 'microphone'].includes(event.error) ? event.error : 'unavailable')
+          // The script already fell back to the default input, which is the right
+          // behaviour but invisible; surfacing it is the whole point of this branch.
+          else if (event.type === 'log' && event.reason === 'device-missing' && !this.deviceNotice) {
+            this.deviceNotice = 'device-missing'
+            this.publish(this.status)
+          }
         } catch { failed(); return }
       }
     })

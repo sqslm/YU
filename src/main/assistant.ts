@@ -89,6 +89,20 @@ function ordinalOf(text: string): number | null {
 /** "最后一个" names the tail of the same list an ordinal names. */
 const LAST_REFERENCE = /最后\s*(?:一)?\s*(?:个|条|项|件|位)?|最后那条|\blast (?:one|item|result|answer)\b|\bthe last one\b/iu
 
+/**
+ * The spans a sentence puts in quotes.
+ *
+ * Both families are accepted on either end, and a pair may mix them: dictation
+ * closes an 「 with a straight quote often enough that refusing the mix would put
+ * the ordinal back in charge of the sentence.
+ */
+function quotedSpans(text: string): string[] {
+  const spans: string[] = []
+  const pattern = /["“「『]([^"”」』]{1,200})["”」』]/gu
+  for (const match of text.matchAll(pattern)) spans.push(match[1] ?? '')
+  return spans
+}
+
 /** "刚才那条" / "上一个" point at the last object, not at a position in a list. */
 const AMBIENT_REFERENCE = /刚才(?:那|说|的)?\s*(?:个|条|项|件)?|上(?:一)?(?:个|条|项)|这条|那条|这个|那个|它(?!们)|\b(?:that one|that item|the previous one)\b/iu
 
@@ -251,6 +265,10 @@ const listingOf = (items: ReferenceItem[]): string => items.slice(0, 6).map((ite
 export function resolveReference(text: string, thread?: ReferenceContext | null): ReferenceOutcome {
   // Dictated or quoted text is data the user is talking about, never a pointer.
   if (isDictatedContent(text)) return { kind: 'none' }
+  // The same rule has to hold mid-sentence: "他说「第二个方案不行」，帮我记下来" is a
+  // sentence about a sentence, and pointing at row 2 would edit the wrong thing.
+  // Only the quoted span is consulted, so a plain "第二个改成十一点" still resolves.
+  if (quotedSpans(text).some(span => ordinalOf(span) !== null || LAST_REFERENCE.test(span))) return { kind: 'none' }
   const ordinal = ordinalOf(text)
   const last = ordinal === null && LAST_REFERENCE.test(text)
   const ambient = ordinal === null && !last && AMBIENT_REFERENCE.test(text) && EDIT_ACTION.test(text)

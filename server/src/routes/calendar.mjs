@@ -6,13 +6,14 @@ import { requireUser } from '../session.mjs'
  * The calendar, over the same protocol as `notes`: incremental pull by `seq`,
  * tombstone for a deletion, one transaction per push.
  *
- * The write is an upsert with no version check, on purpose. A calendar row is
- * personal data the user edits on whichever device is at hand; the server has no
- * better claim to the truth than the client that just sent the edit, so a
- * "someone else changed this" answer would only produce a conflict dialog over
- * the user's own change. Ordering is therefore last-write-wins per `id`, while a
- * deletion stays a tombstone so a device that was offline cannot resurrect the
- * row by pushing its stale copy.
+ * The write is an upsert, because a calendar row is personal data the user edits
+ * on whichever device is at hand and a "someone else changed this" dialog over
+ * the user's own edit would only be noise. "Last" therefore means last by
+ * `updatedAt`, not last to arrive: a device that was offline for a day must not
+ * roll a row back just because its request arrived second. A change whose
+ * `updatedAt` is not newer than the stored row is answered with `stale` and
+ * dropped, and a deletion stays a tombstone so a device that was offline cannot
+ * resurrect the row by pushing its older copy.
  */
 
 /** One push may not exceed this many rows; the client pages below it. */
@@ -154,6 +155,12 @@ function sameContent(row, change) {
  * `duplicate` is not an error: a client whose response was lost retries the same
  * content, and bumping `seq` for it would hand every other device a row that did
  * not change.
+ *
+ * `stale` is the other quiet answer: the row exists here with a newer
+ * `updated_at`, so this change is an older device catching up. It is refused and
+ * reported by id (the client turns it into a conflict copy), which is why it must
+ * not bump `seq` or touch the stored row — a rollback here would spread to every
+ * device on the next pull.
  */
 function applyChange(ctx, user, change) {
   const db = ctx.db
@@ -193,6 +200,11 @@ function applyChange(ctx, user, change) {
   }
 
   if (sameContent(existing, change)) return { status: 'duplicate' }
+
+  // Same content is a retry; older content is a late arrival. `<=` and not `<`:
+  // two devices editing the same millisecond is a tie, and the row already stored
+  // is the one every other device has seen.
+  if (change.updatedAt <= Number(existing.updated_at)) return { status: 'stale' }
 
   const seq = bumpCounter(db, 'calendar_seq')
   db.prepare(
@@ -276,12 +288,14 @@ export function registerCalendarRoutes(router) {
     const applied = []
     const duplicates = []
     const conflicts = []
+    const stale = []
     ctx.db.exec('BEGIN')
     try {
       for (const change of changes) {
         const result = applyChange(ctx, user, change)
         if (result.status === 'applied') applied.push(change.id)
         else if (result.status === 'duplicate') duplicates.push(change.id)
+        else if (result.status === 'stale') stale.push(change.id)
         else conflicts.push({ id: change.id, error: 'calendar_id_taken' })
       }
       ctx.db.exec('COMMIT')
@@ -300,6 +314,7 @@ export function registerCalendarRoutes(router) {
         applied,
         duplicates,
         conflicts,
+        stale,
         cursor: lastSeq(ctx.db, 'calendar_events')
       })
     }
@@ -307,6 +322,7 @@ export function registerCalendarRoutes(router) {
       applied,
       duplicates,
       conflicts: [],
+      stale,
       events: stored,
       cursor: lastSeq(ctx.db, 'calendar_events'),
       serverTime: ctx.now

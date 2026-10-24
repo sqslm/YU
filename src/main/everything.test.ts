@@ -186,3 +186,96 @@ describe('tier 3: honest absence', () => {
     })).rejects.toThrow()
   })
 })
+
+/** Nothing installed anywhere: the three tier-1 outcomes are what is under test. */
+const noEverything: EverythingOptions = { fileExists: () => false, pathValue: '', env: {} }
+
+describe('degradation wording names the real cause', () => {
+  it('blames the port occupant, not a firewall, when the answer is not Everything JSON', async () => {
+    const html = await searchEverything('a', { ...noEverything, fetchImpl: async () => reply('<html>router login</html>') })
+    expect(html.reason).toContain('不是 Everything 的 JSON')
+    expect(html.reason).not.toContain('端口没有响应')
+    const busy = await searchEverything('a', { ...noEverything, fetchImpl: async () => reply('boom', { status: 500 }) })
+    expect(busy.reason).toContain('有服务在应答')
+  })
+  it('still says the port did not answer when the connection never opened', async () => {
+    const result = await searchEverything('a', { ...noEverything, fetchImpl: async () => { throw new Error('ECONNREFUSED') } })
+    expect(result.reason).toContain('端口没有响应')
+    expect(result.reason).not.toContain('不是 Everything 的 JSON')
+  })
+  it('separates a missing es.exe from one that failed to run', async () => {
+    const missing = await searchEverything('a', { ...noEverything, fetchImpl: async () => { throw new Error('off') } })
+    expect(missing.reason).toContain('没有找到 es.exe')
+    const installed: EverythingOptions = {
+      pathValue: 'C:\\Tools', env: {}, fileExists: path => path === join('C:\\Tools', 'es.exe'),
+      fetchImpl: async () => { throw new Error('off') }, spawnImpl: spawner([], 1)
+    }
+    const failed = await searchEverything('a', installed)
+    expect(failed.reason).toContain('es.exe 运行失败')
+    expect(failed.reason).not.toContain('没有找到 es.exe')
+  })
+})
+
+/** A body that arrives row by row and then stalls, so only a deadline ends it. */
+const streamed = (chunks: string[]): Response => {
+  let index = 0
+  return {
+    ok: true,
+    status: 200,
+    url: '',
+    body: {
+      getReader: () => ({
+        read: async (): Promise<{ done: boolean; value?: Uint8Array }> => index < chunks.length
+          ? { done: false, value: new TextEncoder().encode(chunks[index++]) }
+          : new Promise<{ done: boolean; value?: Uint8Array }>(() => {})
+      })
+    }
+  } as unknown as Response
+}
+
+/** Cuts the stream mid-line, exactly like a real timeout does. */
+const stalledSpawner = (text: string) => vi.fn((): ChildLike => {
+  const fake = new EventEmitter() as FakeChild
+  fake.stdout = Object.assign(new EventEmitter(), { setEncoding: () => {} })
+  fake.stderr = Object.assign(new EventEmitter(), { setEncoding: () => {} })
+  queueMicrotask(() => fake.stdout.emit('data', text))
+  return fake as unknown as ChildLike
+})
+
+describe('a deadline keeps the rows that already arrived', () => {
+  it('answers with the rows a slow HTTP service managed to send', async () => {
+    const started = Date.now()
+    const result = await searchEverything('a', {
+      ...noEverything,
+      timeoutMs: 40,
+      fetchImpl: async () => streamed([
+        '{"totalResults":9,"results":[{"name":"first.txt","path":"C:\\\\x"}',
+        ',{"name":"second.txt","path":"C:\\\\x"},'
+      ])
+    })
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(result).toMatchObject({ available: true, backend: 'http', truncated: true, failure: 'timeout' })
+    expect(result.hits.map(hit => hit.name)).toEqual(['first.txt', 'second.txt'])
+    expect(result.reason).toContain('只拿到 2 条')
+  })
+  it('answers with the paths es.exe printed before the deadline', async () => {
+    const result = await searchEverything('a', {
+      pathValue: 'C:\\Tools',
+      env: {},
+      fileExists: path => path === join('C:\\Tools', 'es.exe'),
+      fetchImpl: async () => { throw new Error('off') },
+      cliTimeoutMs: 30,
+      spawnImpl: stalledSpawner('C:\\x\\one.txt\r\nC:\\x\\two.txt\r\nC:\\x\\three'),
+      statImpl: async () => ({ size: 3, mtimeMs: 0 })
+    })
+    expect(result).toMatchObject({ available: true, backend: 'cli', truncated: true, failure: 'timeout' })
+    // The cut last line is not a path yet, so it must not become a hit.
+    expect(result.hits.map(hit => hit.name)).toEqual(['one.txt', 'two.txt'])
+  })
+  it('stays unavailable when the deadline caught nothing at all', async () => {
+    const result = await searchEverything('a', { ...noEverything, timeoutMs: 20, fetchImpl: never })
+    expect(result.available).toBe(false)
+    expect(result.truncated).toBe(false)
+    expect(result.failure).toBeUndefined()
+  })
+})

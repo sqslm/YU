@@ -89,6 +89,8 @@ class FakeRemote implements ReminderRemote {
   duplicate = false
   /** False when the server answers 200 but takes nothing, keeping rows dirty. */
   accept = true
+  /** Ids the server rejects because its own copy is newer, like a late push. */
+  stale: string[] = []
   error: unknown = null
   page: (since: number) => ReminderPage = () => ({ cursor: 0, reminders: [], hasMore: false })
 
@@ -97,11 +99,13 @@ class FakeRemote implements ReminderRemote {
     this.pushes.push(rows)
     if (this.error) throw this.error
     const ids = rows.map((row) => String(row.id))
+    const stale = ids.filter((id) => this.stale.includes(id))
+    const fresh = ids.filter((id) => !this.stale.includes(id))
     const payload: ReminderPushResult = !this.accept
-      ? { applied: [], duplicates: [], conflicts: [], cursor: 0 }
+      ? { applied: [], duplicates: [], conflicts: [], stale, cursor: 0 }
       : this.duplicate
-        ? { applied: [], duplicates: ids, conflicts: [], cursor: ids.length }
-        : { applied: ids, duplicates: [], conflicts: [], cursor: ids.length }
+        ? { applied: [], duplicates: fresh, conflicts: [], stale, cursor: ids.length }
+        : { applied: fresh, duplicates: [], conflicts: [], stale, cursor: ids.length }
     return { status: 200, payload }
   }
 
@@ -205,6 +209,25 @@ describe('提醒推送', () => {
     await engine.run(remote, 'http://server.test:8787')
     expect(engine.pendingCount()).toBe(0)
     expect(lines.join('\n')).toContain('被服务器拒绝')
+  })
+
+  it('服务器版本更新时把本机改动另存为副本，而不是静默丢掉', async () => {
+    const store = memoryStore([makeReminder({ title: '交周报（本机）' })])
+    const remote = new FakeRemote()
+    // The server already holds a newer version of this id, so our push loses.
+    remote.stale = ['rem-1']
+    const lines: string[] = []
+    const engine = sync(store, join(tempDir(), 'sync.json'), (line) => lines.push(line))
+    expect(await engine.run(remote, 'http://server.test:8787')).toEqual({ pushed: 1, pulled: 0 })
+
+    const copy = [...store.rows.values()].find((row) => row.id !== 'rem-1')
+    expect(copy?.title).toBe('交周报（本机）（冲突副本）')
+    expect(lines.join('\n')).toContain('服务端版本更新')
+
+    // Recorded as delivered, so the older content is not pushed again.
+    await engine.run(remote, 'http://server.test:8787')
+    expect(remote.pushes).toHaveLength(2)
+    expect(remote.pushes[1].map((row) => String(row.id))).not.toContain('rem-1')
   })
 })
 

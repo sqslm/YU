@@ -19,7 +19,7 @@ import { buildShareCard, drawShareCard, shareCardFileName } from './shareCard'
 import { AppShareDialog } from './AppShareDialog'
 import { appColor, piePercentages } from './pie'
 import { recentChipText } from './recentChip'
-import i18n from '../../i18n'
+import i18n, { currentUiLanguage } from '../../i18n'
 
 interface HomeProps {
   settings: Settings
@@ -189,7 +189,11 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
    * collide; `monthLabels` drops the ones that would overlap (the current
    * month always survives, because that is the one the reader looks for).
    */
-  const monthCols = useMemo(() => monthLabels(heat.weeks), [heat])
+  // `monthLabels` translates month names itself, so the memo has to recompute when
+  // the interface language flips; keyed on `heat` alone it kept the labels it
+  // captured on the first render (Chinese, on a reload, before settings applied).
+  const language = currentUiLanguage()
+  const monthCols = useMemo(() => monthLabels(heat.weeks), [heat, language])
 
   /**
    * Renders the same figures into a 1080×1350 PNG and hands it to the main
@@ -559,7 +563,7 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
                 {
                   label: i18n.t('节省时间'),
                   value: saved.value,
-                  sub: i18n.t('{{unit}} · 对比 {{wpm}} 字/分', { unit: saved.unit, wpm: insights.typingWpm })
+                  sub: i18n.t('{{unit}} · 对比 {{wpm}} 字/分', { unit: i18n.t(saved.unit), wpm: insights.typingWpm })
                 },
                 {
                   label: i18n.t('连续天数'),

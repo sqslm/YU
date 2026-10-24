@@ -4,7 +4,7 @@ import { requireUser } from '../session.mjs'
 
 /**
  * Reminders, over the same protocol as `notes` and `calendar`: incremental pull
- * by `seq`, tombstone for a deletion, last-write-wins per id.
+ * by `seq`, tombstone for a deletion, newest `updatedAt` wins per id.
  *
  * The client's own reminder document travels in `data` verbatim. The columns
  * (`due_at`, `level`, `priority`, `deadline_at`, `recurrence`) are the parts a
@@ -192,6 +192,11 @@ function applyChange(ctx, user, change) {
 
   if (sameContent(existing, change)) return { status: 'duplicate' }
 
+  // See `calendar.mjs`: "last write wins" means last by `updatedAt`, not last to
+  // arrive. An older change is refused as `stale` and reported by id so the client
+  // can keep its version as a conflict copy instead of losing it.
+  if (change.updatedAt <= Number(existing.updated_at)) return { status: 'stale' }
+
   const seq = bumpCounter(db, 'reminders_seq')
   db.prepare(
     `UPDATE reminders
@@ -264,12 +269,14 @@ export function registerReminderRoutes(router) {
     const applied = []
     const duplicates = []
     const conflicts = []
+    const stale = []
     ctx.db.exec('BEGIN')
     try {
       for (const change of changes) {
         const result = applyChange(ctx, user, change)
         if (result.status === 'applied') applied.push(change.id)
         else if (result.status === 'duplicate') duplicates.push(change.id)
+        else if (result.status === 'stale') stale.push(change.id)
         else conflicts.push({ id: change.id, error: 'reminder_id_taken' })
       }
       ctx.db.exec('COMMIT')
@@ -288,6 +295,7 @@ export function registerReminderRoutes(router) {
         applied,
         duplicates,
         conflicts,
+        stale,
         cursor: lastSeq(ctx.db, 'reminders')
       })
     }
@@ -295,6 +303,7 @@ export function registerReminderRoutes(router) {
       applied,
       duplicates,
       conflicts: [],
+      stale,
       reminders: stored,
       cursor: lastSeq(ctx.db, 'reminders'),
       serverTime: ctx.now

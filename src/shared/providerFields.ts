@@ -17,44 +17,44 @@ export const PRESET_FIELDS: Record<string, PresetField[]> = {
   'azure-openai': [
     {
       key: 'deployment',
-      label: mt('部署名'),
-      hint: mt('Azure 门户里那个部署名称，不是模型名'),
+      get label() { return mt('部署名') },
+      get hint() { return mt('Azure 门户里那个部署名称，不是模型名') },
       required: true,
       placeholder: 'whisper'
     },
     {
       key: 'apiVersion',
-      label: mt('API 版本'),
-      hint: mt('留空用 2024-06-01'),
+      get label() { return mt('API 版本') },
+      get hint() { return mt('留空用 2024-06-01') },
       placeholder: '2024-06-01',
       value: '2024-06-01'
     }
   ],
   tencent: [
-    { key: 'secretId', label: 'SecretId', required: true, hint: mt('访问管理 → API 密钥') },
+    { key: 'secretId', label: 'SecretId', required: true, get hint() { return mt('访问管理 → API 密钥') } },
     { key: 'secretKey', label: 'SecretKey', required: true },
-    { key: 'region', label: mt('地域'), value: 'ap-shanghai', placeholder: 'ap-shanghai' },
-    { key: 'token', label: mt('临时 Token'), hint: mt('只有用临时密钥时才填') }
+    { key: 'region', get label() { return mt('地域') }, value: 'ap-shanghai', placeholder: 'ap-shanghai' },
+    { key: 'token', get label() { return mt('临时 Token') }, get hint() { return mt('只有用临时密钥时才填') } }
   ],
   xfyun: [
-    { key: 'appId', label: 'AppId', required: true, hint: mt('讯飞控制台里那串 8 位数字') },
+    { key: 'appId', label: 'AppId', required: true, get hint() { return mt('讯飞控制台里那串 8 位数字') } },
     { key: 'apiKey', label: 'APIKey', required: true },
     { key: 'apiSecret', label: 'APISecret', required: true }
   ],
   baidu: [
-    { key: 'apiKey', label: 'API Key', required: true, hint: mt('百度智能云应用列表里的 API Key') },
-    { key: 'secretKey', label: 'Secret Key', required: true, hint: mt('同一个应用里的 Secret Key，用来换 access_token') }
+    { key: 'apiKey', label: 'API Key', required: true, get hint() { return mt('百度智能云应用列表里的 API Key') } },
+    { key: 'secretKey', label: 'Secret Key', required: true, get hint() { return mt('同一个应用里的 Secret Key，用来换 access_token') } }
   ],
   aliyun: [
     {
       key: 'uploadUrl',
-      label: mt('上传地址'),
-      hint: mt('仅 Paraformer / Filetrans 异步模型需要；Qwen ASR Flash 直接上传录音，无需填写')
+      get label() { return mt('上传地址') },
+      get hint() { return mt('仅 Paraformer / Filetrans 异步模型需要；Qwen ASR Flash 直接上传录音，无需填写') }
     },
-    { key: 'workspace', label: 'Workspace', hint: mt('留空用默认业务空间') }
+    { key: 'workspace', label: 'Workspace', get hint() { return mt('留空用默认业务空间') } }
   ],
   'google-cse': [
-    { key: 'cx', label: mt('搜索引擎 ID (cx)'), required: true, hint: mt('Programmable Search Engine 的控制台里那串 cx') }
+    { key: 'cx', get label() { return mt('搜索引擎 ID (cx)') }, required: true, get hint() { return mt('Programmable Search Engine 的控制台里那串 cx') } }
   ]
 }
 
