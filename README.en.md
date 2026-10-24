@@ -36,9 +36,13 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | --- | --- |
 | ![Bar](resources/screenshots/bar-recording.png) | ![Answer card](resources/screenshots/card-answer.png) |
 
-| History | Settings (general) |
+| History | Events |
 | --- | --- |
-| ![History](resources/screenshots/hub-history.png) | ![Settings](resources/screenshots/prefs-general.png) |
+| ![History](resources/screenshots/hub-history.png) | ![Events](resources/screenshots/hub-calendar.png) |
+
+| Settings (general) | Settings (automation) |
+| --- | --- |
+| ![Settings](resources/screenshots/prefs-general.png) | ![Automation](resources/screenshots/prefs-automation.png) |
 
 ![AI & models](resources/screenshots/prefs-models.png)
 
@@ -47,6 +51,8 @@ A fresh install has no working connections: this is where you add a recognition 
 ![Schedule & briefing](resources/screenshots/prefs-life.png)
 
 Events carry a start, an end, a location and an advance alert, and can be imported from or exported to ICS. The daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud, and quiet hours hold it back. Events have their own page under Reminders in the main window, and the calendar and its data stay on this machine.
+
+The automation page lists the workflows you saved: describe a run of steps once, then replay it with a single sentence — no model in the loop, each step reported as it finishes.
 
 ## Quick start
 

@@ -35,9 +35,13 @@ Windows 上的语音输入与本地 AI 助手：按一下热键说话，松手�
 | --- | --- |
 | ![悬浮条](resources/screenshots/bar-recording.png) | ![回答卡](resources/screenshots/card-answer.png) |
 
-| 历史记录 | 设置（通用） |
+| 历史记录 | 日程 |
 | --- | --- |
-| ![历史](resources/screenshots/hub-history.png) | ![设置](resources/screenshots/prefs-general.png) |
+| ![历史](resources/screenshots/hub-history.png) | ![日程](resources/screenshots/hub-calendar.png) |
+
+| 设置（通用） | 设置（自动化） |
+| --- | --- |
+| ![设置](resources/screenshots/prefs-general.png) | ![自动化](resources/screenshots/prefs-automation.png) |
 
 ![AI 与模型](resources/screenshots/prefs-models.png)
 
@@ -46,6 +50,8 @@ Windows 上的语音输入与本地 AI 助手：按一下热键说话，松手�
 ![日程与简报](resources/screenshots/prefs-life.png)
 
 日程有起止时间、地点和提前提醒，可以导入导出 ICS；每日简报会把今天的安排、到期待办、已经过期的事和明天预告整理成一段话，需要时可以朗读出来，免打扰时段不投递。日程在主页面「提醒与待办」下面单独一页，月历和数据都只存在本机、不上传。
+
+自动化页列的是保存下来的工作流：把常说的一串步骤描述一次，之后一句话就能重放，不经过模型，每一步结果逐条汇报。
 
 ## 快速开始
 
