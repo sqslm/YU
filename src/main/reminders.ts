@@ -82,6 +82,16 @@ export class ReminderStore {
     try { const rows = inputs.map(input => this.save(input)); this.db.exec('COMMIT'); return rows }
     catch (error) { this.db.exec('ROLLBACK'); throw error }
   }
+  /**
+   * Stores a row as given, for rows pulled from another device.
+   *
+   * `save()` rejects a `dueAt` in the past, which is right for creating an event
+   * but wrong for a reminder that arrived while this machine was off: those are
+   * exactly the ones worth surfacing.
+   */
+  put(reminder: Reminder): Reminder {
+    return this.write(reminder)
+  }
   private write(reminder: Reminder): Reminder {
     this.db.prepare('INSERT OR REPLACE INTO reminders (id,dueAt,status,data) VALUES (?,?,?,?)')
       .run(reminder.id, reminder.dueAt, reminder.status, JSON.stringify(reminder))

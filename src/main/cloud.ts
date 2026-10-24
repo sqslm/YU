@@ -14,6 +14,8 @@ import type {
 import type { AccountStore, Session } from './account'
 import { toSyncRow, type HistoryStore } from './history'
 import type { RemoteAudio } from './notes'
+import type { CalendarPage, CalendarRemote, CalendarPushResult } from './calendar-sync'
+import type { ReminderPage, ReminderRemote, ReminderPushResult } from './reminders-sync'
 import type { StatsFile } from '@shared/stats'
 import { statsAccountKey } from './stats'
 import { mt } from '@shared/mainI18n'
@@ -315,6 +317,32 @@ export class CloudClient {
     return this.request<NotesPage>('GET', `/api/v1/notes?since=${since}&limit=${limit}`)
   }
 
+  // ---------------------------------------------------------------- calendar
+
+  /**
+   * One calendar push.
+   *
+   * Same contract as `pushNotes`: a 409 names the ids another account owns and
+   * comes back as data, because the sync records them and carries on.
+   */
+  async pushCalendar(changes: unknown[]): Promise<{ status: number; payload: CalendarPushResult }> {
+    return this.sendAuthed<CalendarPushResult>('POST', '/api/v1/calendar', { changes })
+  }
+
+  pullCalendar(since: number, limit: number): Promise<CalendarPage> {
+    return this.request<CalendarPage>('GET', `/api/v1/calendar?since=${since}&limit=${limit}`)
+  }
+
+  // --------------------------------------------------------------- reminders
+
+  async pushReminders(changes: unknown[]): Promise<{ status: number; payload: ReminderPushResult }> {
+    return this.sendAuthed<ReminderPushResult>('POST', '/api/v1/reminders', { changes })
+  }
+
+  pullReminders(since: number, limit: number): Promise<ReminderPage> {
+    return this.request<ReminderPage>('GET', `/api/v1/reminders?since=${since}&limit=${limit}`)
+  }
+
   /** Puts this machine's recording for one note on the server. */
   async uploadNoteAudio(
     id: string,
@@ -456,6 +484,22 @@ export interface StatsSyncSource {
   setCloudContributions(devices: Array<{ deviceId: string; stats: unknown }>, ownDeviceId: string, accountKey: string): Promise<void>
 }
 
+/**
+ * What the engine needs from the calendar sync step.
+ *
+ * `CalendarSync` satisfies this as written; the interface exists so a test can
+ * drive the engine's ordering without a calendar store or a state file.
+ */
+export interface CalendarSyncSource {
+  pendingCount(): number
+  run(remote: CalendarRemote, serverUrl: string): Promise<{ pushed: number; pulled: number }>
+}
+
+export interface RemindersSyncSource {
+  pendingCount(): number
+  run(remote: ReminderRemote, serverUrl: string): Promise<{ pushed: number; pulled: number }>
+}
+
 /** A note as the server expects it in a change list. */
 function toNoteChange(note: NoteEntry): Record<string, unknown> {
   return {
@@ -531,7 +575,12 @@ export class SyncEngine {
     private readonly log: (line: string) => void,
     private readonly filePath = join(app.getPath('userData'), 'sync-state.json'),
     private readonly notes: NotesSyncSource | null = null,
-    private readonly stats: StatsSyncSource | null = null
+    private readonly stats: StatsSyncSource | null = null,
+    // Appended, never inserted: `src/main/index.ts` builds this positionally and
+    // belongs to the Lead. Their cursors live in their own state files, so the
+    // shape of SyncState — and of the status the UI renders — is unchanged.
+    private readonly calendars: CalendarSyncSource | null = null,
+    private readonly reminders: RemindersSyncSource | null = null
   ) {
     this.state = this.readState()
     if (!this.state.deviceId) this.state.deviceId = randomUUID()
@@ -590,7 +639,10 @@ export class SyncEngine {
     const session = this.accounts.get()
     const enabled = settings.syncEnabled && session !== null
     const pending = enabled
-      ? this.history.pendingSince(this.state.pushCursor) + (this.notes?.pendingCount() ?? 0)
+      ? this.history.pendingSince(this.state.pushCursor) +
+        (this.notes?.pendingCount() ?? 0) +
+        (this.calendars?.pendingCount() ?? 0) +
+        (this.reminders?.pendingCount() ?? 0)
       : 0
     return {
       enabled,
@@ -653,6 +705,9 @@ export class SyncEngine {
       await this.pullAll()
       await this.syncNoteAudio()
       await this.syncStats()
+      // Schedule and tasks last: they are the cheapest steps and the ones a user
+      // notices, but they must never delay the history that the dictation UI reads.
+      await this.syncSideRows()
       // Keep the old durable cursor until recordings are on disk as well. A
       // failed download (or a restart) must replay the page that advertised it.
       this.state.notesCursor = notesCursor
@@ -666,6 +721,37 @@ export class SyncEngine {
     }
     this.writeState()
     return this.emit(this.snapshot())
+  }
+
+  /**
+   * Calendar and reminder rows.
+   *
+   * Each resource owns its cursor and its state file, so they are attempted
+   * independently: an older server that answers 404 for one of them still syncs the
+   * other. The first failure is rethrown only after both have had their turn, so
+   * one broken resource cannot hide the other's progress.
+   */
+  private async syncSideRows(): Promise<void> {
+    const session = this.accounts.get()
+    if (!session) return
+    let failure: unknown = null
+    const steps: Array<[string, (() => Promise<{ pushed: number; pulled: number }>) | null]> = [
+      ['calendar', this.calendars ? () => this.calendars!.run(this.client, session.serverUrl) : null],
+      ['reminders', this.reminders ? () => this.reminders!.run(this.client, session.serverUrl) : null]
+    ]
+    for (const [name, step] of steps) {
+      if (!step) continue
+      try {
+        const result = await step()
+        if (result.pushed > 0 || result.pulled > 0) {
+          this.log(`[sync] ${name}: ${result.pushed} pushed, ${result.pulled} pulled`)
+        }
+      } catch (error) {
+        if (failure === null) failure = error
+        this.log(`[sync] ${name} failed: ${describeError(error)}`)
+      }
+    }
+    if (failure !== null) throw failure
   }
 
   /** Sync per-install rollups so multiple machines add without echo-counting. */

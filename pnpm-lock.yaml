@@ -23,6 +23,9 @@ importers:
       sherpa-onnx-node:
         specifier: 1.13.8
         version: 1.13.8
+      sherpa-onnx-win-x64:
+        specifier: 1.13.8
+        version: 1.13.8
     devDependencies:
       '@emotion/react':
         specifier: ^11.14.0
@@ -4342,8 +4345,7 @@ snapshots:
   sherpa-onnx-win-ia32@1.13.8:
     optional: true
 
-  sherpa-onnx-win-x64@1.13.8:
-    optional: true
+  sherpa-onnx-win-x64@1.13.8: {}
 
   siginfo@2.0.0: {}
 

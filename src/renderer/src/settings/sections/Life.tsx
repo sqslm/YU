@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Box, Button, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
-import type { Settings } from '@shared/types'
+import type { ExternalCalendar, Settings } from '@shared/types'
 import type { CalendarEvent, CalendarRange } from '@shared/calendar'
 import { formatEventTime } from '@shared/calendar'
 import type { Briefing, BriefingRecord } from '@shared/briefing'
@@ -81,6 +81,9 @@ export function LifeSection({ settings, patch }: {
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<BriefingRecord[]>([])
   const [openDay, setOpenDay] = useState<string | null>(null)
+  const [feeds, setFeeds] = useState<ExternalCalendar[]>([])
+  const [feedName, setFeedName] = useState('')
+  const [feedUrl, setFeedUrl] = useState('')
 
   const language: 'zh' | 'en' = i18n.language === 'en' ? 'en' : 'zh'
   const quiet = settings.briefing.quietHours
@@ -107,11 +110,64 @@ export function LifeSection({ settings, patch }: {
     try { setHistory(await window.api.life.briefingHistory()) } catch (error) { setNotice({ error: true, text: String(error) }) }
   }, [])
 
+  const loadFeeds = useCallback(async (): Promise<void> => {
+    try { setFeeds(await window.api.life.feeds()) } catch (error) { setNotice({ error: true, text: String(error) }) }
+  }, [])
+
+  /**
+   * Feed edits go through the main process and come back as the whole list: the
+   * page never guesses what the stored rows look like after a validation that
+   * only the main process can perform.
+   */
+  const addFeed = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const result = await window.api.life.addFeed({ name: feedName, url: feedUrl })
+      if (!result.ok) setNotice({ error: true, text: result.error })
+      else {
+        setFeeds(previous => [...previous, result.calendar])
+        setFeedName(''); setFeedUrl('')
+        setNotice({ error: false, text: i18n.t('已添加订阅：{{name}}', { name: result.calendar.name }) })
+      }
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
+  }
+
+  const refreshFeeds = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const result = await window.api.life.refreshFeeds()
+      if (!result.ok) setNotice({ error: true, text: result.error })
+      else {
+        const { added, updated, failed } = result.result
+        setNotice({ error: false, text: failed
+          ? i18n.t('订阅已刷新：新增 {{added}} 条，更新 {{updated}} 条，{{failed}} 个没有拉到', { added, updated, failed })
+          : i18n.t('订阅已刷新：新增 {{added}} 条，更新 {{updated}} 条', { added, updated }) })
+        await loadFeeds()
+        await loadEvents(range)
+      }
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
+  }
+
+  const removeFeed = async (id: string): Promise<void> => {
+    try { setFeeds((await window.api.life.removeFeed(id)).feeds) } catch (error) { setNotice({ error: true, text: String(error) }) }
+  }
+
+  const toggleFeed = async (feed: ExternalCalendar, enabled: boolean): Promise<void> => {
+    try {
+      const result = await window.api.life.updateFeed({ id: feed.id, patch: { enabled } })
+      if (result.ok) setFeeds(result.feeds)
+      else setNotice({ error: true, text: result.error })
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+  }
+
   const loadEvents = useCallback(async (next: CalendarRange) => {
     try { setEvents(await window.api.life.events(next)) } catch (error) { setNotice({ error: true, text: String(error) }) }
   }, [])
 
   useEffect(() => { void loadEvents(range) }, [loadEvents, range])
+  useEffect(() => { void loadFeeds() }, [loadFeeds])
   // The hub calendar page and the assistant write the same store, so the list has
   // to follow their edits instead of showing what was true when the tab opened.
   useEffect(() => window.api.life.onChanged(() => { void loadEvents(range) }), [loadEvents, range])
@@ -186,10 +242,42 @@ export function LifeSection({ settings, patch }: {
         ))}
       </SettingsGroup>
 
+      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🔗</Box>} title={i18n.t('订阅日历')}>
+        <SettingsHint>{i18n.t('把别人分享的 ICS 地址填进来，日程会合并到本地：订阅是只读的，这里的改动不会回写。')}</SettingsHint>
+        {feeds.map(feed => (
+          <SettingsRow key={feed.id} label={feed.name}
+            description={`${feed.url}${feed.lastFetchedAt ? ` · ${i18n.t('上次拉取：{{time}}', { time: historyDayText(
+              new Date(feed.lastFetchedAt).toISOString().slice(0, 10), language) })}` : ` · ${i18n.t('还没拉取过')}`}`}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Switch size="small" checked={feed.enabled} onChange={e => void toggleFeed(feed, e.target.checked)} />
+              <Button size="small" onClick={() => void removeFeed(feed.id)}>{i18n.t('移除')}</Button>
+            </Stack>
+          </SettingsRow>
+        ))}
+        <SettingsRow label={i18n.t('添加订阅')} description={i18n.t('支持 https 与 webcal 链接；本机地址和回环地址会被拒绝。')}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <TextField size="small" sx={narrowControlSx} placeholder={i18n.t('名称（可留空）')} value={feedName}
+              onChange={e => setFeedName(e.target.value)} />
+            <TextField size="small" sx={controlSx} placeholder="https://example.com/calendar.ics" value={feedUrl}
+              onChange={e => setFeedUrl(e.target.value)} />
+            <Button size="small" variant="contained" disabled={busy || !feedUrl.trim()} onClick={() => void addFeed()}>
+              {i18n.t('添加')}
+            </Button>
+            <Button size="small" disabled={busy || feeds.length === 0} onClick={() => void refreshFeeds()}>
+              {i18n.t('立即刷新')}
+            </Button>
+          </Stack>
+        </SettingsRow>
+      </SettingsGroup>
+
       <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🌤</Box>} title={i18n.t('每日简报')}>
         <SettingsRow label={i18n.t('每天定时生成简报')} description={i18n.t('汇总今天的日程、到期待办、已经过期的事和明天的预览。')}>
           <Switch size="small" checked={settings.briefing.enabled}
             onChange={e => patch({ briefing: { ...settings.briefing, enabled: e.target.checked } })} />
+        </SettingsRow>
+        <SettingsRow label={i18n.t('让模型写成一段话')} description={i18n.t('用同一份数据写成连贯的一段；模型没返回或拒绝时自动回落到模板，不会因此漏发。')}>
+          <Switch size="small" checked={settings.briefing.narrative !== false}
+            onChange={e => patch({ briefing: { ...settings.briefing, narrative: e.target.checked } })} />
         </SettingsRow>
         <SettingsRow label={i18n.t('生成时间')}>
           <TextField select size="small" sx={{ width: 140 }} value={settings.briefing.time}

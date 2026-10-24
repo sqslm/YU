@@ -28,9 +28,31 @@ import type { Reminder, ReminderAction, ReminderInput, ReminderView } from './re
 export type { AnswerCardPayload } from './types'
 
 /** The bridge exposed by the preload script as `window.api`. */
+/**
+ * Mirrors `src/main/updater.ts`'s `UpdateState`. Kept structurally identical so a
+ * change there shows up here as a type error instead of a silently empty badge.
+ */
+export interface UpdateState {
+  phase:
+    | 'idle'
+    | 'checking'
+    | 'up-to-date'
+    | 'available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+    | 'disabled'
+  currentVersion: string
+  version?: string
+  percent?: number
+  message?: string
+}
+
 export interface TypelessApi {
   checkAsr(): Promise<void>
   wakeWord: {
+    /** Enumerates capture devices; never rejects, an empty list means "use default". */
+    devices(): Promise<Array<{ id: string; name: string }>>
     status(): Promise<import('./wake-word').WakeWordStatus>
     retry(): Promise<import('./wake-word').WakeWordStatus>
     onChanged(callback: (status: import('./wake-word').WakeWordStatus) => void): () => void
@@ -83,6 +105,19 @@ export interface TypelessApi {
      */
     saveEvent(input: import('./calendar').CalendarEventInput, id?: string): Promise<import('./calendar').CalendarEvent | null>
     importIcs(): Promise<{ added: number; updated: number; skipped: number } | null>
+    /**
+     * Subscribed ICS feeds. Adding and updating validate the URL in the main
+     * process — the renderer never decides whether a fetch may happen.
+     */
+    feeds(): Promise<import('./types').ExternalCalendar[]>
+    addFeed(input: { name?: string; url: string }):
+      Promise<{ ok: true; calendar: import('./types').ExternalCalendar } | { ok: false; error: string }>
+    updateFeed(input: { id: string; patch: { name?: string; url?: string; enabled?: boolean } }):
+      Promise<{ ok: true; feeds: import('./types').ExternalCalendar[] } | { ok: false; error: string }>
+    removeFeed(id: string): Promise<{ ok: true; feeds: import('./types').ExternalCalendar[] }>
+    /** Manual "refresh now": resolves with what each feed contributed this time. */
+    refreshFeeds(): Promise<{ ok: true; result: { feeds: number; added: number; updated: number; failed: number } }
+      | { ok: false; error: string }>
     exportIcs(): Promise<{ path: string } | null>
     /** Fires after any calendar write, including ones made by the assistant. */
     onChanged(callback: () => void): () => void
@@ -256,6 +291,18 @@ export interface TypelessApi {
      * button and by the history row menu (REQ-02).
      */
     retry(id?: string): Promise<{ ok: boolean; message: string }>
+  }
+  /**
+   * Update plumbing. `state` is the whole truth (phase + version + percent), so
+   * the hub can show a badge without asking the updater twice, and `onState`
+   * pushes every phase change so the badge is never stale.
+   */
+  update: {
+    state(): Promise<UpdateState | null>
+    check(): Promise<UpdateState | null>
+    download(): Promise<{ ok: boolean; message: string }>
+    install(): Promise<boolean>
+    onState(callback: (state: UpdateState) => void): () => void
   }
   app: {
     chooseDownloadFolder(): Promise<string | null>

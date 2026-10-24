@@ -6,8 +6,10 @@ import { createMailer } from './mail.mjs'
 import { RateLimiter } from './ratelimit.mjs'
 import { registerAuthRoutes } from './routes/auth.mjs'
 import { registerAdminRoutes } from './routes/admin.mjs'
+import { registerCalendarRoutes } from './routes/calendar.mjs'
 import { registerMetaRoutes } from './routes/meta.mjs'
 import { registerNoteRoutes } from './routes/notes.mjs'
+import { registerReminderRoutes } from './routes/reminders.mjs'
 import { registerStatsRoutes } from './routes/stats.mjs'
 import { registerSyncRoutes } from './routes/sync.mjs'
 import { registerUserRoutes } from './routes/user.mjs'
@@ -62,6 +64,8 @@ export function createApp({ config, logger, db = openDatabase(config.dataDir) })
   registerAuthRoutes(router)
   registerUserRoutes(router)
   registerNoteRoutes(router)
+  registerCalendarRoutes(router)
+  registerReminderRoutes(router)
   registerStatsRoutes(router)
   // Kept so existing builds that already sync the dictation history stay working.
   registerSyncRoutes(router)

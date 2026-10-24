@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  DEFAULT_BRIEFING_SETTINGS, DEFAULT_QUIET_HOURS, MAX_BRIEFING_HISTORY, appendBriefingHistory,
-  briefingDayKey, composeBriefing, isWithinQuietHours, nextAllowedAt, nextBriefingAt,
-  normalizeBriefingSettings, normalizeBriefingTime
+  BRIEFING_NARRATION_TIMEOUT_MS, DEFAULT_BRIEFING_SETTINGS, DEFAULT_QUIET_HOURS, MAX_BRIEFING_HISTORY, appendBriefingHistory,
+  briefingDayKey, briefingNarrationFacts, briefingNarrationProblem, briefingNarrationPrompt, composeBriefing, isWithinQuietHours,
+  narrateBriefing, nextAllowedAt, nextBriefingAt, normalizeBriefingSettings, normalizeBriefingTime
 } from '@shared/briefing'
 import type { Briefing, BriefingData, BriefingQuietHours, BriefingRecord, BriefingSettings } from '@shared/briefing'
 import { BriefingScheduler } from './briefing'
@@ -56,12 +56,16 @@ describe('briefing settings', () => {
   })
   it('fills missing flags and keeps the ones it is given', () => {
     expect(normalizeBriefingSettings(undefined)).toEqual(DEFAULT_BRIEFING_SETTINGS)
-    expect(normalizeBriefingSettings({ enabled: true, time: '7:5' })).toEqual({ enabled: true, time: '07:05', speak: false, notify: true, skipEmpty: true, quietHours: DEFAULT_QUIET_HOURS })
+    expect(normalizeBriefingSettings({ enabled: true, time: '7:5' })).toEqual({ enabled: true, time: '07:05', speak: false, notify: true, skipEmpty: true, narrative: true, quietHours: DEFAULT_QUIET_HOURS })
     expect(normalizeBriefingSettings({ enabled: 'yes', skipEmpty: false })).toMatchObject({ enabled: false, skipEmpty: false })
   })
   it('backfills quiet hours for a settings file written before they existed', () => {
     const settings = normalizeBriefingSettings({ enabled: true, time: '08:00', speak: true, notify: false, skipEmpty: false })
-    expect(settings).toEqual({ enabled: true, time: '08:00', speak: true, notify: false, skipEmpty: false, quietHours: DEFAULT_QUIET_HOURS })
+    expect(settings).toEqual({ enabled: true, time: '08:00', speak: true, notify: false, skipEmpty: false, narrative: true, quietHours: DEFAULT_QUIET_HOURS })
+  })
+  it('lets the user fall back to the template without losing the rest of the group', () => {
+    expect(normalizeBriefingSettings({ narrative: false })).toMatchObject({ narrative: false, enabled: false, time: '08:00' })
+    expect(normalizeBriefingSettings({ narrative: 'off' })).toMatchObject({ narrative: true })
   })
   it('normalizes each quiet-hours field and keeps what it is given', () => {
     expect(normalizeBriefingSettings({ quietHours: { enabled: false, start: '7:5', end: '9:0' } }).quietHours)
@@ -241,15 +245,15 @@ interface Harness {
   run: (advanceMs?: number) => void
 }
 
-function harness(options: { now?: number; settings?: BriefingSettings | { briefing: BriefingSettings }; briefing?: Briefing; state?: BriefingState } = {}): Harness {
+function harness(options: { now?: number; settings?: BriefingSettings | { briefing: BriefingSettings }; briefing?: Briefing; state?: BriefingState; compose?: (now: number) => Briefing | Promise<Briefing> } = {}): Harness {
   const clock = { now: options.now ?? SLOT - 60_000 }
   const timers = new Map<number, () => void>()
   const delays: number[] = []
   const saved: BriefingState[] = []
   const state: BriefingState = { ...options.state }
-  const briefing = options.briefing ?? { title: '简报', body: '正文', sections: ['今天\n- 全天 团建'], empty: false, language: 'zh' as const }
+  const briefing = options.briefing ?? { title: '简报', body: '正文', sections: ['今天\n- 全天 团建'], empty: false, language: 'zh' as const, source: 'template' as const }
   const deliver = vi.fn()
-  const compose = vi.fn(() => briefing)
+  const compose = vi.fn(options.compose ?? (() => briefing))
   const log = vi.fn()
   const settings = { value: options.settings ?? { ...DEFAULT_BRIEFING_SETTINGS, enabled: true } }
   let handle = 0
@@ -361,7 +365,7 @@ describe('BriefingScheduler', () => {
     expect(h.deliver.mock.calls[0][1]).toBe(at(25, 11))
   })
   it('skips an empty briefing but still marks the day', () => {
-    const h = harness({ now: SLOT, briefing: { title: '简报', body: '今天没有安排。', sections: [], empty: true, language: 'zh' } })
+    const h = harness({ now: SLOT, briefing: { title: '简报', body: '今天没有安排。', sections: [], empty: true, language: 'zh', source: 'template' } })
     h.scheduler.start()
     expect(h.deliver).not.toHaveBeenCalled()
     expect(h.log).toHaveBeenCalledWith('briefing: nothing scheduled')
@@ -372,7 +376,7 @@ describe('BriefingScheduler', () => {
   })
   it('delivers an empty briefing when skipEmpty is off', () => {
     const h = harness({ now: SLOT, settings: { ...DEFAULT_BRIEFING_SETTINGS, enabled: true, skipEmpty: false },
-      briefing: { title: '简报', body: '今天没有安排。', sections: [], empty: true, language: 'zh' } })
+      briefing: { title: '简报', body: '今天没有安排。', sections: [], empty: true, language: 'zh', source: 'template' } })
     h.scheduler.start()
     expect(h.deliver).toHaveBeenCalledTimes(1)
   })
@@ -460,7 +464,7 @@ describe('BriefingScheduler history', () => {
   it('records every delivery and exposes it through status()', () => {
     const h = harness({ now: SLOT })
     h.scheduler.start()
-    expect(h.saved[0].history).toEqual([{ dayKey: '2026-08-25', title: '简报', body: '正文', createdAt: SLOT }])
+    expect(h.saved[0].history).toEqual([{ dayKey: '2026-08-25', title: '简报', body: '正文', createdAt: SLOT, source: 'template' }])
     expect(h.scheduler.status().history).toHaveLength(1)
     h.clock.now = at(26, 8)
     h.scheduler.check()
@@ -472,7 +476,7 @@ describe('BriefingScheduler history', () => {
     const h = harness({ now: SLOT, state: { history: [stale] } })
     h.scheduler.start()
     expect(h.deliver).toHaveBeenCalledTimes(1)
-    expect(h.scheduler.status().history).toEqual([{ dayKey: '2026-08-25', title: '简报', body: '正文', createdAt: SLOT }])
+    expect(h.scheduler.status().history).toEqual([{ dayKey: '2026-08-25', title: '简报', body: '正文', createdAt: SLOT, source: 'template' }])
   })
   it('loads a state file that only has lastDay and keeps working', () => {
     const h = harness({ now: SLOT - 60_000, state: { lastDay: '2026-08-24' } })
@@ -483,5 +487,205 @@ describe('BriefingScheduler history', () => {
     expect(h.deliver).toHaveBeenCalledTimes(1)
     expect(h.scheduler.status().lastDay).toBe('2026-08-25')
     expect(h.scheduler.status().history).toHaveLength(1)
+  })
+})
+
+/** A Chinese narration inside the limits; `length` drives the boundary cases. */
+const zhNarration = (length = 140): string => '今天有两件要紧的事，下午两点项目讨论，四点评审，上午记得先交周报。'.padEnd(length, '好')
+
+const enNarration = (words = 70): string => Array.from({ length: words }, () => 'word').join(' ')
+
+const emptyBriefing: Briefing = { title: '简报', body: '今天没有安排。', sections: [], empty: true, language: 'zh', source: 'template' }
+
+describe('briefingNarrationFacts', () => {
+  it('hands over the facts the template already had, and nothing more', () => {
+    const facts = briefingNarrationFacts(data(fullZh()))
+    expect(facts).toMatchObject({ language: 'zh', date: '2026-08-25', empty: false })
+    expect(facts.today).toEqual([{ title: '项目讨论', start: '14:00', end: '15:00', allDay: false, startAt: at(25, 14) },
+      { title: '评审', start: '16:00', end: '17:00', allDay: false, startAt: at(25, 16) }])
+    expect(facts.todo).toEqual([{ title: '交周报', due: '16:30', priority: 'normal' }])
+    expect(facts.overdue).toEqual([{ title: '体检', due: '18:00', priority: 'normal' }])
+    expect(facts.tomorrow).toHaveLength(1)
+    expect(String(facts.recap)).toContain('12')
+  })
+  it('says the day is empty only when every list is empty', () => {
+    expect(briefingNarrationFacts(data())).toMatchObject({ empty: true, today: [], todo: [], recap: null })
+    expect(briefingNarrationFacts(data({ events: fullZh().events }))).toMatchObject({ empty: false })
+  })
+})
+
+describe('briefingNarrationPrompt', () => {
+  it('carries the data-only rule, both length limits and the empty sentence', () => {
+    const prompt = briefingNarrationPrompt(data(fullZh()))
+    expect(prompt).toContain('120–220')
+    expect(prompt).toContain('今天没有安排。')
+    expect(prompt).toContain('不要编造')
+    expect(prompt).toContain('"title": "评审"')
+    // The absolute start stays available so an echoed row keeps an exact time.
+    expect(prompt).toContain(String(at(25, 14)))
+  })
+  it('states the English limits in words', () => {
+    const prompt = briefingNarrationPrompt(data(fullEn()))
+    expect(prompt).toContain('60–110 words')
+    expect(prompt).toContain('Nothing scheduled for today.')
+    expect(prompt).toContain('Design review')
+  })
+})
+
+describe('briefingNarrationProblem', () => {
+  it.each([
+    ['', 'empty'],
+    ['   \n ', 'empty'],
+    ['# 今日简报\n' + zhNarration(), 'markdown'],
+    ['- 下午两点项目讨论\n- 四点评审', 'markdown'],
+    [zhNarration(221), 'too long'],
+    [zhNarration(59), 'too short'],
+    ['今天三件事。', 'too short']
+  ])('rejects %j as %s', (body, problem) => {
+    expect(briefingNarrationProblem(body, 'zh')).toBe(problem)
+  })
+  it('accepts both ends of the Chinese range and one plain paragraph in between', () => {
+    expect(briefingNarrationProblem(zhNarration(120), 'zh')).toBeNull()
+    expect(briefingNarrationProblem(zhNarration(220), 'zh')).toBeNull()
+    expect(briefingNarrationProblem(`  ${zhNarration(150)}  `, 'zh')).toBeNull()
+  })
+  it('counts words rather than characters for English', () => {
+    expect(briefingNarrationProblem(enNarration(60), 'en')).toBeNull()
+    expect(briefingNarrationProblem(enNarration(110), 'en')).toBeNull()
+    expect(briefingNarrationProblem(enNarration(111), 'en')).toBe('too long')
+    expect(briefingNarrationProblem(enNarration(20), 'en')).toBe('too short')
+  })
+})
+
+describe('narrateBriefing', () => {
+  it('replaces the body with the narration but keeps the template facts', async () => {
+    const ask = vi.fn(async () => `  ${zhNarration()}  `)
+    const briefing = await narrateBriefing(data(fullZh()), { ask })
+    expect(briefing.source).toBe('model')
+    expect(briefing.body).toBe(zhNarration())
+    expect(briefing.title).toBe('8 月 25 日 · 今日简报')
+    expect(briefing.sections).toHaveLength(5)
+    expect(briefing.empty).toBe(false)
+    expect(ask).toHaveBeenCalledWith(expect.stringContaining('每日简报'), { signal: expect.any(AbortSignal) })
+  })
+  it('falls back to the template body when the call throws', async () => {
+    const log = vi.fn()
+    const ask = vi.fn(async () => { throw new Error('gateway down') })
+    const briefing = await narrateBriefing(data(fullZh()), { ask, log })
+    const template = composeBriefing(data(fullZh()))
+    expect(briefing).toEqual(template)
+    expect(briefing.source).toBe('template')
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('narration failed: gateway down'))
+  })
+  it('gives up on a slow call and keeps the template', async () => {
+    const log = vi.fn()
+    const ask = (_prompt: string, { signal }: { signal: AbortSignal }) => new Promise<string>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('aborted')))
+    })
+    const briefing = await narrateBriefing(data(fullZh()), { ask, timeoutMs: 5, log })
+    expect(briefing.source).toBe('template')
+    expect(briefing.body).toBe(composeBriefing(data(fullZh())).body)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('narration failed'))
+  })
+  it('defaults to the eight second ceiling', () => {
+    expect(BRIEFING_NARRATION_TIMEOUT_MS).toBe(8000)
+  })
+  it('rejects an over-long or blank answer instead of shipping it', async () => {
+    for (const body of [zhNarration(400), '', '# 今日简报\n' + zhNarration()]) {
+      const log = vi.fn()
+      const briefing = await narrateBriefing(data(fullZh()), { ask: vi.fn(async () => body), log })
+      expect(briefing.source).toBe('template')
+      expect(briefing.body).toBe(composeBriefing(data(fullZh())).body)
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('narration rejected'))
+    }
+  })
+  it('does not call the model for an empty day', async () => {
+    const ask = vi.fn(async () => zhNarration())
+    const briefing = await narrateBriefing(data(), { ask })
+    expect(ask).not.toHaveBeenCalled()
+    expect(briefing.body).toBe('今天没有安排。')
+    expect(briefing.source).toBe('template')
+  })
+  it('accepts an English narration measured in words', async () => {
+    const briefing = await narrateBriefing(data(fullEn()), { ask: vi.fn(async () => enNarration(80)) })
+    expect(briefing.source).toBe('model')
+    expect(briefing.body).toBe(enNarration(80))
+    expect(briefing.language).toBe('en')
+  })
+})
+
+/** Lets the un-awaited narration promise settle before asserting on it. */
+const flush = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
+
+describe('BriefingScheduler narration', () => {
+  it('arms the next check without waiting for the model', async () => {
+    let release: (value: Briefing) => void = () => {}
+    const pending = new Promise<Briefing>(resolve => { release = resolve })
+    const h = harness({ now: SLOT, compose: () => pending })
+    h.scheduler.start()
+    // start() came back while the model call is still open: no delivery yet, and
+    // tomorrow is already the target, so a slow provider cannot stall the chain.
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().nextAt).toBe(at(26, 8))
+    expect(h.scheduler.status().lastDay).toBeUndefined()
+    release({ ...emptyBriefing, body: '模型写的正文', sections: ['今天'], empty: false, source: 'model' })
+    await flush()
+    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.scheduler.status().lastDay).toBe('2026-08-25')
+    expect(h.scheduler.status().history).toEqual([
+      { dayKey: '2026-08-25', title: '简报', body: '模型写的正文', createdAt: SLOT, source: 'model' }
+    ])
+  })
+  it('keeps the day owed when the narration rejects, so the poll retries', async () => {
+    let calls = 0
+    const h = harness({
+      now: SLOT,
+      compose: () => {
+        calls += 1
+        return calls === 1 ? Promise.reject(new Error('boom')) : Promise.resolve({ ...emptyBriefing, body: '重试成功', sections: ['今天'], empty: false, source: 'model' })
+      }
+    })
+    h.scheduler.start()
+    await flush()
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().lastDay).toBeUndefined()
+    h.clock.now = SLOT + 30_000
+    h.scheduler.check()
+    await flush()
+    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.scheduler.status().lastDay).toBe('2026-08-25')
+  })
+  it('drops a narration that lands after stop() instead of delivering it', async () => {
+    let release: (value: Briefing) => void = () => {}
+    const pending = new Promise<Briefing>(resolve => { release = resolve })
+    const h = harness({ now: SLOT, compose: () => pending })
+    h.scheduler.start()
+    h.scheduler.stop()
+    release({ ...emptyBriefing, body: '模型写的正文', sections: ['今天'], empty: false, source: 'model' })
+    await flush()
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().lastDay).toBeUndefined()
+    expect(h.scheduler.status().history).toEqual([])
+  })
+  it('still skips an empty narrated day and settles it', async () => {
+    const h = harness({ now: SLOT, compose: async () => emptyBriefing })
+    h.scheduler.start()
+    await flush()
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().lastDay).toBe('2026-08-25')
+    expect(h.scheduler.status().history).toEqual([])
+    expect(h.log).toHaveBeenCalledWith('briefing: nothing scheduled')
+  })
+  it('does not start a second narration while one is still open', async () => {
+    let release: (value: Briefing) => void = () => {}
+    const pending = new Promise<Briefing>(resolve => { release = resolve })
+    const h = harness({ now: SLOT, compose: () => pending })
+    h.scheduler.start()
+    h.scheduler.check()
+    h.scheduler.check()
+    expect(h.compose).toHaveBeenCalledTimes(1)
+    release({ ...emptyBriefing, body: '模型写的正文', sections: ['今天'], empty: false, source: 'model' })
+    await flush()
+    expect(h.deliver).toHaveBeenCalledTimes(1)
   })
 })

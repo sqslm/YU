@@ -4,15 +4,85 @@ import { app } from 'electron'
 import type { Settings } from '@shared/types'
 import type { WakeWordStatus } from '@shared/wake-word'
 
+/** A capture endpoint the recogniser can be pointed at. `id` is the waveIn index, as text. */
+export interface WakeWordDevice {
+  id: string
+  name: string
+}
+
+/** Settings plus the optional device picker, so this file compiles before the shape lands. */
+export type WakeWordInput = Settings['wakeWord'] & { deviceId?: string }
+
+/** Pulls the device list out of the script's stdout; exported so it can be tested without spawning. */
+export function parseDeviceList(stdout: string): WakeWordDevice[] {
+  for (const line of stdout.split('\n')) {
+    const text = line.trim()
+    if (!text.startsWith('{')) continue
+    try {
+      const event = JSON.parse(text)
+      if (event?.type !== 'devices' || !Array.isArray(event.devices)) continue
+      const list: unknown[] = event.devices
+      return list
+        .map((item) => (item && typeof item === 'object' ? (item as { id?: unknown; name?: unknown }) : null))
+        .filter((item): item is { id?: unknown; name?: unknown } => item !== null)
+        .map((item) => ({ id: String(item.id ?? ''), name: String(item.name ?? '') }))
+        .filter((item) => item.id !== '')
+    } catch { continue }
+  }
+  return []
+}
+
 /** Windows offline, exact-phrase grammar. No ASR provider, recording or polling while waiting. */
 export class WakeWordHost {
   private child: ChildProcessWithoutNullStreams | null = null
   private phrase = ''
+  private deviceId = ''
   private status: WakeWordStatus = { phase: 'off' }
   private startup: NodeJS.Timeout | null = null
   private lastWake = -Infinity
+  /** Why the last `listDevices()` came back empty: 'unavailable' | 'timeout' | '' when it worked. */
+  deviceIssue: '' | 'unavailable' | 'timeout' = ''
   constructor(private deps: { wake: () => void; changed: (status: WakeWordStatus) => void }) {}
   snapshot(): WakeWordStatus { return { ...this.status } }
+  private get script(): string {
+    return app.isPackaged ? join(process.resourcesPath, 'voice-wake.ps1') : join(app.getAppPath(), 'resources/voice-wake.ps1')
+  }
+  private get shell(): string {
+    return join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
+  }
+  /**
+   * Capture devices for the settings picker. Never throws: the settings UI has to render
+   * even on a machine with no microphone, and an old Windows may have no PowerShell at all.
+   */
+  listDevices(): Promise<WakeWordDevice[]> {
+    if (process.platform !== 'win32') { this.deviceIssue = 'unavailable'; return Promise.resolve([]) }
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(this.shell, ['-NoProfile', '-NonInteractive', '-File', this.script, '-ListDevices'],
+        { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch { this.deviceIssue = 'unavailable'; return Promise.resolve([]) }
+    return new Promise((resolve) => {
+      let output = ''
+      let settled = false
+      const finish = (devices: WakeWordDevice[], issue: '' | 'unavailable' | 'timeout' = ''): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.deviceIssue = issue
+        resolve(devices)
+      }
+      // Add-Type compiles the P/Invoke block on first use, which is slow but bounded.
+      const timer = setTimeout(() => { child.kill(); finish([], 'timeout') }, 15_000)
+      child.stdout?.setEncoding('utf8')
+      child.stdout?.on('data', (text: string) => { if (output.length < 65_536) output += text })
+      child.stderr?.resume()
+      child.on('error', () => finish([], 'unavailable'))
+      child.on('exit', () => {
+        const devices = parseDeviceList(output)
+        finish(devices, devices.length > 0 ? '' : 'unavailable')
+      })
+    })
+  }
   private publish(status: WakeWordStatus): void {
     if (JSON.stringify(status) === JSON.stringify(this.status)) return
     this.status = status; this.deps.changed(this.snapshot())
@@ -25,20 +95,22 @@ export class WakeWordHost {
     child?.kill()
     this.phrase = ''
   }
-  update(settings: Settings['wakeWord'], paused: boolean, retry = false): void {
+  update(settings: WakeWordInput, paused: boolean, retry = false): void {
     if (!settings.enabled || paused) {
       this.stop(); this.publish({ phase: settings.enabled ? 'paused' : 'off' }); return
     }
-    if (this.phrase === settings.phrase && (this.child || this.status.phase === 'error') && !retry) return
+    const device = settings.deviceId ?? ''
+    // A device switch has to restart the recogniser: waveIn cannot re-target an open input.
+    if (this.phrase === settings.phrase && this.deviceId === device && (this.child || this.status.phase === 'error') && !retry) return
     this.stop()
     this.phrase = settings.phrase
+    this.deviceId = device
     const letters = this.phrase.replace(/[^\p{L}\p{N}]/gu, '')
     const shortPhrase = /[\u3400-\u9fff]/u.test(letters) ? letters.length < 4 : this.phrase.trim().split(/\s+/).length < 2
     if (process.platform !== 'win32') { this.publish({ phase: 'error', error: 'unavailable' }); return }
     this.publish({ phase: 'starting' })
-    const script = app.isPackaged ? join(process.resourcesPath, 'voice-wake.ps1') : join(app.getAppPath(), 'resources/voice-wake.ps1')
-    const child = spawn(join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
-      ['-NoProfile', '-NonInteractive', '-File', script], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(this.shell,
+      ['-NoProfile', '-NonInteractive', '-File', this.script], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     this.child = child
     let buffer = ''
     const failed = (error: WakeWordStatus['error'] = 'unavailable'): void => {
@@ -77,6 +149,6 @@ export class WakeWordHost {
     child.on('exit', () => failed())
     child.stdin.on('error', () => failed())
     this.startup = setTimeout(() => failed(), 15_000)
-    child.stdin.end(JSON.stringify({ phrase: settings.phrase, language: /[\u3400-\u9fff]/u.test(settings.phrase) ? 'zh' : 'en' }) + '\n', 'utf8')
+    child.stdin.end(JSON.stringify({ phrase: settings.phrase, language: /[\u3400-\u9fff]/u.test(settings.phrase) ? 'zh' : 'en', device }) + '\n', 'utf8')
   }
 }

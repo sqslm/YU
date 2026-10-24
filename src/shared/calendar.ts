@@ -16,6 +16,11 @@
  *    calendar entry the user typed in their own zone.
  */
 import { mt } from './mainI18n'
+// The settings group and its feed rows live in the domain model file: one
+// definition means a new field cannot be added on only one side of the app.
+import type { CalendarSettings } from './types'
+
+export type { CalendarSettings, ExternalCalendar } from './types'
 
 export const MAX_EVENT_TITLE = 200
 export const MAX_EVENT_NOTES = 2000
@@ -32,12 +37,10 @@ const FOLD_OCTETS = 73
 
 export type EventStatus = 'confirmed' | 'cancelled'
 
-export interface CalendarSettings {
-  enabled: boolean
-  defaultLeadMinutes: number
-}
-
-export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = { enabled: true, defaultLeadMinutes: DEFAULT_EVENT_LEAD_MINUTES }
+export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = { enabled: true, defaultLeadMinutes: DEFAULT_EVENT_LEAD_MINUTES,
+  // Empty by default: subscribing is a deliberate act, and an unreachable feed
+  // would otherwise show up as a warning the user never asked for.
+  externalCalendars: [] }
 
 export interface CalendarEvent {
   id: string

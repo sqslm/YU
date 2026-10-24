@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeSettings } from '@shared/defaults'
-import { AssistantSession, ASSISTANT_TOOLS } from './assistant'
+import {
+  AssistantSession, ASSISTANT_TOOLS, referenceBlock, referenceContextFrom, referenceContextFromNotes, referenceEditHint,
+  resolveReference
+} from './assistant'
+import type { ReferenceContext, ReferenceItem } from './assistant'
 import { askAgent } from './agent'
 import { runTool, toolSchemas } from './tools/registry'
 import type { AssistantState } from '@shared/assistant'
@@ -203,5 +207,140 @@ describe('life capabilities in the ask prompt', () => {
     expect(prompt).toContain('not connected as assistant tools yet')
     expect(prompt).not.toContain('long-term memory')
     expect(prompt.trim().endsWith('report the actual failure.')).toBe(true)
+  })
+})
+
+/** 2026-08-25, so the duration hints stay timezone independent. */
+const at = (hour: number, minute = 0): number => new Date(2026, 7, 25, hour, minute).getTime()
+
+const rows = (): ReferenceItem[] => [
+  { id: 'e1', title: '项目讨论', fields: { id: 'e1', title: '项目讨论', start: at(14), end: at(15), allDay: false } },
+  { id: 'e2', title: '评审', fields: { id: 'e2', title: '评审', start: at(16), end: at(17), allDay: false } },
+  { id: 'e3', title: '面试', fields: { id: 'e3', title: '面试', start: at(18), end: at(18, 30), allDay: false } }
+]
+
+const thread = (items: ReferenceItem[] = rows(), lastObject?: ReferenceItem): ReferenceContext => ({ tool: 'list_events', items, lastObject })
+
+describe('resolveReference', () => {
+  it('reads a Chinese and an Arabic ordinal the same way', () => {
+    expect(resolveReference('第二条改成十一点', thread())).toMatchObject({ kind: 'ordinal', index: 1, item: { id: 'e2' } })
+    expect(resolveReference('把第 2 条改成十一点', thread())).toMatchObject({ kind: 'ordinal', index: 1, item: { id: 'e2' } })
+    expect(resolveReference('第一个', thread())).toMatchObject({ kind: 'ordinal', index: 0, item: { id: 'e1' } })
+    expect(resolveReference('第十二条', thread(Array.from({ length: 12 }, (_, index) => ({ id: `r${index}`, title: `T${index}`, fields: {} })))))
+      .toMatchObject({ kind: 'ordinal', index: 11 })
+  })
+  it('counts English ordinals too', () => {
+    expect(resolveReference('Change the second one to 11am', thread())).toMatchObject({ kind: 'ordinal', index: 1 })
+  })
+  it('treats "最后一个" as the tail of the same list', () => {
+    expect(resolveReference('最后一个改成十一点', thread())).toMatchObject({ kind: 'last', index: 2, item: { id: 'e3' } })
+  })
+  it('asks instead of guessing when there is no context at all', () => {
+    const outcome = resolveReference('第二个改成十一点', null)
+    expect(outcome).toMatchObject({ kind: 'clarify' })
+    expect(outcome.kind === 'clarify' ? outcome.question : '').toContain('哪一条')
+  })
+  it('asks when the ordinal points past the list the user saw', () => {
+    const outcome = resolveReference('第五个', thread())
+    expect(outcome).toMatchObject({ kind: 'clarify' })
+    expect(outcome.kind === 'clarify' ? outcome.question : '').toContain('3')
+  })
+  it('asks when several rows could be "刚才那条"', () => {
+    const outcome = resolveReference('刚才那条改成下午三点', thread())
+    expect(outcome).toMatchObject({ kind: 'clarify' })
+    expect(outcome.kind === 'clarify' ? outcome.question : '').toContain('项目讨论')
+  })
+  it('resolves "刚才那条" to the single object the last turn wrote', () => {
+    const written: ReferenceItem = { id: 'e9', title: '周会', fields: { id: 'e9', title: '周会', start: at(9), end: at(10) } }
+    expect(resolveReference('刚才那条改成十一点', thread([], written))).toMatchObject({ kind: 'ambient', item: { id: 'e9' } })
+    expect(resolveReference('上一个改成十一点', thread([], written))).toMatchObject({ kind: 'ambient', item: { id: 'e9' } })
+  })
+  it('never treats dictated or quoted text as a pointer', () => {
+    expect(resolveReference('"第二个"用英文怎么说', thread())).toEqual({ kind: 'none' })
+    expect(resolveReference('这段需求：第二个改成十一点', thread())).toEqual({ kind: 'none' })
+  })
+  it('ignores an ambient word that asks for nothing', () => {
+    expect(resolveReference('这个日程是什么意思', thread())).toEqual({ kind: 'none' })
+  })
+  it('declines a time ordinal such as "第一次"', () => {
+    expect(resolveReference('第一次提醒是什么时候', thread())).toEqual({ kind: 'none' })
+  })
+})
+
+describe('referenceEditHint', () => {
+  it('keeps the duration when only a new start is given', () => {
+    const hint = referenceEditHint(rows()[0]) ?? ''
+    expect(hint).toContain('14:00')
+    expect(hint).toContain('15:00')
+    expect(hint).toContain('时长 60 分钟')
+    expect(hint).toContain('只改开始时间')
+  })
+  it('offers no schedule rule for a row without an end', () => {
+    expect(referenceEditHint({ id: 't1', title: '交周报', fields: { id: 't1', title: '交周报', dueAt: at(16) } })).toBeNull()
+  })
+})
+
+describe('referenceBlock', () => {
+  it('lists the rows in the order the user saw them, with real ids', () => {
+    const block = referenceBlock(thread(), resolveReference('第二个', thread()))
+    expect(block).toContain('1. 项目讨论（id=e1）')
+    expect(block).toContain('2. 评审（id=e2）')
+    expect(block).toContain('「第 2 条」= 评审（id=e2）')
+    expect(block).toContain('"start"')
+    expect(block).toContain('时长 60 分钟')
+  })
+  it('says nothing when there is neither context nor a pointer', () => {
+    expect(referenceBlock(null, { kind: 'none' })).toBe('')
+  })
+})
+
+describe('referenceContextFrom', () => {
+  it('keeps list rows in order and leaves a list without a written object', () => {
+    const context = referenceContextFrom({ ok: true, data: { items: [{ id: 'e1', title: 'A' }, { id: 'e2', title: 'B' }] } }, 'list_events')
+    expect(context).toMatchObject({ tool: 'list_events' })
+    expect(context?.items.map(item => item.id)).toEqual(['e1', 'e2'])
+    expect(context?.lastObject).toBeUndefined()
+  })
+  it('takes the written row rather than the values it replaced', () => {
+    const context = referenceContextFrom({ ok: true, data: {
+      item: { id: 'e7', title: 'C', start: at(9), end: at(10) },
+      before: { id: 'e7', title: 'C', start: at(8), end: at(9) }
+    } }, 'manage_event')
+    expect(context?.lastObject).toMatchObject({ id: 'e7', fields: { start: at(9) } })
+  })
+  it('ignores rows without an id or a title', () => {
+    expect(referenceContextFrom({ ok: true, data: { items: [{ id: 'x' }, { title: 'y' }] } })).toBeNull()
+  })
+  it('reads rows back out of the rendered thread notes', () => {
+    const notes = `[1] list_events\n{"ok":true,"data":{"items":[{"id":"e1","title":"项目讨论","start":${at(14)},"end":${at(15)}}]}}`
+    expect(referenceContextFromNotes(notes)?.items.map(item => item.id)).toEqual(['e1'])
+    expect(referenceContextFromNotes('')).toBeNull()
+    expect(referenceContextFromNotes('{not json')).toBeNull()
+  })
+})
+
+describe('assistant session references', () => {
+  it('hands the resolved id and its fields to the model for "第二个"', async () => {
+    session.rememberAnswer('我的日程', '两个日程', { name: 'list_events', ok: true,
+      data: { items: rows().map(row => row.fields) } })
+    await session.send('把第二个改成十一点')
+    const prompt = ask.mock.calls.at(-1)?.[0].polish.askPrompt ?? ''
+    expect(prompt).toContain('「第 2 条」= 评审（id=e2）')
+    expect(prompt).toContain(String(at(16)))
+    expect(prompt).toContain('时长 60 分钟')
+    expect(prompt).toContain('最近 3 轮对话')
+    expect(session.snapshot().turns.at(-1)?.state).toBe('done')
+  })
+  it('asks the user instead of calling the model when a pointer has no rows', async () => {
+    await session.send('第二个改成十一点')
+    expect(ask).not.toHaveBeenCalled()
+    expect(session.snapshot().turns[0]).toMatchObject({ state: 'done' })
+    expect(session.snapshot().turns[0].answer).toContain('哪一条')
+  })
+  it('asks which one when the last turn left several rows and no single object', async () => {
+    session.rememberAnswer('我的日程', '三个日程', { name: 'list_events', ok: true, data: { items: rows().map(row => row.fields) } })
+    await session.send('刚才那条改成下午三点')
+    expect(ask).not.toHaveBeenCalled()
+    expect(session.snapshot().turns.at(-1)?.answer).toContain('项目讨论')
   })
 })

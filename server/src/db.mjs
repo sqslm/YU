@@ -174,6 +174,65 @@ function migration2(db) {
   db.exec(V2_SCHEMA)
 }
 
+/**
+ * Version 5: the calendar and the reminder list.
+ *
+ * Both speak the same protocol as `notes` — one row per id, a `seq` cursor, a
+ * tombstone — because the client already knows that protocol and a second,
+ * subtly different cursor scheme is how a sync stops working silently. Unlike
+ * `notes` there is no `version` column: a calendar entry or a task is edited by
+ * the person holding whichever device is nearest, the server has no better claim
+ * to the truth, and a version check would only turn a normal edit into a
+ * conflict dialog. Last write wins per id, and deletions stay as tombstones so a
+ * device that was offline cannot resurrect a row it never learned about.
+ *
+ * Reminder rows keep the client's own document in `data` while the columns hold
+ * the fields a query (or a future server-side job) needs. The client owns that
+ * shape — recurrence rules, snooze and missed bookkeeping — so the server stores
+ * it verbatim instead of growing one column per user-facing option.
+ */
+const V5_SCHEMA = `
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  start_at INTEGER NOT NULL DEFAULT 0,
+  end_at INTEGER NOT NULL DEFAULT 0,
+  all_day INTEGER NOT NULL DEFAULT 0,
+  location TEXT,
+  notes TEXT,
+  lead_minutes INTEGER,
+  source TEXT NOT NULL DEFAULT 'manual',
+  uid TEXT,
+  status TEXT NOT NULL DEFAULT 'confirmed',
+  updated_at INTEGER NOT NULL,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  deleted_at INTEGER,
+  seq INTEGER NOT NULL DEFAULT 0,
+  server_updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS calendar_events_user_seq ON calendar_events (user_id, seq);
+
+CREATE TABLE IF NOT EXISTS reminders (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  due_at INTEGER,
+  level TEXT NOT NULL DEFAULT 'normal',
+  priority TEXT NOT NULL DEFAULT 'normal',
+  deadline_at INTEGER,
+  recurrence TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  data TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  deleted_at INTEGER,
+  seq INTEGER NOT NULL DEFAULT 0,
+  server_updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reminders_user_seq ON reminders (user_id, seq);
+`
+
 const MIGRATIONS = [
   { version: 1, name: 'baseline', up: migration1 },
   { version: 2, name: 'sessions-notes-audio', up: migration2 },
@@ -188,7 +247,8 @@ const MIGRATIONS = [
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, device_id)
     ); CREATE INDEX IF NOT EXISTS usage_stats_user ON usage_stats (user_id);`)
-  }
+  },
+  { version: 5, name: 'calendar-reminders', up: db => db.exec(V5_SCHEMA) }
 ]
 
 /**

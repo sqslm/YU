@@ -27,6 +27,8 @@ export interface UpdaterOptions {
   onProgress?: (percent: number) => void
   onDownloaded: (version: string) => void
   onError: (message: string) => void
+  /** Pushes every phase change to the hub badge; the renderer never polls. */
+  onState?: (state: UpdateState) => void
 }
 
 export type UpdateCheck =
@@ -34,9 +36,39 @@ export type UpdateCheck =
   | { ok: false; status: 'not-configured' | 'error'; message: string }
 
 /**
+ * What the hub badge renders. Only the main process knows whether a check is
+ * still running, whether bytes are moving, or whether a downloaded installer is
+ * waiting for a restart, so the state lives here instead of being pieced together
+ * from one-shot IPC answers in the renderer.
+ */
+export interface UpdateState {
+  phase:
+    | 'idle'
+    | 'checking'
+    | 'up-to-date'
+    | 'available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+    | 'disabled'
+  currentVersion: string
+  version?: string
+  percent?: number
+  message?: string
+}
+
+/**
+ * The project's own release feed. GitHub serves the newest release's assets at
+ * `/releases/latest/download/`, so a generic feed URL keeps working without
+ * running an update server of our own. `TYPELESS_UPDATE_URL` and
+ * `update-feed.txt` still win, which is how a mirrored install points elsewhere.
+ */
+export const DEFAULT_FEED_URL = 'https://github.com/sqslm/YU/releases/latest/download'
+
+/**
  * Feed URL resolution order: the environment variable wins so a packaged build
  * can be pointed at a mirror without rebuilding, then a plain text file the
- * operator can drop into the data folder.
+ * operator can drop into the data folder, then the built-in GitHub feed.
  */
 export function resolveFeedUrl(
   env: Record<string, string | undefined> = process.env,
@@ -47,15 +79,18 @@ export function resolveFeedUrl(
   if ((env.TYPELESS_NO_UPDATE ?? '').trim() === '1') return null
   const fromEnv = (env.TYPELESS_UPDATE_URL ?? '').trim()
   if (fromEnv) return fromEnv
-  if (!userDataPath) return null
-  const file = join(userDataPath, 'update-feed.txt')
-  if (!existsSync(file)) return null
-  try {
-    const fromFile = readFileSync(file, 'utf8').trim()
-    return fromFile || null
-  } catch {
-    return null
+  if (userDataPath) {
+    const file = join(userDataPath, 'update-feed.txt')
+    if (existsSync(file)) {
+      try {
+        const fromFile = readFileSync(file, 'utf8').trim()
+        if (fromFile) return fromFile
+      } catch {
+        // A half-written file is not a reason to lose the default feed.
+      }
+    }
   }
+  return DEFAULT_FEED_URL
 }
 
 /** True when running from a packaged build: the only case updates make sense. */
@@ -97,13 +132,35 @@ export class Updater {
   private downloadedVersion: string | null = null
   /** One check at a time: the startup timer and a click must share it. */
   private checking: Promise<UpdateCheck> | null = null
+  private state: UpdateState = { phase: 'idle', currentVersion: app.getVersion() }
 
   constructor(private readonly options: UpdaterOptions) {}
+
+  /** Last known phase; the hub asks once on mount and then follows `onState`. */
+  getState(): UpdateState {
+    return this.state
+  }
+
+  private setState(patch: Partial<UpdateState>): void {
+    this.state = { ...this.state, ...patch, currentVersion: app.getVersion() }
+    try {
+      this.options.onState?.(this.state)
+    } catch (err) {
+      // A renderer that went away must not break the update flow.
+      this.options.log(`[update] state listener failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
 
   private configure(feedUrl: string): void {
     if (this.configured) return
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = true
+    // A prerelease build publishes `rc.yml` — electron-builder names the channel
+    // after the prerelease tag — so asking for `latest.yml` would 404 against our
+    // own feed and every rc install would silently stop seeing new builds.
+    const tag = /^\d+\.\d+\.\d+-([0-9A-Za-z]+)/.exec(app.getVersion())?.[1]
+    autoUpdater.allowPrerelease = Boolean(tag)
+    if (tag) autoUpdater.channel = tag
     autoUpdater.logger = {
       info: (msg?: unknown) => this.options.log(`[update] ${String(msg ?? '')}`),
       warn: (msg?: unknown) => this.options.log(`[update] warn ${String(msg ?? '')}`),
@@ -114,20 +171,28 @@ export class Updater {
 
     autoUpdater.on('update-available', (info) => {
       this.options.log(`[update] available ${info.version}`)
+      this.setState({ phase: 'available', version: info.version, percent: undefined, message: undefined })
       this.options.onAvailable({ version: info.version, notes: notesOf(info.releaseNotes) })
     })
-    autoUpdater.on('update-not-available', () => this.options.log('[update] up to date'))
+    autoUpdater.on('update-not-available', () => {
+      this.options.log('[update] up to date')
+      this.setState({ phase: 'up-to-date', version: undefined, percent: undefined, message: undefined })
+    })
     autoUpdater.on('download-progress', (progress) => {
-      this.options.onProgress?.(Math.round(progress.percent))
+      const percent = Math.round(progress.percent)
+      this.setState({ phase: 'downloading', percent })
+      this.options.onProgress?.(percent)
     })
     autoUpdater.on('update-downloaded', (info) => {
       this.downloadedVersion = info.version
       this.options.log(`[update] downloaded ${info.version}`)
+      this.setState({ phase: 'downloaded', version: info.version, percent: 100, message: undefined })
       this.options.onDownloaded(info.version)
     })
     autoUpdater.on('error', (err) => {
       const message = err instanceof Error ? err.message : String(err)
       this.options.log(`[update] failed: ${message}`)
+      this.setState({ phase: 'error', message })
       this.options.onError(message)
     })
     this.configured = true
@@ -149,25 +214,32 @@ export class Updater {
   private async runCheck(): Promise<UpdateCheck> {
     if (!canSelfUpdate()) {
       this.options.log('[update] skipped: development build')
+      this.setState({ phase: 'disabled', message: mt('开发模式不检查更新') })
       return { ok: false, status: 'not-configured', message: mt('开发模式不检查更新') }
     }
     const feedUrl = resolveFeedUrl(process.env, this.options.userDataPath)
     if (!feedUrl) {
-      this.options.log('[update] skipped: no feed configured')
-      return { ok: false, status: 'not-configured', message: mt('未配置更新源（TYPELESS_UPDATE_URL）') }
+      // Only reachable with TYPELESS_NO_UPDATE=1: say so instead of checking.
+      this.options.log('[update] skipped: checks disabled')
+      this.setState({ phase: 'disabled', message: mt('更新检查已关闭') })
+      return { ok: false, status: 'not-configured', message: mt('更新检查已关闭') }
     }
+    this.setState({ phase: 'checking', message: undefined, percent: undefined })
     try {
       this.configure(feedUrl)
       const result = await autoUpdater.checkForUpdates()
       const version = result?.updateInfo?.version
       if (version && isNewerVersion(version, app.getVersion())) {
+        this.setState({ phase: 'available', version, percent: undefined, message: undefined })
         return { ok: true, status: 'available', version }
       }
       if (version) this.options.log(`[update] feed has ${version}, installed ${app.getVersion()}`)
+      this.setState({ phase: 'up-to-date', version: undefined, percent: undefined, message: undefined })
       return { ok: true, status: 'none' }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       this.options.log(`[update] check failed: ${message}`)
+      this.setState({ phase: 'error', message })
       return { ok: false, status: 'error', message }
     }
   }
@@ -175,6 +247,7 @@ export class Updater {
   /** Starts the download for a version the user accepted in the bar. */
   async download(): Promise<{ ok: boolean; message: string }> {
     if (!this.configured) return { ok: false, message: mt('尚未检查更新') }
+    this.setState({ phase: 'downloading', percent: 0, message: undefined })
     try {
       await autoUpdater.downloadUpdate()
       return { ok: true, message: mt('更新已下载，退出时自动安装') }

@@ -12,7 +12,12 @@ export interface BriefingDeps {
   /** Settings arrive bare or nested under `briefing`, depending on the caller. */
   settings: () => { briefing?: BriefingSettings } | BriefingSettings
   now?: () => number
-  compose: (now: number) => Briefing
+  /**
+   * Produces the briefing. Model-written text arrives as a promise: the timer
+   * chain must not wait on an LLM round trip, so a promise is settled off the
+   * tick and the day is claimed only when real text comes back.
+   */
+  compose: (now: number) => Briefing | Promise<Briefing>
   deliver: (briefing: Briefing, at: number) => void
   load: () => BriefingState
   save: (state: BriefingState) => void
@@ -31,6 +36,10 @@ const describe = (error: unknown): string => error instanceof Error ? error.mess
 
 const iso = (at: number): string => new Date(at).toISOString()
 
+/** A `compose` that narrates returns a thenable; one that does not returns a Briefing. */
+const isThenable = (value: Briefing | Promise<Briefing>): value is Promise<Briefing> =>
+  typeof (value as Promise<Briefing>)?.then === 'function'
+
 function readSettings(source: { briefing?: BriefingSettings } | BriefingSettings): BriefingSettings {
   const nested = (source as { briefing?: BriefingSettings }).briefing
   return nested ?? source as BriefingSettings
@@ -43,6 +52,8 @@ export class BriefingScheduler {
   private active = false
   /** The quiet-hours end already reported, so the poll loop logs it once. */
   private loggedQuietAt: number | null = null
+  /** The narration currently being awaited for today; null once it settles. */
+  private settling: Promise<void> | null = null
   private state: BriefingState
   private readonly now: () => number
   private readonly setTimer: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>
@@ -159,13 +170,31 @@ export class BriefingScheduler {
 
   /** True when today's slot is settled: delivered, or deliberately skipped as empty. */
   private attempt(now: number, settings: BriefingSettings, today: string): boolean {
-    let briefing: Briefing
+    // A narration already in flight owns today: a second call would deliver the
+    // briefing twice and write two history rows a second apart.
+    if (this.settling) return true
+    let produced: Briefing | Promise<Briefing>
     try {
-      briefing = this.deps.compose(now)
+      produced = this.deps.compose(now)
     } catch (error) {
       this.deps.log(`briefing: compose failed: ${describe(error)}`)
       return false
     }
+    if (isThenable(produced)) {
+      // The timer chain moves on immediately; the day is claimed when the text lands.
+      this.settling = this.settleLater(produced, now, settings, today)
+      return true
+    }
+    return this.settle(produced, now, settings, today)
+  }
+
+  /**
+   * Delivers (or deliberately skips) one produced briefing.
+   *
+   * Split out of `attempt` so the awaited path and the immediate path share one
+   * definition of "today is done": skipEmpty, delivery, `lastDay`, history, save.
+   */
+  private settle(briefing: Briefing, now: number, settings: BriefingSettings, today: string): boolean {
     const skipped = settings.skipEmpty && briefing.empty
     if (skipped) {
       // Still mark the day so an empty briefing does not resurface on every tick.
@@ -186,11 +215,39 @@ export class BriefingScheduler {
         ...this.state,
         lastDay: today,
         history: appendBriefingHistory(this.state.history ?? [],
-          { dayKey: today, title: briefing.title, body: briefing.body, createdAt: now })
+          { dayKey: today, title: briefing.title, body: briefing.body, createdAt: now, source: briefing.source })
       }
     }
     this.deps.save(this.state)
     return true
+  }
+
+  /**
+   * Settles a narrated briefing once its model call returns.
+   *
+   * A rejected narration writes nothing: the day stays owed, so the 30 s poll
+   * retries exactly like a failed delivery instead of losing the briefing. The
+   * promise is never awaited by `check()`, so a slow provider cannot stall the
+   * timer chain.
+   */
+  private async settleLater(produced: Promise<Briefing>, now: number, settings: BriefingSettings, today: string): Promise<void> {
+    let briefing: Briefing
+    try {
+      briefing = await produced
+    } catch (error) {
+      this.deps.log(`briefing: compose failed: ${describe(error)}`)
+      return
+    } finally {
+      this.settling = null
+    }
+    // A narration that lands after stop() belongs to a briefing the user switched
+    // off (or a time they already changed), so it is dropped rather than delivered.
+    if (!this.active) return
+    try {
+      this.settle(briefing, now, settings, today)
+    } catch (error) {
+      this.deps.log(`briefing: deliver failed: ${describe(error)}`)
+    }
   }
 
   /** Once today is served the target is tomorrow's clock time, even if the time changed. */

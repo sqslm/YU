@@ -457,7 +457,12 @@ export interface Settings {
   /** Empty uses the Windows known Downloads folder. */
   assistantDownloadFolder: string
   voiceCommands: VoiceCommandsSettings
-  wakeWord: { enabled: boolean; phrase: string }
+  /**
+   * `deviceId` is the WinMM input index as a string; '' means the system default.
+   * Optional because settings files written before device selection exist, and
+   * `mergeSettings` fills it in on load rather than rejecting the old shape.
+   */
+  wakeWord: { enabled: boolean; phrase: string; deviceId?: string }
   reminders: { notifications: boolean; strongSound: boolean; snoozeMinutes: number }
   polish: PolishSettings
   /** 'classic' = ASR + text LLM, 'multimodal' = one audio-in model does both. */
@@ -626,10 +631,26 @@ export interface Settings {
   tts: TtsSettings
 }
 
+/**
+ * A read-only ICS feed the calendar mirrors.
+ *
+ * `lastFetchedAt` is bookkeeping for the UI only: a feed that fails keeps its
+ * events, so nothing downstream may treat a stale timestamp as "no events".
+ */
+export interface ExternalCalendar {
+  id: string
+  name: string
+  url: string
+  enabled: boolean
+  lastFetchedAt?: number
+}
+
 export interface CalendarSettings {
   enabled: boolean
   /** Lead time used by events that do not set their own. */
   defaultLeadMinutes: number
+  /** Subscribed ICS feeds merged into the local calendar. */
+  externalCalendars: ExternalCalendar[]
 }
 
 /** A local `HH:mm` window during which the briefing waits; `start > end` wraps midnight. */
@@ -649,6 +670,11 @@ export interface BriefingSettings {
   notify: boolean
   /** A briefing with nothing in it is skipped instead of sent. */
   skipEmpty: boolean
+  /**
+   * Let the model write the body from the same data. Optional because a settings
+   * file written before narration existed has to keep working: absent means on.
+   */
+  narrative?: boolean
   /** Night hours the briefing must not interrupt. */
   quietHours: BriefingQuietHours
 }

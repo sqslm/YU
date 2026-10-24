@@ -6,21 +6,53 @@ import type { AssistantItem } from '@shared/assistant'
 import type { ToolDefinition, ToolOutcome } from './registry'
 import type { PromptContext } from '@shared/prompts'
 import { isCurrentWindowQuestion } from '../voice-intent'
+import { FileIndex, DEFAULT_MAX_FILES, DEFAULT_TIMEOUT_MS, type ContentSearchOptions, type ContentSearchResult, type FileIndexDeps } from '../file-index'
+import { searchEverything, type EverythingOptions, type EverythingResult } from '../everything'
 
-export const WINDOWS_TOOLS = ['open_application', 'open_folder', 'open_file', 'open_url', 'search_files', 'get_active_window', 'get_disk_space', 'get_current_folder', 'get_current_page'] as const
+export const WINDOWS_TOOLS = ['open_application', 'open_folder', 'open_file', 'open_url', 'search_files', 'search_file_contents', 'search_files_everything', 'get_active_window', 'get_disk_space', 'get_current_folder', 'get_current_page'] as const
 const documents = new Set(['.pdf', '.txt', '.md', '.csv', '.json', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.rtf', '.mp3', '.wav', '.mp4'])
 const string = (value: unknown): string => typeof value === 'string' ? value.trim() : ''
 const within = (root: string, path: string): boolean => { const part = relative(root, path); return !part.startsWith('..') && !isAbsolute(part) }
+
+/** Only the JSON Schema keywords the model is allowed to see are honoured. */
+interface FieldSchema { type: string; enum?: string[]; items?: { type: string }; maxItems?: number }
+
+const validArgument = (field: FieldSchema, value: unknown): boolean => {
+  if (field.enum && !field.enum.includes(value as string)) return false
+  if (field.type === 'array') {
+    if (!Array.isArray(value) || value.length > (field.maxItems ?? Number.MAX_SAFE_INTEGER)) return false
+    const itemType = field.items?.type ?? 'string'
+    return value.every(item => typeof item === (itemType === 'integer' ? 'number' : itemType))
+  }
+  return typeof value === (field.type === 'integer' ? 'number' : field.type)
+}
+
+/** Why a body scan stopped early, phrased for a card and for the model. */
+const TRUNCATION_NOTE: Record<string, string> = {
+  timeout: '已达到时间上限，结果不完整',
+  'file-limit': '已达到扫描文件上限，结果不完整',
+  'result-limit': '已达到结果上限，结果可能更多'
+}
 
 export class WindowsTools {
   private items = new Map<string, AssistantItem>()
   private recent: AssistantItem[] = []
   private permitted = new Set<string>()
+  /** Lazily built so the extraction cache stays warm across tool rounds. */
+  private index: FileIndex | null = null
   constructor(private deps: {
     folders: Record<'downloads' | 'desktop' | 'documents', string> | (() => Record<'downloads' | 'desktop' | 'documents', string>)
     native: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<Record<string, unknown>>
     openPath: (path: string) => Promise<string>
     openUrl: (url: string) => Promise<void>
+    /** Injected in tests so the traversal never needs a real disk. */
+    fileIndex?: FileIndex
+    fileSystem?: FileIndexDeps
+    /** Injected in tests: replaces the whole Everything lookup. */
+    everything?: (query: string, limit: number, signal?: AbortSignal) => Promise<EverythingResult>
+    everythingOptions?: EverythingOptions
+    /** Where a body scan looks when the model gives no roots. */
+    contentRoots?: () => string[]
   }) {}
 
   clear(): void { this.items.clear(); this.recent = []; this.permitted.clear() }
@@ -62,11 +94,11 @@ export class WindowsTools {
     signal?.throwIfAborted()
     const ok = (summary: string, data: Record<string, unknown> = {}): ToolOutcome => ({ ok: true, summary, data: { ...data, ok: true, summary } })
     const failed = (message: string): ToolOutcome => ({ ok: false, summary: message, error: message, data: { ok: false, error: message } })
-    const schema = properties[name as keyof typeof properties] as Record<string, { type: string; enum?: string[] }> | undefined
+    const schema = properties[name as keyof typeof properties] as Record<string, FieldSchema> | undefined
     if (!schema) return failed(mt('未知工具：{{name}}', { name }))
     for (const [key, value] of Object.entries(args)) {
       const field = Object.hasOwn(schema, key) ? schema[key] : undefined
-      if (!field || typeof value !== (field.type === 'integer' ? 'number' : field.type) || (field.enum && !field.enum.includes(value as string))) return failed(mt('工具参数无效：{{name}}', { name: key }))
+      if (!field || !validArgument(field, value)) return failed(mt('工具参数无效：{{name}}', { name: key }))
     }
     const originalContext = async (action: 'explorer-folder' | 'browser-url'): Promise<Record<string, unknown>> => {
       if (!context?.windowHandle || !context.processId) throw new Error(mt('没有可用的原窗口信息，请从目标应用重新呼出助手'))
@@ -151,6 +183,57 @@ export class WindowsTools {
       await this.deps.openUrl(url.href)
       return ok(mt('已向 Windows 提交打开请求：{{name}}', { name: url.href }))
     }
+    if (name === 'search_file_contents') {
+      const query = string(args.query)
+      // A body query is a phrase to look for, not a pattern: no control bytes, bounded length.
+      if (!query || query.length > 120 || /[\x00-\x1f]/.test(query)) return failed(mt('请输入要搜索的正文关键词'))
+      const scope = await this.contentRoots(args.roots)
+      if (!('roots' in scope)) return failed(scope.error)
+      const limit = Math.min(Math.max(Math.trunc(Number(args.limit ?? 10)) || 10, 1), 20)
+      const result = await this.contentSearch({ query, roots: scope.roots, limit, signal })
+      signal?.throwIfAborted()
+      const items = this.remember(result.hits.map(hit => ({ name: hit.name, path: hit.path, kind: 'file' as const })))
+      const notes = [
+        result.truncated ? TRUNCATION_NOTE[result.reason] ?? '' : '',
+        result.skipped.unsupported ? mt('{{n}} 个文件类型不支持正文检索（含 PDF）', { n: result.skipped.unsupported }) : '',
+        result.skipped.binary ? mt('跳过 {{n}} 个二进制文件', { n: result.skipped.binary }) : ''
+      ].filter(Boolean)
+      const summary = result.hits.length
+        ? mt('在文件正文里找到 {{n}} 个匹配文件', { n: result.hits.length })
+        : mt('没有文件正文包含「{{query}}」', { query })
+      return ok(notes.length ? `${summary}；${notes.join('；')}` : summary, {
+        hits: result.hits.map((hit, index) => ({ ...hit, id: items[index]?.id ?? '' })),
+        items, query, scope: result.roots, scanned: result.scanned, truncated: result.truncated,
+        partial: result.truncated, reason: result.reason, skipped: result.skipped,
+        elapsedMs: result.elapsedMs, cache: result.cache,
+        coverage: mt('按正文检索 {{roots}}，最多扫描 {{files}} 个文件、{{seconds}} 秒；不解析 PDF，不扫描整个硬盘。', {
+          roots: result.roots.join('、'), files: DEFAULT_MAX_FILES, seconds: DEFAULT_TIMEOUT_MS / 1000
+        })
+      })
+    }
+    if (name === 'search_files_everything') {
+      const query = string(args.query)
+      if (!query || query.length > 120 || /[\x00-\x1f]/.test(query)) return failed(mt('请输入要搜索的文件名关键词'))
+      const limit = Math.min(Math.max(Math.trunc(Number(args.limit ?? 20)) || 20, 1), 50)
+      const found = await this.everythingSearch(query, limit, signal)
+      if (!found.available) {
+        // Not an error: the model is expected to retry with the built-in search,
+        // and the summary has to say that out loud or it will just apologise.
+        return { ok: false, summary: mt('这台机器没有 Everything，已改用内置文件搜索'), error: found.reason,
+          data: { ok: false, available: false, backend: found.backend, query, reason: found.reason, fallback: ['search_files', 'search_file_contents'] } }
+      }
+      const openable = found.hits.filter(hit => documents.has(extname(hit.path).toLowerCase()))
+      const items = this.remember(openable.map(hit => ({ name: hit.name, path: hit.path, kind: 'file' as const })))
+      const ids = new Map(items.map(item => [item.path.toLowerCase(), item.id]))
+      const summary = found.hits.length
+        ? mt('Everything 找到 {{n}} 个文件', { n: found.hits.length })
+        : mt('Everything 里没有匹配「{{query}}」的文件', { query })
+      return ok(summary, {
+        hits: found.hits.map(hit => ({ ...hit, id: ids.get(hit.path.toLowerCase()) ?? '' })),
+        items, query, backend: found.backend, total: found.total, partial: found.truncated,
+        coverage: mt('查询 Everything 本地索引（文件名与路径，不含文件正文）；后端：{{backend}}。', { backend: found.backend === 'http' ? mt('HTTP 服务') : 'es.exe' })
+      })
+    }
     if (name !== 'open_folder' && name !== 'search_files') return failed(mt('未知工具：{{name}}', { name }))
     let input = string(args.folder) || 'downloads'
     if (input === 'current') {
@@ -196,6 +279,47 @@ export class WindowsTools {
       scope: root, partial: result.partial, indexUnavailable: result.indexUnavailable,
       coverage: args.recursive === true ? mt('查询 Windows 索引并补查最多 3 层子目录、5000 个条目、5 秒；不跟随目录链接。按修改时间筛选，不代表下载时间；不搜索文件正文。') : mt('查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。') })
   }
+
+  /**
+   * Local folders only, for the same reason search_files refuses whole disks:
+   * a body scan runs on a hard time budget and a network share would blow it.
+   * Explicit roots are strict — scanning nothing and returning no hits would
+   * read as "no file contains this", which is a different and worse answer.
+   */
+  private async contentRoots(input: unknown): Promise<{ roots: string[] } | { error: string }> {
+    const invalid = mt('请选择本地的具体文件夹，不支持全盘或网络目录')
+    const folders = typeof this.deps.folders === 'function' ? this.deps.folders() : this.deps.folders
+    const requested = (Array.isArray(input) ? input : typeof input === 'string' ? [input] : []).map(string).filter(Boolean).slice(0, 4)
+    const explicit = requested.length > 0
+    const candidates = explicit ? requested : this.deps.contentRoots ? this.deps.contentRoots() : [folders.documents, folders.desktop, folders.downloads].filter(Boolean)
+    const roots: string[] = []
+    const seen = new Set<string>()
+    for (const candidate of candidates) {
+      const plausible = isAbsolute(candidate) && !candidate.startsWith('\\\\')
+      const real = plausible ? await realpath(candidate).catch(() => '') : ''
+      const info = real ? await stat(real).catch(() => null) : null
+      if (!real || !info?.isDirectory() || real === parse(real).root) {
+        if (explicit) return { error: invalid }
+        continue
+      }
+      // The three default folders often resolve to the same place (or nest), and
+      // paying for the same tree twice would spend the file budget twice.
+      if (seen.has(real.toLowerCase())) continue
+      seen.add(real.toLowerCase())
+      roots.push(real)
+    }
+    if (roots.length) return { roots }
+    return { error: explicit ? invalid : mt('没有可检索的文档目录，请指定要搜索的文件夹') }
+  }
+  private async contentSearch(options: ContentSearchOptions): Promise<ContentSearchResult> {
+    if (this.deps.fileIndex) return this.deps.fileIndex.search(options)
+    this.index ??= new FileIndex(this.deps.fileSystem)
+    return this.index.search(options)
+  }
+  private async everythingSearch(query: string, limit: number, signal?: AbortSignal): Promise<EverythingResult> {
+    if (this.deps.everything) return this.deps.everything(query, limit, signal)
+    return searchEverything(query, { ...this.deps.everythingOptions, limit, signal })
+  }
 }
 
 const properties = {
@@ -207,10 +331,12 @@ const properties = {
   open_folder: { folder: { type: 'string', description: 'downloads, desktop, documents or an explicit absolute local folder' } },
   open_file: { id: { type: 'string', description: 'Exact id from search_files results. Never invent paths or ids.' } },
   open_url: { url: { type: 'string' } },
-  search_files: { folder: { type: 'string' }, name: { type: 'string' }, extension: { type: 'string' }, type: { type: 'string', enum: ['archive', 'pdf', 'document', 'image', 'audio'] }, recursive: { type: 'boolean', description: 'Only if user requests subfolders; bounded to depth 3 / 5000 entries / 5 seconds without following junctions.' }, day: { type: 'string', enum: ['today', 'yesterday'] }, after: { type: 'string', description: 'Inclusive modification instant, ISO 8601 with timezone. Prefer day for local today/yesterday.' }, before: { type: 'string', description: 'Exclusive modification instant, ISO 8601 with timezone.' }, minBytes: { type: 'integer', minimum: 0 }, sort: { type: 'string', enum: ['modified', 'size'] } }
+  search_files: { folder: { type: 'string' }, name: { type: 'string' }, extension: { type: 'string' }, type: { type: 'string', enum: ['archive', 'pdf', 'document', 'image', 'audio'] }, recursive: { type: 'boolean', description: 'Only if user requests subfolders; bounded to depth 3 / 5000 entries / 5 seconds without following junctions.' }, day: { type: 'string', enum: ['today', 'yesterday'] }, after: { type: 'string', description: 'Inclusive modification instant, ISO 8601 with timezone. Prefer day for local today/yesterday.' }, before: { type: 'string', description: 'Exclusive modification instant, ISO 8601 with timezone.' }, minBytes: { type: 'integer', minimum: 0 }, sort: { type: 'string', enum: ['modified', 'size'] } },
+  search_file_contents: { query: { type: 'string', description: 'Literal words to find inside file bodies (max 6 terms). Not a regular expression.' }, roots: { type: 'array', items: { type: 'string' }, maxItems: 4, description: 'Absolute local folders; omit for Documents, Desktop and Downloads.' }, limit: { type: 'integer', description: 'How many matches to keep, 1-20; larger values are clamped.' } },
+  search_files_everything: { query: { type: 'string', description: 'File name or path fragment. Everything matches names and paths, never file bodies.' }, limit: { type: 'integer', description: 'How many matches to keep, 1-50; larger values are clamped.' } }
 }
 export const WINDOWS_DEFINITIONS: ToolDefinition[] = WINDOWS_TOOLS.map(name => ({ name,
-  description: ({ get_current_folder: 'Get the real original Explorer folder through Shell by the frozen window handle. Fails on unavailable or ambiguous tabs; never infer a path from the title.', get_current_page: 'Read the original browser address through native accessibility. Then use read_webpage for public content. No cookies or access to logged-in page content; ask for a link when unavailable.', get_active_window: 'Get the original foreground application snapshot captured when this task started. Does not inspect a newly focused window or read its document content.', get_disk_space: 'Read actual ready local disk total/free/used bytes through Windows. No guessed capacity values.', open_application: 'Find registered Windows desktop and Start Apps applications by name; launch a unique match directly without another confirmation. Multiple candidates require user choice by returned id.', open_folder: 'Open a requested specific local folder in Explorer directly, without another confirmation.', open_file: 'Open a requested actual document result by id directly, without another confirmation. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open a requested HTTP/HTTPS URL directly in the default browser, without another confirmation.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus bounded folder fallback. downloads uses the saved custom folder or the Windows known folder; folder=current resolves the original Explorer window. Use type=archive for ZIP/RAR/7Z etc; recursive=true only if requested. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.' })[name],
-  parameters: { type: 'object', properties: properties[name], additionalProperties: false, required: name === 'open_file' ? ['id'] : name === 'open_url' ? ['url'] : [] },
+  description: ({ get_current_folder: 'Get the real original Explorer folder through Shell by the frozen window handle. Fails on unavailable or ambiguous tabs; never infer a path from the title.', get_current_page: 'Read the original browser address through native accessibility. Then use read_webpage for public content. No cookies or access to logged-in page content; ask for a link when unavailable.', get_active_window: 'Get the original foreground application snapshot captured when this task started. Does not inspect a newly focused window or read its document content.', get_disk_space: 'Read actual ready local disk total/free/used bytes through Windows. No guessed capacity values.', open_application: 'Find registered Windows desktop and Start Apps applications by name; launch a unique match directly without another confirmation. Multiple candidates require user choice by returned id.', open_folder: 'Open a requested specific local folder in Explorer directly, without another confirmation.', open_file: 'Open a requested actual document result by id directly, without another confirmation. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open a requested HTTP/HTTPS URL directly in the default browser, without another confirmation.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus bounded folder fallback. downloads uses the saved custom folder or the Windows known folder; folder=current resolves the original Explorer window. Use type=archive for ZIP/RAR/7Z etc; recursive=true only if requested. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.', search_file_contents: 'Find which documents actually contain given words, by reading body text: plain text plus .docx/.xlsx/.pptx (unzipped in-process). PDF bodies are NOT readable, so never claim a PDF matched. Default scope is Documents, Desktop, Downloads; bounded by file count, file size and a total time budget, and may set truncated=true. Returns matches with a snippet, newest first. Best for "which document mentioned X".', search_files_everything: 'Look a file name or path fragment up in the Everything (voidtools) index — instant, whole-disk, names and paths only, never file bodies. Prefer it over search_files/recursive for "where is the file called X". When it reports available=false the machine has no usable Everything: say so and fall back to search_files or search_file_contents in the next round.' })[name],
+  parameters: { type: 'object', properties: properties[name], additionalProperties: false, required: ({ open_file: ['id'], open_url: ['url'], search_file_contents: ['query'], search_files_everything: ['query'] } as Record<string, string[]>)[name] ?? [] },
   run: (args, ctx) => ctx.windows!.run(name, args, ctx.signal, ctx.taskContext)
 }))

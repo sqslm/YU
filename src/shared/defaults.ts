@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   selectionInsertMode: 'replace',
   assistantDownloadFolder: '',
   voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
-  wakeWord: { enabled: false, phrase: '你好语助手' },
+  wakeWord: { enabled: false, phrase: '你好语助手', deviceId: '' },
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
     baseUrl: '',
@@ -238,7 +238,13 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   merged.briefing = normalizeBriefingSettings(merged.briefing)
   merged.tts = normalizeTtsSettings(merged.tts)
   merged.calendar = { ...merged.calendar,
-    defaultLeadMinutes: clampNumber(merged.calendar.defaultLeadMinutes, 0, MAX_EVENT_LEAD_MINUTES, DEFAULT_CALENDAR_SETTINGS.defaultLeadMinutes) }
+    defaultLeadMinutes: clampNumber(merged.calendar.defaultLeadMinutes, 0, MAX_EVENT_LEAD_MINUTES, DEFAULT_CALENDAR_SETTINGS.defaultLeadMinutes),
+    // A feed row without an https/webcal URL can never be fetched, so it is
+    // dropped here instead of failing on every refresh with a log line.
+    externalCalendars: Array.isArray(merged.calendar.externalCalendars)
+      ? merged.calendar.externalCalendars.filter(feed => feed && typeof feed.id === 'string' && feed.id
+        && typeof feed.name === 'string' && typeof feed.url === 'string' && /^(https|webcal):\/\//i.test(feed.url))
+      : [] }
   // A hand-edited config must not smuggle an unknown wire format in.
   merged.asr = { ...merged.asr, upload: pickEnum(merged.asr.upload, ['wav', 'opus'], 'wav') }
 
@@ -273,7 +279,23 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   merged.assistantDownloadFolder = typeof input.assistantDownloadFolder === 'string' ? input.assistantDownloadFolder.trim() : ''
   merged.voiceCommands = normalizeVoiceCommands(input.voiceCommands)
   const phrase = typeof input.wakeWord?.phrase === 'string' ? input.wakeWord.phrase.trim().replace(/\s+/g, ' ') : ''
-  merged.wakeWord = { enabled: input.wakeWord?.enabled === true, phrase: phrase.length >= 2 && phrase.length <= 40 && !['你好轻令', 'Hey Qinly'].includes(phrase) ? phrase : input.uiLanguage === 'en' ? 'Hello YU assistant' : '你好语助手' }
+  // The device index is not validated against the live system here: unplugging a
+  // headset should keep the saved choice so it works again once it is plugged back
+  // in, and the recogniser already falls back to the default input when the index
+  // is missing at runtime.
+  merged.wakeWord = {
+    enabled: input.wakeWord?.enabled === true,
+    phrase:
+      phrase.length >= 2 && phrase.length <= 40 && !['你好轻令', 'Hey Qinly'].includes(phrase)
+        ? phrase
+        : input.uiLanguage === 'en'
+          ? 'Hello YU assistant'
+          : '你好语助手',
+    deviceId:
+      typeof input.wakeWord?.deviceId === 'string' && /^\d{0,3}$/.test(input.wakeWord.deviceId.trim())
+        ? input.wakeWord.deviceId.trim()
+        : ''
+  }
   merged.reminders = {
     notifications: input.reminders?.notifications !== false,
     strongSound: input.reminders?.strongSound !== false,

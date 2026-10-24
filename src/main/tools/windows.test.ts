@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, writeFile, unlink, rmdir, realpath, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { WindowsTools, WINDOWS_TOOLS } from './windows'
+import { WindowsTools, WINDOWS_TOOLS, WINDOWS_DEFINITIONS } from './windows'
+import type { FileIndex } from '../file-index'
+import type { EverythingResult } from '../everything'
 import { runTool, toolSchemas } from './registry'
 import { mergeSettings } from '@shared/defaults'
 
@@ -218,3 +220,122 @@ it('opens official URLs only from explicit input or actual tool evidence', async
   expect((await runTool('open_url', { url: 'https://official.example/' }, base)).ok).toBe(true)
   expect(openUrl).toHaveBeenCalledExactlyOnceWith('https://official.example/')
 })
+
+describe('file body search and the Everything index', () => {
+  const write = async (name: string, text: string): Promise<string> => {
+    const path = join(root, name)
+    await writeFile(path, text)
+    owned.push(path)
+    return path
+  }
+  const everything = (result: Partial<EverythingResult>): ((query: string, limit: number) => Promise<EverythingResult>) =>
+    vi.fn(async (query: string, limit: number) => ({
+      available: true, backend: 'http' as const, query, hits: [], total: 0, truncated: false, reason: '', ...result
+    }))
+
+  it('finds a document by its body and returns a snippet plus an openable item', async () => {
+    const path = await write('复盘.txt', '本季度营收未达目标，下季度预算需要复核。')
+    await write('other.txt', '完全无关的内容')
+    const result = await tools.run('search_file_contents', { query: '下季度预算' })
+    expect(result.ok).toBe(true)
+    expect(result.data.scope).toEqual([root])
+    expect(result.data.truncated).toBe(false)
+    const hits = result.data.hits as { path: string; snippet: string; id: string }[]
+    expect(hits).toHaveLength(1)
+    expect(hits[0].path).toBe(path)
+    expect(hits[0].snippet).toContain('下季度预算')
+    expect((result.data.items as { id: string }[])[0].id).toBe(hits[0].id)
+    expect(result.summary).toContain('1')
+  })
+  it('accepts explicit roots and refuses a drive root, a relative path or a non-folder', async () => {
+    await write('a.txt', '关键词')
+    expect((await tools.run('search_file_contents', { query: '关键词', roots: [root] })).ok).toBe(true)
+    const file = join(root, 'nested.txt')
+    await write('nested.txt', '关键词')
+    for (const roots of [[root.slice(0, 3)], ['relative-folder'], [file]]) {
+      const result = await tools.run('search_file_contents', { query: '关键词', roots })
+      expect(result.ok).toBe(false)
+      expect(result.summary).toContain('本地的具体文件夹')
+    }
+  })
+  it('rejects a string roots value and an empty query before touching the disk', async () => {
+    expect((await tools.run('search_file_contents', { query: 'x', roots: root })).ok).toBe(false)
+    expect((await tools.run('search_file_contents', { query: '   ' })).ok).toBe(false)
+    expect((await tools.run('search_file_contents', { query: 'x'.repeat(200) })).ok).toBe(false)
+  })
+  it('reports a bounded scan as partial instead of pretending it finished', async () => {
+    await write('1.txt', '预算')
+    await write('2.txt', '预算')
+    const result = await tools.run('search_file_contents', { query: '预算', limit: 1 })
+    expect(result.data.partial).toBe(true)
+    expect(result.data.reason).toBe('result-limit')
+    expect(result.summary).toContain('已达到结果上限')
+    expect((result.data.hits as unknown[]).length).toBe(1)
+  })
+  it('takes an injected index so the tool has no disk dependency of its own', async () => {
+    const search = vi.fn(async () => ({
+      query: 'q', roots: [root], hits: [{ path: join(root, 'x.md'), name: 'x.md', modifiedAt: '2026-10-01T00:00:00.000Z', size: 3, snippet: '…q…' }],
+      scanned: 1, truncated: false, reason: '' as const, elapsedMs: 1,
+      skipped: { binary: 0, tooLarge: 0, unsupported: 2, unreadable: 0 }, cache: { hits: 0, misses: 1 }
+    }))
+    const injected = new WindowsTools({
+      folders: { downloads: root, desktop: root, documents: root }, native, openPath, openUrl,
+      fileIndex: { search } as unknown as FileIndex
+    })
+    const result = await injected.run('search_file_contents', { query: 'q' })
+    expect(result.ok).toBe(true)
+    // Unsupported files are counted and spoken about, never silently dropped.
+    expect(result.summary).toContain('2')
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ query: 'q', roots: [root], limit: 10 }))
+  })
+  it('says the machine has no Everything and points at the built-in search', async () => {
+    const lookUp = async (): Promise<EverythingResult> => ({
+      available: false, backend: 'none', query: 'a', hits: [], total: 0, truncated: false,
+      reason: '这台机器没有 Everything（HTTP 服务 80 端口未响应），已改用内置文件搜索'
+    })
+    const local = new WindowsTools({ folders: { downloads: root, desktop: root, documents: root }, native, openPath, openUrl, everything: lookUp })
+    const result = await local.run('search_files_everything', { query: '预算.xlsx' })
+    expect(result.ok).toBe(false)
+    expect(result.summary).toBe('这台机器没有 Everything，已改用内置文件搜索')
+    expect(result.data).toMatchObject({ available: false, backend: 'none', fallback: ['search_files', 'search_file_contents'] })
+  })
+  it('keeps only openable Everything hits as items while listing every hit', async () => {
+    const local = new WindowsTools({ folders: { downloads: root, desktop: root, documents: root }, native, openPath, openUrl,
+      everything: everything({
+        backend: 'cli', total: 9, truncated: true,
+        hits: [{ name: '预算.xlsx', path: join(root, '预算.xlsx'), size: 10, modifiedAt: '2026-10-01T00:00:00.000Z' },
+          { name: 'setup.exe', path: join(root, 'setup.exe'), size: 10, modifiedAt: '' }]
+      }) })
+    const result = await local.run('search_files_everything', { query: '预算', limit: 5 })
+    expect(result.ok).toBe(true)
+    const items = result.data.items as { name: string; path: string; id: string }[]
+    expect(items.map(item => item.name)).toEqual(['预算.xlsx'])
+    const hits = result.data.hits as { name: string; id: string }[]
+    expect(hits).toHaveLength(2)
+    expect(hits[1].id).toBe('')
+    expect(result.data).toMatchObject({ backend: 'cli', total: 9, partial: true })
+    expect(String(result.data.coverage)).toContain('es.exe')
+  })
+  it('exposes both tools with a required query and a keyword-only schema', () => {
+    for (const name of ['search_file_contents', 'search_files_everything']) {
+      expect(WINDOWS_TOOLS).toContain(name)
+      const definition = WINDOWS_DEFINITIONS.find(item => item.name === name)!
+      expect(definition.parameters.required).toEqual(['query'])
+      const allowed = new Set(['type', 'enum', 'items', 'maxItems', 'description'])
+      const fields = definition.parameters.properties as Record<string, Record<string, unknown>>
+      for (const field of Object.values(fields)) for (const key of Object.keys(field)) expect(allowed.has(key)).toBe(true)
+    }
+    expect((WINDOWS_DEFINITIONS.find(item => item.name === 'search_file_contents')!.parameters.properties as Record<string, { type: string }>).roots.type).toBe('array')
+  })
+  it('surfaces both tools through the registry receipt without a schema leak', async () => {
+    const schemas = toolSchemas().map(schema => (schema.function as { name: string }).name)
+    expect(schemas).not.toContain('search_file_contents')
+    const receipt = vi.fn()
+    const result = await runTool('search_files_everything', { query: 'a' }, {
+      windows: tools, allowedTools: WINDOWS_TOOLS, settings: mergeSettings({}), question: '找文件', log: vi.fn(), onLocalResult: receipt
+    })
+    expect(result.ok).toBe(false)
+    expect(receipt).toHaveBeenCalledWith(expect.objectContaining({ ok: false }))
+  })
+})
+

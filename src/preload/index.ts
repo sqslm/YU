@@ -19,6 +19,7 @@ ipcRenderer.on('card:hidden', () => { lastCard = null })
 const api: TypelessApi = {
   checkAsr: () => ipcRenderer.invoke('asr:check'),
   wakeWord: {
+    devices: (): Promise<Array<{ id: string; name: string }>> => ipcRenderer.invoke('wake:devices'),
     status: () => ipcRenderer.invoke('wake:status'),
     retry: () => ipcRenderer.invoke('wake:retry'),
     onChanged: callback => {
@@ -72,6 +73,11 @@ const api: TypelessApi = {
     cancelEvent: (id, action) => ipcRenderer.invoke('life:event-cancel', id, action),
     saveEvent: (input, id) => ipcRenderer.invoke('life:event-save', input, id),
     importIcs: () => ipcRenderer.invoke('life:ics-import'),
+    feeds: () => ipcRenderer.invoke('calendar:feeds'),
+    addFeed: input => ipcRenderer.invoke('calendar:feed-add', input),
+    updateFeed: input => ipcRenderer.invoke('calendar:feed-update', input),
+    removeFeed: id => ipcRenderer.invoke('calendar:feed-remove', id),
+    refreshFeeds: () => ipcRenderer.invoke('calendar:feed-refresh'),
     exportIcs: () => ipcRenderer.invoke('life:ics-export'),
     onChanged: callback => {
       const listener = (): void => callback()
@@ -218,6 +224,17 @@ const api: TypelessApi = {
     state: (): Promise<'recording' | 'idle'> => ipcRenderer.invoke('pipeline:state'),
     retry: (id?: string): Promise<{ ok: boolean; message: string }> =>
       ipcRenderer.invoke('pipeline:retry', id)
+  },
+  update: {
+    state: (): Promise<import('@shared/api').UpdateState | null> => ipcRenderer.invoke('update:state'),
+    check: (): Promise<import('@shared/api').UpdateState | null> => ipcRenderer.invoke('update:check'),
+    download: (): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('update:download'),
+    install: (): Promise<boolean> => ipcRenderer.invoke('update:install'),
+    onState: (callback: (state: import('@shared/api').UpdateState) => void) => {
+      const listener = (_event: unknown, state: import('@shared/api').UpdateState): void => callback(state)
+      ipcRenderer.on('update:state', listener)
+      return () => ipcRenderer.removeListener('update:state', listener)
+    }
   },
   app: {
     chooseDownloadFolder: () => ipcRenderer.invoke('app:chooseDownloadFolder'),

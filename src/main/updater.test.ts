@@ -30,7 +30,9 @@ vi.mock('electron-updater', () => ({
   }
 }))
 
-const { Updater, canSelfUpdate, resolveFeedUrl, isNewerVersion } = await import('./updater')
+const { DEFAULT_FEED_URL, Updater, canSelfUpdate, resolveFeedUrl, isNewerVersion } = await import(
+  './updater'
+)
 
 it.each([
   ['1.0.0-rc.2', '1.0.0-rc.1', true],
@@ -66,9 +68,12 @@ describe('resolveFeedUrl', () => {
     expect(resolveFeedUrl({}, dir)).toBe('https://file.test/u')
   })
 
-  it('reports nothing when neither source exists', () => {
-    expect(resolveFeedUrl({}, join(tmpdir(), 'typeless-missing-dir'))).toBeNull()
-    expect(resolveFeedUrl({})).toBeNull()
+  it('falls back to the project GitHub feed when no override exists', () => {
+    // The released builds must be able to find their own updates: the feed is the
+    // repository's `releases/latest/download` URL unless an override says otherwise.
+    expect(resolveFeedUrl({}, join(tmpdir(), 'typeless-missing-dir'))).toBe(DEFAULT_FEED_URL)
+    expect(resolveFeedUrl({})).toBe(DEFAULT_FEED_URL)
+    expect(DEFAULT_FEED_URL).toBe('https://github.com/sqslm/YU/releases/latest/download')
   })
 
   it('honours the hard opt-out even when a URL is set', () => {
@@ -86,22 +91,32 @@ describe('canSelfUpdate', () => {
 })
 
 describe('Updater.check', () => {
-  it('never contacts the network without a feed', async () => {
+  it('never contacts the network when checks are switched off', async () => {
     const log = vi.fn()
     const updater = new Updater({ ...options(join(tmpdir(), 'typeless-missing-dir')), log })
-    const result = await updater.check()
-    expect(result.ok).toBe(false)
-    expect(mocks.checkForUpdates).not.toHaveBeenCalled()
-    expect(log).toHaveBeenCalledWith('[update] skipped: no feed configured')
+    const saved = process.env.TYPELESS_NO_UPDATE
+    process.env.TYPELESS_NO_UPDATE = '1'
+    try {
+      const result = await updater.check()
+      expect(result).toMatchObject({ ok: false, status: 'not-configured' })
+      expect(mocks.checkForUpdates).not.toHaveBeenCalled()
+      expect(log).toHaveBeenCalledWith('[update] skipped: checks disabled')
+      expect(updater.getState().phase).toBe('disabled')
+    } finally {
+      if (saved === undefined) delete process.env.TYPELESS_NO_UPDATE
+      else process.env.TYPELESS_NO_UPDATE = saved
+    }
   })
 
-  it('configures the feed then reports the available version', async () => {
+  it('falls back to the project feed and reports the available version', async () => {
     mocks.checkForUpdates.mockResolvedValue({ updateInfo: { version: '1.0.0' } })
     const updater = new Updater(options())
     const result = await updater.check()
-    // No feed in this environment either, so it still refuses — the point is that
-    // a missing feed is never reported as "up to date".
-    expect(result).toMatchObject({ ok: false, status: 'not-configured' })
+    // With no override the installed build checks the repository's own releases,
+    // otherwise a shipped app could never learn that a newer one exists.
+    expect(mocks.setFeedURL).toHaveBeenCalledWith({ provider: 'generic', url: DEFAULT_FEED_URL })
+    expect(result).toEqual({ ok: true, status: 'available', version: '1.0.0' })
+    expect(updater.getState()).toMatchObject({ phase: 'available', version: '1.0.0' })
   })
 
   it('passes the configured URL to electron-updater', async () => {

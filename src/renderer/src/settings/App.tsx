@@ -18,9 +18,11 @@ import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
 import { RemindersPage } from './pages/RemindersPage'
 import { CalendarPage } from './pages/CalendarPage'
+import { BriefingPage } from './pages/BriefingPage'
 import type { ReminderView } from '@shared/reminders'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
+import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 import { DictionaryPage } from './pages/Dictionary'
 import { IconBook, IconChart, IconClock, IconSettings } from './icons'
 import { Onboarding } from './pages/Onboarding'
@@ -31,8 +33,9 @@ import { applyUiLanguage } from '../i18n'
 import i18n from '../i18n'
 import { BrandLogo } from '../BrandLogo'
 import { MissedReminders } from './MissedReminders'
+import { UpdatePill } from './UpdatePill'
 
-type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'calendar'
+type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'briefing' | 'calendar'
 
 /** Label keys resolve through i18next; the ids stay stable for routing. */
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
@@ -40,6 +43,7 @@ const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
   { id: 'reminders', labelKey: '提醒与待办', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
+  { id: 'briefing', labelKey: '简报', icon: <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} /> },
   { id: 'calendar', labelKey: '日程', icon: <CalendarMonthIcon sx={{ fontSize: 18 }} /> },
   { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> }
 ]
@@ -141,6 +145,7 @@ export function App(): JSX.Element {
     }
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} initialNoteId={noteToOpen} />
     if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen(id); setPage('notes') }} />
+    if (page === 'briefing') return <BriefingPage settings={settings} onOpenSettings={() => setSettingsOpen(true)} />
     if (page === 'calendar') return <CalendarPage />
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />
     return (
@@ -248,6 +253,10 @@ export function App(): JSX.Element {
               <IconSettings size={15} />
               <Box component="span">{translate('nav.settings')}</Box>
             </Box>
+            {/* Sits in the same footer row as the gear so a published build is
+                discoverable without opening anything, and disappears entirely
+                when the installed version is the newest one. */}
+            <UpdatePill />
           </Box>
         </Box>
 

@@ -12,6 +12,7 @@ import {
 } from 'electron'
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import os from 'node:os'
 import type { BrowserWindow } from 'electron'
@@ -41,6 +42,7 @@ import { ScreenshotTool } from './screenshot-tool'
 import { needsAssistantContext } from './voice-intent'
 import { generateFromImage } from './providers/gemini'
 import { chainFor, withFailover } from './providers/chain'
+import { complete } from './providers/llm'
 import { registerNotesIpc } from './notes-ipc'
 import { LocalAsrHost } from './local-asr/host'
 import { registerLocalAsrIpc } from './local-asr/ipc'
@@ -53,6 +55,8 @@ import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
 import { CalendarStore, CalendarScheduler } from './calendar'
+import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
+import { RemindersSync } from './reminders-sync'
 import { BriefingScheduler, type BriefingState } from './briefing'
 import { SpeechService, createWindowsSpeechRunner } from './speech'
 import { WorkflowStore } from './workflows'
@@ -63,7 +67,7 @@ import {
   type CalendarEventInput,
   type CalendarRange
 } from '@shared/calendar'
-import { composeBriefing, type Briefing } from '@shared/briefing'
+import { composeBriefing, narrateBriefing, type Briefing, type BriefingData } from '@shared/briefing'
 import type { BriefingTask } from '@shared/briefing'
 import type { LifeSyncStatus } from './tools/life'
 import {
@@ -316,7 +320,8 @@ function lifeSyncStatus(): LifeSyncStatus {
  * the section order and the empty case all live in `shared/briefing.ts`, so the
  * tool, the notification and any future page say the same thing.
  */
-function composeDailyBriefing(): Briefing {
+/** The facts a briefing is built from, before any wording is chosen. */
+function dailyBriefingData(): BriefingData {
   const now = Date.now()
   const today = rangeFor('today', now)
   const tomorrow = rangeFor('tomorrow', now)
@@ -325,12 +330,39 @@ function composeDailyBriefing(): Briefing {
   const ahead = (calendar?.range(tomorrow.from, tomorrow.until) ?? []).filter(confirmed)
   const open = (reminders?.store.list() ?? []).filter(row => row.status === 'pending' || row.status === 'due')
   const task = (row: (typeof open)[number]): BriefingTask => ({ id: row.id, title: row.title, dueAt: row.dueAt, level: row.level })
-  return composeBriefing({ now, language: mainLanguage() === 'en' ? 'en' : 'zh',
+  return { now, language: mainLanguage() === 'en' ? 'en' : 'zh',
     events, tomorrow: ahead,
     // 待办 is what is still ahead today; a task whose time already passed is 已经过期,
     // even when it was due this morning — that is the part worth seeing first.
     tasks: open.filter(row => row.dueAt !== null && row.dueAt >= now && row.dueAt < today.until).map(task),
-    overdue: open.filter(row => row.dueAt !== null && row.dueAt < now).map(row => ({ ...task(row), overdue: true })) })
+    overdue: open.filter(row => row.dueAt !== null && row.dueAt < now).map(row => ({ ...task(row), overdue: true })) }
+}
+
+function composeDailyBriefing(): Briefing {
+  return composeBriefing(dailyBriefingData())
+}
+
+/**
+ * What the scheduler and the page show: the template, or a model's retelling.
+ *
+ * The retelling is opt-in and lives behind `narrateBriefing`, which falls back to
+ * the template on any refusal of its own. Nothing here retries: the narration
+ * already owns an 8 second ceiling, and a second attempt would double it to a
+ * point where the briefing arrives after the morning it describes.
+ */
+function briefingCompose(): Briefing | Promise<Briefing> {
+  const data = dailyBriefingData()
+  if (store.get().briefing.narrative === false) return composeBriefing(data)
+  return narrateBriefing(data, { ask: briefingAsk, log })
+}
+
+async function briefingAsk(prompt: string, { signal }: { signal: AbortSignal }): Promise<string> {
+  const settings = store.get(), profiles = chainFor(settings, 'llm')
+  if (!profiles.length) throw new Error('no text model configured')
+  const { value } = await withFailover(profiles, profile =>
+    complete({ ...settings.polish, ...profile }, {
+      messages: [{ role: 'user', content: prompt }], temperature: 0, maxTokens: 600, signal }))
+  return value
 }
 
 function briefingStateFile(): string { return join(app.getPath('userData'), 'briefing-state.json') }
@@ -372,6 +404,38 @@ function deliverCalendarEvent(event: CalendarEvent): void {
   notice.on('click', () => navigateHub('overview'))
   notice.on('failed', (_event, error) => log(`[calendar] notification failed: ${String(error)}`))
   notice.show()
+}
+
+/**
+ * Fetches every enabled ICS feed and merges it into the local calendar.
+ *
+ * Failures are logged per feed and never reject: a dead subscription must not
+ * stop the others, and the events a feed delivered last time stay in place.
+ */
+async function refreshFeeds(): Promise<{ feeds: number; added: number; updated: number; failed: number }> {
+  const settings = store.get()
+  const result = await refreshExternalCalendars({
+    getCalendars: () => settings.calendar.externalCalendars ?? [],
+    fetchImpl: (url, init) => fetch(url, init),
+    store: { importIcs: text => calendar!.importIcs(text) },
+    log,
+    // The stamp is bookkeeping for the settings page ("last checked"), so it is
+    // persisted rather than kept in memory: a restart should not claim "never".
+    onFetched: (id, at) => {
+      const current = store.get()
+      const feeds = (current.calendar.externalCalendars ?? [])
+        .map(feed => feed.id === id ? { ...feed, lastFetchedAt: at } : feed)
+      void store.update({ calendar: { ...current.calendar, externalCalendars: feeds } })
+    }
+  })
+  if (result.added || result.updated) { announceCalendar(); calendarScheduler?.check() }
+  return result
+}
+
+function saveFeeds(feeds: ExternalCalendar[]): ExternalCalendar[] {
+  const current = store.get()
+  void store.update({ calendar: { ...current.calendar, externalCalendars: feeds } })
+  return feeds
 }
 
 /**
@@ -1136,13 +1200,65 @@ function registerIpc(): void {
   // Plans and quotas are set by the operator, and the account card only reports
   // what the server says the account currently has.
   ipcMain.handle('sync:status', () => sync?.status() ?? null)
+  ipcMain.handle('update:state', () => updater?.getState() ?? null)
+  ipcMain.handle('update:check', async () => {
+    if (!updater) return null
+    await updater.check()
+    return updater.getState()
+  })
+  ipcMain.handle('update:download', async () => {
+    if (!updater) return { ok: false, message: mt('更新不可用') }
+    const result = await updater.download()
+    log(`[update] ${result.message}`)
+    return result
+  })
+  ipcMain.handle('update:install', () => updater?.install() ?? false)
   // The last composed briefing, handed to the UI instead of recomposed there:
   // two composers would drift apart on what "today" means.
   ipcMain.handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())
-  ipcMain.handle('briefing:refresh', () => { const value = composeDailyBriefing(); latestBriefing = value; return value })
+  ipcMain.handle('briefing:refresh', async () => {
+    const value = await briefingCompose()
+    latestBriefing = value
+    return value
+  })
   // Delivery history is stored by the scheduler and used to be invisible: the page
   // could only show the latest briefing, never what was actually delivered.
   ipcMain.handle('briefing:history', () => briefing?.status().history ?? [])
+  /**
+   * Subscribed calendars.
+   *
+   * The URL check happens here rather than in the renderer: it decides whether a
+   * fetch is even attempted, and only the main process may open a socket.
+   */
+  ipcMain.handle('calendar:feeds', () => store.get().calendar.externalCalendars ?? [])
+  ipcMain.handle('calendar:feed-add', (_event, input: { name?: string; url?: string }) => {
+    const url = (input?.url ?? '').trim()
+    const check = checkFeedUrl(url)
+    if (!check.ok) return { ok: false, error: check.reason }
+    const name = (input?.name ?? '').trim() || (() => { try { return new URL(check.url).hostname } catch { return mt('订阅地址不可用') } })()
+    const feed: ExternalCalendar = { id: randomUUID(), name, url: check.url, enabled: true }
+    const feeds = [...(store.get().calendar.externalCalendars ?? []), feed]
+    saveFeeds(feeds)
+    return { ok: true, calendar: feed }
+  })
+  ipcMain.handle('calendar:feed-update', (_event, input: { id: string; patch?: Partial<ExternalCalendar> }) => {
+    const current = store.get().calendar.externalCalendars ?? []
+    const patch = input?.patch ?? {}
+    if (patch.url !== undefined) {
+      const check = checkFeedUrl(patch.url)
+      if (!check.ok) return { ok: false, error: check.reason }
+      patch.url = check.url
+    }
+    return { ok: true, feeds: saveFeeds(current.map(feed => feed.id === input.id ? { ...feed, ...patch, id: feed.id } : feed)) }
+  })
+  ipcMain.handle('calendar:feed-remove', (_event, id: string) => {
+    const current = store.get().calendar.externalCalendars ?? []
+    return { ok: true, feeds: saveFeeds(current.filter(feed => feed.id !== id)) }
+  })
+  ipcMain.handle('calendar:feed-refresh', async () => {
+    try { return { ok: true, result: await refreshFeeds() } }
+    catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
   /**
    * Calendar and read-aloud for the settings page.
    *
@@ -1790,7 +1906,14 @@ async function bootstrap(): Promise<void> {
     log,
     join(app.getPath('userData'), 'sync-state.json'),
     notes,
-    stats
+    stats,
+    // Both sources read through the live stores: the calendar and the reminder
+    // table are created further down, and a snapshot taken here would sync an
+    // empty list on the first run after launch.
+    new CalendarSync({ log, file: join(app.getPath('userData'), 'calendar-sync-state.json'),
+      store: { list: () => calendar?.list() ?? [], put: row => calendar?.put(row), remove: id => calendar?.remove(id) } }),
+    new RemindersSync({ log, file: join(app.getPath('userData'), 'reminders-sync-state.json'),
+      store: { list: () => reminders?.store.list() ?? [], put: row => reminders?.store.put(row), remove: id => reminders?.store.remove(id) } })
   )
   sync.onStatus((status) => {
     for (const win of [settingsWindow, barWindow]) {
@@ -1817,7 +1940,7 @@ async function bootstrap(): Promise<void> {
     // leaves it unset so the next tick retries instead of losing the warning.
     deliver: (event, at) => { deliverCalendarEvent(event); calendar?.markNotified(event.id, at) }, log })
   workflows = new WorkflowStore(join(app.getPath('userData'), 'workflows.json'))
-  briefing = new BriefingScheduler({ settings: () => store.get().briefing, compose: () => composeDailyBriefing(),
+  briefing = new BriefingScheduler({ settings: () => store.get().briefing, compose: () => briefingCompose(),
     deliver: value => deliverBriefing(value), load: loadBriefingState, save: saveBriefingState, log })
 
   /**
@@ -1848,6 +1971,16 @@ async function bootstrap(): Promise<void> {
   registerIpc()
   ipcMain.handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
   ipcMain.handle('wake:status', () => wakeWord.snapshot())
+  // Enumerating inputs cold-starts PowerShell and compiles Add-Type (~1s), and the
+  // settings page asks again on every open, so a short cache keeps the dropdown
+  // instant without hiding a device the user just plugged in.
+  let wakeDevices: { at: number; items: Array<{ id: string; name: string }> } | null = null
+  ipcMain.handle('wake:devices', async () => {
+    if (wakeDevices && Date.now() - wakeDevices.at < 15_000) return wakeDevices.items
+    const items = await wakeWord.listDevices()
+    wakeDevices = { at: Date.now(), items }
+    return items
+  })
   ipcMain.handle('wake:retry', () => { refreshWakeWord(undefined, true); return wakeWord.snapshot() })
   refreshWakeWord()
   reminders.registerIpc(notes)
@@ -1929,7 +2062,14 @@ async function bootstrap(): Promise<void> {
         actions: [{ id: 'dismiss', label: mt('知道了') }]
       })
     },
-    onError: (message) => log(`[update] ${message}`)
+    onError: (message) => log(`[update] ${message}`),
+    onState: (state) => {
+      // The hub badge is the only place a pending update is visible, so every
+      // phase change is pushed instead of leaving the renderer to poll.
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send('update:state', state)
+      }
+    }
   })
   // Background check, well after startup work: a packaged build with a feed
   // configured only. Development builds log "skipped" instead of failing.

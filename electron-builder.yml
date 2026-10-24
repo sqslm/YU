@@ -24,12 +24,24 @@ extraResources:
   - from: resources/installer.ico
     to: shortcut.ico
 asar: true
-# Placeholder feed: a build with no real server still has to boot, and the URL can
-# be overridden at runtime with TYPELESS_UPDATE_URL or <userData>/update-feed.txt.
-# `TYPELESS_NO_UPDATE=1` disables update checks entirely.
+# The recogniser is a native addon plus its DLLs: neither can be loaded from
+# inside an asar archive, and the addon finds its runtime by looking at a sibling
+# directory (`../sherpa-onnx-win-x64`). Unpacking both packages side by side keeps
+# that lookup working in the installed build, which is what "这个版本没有带本地识别运行时"
+# used to report before they were shipped.
+asarUnpack:
+  - node_modules/sherpa-onnx-node/**
+  - node_modules/sherpa-onnx-win-x64/**
+  - node_modules/koffi/**
+# The shipped feed is the project's own GitHub releases: `/releases/latest/download/`
+# always serves the newest release's assets, so releasing is "upload rc.yml + setup
+# + blockmap" with no update server to run. TYPELESS_UPDATE_URL (or
+# <userData>/update-feed.txt) still overrides it, and TYPELESS_NO_UPDATE=1 disables
+# checks entirely. Keep the channel in sync with `version` in package.json: a
+# prerelease such as 1.0.0-rc.6 publishes `rc.yml`, a stable one publishes `latest.yml`.
 publish:
   provider: generic
-  url: https://example.invalid/typeless-rebuild/updates
+  url: https://github.com/sqslm/YU/releases/latest/download
 win:
   target:
     - target: nsis

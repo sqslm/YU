@@ -148,6 +148,20 @@ export class CalendarStore {
     this.flush()
   }
 
+  /**
+   * Writes a row exactly as given, for remote rows and conflict copies.
+   *
+   * `save()` is the user-facing door: it mints ids, re-derives status and refuses
+   * to move an event into the past. A row arriving from another device or from a
+   * conflict copy has already been decided, so it needs the raw door — clamping it
+   * through `save()` would silently change what the other device shows.
+   */
+  put(row: CalendarEvent): void {
+    const exists = this.events.some(item => item.id === row.id)
+    this.events = exists ? this.events.map(item => item.id === row.id ? row : item) : [...this.events, row]
+    this.flush()
+  }
+
   remove(id: string): void {
     const before = this.events.length
     this.events = this.events.filter(row => row.id !== id)
