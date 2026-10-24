@@ -7,6 +7,13 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '唤醒待命': 'Listening for wake phrase',
+  '请在 Windows 设置中安装所选 OCR 语言包': 'Install the selected OCR language pack in Windows Settings.',
+  '无效的识别语言': 'Invalid OCR language',
+  "语音识别服务未连接，请先启动本地 ASR 服务或检查模型配置": "Speech recognition is unavailable. Start your local ASR server or check the model settings.",
+  "录音已保留到随记，可在服务恢复后重新转写": "Your recording was saved to Notes. Transcribe it again when the service is available.",
+  "录音保存失败，请检查随记存储目录": "Could not save the recording. Check your Notes storage folder.",
+  "语音识别未完成，录音已保留，请重新转写": "Transcription failed. Your recording was saved; please transcribe it again.",
   '屏幕截图失败，请重试': 'Screen capture failed. Please try again.',
   '截图数据无效或过大': 'The screenshot is invalid or too large.',
   '请输入截图问题': 'Enter a question about the screenshot',

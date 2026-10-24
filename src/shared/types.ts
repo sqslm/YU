@@ -456,6 +456,7 @@ export interface Settings {
   /** Empty uses the Windows known Downloads folder. */
   assistantDownloadFolder: string
   voiceCommands: VoiceCommandsSettings
+  wakeWord: { enabled: boolean; phrase: string }
   reminders: { notifications: boolean; strongSound: boolean; snoozeMinutes: number }
   polish: PolishSettings
   /** 'classic' = ASR + text LLM, 'multimodal' = one audio-in model does both. */

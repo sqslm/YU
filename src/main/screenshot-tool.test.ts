@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('node:fs/promises', () => ({ writeFile: mocks.write }))
 vi.mock('./windows-native', () => ({ windowsNative: mocks.native }))
+vi.mock('./ocr', async importOriginal => ({ ...await importOriginal<typeof import('./ocr')>(), prepareOcrImage: () => Buffer.from('ocr pixels') }))
 vi.mock('./providers/llm', () => ({ complete: mocks.complete }))
 vi.mock('./providers/gemini', () => ({ generateFromImage: mocks.vision }))
 import { ScreenshotTool } from './screenshot-tool'

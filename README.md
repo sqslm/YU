@@ -1,6 +1,6 @@
 # 轻令（Qinly）
 
-Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。助手中心复用 Ask，支持文字/语音问答、独立临时追问，以及直接打开用户要求的 Windows 应用、文件夹、文档或网页，以及经授权的限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询、页面导航及当前窗口截图已接入；日程、长期记忆、简报、TTS 和唤醒尚未接入助手。
+Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。助手中心复用 Ask，支持文字/语音问答、独立临时追问，以及直接打开用户要求的 Windows 应用、文件夹、文档或网页，以及经授权的限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询、页面导航及当前窗口截图已接入；日程、长期记忆、简报和 TTS 尚未接入助手；可选 Windows 离线唤醒已接入统一语音入口。
 
 0.35.0 的 [81 项验收对照](ASSISTANT_ROADMAP.md#81-项实测对照03502026-10-24) 记录真实接口测试结果和未解决事项，不代表全部通过。测试使用中英文合成语音及实际配置的 ASR、文本和视觉模型；真人麦克风、实体快捷键、覆盖安装和 Windows 通知实际显示另有验证边界。解释/分析选区有只读保护；已有提醒/待办修改必须取得真实成功工具回执，不能将模型回答当作已执行。明确的截图问题可直接预览并调用既有视觉/OCR 服务，实际回执保留在短期会话中用于后续追问。
 
@@ -28,7 +28,7 @@ The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). 
 
 Minimize keeps the main window on the Windows taskbar; the close-to-tray preference applies only to closing. Routine unified voice task receipts appear in a bubble above the recording strip for 10 seconds, with optional **View details**, without opening the assistant or taking focus. Screenshot approval and other necessary reviews retain their explicit interfaces. Independent requests start with clean model context; explicit follow-ups can use the recent session. Current-window identification reads each recording's original-window snapshot directly instead of reusing a previous answer.
 
-Windows tools discover real registered applications, open folders/documents/web addresses and search scoped file metadata. Requested application, folder, document and website opens run directly without a second confirmation. File metadata searches retain their explicit, cancel-by-default authorization. Only file names, paths, modification times and sizes may reach the configured model; file contents are not read. Windows Search is supplemented with an immediate-folder check, never a whole-disk crawl. Unindexed subfolders, a 40-item result limit and unavailable indexing are reported. Multiple results require a user choice; “Open second” uses the actual previous ordering. Model output cannot supply an arbitrary executable or document path. Dependent operations are sequential and stop on failure, with at most four tool rounds, eight calls and a 90-second task deadline. Scripts, installers, deletion and arbitrary commands are unavailable. Calendar, memory, briefings, TTS and wake words remain future stages.
+Windows tools discover real registered applications, open folders/documents/web addresses and search scoped file metadata. Requested application, folder, document and website opens run directly without a second confirmation. File metadata searches retain their explicit, cancel-by-default authorization. Only file names, paths, modification times and sizes may reach the configured model; file contents are not read. Windows Search is supplemented with an immediate-folder check, never a whole-disk crawl. Unindexed subfolders, a 40-item result limit and unavailable indexing are reported. Multiple results require a user choice; “Open second” uses the actual previous ordering. Model output cannot supply an arbitrary executable or document path. Dependent operations are sequential and stop on failure, with at most four tool rounds, eight calls and a 90-second task deadline. Scripts, installers, deletion and arbitrary commands are unavailable. Calendar, memory, briefings and TTS remain future stages. Optional offline Windows wake phrases now use the existing unified voice entry.
 
 品牌资源位于 `logo/`，转换产物位于 `resources/`：`-1.png` 纯图标用于应用、任务栏和托盘；`-2.png` 浅色完整 Logo 和「轻令 Qinly 智能助手标志2.png」深色透明 Logo 用于对应主题侧边栏及关于页面，两者使用相同的 2:1 透明画布与显示尺寸；`-4.png` 方形图标用于安装包和桌面快捷方式；白底「轻令 Qinly 智能助手标志.png」用于本页品牌展示。原图保留，未重新绘制。开发时安装 Pillow 后运行 `pnpm icon`；可用 `QINLY_PYTHON` 指定已有 Python。ICO 含 16–256 像素多尺寸。显示名称改为轻令（Qinly），技术包名、App ID 和原 `typeless-rebuild` 用户目录继续沿用，以保留配置、登录与升级身份。
 
@@ -43,6 +43,26 @@ Windows 上的语音输入客户端，界面与交互对齐 Typeless（hub 三�
 随记支持按文字、录音或处理失败筛选，也可按最近修改排序；筛选和排序先于分页、批量操作及导出。录音随记即使尚未下载音频，也归入录音类型。详情可分别复制当前原文、润色稿（含尚未保存的编辑），播放器可前后跳转 10 秒并停在录音边界。手动编辑、批量修改和删除保存失败时会报告错误并恢复内存记录；删除写入成功后才清理录音。编辑未保存成功时，切换随记和重新润色会暂停，保留当前草稿供重试。
 
 Notes can be filtered by text, voice or processing failure and sorted by last modification before pagination, bulk operations and export. Voice notes without a downloaded recording still count as voice notes. Copy the current original or polished draft directly, and skip recordings backward or forward by 10 seconds. Failed manual edits, bulk changes and deletions preserve the stored rows and recordings. Switching notes or polishing again waits for unsaved edits to succeed.
+
+## 录音保障与离线唤醒（0.37.0） / Recording reliability and offline wake
+
+开始录音时检查配置链路的 TCP 连通性，不提交测试音频或消耗 ASR 额度；服务未启动会立即结束本次录音并明确提示。已启用的内置 ASR 模型会按选定配置自动加载（仅使用已有文件，不自动下载）；外部 llama.cpp 等服务仍由用户启动，软件不会猜测启动命令。连接成功仅表示端口可达，不能保证模型已就绪、鉴权或转写必定成功。录音结束后遇到转写失败，音频保留到随记，可恢复服务后重新转写；取消和静音不保存，失败记录不进入历史。随记录音直接写盘后处理，继续保留原录音。
+
+语音随记默认突出润色结果，原始转写默认折叠，可展开编辑、复制；文字随记保持直接编辑。
+
+「设置 → 通用 → 语音唤醒」默认关闭，启用后通过 Windows 本地 System.Speech 的限定词语法等待用户自定义的 2–40 字符唤醒词。默认中文“你好轻令”，英文新配置“Hey Qinly”；对应的 Windows **桌面语音识别**语言包必须可用，中文/英文缺失会明确报错，不会降级为持续云端 ASR。使用 Windows 默认麦克风，默认设备与听写自选设备可以不同。先说唤醒词，看到录音条后再说需求；本版不承诺同一句连说唤醒词和正文。之后复用统一语音分流、ASR 与模型配置，停顿约 1.4 秒自动提交；无语音 10 秒取消，右 Alt 提交，Esc 取消。任务、截图、锁屏或休眠期间暂停监听，恢复空闲后继续；唤醒前不上传音频，不保存监听内容。误唤醒和识别率仍受系统语言包、发音、噪声影响；可随时关闭，启用会增加本地麦克风与识别进程资源占用。参见 [Windows SpeechRecognitionEngine](https://learn.microsoft.com/en-us/dotnet/api/system.speech.recognition.speechrecognitionengine)。
+
+Recording starts with a bounded TCP availability check, without sending test audio or consuming ASR quota. An enabled built-in model loads automatically from existing files. External ASR servers must still be started by the user. An open port does not certify credentials or model readiness. Final transcription failures preserve audio in Notes for retranscription; cancelled or silent takes are discarded, and failed history rows are not added. Voice notes show the polished draft prominently and collapse the original transcript by default; text notes stay directly editable.
+
+Optional **Settings → General → Voice wake** uses offline Windows desktop speech recognition and a custom 2–40 character phrase. It is off by default and requires the matching Chinese/English speech recognition language pack. It uses the Windows default microphone. Say the phrase, wait for the recording strip, then speak your request. Wake-triggered recording submits after about 1.4 seconds of silence or cancels after 10 seconds without speech; Right Alt submits and Esc cancels. Tasks, screenshots, lock and sleep pause listening. No pre-wake audio is uploaded or saved. Existing recognition and providers process the request after waking. Recognition accuracy and false activations depend on the installed Windows recognizer and microphone environment; enabling it adds a local recognition process.
+
+## 截图改进（0.37.0） / Screenshot improvements
+
+框选截图优先通过 Windows GDI 直接捕获光标所在显示器的原始像素，不启动 Chromium 屏幕视频捕获；不可用时保留 Electron 路径。编辑器仍按需创建，退出即释放。工具栏保持单行，窄屏可横向滚动；颜色、线宽、字号、马赛克块大小、OCR 语言、翻译目标和 Ask 问题在对应工具二级面板展开。四角与四边中点共八个节点用于缩放，只有拖动其他边框线才移动选区，内部空白不移动选区。选择工具可拖动全部标注图层，文字和马赛克工具也可拖动已有同类图层，撤销支持图层移动。
+
+本地 OCR 优先选择中英混排识别语言，支持手动中文/英文选择；识别专用副本放大小字、反转暗底文字，导出图片保持原始像素。保留识别行分隔，消除中文分词空格，保留英文单词间空格。没有替换为微信私有 OCR，也不使用 LLM 编造纠字；很小、模糊、复杂背景的文字仍可能识别错误，未安装的语言包会报错。复制、另存为、翻译和视觉 Ask 保留现有数据发送边界。
+
+On Windows, screenshot capture first uses a direct GDI monitor snapshot at source resolution, with the existing Electron path as fallback. The editor is on demand. One toolbar row contains all actions; tool-specific options expand below it. Eight corner/edge handles resize the crop; only its remaining border moves it. Blank interior dragging does nothing. Annotation layers, including text and mosaic, can move independently and undo their movement. OCR uses an enlarged, dark-background-adjusted copy, supports Chinese/English language selection, preserves lines and removes artificial Chinese spaces without joining English words. It remains Windows OCR, with accuracy limits for blurred or tiny text; screenshots are not secretly uploaded for correction.
 
 ## 快速开始
 
@@ -62,7 +82,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\轻令（Qinly）-0.34.1-setup.exe
+pnpm package          # → release\轻令（Qinly）-0.37.0-setup.exe
 ```
 
 
@@ -80,7 +100,7 @@ pnpm package          # → release\轻令（Qinly）-0.34.1-setup.exe
 
 Use your dictation shortcut (Right Alt by default) for normal or web-enabled Ask, translation, voice notes, reminders/todos, Windows actions, personal-data queries and existing application pages. Dedicated shortcuts and enabled activation phrases take priority. Ordinary dictation and development requirements retain automatic prompt routing. Turn **Understand voice requests** off in Settings → Shortcuts for plain dictation. Classification uses your current text model and may add one request; multimodal audio is transcribed first. Commands are executed only after the final transcript, never from captions. Invalid/failed/cancelled takes perform no action.
 
-Voice selection polish/translation reuses existing replace/append preferences and verifies the original window. Ask remains in its answer card; successful answers share the assistant's temporary session so follow-up requests can reference them. Notes retain original audio. Reminder creation and note extraction reuse the complete built-in template and program-side time validation. Personal data reads and existing task changes require explicit permission, official URLs must come from real search evidence, and ambiguous reminders still need review. Calendar, persistent memory, TTS and wake words remain unimplemented; opening Settings does not automatically change individual options.
+Voice selection polish/translation reuses existing replace/append preferences and verifies the original window. Ask remains in its answer card; successful answers share the assistant's temporary session so follow-up requests can reference them. Notes retain original audio. Reminder creation and note extraction reuse the complete built-in template and program-side time validation. Personal data reads and existing task changes require explicit permission, official URLs must come from real search evidence, and ambiguous reminders still need review. Calendar, persistent memory and TTS remain unimplemented; opening Settings does not automatically change individual options.
 
 ## 使用
 

@@ -246,6 +246,41 @@ afterEach(() => {
 })
 
 describe('Ask card completion', () => {
+  it('stops early with a useful error when the ASR service is unavailable', async () => {
+    const { pipeline, sent } = harness({}, { checkAsr: async () => { throw Error('请先启动本地 ASR 服务') } })
+    pipeline.start('dictation')
+    await vi.waitFor(() => expect(pipeline.isBusy).toBe(false))
+    expect(alerts(sent).at(-1)?.alert.text).toContain('请先启动')
+    expect(mocks.transcribe).not.toHaveBeenCalled()
+  })
+  it('ignores an old preflight failure after cancel and re-record', async () => {
+    let reject!: (error: Error) => void
+    const checkAsr = vi.fn().mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail })).mockResolvedValue(undefined)
+    const { pipeline } = harness({}, { checkAsr })
+    pipeline.start('dictation'); pipeline.cancel(); pipeline.start('dictation')
+    reject(Error('old failure'))
+    await Promise.resolve(); await Promise.resolve()
+    expect(pipeline.isRecording).toBe(true); pipeline.cancel()
+  })
+  it('preserves audio after ASR fails, without adding an abnormal history entry', async () => {
+    const preserveAudio = vi.fn(async () => {})
+    mocks.transcribe.mockRejectedValue(Error('connect ECONNREFUSED'))
+    const { pipeline, sent, entries } = harness({}, { preserveAudio })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    await pipeline.stop()
+    expect(preserveAudio).toHaveBeenCalledOnce()
+    expect(alerts(sent).at(-1)?.alert.text).toContain('录音已保留到随记')
+    expect(entries).toHaveLength(0)
+  })
+  it('submits wake recordings after speech and silence, but never changes normal shortcut recording', async () => {
+    const { pipeline } = harness({})
+    const stop = vi.spyOn(pipeline, 'stop').mockResolvedValue(null)
+    pipeline.start('dictation', { viaWake: true, handsFree: true })
+    pipeline.pushAudio(tone(500)); pipeline.pushAudio(silence(1400))
+    expect(stop).toHaveBeenCalledOnce(); pipeline.cancel()
+    pipeline.start('dictation'); pipeline.pushAudio(tone(500)); pipeline.pushAudio(silence(2000))
+    expect(stop).toHaveBeenCalledOnce(); pipeline.cancel()
+  })
   it('stops an Ask request and ignores queued deltas and a late response without writing history', async () => {
     vi.useFakeTimers()
     const onAnswer = vi.fn()

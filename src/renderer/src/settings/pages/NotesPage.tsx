@@ -525,6 +525,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     })
     micRef.current = mic
     try {
+      await window.api.checkAsr()
+      if (micRef.current !== mic) return
       await mic.setDevice(settings.inputDeviceId ?? '', settings.audioProcessing)
       if (micRef.current !== mic) return
       await mic.start()
@@ -1465,8 +1467,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
               </Stack>
 
               <Stack spacing={2} sx={{ mt: 2.25 }}>
-                <Box>
-                  <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.secondary', mb: 0.75 }}>
+                <Box key={selected.id} component={selected.durationMs > 0 || audioKey ? 'details' : 'div'}
+                  data-notes-original sx={{ order: selected.durationMs > 0 || audioKey ? 2 : 0 }}>
+                  <Typography component={selected.durationMs > 0 || audioKey ? 'summary' : 'div'}
+                    sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.secondary', mb: 0.75, cursor: selected.durationMs > 0 || audioKey ? 'pointer' : 'default' }}>
                     {t(selected.durationMs === 0 && !audioKey ? 'notes.bodyLabel' : 'notes.transcriptLabel')}
                   </Typography>
                   <TextField
@@ -1474,7 +1478,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                     disabled={retranscribingId === selected.id}
                     inputRef={bodyInputRef}
                     multiline
-                    minRows={4}
+                    minRows={selected.durationMs > 0 || audioKey ? 4 : 10}
                     fullWidth
                     value={transcriptDraft}
                     onChange={(event) => editField('transcript', event.target.value)}
@@ -1486,7 +1490,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                     onClick={() => void copyDraft(transcriptDraft)} sx={{ mt: 0.5, fontSize: 11.5 }}>{t('notes.copyOriginal')}</Button>
                 </Box>
 
-                <Box>
+                <Box sx={{ order: 1 }}>
                   <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.secondary', mb: 0.75 }}>
                     {t('notes.polishedLabel')}
                   </Typography>
@@ -1494,7 +1498,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                     data-notes-editor="polished"
                     disabled={retranscribingId === selected.id}
                     multiline
-                    minRows={4}
+                    minRows={selected.durationMs > 0 || audioKey ? 12 : 4}
                     fullWidth
                     value={polishedDraft}
                     onChange={(event) => editField('polished', event.target.value)}

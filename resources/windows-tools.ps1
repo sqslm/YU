@@ -17,7 +17,15 @@ if ($request.action -eq 'ocr') {
     $task.Wait()
     return $task.Result
   }
-  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+  [void][Windows.Globalization.Language,Windows.Globalization,ContentType=WindowsRuntime]
+  $engine = $null
+  # The Chinese recognizer also reads Latin text. Prefer it for mixed Chinese/English screenshots.
+  $language = [string]$request.language
+  if (!$language -or $language -eq 'auto') { $language = 'zh' }
+  $recognizer = [Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages | Where-Object { $_.LanguageTag -like "$language*" } | Select-Object -First 1
+  if ($recognizer) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($recognizer) }
+  elseif ($request.language -and $request.language -ne 'auto') { throw 'Requested Windows OCR language pack is not installed' }
+  if (!$engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
   if (!$engine) { throw 'Windows OCR language support is unavailable' }
   $bytes = [Convert]::FromBase64String([string]$request.png)
   if (!$bytes.Length -or $bytes.Length -gt 6291456) { throw 'Invalid OCR image size' }
@@ -33,7 +41,13 @@ if ($request.action -eq 'ocr') {
     $bitmap = Await-Result ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
     if ($bitmap.PixelWidth -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension -or $bitmap.PixelHeight -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension) { throw 'Image exceeds Windows OCR dimensions' }
     $result = Await-Result ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-    @{text=$result.Text;language=$engine.RecognizerLanguage.LanguageTag} | ConvertTo-Json -Compress
+    $lines = @($result.Lines | ForEach-Object {
+      $line = $_.Text -replace '([\p{IsCJKUnifiedIdeographs}])\s+(?=[\p{IsCJKUnifiedIdeographs}])', '$1'
+      $line = $line -replace '\s+([\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\u3001\uFF09\u300B\u3011\u300D\u300F])', '$1'
+      $line = $line -replace '([\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\u3001\uFF08\u300A\u3010\u300C\u300E])\s+', '$1'
+      $line.Trim()
+    })
+    @{text=($lines -join "`n");language=$engine.RecognizerLanguage.LanguageTag} | ConvertTo-Json -Compress
   } finally { if ($bitmap) { $bitmap.Dispose() }; $writer.Dispose(); $stream.Dispose() }
   exit
 }

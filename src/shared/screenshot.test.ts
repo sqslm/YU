@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { screenshotCrop } from './screenshot'
+import { screenshotCrop, captureHit, captureHandle, CAPTURE_HANDLES, resizeCapture } from './screenshot'
 
 it.each([1, 1.25, 1.5, 2])('exports the real captured pixels at %sx display scale', scale => {
   expect(screenshotCrop({ x: 20, y: 40, width: 200, height: 100 }, { width: 1000, height: 800 }, { width: 1000 * scale, height: 800 * scale }))
@@ -12,4 +12,19 @@ it('clamps an edge selection to the actual image rather than exporting toolbar o
 it('uses actual source dimensions when desktop capture returns a smaller thumbnail', () => {
   expect(screenshotCrop({ x: 0, y: 0, width: 2000, height: 1000 }, { width: 4000, height: 2000 }, { width: 1600, height: 800 }))
     .toEqual({ x: 0, y: 0, width: 800, height: 400 })
+})
+it('offers all eight resize handles; only the border can move a selection', () => {
+  const rect = { x: 100, y: 100, width: 400, height: 200 }
+  for (const handle of CAPTURE_HANDLES) expect(captureHit(captureHandle(rect, handle), rect)).toBe(handle)
+  expect(captureHit({ x: 180, y: 100 }, rect)).toBe('move')
+  expect(captureHit({ x: 180, y: 160 }, rect)).toBeNull()
+  expect(captureHit({ x: 30, y: 100 }, rect)).toBeNull()
+})
+it('resizes any edge independently without moving the opposite edge or allowing inverted rectangles', () => {
+  const rect = { x: 100, y: 100, width: 400, height: 200 }, view = { width: 1000, height: 800 }
+  expect(resizeCapture(rect, 'w', { x: 70, y: 130 }, view)).toEqual({ x: 70, y: 100, width: 430, height: 200 })
+  expect(resizeCapture(rect, 'n', { x: 320, y: 80 }, view)).toEqual({ x: 100, y: 80, width: 400, height: 220 })
+  expect(resizeCapture(rect, 'e', { x: 700, y: 150 }, view)).toEqual({ x: 100, y: 100, width: 600, height: 200 })
+  expect(resizeCapture(rect, 's', { x: 120, y: 900 }, view)).toEqual({ x: 100, y: 100, width: 400, height: 700 })
+  expect(resizeCapture(rect, 'w', { x: 600, y: 150 }, view).width).toBe(4)
 })

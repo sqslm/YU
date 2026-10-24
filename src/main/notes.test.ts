@@ -131,6 +131,14 @@ afterEach(() => {
 })
 
 describe('creation', () => {
+  it('keeps failed dictation audio for a later retry without invoking any model', async () => {
+    const store = await loadedStore()
+    const entry = await store.create({ pcm: pcm(), durationMs: 1000, recovery: true })
+    expect(entry.polishStatus).toBe('failed')
+    expect(existsSync(join(dir, entry.audioPath!))).toBe(true)
+    expect(readDb(dir).notes[0]?.polishError).toContain('录音已保留')
+    expect(mocks.transcribe).not.toHaveBeenCalled(); expect(mocks.complete).not.toHaveBeenCalled()
+  })
   it('stores keyword-routed audio and the supplied transcript without another ASR request', async () => {
     const store = await loadedStore()
     const entry = await store.create({ pcm: pcm(), durationMs: 1000 }, undefined, '这是已经识别的随记正文')

@@ -126,6 +126,8 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  checkAsr?: () => Promise<void>
+  preserveAudio?: (pcm: Int16Array, signal: AbortSignal) => Promise<void>
   captureSelection?: () => Promise<SelectionTarget>
   voiceContext?: (text: string) => { recent: { question: string; answer: string } | null; activeTasks?: { id: string; title: string }[] }
   onCompletedAnswer?: (question: string, answer: string) => void
@@ -217,6 +219,8 @@ function stripAppendedSources(text: string): string {
  * token so an in-flight request can never insert, record or surface anything.
  */
 export class Pipeline {
+  private asrCheck: Promise<void> | null = null
+  private wakeCapture: { speechMs: number; silenceMs: number; totalMs: number } | null = null
   private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
   private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo; purpose?: 'reminder' | 'assistant' } | null = null
@@ -597,7 +601,7 @@ export class Pipeline {
     }, capMs)
   }
 
-  start(mode: Mode, options: { handsFree?: boolean; purpose?: 'reminder' | 'assistant'; target?: ForegroundInfo } = {}): void {
+  start(mode: Mode, options: { handsFree?: boolean; purpose?: 'reminder' | 'assistant'; target?: ForegroundInfo; viaWake?: boolean } = {}): void {
     // The stage stays `recording` while `stop()` waits for the renderer to flush
     // its tail, so a press in that window must be reported as busy instead of
     // being ignored as a duplicate start.
@@ -641,6 +645,7 @@ export class Pipeline {
     if (this.takePrompt.size > 8) this.takePrompt.clear()
     this.usedProvider = null
     this.stage = 'recording'
+    this.wakeCapture = options.viaWake ? { speechMs: 0, silenceMs: 0, totalMs: 0 } : null
     this.stageMode = mode
     this.log(`[pipeline] start ${mode}${options.handsFree ? ' (hands-free)' : ''}`)
     // One log file per take (the reference client's `recording-event` stream).
@@ -677,6 +682,15 @@ export class Pipeline {
       showMode: this.getSettings().showModeInBar,
       handsFree: options.handsFree
     })
+    const token = this.runToken
+    this.asrCheck = this.options.checkAsr?.() ?? null
+    void this.asrCheck?.catch(error => {
+      if (token !== this.runToken || this.stage !== 'recording' || !this.recording) return
+      // Stop immediately when a server was never started; a later outage still
+      // preserves the completed recording through preserveAudio below.
+      this.cancel('asr-unavailable')
+      this.showAlert({ kind: 'no_network', level: 'error', text: String(error instanceof Error ? error.message : error), actions: [] })
+    })
   }
 
   /** The hook reported a tap: keep recording until the next press. */
@@ -709,6 +723,16 @@ export class Pipeline {
     if (this.stage !== 'recording') return
     this.chunks.push(pcm)
     this.captions?.push(pcm)
+    const wake = this.wakeCapture
+    if (!wake || !this.recording) return
+    const ms = pcmDurationMs(pcm)
+    wake.totalMs += ms
+    if (isSilent(pcm)) wake.silenceMs += ms
+    else { wake.speechMs += ms; wake.silenceMs = 0 }
+    if (wake.speechMs >= 240 && wake.silenceMs >= 1400) {
+      this.wakeCapture = null
+      void this.stop()
+    } else if (wake.totalMs >= 10_000 && wake.speechMs < 240) this.cancel('wake-no-speech')
   }
 
   private startCaptions(settings: Settings): void {
@@ -852,6 +876,8 @@ export class Pipeline {
     this.runToken += 1
     this.clearSessionCap()
     this.recording = null
+    this.asrCheck = null
+    this.wakeCapture = null
     this.stage = 'idle'
     this.takeVoiceCommands = null
     this.takeSmartRouting = false
@@ -883,6 +909,8 @@ export class Pipeline {
 
     this.clearSessionCap()
     this.recording = null
+    this.asrCheck = null
+    this.wakeCapture = null
     this.stage = 'idle'
     this.takeVoiceCommands = null
     this.takeSmartRouting = false
@@ -1178,6 +1206,8 @@ export class Pipeline {
     let transcript = ''
     let assistantUseContext: boolean | undefined
     try {
+      await this.asrCheck
+      controller.signal.throwIfAborted()
       const speech = trimSilencePcm(pcm)
       if (speech.length !== pcm.length) this.encoded = null
       const wav = encodeWav(speech)
@@ -1464,6 +1494,18 @@ export class Pipeline {
       // Failures remain visible as alerts and diagnostics, without a history row.
       const classified = classifyError(err)
       const alert = buildBarAlert(classified)
+      if (!transcript && !controller.signal.aborted && this.options.preserveAudio) {
+        try {
+          await this.options.preserveAudio(pcm, controller.signal)
+          if (token !== this.runToken) return null
+          alert.text += '\n' + mt('录音已保留到随记，可在服务恢复后重新转写')
+          alert.actions = alert.actions?.filter(action => action.id !== 'retry')
+        } catch (saveError) {
+          if (token !== this.runToken) return null
+          this.log(`[pipeline] audio recovery failed: ${describeFailure(saveError)}`)
+          alert.text += '\n' + mt('录音保存失败，请检查随记存储目录')
+        }
+      }
       // Assistant voice has no legacy history row to retry. Do not reopen an
       // unrelated older failed take through the shared bar's retry action.
       if (purpose === 'assistant') alert.actions = alert.actions?.filter(action => action.id !== 'retry')
@@ -1492,6 +1534,8 @@ export class Pipeline {
     this.takePrompt.delete(token)
     if (token !== this.runToken) return
     this.stage = 'idle'
+    this.asrCheck = null
+    this.wakeCapture = null
     this.encoded = null
     this.takePurpose = undefined
     this.takeVoiceCommands = null

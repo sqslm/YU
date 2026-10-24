@@ -14,6 +14,8 @@ files:
   - THIRD_PARTY_NOTICES.md
   - licenses/**
 extraResources:
+  - from: resources/voice-wake.ps1
+    to: voice-wake.ps1
   - from: resources/windows-tools.ps1
     to: windows-tools.ps1
   - from: resources/installer.ico

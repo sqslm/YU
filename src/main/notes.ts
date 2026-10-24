@@ -67,6 +67,7 @@ const MAX_PUSH_NOTES = 200
 const POLISH_STATUSES: readonly NoteEntry['polishStatus'][] = ['pending', 'ok', 'failed', 'skipped']
 
 export interface NotesStoreOptions {
+  localAsr?: { enabled: () => boolean; prepare: () => Promise<void>; transcribeWav: (wav: Uint8Array) => Promise<string> }
   log: (line: string) => void
   getSettings: () => Settings
   /** Called after any persisted change so the UI can refresh. */
@@ -427,7 +428,7 @@ export class NotesStore {
    * polish land later through `notify`.
    */
   async create(
-    input: { pcm: Int16Array; durationMs: number; categoryId?: string; tags?: string[] },
+    input: { pcm: Int16Array; durationMs: number; categoryId?: string; tags?: string[]; recovery?: boolean },
     signal?: AbortSignal,
     transcript?: string
   ): Promise<NoteEntry> {
@@ -452,7 +453,8 @@ export class NotesStore {
       durationMs,
       transcript: transcript ?? '',
       polished: '',
-      polishStatus: 'pending',
+      polishStatus: input.recovery ? 'failed' : 'pending',
+      ...(input.recovery ? { polishError: mt('语音识别未完成，录音已保留，请重新转写') } : {}),
       audioPath: audioRel,
       audioFormat: stored.format,
       audioBytes: stored.data.byteLength,
@@ -476,7 +478,7 @@ export class NotesStore {
     )
 
     // Detached on purpose: `create` returns as soon as the note is safe on disk.
-    void this.run(id, wav, signal, transcript)
+    if (!input.recovery) void this.run(id, wav, signal, transcript)
     return cloneNote(entry)
   }
 
@@ -1248,6 +1250,19 @@ export class NotesStore {
 
   /** ASR leg, walking the configured failover chain exactly like the pipeline. */
   private async transcribe(settings: Settings, wav: Uint8Array, signal?: AbortSignal): Promise<string> {
+    const local = this.options.localAsr
+    if (local?.enabled()) {
+      try {
+        await local.prepare()
+        signal?.throwIfAborted()
+        const text = (await local.transcribeWav(wav)).trim()
+        signal?.throwIfAborted()
+        if (text) return text
+      } catch (error) {
+        signal?.throwIfAborted()
+        this.options.log(`[notes] local ASR failed: ${describeError(error)}`)
+      }
+    }
     const chain = chainFor(settings, 'asr')
     const { value } = await withFailover(
       chain,

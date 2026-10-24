@@ -54,6 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   selectionInsertMode: 'replace',
   assistantDownloadFolder: '',
   voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
+  wakeWord: { enabled: false, phrase: '你好轻令' },
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
     baseUrl: '',
@@ -181,7 +182,7 @@ export function applySettingsPatch(current: Settings, patch: Partial<Settings>):
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings>
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings> {
   const next = { ...current, ...patch }
-  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands'] as const) {
+  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord'] as const) {
     if (patch[key]) next[key] = { ...current[key], ...patch[key] } as never
   }
   if (patch.hotkeys?.bindings) {
@@ -250,6 +251,8 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   merged.selectionInsertMode = input.selectionInsertMode === 'append' ? 'append' : 'replace'
   merged.assistantDownloadFolder = typeof input.assistantDownloadFolder === 'string' ? input.assistantDownloadFolder.trim() : ''
   merged.voiceCommands = normalizeVoiceCommands(input.voiceCommands)
+  const phrase = typeof input.wakeWord?.phrase === 'string' ? input.wakeWord.phrase.trim().replace(/\s+/g, ' ') : ''
+  merged.wakeWord = { enabled: input.wakeWord?.enabled === true, phrase: phrase.length >= 2 && phrase.length <= 40 ? phrase : input.uiLanguage === 'en' ? 'Hey Qinly' : '你好轻令' }
   merged.reminders = {
     notifications: input.reminders?.notifications !== false,
     strongSound: input.reminders?.strongSound !== false,

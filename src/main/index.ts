@@ -25,6 +25,8 @@ import { HotkeyHost, type HotkeyHostEvent } from './hotkey/host'
 import { UiaHost } from './uia/host'
 import { Updater } from './updater'
 import { Pipeline } from './pipeline'
+import { checkAsrReadiness } from './asr-readiness'
+import { WakeWordHost } from './wake-word'
 import { buildBarAlert, classifyError } from './errors'
 import { RingLog, describeSecret, diagnosticsFileName, renderDiagnostics } from './diagnostics'
 import { NotesStore } from './notes'
@@ -118,7 +120,7 @@ let hubView: import('./tools/personal').HubPage | null = null
 let assistantTarget: ForegroundInfo | undefined
 let screenshotSequence = 0
 let screenshotReview: { id: number; finish: (accepted: boolean) => void } | null = null
-const screenshotTool = new ScreenshotTool(() => store.get(), active => hotkeys?.setSuspended(active))
+const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active); refreshWakeWord(active) }, line => log(line))
 async function openScreenshot(): Promise<boolean> {
   if (pipeline?.isBusy || notesRecording || assistant.busy || selectionEditor?.isBusy) return false
   try { await screenshotTool.open(); return true }
@@ -222,6 +224,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   changed: state => {
     if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.webContents.send('assistant:changed', state)
     tray?.refresh()
+    refreshWakeWord()
   } })
 
 function broadcastReminders(): void {
@@ -238,7 +241,16 @@ function broadcastReminders(): void {
 const notes = new NotesStore({
   log: (line) => log(line),
   getSettings: () => store.get(),
-  notify: () => broadcastNotes()
+  notify: () => broadcastNotes(),
+  localAsr: {
+    enabled: () => store.get().localAsr.enabled,
+    prepare: async () => {
+      if (localAsr.available()) return
+      const status = await localAsr.activate()
+      if (status.phase !== 'ready') throw new Error(status.message)
+    },
+    transcribeWav: wav => localAsr.transcribeWav(wav)
+  }
 })
 
 /**
@@ -351,8 +363,25 @@ const uia = new UiaHost(log)
  */
 let chromeDimmed = false
 let notesRecording = false
+let wakeSuspended = false
+let wakeLocked = false
+const wakeWord = new WakeWordHost({
+  wake: () => {
+    if (quitting || wakeSuspended || wakeLocked || pipeline?.isBusy || notesRecording || assistant.busy || screenshotTool.isOpen || selectionEditor?.isBusy) return
+    pipeline?.start('dictation', { handsFree: true, viaWake: true })
+    refreshWakeWord()
+  },
+  changed: status => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('wake:changed', status)
+    tray?.refresh()
+  }
+})
+function refreshWakeWord(screenshotActive = screenshotTool.isOpen, retry = false): void {
+  wakeWord.update(store.get().wakeWord, quitting || wakeSuspended || wakeLocked || screenshotActive || notesRecording || Boolean(pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy), retry)
+}
 
 function refreshHotkeyActivity(): void {
+  refreshWakeWord()
   hotkeys?.setActivity(notesRecording || pipeline?.isRecording ? 'recording' : pipeline?.isBusy ? 'working' : 'idle')
   if (!pipeline?.isBusy) assistantVoice = false
   tray?.refresh()
@@ -877,6 +906,7 @@ function registerIpc(): void {
     const previous = store.get()
     const next = await store.update(patch)
     setMainLanguage(next.uiLanguage)
+    refreshWakeWord()
     tray?.refresh()
     if (assistantWindow && !assistantWindow.isDestroyed()) {
       applyHubTheme(assistantWindow, next.themeMode)
@@ -1490,6 +1520,8 @@ async function bootstrap(): Promise<void> {
   }, broadcastReminders, log)
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+    checkAsr: () => checkAsrReadiness(store.get(), localAsr),
+    preserveAudio: async (pcm, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16), recovery: true }, signal) },
     captureSelection: () => captureSelectionTarget(store.get()),
     voiceContext: text => {
       const last = needsAssistantContext(text) ? assistant.snapshot().turns.at(-1) : undefined
@@ -1589,17 +1621,23 @@ async function bootstrap(): Promise<void> {
    * covers what the reference client reads through its `isLidOpen` native export.
    */
   powerMonitor.on('suspend', () => {
+    wakeSuspended = true; refreshWakeWord()
     hideAssistant()
     pipeline?.cancel('suspend')
   })
   powerMonitor.on('lock-screen', () => {
+    wakeLocked = true; refreshWakeWord()
     hideAssistant()
     pipeline?.cancel('lock')
   })
-  powerMonitor.on('resume', () => reminders?.refresh())
-  powerMonitor.on('unlock-screen', () => reminders?.refresh())
+  powerMonitor.on('resume', () => { wakeSuspended = false; refreshWakeWord(); reminders?.refresh() })
+  powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); reminders?.refresh() })
 
   registerIpc()
+  ipcMain.handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
+  ipcMain.handle('wake:status', () => wakeWord.snapshot())
+  ipcMain.handle('wake:retry', () => { refreshWakeWord(undefined, true); return wakeWord.snapshot() })
+  refreshWakeWord()
   reminders.registerIpc(notes)
   reminders.start()
   registerNotesIpc({
@@ -1685,7 +1723,7 @@ async function bootstrap(): Promise<void> {
     openAssistant: () => { openAssistant() },
     openNotes: () => navigateHub('notes'),
     openReminders: () => navigateHub('reminders'),
-    status: () => notesRecording || pipeline?.isRecording ? mt('录音中') : pipeline?.isBusy || assistant.busy ? mt('处理中') : store.get().hotkeys.enabled ? mt('待命') : mt('快捷键已暂停'),
+    status: () => notesRecording || pipeline?.isRecording ? mt('录音中') : pipeline?.isBusy || assistant.busy ? mt('处理中') : wakeWord.snapshot().phase === 'listening' ? mt('唤醒待命') : store.get().hotkeys.enabled ? mt('待命') : mt('快捷键已暂停'),
     pasteLast: () => void pipeline?.pasteLast(),
     openSettings: () => navigateHub('settings'),
     hotkeysEnabled: () => store.get().hotkeys.enabled,
@@ -1947,6 +1985,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     quitting = true
+    wakeWord.stop()
     if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()

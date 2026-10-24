@@ -17,12 +17,22 @@ import type { AnswerCardPayload, TypelessApi } from '@shared/api'
 let lastCard: AnswerCardPayload | null = null
 
 const api: TypelessApi = {
+  checkAsr: () => ipcRenderer.invoke('asr:check'),
+  wakeWord: {
+    status: () => ipcRenderer.invoke('wake:status'),
+    retry: () => ipcRenderer.invoke('wake:retry'),
+    onChanged: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, status: import('@shared/wake-word').WakeWordStatus): void => callback(status)
+      ipcRenderer.on('wake:changed', listener)
+      return () => ipcRenderer.removeListener('wake:changed', listener)
+    }
+  },
   screenshot: {
     open: () => ipcRenderer.invoke('screenshot:open'),
     frame: () => ipcRenderer.invoke('screenshot:frame'),
     close: () => ipcRenderer.invoke('screenshot:close'),
     copyText: text => ipcRenderer.invoke('screenshot:copy-text', text),
-    run: (action, dataUrl, question, target) => ipcRenderer.invoke('screenshot:run', action, dataUrl, question, target)
+    run: (action, dataUrl, question, target, ocrLanguage) => ipcRenderer.invoke('screenshot:run', action, dataUrl, question, target, ocrLanguage)
   },
   assistant: {
     reviewScreenshot: (id, accepted) => ipcRenderer.invoke('assistant:screenshot-response', id, accepted),

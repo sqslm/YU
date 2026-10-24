@@ -3,6 +3,7 @@ import { Autocomplete, Box, Button, MenuItem, Stack, Switch, TextField, Typograp
 import type { Settings } from '@shared/types'
 import { MAX_TRANSLATE_TARGETS } from '@shared/defaults'
 import { MicTest } from './MicTest'
+import { WakeWordSection } from './WakeWordSection'
 // Kept on its own line so the history-retention row (REQ-05) does not restyle
 // the imports the other rows already share.
 import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Select } from '@mui/material'
@@ -855,6 +856,7 @@ export function GeneralSection({ settings, patch }: {
 }): JSX.Element {
   return (
     <Stack spacing={3}>
+      <WakeWordSection settings={settings} patch={patch} />
       <SettingsGroup icon={<IconGlobe />} title={i18n.t('外观')}>
         <SettingsRow
           label={i18n.t('主题')}
