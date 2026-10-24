@@ -225,6 +225,22 @@ function seedNote(dir: string, note: Partial<NoteEntry> & { id: string }, audio?
 const audioBytes = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00, 0x11, 0x22, 0x33, 0x44])
 
 describe('notes sync against the real server', () => {
+  it('syncs custom note names across devices, including rename and clearing, without changing raw text', async () => {
+    const session = await signUp('note-titles@example.com')
+    const desktop = await device('titles-desktop',session,dir=>seedNote(dir,{id:'named-note'}))
+    await desktop.store.update('named-note',{title:'Original name'})
+    await desktop.engine.now()
+    const laptop = await device('titles-laptop',session)
+    await laptop.engine.now()
+    expect(laptop.store.list().notes[0].title).toBe('Original name')
+    const original = laptop.store.list().notes[0].transcript
+    await laptop.store.update('named-note',{title:'新标题'})
+    await laptop.engine.now(); await desktop.engine.now()
+    expect(desktop.store.list().notes[0]).toMatchObject({title:'新标题',transcript:original})
+    await desktop.store.update('named-note',{title:''})
+    await desktop.engine.now(); await laptop.engine.now()
+    expect(laptop.store.list().notes[0].title).toBeUndefined()
+  })
   it('reports an audio upload failure and keeps the recording pending until retry succeeds', async () => {
     const session = await signUp('audio-upload-retry@example.com')
     const desktop = await device('audio-upload-retry', session, (dir) => seedNote(dir, { id: 'upload-retry' }, audioBytes))

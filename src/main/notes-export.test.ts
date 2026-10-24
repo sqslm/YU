@@ -60,9 +60,10 @@ describe('portable notes export', () => {
   })
 
   it('handles empty text, missing categories, Markdown metacharacters and English labels', () => {
-    const entry = note('n', { transcript: '', polished: '', categoryId: 'missing', tags: ['[tag]', '#topic'] })
+    const entry = note('n', { title: '# Plan [draft]', transcript: '', polished: '', categoryId: 'missing', tags: ['[tag]', '#topic'] })
     const md = formatNotesExport([entry], [], 'markdown')
     expect(md).toContain('\\[tag\\] / \\#topic')
+    expect(md).toContain('## \\# Plan \\[draft\\]')
     expect(md).not.toContain('分类：')
     expect(md.match(/（无内容）/g)).toHaveLength(2)
     setMainLanguage('en')

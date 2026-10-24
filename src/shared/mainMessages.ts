@@ -7,6 +7,18 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '分类数量已达上限，请使用已有分类': 'Category limit reached. Use an existing category.',
+  "未听到语音，已结束本次录音": "No speech detected. Recording ended.",
+  "请补充明确的事项和提醒时间，本次未保存": "Please specify the task and reminder time. Nothing was saved.",
+  "没有明确可保存的事项，请补充事项或具体时间": "No clear tasks to save. Please specify the task or its time.",
+  "已保存 {{count}} 个事项，{{skipped}} 个不明确事项未保存": "Saved {{count}} items; skipped {{skipped}} ambiguous items.",
+  "已拒绝不可逆删除；可以取消事项，保留恢复能力": "Irreversible deletion refused. Cancel the item to keep it recoverable.",
+  "分类不存在": "Category does not exist",
+  "请输入分类名称": "Enter a category name",
+  "存在同名分类，请指定分类 ID": "Multiple categories share this name. Specify a category ID.",
+  "请提供随记名称或分类": "Provide a note name or category",
+  "请只提供一种分类方式": "Provide either a category ID or name, not both.",
+  "随记已更新": "Note updated",
   '任务处理': 'Processing task',
   '任务结果': 'Task result',
   '正在分析截图…': 'Analyzing screenshot…',

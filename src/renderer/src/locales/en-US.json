@@ -1,4 +1,10 @@
 {
+  "更多": "More",
+  "notes.titlePlaceholder": "Untitled note — click to name",
+  "notes.titleLabel": "Note name",
+  "分类与标签": "Category & tags",
+  "notes.tagFilter": "Filter by tags",
+  "未听到语音，已结束本次录音": "No speech detected. Recording ended.",
   "待办": "To-do",
   "状态": "Status",
   "高级音频": "Advanced audio",
@@ -1081,7 +1087,7 @@
     "settings": "Settings"
   },
   "notes": {
-    "searchPlaceholder": "Search transcripts, tags or categories",
+    "searchPlaceholder": "Search names, text, tags or categories",
     "categoryFilter": "Filter by category",
     "allCategories": "All categories",
     "sortNewest": "Newest first",

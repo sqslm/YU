@@ -19,7 +19,6 @@ export class WindowsTools {
   constructor(private deps: {
     folders: Record<'downloads' | 'desktop' | 'documents', string> | (() => Record<'downloads' | 'desktop' | 'documents', string>)
     native: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<Record<string, unknown>>
-    confirm: (description: string, signal?: AbortSignal) => Promise<boolean>
     openPath: (path: string) => Promise<string>
     openUrl: (url: string) => Promise<void>
   }) {}
@@ -68,10 +67,6 @@ export class WindowsTools {
     for (const [key, value] of Object.entries(args)) {
       const field = Object.hasOwn(schema, key) ? schema[key] : undefined
       if (!field || typeof value !== (field.type === 'integer' ? 'number' : field.type) || (field.enum && !field.enum.includes(value as string))) return failed(mt('工具参数无效：{{name}}', { name: key }))
-    }
-    const approve = async (text: string): Promise<void> => {
-      if (!await this.deps.confirm(text, signal)) throw new Error(mt('已取消本次系统操作'))
-      signal?.throwIfAborted()
     }
     const originalContext = async (action: 'explorer-folder' | 'browser-url'): Promise<Record<string, unknown>> => {
       if (!context?.windowHandle || !context.processId) throw new Error(mt('没有可用的原窗口信息，请从目标应用重新呼出助手'))
@@ -141,7 +136,6 @@ export class WindowsTools {
       return ok(mt('已读取原窗口的文件夹'), { folder })
     }
     if (name === 'get_current_page') {
-      await approve(mt('读取原浏览器当前网页地址并发送给配置的模型？'))
       const result = await originalContext('browser-url')
       let url: URL
       try { url = new URL(string(result.url)) } catch { return failed(mt('无法读取原浏览器的网页地址，请粘贴链接')) }
@@ -190,7 +184,6 @@ export class WindowsTools {
     before = before ? new Date(before).toISOString() : ''
     const minBytes = args.minBytes ?? 0
     if (typeof minBytes !== 'number' || !Number.isSafeInteger(minBytes) || minBytes < 0) return failed(mt('文件大小无效'))
-    await approve(mt('仅查询以下目录的文件名、路径、修改时间和大小；这些元数据可能发送给配置的模型。不会读取文件内容。\n{{path}}', { path: root }))
     const result = await this.deps.native({ action: 'search', root, name: query, extension, extensions, recursive: args.recursive === true, after, before, minBytes, sort: args.sort === 'size' ? 'size' : 'modified' }, signal)
     const found: Omit<AssistantItem, 'id'>[] = []
     for (const file of (Array.isArray(result.files) ? result.files : []).slice(0, 40) as { name: string; path: string; bytes: number; modified: string }[]) {
@@ -217,7 +210,7 @@ const properties = {
   search_files: { folder: { type: 'string' }, name: { type: 'string' }, extension: { type: 'string' }, type: { type: 'string', enum: ['archive', 'pdf', 'document', 'image', 'audio'] }, recursive: { type: 'boolean', description: 'Only if user requests subfolders; bounded to depth 3 / 5000 entries / 5 seconds without following junctions.' }, day: { type: 'string', enum: ['today', 'yesterday'] }, after: { type: 'string', description: 'Inclusive modification instant, ISO 8601 with timezone. Prefer day for local today/yesterday.' }, before: { type: 'string', description: 'Exclusive modification instant, ISO 8601 with timezone.' }, minBytes: { type: 'integer', minimum: 0 }, sort: { type: 'string', enum: ['modified', 'size'] } }
 }
 export const WINDOWS_DEFINITIONS: ToolDefinition[] = WINDOWS_TOOLS.map(name => ({ name,
-  description: ({ get_current_folder: 'Get the real original Explorer folder through Shell by the frozen window handle. Fails on unavailable or ambiguous tabs; never infer a path from the title.', get_current_page: 'Read the original browser address through native accessibility with permission. Then use read_webpage for public content. No cookies or access to logged-in page content; ask for a link when unavailable.', get_active_window: 'Get the original foreground application snapshot captured when this task started. Does not inspect a newly focused window or read its document content.', get_disk_space: 'Read actual ready local disk total/free/used bytes through Windows. No guessed capacity values.', open_application: 'Find registered Windows desktop and Start Apps applications by name; launch a unique match directly without another confirmation. Multiple candidates require user choice by returned id.', open_folder: 'Open a requested specific local folder in Explorer directly, without another confirmation.', open_file: 'Open a requested actual document result by id directly, without another confirmation. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open a requested HTTP/HTTPS URL directly in the default browser, without another confirmation.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus bounded folder fallback. downloads uses the saved custom folder or the Windows known folder; folder=current resolves the original Explorer window. Use type=archive for ZIP/RAR/7Z etc; recursive=true only if requested. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.' })[name],
+  description: ({ get_current_folder: 'Get the real original Explorer folder through Shell by the frozen window handle. Fails on unavailable or ambiguous tabs; never infer a path from the title.', get_current_page: 'Read the original browser address through native accessibility. Then use read_webpage for public content. No cookies or access to logged-in page content; ask for a link when unavailable.', get_active_window: 'Get the original foreground application snapshot captured when this task started. Does not inspect a newly focused window or read its document content.', get_disk_space: 'Read actual ready local disk total/free/used bytes through Windows. No guessed capacity values.', open_application: 'Find registered Windows desktop and Start Apps applications by name; launch a unique match directly without another confirmation. Multiple candidates require user choice by returned id.', open_folder: 'Open a requested specific local folder in Explorer directly, without another confirmation.', open_file: 'Open a requested actual document result by id directly, without another confirmation. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open a requested HTTP/HTTPS URL directly in the default browser, without another confirmation.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus bounded folder fallback. downloads uses the saved custom folder or the Windows known folder; folder=current resolves the original Explorer window. Use type=archive for ZIP/RAR/7Z etc; recursive=true only if requested. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.' })[name],
   parameters: { type: 'object', properties: properties[name], additionalProperties: false, required: name === 'open_file' ? ['id'] : name === 'open_url' ? ['url'] : [] },
   run: (args, ctx) => ctx.windows!.run(name, args, ctx.signal, ctx.taskContext)
 }))

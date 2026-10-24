@@ -198,7 +198,9 @@ GET /api/v1/user/storage
 | `deleted` | 墓碑标记 |
 | `audio` | `{ "bytes", "format": "ogg"\|"wav", "sha256" }` 或 `null` |
 
-完整字段：`id, createdAt, updatedAt, durationMs, transcript, polished, polishStatus, polishError, categoryId, tags, editedAt, version, deleted, audio, serverUpdatedAt`。
+完整字段：`id, title, createdAt, updatedAt, durationMs, transcript, polished, polishStatus, polishError, categoryId, tags, editedAt, version, deleted, audio, serverUpdatedAt`。
+
+`title`（2.0.2）为可选名称，最多 200 字符；推送省略时保留原名称，空字符串明确清空。旧客户端继续兼容。
 
 `tags` 服务端会 trim、去空、去重、每个最多 64 个字符、最多 32 个；`categoryId` 原样保存（是否存在于分类列表由客户端判断）。单条 `transcript`/`polished` 上限 200000 字符。
 

@@ -82,6 +82,7 @@ function parseChange(raw, index) {
     updatedAt: integer(raw.updatedAt, 'updatedAt', { fallback: Date.now() }),
     durationMs: integer(raw.durationMs, 'durationMs', { max: 24 * 3600 * 1000, fallback: 0 }),
     transcript: text(raw.transcript, 'transcript', MAX_TEXT),
+    title: raw.title === undefined ? undefined : text(raw.title, 'title', 200),
     polished: text(raw.polished, 'polished', MAX_TEXT),
     polishStatus: 'skipped',
     polishError: null,
@@ -119,6 +120,7 @@ function serialize(row, audio) {
     durationMs: Number(row.duration_ms),
     // A tombstone never carries the text back to a client that asked to forget it.
     transcript: deleted ? '' : row.transcript,
+    title: deleted ? '' : row.title ?? '',
     polished: deleted ? '' : row.polished,
     polishStatus: row.polish_status,
     polishError: deleted ? null : row.polish_error ?? null,
@@ -153,6 +155,7 @@ function sameContent(row, change) {
     Number(row.created_at) === change.createdAt &&
     Number(row.duration_ms) === change.durationMs &&
     row.transcript === change.transcript &&
+    (change.title === undefined || (row.title ?? '') === change.title) &&
     row.polished === change.polished &&
     row.polish_status === change.polishStatus &&
     (row.polish_error ?? null) === change.polishError &&
@@ -188,8 +191,8 @@ function applyChange(ctx, user, change) {
     db.prepare(
       `INSERT INTO notes
          (id, user_id, created_at, updated_at, duration_ms, transcript, polished, polish_status,
-          polish_error, category_id, tags, edited_at, version, deleted, seq, server_updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          polish_error, category_id, tags, edited_at, version, deleted, seq, server_updated_at, title)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       change.id,
       user.id,
@@ -206,7 +209,8 @@ function applyChange(ctx, user, change) {
       change.version + 1,
       change.deleted ? 1 : 0,
       seq,
-      ctx.now
+      ctx.now,
+      change.deleted ? '' : change.title ?? ''
     )
     return { status: 'applied', note: readNote(db, user.id, change.id) }
   }
@@ -218,7 +222,7 @@ function applyChange(ctx, user, change) {
       `UPDATE notes
           SET created_at = ?, updated_at = ?, duration_ms = ?, transcript = ?, polished = ?,
               polish_status = ?, polish_error = ?, category_id = ?, tags = ?, edited_at = ?,
-              version = ?, deleted = ?, seq = ?, server_updated_at = ?
+              version = ?, deleted = ?, seq = ?, server_updated_at = ?, title = ?
         WHERE id = ? AND user_id = ?`
     ).run(
       change.createdAt,
@@ -235,6 +239,7 @@ function applyChange(ctx, user, change) {
       change.deleted ? 1 : 0,
       seq,
       ctx.now,
+      change.deleted ? '' : change.title ?? existing.title,
       change.id,
       user.id
     )

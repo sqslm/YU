@@ -458,6 +458,7 @@ function toNoteChange(note: NoteEntry): Record<string, unknown> {
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
     durationMs: note.durationMs,
+    title: note.title ?? '',
     transcript: note.transcript,
     polished: note.polished,
     polishStatus: note.polishStatus,

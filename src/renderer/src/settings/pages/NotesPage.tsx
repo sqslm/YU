@@ -20,6 +20,8 @@ import {
   Slider,
   Stack,
   Switch,
+  Tabs,
+  Tab,
   TextField,
   Tooltip,
   Typography
@@ -33,7 +35,7 @@ import Forward10Icon from '@mui/icons-material/Forward10'
 import { useTranslation } from 'react-i18next'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
 import { MicCapture } from '../../bar/capture'
-import { IconMic, IconPlus, IconSearch, IconSettings, IconSparkles, IconTrash } from '../icons'
+import { IconMic, IconPlus, IconSearch, IconSparkles, IconTrash } from '../icons'
 import {
   ALL_CATEGORIES,
   MAX_TAGS,
@@ -157,6 +159,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   const [sort, setSort] = useState<NoteSort>('newest')
   const [kind, setKind] = useState<NoteKind>('all')
 
+  const [titleDraft, setTitleDraft] = useState('')
+  const [metadataOpen, setMetadataOpen] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [tagFiltersOpen, setTagFiltersOpen] = useState(false)
+  const [moreAt, setMoreAt] = useState<HTMLElement | null>(null)
   const [transcriptDraft, setTranscriptDraft] = useState('')
   const [polishedDraft, setPolishedDraft] = useState('')
   const [originalOpen, setOriginalOpen] = useState(false)
@@ -213,8 +220,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
    * The server-side text the drafts were last built from. Comparing against it
    * is how the page tells "the model just filled this in" from "the user typed".
    */
-  const draftBaseRef = useRef<{ id: string | null; transcript: string; polished: string }>({
+  const draftBaseRef = useRef<{ id: string | null; title: string; transcript: string; polished: string }>({
     id: null,
+    title: '',
     transcript: '',
     polished: ''
   })
@@ -296,10 +304,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   // click handler before this ran.
   useEffect(() => {
     const note = notesRef.current.find((item) => item.id === selectedId) ?? null
+    setTitleDraft(note?.title ?? '')
+    setMetadataOpen(false)
+    setToolsOpen(false)
     setTranscriptDraft(note?.transcript ?? '')
     setOriginalOpen(false)
     setPolishedDraft(note?.polished ?? '')
-    draftBaseRef.current = { id: note?.id ?? null, transcript: note?.transcript ?? '', polished: note?.polished ?? '' }
+    draftBaseRef.current = { id: note?.id ?? null, title: note?.title ?? '', transcript: note?.transcript ?? '', polished: note?.polished ?? '' }
     setTagInput('')
     setSaveState(nextSaveState('idle', 'reset'))
     if (focusNewNoteRef.current === selectedId) {
@@ -327,6 +338,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     const pending = pendingRef.current
     const ownsText = pending && pending.id === note.id
 
+    if ((note.title ?? '') !== base.title) {
+      if (!(ownsText && pending?.patch.title !== undefined) && titleDraft === base.title) setTitleDraft(note.title ?? '')
+      base.title = note.title ?? ''
+    }
     if (note.transcript !== base.transcript) {
       const userTyped = Boolean(ownsText && pending?.patch.transcript !== undefined)
       if (!userTyped && transcriptDraft === base.transcript) setTranscriptDraft(note.transcript)
@@ -337,7 +352,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
       if (!userTyped && polishedDraft === base.polished) setPolishedDraft(note.polished)
       base.polished = note.polished
     }
-  }, [selected, transcriptDraft, polishedDraft])
+  }, [selected, titleDraft, transcriptDraft, polishedDraft])
 
   const patchEntry = useCallback((updated: NoteEntry): void => {
     setNotes((prev) => prev.map((note) => (note.id === updated.id ? updated : note)))
@@ -454,8 +469,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   }, [createTextNote])
 
   const editField = useCallback(
-    (field: 'transcript' | 'polished', value: string): void => {
-      if (field === 'transcript') setTranscriptDraft(value)
+    (field: 'title' | 'transcript' | 'polished', value: string): void => {
+      if (field === 'title') setTitleDraft(value)
+      else if (field === 'transcript') setTranscriptDraft(value)
       else setPolishedDraft(value)
       const note = selectedRef.current
       if (!note) return
@@ -942,6 +958,69 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
         data-notes-toolbar
         sx={{ px: 3, pt: 2, pb: 1, display: 'flex', flexDirection: 'column', gap: 1, flex: '0 0 auto' }}
       >
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography sx={{ fontSize: 18, fontWeight: 600 }}>{t('随记')}</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{notes.length}</Typography>
+          <Box sx={{ flex: 1 }} />
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
+            <ButtonGroup size="small" variant="outlined" disabled={creatingText || importing || !!retranscribingId || loading || recording || starting || busy || bulkBusy || exportBusy} sx={{ height: 34 }}>
+              <Button data-notes-new-text title={t('notes.newTextShortcut')} aria-keyshortcuts="Control+N" onClick={() => void createTextNote()} startIcon={<IconPlus size={14} />} sx={{ fontSize: 12 }}>
+                {creatingText ? t('notes.creatingText') : t('notes.newText')}
+              </Button>
+              <Button data-notes-create-menu onClick={event => setCreateMenuAt(event.currentTarget)} aria-label={t('notes.moreCreateOptions')} sx={{ minWidth: '24px !important', px: 0.25 }}>
+                <ArrowDropDownIcon sx={{ fontSize: 17 }} />
+              </Button>
+            </ButtonGroup>
+
+
+            {recording && (
+              <Stack
+                direction="row"
+                spacing={0.75}
+                alignItems="center"
+                data-notes-recording
+                data-notes-elapsed={Math.floor(recordedMs / 1000)}
+              >
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: 'error.main',
+                    animation: 'notesPulse 1.2s ease-in-out infinite',
+                    '@keyframes notesPulse': {
+                      '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                      '50%': { opacity: 0.3, transform: 'scale(0.78)' }
+                    }
+                  }}
+                />
+                <Typography
+                  data-notes-elapsed-label
+                  sx={{ fontSize: 11.5, color: 'error.main', fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {formatClock(recordedMs)}
+                </Typography>
+                <Button data-notes-more size="small" onClick={event => setMoreAt(event.currentTarget)}>{t('更多')}</Button>
+          </Stack>
+            )}
+
+
+
+            <Button
+              data-notes-record={recording ? 'on' : 'idle'}
+              size="small"
+              variant={recording ? 'contained' : 'outlined'}
+              color={recording ? 'error' : 'primary'}
+              disabled={starting || importing || !!retranscribingId}
+              onClick={() => void (recording ? stopRecording() : startRecording())}
+              startIcon={<IconMic size={14} />}
+              sx={{ fontSize: 12, height: 34 }}
+            >
+              {recording ? t('notes.recordStop') : t('notes.record')}
+            </Button>
+            <Button data-notes-more size="small" onClick={event => setMoreAt(event.currentTarget)}>{t('更多')}</Button>
+          </Stack>
+        </Stack>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           <Box
             data-notes-search
@@ -951,7 +1030,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
               gap: 1,
               height: 34,
               px: 1.25,
-              width: 230,
+              flex: 1,
+              minWidth: 180,
               borderRadius: '8px',
               bgcolor: 'action.hover'
             }}
@@ -986,29 +1066,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
             ))}
           </TextField>
 
-          <Tooltip title={t('notes.categoryManage')}>
-            <IconButton
-              data-notes-category-manage
-              size="small"
-              onClick={() => {
-                setCategoryDraft('')
-                setCategoriesOpen(true)
-              }}
-              sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px', width: 30, height: 30 }}
-              aria-label={t('notes.categoryManage')}
-            >
-              <IconPlus size={14} />
-            </IconButton>
-          </Tooltip>
-
-          <TextField select size="small" value={kind} data-notes-kind-filter
-            onChange={event => setKind(event.target.value as NoteKind)}
-            aria-label={t('notes.kindFilter')}
-            sx={{ width: 128, '& .MuiInputBase-input': { fontSize: 12.5 } }}>
-            {(['all', 'text', 'audio', 'failed'] as const).map(value =>
-              <MenuItem key={value} value={value}>{t(`notes.kind_${value}`)}</MenuItem>)}
-          </TextField>
-
           <TextField select size="small" value={sort}
             data-notes-sort={sort}
             onChange={event => setSort(event.target.value as NoteSort)}
@@ -1021,90 +1078,19 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
 
           <Box sx={{ flex: 1 }} />
 
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
-            <ButtonGroup size="small" variant="outlined" disabled={creatingText || importing || !!retranscribingId || loading || recording || starting || busy || bulkBusy || exportBusy} sx={{ height: 34 }}>
-              <Button data-notes-new-text title={t('notes.newTextShortcut')} aria-keyshortcuts="Control+N" onClick={() => void createTextNote()} startIcon={<IconPlus size={14} />} sx={{ fontSize: 12 }}>
-                {creatingText ? t('notes.creatingText') : t('notes.newText')}
-              </Button>
-              <Button data-notes-create-menu onClick={event => setCreateMenuAt(event.currentTarget)} aria-label={t('notes.moreCreateOptions')} sx={{ minWidth: '24px !important', px: 0.25 }}>
-                <ArrowDropDownIcon sx={{ fontSize: 17 }} />
-              </Button>
-            </ButtonGroup>
-            <Button
-              data-notes-export
-              size="small"
-              disabled={exportBusy || bulkBusy || loading || exportIds.length === 0}
-              startIcon={<DownloadIcon sx={{ fontSize: 16 }} />}
-              onClick={(event) => setExportMenu({ anchor: event.currentTarget, ids: exportIds, label: t(selection.length ? 'notes.exportSelected' : 'notes.exportFiltered', { count: exportIds.length }) })}
-              sx={{ fontSize: 12, height: 34 }}
-            >
-              {exportBusy ? t('notes.exporting') : t('notes.export')}
-            </Button>
 
-            {recording && (
-              <Stack
-                direction="row"
-                spacing={0.75}
-                alignItems="center"
-                data-notes-recording
-                data-notes-elapsed={Math.floor(recordedMs / 1000)}
-              >
-                <Box
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    bgcolor: 'error.main',
-                    animation: 'notesPulse 1.2s ease-in-out infinite',
-                    '@keyframes notesPulse': {
-                      '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-                      '50%': { opacity: 0.3, transform: 'scale(0.78)' }
-                    }
-                  }}
-                />
-                <Typography
-                  data-notes-elapsed-label
-                  sx={{ fontSize: 11.5, color: 'error.main', fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {formatClock(recordedMs)}
-                </Typography>
-              </Stack>
-            )}
-
-            <Tooltip title={t('notes.prefsTitle')}>
-              <IconButton
-                data-notes-prefs-open
-                size="small"
-                onClick={() => setPrefsOpen(true)}
-                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px', width: 30, height: 30 }}
-                aria-label={t('notes.prefsTitle')}
-              >
-                <IconSettings size={14} />
-              </IconButton>
-            </Tooltip>
-
-            <Button
-              data-notes-record={recording ? 'on' : 'idle'}
-              size="small"
-              variant={recording ? 'contained' : 'outlined'}
-              color={recording ? 'error' : 'primary'}
-              disabled={starting || importing || !!retranscribingId}
-              onClick={() => void (recording ? stopRecording() : startRecording())}
-              startIcon={<IconMic size={14} />}
-              sx={{ fontSize: 12, height: 34 }}
-            >
-              {recording ? t('notes.recordStop') : t('notes.record')}
-            </Button>
-          </Stack>
         </Stack>
 
+        <Tabs data-notes-kind-filter value={kind} onChange={(_event, value) => setKind(value)} sx={{ minHeight: 34, '& .MuiTab-root': { minHeight: 34, py: .5, fontSize: 12 } }}>
+          {(['all', 'text', 'audio', 'failed'] as const).map(value => <Tab key={value} value={value} label={t(`notes.kind_${value}`)} />)}
+        </Tabs>
         {(importing || retranscribingId) && <Stack data-notes-audio-job role="status" direction="row" spacing={1} alignItems="center">
           <CircularProgress size={13} />
           <Typography sx={{ fontSize: 11.5 }}>{t(importing ? 'notes.importingAudio' : 'notes.retranscribing')}</Typography>
           <Button data-notes-cancel-audio-job size="small" onClick={() => { audioJobRef.current = false; void window.api.notes.cancelAudioJob().catch(err => setNotice(messageOf(err))) }}>{t('common.cancel')}</Button>
         </Stack>}
 
-        {tagOptions.length > 0 && (
+        {tagOptions.length > 0 && (tagFiltersOpen || activeTags.length > 0) && (
           <Stack
             data-notes-tag-filter-row
             direction="row"
@@ -1339,6 +1325,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                     data-notes-row-summary
                     sx={{
                       fontSize: 12.5,
+                      fontWeight: note.title ? 600 : 400,
                       lineHeight: 1.45,
                       mt: 0.25,
                       color: 'text.primary',
@@ -1396,6 +1383,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
 
           {selected && (
             <Box data-notes-detail={selected.id} sx={{ px: 3, py: 2.5 }}>
+              <TextField data-notes-title fullWidth variant="standard" value={titleDraft}
+                placeholder={t('notes.titlePlaceholder')} onChange={event => editField('title', event.target.value)}
+                onBlur={() => void flushNow()} inputProps={{ maxLength: 200, 'aria-label': t('notes.titleLabel') }}
+                InputProps={{ disableUnderline: true, sx: { fontSize: 19, fontWeight: 600, mb: .75 } }} />
               <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.75 }}>
                 <Typography
                   data-notes-detail-time
@@ -1420,6 +1411,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                 </Tooltip>
               </Stack>
 
+              <Button data-notes-metadata-toggle size="small" aria-expanded={metadataOpen} onClick={() => setMetadataOpen(open => !open)} sx={{ mt: .5, fontSize: 12 }}>{t('分类与标签')}</Button>
+              {metadataOpen && <Box data-notes-metadata>
               <Stack direction="row" spacing={1.5} sx={{ mt: 1.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <TextField
                   data-notes-category
@@ -1471,6 +1464,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                 </Box>
               </Stack>
 
+              </Box>}
               <Box data-notes-primary sx={{ mt: 2.25 }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary', mb: 1 }}>
                   {t(primaryField === 'polished' ? 'notes.polishedLabel' : 'notes.bodyLabel')}
@@ -1496,6 +1490,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                 <Button data-notes-copy="original" size="small" disabled={!transcriptDraft.trim()} onClick={() => void copyDraft(transcriptDraft)} sx={{ mt: .5, fontSize: 11.5 }}>{t('notes.copyOriginal')}</Button>
               </Box>}
 
+              <Button data-notes-tools-toggle size="small" aria-expanded={toolsOpen} onClick={() => setToolsOpen(open => !open)} sx={{ mt: 1, fontSize: 12 }}>{t('更多操作')}</Button>
+              {toolsOpen && <Box data-notes-tools>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5, flexWrap: 'wrap' }}>
                 <Button
                   data-notes-export-current
@@ -1524,7 +1520,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                     void flushNow().then(() => {
                       if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
                       return window.api.reminders.extractNote(id)
-                    }).catch(e => setNotice(messageOf(e))).finally(() => setExtractingReminders(false))
+                    }).then(message => setFlash(message)).catch(e => setNotice(messageOf(e))).finally(() => setExtractingReminders(false))
                   }}>{t(extractingReminders ? '正在提取待办…' : '提取待办与提醒')}</Button>
                 {audioKey && <Button data-notes-retranscribe size="small" disabled={busy || importing || !!retranscribingId || recording || starting}
                   onClick={() => setRetryConfirmId(selected.id)} sx={{ fontSize: 12 }}>{t('notes.retranscribe')}</Button>}
@@ -1535,6 +1531,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                 )}
               </Stack>
 
+              </Box>}
               {audioKey ? <Box
                 data-notes-player
                 sx={{
@@ -1648,6 +1645,12 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
         <MenuItem data-notes-export-text onClick={() => void exportText('text')} sx={{ fontSize: 12.5 }}>{t('notes.exportPlainText')}</MenuItem>
       </Menu>
 
+      <Menu anchorEl={moreAt} open={Boolean(moreAt)} onClose={() => setMoreAt(null)}>
+        <MenuItem data-notes-category-manage onClick={() => { setMoreAt(null); setCategoryDraft(''); setCategoriesOpen(true) }}>{t('notes.categoryManage')}</MenuItem>
+        <MenuItem data-notes-export disabled={exportBusy || bulkBusy || loading || !exportIds.length} onClick={() => { const anchor = moreAt!; setMoreAt(null); setExportMenu({ anchor, ids: exportIds, label: t(selection.length ? 'notes.exportSelected' : 'notes.exportFiltered', { count: exportIds.length }) }) }}>{t('notes.export')}</MenuItem>
+        <MenuItem data-notes-filter-tags onClick={() => { setMoreAt(null); setTagFiltersOpen(open => !open) }}>{t('notes.tagFilter')}</MenuItem>
+        <MenuItem data-notes-prefs-open onClick={() => { setMoreAt(null); setPrefsOpen(true) }}>{t('notes.prefsTitle')}</MenuItem>
+      </Menu>
       <Dialog
         open={repolishOpen}
         onClose={() => setRepolishOpen(false)}

@@ -255,7 +255,7 @@ export function AnswerCard(): JSX.Element | null {
   const answer = data.answer ?? ''
   const tools = data.tools ?? []
   const actions = data.actions ?? []
-  const busy = pending !== null || data.streaming === true || Boolean(data.screenshot)
+  const busy = pending !== null || data.streaming === true
   const statusLine = pending !== null ? i18n.t('正在思考…') : (data.status ?? '').trim() || null
   const streaming = data.streaming === true
   const sourceList = data.sources ?? []
@@ -374,14 +374,6 @@ export function AnswerCard(): JSX.Element | null {
         )}
 
         <div ref={scrollRef} style={answerBox} data-card-scroll>
-          {data.screenshot && <div data-card-screenshot>
-            <img src={data.screenshot.dataUrl} alt={data.screenshot.title} style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 8 }} />
-            <p style={{ ...statusText, fontSize: 12 }}>{data.screenshot.detail}</p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <button data-card-screenshot-cancel style={primaryButton} onClick={() => bridge().action?.({ id: 'screenshot-cancel', payload: String(data.screenshot!.id), label: i18n.t('取消') })}>{i18n.t('取消')}</button>
-              <button data-card-screenshot-accept style={primaryButton} onClick={() => bridge().action?.({ id: 'screenshot-accept', payload: String(data.screenshot!.id), label: i18n.t('继续') })}>{i18n.t('继续')}</button>
-            </div>
-          </div>}
           <div style={answerTitleRow}>
             <span style={answerMark}>✦</span>
             <span style={answerTitle}>{i18n.t(data.selection ? '处理结果' : '回答')}</span>

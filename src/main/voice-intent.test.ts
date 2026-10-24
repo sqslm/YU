@@ -25,6 +25,9 @@ describe('unified voice decisions', () => {
   it.each(['明天提醒我开会，然后打开下载目录', 'Remind me in ten minutes and then open downloads'])('does not drop another operation from a multi-step request: %s', text => {
     expect(directVoiceIntent(text)).toBeNull()
   })
+  it.each(['帮我给这条随记分类到工作', '把上一条随记重命名为发布计划', 'Rename the latest note to Release plan', 'Categorize this note as Work'])('routes note organization to actual assistant tools: %s', text => {
+    expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })
+  })
   it('extracts only explicitly supplied note text', () => {
     expect(directVoiceIntent('帮我保存到随记：今天的灵感。')).toEqual({ kind: 'notes', text: '今天的灵感。' })
     expect(directVoiceIntent('Take a note: My idea.')).toEqual({ kind: 'notes', text: 'My idea.' })

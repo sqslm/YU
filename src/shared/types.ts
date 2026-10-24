@@ -318,6 +318,7 @@ export type NoteExportFormat = 'markdown' | 'text'
 /** A long-lived voice note: recording + transcript + light polish + tags. */
 export interface NoteEntry {
   id: string
+  title?: string
   createdAt: number
   updatedAt: number
   durationMs: number
@@ -365,7 +366,7 @@ export interface NoteStore {
 }
 
 export type NotePatch = Partial<
-  Pick<NoteEntry, 'transcript' | 'polished' | 'categoryId' | 'tags'>
+  Pick<NoteEntry, 'title' | 'transcript' | 'polished' | 'categoryId' | 'tags'>
 >
 
 /**
@@ -914,7 +915,7 @@ export interface ModelListResult {
   error?: string
 }
 
-export type CardActionId = 'copy' | 'replace' | 'ask' | 'stop' | 'open-item' | 'screenshot-accept' | 'screenshot-cancel' | 'selection-polish' | 'selection-translate' | 'selection-replace' | 'selection-append'
+export type CardActionId = 'copy' | 'replace' | 'ask' | 'stop' | 'open-item' | 'selection-polish' | 'selection-translate' | 'selection-replace' | 'selection-append'
 
 export interface CardAction {
   id: CardActionId
@@ -927,7 +928,6 @@ export interface CardAction {
 export interface AnswerCardPayload {
   assistant?: boolean
   localResults?: import('./assistant').AssistantLocalResult[]
-  screenshot?: import('./assistant').ScreenshotPreview
   question: string
   answer: string
   sources?: SearchResult[]

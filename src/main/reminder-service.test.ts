@@ -74,11 +74,11 @@ describe('shared reminder delivery and entry points', () => {
       service.undo(); expect(service.store.list()).toHaveLength(0)
     } finally { service.stop() }
   })
-  it('opens an editor for missing time, never saves a guess, and ignores ordinary statements', async () => {
+  it('asks for missing time in text without opening a confirmation editor or saving a guess', async () => {
     const { service, open } = harness()
     try {
       mock.extract.mockResolvedValue([draft({ dueAt: null, needs_confirmation: true })]); await service.voice('Remind me to call', new AbortController().signal)
-      expect(service.store.list()).toHaveLength(0); expect(open).toHaveBeenCalledOnce()
+      expect(service.store.list()).toHaveLength(0); expect(open).not.toHaveBeenCalled()
       mock.extract.mockResolvedValue([draft({ intent: 'possible' })]); await expect(service.voice('Maybe I will call tomorrow', new AbortController().signal)).rejects.toThrow()
       mock.extract.mockRejectedValue(new Error('LLM unavailable')); await expect(service.voice('Remind me', new AbortController().signal)).rejects.toThrow('LLM unavailable')
       expect(service.store.list()).toHaveLength(0)
@@ -99,6 +99,16 @@ describe('shared reminder delivery and entry points', () => {
     try { mock.extract.mockResolvedValue([draft()]); controller.abort(); await expect(service.voice('提醒我', controller.signal)).rejects.toThrow(); expect(service.store.list()).toHaveLength(0) }
     finally { service.stop() }
   })
+  it('saves multiple clear voice items together without opening review', async () => {
+    const { service, open } = harness()
+    try {
+      mock.extract.mockResolvedValue([draft(), draft({ intent: 'todo', title: 'Check backup', dueAt: null, time_expression: null })])
+      const result = await service.voice('Remind me in 20 minutes; also add a todo to check backup', new AbortController().signal)
+      expect(service.store.list()).toHaveLength(2)
+      expect(result.message).toContain('Check backup'); expect(result.message).toContain('待办')
+      expect(open).not.toHaveBeenCalled()
+    } finally { service.stop() }
+  })
   it('keeps refinement details when saving and reports a withdrawn request without an error or record', async () => {
     const { service, open } = harness(), progress = vi.fn()
     try {
@@ -111,12 +121,12 @@ describe('shared reminder delivery and entry points', () => {
       expect(service.store.list()).toHaveLength(1); expect(open).not.toHaveBeenCalled()
     } finally { service.stop() }
   })
-  it('reviews a to-do from the explicit reminder entry instead of dropping it', async () => {
+  it('clarifies an inconsistent timed todo in text without guessing', async () => {
     const { service, open } = harness()
     try {
       mock.extract.mockResolvedValue([draft({ intent: 'todo' })])
-      await expect(service.voice('Clean up in 20 minutes', new AbortController().signal)).resolves.toEqual({ message: '请确认提醒事项与时间' })
-      expect(open).toHaveBeenCalledWith({ drafts: [expect.objectContaining({ intent: 'todo' })] })
+      await expect(service.voice('Clean up in 20 minutes', new AbortController().signal)).resolves.toEqual({ message: '请补充明确的事项和提醒时间，本次未保存' })
+      expect(open).not.toHaveBeenCalled()
       expect(service.store.list()).toHaveLength(0)
     } finally { service.stop() }
   })
@@ -135,16 +145,16 @@ describe('shared reminder delivery and entry points', () => {
       expect(service.store.list().some(row => row.level === 'strong' && row.status === 'due')).toBe(true)
     } finally { service.stop() }
   })
-  it('extracts several note items without creating any until an explicit batch save', async () => {
+  it('saves clear extracted items with their note link and skips ambiguous items without a popup', async () => {
     const { service, open } = harness()
     try {
       service.registerIpc({ list: () => ({ notes: [{ id: 'note-1', transcript: 'Call tomorrow; report before Friday', polished: 'do not overwrite' }] }) } as never)
       mock.extract.mockResolvedValue([draft(), draft({ intent: 'todo', title: 'Submit report', dueAt: null, needs_confirmation: true })])
       await mock.handlers.get('reminders:extract-note')!(null, 'note-1')
-      expect(open).toHaveBeenCalledWith(expect.objectContaining({ noteId: 'note-1', drafts: expect.any(Array) }))
-      expect(service.store.list()).toHaveLength(0)
-      mock.handlers.get('reminders:save-many')!(null, [{ title: 'Submit report', dueAt: null, level: 'normal', recurrence: null, source: 'note', noteId: 'note-1' }])
-      expect(service.store.list()[0]).toMatchObject({ source: 'note', noteId: 'note-1', dueAt: null })
+      expect(open).not.toHaveBeenCalled()
+      expect(service.store.list()).toHaveLength(1)
+      expect(service.store.list()[0]).toMatchObject({ source: 'note', noteId: 'note-1', title:'Clean up' })
+
     } finally { service.stop() }
   })
 })

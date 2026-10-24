@@ -12,7 +12,7 @@ beforeEach(() => {
     { id: 'task-1', title: 'Untimed task', dueAt: null, status: 'pending', level: 'normal' },
     { id: 'task-2', title: 'Done', dueAt: 1, status: 'completed', level: 'normal' }
   ] as Reminder[]), action: vi.fn(), saveReminder: vi.fn((input, id) => ({ ...input, id } as Reminder)), updateNoteTags: vi.fn(), notes: vi.fn().mockReturnValue([{ id: 'note-1', transcript: 'My idea', polished: '', tags: [], updatedAt: 1, createdAt: 1, durationMs: 0, polishStatus: 'skipped' }] as NoteEntry[]),
-    createNote: vi.fn().mockResolvedValue({ id: 'saved-note' }), extract: vi.fn(), history: vi.fn().mockReturnValue([]), copy: vi.fn(), readClipboard: vi.fn().mockReturnValue('Clipboard text'), open: vi.fn(), confirm: vi.fn().mockResolvedValue(true) }
+    createNote: vi.fn().mockResolvedValue({ id: 'saved-note' }), extract: vi.fn().mockResolvedValue('已保存 1 个事项'), history: vi.fn().mockReturnValue([]), copy: vi.fn(), readClipboard: vi.fn().mockReturnValue('Clipboard text'), open: vi.fn(), updateNote: vi.fn(async(id, patch)=>({...api.notes()[0], ...patch, id})), categories: vi.fn().mockReturnValue([]), saveCategories: vi.fn(async categories=>categories) }
   ctx = { settings: mergeSettings({}), question: 'Remind me tomorrow morning', log: vi.fn(), allowedTools: PERSONAL_TOOLS, personal: api, cache: new Map(), signal: new AbortController().signal, onLocalResult: vi.fn(), submittedAt: Date.now() - 20_000 }
 })
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
@@ -27,7 +27,7 @@ describe('personal tools share real application services', () => {
   it('uses the untouched user command, rejects timestamps and does not claim a review was saved', async () => {
     const result = await runTool('create_reminder', {}, ctx)
     expect(api.remind).toHaveBeenCalledWith(ctx.question, expect.any(AbortSignal), ctx.submittedAt)
-    expect(result).toMatchObject({ ok: true, data: { confirmationRequired: true }, summary: 'Please confirm the time' })
+    expect(result).toMatchObject({ ok: true, summary: 'Please confirm the time' })
     expect((await runTool('create_reminder', { dueAt: Date.now() + 60000 }, ctx)).ok).toBe(false)
   })
   it.each(['每天八点给我当天的任务简报。', 'Schedule a project meeting tomorrow.', '把明天取东西的提醒改成下午两点。', '记住，我喜欢简单的方案。'])('does not let a model substitute new reminders for a different action: %s', async question => {
@@ -39,29 +39,39 @@ describe('personal tools share real application services', () => {
     expect(api.createNote).toHaveBeenCalledExactlyOnceWith('My note')
     expect(ctx.onLocalResult).toHaveBeenCalledWith(expect.objectContaining({ tool: 'create_note', items: undefined }))
   })
+  it('renames and categorizes a real note without changing its raw text, and reuses category IDs', async () => {
+    vi.mocked(api.categories).mockReturnValue([{id:'work',name:'Work'}])
+    expect((await runTool('update_note', {id:'note-1',title:'Project plan',category_name:'work'},ctx)).ok).toBe(true)
+    expect(api.updateNote).toHaveBeenCalledWith('note-1',{title:'Project plan',categoryId:'work'})
+    expect(api.saveCategories).not.toHaveBeenCalled()
+    expect(api.notes()[0].transcript).toBe('My idea')
+    expect((await runTool('update_note',{id:'note-1',category_name:'灵感'},ctx)).ok).toBe(true)
+    expect(api.saveCategories).toHaveBeenCalledWith([{id:'work',name:'Work'},{id:expect.any(String),name:'灵感'}])
+    expect((await runTool('update_note',{id:'missing',title:'No'},ctx)).ok).toBe(false)
+    expect((await runTool('update_note',{id:'note-1',category_id:'work',category_name:'Work'},ctx)).ok).toBe(false)
+  })
   it('queries actual active untimed todos and excludes completed items by default', async () => {
     const result = await runTool('list_reminders', {}, ctx)
     expect(result.data).toMatchObject({ total: 1, items: [expect.objectContaining({ id: 'task-1', dueAt: null })] })
     expect((await runTool('list_reminders', { status: 'all' }, ctx)).data.total).toBe(2)
   })
-  it('requires permission for reading notes or history and never reads after denial', async () => {
-    vi.mocked(api.confirm).mockResolvedValue(false)
-    expect((await runTool('search_notes', {}, ctx)).ok).toBe(false)
-    expect((await runTool('search_history', {}, ctx)).ok).toBe(false)
-    expect(api.notes).not.toHaveBeenCalled(); expect(api.history).not.toHaveBeenCalled()
-    expect((await runTool('create_note', { text: 'Injected side effect' }, ctx)).ok).toBe(false)
-    expect(api.createNote).not.toHaveBeenCalled()
+  it('executes safe reads and writes directly without confirmation and refuses irreversible deletion', async () => {
+    expect((await runTool('search_notes', {}, ctx)).ok).toBe(true)
+    expect((await runTool('search_history', {}, ctx)).ok).toBe(true)
+    expect((await runTool('create_note', {text:'Explicit note'}, ctx)).ok).toBe(true)
+    expect((await runTool('manage_reminder', {id:'task-1',action:'delete'},ctx)).ok).toBe(false)
+    expect(api.action).not.toHaveBeenCalled()
   })
-  it('reuses extraction with note ID and review, rather than changing the original note', async () => {
+  it('returns real extraction receipts without confirmation or changing the note', async () => {
     const result = await runTool('extract_note_tasks', { id: 'note-1' }, ctx)
     expect(api.extract).toHaveBeenCalledWith('note-1', expect.any(AbortSignal))
-    expect(result.data.confirmationRequired).toBe(true); expect(api.createNote).not.toHaveBeenCalled()
+    expect(result.summary).toBe('已保存 1 个事项'); expect(result.data.confirmationRequired).toBeUndefined(); expect(api.createNote).not.toHaveBeenCalled()
   })
   it('confirms mutations against a real reminder ID and rejects a guessed ID', async () => {
     expect((await runTool('manage_reminder', { id: 'unknown', action: 'delete' }, ctx)).ok).toBe(false)
     expect(api.action).not.toHaveBeenCalled()
     await runTool('manage_reminder', { id: 'task-1', action: 'complete' }, ctx)
-    expect(api.confirm).toHaveBeenCalled(); expect(api.action).toHaveBeenCalledWith('task-1', 'complete', undefined)
+    expect(api.action).toHaveBeenCalledWith('task-1', 'complete', undefined)
   })
   it('only opens a registered existing page, and copies after authorization', async () => {
     expect((await runTool('open_page', { page: 'calendar' }, ctx)).ok).toBe(false)
@@ -114,7 +124,7 @@ describe('personal tools share real application services', () => {
   it('rejects ambiguous times, missing edit fields and a target changed during authorization', async () => {
     expect((await runTool('manage_reminder', { id: 'task-1', action: 'update' }, ctx)).ok).toBe(false)
     expect((await runTool('manage_reminder', { id: 'task-1', action: 'update', time_expression: 'tomorrow' }, ctx)).ok).toBe(false)
-    vi.mocked(api.confirm).mockImplementation(async () => { vi.mocked(api.reminders).mockReturnValue([]); return true })
+    vi.mocked(api.reminders).mockReturnValueOnce(api.reminders()).mockReturnValue([])
     expect((await runTool('manage_reminder', { id: 'task-1', action: 'update', level: 'strong' }, ctx)).ok).toBe(false)
     expect(api.saveReminder).not.toHaveBeenCalled()
   })
@@ -155,12 +165,9 @@ describe('personal tools share real application services', () => {
     expect(result.ok).toBe(true)
     expect(JSON.stringify(result)).not.toMatch(/[\u4e00-\u9fff]/)
   })
-  it('reads only current clipboard text after permission and does not read after denial', async () => {
-    expect((await runTool('read_clipboard', {}, ctx)).data.text).toBe('Clipboard text')
+  it('reads only explicitly requested current clipboard text without a confirmation popup', async () => {
+    expect((await runTool('read_clipboard', {}, { ...ctx, question:'Read the clipboard' })).ok).toBe(true)
     expect(api.readClipboard).toHaveBeenCalledOnce()
-    vi.mocked(api.readClipboard).mockClear(); vi.mocked(api.confirm).mockResolvedValue(false)
-    expect((await runTool('read_clipboard', {}, { ...ctx, cache: new Map() })).ok).toBe(false)
-    expect(api.readClipboard).not.toHaveBeenCalled()
   })
 })
 

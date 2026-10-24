@@ -34,7 +34,7 @@ import { AssistantSession } from './assistant'
 import { assistantAnswer } from './assistant-presentation'
 import { WindowsTools } from './tools/windows'
 import { windowsNative } from './windows-native'
-import { captureOriginalWindow, type WindowScreenshot } from './screenshot'
+import { captureOriginalWindow } from './screenshot'
 import { ScreenshotTool } from './screenshot-tool'
 import { needsAssistantContext } from './voice-intent'
 import { generateFromImage } from './providers/gemini'
@@ -116,8 +116,6 @@ let assistantCardActive = false
 let tray: ReturnType<typeof createTray> | null = null
 let hubView: import('./tools/personal').HubPage | null = null
 let assistantTarget: ForegroundInfo | undefined
-let screenshotSequence = 0
-let screenshotReview: { id: number; finish: (accepted: boolean) => void } | null = null
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active); refreshWakeWord(active) }, line => log(line))
 async function openScreenshot(): Promise<boolean> {
   if (pipeline?.isBusy || notesRecording || assistant.busy || selectionEditor?.isBusy) return false
@@ -128,53 +126,19 @@ async function openScreenshot(): Promise<boolean> {
     return false
   }
 }
-function taskDialog(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
-  const parent = [cardWindow, settingsWindow].find(win => win && !win.isDestroyed() && win.isVisible())
-  return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options)
-}
-async function previewScreenshot(image: WindowScreenshot, detail: string, signal: AbortSignal): Promise<void> {
-  signal.throwIfAborted()
-  await new Promise<void>((resolve, reject) => {
-    const id = ++screenshotSequence
-    const finish = (accepted: boolean): void => {
-      if (screenshotReview?.id !== id) return
-      signal.removeEventListener('abort', cancel)
-      screenshotReview = null
-      if (lastAnswer?.screenshot?.id === id) {
-        if (accepted && !signal.aborted) showAnswerCard({ question: lastAnswer.question, answer: '', assistant: true, streaming: true, status: mt('正在分析截图…') })
-        else hideCard()
-      }
-      if (accepted && !signal.aborted) resolve()
-      else reject(new Error(mt('已取消本次系统操作')))
-    }
-    const cancel = (): void => finish(false)
-    screenshotReview = { id, finish }
-    signal.addEventListener('abort', cancel, { once: true })
-    showAnswerCard({ question: image.title, answer: '', assistant: true, screenshot: { id, title: image.title, dataUrl: image.dataUrl, detail } })
-  })
-}
-
 function assistantContext(target = assistantTarget): PromptContext {
   return target ? { appName: target.appName, windowTitle: target.title, processId: target.pid, appPath: target.appPath,
     windowRect: target.rect ?? undefined, windowHandle: target.handle } : {}
 }
 const windowsTools = new WindowsTools({
   folders: () => ({ downloads: store.get().assistantDownloadFolder || app.getPath('downloads'), desktop: app.getPath('desktop'), documents: app.getPath('documents') }),
-  native: windowsNative, openPath: path => shell.openPath(path), openUrl: url => shell.openExternal(url),
-  confirm: async (description, signal) => {
-    signal?.throwIfAborted()
-    const { response } = await taskDialog({ type: 'question', signal, title: mt('授权本次系统操作'),
-      message: description, detail: mt('仅授权本次操作。可以取消；不会执行任意命令、删除文件或读取正文。'),
-      buttons: [mt('取消'), mt('允许本次')], defaultId: 0, cancelId: 0, noLink: true })
-    return !signal?.aborted && response === 1
-  }
+  native: windowsNative, openPath: path => shell.openPath(path), openUrl: url => shell.openExternal(url)
 })
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
   analyzeScreenshot: async (context, question, ocr, signal) => {
     const settings = store.get(), profiles = chainFor(settings, 'multimodal')
     if (!ocr && !profiles.length) throw new Error(mt('请先在模型设置中启用支持图片的多模态模型；当前文本模型不能查看截图'))
     const image = await captureOriginalWindow(context, signal)
-    await previewScreenshot(image, ocr ? mt('图片仅在本机进行 OCR；提取的文字会交给当前对话模型。') : mt('确认后将此截图发送给已启用的多模态服务：{{name}}。仅用于本次任务，不自动保存。', { name: profiles.map(row => row.name).join(', ') }), signal)
     signal.throwIfAborted()
     if (ocr) {
       const result = await windowsNative({ action: 'ocr', png: Buffer.from(image.png).toString('base64') }, signal)
@@ -189,10 +153,6 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   },
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
-    const { response } = await taskDialog({ type: 'question', signal, title: mt('确认本次操作'),
-      message: mt('读取原窗口的选中文字并发送给配置的模型？'), detail: context.appName || '', buttons: [mt('取消'), mt('确认')], defaultId: 0, cancelId: 0, noLink: true })
-    signal.throwIfAborted()
-    if (response !== 1) throw new Error(mt('已取消本次系统操作'))
     const target = await captureSelectionTarget(store.get(), context, signal)
     signal.throwIfAborted(); return target.text
   },
@@ -204,21 +164,18 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     notes: () => notes.list().notes,
     createNote: text => notes.createText({ text }),
     updateNoteTags: (id, tags) => notes.update(id, { tags }),
+    updateNote: (id, patch) => notes.update(id, patch),
+    categories: () => notes.list().categories,
+    saveCategories: categories => notes.setCategories(categories),
     extract: (id, signal) => reminders!.extractNote(notes, id, signal),
     history: (query, range) => history.list(query, 40, range),
     copy: text => clipboard.writeText(text),
     readClipboard: () => clipboard.readText(),
-    open: page => navigateHub(page),
-    confirm: async (description, signal) => {
-      signal?.throwIfAborted()
-      const { response } = await taskDialog({ type: 'question', signal, title: mt('确认本次操作'),
-        message: description, buttons: [mt('取消'), mt('确认')], defaultId: 0, cancelId: 0, noLink: true })
-      return !signal?.aborted && response === 1
-    }
+    open: page => navigateHub(page)
   },
   changed: state => {
     const turn = state.turns.at(-1)
-    if (assistantCardActive && turn && !screenshotReview) showAnswerCard({ question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
+    if (assistantCardActive && turn) showAnswerCard({ question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
     tray?.refresh()
     refreshWakeWord()
   } })
@@ -716,17 +673,11 @@ function showAnswerCard(payload: AnswerCardPayload): void {
  * overwritten after they clicked that button, and `ask` is a follow-up turn.
  */
 async function handleCardAction(action: CardAction): Promise<void> {
-  if (action.id === 'screenshot-accept' || action.id === 'screenshot-cancel') {
-    if (!screenshotReview || String(screenshotReview.id) !== action.payload) return
-    screenshotReview.finish(action.id === 'screenshot-accept')
-    return
-  }
   if (action.id === 'stop') {
-    if (screenshotReview) { screenshotReview.finish(false); return }
     const partial = lastAnswer
     if (partial?.assistant && partial.streaming) {
       cancelAssistant()
-      showAnswerCard({ ...partial, screenshot: undefined, streaming: false, stopped: true, status: '', actions: [] })
+      showAnswerCard({ ...partial, streaming: false, stopped: true, status: '', actions: [] })
     } else if (partial?.streaming && pipeline?.stopAnswer()) {
       showAnswerCard({ ...partial, streaming: false, stopped: true, status: '', actions: [] })
     }
@@ -796,7 +747,6 @@ function scheduleCardRetire(): void {
 
 function hideCard(cancelSelection = true): void {
   assistantCardActive = false
-  screenshotReview?.finish(false)
   if (cancelSelection) selectionEditor?.cancel()
   pendingCard = null
   hotkeys?.setCardOpen(false)

@@ -71,7 +71,7 @@ function finite(value: number): number {
  */
 export function summarize(note: NoteEntry, maxChars = 120): string {
   if (!Number.isFinite(maxChars) || maxChars <= 0) return ''
-  const source = text(note.polished) || text(note.transcript)
+  const source = text(note.title) || text(note.polished) || text(note.transcript)
   const flat = source.replace(SPACES, ' ').trim()
   if (flat.length <= maxChars) return flat
   return `${flat.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`
@@ -84,7 +84,7 @@ export function summarize(note: NoteEntry, maxChars = 120): string {
 export function matchesQuery(note: NoteEntry, query: string, categoryName = ''): boolean {
   const needle = lower(query)
   if (!needle) return true
-  const haystack = [note.transcript, note.polished, categoryName, ...(note.tags ?? [])]
+  const haystack = [note.title, note.transcript, note.polished, categoryName, ...(note.tags ?? [])]
   return haystack.some((value) => lower(value).includes(needle))
 }
 

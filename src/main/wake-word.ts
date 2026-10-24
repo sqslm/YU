@@ -10,6 +10,7 @@ export class WakeWordHost {
   private phrase = ''
   private status: WakeWordStatus = { phase: 'off' }
   private startup: NodeJS.Timeout | null = null
+  private lastWake = -Infinity
   constructor(private deps: { wake: () => void; changed: (status: WakeWordStatus) => void }) {}
   snapshot(): WakeWordStatus { return { ...this.status } }
   private publish(status: WakeWordStatus): void {
@@ -59,7 +60,10 @@ export class WakeWordHost {
             this.startup = null
             this.publish({ phase: 'listening' })
           }
-          else if (event.type === 'wake' && this.status.phase === 'listening') {
+          else if (event.type === 'wake' && this.status.phase === 'listening' &&
+            event.phrase === this.phrase && event.confidence >= (this.phrase.replace(/\s/g, '').length < 4 ? 0.97 : 0.93) &&
+            event.wordConfidence >= 0.80 && event.durationMs >= 300 && event.durationMs <= 9000 && Date.now() - this.lastWake >= 5000) {
+            this.lastWake = Date.now()
             this.stop(); this.publish({ phase: 'paused' }); this.deps.wake(); return
           } else if (event.type === 'error') failed(['language', 'microphone'].includes(event.error) ? event.error : 'unavailable')
         } catch { failed(); return }

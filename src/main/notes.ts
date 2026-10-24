@@ -180,6 +180,7 @@ function normalizeNote(value: unknown): NoteEntry | null {
     note.audioBytes = Math.round(raw.audioBytes)
   }
   if (typeof raw.categoryId === 'string' && raw.categoryId) note.categoryId = raw.categoryId
+  if (typeof raw.title === 'string' && raw.title.trim()) note.title = raw.title.trim().slice(0, 200)
   if (typeof raw.editedAt === 'number' && Number.isFinite(raw.editedAt)) note.editedAt = raw.editedAt
   // A file written by an older build has neither field: such a note has never
   // reached a server, and the first sync will push it.
@@ -262,6 +263,7 @@ function remoteNote(row: Record<string, unknown>, id: string, version: number): 
   }
   if (typeof row.polishError === 'string' && row.polishError) note.polishError = row.polishError
   if (typeof row.categoryId === 'string' && row.categoryId) note.categoryId = row.categoryId
+  if (typeof row.title === 'string' && row.title.trim()) note.title = row.title.trim().slice(0, 200)
   if (typeof row.editedAt === 'number' && Number.isFinite(row.editedAt)) note.editedAt = row.editedAt
   return note
 }
@@ -514,6 +516,12 @@ export class NotesStore {
     if (!note) return undefined
     const before = cloneNote(note)
 
+    if (patch.title !== undefined) {
+      const title = patch.title.trim().slice(0, 200)
+      if (title) note.title = title
+      else delete note.title
+    }
+
     let edited = false
     if (patch.transcript !== undefined && patch.transcript !== note.transcript) {
       note.transcript = patch.transcript
@@ -738,7 +746,7 @@ export class NotesStore {
     const live: NoteEntry[] = []
     for (const note of this.data.notes) {
       if (note.pending !== true) continue
-      live.push(cloneNote(note))
+      live.push({ ...cloneNote(note), title: note.title ?? '' })
       if (live.length >= limit) break
     }
     const dead = (this.data.deleted ?? []).slice(0, limit).map((item) => ({ ...item }))
@@ -841,6 +849,7 @@ export class NotesStore {
       const hasAudio = Boolean(row.audio && typeof row.audio === 'object')
 
       const incoming = remoteNote(row, id, version)
+      if (row.title === undefined && index >= 0 && this.data.notes[index].title) incoming.title = this.data.notes[index].title
       if (hasAudio) incoming.audioUploaded = true
       if (index < 0) {
         this.data.notes.unshift(incoming)

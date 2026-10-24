@@ -40,6 +40,7 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceI
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
   if (isCurrentWindowQuestion(value)) return { kind: 'assistant' }
+  if (/^(?:(?:请|帮我|请帮我)\s*)?(?:把|给|将|为|分类|重命名|命名).{0,60}(?:随记|笔记).{0,30}(?:分类|命名|改名)|^(?:(?:请|帮我|请帮我)\s*)?(?:分类|重命名|命名).{0,30}(?:随记|笔记)|^(?:please\s+)?(?:rename|name|categorize|categorise)\b.{0,70}\bnotes?\b/iu.test(value)) return { kind: 'assistant' }
   if (isReadOnlySelectionRequest(value)) return { kind: 'ask' }
   if (hasRecentAnswer && /^(?:那|那么|所以).{0,8}(?:怎么|如何)|^(?:so\s+)?(?:how\b.{0,30}\b(?:it|that)\b|what should I do(?: next)?\b)/iu.test(value)) return { kind: 'assistant' }
   const existingTask = /^(?:(?:请|帮我|请帮我)\s*)?(?:把|将|算了|刚才|之前|那个|这条|这个|修改|更改|调整|取消|删除|恢复|延后|推迟|提前|再改|改成|改为)/u.test(value) &&

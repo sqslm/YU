@@ -131,6 +131,18 @@ afterEach(() => {
 })
 
 describe('creation', () => {
+  it('persists custom names independently of raw/polished text and preserves them with legacy sync', async () => {
+    const store = await loadedStore(), note = await store.createText({text:'Exact original'})
+    await store.update(note.id,{title:'项目计划',polished:'Polished result'})
+    const reloaded = await loadedStore()
+    expect(reloaded.list().notes[0]).toMatchObject({title:'项目计划',transcript:'Exact original',polished:'Polished result'})
+    expect(reloaded.pendingChanges().live[0].title).toBe('项目计划')
+    reloaded.applyRemote([{...note,version:2,transcript:'Remote raw',polished:'Remote polish'}])
+    expect(reloaded.list().notes.find(row=>row.id===note.id)?.title).toBe('项目计划')
+    await reloaded.update(note.id,{title:''})
+    expect(reloaded.pendingChanges().live.find(row=>row.id===note.id)?.title).toBe('')
+    expect((await loadedStore()).list().notes.find(row=>row.id===note.id)?.title).toBeUndefined()
+  })
   it('keeps failed dictation audio for a later retry without invoking any model', async () => {
     const store = await loadedStore()
     const entry = await store.create({ pcm: pcm(), durationMs: 1000, recovery: true })
@@ -316,7 +328,7 @@ describe('re-transcription', () => {
     expect(result).toMatchObject({ transcript: '重新转写', polished: '重新润色', polishStatus: 'ok', pending: true })
     expect(readFileSync(file)).toEqual(before)
     expect(readDb(dir).notes[0]).toEqual(result)
-    expect(store.pendingChanges().live[0]).toEqual(result)
+    expect(store.pendingChanges().live[0]).toEqual({ ...result, title: '' })
   })
   it.each(['asr', 'polish', 'empty'])('preserves both edited texts and recording on %s failure', async kind => {
     const { store, id, file } = await recorded()

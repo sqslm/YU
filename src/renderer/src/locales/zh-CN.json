@@ -1,4 +1,9 @@
 {
+  "notes.titlePlaceholder": "未命名随记，点击命名",
+  "notes.titleLabel": "随记名称",
+  "分类与标签": "分类与标签",
+  "notes.tagFilter": "按标签筛选",
+  "未听到语音，已结束本次录音": "未听到语音，已结束本次录音",
   "待办": "待办",
   "状态": "状态",
   "高级音频": "高级音频",
@@ -1081,7 +1086,7 @@
     "settings": "设置"
   },
   "notes": {
-    "searchPlaceholder": "搜索转写、标签或分类",
+    "searchPlaceholder": "搜索名称、正文、标签或分类",
     "categoryFilter": "按分类筛选",
     "allCategories": "全部分类",
     "sortNewest": "最新优先",

@@ -243,3 +243,17 @@ test('标签与分类按客户端规则裁剪', async (t) => {
   assert.equal(pull.body.note.categoryId, 'unknown-category')
   assert.deepEqual(pull.body.note.tags, ['工作', 'x'.repeat(64), '生活'])
 })
+
+
+test('随记标题兼容旧客户端，支持重命名和显式清空', async t => {
+  const {app,alice}=await setup(t)
+  const call=change=>app.call('POST','/api/v1/notes/changes',{token:alice.accessToken,body:{changes:[change]}})
+  const get=async()=>(await app.call('GET','/api/v1/notes/note-1',{token:alice.accessToken})).body.note
+  const original=note({title:'Project plan'})
+  assert.equal((await call(original)).status,200)
+  assert.equal((await get()).title,'Project plan')
+  const legacy={...original,version:1,transcript:'Legacy edit'};delete legacy.title
+  await call(legacy);assert.equal((await get()).title,'Project plan')
+  await call({...legacy,version:2,title:'新标题'});assert.equal((await get()).title,'新标题')
+  await call({...legacy,version:3,title:''});assert.equal((await get()).title,'')
+})

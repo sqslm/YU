@@ -32,9 +32,22 @@ describe('offline custom wake lifecycle', () => {
   })
   it('starts exactly one existing recording when woken and ignores queued events', () => {
     host.update({ enabled: true, phrase: 'Hey Qinly' }, false)
-    children[0].stdout.write('{"type":"ready"}\n{"type":"wake"}\n{"type":"wake"}\n')
+    const event = JSON.stringify({ type: 'wake', phrase: 'Hey Qinly', confidence: .98, wordConfidence: .95, durationMs: 800 }) + '\n'
+    children[0].stdout.write('{"type":"ready"}\n' + event + event)
     expect(wake).toHaveBeenCalledOnce(); expect(children[0].kill).toHaveBeenCalledOnce()
     expect(host.snapshot().phase).toBe('paused')
+  })
+  it('rejects weak, clipped, unrelated and cooldown matches without starting a recording', () => {
+    const settings = { enabled: true, phrase: '你好轻令' }
+    host.update(settings, false); children[0].stdout.write('{"type":"ready"}\n')
+    const event = { type: 'wake', phrase: settings.phrase, confidence: .98, wordConfidence: .95, durationMs: 700 }
+    for (const patch of [{ confidence: .88 }, { wordConfidence: .6 }, { durationMs: 100 }, { phrase: '你好清理' }]) children[0].stdout.write(JSON.stringify({ ...event, ...patch }) + '\n')
+    expect(wake).not.toHaveBeenCalled()
+    children[0].stdout.write(JSON.stringify(event) + '\n'); expect(wake).toHaveBeenCalledOnce()
+    host.update(settings, false); children[1].stdout.write('{"type":"ready"}\n' + JSON.stringify(event) + '\n')
+    expect(wake).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(5000); children[1].stdout.write(JSON.stringify(event) + '\n')
+    expect(wake).toHaveBeenCalledTimes(2)
   })
   it('surfaces a missing language pack and retries only when requested', () => {
     const settings = { enabled: true, phrase: 'Hey Qinly' }

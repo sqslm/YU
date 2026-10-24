@@ -293,10 +293,27 @@ describe('Ask card completion', () => {
     const { pipeline } = harness({})
     const stop = vi.spyOn(pipeline, 'stop').mockResolvedValue(null)
     pipeline.start('dictation', { viaWake: true, handsFree: true })
-    pipeline.pushAudio(tone(500)); pipeline.pushAudio(silence(1400))
+    pipeline.pushAudio(tone(500)); pipeline.pushAudio(silence(2200))
     expect(stop).toHaveBeenCalledOnce(); pipeline.cancel()
     pipeline.start('dictation'); pipeline.pushAudio(tone(500)); pipeline.pushAudio(silence(2000))
     expect(stop).toHaveBeenCalledOnce(); pipeline.cancel()
+  })
+  it('ends a silent wake take with a clear no-speech message, without ASR or failure history', () => {
+    const {pipeline,sent,entries}=harness({})
+    pipeline.start('dictation',{viaWake:true,handsFree:true})
+    for(let i=0;i<240;i++) pipeline.pushAudio(silence(64))
+    expect(pipeline.isRecording).toBe(false)
+    expect(sent.at(-1)).toMatchObject({phase:'done',text:'未听到语音，已结束本次录音'})
+    expect(mocks.transcribe).not.toHaveBeenCalled(); expect(entries).toEqual([])
+  })
+  it('recognizes speech across the real 64 ms microphone chunks after waking', () => {
+    const { pipeline } = harness({})
+    const stop = vi.spyOn(pipeline, 'stop').mockResolvedValue(null)
+    pipeline.start('dictation', { viaWake: true, handsFree: true })
+    for (let i = 0; i < 20; i++) pipeline.pushAudio(tone(64))
+    for (let i = 0; i < 35; i++) pipeline.pushAudio(silence(64))
+    expect(stop).toHaveBeenCalledOnce()
+    pipeline.cancel()
   })
   it('stops an Ask request and ignores queued deltas and a late response without writing history', async () => {
     vi.useFakeTimers()
@@ -1226,12 +1243,12 @@ describe('opening phrase mode activation', () => {
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(entries).toHaveLength(0)
   })
-  it('hands notes the same full audio and cleaned transcript without insertion or voice history', async () => {
+  it('hands notes the same full audio and unmodified ASR transcript without insertion or voice history', async () => {
     mocks.transcribe.mockResolvedValue({ text: '指令笔记：这是灵感' })
     const onVoiceNote = vi.fn(async () => undefined), pcm = tone(1400)
     const { pipeline, entries } = harness({ voiceCommands: commands() }, { onVoiceNote })
     pipeline.start('dictation'); pipeline.pushAudio(pcm); await finish(pipeline)
-    expect(onVoiceNote).toHaveBeenCalledWith(pcm, '这是灵感', expect.any(AbortSignal))
+    expect(onVoiceNote).toHaveBeenCalledWith(pcm, '指令笔记：这是灵感', expect.any(AbortSignal))
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(entries).toHaveLength(0)
@@ -1379,6 +1396,15 @@ describe('unified voice entry', () => {
   const finish = async (pipeline: InstanceType<typeof Pipeline>): Promise<HistoryEntry | null> => {
     pipeline.pushAudio(tone(1200)); const pending = pipeline.stop(); pipeline.audioStopped(); return pending
   }
+  it('preserves literal ASR in notes even when the intent model tries to rewrite it', async () => {
+    const raw='嗯，给我记一下，我今天、今天想到的那个计划。'
+    mocks.transcribe.mockResolvedValue({text:raw})
+    mocks.complete.mockResolvedValueOnce(JSON.stringify({kind:'notes',text:'我今天想到了一个计划。'}))
+    const onVoiceNote=vi.fn().mockResolvedValue(undefined), h=harness({voiceCommands:smart},{onVoiceNote})
+    h.pipeline.start('dictation'); await finish(h.pipeline)
+    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array),raw,expect.any(AbortSignal))
+    expect(mocks.complete).toHaveBeenCalledOnce()
+  })
   it.each([true, false])('reuses the intent classification context decision without another model request: %s', async useContext => {
     mocks.transcribe.mockResolvedValue({ text: '再详细一点' })
     mocks.complete.mockResolvedValueOnce(JSON.stringify({ kind: 'assistant', useContext }))
@@ -1434,7 +1460,7 @@ describe('unified voice entry', () => {
     mocks.transcribe.mockResolvedValue({ text: '帮我保存到随记：明天研究这个问题。' })
     const onVoiceNote = vi.fn().mockResolvedValue(undefined), h = harness({ voiceCommands: smart }, { onVoiceNote })
     h.pipeline.start('dictation'); await finish(h.pipeline)
-    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array), '明天研究这个问题。', expect.any(AbortSignal))
+    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array), '帮我保存到随记：明天研究这个问题。', expect.any(AbortSignal))
     expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0)
   })
   it('keeps development requirements on the opening-window prompt route even after switching apps', async () => {

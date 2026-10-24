@@ -220,7 +220,7 @@ function stripAppendedSources(text: string): string {
  */
 export class Pipeline {
   private asrCheck: Promise<void> | null = null
-  private wakeCapture: { speechMs: number; silenceMs: number; totalMs: number } | null = null
+  private wakeCapture: { speechMs: number; silenceMs: number; totalMs: number; pending: Int16Array[]; pendingMs: number } | null = null
   private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
   private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo; purpose?: 'reminder' | 'assistant' } | null = null
@@ -645,7 +645,7 @@ export class Pipeline {
     if (this.takePrompt.size > 8) this.takePrompt.clear()
     this.usedProvider = null
     this.stage = 'recording'
-    this.wakeCapture = options.viaWake ? { speechMs: 0, silenceMs: 0, totalMs: 0 } : null
+    this.wakeCapture = options.viaWake ? { speechMs: 0, silenceMs: 0, totalMs: 0, pending: [], pendingMs: 0 } : null
     this.stageMode = mode
     this.log(`[pipeline] start ${mode}${options.handsFree ? ' (hands-free)' : ''}`)
     // One log file per take (the reference client's `recording-event` stream).
@@ -727,12 +727,17 @@ export class Pipeline {
     if (!wake || !this.recording) return
     const ms = pcmDurationMs(pcm)
     wake.totalMs += ms
-    if (isSilent(pcm)) wake.silenceMs += ms
-    else { wake.speechMs += ms; wake.silenceMs = 0 }
-    if (wake.speechMs >= 240 && wake.silenceMs >= 1400) {
+    // Mic chunks are ~64 ms, shorter than the quiet-input gate's 80 ms minimum.
+    // Evaluate a small window, not each transport chunk as if it were silence.
+    wake.pending.push(pcm); wake.pendingMs += ms
+    if (wake.pendingMs < 160) return
+    if (isSilent(concatPcm(wake.pending))) wake.silenceMs += wake.pendingMs
+    else { wake.speechMs += wake.pendingMs; wake.silenceMs = 0 }
+    wake.pending = []; wake.pendingMs = 0
+    if (wake.speechMs >= 320 && wake.silenceMs >= 2000) {
       this.wakeCapture = null
       void this.stop()
-    } else if (wake.totalMs >= 10_000 && wake.speechMs < 240) this.cancel('wake-no-speech')
+    } else if (wake.totalMs >= 15_000 && wake.speechMs < 320) this.cancel('wake-no-speech')
   }
 
   private startCaptions(settings: Settings): void {
@@ -929,7 +934,7 @@ export class Pipeline {
     recordingLog.end({ status: 'cancelled', audioMs: durationMs })
     this.clearCancelHint()
     this.setBarState(
-      { phase: 'done', mode, text: mt('已取消'), showMode: this.getSettings().showModeInBar },
+      { phase: 'done', mode, text: mt(reason === 'wake-no-speech' ? '未听到语音，已结束本次录音' : '已取消'), showMode: this.getSettings().showModeInBar },
       CANCEL_HINT_MS
     )
     // Collapse to the idle pill afterwards; the token guard keeps a quick
@@ -1204,6 +1209,7 @@ export class Pipeline {
     }
 
     let transcript = ''
+    let noteTranscript = ''
     let assistantUseContext: boolean | undefined
     try {
       await this.asrCheck
@@ -1224,6 +1230,7 @@ export class Pipeline {
           : await this.asrTranscript(settings, wav, controller.signal, progress)
         if (token !== this.runToken) return null
         if (!transcript.trim()) throw new Error('ASR returned an empty transcript')
+        noteTranscript = transcript
         const command = commands ? matchVoiceCommand(transcript, commands) : null
         mode = command?.mode === 'ask' || command?.mode === 'translate' ? command.mode : 'dictation'
         purpose = command?.mode === 'reminder' || command?.mode === 'notes' ? command.mode : undefined
@@ -1287,7 +1294,10 @@ export class Pipeline {
       if (purpose === 'notes') {
         progress(mt('保存随记中…'))
         if (!this.options.onVoiceNote) throw new Error(mt('随记服务尚未就绪'))
-        await this.options.onVoiceNote(pcm, transcript, controller.signal)
+        const original = noteTranscript || transcript || (route === 'multimodal'
+          ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
+          : await this.asrTranscript(settings, wav, controller.signal, progress))
+        await this.options.onVoiceNote(pcm, original, controller.signal)
         if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), feedback: {}, taskLabel: mt('随记'), showMode: settings.showModeInBar }, 10_000, { force: true })
         return null
       }

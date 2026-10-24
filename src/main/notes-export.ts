@@ -32,7 +32,7 @@ export function formatNotesExport(notes: readonly NoteEntry[], categories: reado
       ...(note.tags.length ? [`${mt('标签')}：${note.tags.map(literal).join(' / ')}`] : [])
     ].map(line => md ? `- ${line}` : line).join('\n')
     return [
-      heading(2, stamp(note.createdAt)), metadata,
+      heading(2, literal(note.title || stamp(note.createdAt))), metadata,
       heading(3, mt(note.durationMs === 0 && !note.audioPath ? '随记正文' : '原始转写')), note.transcript || mt('（无内容）'),
       heading(3, mt('润色文本')), note.polished || mt('（无内容）')
     ].join('\n\n')

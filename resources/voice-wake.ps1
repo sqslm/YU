@@ -25,11 +25,16 @@ public static class QinlyWake {
     using (var engine = new SpeechRecognitionEngine(selected)) {
       var grammar = new GrammarBuilder { Culture = selected.Culture };
       grammar.Append(phrase);
-      engine.LoadGrammar(new Grammar(grammar));
+      engine.LoadGrammar(new Grammar(grammar) { Name = "wake" });
+      // Competing ordinary speech can be rejected instead of forced into the one wake phrase.
+      engine.LoadGrammar(new DictationGrammar { Name = "background", Weight = 0.5f });
       using (var ended = new ManualResetEvent(false)) {
         engine.SpeechRecognized += (sender, e) => {
-          if (e.Result.Confidence >= 0.80 && String.Equals(e.Result.Text, phrase, StringComparison.OrdinalIgnoreCase)) {
-            Emit(new { type = "wake" });
+          if (e.Result.Grammar.Name == "wake" && String.Equals(e.Result.Text, phrase, StringComparison.OrdinalIgnoreCase)) {
+            float wordConfidence = 1;
+            foreach (var word in e.Result.Words) wordConfidence = Math.Min(wordConfidence, word.Confidence);
+            Emit(new { type = "wake", phrase = phrase, confidence = e.Result.Confidence,
+              wordConfidence = wordConfidence, durationMs = e.Result.Audio.Duration.TotalMilliseconds });
           }
         };
         engine.RecognizeCompleted += (sender, e) => ended.Set();

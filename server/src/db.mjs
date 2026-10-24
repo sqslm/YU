@@ -176,7 +176,8 @@ function migration2(db) {
 
 const MIGRATIONS = [
   { version: 1, name: 'baseline', up: migration1 },
-  { version: 2, name: 'sessions-notes-audio', up: migration2 }
+  { version: 2, name: 'sessions-notes-audio', up: migration2 },
+  { version: 3, name: 'note-titles', up: db => addColumn(db, 'notes', 'title', "TEXT NOT NULL DEFAULT ''") }
 ]
 
 /**

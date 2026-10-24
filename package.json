@@ -1,6 +1,6 @@
 {
   "name": "typeless-rebuild",
-  "version": "0.39.0",
+  "version": "0.40.0",
   "license": "MIT",
   "private": true,
   "description": "Qinly Windows AI assistant with voice input and local tools",

@@ -81,18 +81,24 @@ export class ReminderService {
     this.log(`[reminders] voice parsed: ${drafts.length} item(s), intents=${drafts.map(item => item.intent).join(',')}`)
     if (!drafts.length) return { message: mt('没有可创建的提醒，本次未保存') }
     if (drafts.every(item => item.intent !== 'create_reminder' && item.intent !== 'todo')) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
-    const draft = drafts[0]!
-    const untimedTodo = draft.intent === 'todo' && draft.time_expression === null && draft.rule === null
-    if (drafts.length !== 1 || draft.needs_confirmation || (!untimedTodo && (draft.intent !== 'create_reminder' || draft.dueAt === null || draft.dueAt <= Date.now()))) {
-      this.open({ drafts }); return { message: mt('请确认提醒事项与时间') }
+    const clear = drafts.every(draft => !draft.needs_confirmation && (
+      draft.intent === 'todo' && draft.time_expression === null && draft.rule === null ||
+      draft.intent === 'create_reminder' && draft.dueAt !== null && draft.dueAt > Date.now()
+    ))
+    if (!clear) {
+      return { message: mt('请补充明确的事项和提醒时间，本次未保存') }
     }
-    const row = this.save({ title: draft.title, description: draft.description, dueAt: draft.dueAt, level: draft.level, recurrence: draft.rule,
-      source: 'voice', timeExpression: draft.time_expression ?? undefined })
-    this.undoId = row.id
-    const time = row.dueAt === null ? mt('未设置提醒时间') : new Date(row.dueAt).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN', {
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-    })
-    return { message: `${time} · ${mt(row.level === 'strong' ? '强提醒' : '普通提醒')} · ${row.title}`, undo: true, reminder: row }
+    const rows = this.store.saveMany(drafts.map(draft => ({ title: draft.title, description: draft.description, dueAt: draft.dueAt, level: draft.level, recurrence: draft.rule,
+      source: 'voice', timeExpression: draft.time_expression ?? undefined })))
+    this.refresh()
+    this.undoId = rows.length === 1 ? rows[0].id : null
+    const message = rows.map(row => {
+      const time = row.dueAt === null ? mt('未设置提醒时间') : new Date(row.dueAt).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN', {
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+      })
+      return `${time} · ${mt(row.dueAt === null ? '待办' : row.level === 'strong' ? '强提醒' : '普通提醒')} · ${row.title}`
+    }).join('\n')
+    return { message, undo: rows.length === 1, ...(rows.length === 1 ? { reminder: rows[0] } : {}) }
   }
   undo(): void {
     if (this.undoId) this.remove(this.undoId)
@@ -111,7 +117,7 @@ export class ReminderService {
     ipcMain.on('reminders:close-strong', () => this.strong?.close())
     ipcMain.handle('reminders:extract-note', (_event, id: string) => this.extractNote(notes, id))
   }
-  async extractNote(notes: NotesStore, id: string, signal?: AbortSignal): Promise<void> {
+  async extractNote(notes: NotesStore, id: string, signal?: AbortSignal): Promise<string> {
     signal?.throwIfAborted()
     if (this.extracting) throw new Error(mt('正在提取待办，请稍候'))
     const note = notes.list().notes.find(item => item.id === id)
@@ -128,7 +134,16 @@ export class ReminderService {
       if (!current) throw new Error(mt('随记不存在'))
       if ((current.transcript.trim() || current.polished.trim()) !== text) throw new Error(mt('随记内容已更改，请重新提取'))
       if (!drafts.length) throw new Error(mt('没有发现待办或提醒事项'))
-      this.open({ drafts, noteId: id })
+      const valid = drafts.filter(draft => !draft.needs_confirmation && (
+        draft.intent === 'todo' && draft.time_expression === null && draft.rule === null ||
+        draft.intent === 'create_reminder' && draft.dueAt !== null && draft.dueAt > Date.now()
+      ))
+      if (!valid.length) return mt('没有明确可保存的事项，请补充事项或具体时间')
+      this.store.saveMany(valid.map(draft => ({ title: draft.title, description: draft.description,
+        dueAt: draft.intent === 'todo' ? null : draft.dueAt, level: draft.level, recurrence: draft.rule,
+        source: 'note', noteId: id, timeExpression: draft.time_expression ?? undefined })))
+      this.refresh()
+      return mt('已保存 {{count}} 个事项，{{skipped}} 个不明确事项未保存', { count: valid.length, skipped: drafts.length - valid.length })
     } finally { this.extracting = false; if (this.noteAbort === controller) this.noteAbort = null }
   }
 

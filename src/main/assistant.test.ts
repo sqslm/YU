@@ -30,7 +30,7 @@ describe('assistant session', () => {
   })
   it('answers consecutive current-window questions from each take, without a model or old ChatGPT context', async () => {
     const windows = new WindowsTools({ folders: { downloads: '.', desktop: '.', documents: '.' }, native: vi.fn(),
-      confirm: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })
+      openPath: vi.fn(), openUrl: vi.fn() })
     const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), windows })
     await current.send('这是什么窗口？', undefined, undefined, now, { appName: 'ChatGPT', windowTitle: 'ChatGPT conversation', processId: 123 })
     expect(current.snapshot().turns.at(-1)?.answer).toContain('ChatGPT')

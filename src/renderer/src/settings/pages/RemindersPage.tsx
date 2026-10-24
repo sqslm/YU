@@ -133,11 +133,9 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
       <TextField select size="small" label={t('状态')} value={filter} onChange={e => setFilter(e.target.value)} sx={{ width: 130 }} inputProps={{ 'data-reminder-status-filter': true }}>
         {[['active', '待处理'], ['upcoming', '即将到期'], ['due', '已到期'], ['completed', '已完成'], ['cancelled', '已取消'], ['all', '全部']].map(([value, label]) => <MenuItem key={value} value={value}>{t(label!)}</MenuItem>)}
       </TextField>
-      <Tooltip describeChild disableInteractive title={t('提醒按提醒时间筛选，待办按创建时间筛选；近一周包含今天及过去六天。')}>
         <TextField select size="small" label={t('时间')} value={period} onChange={e => setPeriod(e.target.value as ReminderPeriod)} sx={{ width: 145 }} inputProps={{ 'data-reminder-period-filter': true }}>
           {([['all', '全部时间'], ['today', '今日'], ['week', '近一周'], ['nextWeek', '未来一周'], ['custom', '自定义']] as const).map(([value, label]) => <MenuItem key={value} value={value}>{t(label)}</MenuItem>)}
         </TextField>
-      </Tooltip>
     </Stack>
     {period === 'custom' && <Stack direction="row" spacing={1} sx={{ mb: 2 }} data-reminder-time-filter>
         <TextField type="date" size="small" label={t('开始日期')} value={from} onChange={e => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-date': 'from' }} sx={{ width: 170, colorScheme: theme => theme.palette.mode }} />

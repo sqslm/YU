@@ -8,7 +8,6 @@ import { mergeSettings } from '@shared/defaults'
 
 let root: string
 let native: ReturnType<typeof vi.fn>
-let confirm: ReturnType<typeof vi.fn>
 let openPath: ReturnType<typeof vi.fn>
 let openUrl: ReturnType<typeof vi.fn>
 let tools: WindowsTools
@@ -16,9 +15,8 @@ const owned: string[] = []
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'qinly-tools-')))
   native = vi.fn().mockResolvedValue({ files: [], backend: 'folder' })
-  confirm = vi.fn().mockResolvedValue(true)
   openPath = vi.fn().mockResolvedValue(''); openUrl = vi.fn().mockResolvedValue(undefined)
-  tools = new WindowsTools({ folders: { downloads: root, desktop: root, documents: root }, native, confirm, openPath, openUrl })
+  tools = new WindowsTools({ folders: { downloads: root, desktop: root, documents: root }, native, openPath, openUrl })
   tools.beginTask()
 })
 afterEach(async () => { for (const path of owned.splice(0).reverse()) await unlink(path).catch(() => {}); await rmdir(root) })
@@ -33,7 +31,7 @@ describe('Windows tools permissions and real result selection', () => {
   })
   it('uses a custom Downloads getter on each task and requests bounded recursion and archive extensions', async () => {
     let folder = root
-    const dynamic = new WindowsTools({ folders: () => ({ downloads: folder, desktop: root, documents: root }), native, confirm, openPath, openUrl })
+    const dynamic = new WindowsTools({ folders: () => ({ downloads: folder, desktop: root, documents: root }), native, openPath, openUrl })
     await dynamic.run('search_files', { type: 'archive', recursive: true })
     expect(native.mock.calls[0][0]).toMatchObject({ root, recursive: true, extensions: expect.arrayContaining(['zip', 'rar', '7z']) })
     folder = join(root, 'nonexistent-download-folder')
@@ -48,13 +46,14 @@ describe('Windows tools permissions and real result selection', () => {
     expect(native.mock.calls[1][0].root).toBe(root)
     await expect(tools.run('get_current_folder', {}, undefined, { ...context, appName: 'code' })).rejects.toThrow('原窗口不是')
   })
-  it('reads only a real browser URL with permission and reports an unreadable address without inventing content', async () => {
+  it('reads only a real browser URL directly and respects cancellation', async () => {
     const context = { appName: 'chrome', processId: 42, windowHandle: '1234', windowTitle: 'Web page' }
     native.mockResolvedValueOnce({ url: 'https://example.com/page' }).mockResolvedValueOnce({ url: null })
     expect((await tools.run('get_current_page', {}, undefined, context)).data.url).toBe('https://example.com/page')
     expect((await tools.run('get_current_page', {}, undefined, context)).ok).toBe(false)
-    confirm.mockResolvedValue(false); native.mockClear()
-    await expect(tools.run('get_current_page', {}, undefined, context)).rejects.toThrow()
+    native.mockClear()
+    const controller = new AbortController(); controller.abort()
+    await expect(tools.run('get_current_page', {}, controller.signal, context)).rejects.toThrow()
     expect(native).not.toHaveBeenCalled()
   })
   it.each(['计算器', 'Calculator'])('activates a discovered packaged calculator for %s without guessing an exe path or prompting again', async name => {
@@ -62,7 +61,7 @@ describe('Windows tools permissions and real result selection', () => {
     native.mockResolvedValueOnce({ applications: [{ name: 'Localized Calculator', path: '', appId }] }).mockResolvedValueOnce({ activated: true })
     expect((await tools.run('open_application', { name })).ok).toBe(true)
     expect(native).toHaveBeenLastCalledWith({ action: 'activate', appId }, undefined)
-    expect(openPath).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled()
+    expect(openPath).not.toHaveBeenCalled()
   })
   it('uses only the frozen original window metadata and refuses absent/sensitive targets', async () => {
     expect(await tools.run('get_active_window', {}, undefined, { appName: 'code', windowTitle: 'Project', processId: 123 }))
@@ -77,39 +76,31 @@ describe('Windows tools permissions and real result selection', () => {
     expect(native).toHaveBeenCalledWith({ action: 'disk-space' }, undefined)
   })
   it('opens a requested website without asking for authorization again', async () => {
-    confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
     expect((await tools.run('open_url', { url: 'https://example.com/' })).ok).toBe(true)
     expect(openUrl).toHaveBeenCalledExactlyOnceWith('https://example.com/')
-    expect(confirm).not.toHaveBeenCalled()
   })
   it('opens a requested registered application without another confirmation', async () => {
     const path = await file('Example.exe')
     native.mockResolvedValue({ applications: [{ name: 'Example', path }] })
-    confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
     expect((await tools.run('open_application', { name: 'Example' })).ok).toBe(true)
     expect(openPath).toHaveBeenCalledExactlyOnceWith(path)
-    expect(confirm).not.toHaveBeenCalled()
   })
   it('opens a requested folder without another confirmation', async () => {
-    confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
     expect((await tools.run('open_folder', { folder: 'downloads' })).ok).toBe(true)
     expect(openPath).toHaveBeenCalledExactlyOnceWith(root)
-    expect(confirm).not.toHaveBeenCalled()
   })
   it('opens a selected real document without repeating the search authorization', async () => {
     const path = await file('selected.pdf')
     native.mockResolvedValue({ files: [row(path)] })
     const found = await tools.run('search_files', {})
     const id = (found.data.items as { id: string }[])[0].id
-    confirm.mockClear(); confirm.mockRejectedValue(new Error('Unexpected opening confirmation'))
     expect((await tools.run('open_file', { id })).ok).toBe(true)
     expect(openPath).toHaveBeenCalledExactlyOnceWith(path)
-    expect(confirm).not.toHaveBeenCalled()
   })
   it('does not expose local tools to legacy Ask even if model guesses a name', async () => {
     expect(toolSchemas().map(t => (t.function as { name: string }).name)).not.toContain('search_files')
     const result = await runTool('search_files', {}, { windows: tools, settings: mergeSettings({}), question: '', log: vi.fn() })
-    expect(result.ok).toBe(false); expect(native).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled()
+    expect(result.ok).toBe(false); expect(native).not.toHaveBeenCalled()
   })
   it('uses known folders without a model, and leaves failed opens as failures', async () => {
     expect(tools.command('打开下载文件夹')).toEqual({ name: 'open_folder', args: { folder: 'downloads' } })
@@ -118,10 +109,10 @@ describe('Windows tools permissions and real result selection', () => {
     expect(await tools.run('open_folder', { folder: 'downloads' })).toMatchObject({ ok: false, error: 'Access denied' })
     expect(openPath).toHaveBeenCalledWith(root)
   })
-  it('keeps metadata-search authorization and respects cancelled opening tasks', async () => {
-    confirm.mockResolvedValueOnce(false)
-    await expect(tools.run('search_files', {})).rejects.toThrow('取消')
-    expect(native).not.toHaveBeenCalled(); expect(openPath).not.toHaveBeenCalled()
+  it('searches requested metadata directly and respects cancelled opening tasks', async () => {
+    expect((await tools.run('search_files', {})).ok).toBe(true)
+    expect(native).toHaveBeenCalledOnce(); native.mockClear()
+    expect(openPath).not.toHaveBeenCalled()
     const controller = new AbortController()
     controller.abort()
     await expect(tools.run('open_folder', { folder: 'downloads' }, controller.signal)).rejects.toThrow()
@@ -134,7 +125,7 @@ describe('Windows tools permissions and real result selection', () => {
     const path = await file('Code.exe'), controller = new AbortController()
     native.mockImplementation(async () => { controller.abort(); return { applications: [{ name: 'Code', path }] } })
     await expect(tools.run('open_application', { name: 'Code' }, controller.signal)).rejects.toThrow()
-    expect(openPath).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled()
+    expect(openPath).not.toHaveBeenCalled()
   })
   it('launches only a real unique registered application, deduplicating aliases', async () => {
     const path = await file('Code.exe')
@@ -222,7 +213,7 @@ it('does not confuse website names or domains with registered applications', () 
 it('opens official URLs only from explicit input or actual tool evidence', async () => {
   const base = { settings: mergeSettings({}), windows: tools, allowedTools: WINDOWS_TOOLS, question: '帮我打开卡巴斯基的官方网站', log: vi.fn(), cache: new Map() }
   expect((await runTool('open_url', { url: 'https://invented.example' }, base)).ok).toBe(false)
-  expect(openUrl).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled()
+  expect(openUrl).not.toHaveBeenCalled()
   base.cache.set('web_search?query=official', Promise.resolve({ ok: true, data: {}, summary: 'Found', sources: [{ title: 'Official site', url: 'https://official.example/', snippet: '' }] }))
   expect((await runTool('open_url', { url: 'https://official.example/' }, base)).ok).toBe(true)
   expect(openUrl).toHaveBeenCalledExactlyOnceWith('https://official.example/')
