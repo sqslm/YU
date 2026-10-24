@@ -26,7 +26,11 @@ export interface Reminder extends ReminderInput {
   /** An explicit elapsed-time snooze must survive local timezone rebasing. */
   snoozedUntil?: number
   lastCompletedAt?: number
+  /** The exact occurrence missed while the app was stopped or asleep. */
+  missedAt?: number
+  missedAcknowledgedAt?: number
 }
+export const isMissedReminder = (row: Reminder): boolean => row.status === 'due' && row.dueAt !== null && row.missedAt === row.dueAt && row.missedAcknowledgedAt === undefined
 export interface ReminderDraft {
   intent: 'create_reminder' | 'todo' | 'possible' | 'none'
   title: string

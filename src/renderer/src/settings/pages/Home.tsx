@@ -258,7 +258,7 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
         pt: 1.25,
         pb: 1.75,
         height: '100%',
-        minHeight: 0,
+        minHeight: 680,
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',

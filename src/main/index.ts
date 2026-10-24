@@ -1522,6 +1522,7 @@ async function bootstrap(): Promise<void> {
    * covers what the reference client reads through its `isLidOpen` native export.
    */
   powerMonitor.on('suspend', () => {
+    reminders?.suspend()
     wakeSuspended = true; refreshWakeWord()
     hideCard()
     cancelAssistant()
@@ -1533,7 +1534,7 @@ async function bootstrap(): Promise<void> {
     cancelAssistant()
     pipeline?.cancel('lock')
   })
-  powerMonitor.on('resume', () => { wakeSuspended = false; refreshWakeWord(); reminders?.refresh() })
+  powerMonitor.on('resume', () => { wakeSuspended = false; refreshWakeWord(); if (reminders?.resume()) ensureSettingsWindow() })
   powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); reminders?.refresh() })
 
   registerIpc()
@@ -1543,6 +1544,7 @@ async function bootstrap(): Promise<void> {
   refreshWakeWord()
   reminders.registerIpc(notes)
   reminders.start()
+  if (reminders.store.missed().length) ensureSettingsWindow()
   registerNotesIpc({
     store: notes,
     persistDir: async (dir) => {

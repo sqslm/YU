@@ -28,6 +28,7 @@ import { PaginationSettings } from './Pagination'
 import { applyUiLanguage } from '../i18n'
 import i18n from '../i18n'
 import { BrandLogo } from '../BrandLogo'
+import { MissedReminders } from './MissedReminders'
 
 type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders'
 
@@ -251,6 +252,7 @@ export function App(): JSX.Element {
 
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ height: 40, flex: '0 0 auto' }} />
+          <MissedReminders />
           <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{body()}</Box>
         </Box>
       </Box>

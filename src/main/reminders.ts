@@ -2,6 +2,7 @@ import { mt } from '@shared/mainI18n'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import type { Reminder, ReminderAction, ReminderInput } from '@shared/reminders'
+import { isMissedReminder } from '@shared/reminders'
 import { nextOccurrence, validRecurrence } from './reminder-time'
 
 /** Same local SQLite engine as history, kept independent of history retention. */
@@ -29,6 +30,25 @@ export class ReminderStore {
     const row = this.db.prepare('SELECT data FROM reminders WHERE id = ?').get(id)
     return row ? JSON.parse(String(row.data)) as Reminder : undefined
   }
+  missed(): Reminder[] { return this.due().filter(isMissedReminder) }
+  recoverMissed(): number {
+    const now = this.now()
+    const rows = this.db.prepare("SELECT data FROM reminders WHERE status IN ('pending','due') AND dueAt IS NOT NULL AND dueAt <= ?").all(now)
+      .map(row => JSON.parse(String(row.data)) as Reminder)
+    let count = 0
+    for (const row of rows) {
+      if (row.missedAt === row.dueAt) continue
+      this.write({ ...row, status: 'due', missedAt: row.dueAt!, missedAcknowledgedAt: undefined, deliveredAt: row.deliveredAt ?? now, updatedAt: now })
+      count++
+    }
+    return count
+  }
+  acknowledgeMissed(id: string, dueAt: number, completed: boolean): void {
+    const row = this.get(id)
+    if (!row || row.dueAt !== dueAt || !isMissedReminder(row)) return
+    if (completed) this.action(id, 'complete')
+    else this.write({ ...row, missedAcknowledgedAt: this.now() })
+  }
   save(input: ReminderInput, id?: string): Reminder {
     const old = id ? this.get(id) : undefined
     if (id && !old) throw new Error(mt('提醒不存在'))
@@ -42,7 +62,8 @@ export class ReminderStore {
       recurrence: input.recurrence, source: old?.source ?? input.source, noteId: old?.noteId ?? input.noteId,
       timeExpression: input.timeExpression, id: id ?? randomUUID(), createdAt: old?.createdAt ?? this.now(),
       updatedAt: this.now(), status: sameSchedule ? old.status : 'pending', deliveredAt: sameSchedule ? old.deliveredAt : null,
-      snoozedUntil: sameSchedule ? old.snoozedUntil : undefined, lastCompletedAt: old?.lastCompletedAt }
+      snoozedUntil: sameSchedule ? old.snoozedUntil : undefined, lastCompletedAt: old?.lastCompletedAt,
+      missedAt: sameSchedule ? old.missedAt : undefined, missedAcknowledgedAt: sameSchedule ? old.missedAcknowledgedAt : undefined }
     return this.write(reminder)
   }
   saveMany(inputs: ReminderInput[]): Reminder[] {

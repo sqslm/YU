@@ -25,7 +25,9 @@ export class ReminderService {
       try { this.deliver(row) } catch (error) { this.log(`[reminders] delivery failed: ${String(error)}`) }
     }, () => this.changed())
   }
-  start(): void { this.scheduler.check(); this.updateStrong() }
+  start(): void { this.store.recoverMissed(); this.refresh() }
+  suspend(): void { this.scheduler.stop() }
+  resume(): boolean { const recovered = this.store.recoverMissed(); this.refresh(); return recovered > 0 }
   open(view: ReminderView = {}): void { this.view = view; this.openView(view) }
   private closeNotice(id: string): void { this.notices.get(id)?.close(); this.notices.delete(id) }
   save(input: ReminderInput, id?: string): Reminder {
@@ -46,7 +48,7 @@ export class ReminderService {
       this.strong.webContents.send('settings:changed', this.settings())
     }
   }
-  strongRows(): Reminder[] { return this.store.due().filter(row => row.level === 'strong' && !this.dismissed.has(row.id)) }
+  strongRows(): Reminder[] { return this.store.due().filter(row => row.level === 'strong' && row.missedAt !== row.dueAt && !this.dismissed.has(row.id)) }
   private updateStrong(): void {
     const rows = this.strongRows()
     if (!rows.length) {
@@ -106,6 +108,10 @@ export class ReminderService {
   }
   registerIpc(notes: NotesStore): void {
     ipcMain.handle('reminders:list', () => this.store.list())
+    ipcMain.handle('reminders:acknowledge-missed', (_event, id: string, dueAt: number, completed: boolean) => {
+      if (typeof id !== 'string' || !Number.isSafeInteger(dueAt) || typeof completed !== 'boolean') throw new Error('Invalid missed reminder action')
+      this.store.acknowledgeMissed(id, dueAt, completed); this.refresh()
+    })
     ipcMain.handle('reminders:save', (_event, input: ReminderInput, id?: string) => this.save(input, id))
     ipcMain.handle('reminders:save-many', (_event, inputs: ReminderInput[]) => {
       const rows = this.store.saveMany(inputs); this.refresh(); return rows

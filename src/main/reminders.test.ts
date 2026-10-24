@@ -8,6 +8,31 @@ const base = new Date(2026, 9, 23, 8).getTime()
 const entry = (dueAt: number | null): ReminderInput => ({ title: 'Call the technician', dueAt, level: 'normal', source: 'manual', recurrence: null })
 afterEach(() => vi.useRealTimers())
 describe('durable local reminders', () => {
+  it('recovers missed reminders once across restart; acknowledgment keeps state, completion handles the occurrence', () => {
+    let now=base
+    const dir=mkdtempSync(join(tmpdir(),'qinly-missed-')),file=join(dir,'reminders.sqlite')
+    let store=new ReminderStore(file,()=>now)
+    try {
+      const known=store.save(entry(base+1000)), completed=store.save(entry(base+1000))
+      const recurring=store.save({...entry(base+1000),recurrence:{frequency:'daily',hour:9,minute:0}})
+      const ignored=store.save(entry(base+1000));store.action(ignored.id,'cancel');store.save(entry(null))
+      store.close();now=base+5000;store=new ReminderStore(file,()=>now)
+      expect(store.recoverMissed()).toBe(3);expect(store.missed()).toHaveLength(3)
+      store.acknowledgeMissed(known.id,known.dueAt!,false)
+      expect(store.get(known.id)).toMatchObject({status:'due',dueAt:known.dueAt})
+      store.acknowledgeMissed(completed.id,completed.dueAt!,true)
+      expect(store.get(completed.id)?.status).toBe('completed')
+      store.acknowledgeMissed(recurring.id,recurring.dueAt!,true)
+      expect(store.get(recurring.id)).toMatchObject({status:'pending',dueAt:new Date(2026,9,23,9).getTime()})
+      expect(store.missed()).toHaveLength(0)
+      store.close();store=new ReminderStore(file,()=>now)
+      expect(store.recoverMissed()).toBe(0);expect(store.missed()).toHaveLength(0)
+      now=new Date(2026,9,23,10).getTime();expect(store.recoverMissed()).toBe(1)
+      expect(store.missed()[0].id).toBe(recurring.id)
+      store.acknowledgeMissed(recurring.id,recurring.dueAt!,true)
+      expect(store.missed()).toHaveLength(1) // stale occurrence cannot complete a new one
+    } finally {store.close();rmSync(dir,{recursive:true})}
+  })
   it('restores processed reminders without immediately redelivering an expired occurrence', () => {
     let now = base
     const store = new ReminderStore(':memory:', () => now)

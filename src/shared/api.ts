@@ -50,6 +50,7 @@ export interface TypelessApi {
   }
   reminders: {
     list(): Promise<Reminder[]>
+    acknowledgeMissed(id: string, dueAt: number, completed: boolean): Promise<void>
     save(input: ReminderInput, id?: string): Promise<Reminder>
     saveMany(inputs: ReminderInput[]): Promise<Reminder[]>
     action(id: string, action: ReminderAction, snoozeMinutes?: number): Promise<void>

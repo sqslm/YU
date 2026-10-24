@@ -27,6 +27,20 @@ function harness() {
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true }); vi.useRealTimers(); vi.clearAllMocks(); mock.notices.length = 0; mock.windows.length = 0; mock.handlers.clear() })
 const draft = (overrides: Partial<ReminderDraft> = {}): ReminderDraft => ({ title: 'Clean up', intent: 'create_reminder', level: 'normal', time_expression: 'in 20 minutes', dueAt: Date.now() + 1200000, rule: null, recurrence: null, needs_confirmation: false, ...overrides })
 describe('shared reminder delivery and entry points', () => {
+  it('shows missed strong reminders in the main-view queue instead of reopening a strong window, and keeps acknowledgment after restart', () => {
+    vi.useFakeTimers();vi.setSystemTime(new Date(2026,9,24,8))
+    const {service}=harness()
+    try {
+      const row=service.save({title:'Missed strong',dueAt:Date.now()+60000,level:'strong',source:'manual',recurrence:null})
+      service.suspend();vi.setSystemTime(Date.now()+120000)
+      expect(service.resume()).toBe(true)
+      expect(service.store.missed()).toHaveLength(1);expect(service.strongRows()).toEqual([]);expect(mock.windows).toHaveLength(0)
+      service.registerIpc({list:()=>({notes:[]})} as never)
+      mock.handlers.get('reminders:acknowledge-missed')!(null,row.id,row.dueAt,false)
+      expect(service.store.get(row.id)?.status).toBe('due');expect(service.store.missed()).toHaveLength(0)
+      service.start();expect(mock.windows).toHaveLength(0);expect(service.store.missed()).toHaveLength(0)
+    } finally {service.stop()}
+  })
   it('passes a one-time snooze duration through IPC without changing the configured default', () => {
     vi.useFakeTimers(); const now = Date.now()
     const { service, settings } = harness()

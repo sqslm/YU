@@ -9,12 +9,12 @@ import { resolveTranslateTargets } from '@shared/translate'
 import { useSettings } from '../settings/useSettings'
 import { makeTheme, resolveThemeMode, onSystemThemeChange } from '../settings/theme'
 import { applyUiLanguage } from '../i18n'
+import { resizeMark, type Mark } from './layers'
 
 type Point = { x: number; y: number }
 type Tool = 'select' | 'rect' | 'ellipse' | 'arrow' | 'pen' | 'text' | 'mosaic'
-type Mark = { tool: Exclude<Tool, 'select'>; color: string; points: Point[]; text?: string; width?: number; fontSize?: number }
-type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle; snap?: CaptureRect | null }
-const TOOLS: [Tool, string][] = [['select', '选区'], ['rect', '矩形'], ['ellipse', '椭圆'], ['arrow', '箭头'], ['pen', '画笔'], ['text', '文字'], ['mosaic', '马赛克']]
+type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark' | 'mark-resize'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle; bounds?: CaptureRect; snap?: CaptureRect | null }
+const TOOLS: [Tool, string][] = [['select', '鼠标'], ['rect', '矩形'], ['ellipse', '椭圆'], ['arrow', '箭头'], ['pen', '画笔'], ['text', '文字'], ['mosaic', '马赛克']]
 const COLORS = ['#ff4d5b', '#4c8dff', '#ffd54f', '#ffffff', '#202020']
 const TOOL_ICONS = { select: Mouse, rect: CropSquare, ellipse: RadioButtonUnchecked, arrow: NorthEast, pen: Create, text: TextFields, mosaic: GridOn }
 const rectBetween = (a: Point, b: Point): CaptureRect => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) })
@@ -24,7 +24,7 @@ function drawMark(ctx: CanvasRenderingContext2D, mark: Mark, source: HTMLCanvasE
   const a = mark.points[0], b = mark.points.at(-1)!
   ctx.save(); ctx.strokeStyle = mark.color; ctx.fillStyle = mark.color; ctx.lineWidth = mark.width ?? 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round'
   const r = rectBetween(a, b)
-  if (mark.tool === 'text') { ctx.font = `${mark.fontSize ?? 20}px "Segoe UI", "Microsoft YaHei", sans-serif`; ctx.fillText(mark.text ?? '', a.x, a.y + (mark.fontSize ?? 20)) }
+  if (mark.tool === 'text') { ctx.font = `${mark.fontSize ?? 20}px "Segoe UI", "Microsoft YaHei", sans-serif`; ctx.translate(a.x, a.y); ctx.scale(mark.scaleX ?? 1, mark.scaleY ?? 1); ctx.fillText(mark.text ?? '', 0, mark.fontSize ?? 20) }
   else if (mark.tool === 'rect') ctx.strokeRect(r.x, r.y, r.width, r.height)
   else if (mark.tool === 'ellipse') { ctx.beginPath(); ctx.ellipse(r.x + r.width / 2, r.y + r.height / 2, r.width / 2, r.height / 2, 0, 0, Math.PI * 2); ctx.stroke() }
   else if (mark.tool === 'mosaic' && r.width > 0 && r.height > 0) {
@@ -49,9 +49,9 @@ function markBounds(mark: Mark, ctx: CanvasRenderingContext2D | null): CaptureRe
   if (mark.tool === 'text') {
     const size = mark.fontSize ?? 20
     if (ctx) ctx.font = `${size}px "Segoe UI", "Microsoft YaHei", sans-serif`
-    return { x: xs[0], y: ys[0], width: ctx?.measureText(mark.text ?? '').width ?? (mark.text?.length ?? 1) * size, height: size * 1.3 }
+    return { x: xs[0], y: ys[0], width: Math.max(4, (ctx?.measureText(mark.text ?? '').width ?? (mark.text?.length ?? 1) * size) * (mark.scaleX ?? 1)), height: Math.max(4, size * 1.3 * (mark.scaleY ?? 1)) }
   }
-  return { x: Math.min(...xs) - 4, y: Math.min(...ys) - 4, width: Math.max(...xs) - Math.min(...xs) + 8, height: Math.max(...ys) - Math.min(...ys) + 8 }
+  return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(4, Math.max(...xs) - Math.min(...xs)), height: Math.max(4, Math.max(...ys) - Math.min(...ys)) }
 }
 
 function ScreenshotEditor(): JSX.Element {
@@ -118,9 +118,12 @@ function ScreenshotEditor(): JSX.Element {
     if (selection) {
       ctx.strokeStyle = '#4c8dff'; ctx.lineWidth = 1; ctx.strokeRect(selection.x + .5, selection.y + .5, selection.width, selection.height)
       ctx.fillStyle = '#fff'; for (const id of CAPTURE_HANDLES) { const p = captureHandle(selection, id); ctx.fillRect(p.x - 3, p.y - 3, 6, 6) }
-      if (selectedMark !== null && marks[selectedMark]) { const r = markBounds(marks[selectedMark], ctx); ctx.setLineDash([4, 3]); ctx.strokeRect(r.x, r.y, r.width, r.height); ctx.setLineDash([]) }
+      if (tool === 'select' && selectedMark !== null && marks[selectedMark]) {
+        const r = markBounds(marks[selectedMark], ctx); ctx.setLineDash([4, 3]); ctx.strokeRect(r.x, r.y, r.width, r.height); ctx.setLineDash([])
+        for (const id of CAPTURE_HANDLES) { const p = captureHandle(r, id); ctx.fillRect(p.x - 3, p.y - 3, 6, 6) }
+      }
     }
-  }, [loaded, selection, hover, marks, draft, view, selectedMark])
+  }, [loaded, selection, hover, marks, draft, view, selectedMark, tool])
 
   useEffect(() => {
     if (!loaded || !settings) return
@@ -137,10 +140,13 @@ function ScreenshotEditor(): JSX.Element {
     if (event.button !== 0 || busy || !loaded || result) return
     event.preventDefault()
     const p = point(event); setError(''); commitText()
+    const bounds = tool === 'select' && selectedMark !== null && marks[selectedMark] ? markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null) : null
+    const layerEdge = bounds ? captureHit(p, bounds) : null
     const edge = selection ? captureHit(p, selection) : null
-    const hit = selection && inside(p, selection) ? marks.findLastIndex(mark => (tool === 'select' || tool === mark.tool) && inside(p, markBounds(mark, canvas.current?.getContext('2d') ?? null))) : -1
+    const hit = tool === 'select' && selection && inside(p, selection) ? marks.findLastIndex(mark => inside(p, markBounds(mark, canvas.current?.getContext('2d') ?? null))) : -1
     let kind: Gesture['kind'] = 'select'
-    if (edge) kind = edge === 'move' ? 'move' : 'resize'
+    if (layerEdge && layerEdge !== 'move') kind = 'mark-resize'
+    else if (edge) kind = edge === 'move' ? 'move' : 'resize'
     else if (hit >= 0) { kind = 'mark'; setSelectedMark(hit) }
     else if (selection && inside(p, selection)) {
       setSelectedMark(null)
@@ -149,6 +155,7 @@ function ScreenshotEditor(): JSX.Element {
       kind = 'draw'
     } else { undoStack.current = []; setMarks([]); setSelectedMark(null); setSelection({ ...p, width: 0, height: 0 }) }
     const g: Gesture = { kind, start: p, rect: selection, marks, snap: event.altKey ? null : captureWindowAt(p, windows.current), ...(hit >= 0 ? { index: hit } : {}), ...(edge && edge !== 'move' ? { handle: edge } : {}) }
+    if (kind === 'mark-resize') { g.index = selectedMark!; g.handle = layerEdge as ResizeHandle; g.bounds = bounds! }
     if (kind === 'draw') { g.mark = { tool: tool as Mark['tool'], color, width: tool === 'mosaic' ? mosaicSize : stroke, points: [p] }; setDraft(g.mark) }
     gesture.current = g; event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -158,11 +165,17 @@ function ScreenshotEditor(): JSX.Element {
     if (!g) {
       if (!selection) setHover(event.altKey ? null : captureWindowAt(p, windows.current))
       const edge = selection ? captureHit(p, selection) : null
-      setCursor(edge === 'move' ? 'move' : edge ? `${edge}-resize` : tool === 'select' ? marks.some(mark => inside(p, markBounds(mark, canvas.current?.getContext('2d') ?? null))) ? 'move' : 'default' : 'crosshair')
+      const layerEdge = tool === 'select' && selectedMark !== null && marks[selectedMark] ? captureHit(p, markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null)) : null
+      const handle = layerEdge && layerEdge !== 'move' ? layerEdge : edge
+      setCursor(handle === 'move' ? 'move' : handle ? `${handle}-resize` : tool === 'select' ? marks.some(mark => inside(p, markBounds(mark, canvas.current?.getContext('2d') ?? null))) ? 'move' : 'default' : 'crosshair')
       return
     }
     if (g.kind === 'select') setSelection(rectBetween(g.start, p))
     else if (g.kind === 'resize') setSelection(resizeCapture(g.rect!, g.handle!, p, view))
+    else if (g.kind === 'mark-resize' && g.rect && g.bounds && g.index !== undefined) {
+      const next = resizeCapture(g.bounds, g.handle!, { x: Math.max(g.rect.x, Math.min(g.rect.x + g.rect.width, p.x)), y: Math.max(g.rect.y, Math.min(g.rect.y + g.rect.height, p.y)) }, { width: g.rect.x + g.rect.width, height: g.rect.y + g.rect.height })
+      setMarks(g.marks.map((mark, index) => index === g.index ? resizeMark(mark, g.bounds!, next) : mark))
+    }
     else if (g.kind === 'mark' && g.rect && g.index !== undefined) {
       const bounds = markBounds(g.marks[g.index], canvas.current?.getContext('2d') ?? null)
       const dx = Math.max(g.rect.x - bounds.x, Math.min(g.rect.x + g.rect.width - bounds.x - bounds.width, p.x - g.start.x))
@@ -190,7 +203,7 @@ function ScreenshotEditor(): JSX.Element {
       const dy = Math.max(-g.rect.y, Math.min(view.height - g.rect.y - g.rect.height, p.y - g.start.y))
       undoStack.current = undoStack.current.map(items => items.map(item => ({ ...item, points: item.points.map(old => ({ x: old.x + dx, y: old.y + dy })) })))
     }
-    if (g?.kind === 'mark') undoStack.current.push(g.marks)
+    if (g?.kind === 'mark' || g?.kind === 'mark-resize') undoStack.current.push(g.marks)
     if (mark && mark.points.length > 1) setMarks(items => { undoStack.current.push(items); return [...items, mark] })
     gesture.current = null; setDraft(null)
   }
@@ -236,6 +249,7 @@ function ScreenshotEditor(): JSX.Element {
   return <ThemeProvider theme={theme}><CssBaseline />
     <canvas ref={canvas} width={view.width} height={view.height} data-screenshot-canvas data-screenshot-loaded={loaded || undefined}
       data-screenshot-snap={!selection && hover ? JSON.stringify(hover) : undefined} data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
+      data-screenshot-layer-bounds={tool === 'select' && selectedMark !== null && marks[selectedMark] ? JSON.stringify(markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null)) : undefined}
       style={{ position: 'fixed', inset: 0, cursor, touchAction: 'none' }}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={() => {
         const g = gesture.current
@@ -255,7 +269,7 @@ function ScreenshotEditor(): JSX.Element {
       <Paper data-screenshot-toolbar elevation={4} sx={{ position: 'fixed', top: toolbarTop, left: Math.max(8, Math.min(view.width - toolbarWidth - 8, selection.x)), width: toolbarWidth, p: .5, borderRadius: 2 }}>
         <Stack direction="row" spacing={.25} alignItems="center" sx={{ overflowX: 'auto', whiteSpace: 'nowrap', '& .MuiButton-root': { minWidth: 32, px: .5, flexShrink: 0 }, '& > span': { display: 'inline-flex' } }}>
           {TOOLS.map(([id, label]) => { const Icon = TOOL_ICONS[id]; return <Tooltip key={id} title={t(label)}><span><Button size="small" variant={tool === id ? 'contained' : 'text'} disabled={busy} data-screenshot-tool={id}
-            aria-label={t(label)} onClick={() => { commitText(); setTool(id); setPanel(id === 'select' ? null : panel === id ? null : id) }}><Icon fontSize="small" /></Button></span></Tooltip> })}
+            aria-label={t(label)} onClick={() => { commitText(); setSelectedMark(null); setTool(id); setPanel(id === 'select' ? null : panel === id ? null : id) }}><Icon fontSize="small" /></Button></span></Tooltip> })}
           <Box sx={{ width: '1px', height: 22, bgcolor: 'divider', flexShrink: 0, mx: '.5rem !important' }} />
           {([['ocr', '识别文字', TextSnippet], ['translate', '翻译', Translate], ['ask', '截图问答', SmartToy]] as const).map(([id, label, Icon]) =>
             <Tooltip key={id} title={t(label) + ' · ' + t(id === 'ocr' ? '在本机识别' : id === 'translate' ? '仅向模型发送识别文字' : '向视觉模型发送所选截图')}><span><Button size="small" disabled={busy} data-screenshot-action={id} aria-label={t(label)} variant={panel === id ? 'contained' : 'text'}

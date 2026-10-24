@@ -22,6 +22,8 @@ interface User32 {
   IsIconic(hwnd: unknown): number
   /** Fills a 16-byte `RECT` (left, top, right, bottom as int32) into `rect`. */
   GetWindowRect(hwnd: unknown, rect: Buffer): number
+  GetWindowLongPtrW(hwnd: unknown, index: number): number | bigint
+  GetLayeredWindowAttributes(hwnd: unknown, key: unknown, alpha: Buffer, flags: Buffer): number
   EnumWindows(callback: unknown, lParam: number): number
 }
 
@@ -67,6 +69,8 @@ function win32(): Win32 {
       IsWindowVisible: user32.func('int IsWindowVisible(void *hWnd)'),
       IsIconic: user32.func('int IsIconic(void *hWnd)'),
       GetWindowRect: user32.func('int GetWindowRect(void *hWnd, void *lprc)'),
+      GetWindowLongPtrW: user32.func('intptr_t GetWindowLongPtrW(void *hWnd, int index)'),
+      GetLayeredWindowAttributes: user32.func('int GetLayeredWindowAttributes(void *hWnd, void *key, void *alpha, void *flags)'),
       EnumWindows: user32.func('int EnumWindows(WNDENUMPROC *lpEnumFunc, intptr_t lParam)')
     },
     kernel32: {
@@ -243,6 +247,14 @@ export function captureWindowBounds(): ForegroundRect[] {
   const callback = koffi.register((hwnd: unknown): number => {
     if (found.length >= MAX_VISIBLE_WINDOWS) return 0
     if (!user32.IsWindowVisible(hwnd) || user32.IsIconic(hwnd)) return 1
+    // Layered click-through overlays (including Windows' handwriting canvas)
+    // can cover the entire display without being a visible screenshot target.
+    const style = Number(user32.GetWindowLongPtrW(hwnd, -20))
+    if ((style & 0x80020) === 0x80020) return 1
+    if (style & 0x80000) {
+      const alpha = Buffer.alloc(1), flags = Buffer.alloc(4)
+      if (user32.GetLayeredWindowAttributes(hwnd, null, alpha, flags) && (flags.readUInt32LE() & 2) && alpha[0] === 0) return 1
+    }
     const classBuf = Buffer.alloc(CLASS_CHARS * 2)
     const length = user32.GetClassNameW(hwnd, classBuf, CLASS_CHARS)
     if (SHELL_CLASSES.has(classBuf.toString('utf16le', 0, length * 2))) return 1

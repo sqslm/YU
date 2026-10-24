@@ -1,4 +1,8 @@
 {
+  "鼠标": "Mouse",
+  "错过的提醒（{{count}}）": "Missed reminders ({{count}})",
+  "知道了": "Got it",
+  "已做过可选「已完成」；「知道了」仅关闭告知，保留事项状态。": "Choose Completed if you have done it. Got it only dismisses this notice; the item stays unhandled.",
   "更多": "More",
   "notes.titlePlaceholder": "Untitled note — click to name",
   "notes.titleLabel": "Note name",

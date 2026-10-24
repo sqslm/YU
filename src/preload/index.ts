@@ -46,6 +46,7 @@ const api: TypelessApi = {
   },
   reminders: {
     list: () => ipcRenderer.invoke('reminders:list'),
+    acknowledgeMissed: (id, dueAt, completed) => ipcRenderer.invoke('reminders:acknowledge-missed', id, dueAt, completed),
     save: (input, id) => ipcRenderer.invoke('reminders:save', input, id),
     saveMany: inputs => ipcRenderer.invoke('reminders:save-many', inputs),
     action: (id, action, snoozeMinutes) => ipcRenderer.invoke('reminders:action', id, action, snoozeMinutes),
