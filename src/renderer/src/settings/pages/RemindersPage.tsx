@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, Menu, MenuItem, Stack, Tab, Tabs, TextField, Tooltip, Typography } from '@mui/material'
+import { Add, ArrowDropDown, CheckCircleOutline, MoreHoriz, RadioButtonUnchecked } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderView } from '@shared/reminders'
 import { localDateTime } from '@shared/reminders'
@@ -69,6 +70,8 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
   const [editor, setEditor] = useState<{ id?: string; form: Form; source: ReminderInput['source']; noteId?: string; duplicate?: boolean } | null>(null)
   const [review, setReview] = useState<{ drafts: ReminderDraft[]; forms: Form[]; selected: boolean[]; noteId?: string } | null>(null)
   const [deleting, setDeleting] = useState<Reminder | null>(null)
+  const [createMenu, setCreateMenu] = useState<HTMLElement | null>(null)
+  const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement; row: Reminder } | null>(null)
   const [highlightId, setHighlightId] = useState<string | undefined>()
   const reload = (): void => { void window.api.reminders.list().then(setRows).catch(e => setError(String(e.message ?? e))) }
   useEffect(() => { reload(); return window.api.reminders.onChanged(reload) }, [])
@@ -99,69 +102,82 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
   const statusLabel = { pending: '待处理', due: '已到期', completed: '已完成', cancelled: '已取消' }
   const bounds = reminderDateBounds(period, from, to)
   const filtered = reminderView(rows, { status: filter, kind, query, bounds })
+  const create = (type: Form['kind']): void => { setCreateMenu(null); setError(''); setEditor({ form: empty(type), source: 'manual' }) }
+  const edit = (row: Reminder): void => { setRowMenu(null); setError(''); setEditor({ id: row.id, form: fromReminder(row), source: row.source, noteId: row.noteId }) }
+  const duplicate = (row: Reminder): void => {
+    const form = fromReminder(row)
+    if (form.date && new Date(form.date).getTime() <= Date.now()) form.date = ''
+    setRowMenu(null); setError(''); setEditor({ form, source: 'manual', noteId: row.noteId, duplicate: true })
+  }
   return <Box sx={{ p: 3 }} data-reminders-page>
     <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
       <Typography variant="h6" sx={{ fontWeight: 650 }}>{t('提醒与待办')}</Typography>
-      <Stack direction="row" spacing={1}>
-        <Button variant="outlined" size="small" data-todo-new onClick={() => { setError(''); setEditor({ form: empty('todo'), source: 'manual' }) }}>{t('新建待办')}</Button>
-        <Button variant="contained" size="small" onClick={() => { setError(''); setEditor({ form: empty(), source: 'manual' }) }} data-reminder-new>{t('新建提醒')}</Button>
-      </Stack>
+      <ButtonGroup variant="contained" size="small" disableElevation>
+        <Button startIcon={<Add />} data-reminder-new onClick={() => create('todo')}>{t('新建')}</Button>
+        <Button data-reminder-create-menu aria-label={t('选择新建类型')} aria-haspopup="menu" aria-expanded={Boolean(createMenu)} onClick={e => setCreateMenu(e.currentTarget)} sx={{ px: .5, minWidth: '30px !important' }}><ArrowDropDown fontSize="small" /></Button>
+      </ButtonGroup>
     </Stack>
-    <Typography color="text.secondary" sx={{ fontSize: 12, mb: 2 }}>{t('本地提醒，无需登录。软件完全退出或电脑关机时不触发，重新启动后检查逾期事项。')}</Typography>
+    <Tooltip title={t('本地提醒，无需登录。软件完全退出或电脑关机时不触发，重新启动后检查逾期事项。')}>
+      <Typography color="text.secondary" sx={{ fontSize: 12, mb: 2 }}>{t('共 {{n}} 项待处理', { n: rows.filter(row => ['pending', 'due'].includes(row.status)).length })}</Typography>
+    </Tooltip>
+    <Menu anchorEl={createMenu} open={Boolean(createMenu)} onClose={() => setCreateMenu(null)}>
+      <MenuItem data-todo-new onClick={() => create('todo')}>{t('待办')}</MenuItem>
+      <MenuItem data-reminder-create-reminder onClick={() => create('reminder')}>{t('提醒')}</MenuItem>
+    </Menu>
     {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-      {([['all', '全部事项'], ['reminder', '提醒'], ['todo', '待办']] as const).map(([value, label]) => <Button key={value} size="small" variant={kind === value ? 'contained' : 'text'}
-        data-reminder-kind={value} aria-pressed={kind === value} onClick={() => setKind(value)}>{t(label)}</Button>)}
+    <Tabs value={kind} onChange={(_e, value) => setKind(value)} sx={{ minHeight: 40, borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+      {([['all', '全部事项'], ['todo', '待办'], ['reminder', '提醒']] as const).map(([value, label]) => <Tab key={value} data-reminder-kind={value} value={value} label={t(label)} sx={{ minHeight: 40, minWidth: 80, fontSize: 13 }} />)}
+    </Tabs>
+    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+      <TextField size="small" placeholder={t('搜索事项')} value={query} onChange={e => setQuery(e.target.value)} sx={{ flex: '1 1 200px' }} />
+      <TextField select size="small" label={t('状态')} value={filter} onChange={e => setFilter(e.target.value)} sx={{ width: 130 }} inputProps={{ 'data-reminder-status-filter': true }}>
+        {[['active', '待处理'], ['upcoming', '即将到期'], ['due', '已到期'], ['completed', '已完成'], ['cancelled', '已取消'], ['all', '全部']].map(([value, label]) => <MenuItem key={value} value={value}>{t(label!)}</MenuItem>)}
+      </TextField>
+      <Tooltip describeChild disableInteractive title={t('提醒按提醒时间筛选，待办按创建时间筛选；近一周包含今天及过去六天。')}>
+        <TextField select size="small" label={t('时间')} value={period} onChange={e => setPeriod(e.target.value as ReminderPeriod)} sx={{ width: 145 }} inputProps={{ 'data-reminder-period-filter': true }}>
+          {([['all', '全部时间'], ['today', '今日'], ['week', '近一周'], ['nextWeek', '未来一周'], ['custom', '自定义']] as const).map(([value, label]) => <MenuItem key={value} value={value}>{t(label)}</MenuItem>)}
+        </TextField>
+      </Tooltip>
     </Stack>
-    <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', rowGap: 1, mb: 2 }}>
-      {[['active', '待处理'], ['upcoming', '即将到期'], ['due', '已到期'], ['completed', '已完成'], ['cancelled', '已取消'], ['all', '全部']].map(([value, label]) =>
-        <Chip key={value} data-reminder-status={value} size="small" label={t(label!)} variant={filter === value ? 'filled' : 'outlined'} onClick={() => setFilter(value!)} />)}
-    </Stack>
-    <Stack direction="row" spacing={.75} useFlexGap flexWrap="wrap" alignItems="center" sx={{ mb: 1 }} data-reminder-time-filter>
-      <Typography sx={{ fontSize: 12, color: 'text.secondary', mr: .5 }}>{t('时间')}</Typography>
-      {([['all', '全部时间'], ['today', '今日'], ['week', '近一周'], ['nextWeek', '未来一周'], ['custom', '自定义']] as const).map(([value, label]) =>
-        <Button key={value} size="small" variant={period === value ? 'contained' : 'outlined'} data-reminder-period={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>{t(label)}</Button>)}
-      {period === 'custom' && <>
+    {period === 'custom' && <Stack direction="row" spacing={1} sx={{ mb: 2 }} data-reminder-time-filter>
         <TextField type="date" size="small" label={t('开始日期')} value={from} onChange={e => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-date': 'from' }} sx={{ width: 170, colorScheme: theme => theme.palette.mode }} />
         <TextField type="date" size="small" label={t('结束日期')} value={to} onChange={e => setTo(e.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-date': 'to' }} sx={{ width: 170, colorScheme: theme => theme.palette.mode }} />
-      </>}
-    </Stack>
-    <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 2 }}>{t('提醒按提醒时间筛选，待办按创建时间筛选；近一周包含今天及过去六天。')}</Typography>
+    </Stack>}
     {bounds.error && <Alert severity="warning" sx={{ mb: 2 }}>{t(bounds.error)}</Alert>}
-    <TextField size="small" placeholder={t('搜索提醒事项')} value={query} onChange={e => setQuery(e.target.value)} sx={{ mb: 2, maxWidth: 360 }} />
     {!filtered.length && <Typography color="text.secondary" sx={{ py: 4, fontSize: 13 }}>{t('没有符合条件的事项')}</Typography>}
     <Stack spacing={1}>
       <PagedList name="reminders" resetKey={`${filter}/${kind}/${period}/${from}/${to}/${query}`} revealKey={highlightId}>
-        {filtered.map(row => <Box key={row.id} data-reminder-row={row.id} sx={{ p: 1.75, border: 1, borderColor: highlightId === row.id ? 'primary.main' : 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
+        {filtered.map(row => <Box key={row.id} data-reminder-row={row.id} sx={{ p: 1.5, border: 1, borderColor: highlightId === row.id ? 'primary.main' : 'divider', borderRadius: 2, bgcolor: 'background.paper', display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+          <Tooltip title={t(['pending', 'due'].includes(row.status) ? '确认完成' : '恢复为待处理')}>
+            <IconButton size="small" disabled={busy} aria-label={t(['pending', 'due'].includes(row.status) ? '确认完成' : '恢复为待处理')} onClick={() => act(row.id, ['pending', 'due'].includes(row.status) ? 'complete' : 'restore')} sx={{ mt: -.25 }}>
+              {row.status === 'completed' ? <CheckCircleOutline fontSize="small" color="primary" /> : <RadioButtonUnchecked fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography sx={{ fontSize: 14, fontWeight: 600, flex: 1, overflowWrap: 'anywhere' }}>{row.title}</Typography>
-            <Chip size="small" color={row.level === 'strong' ? 'warning' : 'default'} variant="outlined" label={t(row.dueAt === null ? '待办' : row.level === 'strong' ? '强提醒' : '普通提醒')} />
-            <Chip size="small" label={t(statusLabel[row.status])} />
+            <Typography component="button" disabled={busy} onClick={() => edit(row)} sx={{ fontFamily: 'inherit', background: 'none', border: 0, p: 0, color: 'text.primary', textAlign: 'left', cursor: 'pointer', fontSize: 14, fontWeight: 600, flex: 1, overflowWrap: 'anywhere', textDecoration: row.status === 'completed' ? 'line-through' : 'none' }}>{row.title}</Typography>
+            {row.level === 'strong' && <Chip size="small" color="warning" variant="outlined" label={t('强提醒')} />}
+            {row.status !== 'pending' && <Chip size="small" label={t(statusLabel[row.status])} />}
           </Stack>
           {row.description && <Typography data-reminder-description title={row.description} sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflow: 'hidden' }}>{row.description}</Typography>}
           {row.dueAt === null && row.timeExpression && <Typography sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary' }}>{t('原始时间表达：{{text}}', { text: row.timeExpression })}</Typography>}
-          <Typography sx={{ fontSize: 12, color: row.status === 'due' ? 'warning.main' : 'text.secondary', mt: 0.75 }}>{format(row.dueAt)}{row.dueAt === null && ` · ${t('创建于 {{date}}', { date: format(row.createdAt) })}`}</Typography>
+          <Typography sx={{ fontSize: 12, color: row.status === 'due' ? 'warning.main' : 'text.secondary', mt: 0.75 }}>{row.dueAt === null ? t('待办') : `${t('提醒')} · ${format(row.dueAt)}`}</Typography>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{t(sourceLabel[row.source])} · {t(row.recurrence?.frequency === 'daily' ? '每天' : row.recurrence ? '每周' : '不重复')}{row.recurrence?.weekdays?.map(day => ` ${t(['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][day]!)}`)}</Typography>
+            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{row.dueAt === null ? t('创建于 {{date}}', { date: format(row.createdAt) }) : row.recurrence ? `${t(row.recurrence.frequency === 'daily' ? '每天' : '每周')}${row.recurrence.weekdays?.map(day => ` ${t(['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][day]!)}`).join('') ?? ''}` : t(sourceLabel[row.source])}</Typography>
             {row.noteId && <Button size="small" onClick={() => onOpenNote(row.noteId!)}>{t('查看原始随记')}</Button>}
           </Stack>
-          <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, flexWrap: 'wrap' }}>
-            {['pending', 'due'].includes(row.status) && <><Button size="small" disabled={busy} onClick={() => act(row.id, 'complete')}>{t('确认完成')}</Button>
-              {row.dueAt !== null && <SnoozeButton label={t('稍后提醒')} disabled={busy} onSnooze={minutes => act(row.id, 'snooze', minutes)} />}
-              <Button size="small" disabled={busy} onClick={() => act(row.id, 'cancel')}>{t(row.dueAt === null ? '取消待办' : '取消提醒')}</Button></>}
-            {['completed', 'cancelled'].includes(row.status) && <Button size="small" disabled={busy}
-              title={t('未来的提醒保留时间；过期事项恢复为待办，重复提醒安排下一次。')} onClick={() => act(row.id, 'restore')}>{t('恢复为待处理')}</Button>}
-            <Button size="small" disabled={busy} onClick={() => setEditor({ id: row.id, form: fromReminder(row), source: row.source, noteId: row.noteId })}>{t('编辑')}</Button>
-            <Button size="small" disabled={busy} onClick={() => {
-              const form = fromReminder(row)
-              if (form.date && new Date(form.date).getTime() <= Date.now()) form.date = ''
-              setError(''); setEditor({ form, source: 'manual', noteId: row.noteId, duplicate: true })
-            }}>{t(row.dueAt === null ? '复制待办' : '复制提醒')}</Button>
-            <Button size="small" color="inherit" disabled={busy} onClick={() => setDeleting(row)}>{t('删除')}</Button>
-          </Stack>
+          </Box>
+          {['pending', 'due'].includes(row.status) && row.dueAt !== null && <SnoozeButton label={t('稍后提醒')} disabled={busy} onSnooze={minutes => act(row.id, 'snooze', minutes)} />}
+          <IconButton size="small" data-reminder-more={row.id} aria-label={t('更多操作')} onClick={e => setRowMenu({ anchor: e.currentTarget, row })}><MoreHoriz fontSize="small" /></IconButton>
         </Box>)}
       </PagedList>
     </Stack>
+    <Menu anchorEl={rowMenu?.anchor} open={Boolean(rowMenu)} onClose={() => setRowMenu(null)}>
+      <MenuItem disabled={busy} onClick={() => rowMenu && edit(rowMenu.row)}>{t('编辑')}</MenuItem>
+      <MenuItem disabled={busy} onClick={() => rowMenu && duplicate(rowMenu.row)}>{t('复制')}</MenuItem>
+      {rowMenu && ['pending', 'due'].includes(rowMenu.row.status) && <MenuItem disabled={busy} onClick={() => { act(rowMenu.row.id, 'cancel'); setRowMenu(null) }}>{t(rowMenu.row.dueAt === null ? '取消待办' : '取消提醒')}</MenuItem>}
+      <MenuItem disabled={busy} sx={{ color: 'error.main' }} onClick={() => { if (rowMenu) setDeleting(rowMenu.row); setRowMenu(null) }}>{t('删除')}</MenuItem>
+    </Menu>
     <Dialog open={Boolean(editor)} onClose={() => !busy && setEditor(null)} fullWidth maxWidth="sm">
       <DialogTitle>{t(editor?.form.kind === 'todo' ? editor.id ? '编辑待办' : editor.duplicate ? '复制待办' : '新建待办' : editor?.id ? '编辑提醒' : editor?.duplicate ? '复制提醒' : '新建提醒')}</DialogTitle>
       <DialogContent sx={{ pt: '12px !important' }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

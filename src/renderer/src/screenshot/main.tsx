@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Alert, Box, Button, CssBaseline, MenuItem, Paper, Stack, TextField, ThemeProvider, Tooltip, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { CaptureRect, ScreenshotAction } from '@shared/screenshot'
-import { screenshotCrop, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
+import { screenshotCrop, captureWindowAt, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
 import { CropSquare, RadioButtonUnchecked, NorthEast, Create, TextFields, GridOn, Mouse, Undo, RestartAlt, SaveAlt, Check, Close, Translate, TextSnippet, SmartToy } from '@mui/icons-material'
 import { resolveTranslateTargets } from '@shared/translate'
 import { useSettings } from '../settings/useSettings'
@@ -13,14 +13,14 @@ import { applyUiLanguage } from '../i18n'
 type Point = { x: number; y: number }
 type Tool = 'select' | 'rect' | 'ellipse' | 'arrow' | 'pen' | 'text' | 'mosaic'
 type Mark = { tool: Exclude<Tool, 'select'>; color: string; points: Point[]; text?: string; width?: number; fontSize?: number }
-type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle }
+type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle; snap?: CaptureRect | null }
 const TOOLS: [Tool, string][] = [['select', '选区'], ['rect', '矩形'], ['ellipse', '椭圆'], ['arrow', '箭头'], ['pen', '画笔'], ['text', '文字'], ['mosaic', '马赛克']]
 const COLORS = ['#ff4d5b', '#4c8dff', '#ffd54f', '#ffffff', '#202020']
 const TOOL_ICONS = { select: Mouse, rect: CropSquare, ellipse: RadioButtonUnchecked, arrow: NorthEast, pen: Create, text: TextFields, mosaic: GridOn }
 const rectBetween = (a: Point, b: Point): CaptureRect => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) })
 const inside = (p: Point, r: CaptureRect): boolean => p.x >= r.x && p.y >= r.y && p.x <= r.x + r.width && p.y <= r.y + r.height
 
-function drawMark(ctx: CanvasRenderingContext2D, mark: Mark, source: HTMLImageElement, view: { width: number; height: number }): void {
+function drawMark(ctx: CanvasRenderingContext2D, mark: Mark, source: HTMLCanvasElement, view: { width: number; height: number }): void {
   const a = mark.points[0], b = mark.points.at(-1)!
   ctx.save(); ctx.strokeStyle = mark.color; ctx.fillStyle = mark.color; ctx.lineWidth = mark.width ?? 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round'
   const r = rectBetween(a, b)
@@ -30,7 +30,7 @@ function drawMark(ctx: CanvasRenderingContext2D, mark: Mark, source: HTMLImageEl
   else if (mark.tool === 'mosaic' && r.width > 0 && r.height > 0) {
     const tile = document.createElement('canvas'); tile.width = Math.max(1, Math.ceil(r.width / (mark.width ?? 12))); tile.height = Math.max(1, Math.ceil(r.height / (mark.width ?? 12)))
     const small = tile.getContext('2d')!
-    small.drawImage(source, r.x * source.naturalWidth / view.width, r.y * source.naturalHeight / view.height, r.width * source.naturalWidth / view.width, r.height * source.naturalHeight / view.height, 0, 0, tile.width, tile.height)
+    small.drawImage(source, r.x * source.width / view.width, r.y * source.height / view.height, r.width * source.width / view.width, r.height * source.height / view.height, 0, 0, tile.width, tile.height)
     ctx.imageSmoothingEnabled = false; ctx.drawImage(tile, r.x, r.y, r.width, r.height)
   } else if (mark.tool === 'arrow' || mark.tool === 'pen') {
     ctx.beginPath(); ctx.moveTo(a.x, a.y); for (const p of mark.points.slice(1)) ctx.lineTo(p.x, p.y); ctx.stroke()
@@ -62,8 +62,10 @@ function ScreenshotEditor(): JSX.Element {
   const theme = useMemo(() => makeTheme(mode), [mode])
   useEffect(() => { if (settings) applyUiLanguage(settings.uiLanguage) }, [settings?.uiLanguage])
   const [view, setView] = useState(() => ({ width: innerWidth, height: innerHeight }))
-  const canvas = useRef<HTMLCanvasElement>(null), image = useRef<HTMLImageElement | null>(null), gesture = useRef<Gesture | null>(null)
+  const canvas = useRef<HTMLCanvasElement>(null), image = useRef<HTMLCanvasElement | null>(null), gesture = useRef<Gesture | null>(null)
   const [loaded, setLoaded] = useState(false), [selection, setSelection] = useState<CaptureRect | null>(null)
+  const windows = useRef<CaptureRect[]>([])
+  const [hover, setHover] = useState<CaptureRect | null>(null)
   const [tool, setTool] = useState<Tool>('select'), [color, setColor] = useState(COLORS[0])
   const [panel, setPanel] = useState<Tool | 'ocr' | 'translate' | 'ask' | null>(null)
   const [stroke, setStroke] = useState(3), [fontSize, setFontSize] = useState(20), [mosaicSize, setMosaicSize] = useState(12)
@@ -92,10 +94,10 @@ function ScreenshotEditor(): JSX.Element {
   useEffect(() => {
     let alive = true
     void window.api.screenshot.frame().then(frame => {
-      const img = new Image()
-      img.onload = () => { if (alive) { image.current = img; setLoaded(true) } }
-      img.onerror = () => { if (alive) setError(t('屏幕截图失败，请重试')) }
-      img.src = frame.dataUrl
+      if (!alive) return
+      const source = document.createElement('canvas'); source.width = frame.width; source.height = frame.height
+      source.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(frame.pixels), frame.width, frame.height), 0, 0)
+      image.current = source; windows.current = frame.windows; setHover(captureWindowAt(frame.cursor, frame.windows)); setLoaded(true)
     }).catch(reportError)
     return () => { alive = false; image.current = null }
   }, [])
@@ -109,14 +111,22 @@ function ScreenshotEditor(): JSX.Element {
       ctx.restore()
     }
     ctx.fillStyle = 'rgba(0,0,0,.48)'; ctx.beginPath(); ctx.rect(0, 0, view.width, view.height)
-    if (selection) ctx.rect(selection.x, selection.y, selection.width, selection.height)
+    const preview = selection ?? hover
+    if (preview) ctx.rect(preview.x, preview.y, preview.width, preview.height)
     ctx.fill('evenodd')
+    if (preview && !selection) { ctx.strokeStyle = '#4c8dff'; ctx.lineWidth = 2; ctx.strokeRect(preview.x, preview.y, preview.width, preview.height) }
     if (selection) {
       ctx.strokeStyle = '#4c8dff'; ctx.lineWidth = 1; ctx.strokeRect(selection.x + .5, selection.y + .5, selection.width, selection.height)
       ctx.fillStyle = '#fff'; for (const id of CAPTURE_HANDLES) { const p = captureHandle(selection, id); ctx.fillRect(p.x - 3, p.y - 3, 6, 6) }
       if (selectedMark !== null && marks[selectedMark]) { const r = markBounds(marks[selectedMark], ctx); ctx.setLineDash([4, 3]); ctx.strokeRect(r.x, r.y, r.width, r.height); ctx.setLineDash([]) }
     }
-  }, [loaded, selection, marks, draft, view, selectedMark])
+  }, [loaded, selection, hover, marks, draft, view, selectedMark])
+
+  useEffect(() => {
+    if (!loaded || !settings) return
+    const frame = requestAnimationFrame(() => { void window.api.screenshot.ready().catch(reportError) })
+    return () => cancelAnimationFrame(frame)
+  }, [loaded, Boolean(settings)])
 
   const commitText = (): void => {
     if (text?.value.trim()) setMarks(items => { undoStack.current.push(items); return [...items, { tool: 'text', color, fontSize, points: [text.point], text: text.value }] })
@@ -138,7 +148,7 @@ function ScreenshotEditor(): JSX.Element {
       if (tool === 'text') { setText({ point: p, value: '' }); return }
       kind = 'draw'
     } else { undoStack.current = []; setMarks([]); setSelectedMark(null); setSelection({ ...p, width: 0, height: 0 }) }
-    const g: Gesture = { kind, start: p, rect: selection, marks, ...(hit >= 0 ? { index: hit } : {}), ...(edge && edge !== 'move' ? { handle: edge } : {}) }
+    const g: Gesture = { kind, start: p, rect: selection, marks, snap: event.altKey ? null : captureWindowAt(p, windows.current), ...(hit >= 0 ? { index: hit } : {}), ...(edge && edge !== 'move' ? { handle: edge } : {}) }
     if (kind === 'draw') { g.mark = { tool: tool as Mark['tool'], color, width: tool === 'mosaic' ? mosaicSize : stroke, points: [p] }; setDraft(g.mark) }
     gesture.current = g; event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -146,6 +156,7 @@ function ScreenshotEditor(): JSX.Element {
     const g = gesture.current
     const p = point(event)
     if (!g) {
+      if (!selection) setHover(event.altKey ? null : captureWindowAt(p, windows.current))
       const edge = selection ? captureHit(p, selection) : null
       setCursor(edge === 'move' ? 'move' : edge ? `${edge}-resize` : tool === 'select' ? marks.some(mark => inside(p, markBounds(mark, canvas.current?.getContext('2d') ?? null))) ? 'move' : 'default' : 'crosshair')
       return
@@ -172,6 +183,7 @@ function ScreenshotEditor(): JSX.Element {
   const end = (event: React.PointerEvent<HTMLCanvasElement>): void => {
     move(event)
     const g = gesture.current, mark = g?.mark
+    if (g?.kind === 'select' && g.snap && Math.hypot(point(event).x - g.start.x, point(event).y - g.start.y) < 4) setSelection(g.snap)
     if (g?.kind === 'move' && g.rect) {
       const p = point(event)
       const dx = Math.max(-g.rect.x, Math.min(view.width - g.rect.x - g.rect.width, p.x - g.start.x))
@@ -186,11 +198,11 @@ function ScreenshotEditor(): JSX.Element {
   const reset = (): void => { setSelection(null); setMarks([]); setResult(''); setSelectedMark(null); undoStack.current = []; setPanel(null) }
   const exportImage = (): string => {
     if (!image.current || !selection || selection.width < 4 || selection.height < 4) throw new Error(t('请先框选截图区域'))
-    const source = image.current, crop = screenshotCrop(selection, view, { width: source.naturalWidth, height: source.naturalHeight })
+    const source = image.current, crop = screenshotCrop(selection, view, { width: source.width, height: source.height })
     const output = document.createElement('canvas'); output.width = crop.width; output.height = crop.height
     const ctx = output.getContext('2d')!
     ctx.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height)
-    const sx = source.naturalWidth / view.width, sy = source.naturalHeight / view.height
+    const sx = source.width / view.width, sy = source.height / view.height
     ctx.scale(sx, sy); ctx.translate(-crop.x / sx, -crop.y / sy)
     for (const mark of marks) drawMark(ctx, mark, source, view)
     return output.toDataURL('image/png')
@@ -217,13 +229,13 @@ function ScreenshotEditor(): JSX.Element {
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key)
   }, [])
   const ready = selection && selection.width >= 4 && selection.height >= 4
-  const dimensions = ready && image.current ? screenshotCrop(selection, view, { width: image.current.naturalWidth, height: image.current.naturalHeight }) : null
+  const dimensions = ready && image.current ? screenshotCrop(selection, view, { width: image.current.width, height: image.current.height }) : null
   const toolbarWidth = Math.min(610, view.width - 16)
   const toolbarHeight = panel ? 150 : 48
   const toolbarTop = ready ? Math.max(8, selection.y + selection.height + toolbarHeight + 12 < view.height ? selection.y + selection.height + 12 : selection.y - toolbarHeight - 12) : view.height - 60
   return <ThemeProvider theme={theme}><CssBaseline />
     <canvas ref={canvas} width={view.width} height={view.height} data-screenshot-canvas data-screenshot-loaded={loaded || undefined}
-      data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
+      data-screenshot-snap={!selection && hover ? JSON.stringify(hover) : undefined} data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
       style={{ position: 'fixed', inset: 0, cursor, touchAction: 'none' }}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={() => {
         const g = gesture.current
@@ -236,7 +248,7 @@ function ScreenshotEditor(): JSX.Element {
       onBlur={commitText} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitText() } }}
       style={{ position: 'fixed', left: Math.min(text.point.x, view.width - 240), top: Math.min(text.point.y, view.height - 40), width: 240, color, background: 'rgba(0,0,0,.7)', border: '1px solid #4c8dff', fontSize }} />}
     {!ready && <Paper sx={{ position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)', p: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={2}><Typography>{t('拖动框选区域 · Esc 退出')}</Typography><Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button></Stack>
+      <Stack direction="row" alignItems="center" spacing={2}><Typography>{t('单击选取窗口 · 拖动自由框选 · Esc 退出')}</Typography><Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button></Stack>
     </Paper>}
     {ready && <>
       <Typography variant="caption" sx={{ position: 'fixed', left: selection.x, top: Math.max(0, selection.y - 23), color: 'white', background: '#202020aa', px: .75, borderRadius: 1 }}>{dimensions?.width} × {dimensions?.height}</Typography>

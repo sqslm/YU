@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ sources: vi.fn(), image: vi.fn(), copyImage: v
 vi.mock('electron', () => ({
   app: { getPath: () => '/pictures', getAppPath: () => '/app', getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
   desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image }, dialog: { showSaveDialog: mocks.save },
-  screen: { getCursorScreenPoint: () => ({ x: -100, y: 50 }), getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 } }) },
+  screen: { dipToScreenRect: () => ({ x: -1920, y: 0, width: 1920, height: 1080 }), getCursorScreenPoint: () => ({ x: -100, y: 50 }), getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 } }) },
   ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => mocks.handlers.set(name, handler) },
   BrowserWindow: class extends EventEmitter {
     webContents = Object.assign(new EventEmitter(), { mainFrame: {}, setWindowOpenHandler: vi.fn() }); destroyed = false
@@ -20,6 +20,8 @@ vi.mock('electron', () => ({
 }))
 vi.mock('node:fs/promises', () => ({ writeFile: mocks.write }))
 vi.mock('./windows-native', () => ({ windowsNative: mocks.native }))
+vi.mock('./capture-screen', () => ({ captureScreen: () => { throw Error('GDI unavailable in this test') } }))
+vi.mock('./foreground', () => ({ captureWindowBounds: () => [{ x: -1800, y: 30, width: 1200, height: 900 }] }))
 vi.mock('./ocr', async importOriginal => ({ ...await importOriginal<typeof import('./ocr')>(), prepareOcrImage: () => Buffer.from('ocr pixels') }))
 vi.mock('./providers/llm', () => ({ complete: mocks.complete }))
 vi.mock('./providers/gemini', () => ({ generateFromImage: mocks.vision }))
@@ -33,7 +35,7 @@ const event = (): any => { const win = mocks.windows.at(-1); return { sender: wi
 const run = (action: ScreenshotAction, url = imageUrl, question = 'Explain this error', target = 'en'): Promise<any> => mocks.handlers.get('screenshot:run')!(event(), action, url, question, target)
 beforeEach(() => {
   vi.clearAllMocks(); mocks.handlers.clear(); mocks.windows.length = 0
-  mocks.sources.mockReset().mockResolvedValue([{ display_id: 'wrong', thumbnail: cropped() }, { display_id: '42', thumbnail: { ...cropped(), getSize: () => ({ width: 1920, height: 1080 }), toDataURL: () => 'data:image/png;base64,full-screen' } }])
+  mocks.sources.mockReset().mockResolvedValue([{ display_id: 'wrong', thumbnail: cropped() }, { display_id: '42', thumbnail: { ...cropped(), getSize: () => ({ width: 1920, height: 1080 }), toBitmap: () => Buffer.from([1, 2, 3, 255]) } }])
   mocks.image.mockReset().mockImplementation(cropped)
   mocks.native.mockReset().mockResolvedValue({ text: '真实 OCR 文字' }); mocks.complete.mockReset().mockResolvedValue('Real translation'); mocks.vision.mockReset().mockResolvedValue('Actual visual answer')
   mocks.save.mockReset().mockResolvedValue({ canceled: false, filePath: '/chosen/capture.png' })
@@ -54,10 +56,17 @@ describe('explicit screenshot tool', () => {
     await tool.open()
     expect(mocks.sources).toHaveBeenCalledOnce()
     expect(mocks.sources.mock.calls[0][0]).toMatchObject({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } })
-    expect(mocks.handlers.get('screenshot:frame')!(event())).toMatchObject({ width: 1920, dataUrl: 'data:image/png;base64,full-screen' })
+    expect(mocks.handlers.get('screenshot:frame')!(event())).toMatchObject({ width: 1920, pixels: Buffer.from([3, 2, 1, 255]), windows: [{ x: 80, y: 20, width: 800, height: 600 }] })
     expect(mocks.windows[0].options).toMatchObject({ x: -1280, width: 1280, frame: false, skipTaskbar: true })
     await tool.open(); expect(mocks.sources).toHaveBeenCalledOnce()
     tool.close(); expect(tool.isOpen).toBe(false); expect(active).toHaveBeenLastCalledWith(false)
+  })
+  it('shows the editor only after its captured first frame has been painted', async () => {
+    await tool.open()
+    mocks.windows[0].emit('ready-to-show')
+    expect(mocks.windows[0].show).not.toHaveBeenCalled()
+    mocks.handlers.get('screenshot:ready')!(event())
+    expect(mocks.windows[0].show).toHaveBeenCalledOnce()
   })
   it('rejects screenshot and clipboard calls from any other renderer or subframe', async () => {
     await tool.open()

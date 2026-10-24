@@ -1,5 +1,13 @@
 import { expect, it } from 'vitest'
-import { screenshotCrop, captureHit, captureHandle, CAPTURE_HANDLES, resizeCapture } from './screenshot'
+import { screenshotCrop, captureHit, captureHandle, CAPTURE_HANDLES, resizeCapture, captureWindowRegions, captureWindowAt } from './screenshot'
+
+it('snaps to the top visible window and clips a window spanning a scaled negative-origin monitor', () => {
+  const windows = captureWindowRegions([{ x: -1800, y: 60, width: 600, height: 300 }, { x: -2000, y: 0, width: 2400, height: 1080 }, { x: 100, y: 0, width: 100, height: 100 }], { x: -1920, y: 0, width: 1920, height: 1080 }, { width: 1280, height: 720 })
+  expect(windows).toEqual([{ x: 80, y: 40, width: 400, height: 200 }, { x: 0, y: 0, width: 1280, height: 720 }])
+  expect(captureWindowAt({ x: 100, y: 100 }, windows)).toEqual(windows[0])
+  expect(captureWindowAt({ x: 700, y: 100 }, windows)).toEqual(windows[1])
+  expect(captureWindowAt({ x: 1280, y: 0 }, windows)).toBeNull()
+})
 
 it.each([1, 1.25, 1.5, 2])('exports the real captured pixels at %sx display scale', scale => {
   expect(screenshotCrop({ x: 20, y: 40, width: 200, height: 100 }, { width: 1000, height: 800 }, { width: 1000 * scale, height: 800 * scale }))

@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Settings } from '@shared/types'
 import type { ScreenshotAction, ScreenshotFrame, ScreenshotResult } from '@shared/screenshot'
+import { captureWindowRegions } from '@shared/screenshot'
 import { mt } from '@shared/mainI18n'
 import { chainFor, withFailover } from './providers/chain'
 import { complete } from './providers/llm'
@@ -10,6 +11,7 @@ import { generateFromImage } from './providers/gemini'
 import { windowsNative } from './windows-native'
 import { runWithDeadline } from './tools/read-webpage'
 import { captureScreen } from './capture-screen'
+import { captureWindowBounds } from './foreground'
 import { normalizeOcrText, prepareOcrImage } from './ocr'
 
 /** One on-demand editor. Closing releases the captured screen and pending work. */
@@ -26,6 +28,7 @@ export class ScreenshotTool {
       if (!this.win || event.sender !== this.win.webContents || event.senderFrame !== this.win.webContents.mainFrame) throw new Error('Screenshot editor required')
     }
     ipcMain.handle('screenshot:frame', event => { owned(event); return this.frame })
+    ipcMain.handle('screenshot:ready', event => { owned(event); this.win!.show(); this.win!.focus() })
     ipcMain.handle('screenshot:close', event => { owned(event); this.close() })
     ipcMain.handle('screenshot:copy-text', (event, text: string) => {
       owned(event)
@@ -43,10 +46,15 @@ export class ScreenshotTool {
     this.opening = true
     this.active(true)
     try {
-      const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+      const cursor = screen.getCursorScreenPoint()
+      const display = screen.getDisplayNearestPoint(cursor)
+      const physical = screen.dipToScreenRect(null, display.bounds)
+      let windows: ScreenshotFrame['windows'] = []
+      try { windows = captureWindowRegions(captureWindowBounds(), physical, display.bounds) }
+      catch (error) { this.log(`[screenshot] window bounds unavailable: ${error instanceof Error ? error.message : String(error)}`) }
       let thumbnail: Electron.NativeImage
       try {
-        thumbnail = captureScreen(screen.dipToScreenRect(null, display.bounds))
+        thumbnail = captureScreen(physical)
       } catch (error) {
         this.log(`[screenshot] GDI unavailable: ${error instanceof Error ? error.message : String(error)}`)
         // Remote desktops / unavailable GDI retain the existing capture path.
@@ -58,7 +66,10 @@ export class ScreenshotTool {
         if (!source || source.thumbnail.isEmpty()) throw new Error(mt('屏幕截图失败，请重试'))
         thumbnail = source.thumbnail
       }
-      this.frame = { dataUrl: thumbnail.toDataURL(), ...thumbnail.getSize() }
+      const pixels = thumbnail.toBitmap()
+      // Windows nativeImage bitmaps are BGRA; canvas ImageData uses RGBA.
+      for (let i = 0; i < pixels.length; i += 4) { const blue = pixels[i]; pixels[i] = pixels[i + 2]; pixels[i + 2] = blue }
+      this.frame = { pixels, ...thumbnail.getSize(), windows, cursor: { x: cursor.x - display.bounds.x, y: cursor.y - display.bounds.y } }
       const win = new BrowserWindow({ ...display.bounds, fullscreen: true, frame: false, movable: false, skipTaskbar: true,
         show: false, alwaysOnTop: true, backgroundColor: '#181818', title: mt('截图'), icon: join(app.getAppPath(), 'resources/icon.png'),
         webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false } })
@@ -66,7 +77,6 @@ export class ScreenshotTool {
       win.setAlwaysOnTop(true, 'screen-saver')
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
       win.webContents.on('render-process-gone', () => { if (this.win === win) this.close() })
-      win.once('ready-to-show', () => { win.show(); win.focus() })
       win.on('closed', () => { this.controller?.abort(); this.controller = null; this.frame = null; this.win = null; this.active(false) })
       const dev = process.env.ELECTRON_RENDERER_URL
       if (dev) await win.loadURL(`${dev}/screenshot.html`)

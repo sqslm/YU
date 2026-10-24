@@ -1,8 +1,20 @@
-export interface ScreenshotFrame { dataUrl: string; width: number; height: number }
+export interface ScreenshotFrame { pixels: Uint8Array; width: number; height: number; windows: CaptureRect[]; cursor: CapturePoint }
 export type ScreenshotAction = 'copy' | 'save' | 'ocr' | 'translate' | 'ask'
 export interface ScreenshotResult { text?: string; saved?: boolean }
 export interface CaptureRect { x: number; y: number; width: number; height: number }
 export type CapturePoint = { x: number; y: number }
+/** Clip physical Windows bounds to this display, then map to editor coordinates. */
+export function captureWindowRegions(windows: CaptureRect[], display: CaptureRect, view: { width: number; height: number }): CaptureRect[] {
+  return windows.flatMap(rect => {
+    const x = Math.max(rect.x, display.x), y = Math.max(rect.y, display.y)
+    const width = Math.min(rect.x + rect.width, display.x + display.width) - x
+    const height = Math.min(rect.y + rect.height, display.y + display.height) - y
+    return width > 4 && height > 4 ? [{ x: (x - display.x) * view.width / display.width, y: (y - display.y) * view.height / display.height, width: width * view.width / display.width, height: height * view.height / display.height }] : []
+  })
+}
+export function captureWindowAt(point: CapturePoint, windows: CaptureRect[]): CaptureRect | null {
+  return windows.find(rect => point.x >= rect.x && point.y >= rect.y && point.x < rect.x + rect.width && point.y < rect.y + rect.height) ?? null
+}
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 export const CAPTURE_HANDLES: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 export function captureHandle(rect: CaptureRect, handle: ResizeHandle): CapturePoint {

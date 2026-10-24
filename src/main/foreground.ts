@@ -19,6 +19,7 @@ interface User32 {
   GetClassNameW(hwnd: unknown, buf: Buffer, max: number): number
   GetWindowThreadProcessId(hwnd: unknown, pid: Buffer): number
   IsWindowVisible(hwnd: unknown): number
+  IsIconic(hwnd: unknown): number
   /** Fills a 16-byte `RECT` (left, top, right, bottom as int32) into `rect`. */
   GetWindowRect(hwnd: unknown, rect: Buffer): number
   EnumWindows(callback: unknown, lParam: number): number
@@ -64,6 +65,7 @@ function win32(): Win32 {
         'uint32_t GetWindowThreadProcessId(void *hWnd, void *pid)'
       ),
       IsWindowVisible: user32.func('int IsWindowVisible(void *hWnd)'),
+      IsIconic: user32.func('int IsIconic(void *hWnd)'),
       GetWindowRect: user32.func('int GetWindowRect(void *hWnd, void *lprc)'),
       EnumWindows: user32.func('int EnumWindows(WNDENUMPROC *lpEnumFunc, intptr_t lParam)')
     },
@@ -232,6 +234,30 @@ const SHELL_CLASSES = new Set([
   'SysShadow',
   'tooltips_class32'
 ])
+
+/** Visible top-level bounds in Z order, captured only when the user starts a screenshot. */
+export function captureWindowBounds(): ForegroundRect[] {
+  const { user32, enumProc } = win32()
+  const dwm = koffi.load('dwmapi.dll').func('int32_t DwmGetWindowAttribute(void *window, uint32_t attribute, void *value, uint32_t size)')
+  const found: ForegroundRect[] = []
+  const callback = koffi.register((hwnd: unknown): number => {
+    if (found.length >= MAX_VISIBLE_WINDOWS) return 0
+    if (!user32.IsWindowVisible(hwnd) || user32.IsIconic(hwnd)) return 1
+    const classBuf = Buffer.alloc(CLASS_CHARS * 2)
+    const length = user32.GetClassNameW(hwnd, classBuf, CLASS_CHARS)
+    if (SHELL_CLASSES.has(classBuf.toString('utf16le', 0, length * 2))) return 1
+    const cloak = Buffer.alloc(4)
+    if (dwm(hwnd, 14, cloak, 4) === 0 && cloak.readUInt32LE()) return 1
+    const raw = Buffer.alloc(16)
+    let rect: ForegroundRect | null
+    if (dwm(hwnd, 9, raw, 16) === 0) rect = { x: raw.readInt32LE(0), y: raw.readInt32LE(4), width: raw.readInt32LE(8) - raw.readInt32LE(0), height: raw.readInt32LE(12) - raw.readInt32LE(4) }
+    else rect = windowRect(user32, hwnd)
+    if (rect && rect.width > 4 && rect.height > 4) found.push(rect)
+    return 1
+  }, koffi.pointer(enumProc))
+  try { user32.EnumWindows(callback, 0) } finally { koffi.unregister(callback) }
+  return found
+}
 
 /** One top-level window as Windows reports it, before any routing is applied. */
 export interface VisibleWindow {

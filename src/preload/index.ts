@@ -30,6 +30,7 @@ const api: TypelessApi = {
   screenshot: {
     open: () => ipcRenderer.invoke('screenshot:open'),
     frame: () => ipcRenderer.invoke('screenshot:frame'),
+    ready: () => ipcRenderer.invoke('screenshot:ready'),
     close: () => ipcRenderer.invoke('screenshot:close'),
     copyText: text => ipcRenderer.invoke('screenshot:copy-text', text),
     run: (action, dataUrl, question, target, ocrLanguage) => ipcRenderer.invoke('screenshot:run', action, dataUrl, question, target, ocrLanguage)
@@ -189,6 +190,11 @@ const api: TypelessApi = {
     openDataFolder: (): Promise<void> => ipcRenderer.invoke('app:openDataFolder'),
     recordingOpen: (): Promise<boolean> => ipcRenderer.invoke('recording:open'),
     recordingList: (): Promise<RecordingSessionInfo[]> => ipcRenderer.invoke('recording:list'),
+    onRecordingChanged: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('recording:changed', listener)
+      return () => ipcRenderer.removeListener('recording:changed', listener)
+    },
     recordingRead: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('recording:read', id),
     recordingClear: (): Promise<number> => ipcRenderer.invoke('recording:clear'),

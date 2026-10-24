@@ -51,6 +51,7 @@ export interface RecordingSessionResult {
 }
 
 class RecordingLog {
+  private listeners = new Set<() => void>()
   private dir: string | null = null
   private fd: number | null = null
   private session: { id: string; startedAt: number; meta: RecordingSessionMeta } | null = null
@@ -77,6 +78,12 @@ class RecordingLog {
     return this.session !== null
   }
 
+  onChanged(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
+  private changed(): void { for (const listener of this.listeners) listener() }
+
   begin(meta: RecordingSessionMeta): void {
     this.close()
     if (!this.dir) return
@@ -92,6 +99,7 @@ class RecordingLog {
         for (const [key, value] of Object.entries(meta.extra)) this.write(`${key}=${String(value)}`)
       }
       this.prune()
+      this.changed()
     } catch {
       this.fd = null
       this.session = null
@@ -120,6 +128,7 @@ class RecordingLog {
         (result.error ? ` error="${result.error.slice(0, 300)}"` : '')
     )
     this.close()
+    this.changed()
   }
 
   /** Newest first. Skips files that vanished between listing and stat. */
@@ -167,6 +176,7 @@ class RecordingLog {
     } catch {
       return removed
     }
+    this.changed()
     return removed
   }
 
@@ -185,9 +195,10 @@ class RecordingLog {
   private describe(id: string): RecordingSessionInfo | null {
     if (!this.dir) return null
     const path = join(this.dir, `${id}.jsonl`)
-    let bytes = 0
+    let bytes = 0, modified = 0
     try {
-      bytes = statSync(path).size
+      const file = statSync(path)
+      bytes = file.size; modified = file.mtimeMs
     } catch {
       return null
     }
@@ -196,7 +207,7 @@ class RecordingLog {
     const head = this.readRange(path, 0, Math.min(bytes, 4096))
     const tail =
       bytes > 4096 ? this.readRange(path, bytes - 4096, 4096) : ''
-    const first = head.split('\n')[0] ?? ''
+    const first = this.lastLineBody(head.split('\n')[0] ?? '')
     const lastLine =
       tail
         .split('\n')
@@ -205,11 +216,14 @@ class RecordingLog {
     const meta = /app="([^"]*)" title="([^"]*)"/.exec(first)
     const begun = /^begin (\S+)/.exec(first)
     const ended = /status=(\w+)/.exec(this.lastLineBody(lastLine))
-    const startedAt = Number(id.slice(0, id.indexOf('-'))) || 0
+    const stamp = /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z-/.exec(id)
+    const startedAt = stamp ? Date.parse(`${stamp[1]}:${stamp[2]}:${stamp[3]}.${stamp[4]}Z`) : modified
+    let elapsed = 0
+    try { elapsed = Number(JSON.parse(lastLine).t) || 0 } catch { /* incomplete trailing line */ }
     return {
       id,
       startedAt,
-      endedAt: ended ? startedAt : null,
+      endedAt: ended ? startedAt + elapsed : null,
       mode: begun?.[1] ?? 'take',
       appName: meta?.[1] ?? '',
       windowTitle: meta?.[2] ?? '',

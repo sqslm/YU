@@ -1448,6 +1448,9 @@ async function bootstrap(): Promise<void> {
   // Per-take session logs live beside app.log. Configured here rather than in
   // `recordingLog` itself so the module stays Electron-free and unit-testable.
   recordingLog.configure(join(app.getPath('userData'), 'recordings'))
+  recordingLog.onChanged(() => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('recording:changed')
+  })
   const settings = await store.load()
   // Restore the persisted session only after Electron's OS encryption is ready,
   // and before sync or the account UI reads it.

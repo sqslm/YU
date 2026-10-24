@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Button, Dialog, IconButton, Typography } from '@mui/material'
+import { Box, Button, Dialog, IconButton, Tab, Tabs, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
 import { GeneralSection, SpeechSection, InputSection, StorageSection } from './sections/General'
 import { ShortcutsSection } from './sections/Shortcuts'
@@ -14,15 +14,11 @@ import { GuidePage } from './pages/Guide'
 import { useTranslation } from 'react-i18next'
 import {
   IconClose,
-  IconCode,
   IconCpu,
   IconInfo,
   IconWaveMic,
   IconFolder,
-  IconKeyboard,
-  IconMagnifier,
   IconSliders,
-  IconSparkle,
   IconUser
 } from './sections/General'
 import i18n from '../i18n'
@@ -43,87 +39,18 @@ interface SettingsDialogProps {
  * translated app looks broken rather than unfinished.
  */
 const SECTIONS = [
-  {
-    id: 'account',
-    labelKey: 'settings.nav.account',
-    hintKey: 'settings.hint.account',
-    icon: <IconUser />
-  },
-  {
-    id: 'general',
-    labelKey: 'settings.nav.general',
-    hintKey: 'settings.hint.general',
-    icon: <IconSliders />
-  },
-  {
-    id: 'speech',
-    labelKey: 'settings.nav.speech',
-    hintKey: 'settings.hint.speech',
-    icon: <IconWaveMic />
-  },
-  {
-    id: 'input',
-    labelKey: 'settings.nav.input',
-    hintKey: 'settings.hint.input',
-    icon: <IconKeyboard />
-  },
-  {
-    id: 'storage',
-    labelKey: 'settings.nav.storage',
-    hintKey: 'settings.hint.storage',
-    icon: <IconFolder />
-  },
-  {
-    id: 'shortcuts',
-    labelKey: 'settings.nav.shortcuts',
-    hintKey: 'settings.hint.shortcuts',
-    icon: <IconKeyboard />
-  },
-  {
-    id: 'resources',
-    labelKey: 'settings.nav.resources',
-    hintKey: 'settings.hint.resources',
-    icon: <IconCpu />
-  },
-  {
-    id: 'models',
-    labelKey: 'settings.nav.models',
-    hintKey: 'settings.hint.models',
-    icon: <IconCpu />
-  },
-  {
-    id: 'prompts',
-    labelKey: 'settings.nav.prompts',
-    hintKey: 'settings.hint.prompts',
-    icon: <IconSparkle />
-  },
-  {
-    id: 'routing',
-    labelKey: 'settings.nav.routing',
-    hintKey: 'settings.hint.routing',
-    icon: <IconCode />
-  },
-  {
-    id: 'search',
-    labelKey: 'settings.nav.search',
-    hintKey: 'settings.hint.search',
-    icon: <IconMagnifier />
-  },
-  {
-    id: 'guide',
-    labelKey: 'settings.nav.guide',
-    hintKey: 'settings.hint.guide',
-    icon: <IconSparkle />
-  },
-  {
-    id: 'about',
-    labelKey: 'settings.nav.about',
-    hintKey: 'settings.hint.about',
-    icon: <IconInfo />
-  }
-] as const
-
-type SectionId = (typeof SECTIONS)[number]['id']
+  { id: 'general', labelKey: 'settings.nav.general', hintKey: 'settings.hint.general', icon: <IconSliders />, pages: ['general'] },
+  { id: 'speech', labelKey: '语音与输入', hintKey: '录音、翻译、文本处理与快捷键', icon: <IconWaveMic />, pages: ['speech', 'input', 'shortcuts'] },
+  { id: 'models', labelKey: 'AI 与模型', hintKey: '连接模型，管理提示词、自动路由与搜索', icon: <IconCpu />, pages: ['models', 'prompts', 'routing', 'search'] },
+  { id: 'storage', labelKey: '数据与性能', hintKey: '本地数据、历史保留与资源使用', icon: <IconFolder />, pages: ['storage', 'resources'] },
+  { id: 'account', labelKey: 'settings.nav.account', hintKey: 'settings.hint.account', icon: <IconUser />, pages: ['account'] },
+  { id: 'about', labelKey: '帮助与关于', hintKey: '使用说明、版本信息与问题诊断', icon: <IconInfo />, pages: ['about', 'guide', 'diagnostics'] }
+]
+const PAGE_LABELS: Record<string, string> = {
+  speech: 'settings.nav.speech', input: 'settings.nav.input', shortcuts: 'settings.nav.shortcuts',
+  models: 'settings.nav.models', prompts: 'settings.nav.prompts', routing: 'settings.nav.routing', search: 'settings.nav.search',
+  storage: 'settings.nav.storage', resources: 'settings.nav.resources', about: 'settings.nav.about', guide: 'settings.nav.guide', diagnostics: '诊断'
+}
 
 export function SettingsDialog({
   open,
@@ -134,10 +61,10 @@ export function SettingsDialog({
   saveError,
   onRetry
 }: SettingsDialogProps): JSX.Element {
-  const [section, setSection] = useState<SectionId>('general')
+  const [section, setSection] = useState('general')
   const version = useAppVersion()
   const { t } = useTranslation()
-  const active = SECTIONS.find((item) => item.id === section) ?? SECTIONS[1]
+  const active = SECTIONS.find((item) => item.pages.includes(section)) ?? SECTIONS[0]
 
   return (
     <Dialog
@@ -211,7 +138,7 @@ export function SettingsDialog({
         </Typography>
         <Box component="nav" aria-label={t('settings.title')} sx={{ display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto', minHeight: 0, pb: 1 }}>
           {SECTIONS.map((item) => {
-            const selected = item.id === section
+            const selected = item.pages.includes(section)
             return (
               <Box
                 component="button"
@@ -219,7 +146,7 @@ export function SettingsDialog({
                 key={item.id}
                 data-section={item.id}
                 aria-current={selected ? 'page' : undefined}
-                onClick={() => setSection(item.id)}
+                onClick={() => setSection(item.pages[0])}
                 sx={{
                   display: 'flex',
                   border: 0,
@@ -271,6 +198,9 @@ export function SettingsDialog({
             {t(active.hintKey)}
           </Typography>
         </Box>
+        {active.pages.length > 1 && <Tabs value={section} onChange={(_e, page) => setSection(page)} variant="scrollable" scrollButtons="auto" sx={{ px: 2, mb: 1, minHeight: 38, borderBottom: 1, borderColor: 'divider' }}>
+          {active.pages.map(page => <Tab key={page} value={page} data-settings-tab={page} label={t(PAGE_LABELS[page])} sx={{ minHeight: 38, minWidth: 68, fontSize: 12, px: 1.5 }} />)}
+        </Tabs>}
         <Box
           key={section}
           data-settings-content
@@ -300,7 +230,7 @@ export function SettingsDialog({
           {section === 'search' && <SearchSection settings={settings} patch={patch} />}
           {section === 'resources' && <ResourcesSection settings={settings} patch={patch} />}
           {section === 'guide' && <GuidePage embedded />}
-          {section === 'about' && <AboutSection settings={settings} />}
+          {(section === 'about' || section === 'diagnostics') && <AboutSection diagnosticsOnly={section === 'diagnostics'} />}
         </Box>
       </Box>
     </Dialog>

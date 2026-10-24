@@ -22,7 +22,7 @@ export function WakeWordSection({ settings, patch }: { settings: Settings; patch
   }
   const labels = { off: '已关闭', starting: '正在启动本地唤醒…', listening: '正在等待唤醒词', paused: '任务进行中，唤醒已暂停', error: '语音唤醒不可用' }
   const errors = { language: '请在 Windows 设置中安装唤醒词对应的中文或英文语音识别语言包。', microphone: '无法访问 Windows 默认麦克风，请检查系统麦克风权限和输入设备。', unavailable: 'Windows 本地语音识别启动失败，请重试。' }
-  return <SettingsGroup title={i18n.t('语音唤醒')}>
+  return <SettingsGroup title={i18n.t('语音唤醒')} collapsible defaultOpen={settings.wakeWord.enabled}>
     <SettingsRow label={i18n.t('启用语音唤醒')} description={i18n.t('使用 Windows 默认麦克风离线等待唤醒词，默认关闭；唤醒前不上传音频。')}>
       <Switch size="small" inputProps={{ 'aria-label': i18n.t('启用语音唤醒') }} checked={settings.wakeWord.enabled} onChange={event => patch({ wakeWord: { ...settings.wakeWord, enabled: event.target.checked } })} />
     </SettingsRow>

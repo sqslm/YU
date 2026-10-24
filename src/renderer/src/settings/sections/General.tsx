@@ -856,7 +856,6 @@ export function GeneralSection({ settings, patch }: {
 }): JSX.Element {
   return (
     <Stack spacing={3}>
-      <WakeWordSection settings={settings} patch={patch} />
       <SettingsGroup icon={<IconGlobe />} title={i18n.t('外观')}>
         <SettingsRow
           label={i18n.t('主题')}
@@ -1128,6 +1127,8 @@ export function SpeechSection({ settings, patch }: {
           />
         </SettingsRow>
 
+      </SettingsGroup>
+      {settings.pipelineMode === 'classic' && <SettingsGroup icon={<IconWaveMic />} title={i18n.t('高级音频')} collapsible defaultOpen={false}>
         <SettingsRow
           label={i18n.t('压缩上传（Opus）')}
           description={i18n.t('减小音频上传体积；服务不支持时自动改用 WAV。', { keySeparator: false, nsSeparator: false })}
@@ -1140,7 +1141,8 @@ export function SpeechSection({ settings, patch }: {
             }
           />
         </SettingsRow>
-      </SettingsGroup>
+      </SettingsGroup>}
+      <WakeWordSection settings={settings} patch={patch} />
     </Stack>
   )
 }
@@ -1225,7 +1227,7 @@ export function InputSection({ settings, patch }: {
             onChange={value => patch({ selectionInsertMode: value })} />
         </SettingsRow>
       </SettingsGroup>
-      <SettingsGroup icon={<IconSliders />} title={i18n.t('听写范围')}>
+      <SettingsGroup icon={<IconSliders />} title={i18n.t('听写范围')} collapsible defaultOpen={Boolean(settings.disabledApps?.length)}>
         <SettingsField
           label={i18n.t('在这些应用里关闭听写')}
           description={i18n.t('每行一个进程名或窗口类名，例如 code、chrome、game；不区分大小写，可省略 .exe', { keySeparator: false, nsSeparator: false })}

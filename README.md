@@ -6,7 +6,7 @@ Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔
 
 Windows 工具使用 App Paths 和开始菜单的真实应用登记，不让模型猜 exe 路径。比如“打开 VS Code”“打开下载文件夹”“查找下载目录最新修改的 PDF”。简单打开请求和“打开第二个”直接由程序处理；复杂任务沿用现有 function calling，不支持时使用结构化 JSON，每次任务最多 4 轮工具、8 次调用、90 秒（包括授权等待）。工具按顺序执行，失败时停止后续操作；界面显示真实执行回执。打开成功表示 Windows 接受请求，不保证目标应用已加载完成。
 
-用户明确要求打开软件、网页、文件夹或已有文档结果时直接执行，不再重复弹授权框。应用发现覆盖真实 App Paths、开始菜单和商店应用登记。文件元数据搜索仍先显示范围并确认；文件名、路径、修改日期、大小可能发送至配置的模型，文件正文不会读取。「设置 → 数据与存储 → 助手文件搜索」可保存自定义下载目录，留空使用 Windows 下载目录。搜索优先查询 Windows Search，再补查目标目录；用户要求时可补查最多 3 层子目录、5000 个条目、5 秒，不跟随目录链接，支持压缩包等文件类型。最多展示 40 项，范围或时间受限会说明。日期指修改时间，不代表下载时间。多个候选必须由用户点击选择或明确说“打开第二个”；只允许打开实际结果 ID，支持常见文档/图片/音视频，不运行脚本和安装程序。清空或过期会话会使旧 ID 失效。本阶段不提供文件删除、软件安装或任意命令执行工具；原 Ask 不会自动获得这些本地工具。
+用户明确要求打开软件、网页、文件夹或已有文档结果时直接执行，不再重复弹授权框。应用发现覆盖真实 App Paths、开始菜单和商店应用登记。文件元数据搜索仍先显示范围并确认；文件名、路径、修改日期、大小可能发送至配置的模型，文件正文不会读取。「设置 → 数据与性能 → 数据与存储 → 助手文件搜索」可保存自定义下载目录，留空使用 Windows 下载目录。搜索优先查询 Windows Search，再补查目标目录；用户要求时可补查最多 3 层子目录、5000 个条目、5 秒，不跟随目录链接，支持压缩包等文件类型。最多展示 40 项，范围或时间受限会说明。日期指修改时间，不代表下载时间。多个候选必须由用户点击选择或明确说“打开第二个”；只允许打开实际结果 ID，支持常见文档/图片/音视频，不运行脚本和安装程序。清空或过期会话会使旧 ID 失效。本阶段不提供文件删除、软件安装或任意命令执行工具；原 Ask 不会自动获得这些本地工具。
 
 助手可按原 ID 修改提醒时间和普通/强提醒等级，回执包含标题及修改前后时间；仅修改时刻会保留原日期，重复提醒保留星期集合。每周可指定多个星期或星期范围；明确的无时间待办可直接保存，不强迫设置通知时间。查询返回绝对时间、查询时刻的剩余秒数、等级和状态；今天的事项包含尚未处理的无时间待办。随记支持最近/上一条定位、标签增删和品牌同音检索，保留原文、录音与既有标签；历史日期筛选先于查询条数限制。随记录音沿用用户润色开关，明确使用轻度整理要求；原文已通顺时结果可以相同。
 
@@ -14,11 +14,11 @@ Windows 工具使用 App Paths 和开始菜单的真实应用登记，不让模�
 
 明确请求分析截图、屏幕图表或界面时，只捕获任务起始的目标窗口，先显示预览，可取消；确认后才调用已启用的 Gemini-compatible 多模态配置。普通文本模型不会被当作视觉模型。图片文字提取可使用 Windows 本地 OCR，依赖系统已安装的识别语言；图片保留在内存，提取文字可进入当前模型对话。默认不保存截图，也不截图其他屏幕作为失败兜底；窗口关闭、内容标题改变或最小化时要求重新操作。
 
-**截图工具（0.36.0）**：默认 `左 Ctrl + 右 Shift + X`，在「设置 → 快捷键」可修改/清空，升级避让已有绑定。仅在主动触发时冻结鼠标所在显示器，拖动框选，拖动选区可移动，右下角可调整大小；支持矩形、椭圆、箭头、画笔、文字、马赛克和撤销。「完成」复制带标注的选区图片到剪贴板并关闭；「另存为」打开系统保存窗口，可自选位置和文件名，取消保存返回编辑。`Enter` / `Ctrl+C` 完成，`Ctrl+S` 另存为，`Ctrl+Z` 撤销，`Esc` 退出；文字输入时保留常规编辑快捷键。右键撤掉选区，再次右键退出。
+**截图工具（0.36.0）**：默认 `左 Ctrl + 右 Shift + X`，在「设置 → 语音与输入 → 快捷键」可修改/清空，升级避让已有绑定。仅在主动触发时冻结鼠标所在显示器，拖动框选，拖动选区可移动，右下角可调整大小；支持矩形、椭圆、箭头、画笔、文字、马赛克和撤销。「完成」复制带标注的选区图片到剪贴板并关闭；「另存为」打开系统保存窗口，可自选位置和文件名，取消保存返回编辑。`Enter` / `Ctrl+C` 完成，`Ctrl+S` 另存为，`Ctrl+Z` 撤销，`Esc` 退出；文字输入时保留常规编辑快捷键。右键撤掉选区，再次右键退出。
 
 OCR 只在本机提取所选图片文字。默认「智能翻译」识别外语并译成应用界面主语言；无明确界面语言时使用系统语言，已有目标语言内容保留，也可手动选语言。翻译仅把 OCR 文字提交现有文本模型；点击 Ask 才把所选图片发送给已启用的多模态模型，截图问题可自填。结果可编辑、复制。未配置模型、OCR 无文字或缺少系统识别语言时明确报错，不编造结果。编辑器使用现有中英文和明暗主题，关闭即释放截图、窗口及未完成请求，不后台截图或自动保存。当前不含滚动长截图、贴图常驻或跨显示器框选。
 
-The screenshot shortcut is **Left Ctrl + Right Shift + X**, configurable in Settings → Shortcuts. Select a region on the cursor's display; move/resize it, annotate or undo. **Done** copies the annotated PNG and closes; **Save as** opens the native location/name picker, and cancellation preserves editing. Enter/Ctrl+C copies; Ctrl+S saves; Ctrl+Z undoes; Esc closes. OCR uses installed Windows recognition languages locally. Smart translation defaults to the interface language (system locale fallback), with manual target selection; only recognized text goes to the text model. Explicit Ask sends the selected image to the configured vision model. No automatic capture, uploads, persistence or resident editor. Scrolling capture, pinned images and cross-monitor selections are not implemented. Display IDs and source pixel sizes follow Electron's [desktop capture API](https://www.electronjs.org/docs/latest/api/structures/desktop-capturer-source).
+The screenshot shortcut is **Left Ctrl + Right Shift + X**, configurable in Settings → Voice & input → Shortcuts. Select a region on the cursor's display; move/resize it, annotate or undo. **Done** copies the annotated PNG and closes; **Save as** opens the native location/name picker, and cancellation preserves editing. Enter/Ctrl+C copies; Ctrl+S saves; Ctrl+Z undoes; Esc closes. OCR uses installed Windows recognition languages locally. Smart translation defaults to the interface language (system locale fallback), with manual target selection; only recognized text goes to the text model. Explicit Ask sends the selected image to the configured vision model. No automatic capture, uploads, persistence or resident editor. Scrolling capture, pinned images and cross-monitor selections are not implemented. Display IDs and source pixel sizes follow Electron's [desktop capture API](https://www.electronjs.org/docs/latest/api/structures/desktop-capturer-source).
 
 Ask 可通过托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起，快捷键仍可录制或清空，升级保留原绑定。原有 Ask 语音快捷键继续有效。一般问答、原窗口识别、截图分析和只读查询统一在 Ask 回答卡显示，文件搜索候选在同一窗口分页选择；打开应用/网页、创建或修改提醒/随记、复制等操作结果仅在语音条上方反馈，不再提供“查看详情”跳转助手窗口。后台继续复用原工具注册、参数校验、权限确认和临时上下文；不重新开发路由或执行引擎。Ask 支持文字输入、停止、复制、保存随记和继续提问；截图发送前的预览及取消也在同一 Ask 窗口完成，不绕过原确认。
 
@@ -50,11 +50,11 @@ Notes can be filtered by text, voice or processing failure and sorted by last mo
 
 语音随记默认突出润色结果，原始转写区域默认完全隐藏，点击“查看原始转写”才显示，可编辑、复制；切换随记重新隐藏。文字随记直接编辑正文；未生成润色稿时显示已有正文，不冒充润色结果。
 
-「设置 → 通用 → 语音唤醒」默认关闭，启用后通过 Windows 本地 System.Speech 的限定词语法等待用户自定义的 2–40 字符唤醒词。默认中文“你好轻令”，英文新配置“Hey Qinly”；对应的 Windows **桌面语音识别**语言包必须可用，中文/英文缺失会明确报错，不会降级为持续云端 ASR。使用 Windows 默认麦克风，默认设备与听写自选设备可以不同。先说唤醒词，看到录音条后再说需求；本版不承诺同一句连说唤醒词和正文。之后复用统一语音分流、ASR 与模型配置，停顿约 1.4 秒自动提交；无语音 10 秒取消，右 Alt 提交，Esc 取消。任务、截图、锁屏或休眠期间暂停监听，恢复空闲后继续；唤醒前不上传音频，不保存监听内容。误唤醒和识别率仍受系统语言包、发音、噪声影响；可随时关闭，启用会增加本地麦克风与识别进程资源占用。参见 [Windows SpeechRecognitionEngine](https://learn.microsoft.com/en-us/dotnet/api/system.speech.recognition.speechrecognitionengine)。
+「设置 → 语音与输入 → 语音与翻译 → 语音唤醒」默认关闭，启用后通过 Windows 本地 System.Speech 的限定词语法等待用户自定义的 2–40 字符唤醒词。默认中文“你好轻令”，英文新配置“Hey Qinly”；对应的 Windows **桌面语音识别**语言包必须可用，中文/英文缺失会明确报错，不会降级为持续云端 ASR。使用 Windows 默认麦克风，默认设备与听写自选设备可以不同。先说唤醒词，看到录音条后再说需求；本版不承诺同一句连说唤醒词和正文。之后复用统一语音分流、ASR 与模型配置，停顿约 1.4 秒自动提交；无语音 10 秒取消，右 Alt 提交，Esc 取消。任务、截图、锁屏或休眠期间暂停监听，恢复空闲后继续；唤醒前不上传音频，不保存监听内容。误唤醒和识别率仍受系统语言包、发音、噪声影响；可随时关闭，启用会增加本地麦克风与识别进程资源占用。参见 [Windows SpeechRecognitionEngine](https://learn.microsoft.com/en-us/dotnet/api/system.speech.recognition.speechrecognitionengine)。
 
 Recording starts with a bounded TCP availability check, without sending test audio or consuming ASR quota. An enabled built-in model loads automatically from existing files. External ASR servers must still be started by the user. An open port does not certify credentials or model readiness. Final transcription failures preserve audio in Notes for retranscription; cancelled or silent takes are discarded, and failed history rows are not added. Voice notes devote the main editor to the polished draft. The original transcript is not rendered until Show original transcript is clicked; switching notes hides it again. Text-only or unpolished notes retain editable content.
 
-Optional **Settings → General → Voice wake** uses offline Windows desktop speech recognition and a custom 2–40 character phrase. It is off by default and requires the matching Chinese/English speech recognition language pack. It uses the Windows default microphone. Say the phrase, wait for the recording strip, then speak your request. Wake-triggered recording submits after about 1.4 seconds of silence or cancels after 10 seconds without speech; Right Alt submits and Esc cancels. Tasks, screenshots, lock and sleep pause listening. No pre-wake audio is uploaded or saved. Existing recognition and providers process the request after waking. Recognition accuracy and false activations depend on the installed Windows recognizer and microphone environment; enabling it adds a local recognition process.
+Optional **Settings → Voice & input → Speech & translation → Voice wake** uses offline Windows desktop speech recognition and a custom 2–40 character phrase. It is off by default and requires the matching Chinese/English speech recognition language pack. It uses the Windows default microphone. Say the phrase, wait for the recording strip, then speak your request. Wake-triggered recording submits after about 1.4 seconds of silence or cancels after 10 seconds without speech; Right Alt submits and Esc cancels. Tasks, screenshots, lock and sleep pause listening. No pre-wake audio is uploaded or saved. Existing recognition and providers process the request after waking. Recognition accuracy and false activations depend on the installed Windows recognizer and microphone environment; enabling it adds a local recognition process.
 
 ## 截图改进（0.37.0） / Screenshot improvements
 
@@ -64,13 +64,21 @@ Optional **Settings → General → Voice wake** uses offline Windows desktop sp
 
 On Windows, screenshot capture first uses a direct GDI monitor snapshot at source resolution, with the existing Electron path as fallback. The editor is on demand. One toolbar row contains all actions; tool-specific options expand below it. Eight corner/edge handles resize the crop; only its remaining border moves it. Blank interior dragging does nothing. Annotation layers, including text and mosaic, can move independently and undo their movement. OCR uses an enlarged, dark-background-adjusted copy, supports Chinese/English language selection, preserves lines and removes artificial Chinese spaces without joining English words. It remains Windows OCR, with accuracy limits for blurred or tiny text; screenshots are not secretly uploaded for correction.
 
-## 提醒与待办（0.38.0） / Reminders and todos
+## 提醒与待办（0.39.0） / Reminders and todos
 
-同页提供“全部事项 / 提醒 / 待办”按钮，沿用现有数据：有具体触发时间的是提醒，无具体时间的是待办。提供独立的新建按钮与事项类型选择；提醒必须选择时间，待办不显示提醒等级、重复或稍后提醒操作，不会因缺少时间而误存为提醒。从随记提取且无精确时间的候选仍可确认为待办。
+同页提供“全部事项 / 提醒 / 待办”按钮，沿用现有数据：有具体触发时间的是提醒，无具体时间的是待办。提供单一“新建”分裂按钮：主按钮默认待办，下拉菜单选择提醒或待办，编辑器仍可切换事项类型；提醒必须选择时间，待办不显示提醒等级、重复或稍后提醒操作，不会因缺少时间而误存为提醒。从随记提取且无精确时间的候选仍可确认为待办。
 
-在状态筛选旁提供可点击的时间按钮：全部时间、今日、近一周、未来一周、自定义。近一周包含今天及过去六个日历日；未来一周包含今天及随后六天。自定义包含完整结束日期，反向日期会提示并不返回错误范围的数据。提醒按实际提醒时间、待办按创建日期筛选，筛选先于分页；查看通知或保存事项会恢复能看到目标的筛选范围。中英文与深浅主题均适配。
+类型标签下提供搜索框、状态与时间筛选：全部时间、今日、近一周、未来一周、自定义。近一周包含今天及过去六个日历日；未来一周包含今天及随后六天。自定义包含完整结束日期，反向日期会提示并不返回错误范围的数据。提醒按实际提醒时间、待办按创建日期筛选，筛选先于分页；查看通知或保存事项会恢复能看到目标的筛选范围。中英文与深浅主题均适配。
 
-The same page separates scheduled reminders and undated todos, using the existing store. Dedicated create buttons and an item-type selector make the difference explicit. Reminders require a time; todos do not expose reminder level, recurrence or snooze controls. Clickable date filters support Today, Past week, Next 7 days and an inclusive custom range. Reminder dates use scheduled time; todo dates use creation time. All filters apply before pagination. Invalid ranges are reported, and navigation to a specific item clears restrictive filters.
+The same page separates scheduled reminders and undated todos, using the existing store. A single split New control defaults to a todo; its dropdown chooses a todo or reminder, and the editor retains its item-type selector. Reminders require a time; todos do not expose reminder level, recurrence or snooze controls. Clickable date filters support Today, Past week, Next 7 days and an inclusive custom range. Reminder dates use scheduled time; todo dates use creation time. All filters apply before pagination. Invalid ranges are reported, and navigation to a specific item clears restrictive filters.
+
+## 截图与界面整理（0.39.0） / Capture and interface cleanup
+
+提醒列表突出标题、提醒时间和重复规则；点击圆圈完成事项，编辑、复制、取消与删除收进“更多”菜单。新建默认待办，下拉可选提醒；搜索、状态和时间筛选集中在一行，自定义时才显示日期范围。
+
+截图在首次绘制截图后再显示窗口，启动时直接传递原始像素，省去整屏 PNG 编码和解码，导出仍为原分辨率 PNG。启动时只读取一次可见顶层窗口边界；悬停预览、单击适配窗口，拖动仍自由框选，四边/四角调整与图层拖动保留。按住 Alt 点击可临时略过吸附。仅适配当前显示器可见区域，不承诺识别网页内控件或跨屏完整窗口；不增加常驻窗口或后台检测。窗口边界使用 [Windows DWM](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute)，缩放和坐标遵循现有显示器机制。
+
+Settings now use six groups with contextual tabs, preserving existing values. Secondary audio/upload and application-exclusion controls expand on demand. Help & about → Diagnostics shows correctly parsed take timestamps, mode and app, and updates on take events. The task list uses one split New control (todo by default), compact rows and a More menu. Screenshot startup transfers lossless pixels and waits for a painted frame before showing. Hover previews a real top-level window, click snaps to its visible bounds, and drag still selects freely. Only the current display is captured; no resident capture or window polling is added.
 
 ## 快速开始
 
@@ -90,7 +98,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\轻令（Qinly）-0.38.0-setup.exe
+pnpm package          # → release\轻令（Qinly）-0.39.0-setup.exe
 ```
 
 
@@ -98,7 +106,7 @@ pnpm package          # → release\轻令（Qinly）-0.38.0-setup.exe
 
 默认用听写快捷键（右 Alt）说需求，结束后基于完整转写选择实际功能：普通/联网 Ask、计算/天气/时间、翻译、语音随记、提醒/待办、应用/网站/文件操作、个人数据查询或管理。原有专用快捷键与启用的自定义开头关键词优先；「指令输入」可明确保留为口述。取消、静音、识别失败或非法意图结果不执行动作。语音条在实际决策后显示对应模式/任务；自然语言意图不使用字幕片段提前执行。
 
-「设置 → 快捷键 → 统一语音入口」默认开启，可关闭恢复纯听写。明确的提醒/随记及可识别的开发需求不额外分类；其他内容使用既有文本模型判断意图，可能增加一次调用，受 12 秒期限约束。多模态先转写；普通多模态听写继续以原音频和实际自动路由卡片处理，翻译使用本次指定目标语言或原有目标设置，不改动保存的设置。开发需求、引用命令继续按录音开始时的窗口路由润色；意图判断不是绝对无误，需明确口述时可用「指令输入」或关闭智能分流。
+「设置 → 语音与输入 → 快捷键 → 统一语音入口」默认开启，可关闭恢复纯听写。明确的提醒/随记及可识别的开发需求不额外分类；其他内容使用既有文本模型判断意图，可能增加一次调用，受 12 秒期限约束。多模态先转写；普通多模态听写继续以原音频和实际自动路由卡片处理，翻译使用本次指定目标语言或原有目标设置，不改动保存的设置。开发需求、引用命令继续按录音开始时的窗口路由润色；意图判断不是绝对无误，需明确口述时可用「指令输入」或关闭智能分流。
 
 例：“明天提醒我上午十点去银行”复用完整内置提醒模板和本地时间校验；“帮我翻译成英语，今晚一起吃烧烤吧”只翻译正文；“为什么天空是蓝色的”走原 Ask 回答卡；“打开卡巴斯基官方网站”由助手先检索真实地址，再直接在默认浏览器打开，不猜域名或重复弹确认框。“帮我保存到随记：……”保留本次原始录音并复用已识别正文。
 
@@ -106,7 +114,7 @@ pnpm package          # → release\轻令（Qinly）-0.38.0-setup.exe
 
 明确说“润色/翻译选中文字”复用选区捕获、原提示词及覆盖/追加设置；读取前检查录音起始窗口，应用前复核选区。选区解释/总结走原 Ask，读取前后均验证目标；敏感密码应用拒绝自动读取。正常 Ask 的成功答案进入现有 15 分钟临时助手会话，支持后续请求引用“刚才的回答”；失败、停止的内容不加入。没有常驻录音、剪贴板监听、额外窗口轮询或后台模型请求。
 
-Use your dictation shortcut (Right Alt by default) for normal or web-enabled Ask, translation, voice notes, reminders/todos, Windows actions, personal-data queries and existing application pages. Dedicated shortcuts and enabled activation phrases take priority. Ordinary dictation and development requirements retain automatic prompt routing. Turn **Understand voice requests** off in Settings → Shortcuts for plain dictation. Classification uses your current text model and may add one request; multimodal audio is transcribed first. Commands are executed only after the final transcript, never from captions. Invalid/failed/cancelled takes perform no action.
+Use your dictation shortcut (Right Alt by default) for normal or web-enabled Ask, translation, voice notes, reminders/todos, Windows actions, personal-data queries and existing application pages. Dedicated shortcuts and enabled activation phrases take priority. Ordinary dictation and development requirements retain automatic prompt routing. Turn **Understand voice requests** off in Settings → Voice & input → Shortcuts for plain dictation. Classification uses your current text model and may add one request; multimodal audio is transcribed first. Commands are executed only after the final transcript, never from captions. Invalid/failed/cancelled takes perform no action.
 
 Voice selection polish/translation reuses existing replace/append preferences and verifies the original window. Ask remains in its answer card; successful answers share the assistant's temporary session so follow-up requests can reference them. Notes retain original audio. Reminder creation and note extraction reuse the complete built-in template and program-side time validation. Personal data reads and existing task changes require explicit permission, official URLs must come from real search evidence, and ambiguous reminders still need review. Calendar, persistent memory and TTS remain unimplemented; opening Settings does not automatically change individual options.
 
@@ -127,9 +135,9 @@ Voice selection polish/translation reuses existing replace/append preferences an
 
 说明页仅在设置中提供，主窗口侧栏不重复显示。
 
-「设置 → 快捷键」直接点击按键区域录制，无独立录制按钮；悬停显示提示。按下组合键后松开第一个键保存，先松开其他键也保留完整组合。`Esc`、点击其他区域或窗口失焦取消，旁边的 `×` 清空并解除该绑定。录制直接接收底层按键，区分左右 Shift / Ctrl / Alt；录制期间拦截按键向后续钩子及目标窗口传递，结束或失焦后恢复，仍按住的键在松开后释放拦截。系统保护的按键不保证拦截，其他软件先于本钩子处理的事件也无法撤回（[Windows 钩子说明](https://learn.microsoft.com/zh-cn/windows/win32/winmsg/lowlevelkeyboardproc)）。新组合与其他功能完全相同时会显示冲突并保留原绑定，按键顺序不同的同一组合也视为冲突；Alt / Alt+Shift 这类刻意设计的包含关系仍允许。
+「设置 → 语音与输入 → 快捷键」直接点击按键区域录制，无独立录制按钮；悬停显示提示。按下组合键后松开第一个键保存，先松开其他键也保留完整组合。`Esc`、点击其他区域或窗口失焦取消，旁边的 `×` 清空并解除该绑定。录制直接接收底层按键，区分左右 Shift / Ctrl / Alt；录制期间拦截按键向后续钩子及目标窗口传递，结束或失焦后恢复，仍按住的键在松开后释放拦截。系统保护的按键不保证拦截，其他软件先于本钩子处理的事件也无法撤回（[Windows 钩子说明](https://learn.microsoft.com/zh-cn/windows/win32/winmsg/lowlevelkeyboardproc)）。新组合与其他功能完全相同时会显示冲突并保留原绑定，按键顺序不同的同一组合也视为冲突；Alt / Alt+Shift 这类刻意设计的包含关系仍允许。
 
-「设置 → 快捷键 → 语音关键词切换模式」默认关闭，开启后使用听写启动键（默认右 Alt）开麦，先说关键词，再说正文。听写、翻译、问答、提醒和随记分别默认使用「指令输入」「指令翻译」「指令问答」「指令提醒」「指令笔记」，英文对应 `command dictation` / `command translate` / `command ask` / `command reminder` / `command note`。每个模式可自定义多个短语，用分号或换行分隔，失焦保存；留空停用该模式，跨模式重复关键词会提示冲突并保留原配置。
+「设置 → 语音与输入 → 快捷键 → 语音关键词切换模式」默认关闭，开启后使用听写启动键（默认右 Alt）开麦，先说关键词，再说正文。听写、翻译、问答、提醒和随记分别默认使用「指令输入」「指令翻译」「指令问答」「指令提醒」「指令笔记」，英文对应 `command dictation` / `command translate` / `command ask` / `command reminder` / `command note`。每个模式可自定义多个短语，用分号或换行分隔，失焦保存；留空停用该模式，跨模式重复关键词会提示冲突并保留原配置。
 
 关键词只匹配语音开头，不做模糊匹配，也不扫描正文；没命中时，统一入口开启则继续判断自然语言意图；统一入口关闭仍按正常听写处理。实时识别到开头关键词后，语音条立即更新模式和对应卡片/任务标签，保持同一段录音与计时；窗口路由继续使用录音开始时的窗口快照。最终执行以完整转写再次匹配为准，关键词不进入正文；只有关键词、识别失败或取消时不执行空任务。显式使用其他模式的快捷键，或录音中通过快捷键升级模式时，以快捷键为准。关键词配置在录音开始时快照，修改从下一次新录音生效；历史重试、随记重新转写不重新选择模式。
 
@@ -195,7 +203,7 @@ Reminder refinement uses the entire built-in [prompt document](src/main/prompts/
 
 随记工具栏的「导出」可将当前筛选结果导出为 Markdown 或 UTF-8 纯文本；勾选记录后只导出选中项，按当前排序排列。详情中的「导出此条」只导出当前记录。文档包含创建时间（本机时区）、分类、标签、正文或原始转写、润色文本；有录音时包含录音时长。导出前会等待文字保存，保存失败时停止导出。播放器右侧「保存录音」按原始 OGG / WAV 格式另存，不转码。这些是可阅读的文档与原始录音导出，不是可还原分类和同步状态的完整数据库备份。
 
-设置按用途分为「通用」（外观、启动与反馈）、「语音与翻译」（识别语言、翻译与录音）、「文本输入」（插入、换行与应用排除）和「数据与存储」（历史保留与目录）。每项修改自动保存，数字输入在失焦或按 Enter 后保存。
+设置导航收拢为六组：通用、语音与输入、AI 与模型、数据与性能、账户、帮助与关于。组内标签复用原设置；语音唤醒归入语音设置，音频上传压缩、应用排除等次要选项按需展开，不改变既有保存值。版本页不再重复模型和搜索状态；诊断与听写日志在「帮助与关于 → 诊断」，日志按真实日期时间显示，录音开始/结束后自动更新，无需后台轮询。每项修改自动保存，数字输入在失焦或按 Enter 后保存。
 
 「语音与翻译 → 录音处理」默认保真优先：优先请求设备 48 kHz 单声道输入，关闭浏览器的回声、降噪和自动增益处理；设备不支持时使用其可提供的格式，不将低带宽输入冒充高音质。为兼容现有本地和云端识别接口，PCM 仍由浏览器重采样为 16 kHz 单声道 16-bit WAV，不新增自制降噪或重采样算法。环境噪声较重时可选择「通话降噪」，使用 Chromium 已有的回声消除、降噪和自动增益；声卡或麦克风已有处理时可选保真，避免重复处理。录音中更改设备或处理方式，会在本次收音结束后应用，保留当前任务的完整音频。
 

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Box, Button, Typography, useTheme } from '@mui/material'
 import { BrandLogo } from '../../BrandLogo'
-import { profilesOf } from '@shared/profiles'
-import type { RecordingSessionInfo, Settings } from '@shared/types'
+import type { RecordingSessionInfo } from '@shared/types'
 import { IconCode, IconInfo, SettingsField, SettingsGroup, SettingsRow } from './General'
 import i18n from '../../i18n'
 
@@ -16,7 +15,7 @@ const SESSION_STATUS: Record<RecordingSessionInfo['status'], string> = {
 }
 
 interface SectionProps {
-  settings: Settings
+  diagnosticsOnly?: boolean
 }
 
 /** Shown until the runtime answers, and forever when no version bridge exists. */
@@ -55,7 +54,7 @@ export function useAppVersion(): string {
   return version
 }
 
-export function AboutSection({ settings }: SectionProps): JSX.Element {
+export function AboutSection({ diagnosticsOnly = false }: SectionProps): JSX.Element {
   const theme = useTheme()
   const version = useAppVersion()
   const [diagnostics, setDiagnostics] = useState<{ busy: boolean; message: string }>({
@@ -72,11 +71,14 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
     setSessions(next)
   }
 
-  // Read once when the panel opens. There is no live push: a take ending while
-  // the user stares at this page is rare, and "刷新" is right there.
   useEffect(() => {
+    if (!diagnosticsOnly) return
     void refreshSessions()
-  }, [])
+    return window.api.app.onRecordingChanged(() => {
+      void refreshSessions()
+      if (openSession) void window.api.app.recordingRead(openSession).then(text => setSessionText(text ?? i18n.t('（文件已经不在了）')))
+    })
+  }, [openSession, diagnosticsOnly])
 
   const toggleSession = async (id: string): Promise<void> => {
     if (openSession === id) {
@@ -96,12 +98,6 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
     setSessionNotice(i18n.t('已删除 {{n}} 个会话日志', { n: removed }))
     await refreshSessions()
   }
-
-  const firstModel = (kind: 'asr' | 'llm' | 'multimodal'): string =>
-    profilesOf(settings, kind).find((profile) => profile.enabled)?.model || i18n.t('未配置')
-  const route = settings.pipelineMode === 'multimodal'
-    ? i18n.t('多模态 · {{model}}', { model: firstModel('multimodal') })
-    : `${settings.localAsr.enabled ? i18n.t('本地语音识别') : firstModel('asr')}${settings.polish.enabled ? ` → ${firstModel('llm')}` : ''}`
 
   /**
    * Devices are passed in because only the renderer can enumerate them; the main
@@ -128,7 +124,7 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
 
   return (
     <Box>
-      <SettingsGroup icon={<IconInfo />} title={i18n.t('版本')}>
+      {!diagnosticsOnly && <SettingsGroup icon={<IconInfo />} title={i18n.t('版本')}>
         <Box sx={{ px: 2, py: 2 }}>
           <BrandLogo mode={theme.palette.mode} width={220} />
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
@@ -139,19 +135,9 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
             {i18n.t('支持本地识别和自建服务的语音输入工具。')}
           </Typography>
         </Box>
-        <SettingsRow label={i18n.t('当前链路')} description={i18n.t('在「模型」里可以切换两段式与一段直出')}>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', maxWidth: 240, textAlign: 'right', overflowWrap: 'anywhere' }}>
-            {route}
-          </Typography>
-        </SettingsRow>
-        <SettingsRow label={i18n.t('联网检索')} description={i18n.t('在「搜索」里可以关闭或更换搜索服务')}>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-            {settings.search.enabled ? settings.search.provider : i18n.t('已关闭')}
-          </Typography>
-        </SettingsRow>
-      </SettingsGroup>
+      </SettingsGroup>}
 
-      <Box sx={{ mt: 3 }}>
+      {diagnosticsOnly && <Box>
         <SettingsGroup icon={<IconCode />} title={i18n.t('诊断')}>
           <SettingsRow
             label={i18n.t('运行诊断')}
@@ -177,9 +163,9 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
             </Box>
           )}
         </SettingsGroup>
-      </Box>
+      </Box>}
 
-      <Box sx={{ mt: 3 }}>
+      {diagnosticsOnly && <Box sx={{ mt: 3 }}>
         <SettingsGroup icon={<IconCode />} title={i18n.t('最近几次听写')}>
           <SettingsField
             label={i18n.t('听写日志')}
@@ -252,9 +238,9 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
                 }}
               >
                 <Typography sx={{ fontSize: 12, minWidth: 128, color: 'text.secondary' }}>
-                  {new Date(session.startedAt).toLocaleTimeString()}
+                  {new Date(session.startedAt).toLocaleString(i18n.language === 'en' ? 'en-US' : 'zh-CN')}
                 </Typography>
-                <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{session.mode}</Typography>
+                <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{i18n.t(({ dictation: '听写', translate: '翻译', ask: '问答' } as Record<string, string>)[session.mode] ?? session.mode)}</Typography>
                 <Typography sx={{ fontSize: 11.5, color: 'text.secondary', flex: 1, minWidth: 0 }} noWrap>
                   {session.appName || i18n.t('（未读到前台应用）')}
                 </Typography>
@@ -291,14 +277,14 @@ export function AboutSection({ settings }: SectionProps): JSX.Element {
             </Box>
           ))}
         </SettingsGroup>
-      </Box>
+      </Box>}
 
-      <Box sx={{ mt: 3 }}>
+      {!diagnosticsOnly && <Box sx={{ mt: 3 }}>
         <SettingsGroup icon={<IconCode />} title={i18n.t('开源组件')}>
           <SettingsRow label={i18n.t('Electron + React 18 + MUI 6')} description={i18n.t('桌面界面与应用运行环境。')} />
           <SettingsRow label={i18n.t('faster-whisper / SenseVoice')} description={i18n.t('支持在线转写服务和本地语音模型。')} />
         </SettingsGroup>
-      </Box>
+      </Box>}
     </Box>
   )
 }

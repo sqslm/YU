@@ -38,6 +38,7 @@ export interface TypelessApi {
   screenshot: {
     open(): Promise<boolean>
     frame(): Promise<import('./screenshot').ScreenshotFrame>
+    ready(): Promise<void>
     close(): Promise<void>
     copyText(text: string): Promise<void>
     run(action: import('./screenshot').ScreenshotAction, dataUrl: string, question?: string, target?: string, ocrLanguage?: string): Promise<import('./screenshot').ScreenshotResult>
@@ -221,6 +222,7 @@ export interface TypelessApi {
      */
     recordingOpen(): Promise<boolean>
     recordingList(): Promise<RecordingSessionInfo[]>
+    onRecordingChanged(callback: () => void): () => void
     recordingRead(id: string): Promise<string | null>
     /** Deletes every session log and reports how many files went. */
     recordingClear(): Promise<number>
