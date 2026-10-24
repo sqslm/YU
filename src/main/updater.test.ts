@@ -30,7 +30,18 @@ vi.mock('electron-updater', () => ({
   }
 }))
 
-const { Updater, canSelfUpdate, resolveFeedUrl } = await import('./updater')
+const { Updater, canSelfUpdate, resolveFeedUrl, isNewerVersion } = await import('./updater')
+
+it.each([
+  ['1.0.0-rc.2', '1.0.0-rc.1', true],
+  ['1.0.0-rc.10', '1.0.0-rc.2', true],
+  ['1.0.0', '1.0.0-rc.2', true],
+  ['1.0.0-rc.2', '1.0.0', false],
+  ['1.0.0-rc.1', '1.0.0-rc.2', false],
+  ['1.0.0+new', '1.0.0+old', false]
+])('compares release precedence for %s after %s', (next, current, expected) => {
+  expect(isNewerVersion(next, current)).toBe(expected)
+})
 
 const options = (userDataPath = join(tmpdir(), 'nope')) => ({
   log: vi.fn(),

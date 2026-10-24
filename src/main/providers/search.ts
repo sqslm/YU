@@ -1308,7 +1308,7 @@ export function formatSearchResults(results: SearchResult[]): string {
       // The date travels with the link: without it the model cannot tell a
       // fresh report from a two-year-old page that merely ranks well.
       const info = assessRecency(item)
-      const published = info.publishedAt ? info.publishedAt.slice(0, 10) : ''
+      const published = info.publishedAt ? localCalendarDay(new Date(info.publishedAt)) : ''
       if (published && info.eventDate && published !== info.eventDate) {
         return mt('{{line}}（事件日期：{{event}}；页面发布于：{{published}}）', {
           line,
@@ -1749,13 +1749,17 @@ export function filterByRecency(
   })
 }
 
+/** Local calendar date shared by filtering and the model's source labels. */
+export function localCalendarDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 /** A calendar-day roundup must not label yesterday's or tomorrow's known events as today. */
 export function filterTodayNews(results: SearchResult[], now: Date = new Date()): SearchResult[] {
-  const localDay = (date: Date): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-  const today = localDay(now)
+  const today = localCalendarDay(now)
   return results.filter(result => {
     const info = assessRecency(result, now)
-    const day = info.eventDate ?? (info.publishedAt ? localDay(new Date(info.publishedAt)) : undefined)
+    const day = info.eventDate ?? (info.publishedAt ? localCalendarDay(new Date(info.publishedAt)) : undefined)
     // Undated leads remain usable but the answer must explicitly separate them.
     return !day || day === today
   })

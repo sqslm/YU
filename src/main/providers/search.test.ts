@@ -8,6 +8,7 @@ import {
   MAX_DIGEST_QUERIES,
   isNewsDigest,
   filterTodayNews,
+  formatSearchResults,
   assessRecency,
   classifyQuestion,
   dedupeSyndicated,
@@ -264,6 +265,10 @@ describe('searchPlanned', () => {
 })
 
 describe('dates and recency', () => {
+  it('formats publication dates in the same local calendar as today filtering', () => {
+    const published = new Date(2026, 9, 25, 0, 30)
+    expect(formatSearchResults([{ title: 'Midnight report', url: 'https://example.test/report', snippet: 'Verified report', publishedAt: published.toISOString() }])).toContain('2026-10-25')
+  })
   it('reads explicit dates only', () => {
     expect(extractDate('发布于 2026-10-19')).toBe('2026-10-19')
     expect(extractDate('2026 年 3 月 7 日')).toBe('2026-03-07')

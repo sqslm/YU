@@ -71,19 +71,23 @@ export function canSelfUpdate(isPackaged: boolean = app.isPackaged): boolean {
  * and installed — a downgrade dressed as an upgrade.
  */
 export function isNewerVersion(candidate: string, current: string): boolean {
-  const parse = (raw: string): number[] =>
-    raw
-      .trim()
-      .replace(/^v/i, '')
-      .split(/[.+-]/)
-      .slice(0, 3)
-      .map((part) => Number.parseInt(part, 10) || 0)
+  const parse = (raw: string) => /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(raw.trim().replace(/^v/i, ''))
   const next = parse(candidate)
   const now = parse(current)
-  for (let i = 0; i < 3; i += 1) {
-    const a = next[i] ?? 0
-    const b = now[i] ?? 0
+  if (!next || !now) return false
+  for (let i = 1; i <= 3; i += 1) {
+    const a = Number(next[i]), b = Number(now[i])
     if (a !== b) return a > b
+  }
+  if (!next[4] || !now[4]) return Boolean(now[4] && !next[4])
+  const a = next[4].split('.'), b = now[4].split('.')
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    if (a[i] === b[i]) continue
+    if (a[i] === undefined || b[i] === undefined) return b[i] === undefined
+    const numericA = /^\d+$/.test(a[i]), numericB = /^\d+$/.test(b[i])
+    if (numericA && numericB) return Number(a[i]) > Number(b[i])
+    if (numericA !== numericB) return numericB
+    return a[i] > b[i]
   }
   return false
 }

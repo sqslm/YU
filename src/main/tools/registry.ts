@@ -17,6 +17,8 @@ import { formatToday } from '@shared/prompts'
 import {
   formatSearchResults,
   filterTodayNews,
+  assessRecency,
+  localCalendarDay,
   hoursForFreshness,
   planSearch,
   rankSources,
@@ -234,11 +236,12 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
   // quote gets one; a Chinese news question additionally gets an English one,
   // because the primary coverage of anything global is not in Chinese.
   const plan = planSearch(ctx.question || query, query)
+  const now = new Date()
   const limit = Math.min(Math.max(1, ctx.settings.search.maxResults || 5), MAX_SEARCH_RESULTS)
   // Roundups request a full page per topic, then keep the whole deduped union.
   // Ordinary lookup settings remain unchanged, including the saved provider entry.
   const searchSettings = plan.digest ? { ...ctx.settings.search, maxResults: MAX_SEARCH_RESULTS } : ctx.settings.search
-  const rankOptions = { maxAgeHours: hoursForFreshness(explicitFreshness ?? plan.freshness), ...(plan.digest || ctx.settings.search.strategy === 'aggregate' ? {} : { limit }) }
+  const rankOptions = { now, maxAgeHours: hoursForFreshness(explicitFreshness ?? plan.freshness), ...(plan.digest || ctx.settings.search.strategy === 'aggregate' ? {} : { limit }) }
   if (explicitFreshness) {
     plan.freshness = explicitFreshness
     for (const planned of plan.queries) planned.freshness = explicitFreshness
@@ -312,15 +315,23 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
     }
   }
 
-  if (plan.digest && plan.urgent) results = filterTodayNews(results)
-
-  if (results.length === 0) {
-    return {
-      ok: false,
-      data: { ok: false, query, queries: executed, freshness, count: 0, retried, error: '没有检索到结果' },
-      summary: mt('没有检索到结果'),
-      error: mt('没有检索到结果')
+  let todayCount: number | undefined, timeScope: string | undefined, timeNote: string | undefined
+  if (plan.digest && plan.urgent) {
+    const today = filterTodayNews(results, now)
+    todayCount = today.filter(item => assessRecency(item, now).basis !== 'none').length
+    if (todayCount) {
+      results = today
+      timeScope = todayCount ? 'today' : 'unverified'
+    } else {
+      // Just after midnight, recent reports commonly belong to yesterday.
+      // Retain genuine recent coverage, with its date; never relabel it as today.
+      results = results.filter(item => {
+        const info = assessRecency(item, now), date = info.eventDate ?? info.publishedAt
+        return !date || new Date(date).getTime() <= now.getTime()
+      })
+      timeScope = results.some(item => assessRecency(item, now).basis !== 'none') ? 'recent' : 'unverified'
     }
+    timeNote = `Local date at the start of this search: ${localCalendarDay(now)}. Verified reports dated today: ${todayCount}. ${todayCount ? 'Separate undated leads from verified news.' : 'No reports have a verified date of today. Clearly state this, and label any earlier reports by their actual dates as recent background, not today’s events. Do not say the search service was unavailable.'}`
   }
 
   return {
@@ -335,6 +346,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       freshness,
       recencyDays: FRESHNESS_DAYS[freshness as keyof typeof FRESHNESS_DAYS] ?? 0,
       retried,
+      ...(timeNote ? { todayCount, timeScope, timeNote } : {}),
       count: results.length,
       results: results.map((item) => ({
         title: item.title,
@@ -344,7 +356,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       })),
       text: formatSearchResults(results)
     },
-    summary: mt('检索到 {{n}} 条结果（{{query}}）', { n: results.length, query }),
+    summary: results.length ? mt('检索到 {{n}} 条结果（{{query}}）', { n: results.length, query }) : mt('检索完成，未找到匹配结果'),
     sources: results
   }
 }

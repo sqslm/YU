@@ -319,7 +319,7 @@ describe('answerWithSearch', () => {
     expect(out.text).toContain('## 来源')
   })
 
-  it('falls back to a plain answer when the retry is empty too', async () => {
+  it('keeps a successful empty lookup distinct from a failed search when the retry is empty too', async () => {
     mocks.complete.mockResolvedValueOnce('{"need_search": true, "query": "郑州天气"}')
     mocks.complete.mockResolvedValueOnce('没有检索到可用的天气数据，今天郑州以多云为主。')
     mocks.searchWeb.mockResolvedValue([])
@@ -327,9 +327,9 @@ describe('answerWithSearch', () => {
     const out = await answerWithSearch(makeSettings(), '嗯那个郑州今天天气怎么样啊', {}, signal)
 
     expect(mocks.searchWeb).toHaveBeenCalledTimes(2)
-    expect(out.searched).toBe(false)
+    expect(out.searched).toBe(true)
     expect(out.sources).toEqual([])
-    expect(out.query).toBeUndefined()
+    expect(out.query).toBeTruthy()
     expect(out.text).toContain('今天郑州以多云为主')
   })
 
@@ -341,7 +341,7 @@ describe('answerWithSearch', () => {
     const out = await answerWithSearch(makeSettings(), '快排的复杂度是多少', {}, signal)
 
     expect(mocks.searchWeb).toHaveBeenCalledTimes(1)
-    expect(out.searched).toBe(false)
+    expect(out.searched).toBe(true)
   })
 
   it('searches with the cleaned query when the model hands back a spoken sentence', async () => {

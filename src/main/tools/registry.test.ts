@@ -179,6 +179,28 @@ describe('get_weather', () => {
 })
 
 describe('web_search', () => {
+  it.each(['帮我查一下今天的国内的AI新闻。', 'Show me today’s AI news'])('preserves recent reports at midnight without calling a successful search unavailable: %s', async question => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 25, 0, 3))
+    try {
+      mocks.searchWeb.mockResolvedValue([{ title: 'AI release', url: 'https://source.test/release', snippet: 'A verified release', publishedAt: new Date(2026, 9, 24, 22, 0).toISOString() }])
+      const outcome = await runTool('web_search', { query: question }, makeContext({ question, settings: makeSettings({ strategy: 'single' }) }))
+      expect(outcome.ok).toBe(true)
+      expect(outcome.sources).toHaveLength(1)
+      expect(outcome.data).toMatchObject({ todayCount: 0, timeScope: 'recent' })
+      expect(outcome.data.timeNote).toContain('2026-10-25')
+      expect(outcome.error).toBeUndefined()
+    } finally { vi.useRealTimers() }
+  })
+
+  it('distinguishes a successful empty search from an unavailable provider', async () => {
+    mocks.searchWeb.mockResolvedValue([])
+    const outcome = await runTool('web_search', { query: 'specific rare phrase' }, makeContext({ question: 'specific rare phrase' }))
+    expect(outcome.ok).toBe(true)
+    expect(outcome.data.count).toBe(0)
+    expect(outcome.error).toBeUndefined()
+    expect(outcome.sources).toEqual([])
+  })
   it('does not trim an aggregated ordinary query back to the legacy page size', async () => {
     mocks.searchWeb.mockResolvedValue([
       { title: 'Cedar model', url: 'https://cedar.test', snippet: 'one' },
@@ -270,8 +292,9 @@ describe('web_search', () => {
       makeContext({ sanitizeQuery: () => '快速排序 复杂度', timeSensitive: false })
     )
     expect(mocks.searchWeb).toHaveBeenCalledTimes(1)
-    expect(outcome.ok).toBe(false)
-    expect(outcome.error).toBe('没有检索到结果')
+    expect(outcome.ok).toBe(true)
+    expect(outcome.data.count).toBe(0)
+    expect(outcome.error).toBeUndefined()
   })
 
   it('reports a provider failure as data', async () => {

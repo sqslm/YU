@@ -661,6 +661,19 @@ describe('JSON intent fallback', () => {
 })
 
 describe('routing shortcuts', () => {
+  it('treats recent news at midnight as a successful search and passes the date limitation to the answer', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 25, 0, 3))
+    try {
+      mocks.searchWeb.mockResolvedValue([{ title: 'Recent AI release', url: 'https://official.test/recent', snippet: 'Published report', publishedAt: new Date(2026, 9, 24, 22).toISOString() }])
+      mocks.complete.mockResolvedValue('尚未确认今天的新闻，以下是 10 月 24 日报道。[1]')
+      const fetchImpl = vi.fn(async () => new Response(pageHtml('RECENT_REPORT_BODY'), { headers: { 'content-type': 'text/html' } }))
+      const result = await askAgent(makeSettings(), '帮我查一下今天的国内的AI新闻。', {}, signal, () => {}, { reset: true, fetchImpl: fetchImpl as typeof fetch })
+      expect(result.retrieval).toMatchObject({ searched: true, failed: false })
+      expect(result.sources).toHaveLength(1)
+      expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('Verified reports dated today: 0')
+    } finally { vi.useRealTimers() }
+  })
   it('retrieves a news roundup directly and sends read originals to the answer without a router call', async () => {
     mocks.searchWeb.mockResolvedValue([{ title: 'New release', url: 'https://official.test/release', snippet: 'short snippet' }])
     mocks.complete.mockResolvedValue('新发布的产品。[1]')

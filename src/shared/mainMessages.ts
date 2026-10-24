@@ -7,6 +7,7 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '检索完成，未找到匹配结果': 'Search completed; no matching results found',
   '语': 'YU',
   '分类数量已达上限，请使用已有分类': 'Category limit reached. Use an existing category.',
   "未听到语音，已结束本次录音": "No speech detected. Recording ended.",
