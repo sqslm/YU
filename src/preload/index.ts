@@ -66,6 +66,21 @@ const api: TypelessApi = {
       return () => ipcRenderer.removeListener('reminders:open', listener)
     }
   },
+  life: {
+    memory: () => ipcRenderer.invoke('life:memory'),
+    archiveMemory: (id, action) => ipcRenderer.invoke('life:memory-archive', id, action),
+    events: range => ipcRenderer.invoke('life:events', range),
+    cancelEvent: (id, action) => ipcRenderer.invoke('life:event-cancel', id, action),
+    voices: () => ipcRenderer.invoke('life:voices'),
+    speak: text => ipcRenderer.invoke('life:speak', text),
+    briefing: () => ipcRenderer.invoke('briefing:latest'),
+    refreshBriefing: () => ipcRenderer.invoke('briefing:refresh'),
+    onBriefing: callback => {
+      const listener = (_event: unknown, value: import('@shared/briefing').Briefing): void => callback(value)
+      ipcRenderer.on('briefing:changed', listener)
+      return () => ipcRenderer.removeListener('briefing:changed', listener)
+    }
+  },
   settings: {
     onShortcutKey: callback => {
       const handler = (_event: Electron.IpcRendererEvent, key: import('@shared/types').ShortcutKeyEvent): void => callback(key)

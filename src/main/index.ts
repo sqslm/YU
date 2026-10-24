@@ -4,12 +4,14 @@ import {
   dialog,
   ipcMain,
   nativeTheme,
+  Notification,
   powerMonitor,
   protocol,
   session,
   shell
 } from 'electron'
 import { appendFile, mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import os from 'node:os'
 import type { BrowserWindow } from 'electron'
@@ -50,6 +52,16 @@ import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
+import { MemoryStore } from './memory'
+import { CalendarStore, CalendarScheduler } from './calendar'
+import { BriefingScheduler, type BriefingState } from './briefing'
+import { SpeechService, createWindowsSpeechRunner } from './speech'
+import { formatEventTime, rangeFor, type CalendarEvent, type CalendarRange } from '@shared/calendar'
+import { composeBriefing, type Briefing } from '@shared/briefing'
+import type { BriefingTask } from '@shared/briefing'
+import type { MemoryKind } from '@shared/memory'
+import { renderMemoryPrompt } from '@shared/memory'
+import type { LifeSyncStatus } from './tools/life'
 import {
   anchorCardToBar,
   applyHubTheme,
@@ -110,6 +122,19 @@ let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
 let reminders: ReminderService | null = null
+/**
+ * The four stores behind the assistant's "life" tools. Created in `ready()`, not
+ * at module scope, because their paths follow `app.getPath('userData')` — and the
+ * `life` object the assistant holds is a set of closures, so it can be wired
+ * before the stores exist as long as none of them run earlier.
+ */
+let memory: MemoryStore | null = null
+let calendar: CalendarStore | null = null
+let calendarScheduler: CalendarScheduler | null = null
+let briefing: BriefingScheduler | null = null
+let speech: SpeechService | null = null
+/** Past briefings stay in memory so the settings window can show the last one. */
+let latestBriefing: Briefing | null = null
 let hubRetireTimer: NodeJS.Timeout | null = null
 let quitting = false
 let assistantCardActive = false
@@ -173,6 +198,49 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     readClipboard: () => clipboard.readText(),
     open: page => navigateHub(page)
   },
+  /**
+   * Long-term memory, the local calendar, read-aloud and sync administration.
+   *
+   * Each method is a thin projection onto the store that owns the truth: the tool
+   * layer never formats or persists, so the same data shows up unchanged in the
+   * answer card, the settings page and the next briefing.
+   */
+  life: {
+    // The switches in settings are the contract: asking for a write while the
+    // feature is off has to fail loudly, or the user believes something was saved.
+    remember: input => {
+      if (!store.get().memory.enabled) throw new Error(mt('长期记忆已在设置里关闭，这次没有记录'))
+      return memory!.save({ text: input.text, kind: input.kind as MemoryKind | undefined, tags: input.tags })
+    },
+    memories: (query, kind) => memory!.search(query, kind as MemoryKind | undefined),
+    touchMemories: ids => memory!.touch(ids),
+    archiveMemory: (id, action) => { if (action === 'restore') memory!.restore(id); else memory!.archive(id) },
+    event: id => calendar!.get(id),
+    events: range => calendar!.range(range.from, range.until),
+    saveEvent: (input, id) => {
+      if (!store.get().calendar.enabled) throw new Error(mt('日程已在设置里关闭，这次没有保存'))
+      return calendar!.save(input, id)
+    },
+    controlEvent: (id, action) => calendar!.action(id, action),
+    briefing: () => composeDailyBriefing(),
+    speak: text => speech!.speak(text),
+    stopSpeaking: () => speech!.stop(),
+    ttsEnabled: () => store.get().tts.enabled,
+    syncStatus: () => lifeSyncStatus(),
+    // Flipping the switch is all it takes: `reconfigure()` re-arms the timer and
+    // stops the requests, exactly the path the settings page uses.
+    setSyncEnabled: enabled => { void store.update({ syncEnabled: enabled }).then(() => sync?.reconfigure()) }
+  },
+  /**
+   * Standing preferences, injected into every ask prompt while memory is on.
+   * Gated here rather than in the prompt builder: one flag decides whether the
+   * model sees anything at all.
+   */
+  memory: () => {
+    if (!store.get().memory.enabled) return ''
+    const rows = memory?.active() ?? []
+    return rows.length ? renderMemoryPrompt(rows) : ''
+  },
   changed: state => {
     const turn = state.turns.at(-1)
     if (assistantCardActive && turn) showAnswerCard({ question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
@@ -184,6 +252,86 @@ function broadcastReminders(): void {
   for (const win of [settingsWindow, barWindow]) {
     if (win && !win.isDestroyed()) win.webContents.send('reminders:changed')
   }
+}
+
+/** What `sync_status` reports. Reads the engine, never a cached copy. */
+function lifeSyncStatus(): LifeSyncStatus {
+  const settings = store.get()
+  const status = sync?.status()
+  return {
+    enabled: settings.syncEnabled,
+    signedIn: accounts.get() !== null,
+    serverUrl: settings.syncServerUrl,
+    lastSyncAt: status && status.lastSyncAt ? status.lastSyncAt : null,
+    busy: status?.state === 'syncing',
+    lastError: status?.lastError || undefined
+  }
+}
+
+/**
+ * The daily briefing, assembled from what the app already knows.
+ *
+ * This only projects rows into the shapes `composeBriefing` expects: the wording,
+ * the section order and the empty case all live in `shared/briefing.ts`, so the
+ * tool, the notification and any future page say the same thing.
+ */
+function composeDailyBriefing(): Briefing {
+  const now = Date.now()
+  const today = rangeFor('today', now)
+  const tomorrow = rangeFor('tomorrow', now)
+  const confirmed = (row: CalendarEvent) => row.status === 'confirmed'
+  const events = (calendar?.range(today.from, today.until) ?? []).filter(confirmed)
+  const ahead = (calendar?.range(tomorrow.from, tomorrow.until) ?? []).filter(confirmed)
+  const open = (reminders?.store.list() ?? []).filter(row => row.status === 'pending' || row.status === 'due')
+  const task = (row: (typeof open)[number]): BriefingTask => ({ id: row.id, title: row.title, dueAt: row.dueAt, level: row.level })
+  return composeBriefing({ now, language: mainLanguage() === 'en' ? 'en' : 'zh',
+    events, tomorrow: ahead,
+    // 待办 is what is still ahead today; a task whose time already passed is 已经过期,
+    // even when it was due this morning — that is the part worth seeing first.
+    tasks: open.filter(row => row.dueAt !== null && row.dueAt >= now && row.dueAt < today.until).map(task),
+    overdue: open.filter(row => row.dueAt !== null && row.dueAt < now).map(row => ({ ...task(row), overdue: true })),
+    memories: (memory?.active() ?? []).slice(-6).map(row => ({ id: row.id, kind: row.kind, text: row.text })) })
+}
+
+function briefingStateFile(): string { return join(app.getPath('userData'), 'briefing-state.json') }
+
+function loadBriefingState(): BriefingState {
+  try { return JSON.parse(readFileSync(briefingStateFile(), 'utf8')) as BriefingState } catch { return {} }
+}
+
+function saveBriefingState(state: BriefingState): void {
+  // A briefing state that cannot be written must not throw into the scheduler:
+  // the worst case is one repeated briefing after a restart.
+  try { writeFileSync(briefingStateFile(), JSON.stringify(state)) } catch (error) { log(`[briefing] cannot save state: ${String(error)}`) }
+}
+
+function deliverBriefing(briefing: Briefing): void {
+  latestBriefing = briefing
+  const settings = store.get()
+  log(`[briefing] ${briefing.empty ? 'empty' : 'delivered'}, ${briefing.body.length} chars`)
+  if (settings.briefing.notify && Notification.isSupported()) {
+    const notice = new Notification({ title: briefing.title, body: briefing.body.slice(0, 240), silent: false })
+    notice.on('click', () => navigateHub('overview'))
+    notice.on('failed', (_event, error) => log(`[briefing] notification failed: ${String(error)}`))
+    notice.show()
+  }
+  // Spoken after the notification so a voice that fails to start still leaves the
+  // text on screen; `speak` never throws for a disabled setting.
+  if (settings.briefing.speak) void speech?.speak(briefing.body).catch(error => log(`[briefing] speak failed: ${String(error)}`))
+  for (const win of [settingsWindow, barWindow]) {
+    if (win && !win.isDestroyed()) win.webContents.send('briefing:changed', briefing)
+  }
+}
+
+/** "15 分钟后开会": the same notification channel reminders use, so it lands in one place. */
+function deliverCalendarEvent(event: CalendarEvent): void {
+  if (!Notification.isSupported()) { log('[calendar] Windows notifications are unavailable'); return }
+  const when = formatEventTime(event, mainLanguage())
+  const notice = new Notification({ title: `${mt('日程提醒')} · ${event.title}`,
+    body: [when, event.location, event.notes].filter(Boolean).join(' · '), silent: false })
+  notice.on('click', () => navigateHub('overview'))
+  notice.on('failed', (_event, error) => log(`[calendar] notification failed: ${String(error)}`))
+  notice.show()
 }
 
 /**
@@ -944,6 +1092,39 @@ function registerIpc(): void {
   // Plans and quotas are set by the operator, and the account card only reports
   // what the server says the account currently has.
   ipcMain.handle('sync:status', () => sync?.status() ?? null)
+  // The last composed briefing, handed to the UI instead of recomposed there:
+  // two composers would drift apart on what "today" means.
+  ipcMain.handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())
+  ipcMain.handle('briefing:refresh', () => { const value = composeDailyBriefing(); latestBriefing = value; return value })
+  /**
+   * Memory, calendar and read-aloud for the settings page.
+   *
+   * These return whole lists (matching `life:memory-archive`) so a click never
+   * needs a second round trip to redraw the table it just changed.
+   */
+  ipcMain.handle('life:memory', () => memory?.list() ?? [])
+  ipcMain.handle('life:memory-archive', (_event, id: string, action: 'archive' | 'restore') => {
+    if (action === 'restore') memory?.restore(id); else memory?.archive(id)
+    return memory?.list() ?? []
+  })
+  ipcMain.handle('life:events', (_event, range: CalendarRange) => {
+    const { from, until } = rangeFor(range, Date.now())
+    return calendar?.range(from, until) ?? []
+  })
+  ipcMain.handle('life:event-cancel', (_event, id: string, action: 'cancel' | 'restore') =>
+    (action === 'restore' ? calendar?.action(id, 'restore') : calendar?.action(id, 'cancel')) ?? null)
+  // The settings page reads `{ ok, voices }` (see `@shared/api`); answering with
+  // a bare array looks like a failed call and leaves the dropdown empty even
+  // when the machine has voices installed.
+  ipcMain.handle('life:voices', async () => {
+    if (!speech) return { ok: false, error: 'speech is not ready', voices: [] as string[] }
+    try {
+      return { ok: true, voices: await speech.voices() }
+    } catch (error) {
+      return { ok: false, error: String(error), voices: [] as string[] }
+    }
+  })
+  ipcMain.handle('life:speak', (_event, text: string) => speech?.speak(text) ?? { spoken: 0, skipped: true })
   ipcMain.handle('sync:now', async () => {
     if (!sync) return null
     return sync.now()
@@ -1512,6 +1693,27 @@ async function bootstrap(): Promise<void> {
   sync.reconfigure()
 
   /**
+   * Memory, calendar, read-aloud and the daily briefing.
+   *
+   * Created after sync so `sync_status` can answer, and before the IPC layer so
+   * the settings page always finds something to read. A `--background` launch arms
+   * the schedulers too: a briefing is due whether or not a window is open.
+   */
+  memory = new MemoryStore(join(app.getPath('userData'), 'memory.json'))
+  calendar = new CalendarStore(join(app.getPath('userData'), 'calendar.json'))
+  speech = new SpeechService({ settings: () => store.get(),
+    run: createWindowsSpeechRunner(app.isPackaged
+      ? join(process.resourcesPath, 'speech.ps1')
+      : join(app.getAppPath(), 'resources/speech.ps1')),
+    log })
+  calendarScheduler = new CalendarScheduler({ store: calendar, settings: () => store.get().calendar,
+    // The stamp is written only once the notification is up: a failed delivery
+    // leaves it unset so the next tick retries instead of losing the warning.
+    deliver: (event, at) => { deliverCalendarEvent(event); calendar?.markNotified(event.id, at) }, log })
+  briefing = new BriefingScheduler({ settings: () => store.get().briefing, compose: () => composeDailyBriefing(),
+    deliver: value => deliverBriefing(value), load: loadBriefingState, save: saveBriefingState, log })
+
+  /**
    * A closed lid, a sleep or a screen lock ends the session that was recording.
    *
    * Without this the take stays open across the suspend: the pill keeps a
@@ -1533,7 +1735,7 @@ async function bootstrap(): Promise<void> {
     cancelAssistant()
     pipeline?.cancel('lock')
   })
-  powerMonitor.on('resume', () => { wakeSuspended = false; refreshWakeWord(); if (reminders?.resume()) ensureSettingsWindow() })
+  powerMonitor.on('resume', () => { wakeSuspended = false; refreshWakeWord(); calendarScheduler?.check(); briefing?.check(); if (reminders?.resume()) ensureSettingsWindow() })
   powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); reminders?.refresh() })
 
   registerIpc()
@@ -1543,6 +1745,11 @@ async function bootstrap(): Promise<void> {
   refreshWakeWord()
   reminders.registerIpc(notes)
   reminders.start()
+  // Reminders rebuild their own timer from the database; the calendar and the
+  // briefing are new here, so a briefing that came due while the machine was off
+  // is composed and delivered on this first tick rather than tomorrow.
+  calendarScheduler.start()
+  briefing.start()
   if (reminders.store.missed().length) ensureSettingsWindow()
   registerNotesIpc({
     store: notes,
@@ -1785,6 +1992,7 @@ async function bootstrap(): Promise<void> {
         for (const [section, file] of [
           ['account', 'prefs-account.png'],
           ['general', 'prefs-general.png'],
+          ['life', 'prefs-life.png'],
           ['shortcuts', 'prefs-shortcuts.png'],
           ['models', 'prefs-models.png'],
           ['prompts', 'prefs-prompts.png'],
@@ -1897,6 +2105,9 @@ if (!gotLock) {
     selectionEditor?.cancel()
     pipeline?.cancel('quit')
     reminders?.stop()
+    calendarScheduler?.stop()
+    briefing?.stop()
+    speech?.stop()
     hotkeys?.stop()
     uia.stop()
     localAsr.release()

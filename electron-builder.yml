@@ -19,6 +19,8 @@ extraResources:
     to: voice-wake.ps1
   - from: resources/windows-tools.ps1
     to: windows-tools.ps1
+  - from: resources/speech.ps1
+    to: speech.ps1
   - from: resources/installer.ico
     to: shortcut.ico
 asar: true

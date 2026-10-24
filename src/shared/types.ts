@@ -618,6 +618,54 @@ export interface Settings {
    * syncing to the manual button, which is what a metered connection wants.
    */
   syncIntervalSeconds: number
+  /**
+   * Standing preferences the assistant was explicitly asked to keep.
+   *
+   * The store lives in `shared/memory.ts`; this interface only carries the
+   * switch, so one hand-editable settings file stays the single source of truth.
+   * `defaults.ts` assigns the module's constant, which is what keeps the two
+   * shapes from drifting apart.
+   */
+  memory: MemorySettings
+  /** The local calendar. `defaultLeadMinutes` is the fallback for events without one. */
+  calendar: CalendarSettings
+  /** When the daily briefing fires and whether it is spoken or notified. */
+  briefing: BriefingSettings
+  /** Read-aloud through the local Windows voice. Off until the user opts in. */
+  tts: TtsSettings
+}
+
+export interface MemorySettings {
+  /** Off hides memory from the assistant; stored entries are kept, not deleted. */
+  enabled: boolean
+}
+
+export interface CalendarSettings {
+  enabled: boolean
+  /** Lead time used by events that do not set their own. */
+  defaultLeadMinutes: number
+}
+
+export interface BriefingSettings {
+  enabled: boolean
+  /** Local wall-clock `HH:mm`. */
+  time: string
+  /** Read the briefing aloud as well as showing it. */
+  speak: boolean
+  /** Post it as a Windows notification. */
+  notify: boolean
+  /** A briefing with nothing in it is skipped instead of sent. */
+  skipEmpty: boolean
+}
+
+export interface TtsSettings {
+  enabled: boolean
+  /** Installed voice name; blank means the system default. */
+  voice: string
+  /** -10…10, the SAPI rate. */
+  rate: number
+  /** 0…100. */
+  volume: number
 }
 
 /**

@@ -20,6 +20,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | **Translation** | A dedicated translation mode and a selection-translation hotkey; 1–3 target languages, source language left to the ASR |
 | **Notes** | Voice or typed notes with categories and tags, playback, and audio import with re-transcription; polished text and raw transcript are kept separately |
 | **Reminders / to-dos** | Natural-language times (Chrono plus a program-side validator), recurrence, snooze, a strong-alert overlay window, missed-reminder recovery |
+| **Memory / schedule / briefing** | Say “remember this” and it becomes a standing preference; events carry a start, an end and an advance alert; a daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud. All of it stays on this machine |
 | **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR and smart translation |
 | **Wake word** | Optional offline wake word using Windows on-device speech; nothing is uploaded or stored before it fires |
 | **Sync** | Optional self-hosted server for history, notes, note audio and per-device personal stats; dictation audio stays on the machine that recorded it |
@@ -39,6 +40,10 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 ![AI & models](resources/screenshots/prefs-models.png)
 
 A fresh install has no working connections: this is where you add a recognition and a text connection — address, key, model — test it, then save. Records shown in these screenshots are demo content.
+
+![Memory & schedule](resources/screenshots/prefs-life.png)
+
+Say “remember this from now on” and the preference is kept as long-term memory. Events have a start, an end and an advance alert. The daily briefing puts today's events, due to-dos, overdue items and tomorrow's preview into one paragraph, and can read it out. This data stays local and is never uploaded.
 
 ## Quick start
 
@@ -85,6 +90,7 @@ Three things worth knowing:
 - **Trigger mode** can be switched in the Shortcuts page between "press to start, press to stop" (default) and "hold to talk". In press mode, dictation, Ask and voice translation all end with another single `Right Alt`.
 - **Press `Esc` while recording** to throw the take away: it is neither inserted nor written to history.
 - Every shortcut can be re-recorded or cleared, and the tray menu can suspend all of them temporarily. Recording a shortcut distinguishes left and right Shift / Ctrl / Alt.
+- **Say it, and it is noted**: in Ask, “remember this: lead with the conclusion from now on” becomes standing memory, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, and “read today’s briefing” speaks it. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
 
 ## Configuration
 
@@ -110,7 +116,7 @@ The server only handles accounts and sync (history, notes, note audio, personal 
 
 ## Data and privacy
 
-- The data directory lives under `%APPDATA%`, in a folder named after the application's technical identifier (the legacy identifier is kept so upgrades don't lose settings or the signed-in session): `settings.json`, `history.sqlite`, `notes.json` and `notes/audio/`. Notes can be moved to a custom directory.
+- The data directory lives under `%APPDATA%`, in a folder named after the application's technical identifier (the legacy identifier is kept so upgrades don't lose settings or the signed-in session): `settings.json`, `history.sqlite`, `notes.json` and `notes/audio/`, plus `memory.json`, `calendar.json` and `briefing-state.json`. Notes can be moved to a custom directory.
 - Keys are encrypted with the system keystore (DPAPI / safeStorage) and only ciphertext is written to disk. Where the platform provides no keystore, keys are stored as-is and the UI says so.
 - No always-on recording, no background clipboard watching, no background screenshots, no window polling. Selection reads and screenshots happen only on an explicit trigger, the original window is re-verified before and after, and password managers are refused.
 - Every local tool of the assistant goes through an allowlist plus argument validation: irreversible deletion, arbitrary commands, software installation and system changes are refused outright. Opening a web page requires the URL to come from real search results — the model may not guess domains.

@@ -86,6 +86,7 @@ export interface AgentOptions {
   submittedAt?: number
   selectionGuard?: ToolContext['selectionGuard']
   personal?: ToolContext['personal']
+  life?: ToolContext['life']
   windows?: ToolContext['windows']
   onLocalResult?: ToolContext['onLocalResult']
   conversation?: AgentConversation
@@ -1553,6 +1554,7 @@ export async function askAgent(
     submittedAt: options.submittedAt,
     selectionGuard: options.selectionGuard,
     personal: options.personal,
+    life: options.life,
     windows: options.windows,
     onLocalResult: options.onLocalResult,
     allowedTools: options.allowedTools,

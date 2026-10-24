@@ -194,3 +194,24 @@ it('shares only completed Ask answers with the bounded temporary session', async
   now += 15 * 60_000
   expect(session.snapshot().turns).toEqual([])
 })
+
+describe('standing memory and life capabilities in the ask prompt', () => {
+  it('appends the rendered memory block so a preference applies on the next turn', async () => {
+    const withMemory = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), now: () => now,
+      memory: () => 'The following are standing preferences the user asked you to keep.\n- [preference] 先给结论 #style' })
+    await withMemory.send('Explain caching')
+    const prompt = ask.mock.calls.at(-1)?.[0].polish.askPrompt ?? ''
+    expect(prompt).toContain('先给结论')
+    // The capability sentence flips with the tool set: no life tools here, so the
+    // model must still be told those actions are unavailable.
+    expect(prompt).toContain('not connected as assistant tools yet')
+  })
+
+  it('leaves the prompt untouched when memory is off or empty', async () => {
+    const quiet = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), now: () => now, memory: () => '' })
+    await quiet.send('Explain caching')
+    const prompt = ask.mock.calls.at(-1)?.[0].polish.askPrompt ?? ''
+    expect(prompt).not.toContain('standing preferences the user asked you to keep')
+    expect(prompt.trim().endsWith('report the actual failure.')).toBe(true)
+  })
+})

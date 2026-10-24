@@ -8,6 +8,7 @@ import { PromptsSection } from './sections/Prompts'
 import { RoutingSection } from './sections/Routing'
 import { SearchSection } from './sections/Search'
 import { ResourcesSection } from './sections/Resources'
+import { LifeSection } from './sections/Life'
 import { AccountSection } from './sections/Account'
 import { AboutSection, useAppVersion } from './sections/About'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +18,7 @@ import {
   IconInfo,
   IconWaveMic,
   IconFolder,
+  IconBook,
   IconSliders,
   IconUser
 } from './sections/General'
@@ -41,6 +43,7 @@ const SECTIONS = [
   { id: 'general', labelKey: 'settings.nav.general', hintKey: 'settings.hint.general', icon: <IconSliders />, pages: ['general'] },
   { id: 'speech', labelKey: '语音与输入', hintKey: '录音、翻译、文本处理与快捷键', icon: <IconWaveMic />, pages: ['speech', 'input', 'shortcuts'] },
   { id: 'models', labelKey: 'AI 与模型', hintKey: '连接模型，管理提示词、自动路由与搜索', icon: <IconCpu />, pages: ['models', 'prompts', 'routing', 'search'] },
+  { id: 'life', labelKey: 'settings.nav.life', hintKey: 'settings.hint.life', icon: <IconBook />, pages: ['life'] },
   { id: 'storage', labelKey: '数据与性能', hintKey: '本地数据、历史保留与资源使用', icon: <IconFolder />, pages: ['storage', 'resources'] },
   { id: 'account', labelKey: 'settings.nav.account', hintKey: 'settings.hint.account', icon: <IconUser />, pages: ['account'] },
   { id: 'about', labelKey: 'settings.nav.about', hintKey: '产品理念、版本与诊断', icon: <IconInfo />, pages: ['about'] }
@@ -49,6 +52,7 @@ const PAGE_LABELS: Record<string, string> = {
   speech: 'settings.nav.speech', input: 'settings.nav.input', shortcuts: 'settings.nav.shortcuts',
   models: 'settings.nav.models', prompts: 'settings.nav.prompts', routing: 'settings.nav.routing', search: 'settings.nav.search',
   storage: 'settings.nav.storage', resources: 'settings.nav.resources', about: 'settings.nav.about',
+  life: 'settings.nav.life',
 }
 
 export function SettingsDialog({
@@ -222,6 +226,7 @@ export function SettingsDialog({
           {section === 'speech' && <SpeechSection settings={settings} patch={patch} />}
           {section === 'input' && <InputSection settings={settings} patch={patch} />}
           {section === 'storage' && <StorageSection settings={settings} patch={patch} />}
+          {section === 'life' && <LifeSection settings={settings} patch={patch} />}
           {section === 'shortcuts' && <ShortcutsSection settings={settings} patch={patch} />}
           {section === 'models' && <ProvidersSection settings={settings} patch={patch} />}
           {section === 'prompts' && <PromptsSection settings={settings} patch={patch} />}

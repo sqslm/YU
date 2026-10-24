@@ -13,6 +13,10 @@ import { PROMPT_KINDS, defaultPromptLibrary, normalizePromptLibrary } from './pr
 import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders, normalizeSearchConnections } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL, findModel } from './local-asr'
 import { DEFAULT_VOICE_COMMANDS, normalizeVoiceCommands } from './voiceCommands'
+import { DEFAULT_MEMORY_SETTINGS } from './memory'
+import { DEFAULT_CALENDAR_SETTINGS, MAX_EVENT_LEAD_MINUTES } from './calendar'
+import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingTime } from './briefing'
+import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings } from './speech'
 
 export const SETTINGS_VERSION = 1
 
@@ -174,7 +178,17 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   syncServerUrl: '',
   syncEnabled: false,
   /** Fifteen minutes: often enough to feel live, rare enough to stay invisible. */
-  syncIntervalSeconds: 900
+  syncIntervalSeconds: 900,
+  /** Memory is on: a preference the user asked to keep should survive a restart. */
+  memory: DEFAULT_MEMORY_SETTINGS,
+  calendar: DEFAULT_CALENDAR_SETTINGS,
+  /**
+   * Off by default: a briefing that speaks at 08:00 before the user has decided
+   * they want one is an alarm clock, not an assistant.
+   */
+  briefing: DEFAULT_BRIEFING_SETTINGS,
+  /** Off by default, same reason: read-aloud is an audible side effect. */
+  tts: DEFAULT_TTS_SETTINGS
 }
 
 /** Applies a patch without resetting siblings in a settings group. Arrays replace. */
@@ -182,7 +196,7 @@ export function applySettingsPatch(current: Settings, patch: Partial<Settings>):
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings>
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings> {
   const next = { ...current, ...patch }
-  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord'] as const) {
+  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord', 'memory', 'calendar', 'briefing', 'tts'] as const) {
     if (patch[key]) next[key] = { ...current[key], ...patch[key] } as never
   }
   if (patch.hotkeys?.bindings) {
@@ -216,8 +230,19 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     asr: { ...base.asr, ...(input.asr ?? {}) },
     polish: { ...base.polish, ...(input.polish ?? {}) },
     multimodal: { ...base.multimodal, ...(input.multimodal ?? {}) },
-    search: { ...base.search, ...(input.search ?? {}) }
+    search: { ...base.search, ...(input.search ?? {}) },
+    memory: { ...base.memory, ...(input.memory ?? {}) },
+    calendar: { ...base.calendar, ...(input.calendar ?? {}) },
+    briefing: { ...base.briefing, ...(input.briefing ?? {}) },
+    tts: { ...base.tts, ...(input.tts ?? {}) }
   }
+  // A hand-edited group comes back through the same normalizers the settings UI
+  // uses: a typo must land on the documented default, never on a schedule that
+  // silently never fires (or a voice at 400% volume).
+  merged.briefing = { ...merged.briefing, time: normalizeBriefingTime(merged.briefing.time) }
+  merged.tts = normalizeTtsSettings(merged.tts)
+  merged.calendar = { ...merged.calendar,
+    defaultLeadMinutes: clampNumber(merged.calendar.defaultLeadMinutes, 0, MAX_EVENT_LEAD_MINUTES, DEFAULT_CALENDAR_SETTINGS.defaultLeadMinutes) }
   // A hand-edited config must not smuggle an unknown wire format in.
   merged.asr = { ...merged.asr, upload: pickEnum(merged.asr.upload, ['wav', 'opus'], 'wav') }
 

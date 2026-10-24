@@ -1259,7 +1259,8 @@
       "speech": "Speech and translation",
       "input": "Text input",
       "storage": "Data and storage",
-      "resources": "Resources"
+      "resources": "Resources",
+      "life": "Memory & schedule"
     },
     "hint": {
       "account": "Manage sign-in, cloud sync and storage",
@@ -1274,7 +1275,8 @@
       "speech": "Recognition languages, translation targets and recording devices",
       "input": "Text insertion, line breaks and excluded apps",
       "storage": "History retention, notes folder and app data",
-      "resources": "Memory usage and idle local model policy"
+      "resources": "Memory usage and idle local model policy",
+      "life": "Long-term memory, local events, the daily briefing and read-aloud"
     },
     "saving": "Saving…",
     "saveFailed": "Save failed; changes are not saved",

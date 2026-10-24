@@ -62,6 +62,23 @@ export interface TypelessApi {
     onChanged(callback: () => void): () => void
     onOpen(callback: (view: ReminderView) => void): () => void
   }
+  /**
+   * Long-term memory, local calendar, read-aloud and the daily briefing.
+   *
+   * The mutating calls return the list they changed: the settings page redraws
+   * from one answer instead of guessing whether its cache is still valid.
+   */
+  life: {
+    memory(): Promise<import('./memory').MemoryEntry[]>
+    archiveMemory(id: string, action: 'archive' | 'restore'): Promise<import('./memory').MemoryEntry[]>
+    events(range: import('./calendar').CalendarRange): Promise<import('./calendar').CalendarEvent[]>
+    cancelEvent(id: string, action: 'cancel' | 'restore'): Promise<import('./calendar').CalendarEvent | null>
+    voices(): Promise<{ ok: boolean; error?: string; voices?: string[] }>
+    speak(text: string): Promise<{ spoken: number; skipped: boolean }>
+    briefing(): Promise<import('./briefing').Briefing>
+    refreshBriefing(): Promise<import('./briefing').Briefing>
+    onBriefing(callback: (briefing: import('./briefing').Briefing) => void): () => void
+  }
   settings: {
     get(): Promise<Settings>
     update(patch: Partial<Settings>): Promise<Settings>
