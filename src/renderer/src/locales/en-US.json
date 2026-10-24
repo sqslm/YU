@@ -1633,5 +1633,9 @@
   "收起诊断工具": "Hide diagnostic tools",
   "输入你的服务器地址": "Enter your server address",
   "本机语音识别与模型推理。": "On-device speech recognition and model inference.",
-  "无法读取随记目录，请稍后重试。": "Unable to read the notes folder. Please try again."
+  "无法读取随记目录，请稍后重试。": "Unable to read the notes folder. Please try again.",
+  "官网 / 开发者平台": "Website / developer portal",
+  "官方文档": "Official documentation",
+  "申请 API Key": "Get an API key",
+  "API Key 使用指南": "API key guide"
 }

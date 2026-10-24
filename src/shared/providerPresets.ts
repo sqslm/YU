@@ -838,6 +838,15 @@ export function allPresets(): ProviderPreset[] {
 /** The id the "build it yourself" entry answers to. */
 export const CUSTOM_PRESET_ID = 'custom'
 
+/** Links come from vendor metadata, never the editable API endpoint. */
+export function providerLinks(preset: ProviderPreset): { website: string; docs?: string; key?: string; local: boolean } | null {
+  if (preset.id === CUSTOM_PRESET_ID || preset.id === 'local') return null
+  const key = preset.keyUrl || allPresets().find(item => item.id === preset.id && item.keyUrl)?.keyUrl
+  const url = key || preset.docsUrl
+  if (!url) return null
+  return { website: new URL(url).origin, docs: preset.docsUrl, key, local: ['ollama', 'lmstudio', 'vllm'].includes(preset.id) }
+}
+
 /**
  * A blank connection whose every field belongs to the user.
  *

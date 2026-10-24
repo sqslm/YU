@@ -5,10 +5,23 @@ import {
   customPreset,
   findPreset,
   presetsFor,
-  presetDraft
+  presetDraft,
+  providerLinks
 } from './providerPresets'
 
 const KINDS = ['asr', 'llm', 'multimodal'] as const
+
+it('links to vendor sites and key portals without using editable connection addresses', () => {
+  for (const preset of allPresets()) {
+    const links = providerLinks(preset)
+    if (preset.id === 'local') { expect(links).toBeNull(); continue }
+    expect(links?.website).toMatch(/^https:\/\//)
+    if (links?.key) expect(links.key).toMatch(/^https:\/\//)
+    if (links?.local) expect(links.key).toBeUndefined()
+  }
+  expect(providerLinks(findPreset('siliconflow', 'llm')!)?.key).toBe('https://cloud.siliconflow.cn/account/ak')
+  expect(providerLinks(customPreset('llm'))).toBeNull()
+})
 
 /** `localhost`/loopback presets are the only ones allowed to speak plain http. */
 function isLoopback(url: string): boolean {

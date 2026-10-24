@@ -10,6 +10,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Link,
   MenuItem,
   Stack,
   Switch,
@@ -19,7 +20,7 @@ import {
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import type { ProviderKind, ProviderProfile, Settings } from '@shared/types'
 import { MAX_PROFILES } from '@shared/defaults'
-import { CUSTOM_PRESET_ID, findPreset, presetsFor, presetDraft } from '@shared/providerPresets'
+import { CUSTOM_PRESET_ID, findPreset, presetsFor, presetDraft, providerLinks, type ProviderPreset } from '@shared/providerPresets'
 import { defaultVendorValues, missingVendorFields, presetVendorFields } from '@shared/providerFields'
 import {
   moveProfile,
@@ -38,6 +39,16 @@ const KIND_LABEL: Record<ProviderKind, string> = {
   asr: '语音转写',
   llm: '语言模型',
   multimodal: '多模态'
+}
+
+function ProviderInfo({ preset }: { preset?: ProviderPreset }): JSX.Element | null {
+  const links = preset ? providerLinks(preset) : null
+  if (!links) return null
+  return <Box data-provider-links sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, fontSize: 12 }}>
+    <Link href={links.website} target="_blank" rel="noopener noreferrer" data-provider-website>{i18n.t('官网 / 开发者平台')} · {new URL(links.website).hostname}</Link>
+    {links.docs && <Link href={links.docs} target="_blank" rel="noopener noreferrer" data-provider-docs>{i18n.t('官方文档')}</Link>}
+    {(links.key || !links.local && links.docs) && <Link href={links.key || links.docs} target="_blank" rel="noopener noreferrer" data-provider-key>{i18n.t(links.key ? '申请 API Key' : 'API Key 使用指南')}</Link>}
+  </Box>
 }
 
 /** Callbacks a row needs; the parent owns the settings object and its patches. */
@@ -332,6 +343,7 @@ function ProfileRow({
           the row and it exists to separate the summary from its form.
         */
         <Box data-profile-editor={profile.id} sx={{ borderTop: 1, borderColor: 'divider', pt: 0.25, pb: 1.25 }}>
+          {preset && providerLinks(preset) && <Box sx={{ px: 2, py: 1.5 }}><ProviderInfo preset={preset} /></Box>}
           <SettingsField label="Base URL">
             <TextField
               size="small"
@@ -675,9 +687,7 @@ export function ProviderProfiles({
             {preset ? (
               <Alert severity="info" sx={{ fontSize: 12 }}>
                 {preset.notes ? <Box>{preset.notes}</Box> : null}
-                {preset.keyUrl ? (
-                  <Box sx={{ mt: 0.5, color: 'text.secondary' }}>{i18n.t('申请 Key：{{url}}', { url: preset.keyUrl })}</Box>
-                ) : null}
+                <Box sx={{ mt: 0.75 }}><ProviderInfo preset={preset} /></Box>
               </Alert>
             ) : null}
             <TextField
