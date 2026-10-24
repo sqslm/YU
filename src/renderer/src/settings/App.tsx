@@ -20,7 +20,7 @@ import { RemindersPage } from './pages/RemindersPage'
 import type { ReminderView } from '@shared/reminders'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import { DictionaryPage } from './pages/Dictionary'
-import { IconBook, IconChart, IconClock, IconMic, IconSettings } from './icons'
+import { IconBook, IconChart, IconClock, IconSettings } from './icons'
 import { Onboarding } from './pages/Onboarding'
 import StickyNote2Icon from '@mui/icons-material/StickyNote2'
 import { useTranslation } from 'react-i18next'
@@ -36,7 +36,7 @@ const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'home', labelKey: 'nav.home', icon: <IconChart /> },
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
-  { id: 'reminders', labelKey: '提醒', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
+  { id: 'reminders', labelKey: '提醒与待办', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
   { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> }
 ]
 
@@ -198,10 +198,6 @@ export function App(): JSX.Element {
           </Box>
 
           <List dense sx={{ px: 1, py: 1 }}>
-            <ListItemButton data-assistant-entry onClick={() => { void window.api.assistant.open() }} sx={{ borderRadius: '8px', mb: 0.25 }}>
-              <ListItemIcon sx={{ minWidth: 28 }}><IconMic /></ListItemIcon>
-              <ListItemText primary={translate('AI 助手')} primaryTypographyProps={{ fontSize: 12.5 }} />
-            </ListItemButton>
             {NAV.map((item) => (
               <ListItemButton
                 key={item.id}

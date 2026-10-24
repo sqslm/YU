@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { localDateTime } from '@shared/reminders'
 
 /** Uses the app theme and language rather than the OS-owned Chromium picker. */
-export function ReminderDateTime({ value, onChange }: { value: string; onChange: (value: string) => void }): JSX.Element {
+export function ReminderDateTime({ value, onChange, required = false }: { value: string; onChange: (value: string) => void; required?: boolean }): JSX.Element {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'en' ? 'en-US' : 'zh-CN'
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
@@ -37,7 +37,7 @@ export function ReminderDateTime({ value, onChange }: { value: string; onChange:
       placeholder={t('选择日期和时间')} InputLabelProps={{ shrink: true }} data-reminder-datetime
       inputProps={{ readOnly: true, 'aria-haspopup': 'dialog', 'aria-expanded': Boolean(anchor) }}
       InputProps={{ endAdornment: <InputAdornment position="end"><CalendarMonthOutlined sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> }}
-      onClick={click} onKeyDown={key} sx={{ '& input': { cursor: 'pointer' } }} helperText={t('留空保存为待办，不会定时通知。')} />
+      onClick={click} onKeyDown={key} sx={{ '& input': { cursor: 'pointer' } }} helperText={t(required ? '请选择提醒时间' : '留空保存为待办，不会定时通知。')} />
     <Popover open={Boolean(anchor)} anchorEl={anchor} onClose={() => setAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       PaperProps={{ sx: { p: 2, width: 320, maxWidth: 'calc(100vw - 32px)', border: 1, borderColor: 'divider' } }}>
       <Box role="dialog" aria-label={t('选择日期和时间')} data-reminder-picker>

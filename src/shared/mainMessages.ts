@@ -7,6 +7,9 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '任务处理': 'Processing task',
+  '任务结果': 'Task result',
+  '正在分析截图…': 'Analyzing screenshot…',
   '唤醒待命': 'Listening for wake phrase',
   '请在 Windows 设置中安装所选 OCR 语言包': 'Install the selected OCR language pack in Windows Settings.',
   '无效的识别语言': 'Invalid OCR language',

@@ -1,6 +1,6 @@
 # 轻令（Qinly）
 
-Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。助手中心复用 Ask，支持文字/语音问答、独立临时追问，以及直接打开用户要求的 Windows 应用、文件夹、文档或网页，以及经授权的限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询、页面导航及当前窗口截图已接入；日程、长期记忆、简报和 TTS 尚未接入助手；可选 Windows 离线唤醒已接入统一语音入口。
+Windows AI 助手升级按阶段交付，完整范围、实际进度和后续衔接见 [升级进度](ASSISTANT_ROADMAP.md)。问答统一使用 Ask 窗口，支持文字/语音提问和临时追问；独立 AI 助手窗口与主页入口已删除。本地助手工具在后台继续运行，可直接打开用户要求的 Windows 应用、文件夹、文档或网页，并支持经授权的限定目录文件查找。原有语音输入、随记和提醒入口继续保留。提醒/待办、随记、历史查询、页面导航及当前窗口截图已接入；日程、长期记忆、简报和 TTS 尚未接入助手；可选 Windows 离线唤醒已接入统一语音入口。
 
 0.35.0 的 [81 项验收对照](ASSISTANT_ROADMAP.md#81-项实测对照03502026-10-24) 记录真实接口测试结果和未解决事项，不代表全部通过。测试使用中英文合成语音及实际配置的 ASR、文本和视觉模型；真人麦克风、实体快捷键、覆盖安装和 Windows 通知实际显示另有验证边界。解释/分析选区有只读保护；已有提醒/待办修改必须取得真实成功工具回执，不能将模型回答当作已执行。明确的截图问题可直接预览并调用既有视觉/OCR 服务，实际回执保留在短期会话中用于后续追问。
 
@@ -20,19 +20,19 @@ OCR 只在本机提取所选图片文字。默认「智能翻译」识别外语�
 
 The screenshot shortcut is **Left Ctrl + Right Shift + X**, configurable in Settings → Shortcuts. Select a region on the cursor's display; move/resize it, annotate or undo. **Done** copies the annotated PNG and closes; **Save as** opens the native location/name picker, and cancellation preserves editing. Enter/Ctrl+C copies; Ctrl+S saves; Ctrl+Z undoes; Esc closes. OCR uses installed Windows recognition languages locally. Smart translation defaults to the interface language (system locale fallback), with manual target selection; only recognized text goes to the text model. Explicit Ask sends the selected image to the configured vision model. No automatic capture, uploads, persistence or resident editor. Scrolling capture, pinned images and cross-monitor selections are not implemented. Display IDs and source pixel sizes follow Electron's [desktop capture API](https://www.electronjs.org/docs/latest/api/structures/desktop-capturer-source).
 
-AI 助手可从侧边栏、托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起；快捷键可录制或清空，升级时避让已有相同绑定。点击录音开始，共用现有麦克风/ASR，右 Alt 或「结束录音」提交，Esc 取消；已有任务运行时不会抢占录音。窗口里可停止、新对话、复制回答及直达随记/提醒/设置。关闭助手取消当前任务；最近 12 个界面轮次仅存内存，模型保留最近三个完整问答及工具摘要，闲置 15 分钟后下次访问清理，退出程序即丢弃。助手与旧 Ask 上下文隔离，不自动读取剪贴板、选区或截图，不写长期记忆。发送的输入和相关临时会话会交给用户配置的远程或本地模型。
+Ask 可通过托盘或默认 `左 Ctrl + 右 Shift + A` 打开/收起，快捷键仍可录制或清空，升级保留原绑定。原有 Ask 语音快捷键继续有效。一般问答、原窗口识别、截图分析和只读查询统一在 Ask 回答卡显示，文件搜索候选在同一窗口分页选择；打开应用/网页、创建或修改提醒/随记、复制等操作结果仅在语音条上方反馈，不再提供“查看详情”跳转助手窗口。后台继续复用原工具注册、参数校验、权限确认和临时上下文；不重新开发路由或执行引擎。Ask 支持文字输入、停止、复制、保存随记和继续提问；截图发送前的预览及取消也在同一 Ask 窗口完成，不绕过原确认。
 
-「设置 → 通用 → 关闭主窗口时」可选保留后台或完全退出。默认关闭后后台保留快捷键、提醒与托盘；最小化保留任务栏窗口，不隐藏到托盘。隐藏的助手和主窗口在 60 秒后回收界面（主窗口录随记时、主窗口最小化时不回收），需要时再创建；隐藏界面回收不取消独立的后台助手任务。普通统一语音任务在语音条上方显示结果气泡，10 秒后收起，必要时点击「查看详情」，不自动打开助手或抢焦点；截图审批等必需交互仍保留。独立请求不携带旧对话，明确追问可引用必要的最近上下文；当前窗口查询直接使用本次录音开始的快照。托盘左键单击恢复主窗口并保留当前页面及编辑状态；主窗口重新创建时默认显示概览；右键菜单分别提供「打开主界面」「AI 助手」「随记」「提醒」「设置」，其中「设置」直接打开设置面板。托盘显示待命/录音/处理/快捷键暂停状态。开机启动仍为用户可选；默认不持续录音、截图或读取剪贴板。
 
-The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). Qinly reuses Ask for text/voice questions and a separate temporary conversation. Open it from the sidebar, tray or configurable `Left Ctrl + Right Shift + A`. Voice uses the existing recorder and ASR; Right Alt submits and Esc cancels. Other recordings are never taken over. New conversation clears the session; idle context expires on access after 15 minutes. Closing the assistant cancels its task. Clipboard, selected text and screenshots are not read automatically. Input and relevant conversation are sent to the configured model. Hidden interfaces retire after 60 seconds when safe.
+「设置 → 通用 → 关闭主窗口时」可选保留后台或完全退出。默认关闭后后台保留快捷键、提醒与托盘；最小化保留任务栏窗口，不隐藏到托盘。隐藏主窗口在 60 秒后回收界面（录随记或最小化时不回收），需要时再创建；Ask 回答卡沿用原隐藏回收机制。操作任务在语音条上方显示结果气泡，10 秒后收起；问答使用 Ask，截图审批等必需交互仍保留。独立请求不携带旧对话，明确追问可引用必要的最近上下文；当前窗口查询直接使用本次录音开始的快照。托盘左键单击恢复主窗口并保留当前页面及编辑状态；主窗口重新创建时默认显示概览；右键菜单分别提供「打开主界面」「Ask」「随记」「提醒」「设置」，其中「设置」直接打开设置面板。托盘显示待命/录音/处理/快捷键暂停状态。开机启动仍为用户可选；默认不持续录音、截图或读取剪贴板。
 
-Minimize keeps the main window on the Windows taskbar; the close-to-tray preference applies only to closing. Routine unified voice task receipts appear in a bubble above the recording strip for 10 seconds, with optional **View details**, without opening the assistant or taking focus. Screenshot approval and other necessary reviews retain their explicit interfaces. Independent requests start with clean model context; explicit follow-ups can use the recent session. Current-window identification reads each recording's original-window snapshot directly instead of reusing a previous answer.
+The assistant upgrade ships in stages; see [the roadmap](ASSISTANT_ROADMAP.md). The standalone AI Assistant window and sidebar entry have been removed. Use the existing **Ask** answer window for questions, read-only local queries, file candidates and screenshot preview/consent. The configurable `Left Ctrl + Right Shift + A` shortcut and the tray's Ask action open it; existing voice shortcuts remain available. Actual action receipts appear only above the voice strip for 10 seconds, without opening another assistant window. The existing tool engine, permissions, original-window snapshots and temporary task context are retained. Independent requests do not inherit old question context; explicit follow-ups may use relevant prior results. The main window still minimizes to the taskbar and can close to the tray; a hidden main window retires after 60 seconds when safe.
+
 
 Windows tools discover real registered applications, open folders/documents/web addresses and search scoped file metadata. Requested application, folder, document and website opens run directly without a second confirmation. File metadata searches retain their explicit, cancel-by-default authorization. Only file names, paths, modification times and sizes may reach the configured model; file contents are not read. Windows Search is supplemented with an immediate-folder check, never a whole-disk crawl. Unindexed subfolders, a 40-item result limit and unavailable indexing are reported. Multiple results require a user choice; “Open second” uses the actual previous ordering. Model output cannot supply an arbitrary executable or document path. Dependent operations are sequential and stop on failure, with at most four tool rounds, eight calls and a 90-second task deadline. Scripts, installers, deletion and arbitrary commands are unavailable. Calendar, memory, briefings and TTS remain future stages. Optional offline Windows wake phrases now use the existing unified voice entry.
 
 品牌资源位于 `logo/`，转换产物位于 `resources/`：`-1.png` 纯图标用于应用、任务栏和托盘；`-2.png` 浅色完整 Logo 和「轻令 Qinly 智能助手标志2.png」深色透明 Logo 用于对应主题侧边栏及关于页面，两者使用相同的 2:1 透明画布与显示尺寸；`-4.png` 方形图标用于安装包和桌面快捷方式；白底「轻令 Qinly 智能助手标志.png」用于本页品牌展示。原图保留，未重新绘制。开发时安装 Pillow 后运行 `pnpm icon`；可用 `QINLY_PYTHON` 指定已有 Python。ICO 含 16–256 像素多尺寸。显示名称改为轻令（Qinly），技术包名、App ID 和原 `typeless-rebuild` 用户目录继续沿用，以保留配置、登录与升级身份。
 
-Tray left-click restores the main window and preserves the current page or editor. Its context menu keeps Open main window, AI Assistant and Settings as separate actions. Light and dark wordmarks use matching transparent canvases and sizing.
+Tray left-click restores the main window and preserves the current page or editor. Its context menu keeps Open main window, Ask and Settings as separate actions. Light and dark wordmarks use matching transparent canvases and sizing.
 
 ![轻令 Qinly 品牌标志](resources/brand/brand-board.png)
 
@@ -48,11 +48,11 @@ Notes can be filtered by text, voice or processing failure and sorted by last mo
 
 开始录音时检查配置链路的 TCP 连通性，不提交测试音频或消耗 ASR 额度；服务未启动会立即结束本次录音并明确提示。已启用的内置 ASR 模型会按选定配置自动加载（仅使用已有文件，不自动下载）；外部 llama.cpp 等服务仍由用户启动，软件不会猜测启动命令。连接成功仅表示端口可达，不能保证模型已就绪、鉴权或转写必定成功。录音结束后遇到转写失败，音频保留到随记，可恢复服务后重新转写；取消和静音不保存，失败记录不进入历史。随记录音直接写盘后处理，继续保留原录音。
 
-语音随记默认突出润色结果，原始转写默认折叠，可展开编辑、复制；文字随记保持直接编辑。
+语音随记默认突出润色结果，原始转写区域默认完全隐藏，点击“查看原始转写”才显示，可编辑、复制；切换随记重新隐藏。文字随记直接编辑正文；未生成润色稿时显示已有正文，不冒充润色结果。
 
 「设置 → 通用 → 语音唤醒」默认关闭，启用后通过 Windows 本地 System.Speech 的限定词语法等待用户自定义的 2–40 字符唤醒词。默认中文“你好轻令”，英文新配置“Hey Qinly”；对应的 Windows **桌面语音识别**语言包必须可用，中文/英文缺失会明确报错，不会降级为持续云端 ASR。使用 Windows 默认麦克风，默认设备与听写自选设备可以不同。先说唤醒词，看到录音条后再说需求；本版不承诺同一句连说唤醒词和正文。之后复用统一语音分流、ASR 与模型配置，停顿约 1.4 秒自动提交；无语音 10 秒取消，右 Alt 提交，Esc 取消。任务、截图、锁屏或休眠期间暂停监听，恢复空闲后继续；唤醒前不上传音频，不保存监听内容。误唤醒和识别率仍受系统语言包、发音、噪声影响；可随时关闭，启用会增加本地麦克风与识别进程资源占用。参见 [Windows SpeechRecognitionEngine](https://learn.microsoft.com/en-us/dotnet/api/system.speech.recognition.speechrecognitionengine)。
 
-Recording starts with a bounded TCP availability check, without sending test audio or consuming ASR quota. An enabled built-in model loads automatically from existing files. External ASR servers must still be started by the user. An open port does not certify credentials or model readiness. Final transcription failures preserve audio in Notes for retranscription; cancelled or silent takes are discarded, and failed history rows are not added. Voice notes show the polished draft prominently and collapse the original transcript by default; text notes stay directly editable.
+Recording starts with a bounded TCP availability check, without sending test audio or consuming ASR quota. An enabled built-in model loads automatically from existing files. External ASR servers must still be started by the user. An open port does not certify credentials or model readiness. Final transcription failures preserve audio in Notes for retranscription; cancelled or silent takes are discarded, and failed history rows are not added. Voice notes devote the main editor to the polished draft. The original transcript is not rendered until Show original transcript is clicked; switching notes hides it again. Text-only or unpolished notes retain editable content.
 
 Optional **Settings → General → Voice wake** uses offline Windows desktop speech recognition and a custom 2–40 character phrase. It is off by default and requires the matching Chinese/English speech recognition language pack. It uses the Windows default microphone. Say the phrase, wait for the recording strip, then speak your request. Wake-triggered recording submits after about 1.4 seconds of silence or cancels after 10 seconds without speech; Right Alt submits and Esc cancels. Tasks, screenshots, lock and sleep pause listening. No pre-wake audio is uploaded or saved. Existing recognition and providers process the request after waking. Recognition accuracy and false activations depend on the installed Windows recognizer and microphone environment; enabling it adds a local recognition process.
 
@@ -63,6 +63,14 @@ Optional **Settings → General → Voice wake** uses offline Windows desktop sp
 本地 OCR 优先选择中英混排识别语言，支持手动中文/英文选择；识别专用副本放大小字、反转暗底文字，导出图片保持原始像素。保留识别行分隔，消除中文分词空格，保留英文单词间空格。没有替换为微信私有 OCR，也不使用 LLM 编造纠字；很小、模糊、复杂背景的文字仍可能识别错误，未安装的语言包会报错。复制、另存为、翻译和视觉 Ask 保留现有数据发送边界。
 
 On Windows, screenshot capture first uses a direct GDI monitor snapshot at source resolution, with the existing Electron path as fallback. The editor is on demand. One toolbar row contains all actions; tool-specific options expand below it. Eight corner/edge handles resize the crop; only its remaining border moves it. Blank interior dragging does nothing. Annotation layers, including text and mosaic, can move independently and undo their movement. OCR uses an enlarged, dark-background-adjusted copy, supports Chinese/English language selection, preserves lines and removes artificial Chinese spaces without joining English words. It remains Windows OCR, with accuracy limits for blurred or tiny text; screenshots are not secretly uploaded for correction.
+
+## 提醒与待办（0.38.0） / Reminders and todos
+
+同页提供“全部事项 / 提醒 / 待办”按钮，沿用现有数据：有具体触发时间的是提醒，无具体时间的是待办。提供独立的新建按钮与事项类型选择；提醒必须选择时间，待办不显示提醒等级、重复或稍后提醒操作，不会因缺少时间而误存为提醒。从随记提取且无精确时间的候选仍可确认为待办。
+
+在状态筛选旁提供可点击的时间按钮：全部时间、今日、近一周、未来一周、自定义。近一周包含今天及过去六个日历日；未来一周包含今天及随后六天。自定义包含完整结束日期，反向日期会提示并不返回错误范围的数据。提醒按实际提醒时间、待办按创建日期筛选，筛选先于分页；查看通知或保存事项会恢复能看到目标的筛选范围。中英文与深浅主题均适配。
+
+The same page separates scheduled reminders and undated todos, using the existing store. Dedicated create buttons and an item-type selector make the difference explicit. Reminders require a time; todos do not expose reminder level, recurrence or snooze controls. Clickable date filters support Today, Past week, Next 7 days and an inclusive custom range. Reminder dates use scheduled time; todo dates use creation time. All filters apply before pagination. Invalid ranges are reported, and navigation to a specific item clears restrictive filters.
 
 ## 快速开始
 
@@ -82,7 +90,7 @@ node_modules\electron\dist\electron.exe .
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # → release\轻令（Qinly）-0.37.0-setup.exe
+pnpm package          # → release\轻令（Qinly）-0.38.0-setup.exe
 ```
 
 

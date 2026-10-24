@@ -72,7 +72,7 @@ describe('hasAlertActions', () => {
   it('makes reminder receipts interactive for undo or dismissal', () => {
     expect(hasAlertActions({ phase: 'alert', alert: { kind: 'reminder', level: 'info', text: 'Saved', actions: [{ id: 'undo-reminder', label: 'Undo' }] } })).toBe(true)
     expect(hasAlertActions({ phase: 'alert', alert: { kind: 'reminder', level: 'info', text: 'Review time' } })).toBe(true)
-    expect(hasAlertActions({ phase: 'done', mode: 'ask', text: 'Opened', feedback: { details: true } })).toBe(true)
+    expect(hasAlertActions({ phase: 'done', mode: 'ask', text: 'Opened', feedback: {} })).toBe(true)
   })
   it('is always false: the bar renders no buttons at all', () => {
     // Even an alert that *carries* actions must not put them on screen — the

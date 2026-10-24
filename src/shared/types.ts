@@ -818,7 +818,6 @@ export type BarAlertLevel = 'info' | 'warn' | 'error'
 
 /** Buttons a bar alert may carry; each one has a real handler in main (REQ-01). */
 export type BarActionId =
-  | 'open_assistant'
   | 'retry'
   | 'cancel'
   | 'copy'
@@ -874,7 +873,7 @@ export type BarState =
   | { phase: 'working'; mode: Mode; hint?: string; showMode?: boolean; promptName?: string; taskLabel?: string }
   | { phase: 'done'; mode: Mode; text: string; showMode?: boolean; taskLabel?: string;
       /** Task receipt shown above the strip, separate from live ASR captions. */
-      feedback?: { failed?: boolean; details?: boolean } }
+      feedback?: { failed?: boolean } }
   /** A non-fatal notice (busy, language detected, mic advice) — REQ-01. */
   | { phase: 'alert'; alert: BarAlert }
   | { phase: 'error'; message: string; alert?: BarAlert }
@@ -915,7 +914,7 @@ export interface ModelListResult {
   error?: string
 }
 
-export type CardActionId = 'copy' | 'replace' | 'ask' | 'stop' | 'selection-polish' | 'selection-translate' | 'selection-replace' | 'selection-append'
+export type CardActionId = 'copy' | 'replace' | 'ask' | 'stop' | 'open-item' | 'screenshot-accept' | 'screenshot-cancel' | 'selection-polish' | 'selection-translate' | 'selection-replace' | 'selection-append'
 
 export interface CardAction {
   id: CardActionId
@@ -926,6 +925,9 @@ export interface CardAction {
 
 /** What the answer card renders. Kept in shared because the preload bridges it. */
 export interface AnswerCardPayload {
+  assistant?: boolean
+  localResults?: import('./assistant').AssistantLocalResult[]
+  screenshot?: import('./assistant').ScreenshotPreview
   question: string
   answer: string
   sources?: SearchResult[]

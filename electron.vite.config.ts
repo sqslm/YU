@@ -46,7 +46,6 @@ export default defineConfig({
       rollupOptions: {
         input: {
           settings: resolve('src/renderer/settings.html'),
-          assistant: resolve('src/renderer/assistant.html'),
           screenshot: resolve('src/renderer/screenshot.html'),
           bar: resolve('src/renderer/bar.html'),
           // Ask Anything answer card: its own frameless window.

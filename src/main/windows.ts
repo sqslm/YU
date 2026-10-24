@@ -19,30 +19,11 @@ const preload = join(here, '../preload/index.js')
 const rendererDir = join(here, '../renderer')
 const devServer = process.env['ELECTRON_RENDERER_URL']
 
-type Page = 'settings' | 'bar' | 'card' | 'login' | 'reminder' | 'assistant'
+type Page = 'settings' | 'bar' | 'card' | 'login' | 'reminder'
 
 function loadPage(win: BrowserWindow, page: Page): void {
   if (devServer) void win.loadURL(`${devServer}/${page}.html`)
   else void win.loadFile(join(rendererDir, `${page}.html`))
-}
-
-/** Created only when requested; uses the same preload, theme and window chrome. */
-export function createAssistantWindow(mode: ThemeMode): BrowserWindow {
-  const chrome = HUB_CHROME[resolveThemeMode(mode)]
-  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
-  const width = Math.min(620, area.width), height = Math.min(460, area.height)
-  const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'), width, height,
-    x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 3),
-    minWidth: 420, minHeight: 360, title: mt('AI 助手'), show: false,
-    backgroundColor: chrome.color, titleBarStyle: 'hidden',
-    titleBarOverlay: { color: OVERLAY_COLOR, symbolColor: chrome.symbolColor, height: TITLE_BAR_HEIGHT },
-    autoHideMenuBar: true,
-    webPreferences: { preload, sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false }
-  })
-  win.webContents.setWindowOpenHandler(({ url }) => { openExternalSafely(url); return { action: 'deny' } })
-  win.once('ready-to-show', () => { win.show(); win.focus() })
-  loadPage(win, 'assistant')
-  return win
 }
 
 /** A desktop-sized backdrop with one centred reminder card; never a kiosk/keyboard lock. */

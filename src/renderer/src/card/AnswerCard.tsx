@@ -86,6 +86,7 @@ export function AnswerCard(): JSX.Element | null {
   const [draft, setDraft] = useState('')
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
   const [sourcePage, setSourcePage] = useState(1)
+  const [itemPage, setItemPage] = useState(1)
   const [sourceSize, setSourceSize] = useState(30)
   const [pinned, setPinned] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -174,6 +175,7 @@ export function AnswerCard(): JSX.Element | null {
   }, [])
 
   useEffect(() => setSourcePage(1), [data?.question, sourceSize])
+  useEffect(() => setItemPage(1), [data?.question, sourceSize])
 
   // ESC closes the card. The main process no longer hides it from
   // `before-input-event`, so this is the single path that owns the animation.
@@ -253,10 +255,13 @@ export function AnswerCard(): JSX.Element | null {
   const answer = data.answer ?? ''
   const tools = data.tools ?? []
   const actions = data.actions ?? []
-  const busy = pending !== null || data.streaming === true
+  const busy = pending !== null || data.streaming === true || Boolean(data.screenshot)
   const statusLine = pending !== null ? i18n.t('正在思考…') : (data.status ?? '').trim() || null
   const streaming = data.streaming === true
   const sourceList = data.sources ?? []
+  const items = data.localResults?.flatMap(result => result.items ?? []) ?? []
+  const itemPages = Math.max(1, Math.ceil(items.length / sourceSize))
+  const safeItemPage = Math.min(itemPage, itemPages)
   const retrieval = data.retrieval
   const sourcePages = Math.max(1, Math.ceil(sourceList.length / sourceSize))
   const safeSourcePage = Math.min(sourcePage, sourcePages)
@@ -369,6 +374,14 @@ export function AnswerCard(): JSX.Element | null {
         )}
 
         <div ref={scrollRef} style={answerBox} data-card-scroll>
+          {data.screenshot && <div data-card-screenshot>
+            <img src={data.screenshot.dataUrl} alt={data.screenshot.title} style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 8 }} />
+            <p style={{ ...statusText, fontSize: 12 }}>{data.screenshot.detail}</p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button data-card-screenshot-cancel style={primaryButton} onClick={() => bridge().action?.({ id: 'screenshot-cancel', payload: String(data.screenshot!.id), label: i18n.t('取消') })}>{i18n.t('取消')}</button>
+              <button data-card-screenshot-accept style={primaryButton} onClick={() => bridge().action?.({ id: 'screenshot-accept', payload: String(data.screenshot!.id), label: i18n.t('继续') })}>{i18n.t('继续')}</button>
+            </div>
+          </div>}
           <div style={answerTitleRow}>
             <span style={answerMark}>✦</span>
             <span style={answerTitle}>{i18n.t(data.selection ? '处理结果' : '回答')}</span>
@@ -377,6 +390,19 @@ export function AnswerCard(): JSX.Element | null {
             <MarkdownView text={answer} streaming={streaming} sources={sourceList} copiedCode={copied}
               onCopyCode={busy ? undefined : (text, key) => runAction({ id: 'copy', label: i18n.t('复制代码'), payload: text }, key)} />
           </div>
+          {items.length > 0 && <div data-card-items>
+            {items.slice((safeItemPage - 1) * sourceSize, safeItemPage * sourceSize).map((item, index) => <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+              <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontSize: 12 }}>
+                <div>{(safeItemPage - 1) * sourceSize + index + 1}. {item.name}</div><div style={{ color: '#8b93a4', fontSize: 11, marginTop: 3 }}>{item.path}</div>
+              </div>
+              <button data-card-open-item={item.id} style={primaryButton} disabled={busy} onClick={() => bridge().action?.({ id: 'open-item', payload: item.id, label: i18n.t('打开') })}>{i18n.t('打开')}</button>
+            </div>)}
+            {itemPages > 1 && <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button style={primaryButton} disabled={safeItemPage <= 1} onClick={() => setItemPage(safeItemPage - 1)}>{i18n.t('上一页')}</button>
+              <span style={sourcesTitle}>{i18n.t('第 {{page}} / {{total}} 页', { page: safeItemPage, total: itemPages })}</span>
+              <button style={primaryButton} disabled={safeItemPage >= itemPages} onClick={() => setItemPage(safeItemPage + 1)}>{i18n.t('下一页')}</button>
+            </div>}
+          </div>}
 
           {sourceList.length > 0 && (
             <div style={sources}>
@@ -455,6 +481,7 @@ export function AnswerCard(): JSX.Element | null {
         {!data.selection && <div style={askRow}>
           <InputBase
             className="card-ask"
+            autoFocus={data.assistant && !data.question}
             value={draft}
             disabled={busy}
             placeholder={busy ? i18n.t('正在思考…') : data.stopped ? i18n.t('重新提问…') : i18n.t('继续追问…')}

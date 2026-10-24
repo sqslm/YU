@@ -4,7 +4,7 @@ import { mt } from '@shared/mainI18n'
 
 export interface TrayHandlers {
   openMain: () => void
-  openAssistant: () => void
+  openAsk: () => void
   openNotes: () => void
   openReminders: () => void
   status: () => string
@@ -44,7 +44,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
         { label: handlers.status(), enabled: false },
         { type: 'separator' },
         { label: mt('打开主界面'), click: handlers.openMain },
-        { label: mt('AI 助手'), click: handlers.openAssistant },
+        { label: 'Ask', click: handlers.openAsk },
         { label: mt('随记'), click: handlers.openNotes },
         { label: mt('提醒'), click: handlers.openReminders },
         { label: mt('设置…'), click: handlers.openSettings },

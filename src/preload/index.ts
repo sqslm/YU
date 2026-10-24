@@ -35,42 +35,12 @@ const api: TypelessApi = {
     run: (action, dataUrl, question, target, ocrLanguage) => ipcRenderer.invoke('screenshot:run', action, dataUrl, question, target, ocrLanguage)
   },
   assistant: {
-    reviewScreenshot: (id, accepted) => ipcRenderer.invoke('assistant:screenshot-response', id, accepted),
-    onScreenshot: callback => {
-      const listener = (_event: Electron.IpcRendererEvent, preview: import('@shared/assistant').ScreenshotPreview | null): void => callback(preview)
-      ipcRenderer.on('assistant:screenshot-preview', listener)
-      return () => ipcRenderer.removeListener('assistant:screenshot-preview', listener)
-    },
-    open: () => ipcRenderer.invoke('assistant:open'),
-    hide: () => ipcRenderer.invoke('assistant:hide'),
-    state: () => ipcRenderer.invoke('assistant:state'),
-    send: text => ipcRenderer.invoke('assistant:send', text),
-    openItem: id => ipcRenderer.invoke('assistant:open-item', id),
-    cancel: () => ipcRenderer.invoke('assistant:cancel'),
-    clear: () => ipcRenderer.invoke('assistant:clear'),
-    record: () => ipcRenderer.invoke('assistant:record'),
-    activity: () => ipcRenderer.invoke('assistant:activity'),
-    onActivity: callback => {
-      const listener = (_event: Electron.IpcRendererEvent, phase: 'idle' | 'recording' | 'working'): void => callback(phase)
-      ipcRenderer.on('assistant:activity', listener)
-      return () => ipcRenderer.removeListener('assistant:activity', listener)
-    },
-    onFocus: callback => {
-      const listener = (): void => callback()
-      ipcRenderer.on('assistant:focus', listener)
-      return () => ipcRenderer.removeListener('assistant:focus', listener)
-    },
     navigate: page => ipcRenderer.invoke('assistant:navigate', page),
     hubView: () => ipcRenderer.invoke('assistant:hub-view'),
     onNavigate: callback => {
       const listener = (): void => callback()
       ipcRenderer.on('assistant:navigate', listener)
       return () => ipcRenderer.removeListener('assistant:navigate', listener)
-    },
-    onChanged: callback => {
-      const listener = (_event: Electron.IpcRendererEvent, state: import('@shared/assistant').AssistantState): void => callback(state)
-      ipcRenderer.on('assistant:changed', listener)
-      return () => ipcRenderer.removeListener('assistant:changed', listener)
     }
   },
   reminders: {

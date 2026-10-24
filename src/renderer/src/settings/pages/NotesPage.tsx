@@ -159,6 +159,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
 
   const [transcriptDraft, setTranscriptDraft] = useState('')
   const [polishedDraft, setPolishedDraft] = useState('')
+  const [originalOpen, setOriginalOpen] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [tagInput, setTagInput] = useState('')
 
@@ -267,6 +268,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   selectedRef.current = selected
 
   const audioKey = selected?.audioPath ?? ''
+  const primaryField = selected && (selected.polished.trim() || ['pending', 'ok'].includes(selected.polishStatus)) ? 'polished' : 'transcript'
+  const primaryDraft = primaryField === 'polished' ? polishedDraft : transcriptDraft
+  const hasOriginal = Boolean(selected && (selected.durationMs > 0 || audioKey || selected.polished.trim()))
   const rate = clampPlaybackRate(settings.notePlaybackRate)
 
   useEffect(() => {
@@ -293,6 +297,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   useEffect(() => {
     const note = notesRef.current.find((item) => item.id === selectedId) ?? null
     setTranscriptDraft(note?.transcript ?? '')
+    setOriginalOpen(false)
     setPolishedDraft(note?.polished ?? '')
     draftBaseRef.current = { id: note?.id ?? null, transcript: note?.transcript ?? '', polished: note?.polished ?? '' }
     setTagInput('')
@@ -1466,50 +1471,30 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
                 </Box>
               </Stack>
 
-              <Stack spacing={2} sx={{ mt: 2.25 }}>
-                <Box key={selected.id} component={selected.durationMs > 0 || audioKey ? 'details' : 'div'}
-                  data-notes-original sx={{ order: selected.durationMs > 0 || audioKey ? 2 : 0 }}>
-                  <Typography component={selected.durationMs > 0 || audioKey ? 'summary' : 'div'}
-                    sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.secondary', mb: 0.75, cursor: selected.durationMs > 0 || audioKey ? 'pointer' : 'default' }}>
-                    {t(selected.durationMs === 0 && !audioKey ? 'notes.bodyLabel' : 'notes.transcriptLabel')}
-                  </Typography>
-                  <TextField
-                    data-notes-editor="transcript"
-                    disabled={retranscribingId === selected.id}
-                    inputRef={bodyInputRef}
-                    multiline
-                    minRows={selected.durationMs > 0 || audioKey ? 4 : 10}
-                    fullWidth
-                    value={transcriptDraft}
-                    onChange={(event) => editField('transcript', event.target.value)}
-                    onBlur={() => void flushNow()}
-                    placeholder={t(selected.durationMs === 0 && !audioKey ? 'notes.bodyPlaceholder' : 'notes.transcriptPlaceholder')}
-                    InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }}
-                  />
-                  <Button data-notes-copy="transcript" size="small" disabled={!transcriptDraft.trim()}
-                    onClick={() => void copyDraft(transcriptDraft)} sx={{ mt: 0.5, fontSize: 11.5 }}>{t('notes.copyOriginal')}</Button>
-                </Box>
-
-                <Box sx={{ order: 1 }}>
-                  <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.secondary', mb: 0.75 }}>
-                    {t('notes.polishedLabel')}
-                  </Typography>
-                  <TextField
-                    data-notes-editor="polished"
-                    disabled={retranscribingId === selected.id}
-                    multiline
-                    minRows={selected.durationMs > 0 || audioKey ? 12 : 4}
-                    fullWidth
-                    value={polishedDraft}
-                    onChange={(event) => editField('polished', event.target.value)}
-                    onBlur={() => void flushNow()}
-                    placeholder={t('notes.polishedPlaceholder')}
-                    InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }}
-                  />
-                  <Button data-notes-copy="polished" size="small" disabled={!polishedDraft.trim()}
-                    onClick={() => void copyDraft(polishedDraft)} sx={{ mt: 0.5, fontSize: 11.5 }}>{t('notes.copyPolished')}</Button>
-                </Box>
-              </Stack>
+              <Box data-notes-primary sx={{ mt: 2.25 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary', mb: 1 }}>
+                  {t(primaryField === 'polished' ? 'notes.polishedLabel' : 'notes.bodyLabel')}
+                </Typography>
+                <TextField data-notes-editor={primaryField} inputRef={bodyInputRef} disabled={retranscribingId === selected.id}
+                  multiline minRows={16} fullWidth value={primaryDraft}
+                  onChange={event => editField(primaryField, event.target.value)} onBlur={() => void flushNow()}
+                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
+                  InputProps={{ sx: { fontSize: 14, lineHeight: 1.8, alignItems: 'flex-start', minHeight: '42vh' } }} />
+                <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
+                  <Button data-notes-copy={primaryField} size="small" disabled={!primaryDraft.trim()} onClick={() => void copyDraft(primaryDraft)} sx={{ fontSize: 11.5 }}>
+                    {t(primaryField === 'polished' ? 'notes.copyPolished' : '复制内容')}
+                  </Button>
+                  {hasOriginal && <Button data-notes-toggle-original size="small" aria-expanded={originalOpen} aria-controls="notes-original"
+                    onClick={() => setOriginalOpen(open => !open)} sx={{ fontSize: 11.5 }}>{t(originalOpen ? '隐藏原始转写' : '查看原始转写')}</Button>}
+                </Stack>
+              </Box>
+              {hasOriginal && originalOpen && <Box id="notes-original" data-notes-original sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}>
+                <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1 }}>{t('notes.transcriptLabel')}</Typography>
+                <TextField data-notes-editor="original" disabled={retranscribingId === selected.id} multiline minRows={3} fullWidth value={transcriptDraft}
+                  onChange={event => editField('transcript', event.target.value)} onBlur={() => void flushNow()}
+                  InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }} />
+                <Button data-notes-copy="original" size="small" disabled={!transcriptDraft.trim()} onClick={() => void copyDraft(transcriptDraft)} sx={{ mt: .5, fontSize: 11.5 }}>{t('notes.copyOriginal')}</Button>
+              </Box>}
 
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5, flexWrap: 'wrap' }}>
                 <Button

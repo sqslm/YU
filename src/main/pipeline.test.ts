@@ -246,6 +246,23 @@ afterEach(() => {
 })
 
 describe('Ask card completion', () => {
+  it('presents a read-only local answer in Ask without a duplicate task-result bubble', async () => {
+    const onAnswer = vi.fn(), answerCard = { question: 'Current window?', answer: 'Feishu', assistant: true }
+    const { pipeline, sent } = harness({}, { onAnswer, onAssistant: async () => ({ text: 'Feishu', answerCard }) })
+    pipeline.start('ask', { purpose: 'assistant' }); pipeline.pushAudio(tone(900))
+    const pending = pipeline.stop(); pipeline.audioStopped(); await pending
+    expect(onAnswer).toHaveBeenCalledWith(answerCard)
+    expect(sent.some(state => state.phase === 'done' && state.feedback)).toBe(false)
+  })
+  it('reports completed actions only on the voice bar, without assistant-window buttons', async () => {
+    const onAnswer = vi.fn()
+    const { pipeline, sent } = harness({}, { onAnswer, onAssistant: async () => ({ text: 'Opened VS Code' }) })
+    pipeline.start('ask', { purpose: 'assistant' }); pipeline.pushAudio(tone(900))
+    const pending = pipeline.stop(); pipeline.audioStopped(); await pending
+    expect(onAnswer).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({ phase: 'done', text: 'Opened VS Code', feedback: { failed: false } })
+    expect(sent.at(-1)).not.toHaveProperty('feedback.details')
+  })
   it('stops early with a useful error when the ASR service is unavailable', async () => {
     const { pipeline, sent } = harness({}, { checkAsr: async () => { throw Error('请先启动本地 ASR 服务') } })
     pipeline.start('dictation')
@@ -545,7 +562,7 @@ describe('surrounding-text injection', () => {
     const h = harness({}, { onAssistant, onAnswer })
     h.pipeline.start('ask', { purpose: 'assistant' }); h.pipeline.pushAudio(tone(800))
     const stopping = h.pipeline.stop(); h.pipeline.audioStopped(); await stopping
-    expect(h.sent.at(-1)).toMatchObject({ phase: 'done', text: '已打开官方网站', feedback: { failed: false }, taskLabel: 'AI 助手' })
+    expect(h.sent.at(-1)).toMatchObject({ phase: 'done', text: '已打开官方网站', feedback: { failed: false }, taskLabel: '任务结果' })
     expect(onAnswer).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
     expect(h.entries).toEqual([])
   })
@@ -555,7 +572,7 @@ describe('surrounding-text injection', () => {
     const { pipeline, entries, sent } = harness({}, { readContext, onAssistant, onAnswer })
     pipeline.start('ask', { handsFree: true, purpose: 'assistant' })
     pipeline.pushAudio(tone(800))
-    expect(sent.some(state => state.phase === 'recording' && state.taskLabel === 'AI 助手')).toBe(true)
+    expect(sent.some(state => state.phase === 'recording' && state.taskLabel === '任务处理')).toBe(true)
     const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
     expect(onAssistant).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ appName: 'code', windowTitle: 'Editor' }), undefined)
     expect(mocks.transcribe).toHaveBeenCalledOnce()

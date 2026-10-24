@@ -31,6 +31,7 @@ import { buildBarAlert, classifyError } from './errors'
 import { RingLog, describeSecret, diagnosticsFileName, renderDiagnostics } from './diagnostics'
 import { NotesStore } from './notes'
 import { AssistantSession } from './assistant'
+import { assistantAnswer } from './assistant-presentation'
 import { WindowsTools } from './tools/windows'
 import { windowsNative } from './windows-native'
 import { captureOriginalWindow, type WindowScreenshot } from './screenshot'
@@ -56,7 +57,6 @@ import {
   createCardWindow,
   closeLoginWindow,
   createSettingsWindow,
-  createAssistantWindow,
   openLoginWindow,
   positionCardWindow,
   recordingBarBounds,
@@ -110,11 +110,9 @@ let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
 let reminders: ReminderService | null = null
-let assistantWindow: BrowserWindow | null = null
-let assistantRetireTimer: NodeJS.Timeout | null = null
 let hubRetireTimer: NodeJS.Timeout | null = null
 let quitting = false
-let assistantVoice = false
+let assistantCardActive = false
 let tray: ReturnType<typeof createTray> | null = null
 let hubView: import('./tools/personal').HubPage | null = null
 let assistantTarget: ForegroundInfo | undefined
@@ -131,31 +129,31 @@ async function openScreenshot(): Promise<boolean> {
   }
 }
 function taskDialog(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
-  const parent = [assistantWindow, settingsWindow].find(win => win && !win.isDestroyed() && win.isVisible())
+  const parent = [cardWindow, settingsWindow].find(win => win && !win.isDestroyed() && win.isVisible())
   return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options)
 }
 async function previewScreenshot(image: WindowScreenshot, detail: string, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted()
-  showAssistant()
-  const win = assistantWindow
-  if (!win || win.isDestroyed()) throw new Error(mt('助手尚未就绪'))
-  if (win.webContents.isLoading()) await new Promise<void>(resolve => win.webContents.once('did-finish-load', () => resolve()))
-  signal.throwIfAborted()
   await new Promise<void>((resolve, reject) => {
     const id = ++screenshotSequence
     const finish = (accepted: boolean): void => {
+      if (screenshotReview?.id !== id) return
       signal.removeEventListener('abort', cancel)
-      if (screenshotReview?.id === id) screenshotReview = null
-      if (!win.isDestroyed()) win.webContents.send('assistant:screenshot-preview', null)
+      screenshotReview = null
+      if (lastAnswer?.screenshot?.id === id) {
+        if (accepted && !signal.aborted) showAnswerCard({ question: lastAnswer.question, answer: '', assistant: true, streaming: true, status: mt('正在分析截图…') })
+        else hideCard()
+      }
       if (accepted && !signal.aborted) resolve()
       else reject(new Error(mt('已取消本次系统操作')))
     }
     const cancel = (): void => finish(false)
     screenshotReview = { id, finish }
     signal.addEventListener('abort', cancel, { once: true })
-    win.webContents.send('assistant:screenshot-preview', { id, title: image.title, dataUrl: image.dataUrl, detail })
+    showAnswerCard({ question: image.title, answer: '', assistant: true, screenshot: { id, title: image.title, dataUrl: image.dataUrl, detail } })
   })
 }
+
 function assistantContext(target = assistantTarget): PromptContext {
   return target ? { appName: target.appName, windowTitle: target.title, processId: target.pid, appPath: target.appPath,
     windowRect: target.rect ?? undefined, windowHandle: target.handle } : {}
@@ -191,15 +189,12 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   },
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
-    const win = assistantWindow?.isVisible() ? assistantWindow : null
     const { response } = await taskDialog({ type: 'question', signal, title: mt('确认本次操作'),
       message: mt('读取原窗口的选中文字并发送给配置的模型？'), detail: context.appName || '', buttons: [mt('取消'), mt('确认')], defaultId: 0, cancelId: 0, noLink: true })
     signal.throwIfAborted()
     if (response !== 1) throw new Error(mt('已取消本次系统操作'))
-    try {
-      const target = await captureSelectionTarget(store.get(), context, signal)
-      signal.throwIfAborted(); return target.text
-    } finally { if (win && !win.isDestroyed() && win.isVisible()) win.focus() }
+    const target = await captureSelectionTarget(store.get(), context, signal)
+    signal.throwIfAborted(); return target.text
   },
   personal: {
     remind: (text, signal, submittedAt) => reminders!.voice(text, signal, undefined, submittedAt),
@@ -222,7 +217,8 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     }
   },
   changed: state => {
-    if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.webContents.send('assistant:changed', state)
+    const turn = state.turns.at(-1)
+    if (assistantCardActive && turn && !screenshotReview) showAnswerCard({ question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
     tray?.refresh()
     refreshWakeWord()
   } })
@@ -383,9 +379,7 @@ function refreshWakeWord(screenshotActive = screenshotTool.isOpen, retry = false
 function refreshHotkeyActivity(): void {
   refreshWakeWord()
   hotkeys?.setActivity(notesRecording || pipeline?.isRecording ? 'recording' : pipeline?.isBusy ? 'working' : 'idle')
-  if (!pipeline?.isBusy) assistantVoice = false
   tray?.refresh()
-  if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.webContents.send('assistant:activity', assistantVoice ? pipeline?.isRecording ? 'recording' : 'working' : 'idle')
 }
 
 /**
@@ -479,10 +473,6 @@ async function appendFeedback(input: {
  */
 function handleBarAction(id: BarActionId): void {
   switch (id) {
-    case 'open_assistant':
-      showAssistant()
-      pipeline?.dismissAlert()
-      break
     case 'undo-reminder':
       reminders?.undo()
       pipeline?.dismissAlert()
@@ -565,48 +555,32 @@ function navigateHub(page: import('./tools/personal').HubPage): void {
   win.webContents.send('assistant:navigate')
 }
 
-function cancelAssistant(): void {
-  assistant.cancel()
-  if (assistantVoice) pipeline?.cancel('assistant')
-  assistantVoice = false
-}
+function cancelAssistant(): void { assistant.cancel(); assistantCardActive = false }
 
-function hideAssistant(): void {
-  cancelAssistant()
-  const win = assistantWindow
-  if (!win || win.isDestroyed()) return
-  win.hide()
-  if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
-  assistantRetireTimer = setTimeout(() => {
-    assistantRetireTimer = null
-    if (!win.isDestroyed() && !win.isVisible()) win.destroy()
-  }, 60_000)
-  assistantRetireTimer.unref?.()
-}
-
-function openAssistant(): boolean {
-  if (screenshotTool.isOpen || notesRecording || pipeline?.isBusy || selectionEditor?.isBusy) return false
-  if (!assistantWindow?.isFocused()) assistantTarget = foregroundWindow()
-  showAssistant()
+function openAsk(): boolean {
+  if (screenshotTool.isOpen || notesRecording || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy) return false
+  assistantTarget = foregroundWindow()
+  showAnswerCard({ question: '', answer: '', assistant: true })
+  const win = cardWindow!
+  const focus = (): void => { if (!win.isDestroyed()) { win.show(); win.focus() } }
+  if (win.webContents.isLoading()) win.once('ready-to-show', focus)
+  else focus()
   return true
 }
 
-/** Explicit assistant entry, result details and screenshot approval. */
-function showAssistant(): void {
-  if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
-  assistantRetireTimer = null
-  assistant.snapshot()
-  if (assistantWindow && !assistantWindow.isDestroyed()) {
-    if (assistantWindow.isMinimized()) assistantWindow.restore()
-    assistantWindow.show(); assistantWindow.focus()
-    assistantWindow.webContents.send('assistant:focus')
-    return
-  }
-  const win = createAssistantWindow(store.get().themeMode)
-  assistantWindow = win
-  win.on('close', event => { if (!quitting) { event.preventDefault(); hideAssistant() } })
-  win.on('closed', () => { assistantWindow = null })
-  win.webContents.on('render-process-gone', () => { if (win.isVisible()) cancelAssistant(); win.destroy() })
+async function runAssistant(text: string, signal?: AbortSignal, submittedAt?: number, context = assistantContext(), useContext?: boolean, fromCard = false): Promise<{ text: string; failed?: boolean; answerCard?: AnswerCardPayload } | void> {
+  signal?.throwIfAborted()
+  if (context.windowHandle) assistantTarget = { handle: context.windowHandle, title: context.windowTitle ?? '', appName: context.appName ?? '', className: '', pid: context.processId ?? 0, appPath: context.appPath ?? '', rect: context.windowRect ?? null }
+  assistantCardActive = fromCard
+  try {
+    await assistant.send(text, signal, undefined, submittedAt, context, useContext)
+    signal?.throwIfAborted()
+    const turn = assistant.snapshot().turns.at(-1)
+    if (!turn || turn.state === 'cancelled') return
+    const answerCard = assistantAnswer(turn)
+    if (!answerCard && (fromCard || lastAnswer?.assistant && cardWindow?.isVisible())) hideCard()
+    return { text: turn.answer, failed: turn.state === 'error' || Boolean(turn.localResults?.some(result => !result.ok)), answerCard }
+  } finally { assistantCardActive = false }
 }
 
 /**
@@ -742,11 +716,28 @@ function showAnswerCard(payload: AnswerCardPayload): void {
  * overwritten after they clicked that button, and `ask` is a follow-up turn.
  */
 async function handleCardAction(action: CardAction): Promise<void> {
+  if (action.id === 'screenshot-accept' || action.id === 'screenshot-cancel') {
+    if (!screenshotReview || String(screenshotReview.id) !== action.payload) return
+    screenshotReview.finish(action.id === 'screenshot-accept')
+    return
+  }
   if (action.id === 'stop') {
+    if (screenshotReview) { screenshotReview.finish(false); return }
     const partial = lastAnswer
-    if (partial?.streaming && pipeline?.stopAnswer()) {
+    if (partial?.assistant && partial.streaming) {
+      cancelAssistant()
+      showAnswerCard({ ...partial, screenshot: undefined, streaming: false, stopped: true, status: '', actions: [] })
+    } else if (partial?.streaming && pipeline?.stopAnswer()) {
       showAnswerCard({ ...partial, streaming: false, stopped: true, status: '', actions: [] })
     }
+    return
+  }
+  if (action.id === 'open-item') {
+    if (!action.payload || pipeline?.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy) return
+    hideCard()
+    await assistant.openItem(action.payload)
+    const turn = assistant.snapshot().turns.at(-1)
+    if (turn && turn.state !== 'cancelled') pipeline?.reportTaskResult(turn.answer, turn.state === 'error')
     return
   }
   const answer = (action.payload ?? lastAnswer?.answer ?? '').trim()
@@ -763,7 +754,12 @@ async function handleCardAction(action: CardAction): Promise<void> {
   if (action.id === 'ask') {
     const question = (action.payload ?? '').trim()
     if (!question || !pipeline) return
-    await pipeline.followUp(question)
+    if (lastAnswer?.assistant) {
+      if (pipeline.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy) return
+      const result = await runAssistant(question, undefined, undefined, undefined, needsAssistantContext(question), true)
+      if (result?.answerCard) showAnswerCard(result.answerCard)
+      else if (result?.text) { hideCard(); pipeline.reportTaskResult(result.text, result.failed) }
+    } else await pipeline.followUp(question)
   }
 }
 
@@ -799,6 +795,8 @@ function scheduleCardRetire(): void {
 }
 
 function hideCard(cancelSelection = true): void {
+  assistantCardActive = false
+  screenshotReview?.finish(false)
   if (cancelSelection) selectionEditor?.cancel()
   pendingCard = null
   hotkeys?.setCardOpen(false)
@@ -848,54 +846,16 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 function registerIpc(): void {
   screenshotTool.register()
   ipcMain.handle('screenshot:open', () => openScreenshot())
-  ipcMain.handle('assistant:open', () => openAssistant())
   ipcMain.handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
   ipcMain.handle('assistant:navigate', (_event, page: unknown) => {
     if (!['overview', 'history', 'notes', 'reminders', 'corrections', 'settings'].includes(page as string)) throw new Error('Invalid page')
     navigateHub(page as import('./tools/personal').HubPage)
-  })
-  const assistantOnly = (event: Electron.IpcMainInvokeEvent): void => {
-    if (event.sender !== assistantWindow?.webContents) throw new Error('Assistant window required')
-  }
-  ipcMain.handle('assistant:state', event => { assistantOnly(event); return assistant.snapshot() })
-  ipcMain.handle('assistant:open-item', async (event, id: unknown) => {
-    assistantOnly(event)
-    if (typeof id !== 'string' || id.length > 64) throw new Error('Invalid result')
-    if (pipeline?.isBusy || notesRecording || selectionEditor?.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
-    await assistant.openItem(id)
-  })
-  ipcMain.handle('assistant:hide', event => { assistantOnly(event); hideAssistant() })
-  ipcMain.handle('assistant:cancel', event => { assistantOnly(event); cancelAssistant() })
-  ipcMain.handle('assistant:clear', event => { assistantOnly(event); cancelAssistant(); assistant.clear() })
-  ipcMain.handle('assistant:activity', event => {
-    assistantOnly(event)
-    return assistantVoice ? pipeline?.isRecording ? 'recording' : 'working' : 'idle'
-  })
-  ipcMain.handle('assistant:send', async (event, text: string) => {
-    assistantOnly(event)
-    if (pipeline?.isBusy || notesRecording || selectionEditor?.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
-    await assistant.send(text, undefined, undefined, undefined, assistantContext())
-  })
-  ipcMain.handle('assistant:screenshot-response', (event, id: number, accepted: boolean) => {
-    assistantOnly(event)
-    if (typeof accepted !== 'boolean' || id !== screenshotReview?.id) throw new Error(mt('截图预览已过期，请重新截图'))
-    screenshotReview.finish(accepted)
   })
   ipcMain.handle('app:chooseDownloadFolder', async event => {
     if (event.sender !== settingsWindow?.webContents) throw new Error('Invalid settings window')
     const result = await dialog.showOpenDialog(settingsWindow!, { title: mt('选择下载目录'),
       defaultPath: store.get().assistantDownloadFolder || app.getPath('downloads'), properties: ['openDirectory'] })
     return result.canceled ? null : result.filePaths[0] ?? null
-  })
-  ipcMain.handle('assistant:record', async event => {
-    assistantOnly(event)
-    if (assistantVoice && pipeline?.isRecording) { await pipeline.stop(); return true }
-    if (!pipeline || pipeline.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy) return false
-    hideCard()
-    pipeline.start('ask', { handsFree: true, purpose: 'assistant', target: assistantTarget })
-    assistantVoice = pipeline.isRecording
-    refreshHotkeyActivity()
-    return assistantVoice
   })
   ipcMain.handle('net:probe-search', (_event, input) => probeSearch(input))
   ipcMain.handle('settings:capture-shortcut', (event, active: boolean) => {
@@ -908,10 +868,6 @@ function registerIpc(): void {
     setMainLanguage(next.uiLanguage)
     refreshWakeWord()
     tray?.refresh()
-    if (assistantWindow && !assistantWindow.isDestroyed()) {
-      applyHubTheme(assistantWindow, next.themeMode)
-      assistantWindow.webContents.send('settings:changed', next)
-    }
     reminders?.settingsChanged()
     hotkeys?.apply(next)
     if (next.launchAtStartup !== previous.launchAtStartup) {
@@ -1101,11 +1057,6 @@ function registerIpc(): void {
       pendingCard = null
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
-    if (assistantWindow && !assistantWindow.isDestroyed() && !assistantWindow.isVisible()) {
-      if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
-      assistantRetireTimer = null
-      assistantWindow.destroy()
-    }
     return resources()
   })
 
@@ -1355,9 +1306,14 @@ function registerIpc(): void {
   // the window object stays warm for the next answer.
   ipcMain.on('card:hide', () => hideCard())
   // Card buttons: copy / replace selection / follow-up question.
-  ipcMain.on('card:action', (_event, action: CardAction) => {
+  ipcMain.on('card:action', (event, action: CardAction) => {
+    if (event.sender !== cardWindow?.webContents || event.senderFrame !== cardWindow.webContents.mainFrame) return
     if (!action || typeof action.id !== 'string') return
-    void handleCardAction(action)
+    void handleCardAction(action).catch(error => {
+      const message = error instanceof Error ? error.message : String(error)
+      if (action.id === 'ask') showAnswerCard({ question: action.payload ?? '', answer: message, assistant: true, streaming: false })
+      else { hideCard(); pipeline?.reportTaskResult(message, true) }
+    })
   })
   // The card reports its rendered height so the window fits a long answer.
   ipcMain.on('card:height', (_event, height: number) => {
@@ -1399,6 +1355,7 @@ function wireHotkeys(): void {
       log(`[hotkey] ${event.type}${detail}${at}`)
       switch (event.type) {
         case 'start':
+          if (assistant.busy) cancelAssistant()
           // A stale answer card would otherwise float over the next take.
           hideCard()
           // The hook owns the gesture now: it starts on the press and reports
@@ -1444,8 +1401,8 @@ function wireHotkeys(): void {
           void toggleNotesRecording()
           break
         case 'assistant-toggle':
-          if (assistantWindow?.isVisible()) hideAssistant()
-          else openAssistant()
+          if (cardWindow?.isVisible()) hideCard()
+          else openAsk()
           break
         case 'screenshot':
           void openScreenshot()
@@ -1529,16 +1486,7 @@ async function bootstrap(): Promise<void> {
       return { recent: last?.state === 'done' ? { question: last.question.slice(0, 500), answer: last.answer.slice(0, 2000) } : null,
         ...(completion ? { activeTasks: reminders!.store.list().filter(row => row.status === 'pending' || row.status === 'due').slice(0, 20).map(row => ({ id: row.id, title: row.title })) } : {}) }
     },
-    onAssistant: async (text, signal, submittedAt, context, useContext) => {
-      signal.throwIfAborted()
-      assistantTarget = context ? { handle: context.windowHandle, title: context.windowTitle ?? '', appName: context.appName ?? '',
-        className: '', pid: context.processId ?? 0, appPath: context.appPath ?? '', rect: context.windowRect ?? null } : undefined
-      await assistant.send(text, signal, undefined, submittedAt, context, useContext)
-      signal.throwIfAborted()
-      const turn = assistant.snapshot().turns.at(-1)
-      if (!turn || turn.state === 'cancelled') return
-      return { text: turn.answer, failed: turn.state === 'error' || Boolean(turn.localResults?.some(result => !result.ok)) }
-    },
+    onAssistant: (text, signal, submittedAt, context, useContext) => runAssistant(text, signal, submittedAt, context, useContext),
     onActivity: () => refreshHotkeyActivity(),
     onVoiceNote: async (pcm, transcript, signal) => {
       const note = await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript)
@@ -1622,12 +1570,14 @@ async function bootstrap(): Promise<void> {
    */
   powerMonitor.on('suspend', () => {
     wakeSuspended = true; refreshWakeWord()
-    hideAssistant()
+    hideCard()
+    cancelAssistant()
     pipeline?.cancel('suspend')
   })
   powerMonitor.on('lock-screen', () => {
     wakeLocked = true; refreshWakeWord()
-    hideAssistant()
+    hideCard()
+    cancelAssistant()
     pipeline?.cancel('lock')
   })
   powerMonitor.on('resume', () => { wakeSuspended = false; refreshWakeWord(); reminders?.refresh() })
@@ -1679,7 +1629,6 @@ async function bootstrap(): Promise<void> {
    */
   let appliedSystemTheme: 'dark' | 'light' | null = null
   nativeTheme.on('updated', () => {
-    if (assistantWindow && !assistantWindow.isDestroyed() && store.get().themeMode === 'system') applyHubTheme(assistantWindow, 'system')
     if (store.get().themeMode !== 'system') return
     const next: 'dark' | 'light' = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
     if (next === appliedSystemTheme) return
@@ -1720,7 +1669,7 @@ async function bootstrap(): Promise<void> {
 
   tray = createTray({
     openMain: () => { ensureSettingsWindow() },
-    openAssistant: () => { openAssistant() },
+    openAsk: () => { openAsk() },
     openNotes: () => navigateHub('notes'),
     openReminders: () => navigateHub('reminders'),
     status: () => notesRecording || pipeline?.isRecording ? mt('录音中') : pipeline?.isBusy || assistant.busy ? mt('处理中') : wakeWord.snapshot().phase === 'listening' ? mt('唤醒待命') : store.get().hotkeys.enabled ? mt('待命') : mt('快捷键已暂停'),
@@ -1986,7 +1935,6 @@ if (!gotLock) {
   app.on('before-quit', () => {
     quitting = true
     wakeWord.stop()
-    if (assistantRetireTimer) clearTimeout(assistantRetireTimer)
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()
     screenshotTool.close()

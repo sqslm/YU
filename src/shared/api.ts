@@ -24,7 +24,6 @@ import type {
 import type { StatsFile } from './stats'
 import type { LocalAsrMirror, LocalAsrStatus, LocalDownloadProgress } from './local-asr'
 import type { Reminder, ReminderAction, ReminderInput, ReminderView } from './reminders'
-import type { AssistantState } from './assistant'
 
 export type { AnswerCardPayload } from './types'
 
@@ -44,23 +43,9 @@ export interface TypelessApi {
     run(action: import('./screenshot').ScreenshotAction, dataUrl: string, question?: string, target?: string, ocrLanguage?: string): Promise<import('./screenshot').ScreenshotResult>
   }
   assistant: {
-    reviewScreenshot(id: number, accepted: boolean): Promise<void>
-    onScreenshot(callback: (preview: import('./assistant').ScreenshotPreview | null) => void): () => void
-    open(): Promise<boolean>
-    hide(): Promise<void>
-    state(): Promise<AssistantState>
-    send(text: string): Promise<void>
-    openItem(id: string): Promise<void>
-    cancel(): Promise<void>
-    clear(): Promise<void>
-    record(): Promise<boolean>
-    activity(): Promise<'idle' | 'recording' | 'working'>
-    onActivity(callback: (phase: 'idle' | 'recording' | 'working') => void): () => void
-    onFocus(callback: () => void): () => void
     navigate(page: 'notes' | 'reminders' | 'settings'): Promise<void>
     hubView(): Promise<'overview' | 'history' | 'notes' | 'reminders' | 'corrections' | 'settings' | null>
     onNavigate(callback: () => void): () => void
-    onChanged(callback: (state: AssistantState) => void): () => void
   }
   reminders: {
     list(): Promise<Reminder[]>

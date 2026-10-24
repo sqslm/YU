@@ -131,7 +131,7 @@ export interface PipelineOptions {
   captureSelection?: () => Promise<SelectionTarget>
   voiceContext?: (text: string) => { recent: { question: string; answer: string } | null; activeTasks?: { id: string; title: string }[] }
   onCompletedAnswer?: (question: string, answer: string) => void
-  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext, useContext?: boolean) => Promise<{ text: string; failed?: boolean } | void>
+  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext, useContext?: boolean) => Promise<{ text: string; failed?: boolean; answerCard?: AnswerCardPayload } | void>
   onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal) => Promise<void>
   onActivity?: (recording: boolean, busy: boolean) => void
   onReminder?: (text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt?: number) => Promise<{ message: string; undo?: boolean }>
@@ -380,7 +380,7 @@ export class Pipeline {
     if (!win) return
     const live = state.phase === 'recording' || state.phase === 'working'
     if (!win.isDestroyed()) win.webContents.send('bar:state', live
-      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('AI 助手') : undefined }
+      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('任务处理') : undefined }
       : state)
     this.barPhase = state.phase
     if (live || state.phase === 'alert' || state.phase === 'error') {
@@ -1303,8 +1303,10 @@ export class Pipeline {
           appName: target.appName || target.className, windowHandle: target.handle, windowTitle: target.title,
           processId: target.pid || undefined, appPath: target.appPath || undefined, windowRect: target.rect ?? undefined }, assistantUseContext)
         if (token === this.runToken) {
-          if (result?.text) this.setBarState({ phase: 'done', mode, text: result.text,
-            feedback: { failed: result.failed, details: true }, taskLabel: mt('AI 助手'), showMode: settings.showModeInBar }, 10_000, { force: true })
+          if (result?.answerCard) {
+            this.pushCard(result.answerCard, token)
+            this.setBarState({ phase: 'done', mode: 'ask', text: '', showMode: settings.showModeInBar }, DONE_HIDE_MS)
+          } else if (result?.text) this.reportTaskResult(result.text, result.failed)
           else this.setBarState({ phase: 'idle' }, DONE_HIDE_MS)
         }
         return null
@@ -1541,6 +1543,10 @@ export class Pipeline {
     this.takeVoiceCommands = null
     this.takeSmartRouting = false
     this.options.onActivity?.(false, false)
+  }
+
+  reportTaskResult(text: string, failed = false): void {
+    this.setBarState({ phase: 'done', mode: 'ask', text, feedback: { failed }, taskLabel: mt('任务结果'), showMode: this.getSettings().showModeInBar }, 10_000, { force: true })
   }
 
   /** ASR leg of the classic route, walking the configured failover chain. */

@@ -283,8 +283,7 @@ export function Bar(): JSX.Element {
 
           {phase === 'done' && <span style={{ ...result, ...(feedback?.failed ? { color: '#ffc6c6' } : {}) }}>
             {feedback ? i18n.t(feedback.failed ? '任务失败' : '已完成') : truncate(state.text)}</span>}
-          {feedback?.details && <button data-bar-action="open_assistant" style={feedbackButton}
-            onClick={() => window.api.bar.action('open_assistant')}>{i18n.t('查看详情')}</button>}
+
 
           {/* A failure that carries an alert gets the same row as the notice
               phase — dot, clamp, buttons — so retry/open-settings are always in
