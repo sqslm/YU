@@ -10,7 +10,7 @@ const SLOT = new Date(2026, 7, 25, 8, 0).getTime()
 const at = (day: number, hour: number, minute = 0, month = 7, year = 2026): number => new Date(year, month, day, hour, minute).getTime()
 
 const data = (overrides: Partial<BriefingData> = {}): BriefingData =>
-  ({ now: NOW, language: 'zh', events: [], tasks: [], overdue: [], tomorrow: [], memories: [], ...overrides })
+  ({ now: NOW, language: 'zh', events: [], tasks: [], overdue: [], tomorrow: [], ...overrides })
 
 const fullZh = (): Partial<BriefingData> => ({
   events: [
@@ -20,7 +20,6 @@ const fullZh = (): Partial<BriefingData> => ({
   tasks: [{ id: 't1', title: '交周报', dueAt: at(25, 16, 30), level: 'strong' }],
   overdue: [{ id: 't2', title: '体检', dueAt: at(24, 18), overdue: true }],
   tomorrow: [{ id: 'e3', title: '面试', start: at(26, 10), end: at(26, 11), allDay: false }],
-  memories: [{ id: 'm1', kind: 'preference', text: '上午先处理费脑的事' }],
   stats: { entries: 12, characters: 860, durationMs: 4200 }
 })
 
@@ -33,7 +32,6 @@ const fullEn = (): Partial<BriefingData> => ({
   tasks: [{ id: 't1', title: 'File the weekly report', dueAt: at(25, 16, 30) }],
   overdue: [{ id: 't2', title: 'Medical checkup', dueAt: at(24, 18) }],
   tomorrow: [{ id: 'e3', title: 'Interview', start: at(26, 10), end: at(26, 11), allDay: false }],
-  memories: [{ id: 'm1', kind: 'preference', text: 'Hard thinking first thing in the morning' }],
   stats: { entries: 12, characters: 860, durationMs: 4200 }
 })
 
@@ -84,7 +82,6 @@ describe('composeBriefing', () => {
       '待办\n- 16:30 交周报',
       '已经过期\n- 昨天 18:00 体检（已逾期）',
       '明天\n- 10:00 面试',
-      '你让我记住的\n- 上午先处理费脑的事',
       '回顾\n昨天听写 12 条、共 860 字。'
     ])
     expect(briefing.body).toBe(briefing.sections.join('\n\n'))
@@ -97,7 +94,6 @@ describe('composeBriefing', () => {
       'To do\n- 16:30 File the weekly report',
       'Overdue\n- Yesterday 18:00 Medical checkup (overdue)',
       'Tomorrow\n- 10:00 Interview',
-      'What you asked me to remember\n- Hard thinking first thing in the morning',
       'Recap\nYesterday: 12 notes, 860 characters.'
     ])
   })
@@ -119,16 +115,6 @@ describe('composeBriefing', () => {
       ]
     }))
     expect(briefing.sections[0]).toBe('今天\n- 09:00–10:00 A\n- 13:00–14:00 B\n- 18:00–19:00 C')
-  })
-  it('quotes at most three memories and skips a silent recap', () => {
-    const briefing = composeBriefing(data({
-      memories: [
-        { id: 'm1', kind: 'preference', text: '一' }, { id: 'm2', kind: 'preference', text: '二' },
-        { id: 'm3', kind: 'preference', text: '三' }, { id: 'm4', kind: 'preference', text: '四' }
-      ],
-      stats: { entries: 0, characters: 0, durationMs: 0 }
-    }))
-    expect(briefing.sections).toEqual(['你让我记住的\n- 一\n- 二\n- 三'])
   })
 })
 

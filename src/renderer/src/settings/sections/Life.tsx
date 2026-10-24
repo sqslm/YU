@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Box, Button, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
-import type { MemoryEntry } from '@shared/memory'
 import type { CalendarEvent, CalendarRange } from '@shared/calendar'
 import { formatEventTime } from '@shared/calendar'
 import type { Briefing } from '@shared/briefing'
@@ -11,16 +10,12 @@ import { SettingsGroup, SettingsHint, SettingsRow, controlSx, narrowControlSx } 
 import i18n from '../../i18n'
 
 /**
- * Long-term memory, the local calendar, the daily briefing and read-aloud.
+ * The local calendar, the daily briefing and read-aloud.
  *
- * Everything here is a view onto a store the assistant also writes to: adding a
- * memory by voice shows up in this list, and cancelling an event here is what the
- * next answer will read. Nothing is duplicated, so there is no sync to reconcile.
+ * Everything here is a view onto a store the assistant also writes to: cancelling
+ * an event here is what the next answer will read. Nothing is duplicated, so
+ * there is no sync to reconcile.
  */
-
-const KIND_LABELS: Record<string, string> = {
-  preference: '偏好', fact: '事实', profile: '个人信息', rule: '规则'
-}
 
 const RANGES: { value: CalendarRange; label: string }[] = [
   { value: 'upcoming', label: '接下来的' },
@@ -44,7 +39,6 @@ export function LifeSection({ settings, patch }: {
   settings: Settings
   patch: (patch: Partial<Settings>) => void
 }): JSX.Element {
-  const [memories, setMemories] = useState<MemoryEntry[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [range, setRange] = useState<CalendarRange>('upcoming')
   const [briefing, setBriefing] = useState<Briefing | null>(null)
@@ -52,14 +46,10 @@ export function LifeSection({ settings, patch }: {
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const loadMemory = useCallback(async () => {
-    try { setMemories(await window.api.life.memory()) } catch (error) { setNotice({ error: true, text: String(error) }) }
-  }, [])
   const loadEvents = useCallback(async (next: CalendarRange) => {
     try { setEvents(await window.api.life.events(next)) } catch (error) { setNotice({ error: true, text: String(error) }) }
   }, [])
 
-  useEffect(() => { void loadMemory() }, [loadMemory])
   useEffect(() => { void loadEvents(range) }, [loadEvents, range])
   useEffect(() => {
     let alive = true
@@ -74,9 +64,6 @@ export function LifeSection({ settings, patch }: {
     return () => { alive = false }
   }, [])
 
-  const archive = async (id: string, action: 'archive' | 'restore'): Promise<void> => {
-    try { setMemories(await window.api.life.archiveMemory(id, action)) } catch (error) { setNotice({ error: true, text: String(error) }) }
-  }
   const cancelEvent = async (id: string, action: 'cancel' | 'restore'): Promise<void> => {
     try { await window.api.life.cancelEvent(id, action); await loadEvents(range) } catch (error) { setNotice({ error: true, text: String(error) }) }
   }
@@ -94,39 +81,9 @@ export function LifeSection({ settings, patch }: {
     finally { setBusy(false) }
   }
 
-  const active = memories.filter(row => !row.archivedAt)
-  const archived = memories.filter(row => row.archivedAt)
-
   return (
     <Stack spacing={2}>
       {notice && <Alert severity={notice.error ? 'error' : 'success'} onClose={() => setNotice(null)}>{notice.text}</Alert>}
-
-      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🧠</Box>} title={i18n.t('长期记忆')}>
-        <SettingsRow label={i18n.t('启用长期记忆')} description={i18n.t('你说「记住…」时写入本地记忆，之后问「你还记得…」时读回。数据只在本机。')}>
-          <Switch size="small" checked={settings.memory.enabled}
-            onChange={e => patch({ memory: { ...settings.memory, enabled: e.target.checked } })} />
-        </SettingsRow>
-        <SettingsHint>{i18n.t('共 {{count}} 条，已归档 {{archived}} 条。归档不删除，随时可以恢复。', { count: active.length, archived: archived.length })}</SettingsHint>
-        {active.length === 0 && <SettingsHint>{i18n.t('还没有记忆。对语说「记住，以后回答先给结论」试试。')}</SettingsHint>}
-        {active.map(row => (
-          <SettingsRow key={row.id} label={row.text} description={`${KIND_LABELS[row.kind] ?? row.kind}${row.tags.length ? ` · ${row.tags.join(' / ')}` : ''}`}>
-            <Button size="small" onClick={() => void archive(row.id, 'archive')}>{i18n.t('归档')}</Button>
-          </SettingsRow>
-        ))}
-        {archived.length > 0 && (
-          <Box sx={{ px: 2, py: 1.25 }}>
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 0.75 }}>{i18n.t('已归档')}</Typography>
-            <Stack spacing={0.5}>
-              {archived.map(row => (
-                <Stack key={row.id} direction="row" alignItems="center" spacing={1}>
-                  <Typography sx={{ fontSize: 11.5, color: 'text.secondary', flex: 1, minWidth: 0 }} noWrap>{row.text}</Typography>
-                  <Button size="small" onClick={() => void archive(row.id, 'restore')}>{i18n.t('恢复')}</Button>
-                </Stack>
-              ))}
-            </Stack>
-          </Box>
-        )}
-      </SettingsGroup>
 
       <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>📅</Box>} title={i18n.t('本地日程')}>
         <SettingsRow label={i18n.t('启用日程与提醒')} description={i18n.t('日程独立于提醒：日程有起止时间，到点前按这里的提前量提示。')}>

@@ -5,19 +5,18 @@ import type { ToolDefinition, ToolOutcome } from './registry'
 
 /**
  * Tools for the capabilities that used to be advertised as "not connected":
- * long-term memory, the local calendar, the daily briefing, read-aloud and
- * cloud-sync administration.
+ * the local calendar, the daily briefing, read-aloud and cloud-sync
+ * administration.
  *
  * They live in their own group instead of joining `personal.ts` because each one
- * has a different failure mode: memory and calendar are local writes that must
- * never lie about what was stored, read-aloud is a slow side effect, and sync
- * control only flips a setting. Keeping them separable lets the assistant turn
- * individual groups on without dragging the rest in.
+ * has a different failure mode: the calendar is a local write that must never lie
+ * about what was stored, read-aloud is a slow side effect, and sync control only
+ * flips a setting. Keeping them separable lets the assistant turn individual
+ * groups on without dragging the rest in.
  */
-export const LIFE_TOOLS = ['remember', 'recall_memory', 'forget_memory', 'create_event', 'list_events', 'manage_event', 'daily_briefing', 'speak_text', 'stop_speaking', 'sync_status', 'sync_control'] as const
+export const LIFE_TOOLS = ['create_event', 'list_events', 'manage_event', 'daily_briefing', 'speak_text', 'stop_speaking', 'sync_status', 'sync_control'] as const
 
 /** Shapes the stores project into. Structural on purpose: `index.ts` owns the mapping. */
-export interface LifeMemory { id: string; kind: string; text: string; tags: string[]; createdAt: number; updatedAt: number }
 export interface LifeEvent {
   id: string
   title: string
@@ -42,10 +41,6 @@ export interface LifeSyncStatus { enabled: boolean; signedIn: boolean; serverUrl
 export interface LifeBriefing { title: string; body: string; empty: boolean }
 
 export interface LifeTools {
-  remember(input: { text: string; kind?: string; tags?: string[] }): LifeMemory
-  memories(query: string, kind?: string): LifeMemory[]
-  touchMemories(ids: readonly string[]): void
-  archiveMemory(id: string, action: 'archive' | 'restore'): void
   event(id: string): LifeEvent | undefined
   events(range: { from: number; until: number }): LifeEvent[]
   saveEvent(input: LifeEventInput, id?: string): LifeEvent
@@ -91,26 +86,6 @@ function resolveEnd(expression: string, startAt: number): number {
 }
 
 async function run(name: string, args: Record<string, unknown>, api: LifeTools): Promise<ToolOutcome> {
-  if (name === 'remember') {
-    const text = string(args.text)
-    if (!text) throw new Error(mt('请提供要记住的内容'))
-    const tags = Array.isArray(args.tags) ? args.tags.filter((tag): tag is string => typeof tag === 'string') : undefined
-    const saved = api.remember({ text, kind: string(args.kind) || undefined, tags })
-    return ok(mt('已记住：{{text}}', { text: saved.text.slice(0, 80) }), { id: saved.id, kind: saved.kind, tags: saved.tags, text: saved.text })
-  }
-  if (name === 'recall_memory') {
-    const rows = api.memories(string(args.query), string(args.kind) || undefined)
-    api.touchMemories(rows.slice(0, 12).map(row => row.id))
-    return ok(mt('找到 {{count}} 条记忆', { count: rows.length }), { total: rows.length, asOf: Date.now(),
-      items: rows.slice(0, 12).map(row => ({ id: row.id, kind: row.kind, text: row.text, tags: row.tags, updatedAt: row.updatedAt })), truncated: rows.length > 12 })
-  }
-  if (name === 'forget_memory') {
-    const id = string(args.id)
-    if (!id) throw new Error(mt('请提供要处理的记忆 ID'))
-    const action = string(args.action) === 'restore' ? 'restore' : 'archive'
-    api.archiveMemory(id, action)
-    return ok(mt(action === 'archive' ? '已归档这条记忆，需要时可以恢复' : '已恢复这条记忆'), { id, action })
-  }
   if (name === 'create_event') {
     const title = string(args.title)
     if (!title) throw new Error(mt('请提供日程标题'))
@@ -236,9 +211,6 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools):
 }
 
 const schemas: Record<typeof LIFE_TOOLS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
-  remember: { description: 'Save one standing preference, fact or rule that the user explicitly asked to remember, so later sessions keep it. Quote the user\'s own wording and never infer extra preferences. This is storage, not an agreement to do something now.', properties: { text: { type: 'string' }, kind: { type: 'string', enum: ['preference', 'fact', 'profile', 'rule'] }, tags: { type: 'array', items: { type: 'string' }, maxItems: 8 } }, required: ['text'] },
-  recall_memory: { description: 'Search the local long-term memory by keyword or kind. Only the memories actually returned exist: never claim to remember anything that is not in the result, and say so plainly when a search finds nothing.', properties: { query: { type: 'string' }, kind: { type: 'string', enum: ['preference', 'fact', 'profile', 'rule'] } } },
-  forget_memory: { description: 'Archive a real memory ID returned by recall_memory (default, recoverable) or restore an archived one. Nothing is deleted permanently.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['archive', 'restore'] } }, required: ['id'] },
   create_event: { description: 'Add a local calendar event from the actual request. start (and optional end) are natural-language time expressions parsed by the existing time parser, e.g. "明天下午三点" or "9:30"; never invent a time and never turn a schedule into a reminder. Set all_day for whole-day items. Missing details must be asked for in text.', properties: { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, all_day: { type: 'boolean' }, location: { type: 'string' }, notes: { type: 'string' }, lead_minutes: { type: 'number' } }, required: ['title', 'start'] },
   list_events: { description: 'Read actual confirmed calendar events. range: today/tomorrow/week/upcoming/yesterday by local calendar day, or day=YYYY-MM-DD for one date. Returns real IDs and absolute times; answer from these fields instead of counting down relative phrases.', properties: { range: { type: 'string', enum: ['today', 'tomorrow', 'week', 'upcoming', 'yesterday'] }, day: { type: 'string' }, query: { type: 'string' } } },
   manage_event: { description: 'Change a real event ID returned by list_events. action=update edits title/start/end/all_day/location/notes/lead_minutes in place and keeps the ID; cancel keeps the data recoverable and restore undoes it. Deletion is not available.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['update', 'cancel', 'restore'] }, title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, all_day: { type: 'boolean' }, location: { type: 'string' }, notes: { type: 'string' }, lead_minutes: { type: 'number' } }, required: ['id', 'action'] },

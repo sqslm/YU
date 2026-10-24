@@ -1,20 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeSettings } from '@shared/defaults'
 import { setMainLanguage } from '@shared/mainI18n'
-import type { LifeBriefing, LifeEvent, LifeMemory, LifeSyncStatus, LifeTools } from './life'
+import type { LifeBriefing, LifeEvent, LifeSyncStatus, LifeTools } from './life'
 import { LIFE_TOOLS } from './life'
 import { runTool, toolSchemas, type ToolContext } from './registry'
 
 /**
  * The life tools are the first place where an assistant answer can change a
- * lasting store — a memory, an event, the sync switch. These cases pin the two
+ * lasting store — an event, the sync switch. These cases pin the two
  * halves that matter: what the model is allowed to reach, and what the program
  * does with a real argument (including the refusals).
  */
-
-const memory = (overrides: Partial<LifeMemory> = {}): LifeMemory => ({
-  id: 'm1', kind: 'preference', text: '写代码时先给结论', tags: ['work'], createdAt: 1, updatedAt: 1, ...overrides
-})
 
 const event = (overrides: Partial<LifeEvent> = {}): LifeEvent => ({
   id: 'e1', title: '项目讨论', start: new Date(2026, 9, 24, 15).getTime(), end: new Date(2026, 9, 24, 16).getTime(),
@@ -36,10 +32,6 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date(2026, 9, 23, 8, 0))
   api = {
-    remember: vi.fn((input: { text: string; kind?: string; tags?: string[] }) => memory({ text: input.text, kind: input.kind ?? 'fact', tags: input.tags ?? [] })),
-    memories: vi.fn().mockReturnValue([memory()]),
-    touchMemories: vi.fn(),
-    archiveMemory: vi.fn(),
     event: vi.fn().mockReturnValue(event()),
     events: vi.fn().mockReturnValue([event()]),
     saveEvent: vi.fn((input, id) => event({ ...input, id: id ?? 'e-new' } as Partial<LifeEvent>)),
@@ -58,42 +50,13 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
 
 describe('life tools reach real stores and stay out of ordinary answers', () => {
-  it('keeps calendar, memory and sync tools out of plain Ask and denies a missing capability', async () => {
+  it('keeps calendar and sync tools out of plain Ask and denies a missing capability', async () => {
     const names = toolSchemas().map(tool => (tool.function as { name: string }).name)
     for (const name of LIFE_TOOLS) expect(names).not.toContain(name)
-    expect((await runTool('remember', { text: 'x' }, { ...ctx, allowedTools: undefined })).ok).toBe(false)
+    expect((await runTool('create_event', { title: 'x', start: '明天下午三点' }, { ...ctx, allowedTools: undefined })).ok).toBe(false)
     expect((await runTool('list_events', {}, { ...ctx, life: undefined })).ok).toBe(false)
-    expect(api.remember).not.toHaveBeenCalled()
+    expect(api.saveEvent).not.toHaveBeenCalled()
     expect(api.events).not.toHaveBeenCalled()
-  })
-
-  it('remembers the user wording verbatim and reports the stored text', async () => {
-    const result = await runTool('remember', { text: '  以后回答先给结论  ', kind: 'preference', tags: ['style'] }, ctx)
-    expect(api.remember).toHaveBeenCalledWith({ text: '以后回答先给结论', kind: 'preference', tags: ['style'] })
-    expect(result.ok).toBe(true)
-    expect(result.summary).toContain('以后回答先给结论')
-    expect((await runTool('remember', {}, ctx)).ok).toBe(false)
-    expect((await runTool('remember', { text: 'x', tags: [3] }, ctx)).ok).toBe(false)
-  })
-
-  it('searches memory, marks what it returned as used, and says nothing was found', async () => {
-    const found = await runTool('recall_memory', { query: '结论' }, ctx)
-    expect(api.memories).toHaveBeenCalledWith('结论', undefined)
-    expect(api.touchMemories).toHaveBeenCalledWith(['m1'])
-    expect(found.data).toMatchObject({ total: 1, truncated: false })
-    vi.mocked(api.memories).mockReturnValue([])
-    const empty = await runTool('recall_memory', { query: '不存在的偏好' }, ctx)
-    expect(empty.ok).toBe(true)
-    expect(empty.summary).toContain('0')
-    expect(api.touchMemories).toHaveBeenLastCalledWith([])
-  })
-
-  it('archives by default and restores on request without deleting anything', async () => {
-    expect((await runTool('forget_memory', { id: 'm1' }, ctx)).data).toMatchObject({ id: 'm1', action: 'archive' })
-    expect(api.archiveMemory).toHaveBeenCalledWith('m1', 'archive')
-    expect((await runTool('forget_memory', { id: 'm1', action: 'restore' }, ctx)).data).toMatchObject({ action: 'restore' })
-    expect(api.archiveMemory).toHaveBeenLastCalledWith('m1', 'restore')
-    expect((await runTool('forget_memory', {}, ctx)).ok).toBe(false)
   })
 
   it('parses the start with the reminder parser and recovers a dropped daypart in the end', async () => {

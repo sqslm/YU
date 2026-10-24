@@ -30,7 +30,6 @@ export function normalizeBriefingSettings(input: unknown): BriefingSettings {
 
 export interface BriefingEvent { id: string; title: string; start: number; end: number; allDay: boolean }
 export interface BriefingTask { id: string; title: string; dueAt: number | null; level?: 'normal' | 'strong'; overdue?: boolean }
-export interface BriefingMemory { id: string; kind: string; text: string }
 export interface BriefingStats { entries: number; characters: number; durationMs: number }
 
 /** Everything the caller has already projected; this module never reads a store. */
@@ -41,7 +40,6 @@ export interface BriefingData {
   tasks: BriefingTask[]
   overdue: BriefingTask[]
   tomorrow: BriefingEvent[]
-  memories: BriefingMemory[]
   stats?: BriefingStats
 }
 
@@ -54,9 +52,6 @@ export interface Briefing {
 }
 
 const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
-/** Memories are quoted, not expanded, so a long note cannot flood the briefing. */
-const MEMORY_LIMIT = 3
-
 function pad(value: number): string {
   return String(value).padStart(2, '0')
 }
@@ -104,11 +99,6 @@ export function composeBriefing(data: BriefingData): Briefing {
   const overdueLines = data.overdue.map(task => task.dueAt === null
     ? `- ${task.title}${overdueSuffix}`
     : `- ${dayLabel(task.dueAt)} ${clock(task.dueAt)} ${task.title}${overdueSuffix}`)
-  const memoryLines = data.memories
-    .map(memory => memory.text.trim())
-    .filter(text => text.length > 0)
-    .slice(0, MEMORY_LIMIT)
-    .map(text => `- ${text}`)
   const stats = data.stats
   const recapLines = stats && stats.entries > 0
     ? [zh ? `昨天听写 ${stats.entries} 条、共 ${stats.characters} 字。` : `Yesterday: ${stats.entries} notes, ${stats.characters} characters.`]
@@ -118,7 +108,6 @@ export function composeBriefing(data: BriefingData): Briefing {
   add(zh ? '待办' : 'To do', dueLines(data.tasks))
   add(zh ? '已经过期' : 'Overdue', overdueLines)
   add(zh ? '明天' : 'Tomorrow', previewLines(data.tomorrow))
-  add(zh ? '你让我记住的' : 'What you asked me to remember', memoryLines)
   add(zh ? '回顾' : 'Recap', recapLines)
 
   const empty = sections.length === 0

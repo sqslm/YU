@@ -52,15 +52,12 @@ import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
-import { MemoryStore } from './memory'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { BriefingScheduler, type BriefingState } from './briefing'
 import { SpeechService, createWindowsSpeechRunner } from './speech'
 import { formatEventTime, rangeFor, type CalendarEvent, type CalendarRange } from '@shared/calendar'
 import { composeBriefing, type Briefing } from '@shared/briefing'
 import type { BriefingTask } from '@shared/briefing'
-import type { MemoryKind } from '@shared/memory'
-import { renderMemoryPrompt } from '@shared/memory'
 import type { LifeSyncStatus } from './tools/life'
 import {
   anchorCardToBar,
@@ -128,7 +125,6 @@ let reminders: ReminderService | null = null
  * `life` object the assistant holds is a set of closures, so it can be wired
  * before the stores exist as long as none of them run earlier.
  */
-let memory: MemoryStore | null = null
 let calendar: CalendarStore | null = null
 let calendarScheduler: CalendarScheduler | null = null
 let briefing: BriefingScheduler | null = null
@@ -199,7 +195,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     open: page => navigateHub(page)
   },
   /**
-   * Long-term memory, the local calendar, read-aloud and sync administration.
+   * The local calendar, read-aloud and sync administration.
    *
    * Each method is a thin projection onto the store that owns the truth: the tool
    * layer never formats or persists, so the same data shows up unchanged in the
@@ -208,13 +204,6 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   life: {
     // The switches in settings are the contract: asking for a write while the
     // feature is off has to fail loudly, or the user believes something was saved.
-    remember: input => {
-      if (!store.get().memory.enabled) throw new Error(mt('长期记忆已在设置里关闭，这次没有记录'))
-      return memory!.save({ text: input.text, kind: input.kind as MemoryKind | undefined, tags: input.tags })
-    },
-    memories: (query, kind) => memory!.search(query, kind as MemoryKind | undefined),
-    touchMemories: ids => memory!.touch(ids),
-    archiveMemory: (id, action) => { if (action === 'restore') memory!.restore(id); else memory!.archive(id) },
     event: id => calendar!.get(id),
     events: range => calendar!.range(range.from, range.until),
     saveEvent: (input, id) => {
@@ -230,16 +219,6 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     // Flipping the switch is all it takes: `reconfigure()` re-arms the timer and
     // stops the requests, exactly the path the settings page uses.
     setSyncEnabled: enabled => { void store.update({ syncEnabled: enabled }).then(() => sync?.reconfigure()) }
-  },
-  /**
-   * Standing preferences, injected into every ask prompt while memory is on.
-   * Gated here rather than in the prompt builder: one flag decides whether the
-   * model sees anything at all.
-   */
-  memory: () => {
-    if (!store.get().memory.enabled) return ''
-    const rows = memory?.active() ?? []
-    return rows.length ? renderMemoryPrompt(rows) : ''
   },
   changed: state => {
     const turn = state.turns.at(-1)
@@ -289,8 +268,7 @@ function composeDailyBriefing(): Briefing {
     // 待办 is what is still ahead today; a task whose time already passed is 已经过期,
     // even when it was due this morning — that is the part worth seeing first.
     tasks: open.filter(row => row.dueAt !== null && row.dueAt >= now && row.dueAt < today.until).map(task),
-    overdue: open.filter(row => row.dueAt !== null && row.dueAt < now).map(row => ({ ...task(row), overdue: true })),
-    memories: (memory?.active() ?? []).slice(-6).map(row => ({ id: row.id, kind: row.kind, text: row.text })) })
+    overdue: open.filter(row => row.dueAt !== null && row.dueAt < now).map(row => ({ ...task(row), overdue: true })) })
 }
 
 function briefingStateFile(): string { return join(app.getPath('userData'), 'briefing-state.json') }
@@ -1097,16 +1075,11 @@ function registerIpc(): void {
   ipcMain.handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())
   ipcMain.handle('briefing:refresh', () => { const value = composeDailyBriefing(); latestBriefing = value; return value })
   /**
-   * Memory, calendar and read-aloud for the settings page.
+   * Calendar and read-aloud for the settings page.
    *
-   * These return whole lists (matching `life:memory-archive`) so a click never
-   * needs a second round trip to redraw the table it just changed.
+   * These return whole lists so a click never needs a second round trip to
+   * redraw the table it just changed.
    */
-  ipcMain.handle('life:memory', () => memory?.list() ?? [])
-  ipcMain.handle('life:memory-archive', (_event, id: string, action: 'archive' | 'restore') => {
-    if (action === 'restore') memory?.restore(id); else memory?.archive(id)
-    return memory?.list() ?? []
-  })
   ipcMain.handle('life:events', (_event, range: CalendarRange) => {
     const { from, until } = rangeFor(range, Date.now())
     return calendar?.range(from, until) ?? []
@@ -1693,13 +1666,12 @@ async function bootstrap(): Promise<void> {
   sync.reconfigure()
 
   /**
-   * Memory, calendar, read-aloud and the daily briefing.
+   * The local calendar, read-aloud and the daily briefing.
    *
    * Created after sync so `sync_status` can answer, and before the IPC layer so
    * the settings page always finds something to read. A `--background` launch arms
    * the schedulers too: a briefing is due whether or not a window is open.
    */
-  memory = new MemoryStore(join(app.getPath('userData'), 'memory.json'))
   calendar = new CalendarStore(join(app.getPath('userData'), 'calendar.json'))
   speech = new SpeechService({ settings: () => store.get(),
     run: createWindowsSpeechRunner(app.isPackaged

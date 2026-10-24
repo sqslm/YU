@@ -1260,7 +1260,7 @@
       "input": "Text input",
       "storage": "Data and storage",
       "resources": "Resources",
-      "life": "Memory & schedule"
+      "life": "Schedule & briefing"
     },
     "hint": {
       "account": "Manage sign-in, cloud sync and storage",
@@ -1276,7 +1276,7 @@
       "input": "Text insertion, line breaks and excluded apps",
       "storage": "History retention, notes folder and app data",
       "resources": "Memory usage and idle local model policy",
-      "life": "Long-term memory, local events, the daily briefing and read-aloud"
+      "life": "Local events, the daily briefing and read-aloud"
     },
     "saving": "Saving…",
     "saveFailed": "Save failed; changes are not saved",

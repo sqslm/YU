@@ -13,7 +13,6 @@ import { PROMPT_KINDS, defaultPromptLibrary, normalizePromptLibrary } from './pr
 import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders, normalizeSearchConnections } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL, findModel } from './local-asr'
 import { DEFAULT_VOICE_COMMANDS, normalizeVoiceCommands } from './voiceCommands'
-import { DEFAULT_MEMORY_SETTINGS } from './memory'
 import { DEFAULT_CALENDAR_SETTINGS, MAX_EVENT_LEAD_MINUTES } from './calendar'
 import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingTime } from './briefing'
 import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings } from './speech'
@@ -179,8 +178,6 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   syncEnabled: false,
   /** Fifteen minutes: often enough to feel live, rare enough to stay invisible. */
   syncIntervalSeconds: 900,
-  /** Memory is on: a preference the user asked to keep should survive a restart. */
-  memory: DEFAULT_MEMORY_SETTINGS,
   calendar: DEFAULT_CALENDAR_SETTINGS,
   /**
    * Off by default: a briefing that speaks at 08:00 before the user has decided
@@ -196,7 +193,7 @@ export function applySettingsPatch(current: Settings, patch: Partial<Settings>):
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings>
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings> {
   const next = { ...current, ...patch }
-  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord', 'memory', 'calendar', 'briefing', 'tts'] as const) {
+  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord', 'calendar', 'briefing', 'tts'] as const) {
     if (patch[key]) next[key] = { ...current[key], ...patch[key] } as never
   }
   if (patch.hotkeys?.bindings) {
@@ -231,7 +228,6 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     polish: { ...base.polish, ...(input.polish ?? {}) },
     multimodal: { ...base.multimodal, ...(input.multimodal ?? {}) },
     search: { ...base.search, ...(input.search ?? {}) },
-    memory: { ...base.memory, ...(input.memory ?? {}) },
     calendar: { ...base.calendar, ...(input.calendar ?? {}) },
     briefing: { ...base.briefing, ...(input.briefing ?? {}) },
     tts: { ...base.tts, ...(input.tts ?? {}) }

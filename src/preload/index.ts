@@ -67,8 +67,6 @@ const api: TypelessApi = {
     }
   },
   life: {
-    memory: () => ipcRenderer.invoke('life:memory'),
-    archiveMemory: (id, action) => ipcRenderer.invoke('life:memory-archive', id, action),
     events: range => ipcRenderer.invoke('life:events', range),
     cancelEvent: (id, action) => ipcRenderer.invoke('life:event-cancel', id, action),
     voices: () => ipcRenderer.invoke('life:voices'),
