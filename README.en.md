@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.3**, Windows 10/11 x64, MIT.
+> Current version **1.0.0-rc.4**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -194,7 +194,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.3`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos, screen capture with OCR, offline wake word, accounts and sync, self-hosted server.
+Release candidate (`1.0.0-rc.4`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos, long-term memory and a local calendar, the daily briefing and read-aloud, screen capture with OCR, offline wake word, accounts and sync, self-hosted server.
 
 **Not implemented** (don't read these as available): calendar, long-term memory, daily briefings, TTS, cross-feature workflows, cloud reminders. The installer is unsigned and the update feed is a placeholder — run your own feed or turn update checks off.
 
@@ -216,6 +216,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
+- **1.0.0-rc.4**: long-term memory, a local calendar, the daily briefing and read-aloud become eleven allowlisted tools, and Ask no longer claims those abilities are missing; settings gain a Memory & schedule section; the calendar and briefing timers re-check after sleep and a briefing missed today is still delivered today.
 - **1.0.0-rc.3**: release-audit fixes, Electron 42.11.18 and Vitest 4.1.12, known dependency vulnerabilities patched; brand assets and icons unified, settings folded into six groups, diagnostics exports redacted, and the legacy application identifier and user directory kept so upgrades lose nothing.
 - **1.0.0-rc.2**: the Ask card waits for its subscription before sending and keeps early messages; sequential search failover no longer splits the deadline evenly (8 s per connection, 24 s overall, at most two merged sources in flight); today's news separates "service failure" from "successful query with no matches", and after midnight keeps reports from the last 48 hours with their real dates; model forms link official platforms and key pages; long wake phrases drop to 0.80 / 0.50 confidence while short words stay at 0.94 / 0.75.
 - **0.41.0**: capture snaps to the topmost real window under the cursor, filtering transparent and click-through overlays with Alt to bypass; eight-handle resize and undo in the annotation layer; missed reminders are reported together after restart or wake, and "got it" does not change the item's state.
