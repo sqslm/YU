@@ -2226,6 +2226,7 @@ async function bootstrap(): Promise<void> {
         log(`[capture] sidebar rects ${rects}`)
         for (const [labels, file] of [
           [['历史记录', 'History'], 'hub-history.png'],
+          [['简报', 'Briefing'], 'hub-briefing.png'],
           [['日程', 'Events'], 'hub-calendar.png'],
           [['纠正规则', 'Corrections'], 'hub-corrections.png']
         ] as const) {

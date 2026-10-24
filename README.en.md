@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.5**, Windows 10/11 x64, MIT.
+> Current version **1.0.0-rc.6**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -16,17 +16,17 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | Capability | In one line |
 | --- | --- |
 | **Dictation** | Press to talk, press again to stop; the result is inserted at the caret — clipboard paste first, SendInput character injection as fallback, then read back to verify |
-| **Ask** | `Space + Right Alt` to start, retrieval plus a tool-calling agent, the answer lands in a floating card you can pin, follow up on, or save as a note |
+| **Ask** | `Space + Right Alt` to start, retrieval plus a tool-calling agent, the answer lands in a floating card you can pin, follow up on, or save as a note; it can also read local file bodies (plain text, docx, xlsx, pptx) and the Everything index |
 | **Translation** | A dedicated translation mode and a selection-translation hotkey; 1–3 target languages, source language left to the ASR |
 | **Notes** | Voice or typed notes with categories and tags, playback, and audio import with re-transcription; polished text and raw transcript are kept separately |
-| **Reminders / to-dos** | Natural-language times (Chrono plus a program-side validator), recurrence, snooze, a strong-alert overlay window, missed-reminder recovery |
-| **Reminders / to-dos** | Natural-language Chinese times (Chrono plus programmatic checks), repeats, snooze, a strong-alert overlay, missed-item recovery; each to-do can carry a priority and a deadline |
-| **Events** | Its own page: month grid, day list, create and edit (start, end, location, advance alert), ICS import and export — the page and the assistant write the same data |
-| **Briefing / read-aloud** | A daily paragraph folding today's events, due to-dos, overdue items and tomorrow's preview, readable aloud; quiet hours hold delivery back, and the last two weeks of briefings stay on this machine |
+| **Reminders / to-dos** | Natural-language times (Chrono plus programmatic checks), repeats, snooze, a strong-alert overlay, missed-item recovery; each to-do can carry a priority and a deadline |
+| **Events** | Its own page: month grid, day list, create and edit (start, end, location, advance alert), ICS import and export — the page and the assistant write the same data; subscribe to external ICS calendars (including Google / Outlook secret addresses) and sync both ways once you sign in to your own server |
+| **Briefing / read-aloud** | Its own page plus a daily schedule: today's events, due to-dos, overdue items and tomorrow's preview, optionally written as one paragraph by a model (falling back to the template), readable aloud; quiet hours hold delivery back, and the last two weeks stay on this machine |
 | **Automation** | Save a sequence of steps you repeat as a named workflow and replay it with one sentence, with no model in the loop; each step runs with the saved arguments and reports its result |
 | **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR and smart translation |
-| **Wake word** | Optional offline wake word using Windows on-device speech; nothing is uploaded or stored before it fires |
-| **Sync** | Optional self-hosted server for history, notes, note audio and per-device personal stats; dictation audio stays on the machine that recorded it |
+| **Wake word** | Optional offline wake word using Windows on-device speech, with a selectable input device; nothing is uploaded or stored before it fires |
+| **Updates** | Checks this project's GitHub Releases by default; when a newer build exists the hub shows a pill at the bottom left, and one click downloads and restarts into it |
+| **Sync** | Optional self-hosted server for history, notes, note audio, events, reminders and per-device personal stats; dictation audio stays on the machine that recorded it |
 
 ## Screens
 
@@ -36,13 +36,17 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | --- | --- |
 | ![Bar](resources/screenshots/bar-recording.png) | ![Answer card](resources/screenshots/card-answer.png) |
 
-| History | Events |
+| History | Briefing |
 | --- | --- |
-| ![History](resources/screenshots/hub-history.png) | ![Events](resources/screenshots/hub-calendar.png) |
+| ![History](resources/screenshots/hub-history.png) | ![Briefing](resources/screenshots/hub-briefing.png) |
 
-| Settings (general) | Settings (automation) |
+| Events | Settings (general) |
 | --- | --- |
-| ![Settings](resources/screenshots/prefs-general.png) | ![Automation](resources/screenshots/prefs-automation.png) |
+| ![Events](resources/screenshots/hub-calendar.png) | ![Settings](resources/screenshots/prefs-general.png) |
+
+| Settings (schedule & briefing) | Settings (automation) |
+| --- | --- |
+| ![Schedule & briefing](resources/screenshots/prefs-life.png) | ![Automation](resources/screenshots/prefs-automation.png) |
 
 ![AI & models](resources/screenshots/prefs-models.png)
 
@@ -100,6 +104,7 @@ Three things worth knowing:
 - **Press `Esc` while recording** to throw the take away: it is neither inserted nor written to history.
 - Every shortcut can be re-recorded or cleared, and the tray menu can suspend all of them temporarily. Recording a shortcut distinguishes left and right Shift / Ctrl / Alt.
 - **Say it, and it is noted**: in Ask, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, “read today’s briefing” speaks it, and “mark that to-do high priority, due Friday” updates it. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
+- **Follow-ups do not need the context repeated**: "make the second one eleven", "mark the last one high priority" — the assistant resolves the target against the previous turn's real results, and asks first when it cannot tell which item you mean instead of guessing.
 - **Say it once, replay it with one sentence**: tell it “from now on, when I say morning check, look at today's calendar, build the briefing and read it out” and it saves those steps as a workflow. Saying “run morning check” then runs each step with the saved arguments, with no model in the loop, and lists what every step returned. Workflows can be archived or restored in settings under Automation.
 
 ## Configuration
@@ -110,6 +115,10 @@ Three things worth knowing:
 - **Audio**: fidelity first by default (48 kHz capture, resampled in the browser to 16 kHz mono PCM16); switch to "call noise reduction" in noisy rooms. The speaker test reuses the real capture path for up to 10 seconds and never calls a recognition service.
 - **Insertion and newlines**: insertion method (auto / SendInput / clipboard), multi-line handling (space / Shift+Enter / real newline), and whether to restore the clipboard after pasting.
 - **Prompts**: five card types (AI, polish, translation, document, email) with editable built-in cards and per-card temperature. "Auto activate" picks a card from the foreground app, and the Window classification page lets you add manual rules and preview which rule wins.
+
+- **Schedule & briefing**: the Schedule & briefing page holds the default advance alert, calendar subscriptions (https / webcal only — private and loopback addresses are refused), the briefing time, quiet hours, whether a model should write the paragraph, and the system voice used for read-aloud.
+- **Wake word**: pick the input device explicitly. If it disappears the app falls back to the system default and logs a line in diagnostics instead of failing silently.
+- **Updates**: checked against GitHub Releases by default; point `update-feed.txt` or an environment variable at your own feed if you prefer, or turn update checks off entirely.
 
 All settings save automatically; if a save fails, the pending change is kept with a retry entry point.
 
@@ -122,7 +131,7 @@ cd server
 pnpm start                # or use Docker, see server/README.md
 ```
 
-The server only handles accounts and sync (history, notes, note audio, personal stats). ASR, text models and local models are still configured per client. The client reads server capabilities: public registration off hides the sign-up entry, no SMTP hides password recovery. Prompts are written by this project (`src/shared/prompts.ts`, `src/shared/promptLibrary.ts`). Notes are stored as plaintext on the server and administrators can read them; there is no end-to-end encryption today.
+The server only handles accounts and sync (history, notes, note audio, events, reminders, personal stats). ASR, text models and local models are still configured per client. The client reads server capabilities: public registration off hides the sign-up entry, no SMTP hides password recovery. Prompts are written by this project (`src/shared/prompts.ts`, `src/shared/promptLibrary.ts`). Notes are stored as plaintext on the server and administrators can read them; there is no end-to-end encryption today.
 
 ## Data and privacy
 
@@ -130,6 +139,8 @@ The server only handles accounts and sync (history, notes, note audio, personal 
 - Keys are encrypted with the system keystore (DPAPI / safeStorage) and only ciphertext is written to disk. Where the platform provides no keystore, keys are stored as-is and the UI says so.
 - No always-on recording, no background clipboard watching, no background screenshots, no window polling. Selection reads and screenshots happen only on an explicit trigger, the original window is re-verified before and after, and password managers are refused.
 - Every local tool of the assistant goes through an allowlist plus argument validation: irreversible deletion, arbitrary commands, software installation and system changes are refused outright. Opening a web page requires the URL to come from real search results — the model may not guess domains.
+- Calendar subscription addresses stay in the local `settings.json`; a failed fetch writes a log line and nothing else.
+- Local body search runs only inside the folder you name, skipping `node_modules`, `.git` and system directories, and caches results in memory by path + mtime + size — nothing is written to disk.
 - Exported diagnostics redact credentials, URLs, e-mail addresses, private-network addresses and local paths.
 
 ## Architecture
@@ -163,6 +174,10 @@ Modules worth calling out:
 - `src/main/foreground.ts`, `selection-target.ts` — the original-window snapshot: captured when recording starts, re-verified by pid + title + class before reading or replacing a selection, and verified once more afterwards.
 - `src/main/providers/` — one OpenAI-shaped transport plus per-vendor field rewriting (OpenAI reasoning models, Gemini and DeepSeek all differ inside `adaptChatBody`), and adapters for 13 search backends.
 - `src/renderer/src/bar/capture.ts` — the microphone stays warm (`setActive` only controls reporting), avoiding the 200–800 ms cold-start loss.
+- `src/main/calendar-sync.ts`, `src/main/reminders-sync.ts` — the sync side of events and reminders: ICS subscriptions accept only https / webcal and reuse the private-address block from search, sync uses the server's increasing `seq` as a cursor, deletions travel as tombstones, and one failing source never blocks the others.
+- `src/main/file-index.ts`, `src/main/everything.ts` — local search: bodies go through a hand-rolled `node:zlib` zip reader for docx / xlsx / pptx (PDFs are explicitly unsupported), Everything is tried over HTTP first then `es.exe`, and when neither answers the tool says so and the model falls back to the built-in search.
+- `src/main/briefing.ts` + `src/shared/briefing.ts` — briefing scheduling with two sources: the template always works, and a failed model narration falls back to it with `source` recording which one you got; quiet hours hold delivery instead of queueing it, and a window crossing midnight never fires twice.
+- `src/renderer/src/settings/UpdatePill.tsx` — the pill only renders the phase the main process pushes (`available` / `downloading` / `downloaded`); a click downloads or restarts depending on that phase.
 
 ## Development
 
@@ -204,9 +219,9 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.5`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines, a local events page with ICS, the daily briefing and read-aloud, quiet hours, simple sequential workflows, screen capture with OCR, offline wake word, accounts and sync, self-hosted server.
+Release candidate (`1.0.0-rc.6`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
-**Not implemented** (don't read these as available): external calendar authorisation and two-way sync (Google / Outlook), cloud reminders, document text search, Everything integration, model-written briefings (today's is assembled from templates), conversational references (“make the second one eleven”), wake-word device selection. The installer is unsigned and the update feed is a placeholder — run your own feed or turn update checks off.
+**Not implemented** (don't read these as available): direct Google / Outlook OAuth (subscriptions are read-only ICS today), per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
 Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integration paths, and end-to-end runs use the fake backend. The [roadmap](ASSISTANT_ROADMAP.md) records the 81-item field comparison from 0.35.0 and what remained unresolved. A real microphone, physical hotkeys, overwrite installs, how Windows toasts actually look, and the real quotas of vendor accounts still have to be verified by you; the [API audit](PROVIDER_API_AUDIT.md) marks which endpoints were never confirmed with a real account.
 
@@ -226,6 +241,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
+- **1.0.0-rc.6**: fixes the packaged build reporting no local recognition runtime (the native runtime is an optional dependency that packaging dropped; it is now a real dependency with all three native folders unpacked); update checks move to this project's GitHub Releases with the prerelease channel pinned from the version tag and a pill in the hub when a newer build exists; events and reminders sync both ways with your own server (increasing `seq` as the cursor, tombstones for deletions) and external ICS calendars can be subscribed; Ask reads local docx / xlsx / pptx bodies and the Everything index, degrading honestly when Everything is missing; the briefing can be written by a model with a template fallback, gains its own page and keeps fourteen days; conversational references and a selectable wake-word device land too.
 - **1.0.0-rc.5**: the long-term memory system is gone (spoken preferences are no longer kept forever; notes carry them instead); events get their own page (month grid, day list, form, ICS import/export), to-dos gain a priority and a deadline, the briefing honours quiet hours and keeps two weeks of text on this machine, and a new dictation stops a read-aloud in progress; workflows let you save a sequence of tool steps under a name and replay it with one sentence.
 - **1.0.0-rc.4**: a local calendar, the daily briefing and read-aloud become allowlisted tools, and Ask no longer claims those abilities are missing; settings gain a Memory & schedule section; the calendar and briefing timers re-check after sleep and a briefing missed today is still delivered today.
 - **1.0.0-rc.3**: release-audit fixes, Electron 42.11.18 and Vitest 4.1.12, known dependency vulnerabilities patched; brand assets and icons unified, settings folded into six groups, diagnostics exports redacted, and the legacy application identifier and user directory kept so upgrades lose nothing.
