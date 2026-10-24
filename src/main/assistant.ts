@@ -8,6 +8,7 @@ import { WINDOWS_TOOLS, type WindowsTools } from './tools/windows'
 import { runTool } from './tools/registry'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
+import { WORKFLOW_TOOLS, type WorkflowTools } from './tools/workflow'
 import { directVoiceIntent, needsAssistantContext } from './voice-intent'
 
 export const ASSISTANT_TOOLS = ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'open_search']
@@ -30,6 +31,7 @@ export class AssistantSession {
     windows?: WindowsTools
     personal?: PersonalTools
     life?: LifeTools
+    workflow?: WorkflowTools
     readSelection?: (context: PromptContext, signal: AbortSignal) => Promise<string>
     analyzeScreenshot?: (context: PromptContext, question: string, ocr: boolean, signal: AbortSignal) => Promise<string>
   }) {}
@@ -98,7 +100,7 @@ export class AssistantSession {
       !/然后|并且|同时|保存|创建|复制|打开|\b(?:then|also|save|create|copy|open)\b/iu.test(input)
     const direct = operation || (screenshotRequest ? { name: 'analyze_screenshot', args: { question: input, task: /文字.{0,8}(?:提取|识别)|提取.{0,8}文字|\b(?:OCR|extract text|read text)\b/iu.test(input) ? 'ocr' : 'analyze' } } : null) ||
       (this.deps.personal ? personalCommand(input) : null) || windows?.command(input.trim())
-    const allowedTools = [...ASSISTANT_TOOLS, ...(windows ? WINDOWS_TOOLS : []), ...(this.deps.personal ? PERSONAL_TOOLS : []), ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []), ...(this.deps.analyzeScreenshot && /截.{0,8}(?:图|窗口|屏)|屏幕|图片|图表|这个界面|这张图|\b(?:screenshot|screen|capture|OCR|image|chart|interface)\b/iu.test(input) ? ['analyze_screenshot'] : [])]
+    const allowedTools = [...ASSISTANT_TOOLS, ...(windows ? WINDOWS_TOOLS : []), ...(this.deps.personal ? PERSONAL_TOOLS : []), ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []), ...(this.deps.analyzeScreenshot && /截.{0,8}(?:图|窗口|屏)|屏幕|图片|图表|这个界面|这张图|\b(?:screenshot|screen|capture|OCR|image|chart|interface)\b/iu.test(input) ? ['analyze_screenshot'] : [])]
     const taskReference = Boolean(this.deps.personal) && directVoiceIntent(input)?.kind === 'assistant' && /提醒|待办|代办|\b(?:reminder|to-?do|task)\b/iu.test(input)
     const taskEdit = taskReference && /改|取消|删除|完成|恢复|延后|推迟|提前|不要了|不用了|\b(?:change|update|reschedule|cancel|delete|complete|restore|snooze|postpone|move)\b/iu.test(input)
     const profile = chainFor(settings, 'llm')[0]
@@ -125,7 +127,7 @@ export class AssistantSession {
         analyzeScreenshot: this.deps.analyzeScreenshot ? (question, ocr) => this.deps.analyzeScreenshot!(context, question, ocr, taskSignal) : undefined,
         readSelection: this.deps.readSelection ? () => this.deps.readSelection!(context, taskSignal) : undefined,
         conversation: this.conversation, allowedTools,
-        windows, personal: this.deps.personal, life: this.deps.life, submittedAt,
+        windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, submittedAt,
         onLocalResult: receipt => { if (this.controller === controller && !taskSignal.aborted) { turn.localResults!.push(receipt); this.notify() } },
         onStatus: status => {
           if (this.controller !== controller) return
@@ -140,7 +142,7 @@ export class AssistantSession {
       let result: AgentResult
       if (direct) {
         const outcome = await runTool(direct.name, direct.args, { settings, question: turn.question, signal: taskSignal,
-          log: () => {}, windows, personal: this.deps.personal, life: this.deps.life, taskContext: context, submittedAt, allowedTools, onLocalResult: options.onLocalResult,
+          log: () => {}, windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, taskContext: context, submittedAt, allowedTools, onLocalResult: options.onLocalResult,
           analyzeScreenshot: options.analyzeScreenshot })
         taskSignal.throwIfAborted()
         result = { text: direct.name === 'analyze_screenshot' && outcome.ok ? String(outcome.data.text) : outcome.summary, sources: [], searched: false }

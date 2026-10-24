@@ -2,8 +2,17 @@ import { mt } from '@shared/mainI18n'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import type { Reminder, ReminderAction, ReminderInput } from '@shared/reminders'
-import { isMissedReminder } from '@shared/reminders'
+import { isMissedReminder, normalizePriority, sortTodos } from '@shared/reminders'
 import { nextOccurrence, validRecurrence } from './reminder-time'
+
+/**
+ * Rows live as plain JSON, so a field added later is simply absent on old rows.
+ * Filling defaults here keeps one damaged-looking task from breaking the list.
+ */
+function readReminder(row: Record<string, unknown>): Reminder {
+  const parsed = JSON.parse(String(row.data)) as Reminder
+  return { ...parsed, priority: normalizePriority(parsed.priority), deadlineAt: typeof parsed.deadlineAt === 'number' ? parsed.deadlineAt : null }
+}
 
 /** Same local SQLite engine as history, kept independent of history retention. */
 export class ReminderStore {
@@ -15,26 +24,23 @@ export class ReminderStore {
       CREATE INDEX IF NOT EXISTS reminders_due ON reminders(status, dueAt);`)
   }
   list(): Reminder[] {
-    return this.db.prepare('SELECT data FROM reminders ORDER BY dueAt IS NULL, dueAt, id').all()
-      .map(row => JSON.parse(String(row.data)) as Reminder)
+    // SQL keeps a deterministic base order; sortTodos then applies the explicit todo order.
+    return sortTodos(this.db.prepare('SELECT data FROM reminders ORDER BY dueAt IS NULL, dueAt, id').all().map(readReminder))
   }
   scheduled(): Reminder[] {
-    return this.db.prepare("SELECT data FROM reminders WHERE status = 'pending' AND dueAt IS NOT NULL ORDER BY dueAt").all()
-      .map(row => JSON.parse(String(row.data)) as Reminder)
+    return sortTodos(this.db.prepare("SELECT data FROM reminders WHERE status = 'pending' AND dueAt IS NOT NULL ORDER BY dueAt").all().map(readReminder))
   }
   due(): Reminder[] {
-    return this.db.prepare("SELECT data FROM reminders WHERE status = 'due' ORDER BY dueAt").all()
-      .map(row => JSON.parse(String(row.data)) as Reminder)
+    return this.db.prepare("SELECT data FROM reminders WHERE status = 'due' ORDER BY dueAt").all().map(readReminder)
   }
   get(id: string): Reminder | undefined {
     const row = this.db.prepare('SELECT data FROM reminders WHERE id = ?').get(id)
-    return row ? JSON.parse(String(row.data)) as Reminder : undefined
+    return row ? readReminder(row) : undefined
   }
   missed(): Reminder[] { return this.due().filter(isMissedReminder) }
   recoverMissed(): number {
     const now = this.now()
-    const rows = this.db.prepare("SELECT data FROM reminders WHERE status IN ('pending','due') AND dueAt IS NOT NULL AND dueAt <= ?").all(now)
-      .map(row => JSON.parse(String(row.data)) as Reminder)
+    const rows = this.db.prepare("SELECT data FROM reminders WHERE status IN ('pending','due') AND dueAt IS NOT NULL AND dueAt <= ?").all(now).map(readReminder)
     let count = 0
     for (const row of rows) {
       if (row.missedAt === row.dueAt) continue
@@ -58,7 +64,11 @@ export class ReminderStore {
     if (!['normal', 'strong'].includes(input.level) || !['manual', 'voice', 'note'].includes(input.source)) throw new Error(mt('提醒类型无效'))
     if (input.dueAt !== null && (!Number.isSafeInteger(input.dueAt) || input.dueAt <= this.now() && !(sameSchedule && old.status !== 'pending') || input.dueAt > 8640000000000000)) throw new Error(mt('请选择将来的提醒时间'))
     if (input.recurrence !== null && (!validRecurrence(input.recurrence) || input.dueAt === null)) throw new Error(mt('重复规则无效'))
+    // A deadline may already be in the past (that task is simply overdue); only the shape is checked.
+    const deadlineAt = input.deadlineAt === undefined ? old?.deadlineAt ?? null : input.deadlineAt
+    if (deadlineAt !== null && (!Number.isSafeInteger(deadlineAt) || deadlineAt > 8640000000000000)) throw new Error(mt('截止时间无效'))
     const reminder: Reminder = { title: input.title.trim(), description: (input.description ?? old?.description ?? '').trim(), dueAt: input.dueAt, level: input.level,
+      priority: normalizePriority(input.priority, normalizePriority(old?.priority)), deadlineAt,
       recurrence: input.recurrence, source: old?.source ?? input.source, noteId: old?.noteId ?? input.noteId,
       timeExpression: input.timeExpression, id: id ?? randomUUID(), createdAt: old?.createdAt ?? this.now(),
       updatedAt: this.now(), status: sameSchedule ? old.status : 'pending', deliveredAt: sameSchedule ? old.deliveredAt : null,

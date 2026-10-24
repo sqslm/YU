@@ -17,8 +17,10 @@ import { HomePage } from './pages/Home'
 import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
 import { RemindersPage } from './pages/RemindersPage'
+import { CalendarPage } from './pages/CalendarPage'
 import type { ReminderView } from '@shared/reminders'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import { DictionaryPage } from './pages/Dictionary'
 import { IconBook, IconChart, IconClock, IconSettings } from './icons'
 import { Onboarding } from './pages/Onboarding'
@@ -30,7 +32,7 @@ import i18n from '../i18n'
 import { BrandLogo } from '../BrandLogo'
 import { MissedReminders } from './MissedReminders'
 
-type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders'
+type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'calendar'
 
 /** Label keys resolve through i18next; the ids stay stable for routing. */
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
@@ -38,6 +40,7 @@ const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
   { id: 'reminders', labelKey: '提醒与待办', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
+  { id: 'calendar', labelKey: '日程', icon: <CalendarMonthIcon sx={{ fontSize: 18 }} /> },
   { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> }
 ]
 
@@ -138,6 +141,7 @@ export function App(): JSX.Element {
     }
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} initialNoteId={noteToOpen} />
     if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen(id); setPage('notes') }} />
+    if (page === 'calendar') return <CalendarPage />
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />
     return (
       <HomePage

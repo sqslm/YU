@@ -69,6 +69,14 @@ const api: TypelessApi = {
   life: {
     events: range => ipcRenderer.invoke('life:events', range),
     cancelEvent: (id, action) => ipcRenderer.invoke('life:event-cancel', id, action),
+    saveEvent: (input, id) => ipcRenderer.invoke('life:event-save', input, id),
+    importIcs: () => ipcRenderer.invoke('life:ics-import'),
+    exportIcs: () => ipcRenderer.invoke('life:ics-export'),
+    onChanged: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('life:event-changed', listener)
+      return () => ipcRenderer.removeListener('life:event-changed', listener)
+    },
     voices: () => ipcRenderer.invoke('life:voices'),
     speak: text => ipcRenderer.invoke('life:speak', text),
     briefing: () => ipcRenderer.invoke('briefing:latest'),
@@ -77,6 +85,16 @@ const api: TypelessApi = {
       const listener = (_event: unknown, value: import('@shared/briefing').Briefing): void => callback(value)
       ipcRenderer.on('briefing:changed', listener)
       return () => ipcRenderer.removeListener('briefing:changed', listener)
+    }
+  },
+  workflow: {
+    list: () => ipcRenderer.invoke('workflow:list'),
+    save: (input, id) => ipcRenderer.invoke('workflow:save', input, id),
+    manage: (id, action) => ipcRenderer.invoke('workflow:manage', id, action),
+    onChanged: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('workflow:changed', listener)
+      return () => ipcRenderer.removeListener('workflow:changed', listener)
     }
   },
   settings: {

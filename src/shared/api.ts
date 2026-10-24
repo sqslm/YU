@@ -71,12 +71,34 @@ export interface TypelessApi {
   life: {
     events(range: import('./calendar').CalendarRange): Promise<import('./calendar').CalendarEvent[]>
     cancelEvent(id: string, action: 'cancel' | 'restore'): Promise<import('./calendar').CalendarEvent | null>
+    /**
+     * Creates or replaces one event. The caller passes every field it wants kept:
+     * this is a replacement, not a patch, so a field left out is reset.
+     */
+    saveEvent(input: import('./calendar').CalendarEventInput, id?: string): Promise<import('./calendar').CalendarEvent | null>
+    importIcs(): Promise<{ added: number; updated: number; skipped: number } | null>
+    exportIcs(): Promise<{ path: string } | null>
+    /** Fires after any calendar write, including ones made by the assistant. */
+    onChanged(callback: () => void): () => void
     voices(): Promise<{ ok: boolean; error?: string; voices?: string[] }>
     speak(text: string): Promise<{ spoken: number; skipped: boolean }>
     briefing(): Promise<import('./briefing').Briefing>
     refreshBriefing(): Promise<import('./briefing').Briefing>
     onBriefing(callback: (briefing: import('./briefing').Briefing) => void): () => void
   }
+  /**
+   * Saved workflows: an ordered list of tool calls replayed without a model.
+   *
+   * There is no `run` here on purpose. Running one goes through the assistant so
+   * the same allowlist and the same receipt apply whether a run started from the
+   * settings page or from a sentence.
+   */
+  workflow: {
+    list(): Promise<import('./workflow').Workflow[]>
+    save(input: import('./workflow').WorkflowInput, id?: string): Promise<import('./workflow').Workflow | null>
+    manage(id: string, action: 'archive' | 'restore' | 'remove'): Promise<import('./workflow').Workflow[] | null>
+    onChanged(callback: () => void): () => void
+  },
   settings: {
     get(): Promise<Settings>
     update(patch: Partial<Settings>): Promise<Settings>

@@ -10,7 +10,7 @@ import {
   session,
   shell
 } from 'electron'
-import { appendFile, mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import os from 'node:os'
@@ -55,7 +55,14 @@ import { probeSearch } from './providers/search-probe'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { BriefingScheduler, type BriefingState } from './briefing'
 import { SpeechService, createWindowsSpeechRunner } from './speech'
-import { formatEventTime, rangeFor, type CalendarEvent, type CalendarRange } from '@shared/calendar'
+import { WorkflowStore } from './workflows'
+import {
+  formatEventTime,
+  rangeFor,
+  type CalendarEvent,
+  type CalendarEventInput,
+  type CalendarRange
+} from '@shared/calendar'
 import { composeBriefing, type Briefing } from '@shared/briefing'
 import type { BriefingTask } from '@shared/briefing'
 import type { LifeSyncStatus } from './tools/life'
@@ -129,6 +136,7 @@ let calendar: CalendarStore | null = null
 let calendarScheduler: CalendarScheduler | null = null
 let briefing: BriefingScheduler | null = null
 let speech: SpeechService | null = null
+let workflows: WorkflowStore | null = null
 /** Past briefings stay in memory so the settings window can show the last one. */
 let latestBriefing: Briefing | null = null
 let hubRetireTimer: NodeJS.Timeout | null = null
@@ -220,12 +228,32 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     // stops the requests, exactly the path the settings page uses.
     setSyncEnabled: enabled => { void store.update({ syncEnabled: enabled }).then(() => sync?.reconfigure()) }
   },
+  /**
+   * Saved workflows. Writes announce themselves because the settings page and the
+   * hub can both list them, and a replay changes `runs`/`lastRunAt` in place.
+   */
+  workflow: {
+    list: () => workflows?.list() ?? [],
+    active: () => workflows?.active() ?? [],
+    get: id => workflows?.get(id),
+    save: (input, id) => { const saved = workflows!.save(input, id); announceWorkflows(); return saved },
+    archive: id => { workflows?.archive(id); announceWorkflows() },
+    restore: id => { workflows?.restore(id); announceWorkflows() },
+    recordRun: id => workflows?.recordRun(id)
+  },
   changed: state => {
     const turn = state.turns.at(-1)
     if (assistantCardActive && turn) showAnswerCard({ question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
     tray?.refresh()
     refreshWakeWord()
   } })
+
+/** Any workflow write, from the tools or from the settings page, lands here. */
+function announceWorkflows(): void {
+  for (const win of [settingsWindow, barWindow]) {
+    if (win && !win.isDestroyed()) win.webContents.send('workflow:changed')
+  }
+}
 
 function broadcastReminders(): void {
   for (const win of [settingsWindow, barWindow]) {
@@ -448,6 +476,10 @@ let wakeLocked = false
 const wakeWord = new WakeWordHost({
   wake: () => {
     if (quitting || wakeSuspended || wakeLocked || pipeline?.isBusy || notesRecording || assistant.busy || screenshotTool.isOpen || selectionEditor?.isBusy) return
+    // Listening always wins over speaking: the microphone would otherwise record
+    // the assistant's own voice, and asking something new means the old answer can
+    // stop being read out.
+    speech?.stop()
     pipeline?.start('dictation', { handsFree: true, viaWake: true })
     refreshWakeWord()
   },
@@ -1084,8 +1116,57 @@ function registerIpc(): void {
     const { from, until } = rangeFor(range, Date.now())
     return calendar?.range(from, until) ?? []
   })
-  ipcMain.handle('life:event-cancel', (_event, id: string, action: 'cancel' | 'restore') =>
-    (action === 'restore' ? calendar?.action(id, 'restore') : calendar?.action(id, 'cancel')) ?? null)
+  // Every calendar write announces itself: the hub page and the settings page can
+  // both be open, and neither should have to poll to notice the other's edit.
+  const announceCalendar = (): void => {
+    for (const win of [settingsWindow, barWindow]) {
+      if (win && !win.isDestroyed()) win.webContents.send('life:event-changed')
+    }
+  }
+  ipcMain.handle('life:event-cancel', (_event, id: string, action: 'cancel' | 'restore') => {
+    const changed = action === 'restore' ? calendar?.action(id, 'restore') : calendar?.action(id, 'cancel')
+    if (changed) announceCalendar()
+    return changed ?? null
+  })
+  ipcMain.handle('life:event-save', (_event, input: CalendarEventInput, id?: string) => {
+    if (!calendar) return null
+    const saved = calendar.save(input, id)
+    announceCalendar()
+    return saved
+  })
+  // Import and export go through the main process because only it may touch the
+  // file system: the renderer stays sandboxed and never sees a raw path it chose.
+  ipcMain.handle('life:ics-import', async () => {
+    if (!calendar) return null
+    const target = settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined
+    const options: Electron.OpenDialogOptions = {
+      title: mt('导入日程（ICS）'),
+      properties: ['openFile'],
+      filters: [
+        { name: 'ICS', extensions: ['ics'] },
+        { name: mt('所有文件'), extensions: ['*'] }
+      ]
+    }
+    const picked = target ? await dialog.showOpenDialog(target, options) : await dialog.showOpenDialog(options)
+    if (picked.canceled || picked.filePaths.length === 0) return null
+    const text = await readFile(picked.filePaths[0], 'utf8')
+    const result = calendar.importIcs(text)
+    announceCalendar()
+    return result
+  })
+  ipcMain.handle('life:ics-export', async () => {
+    if (!calendar) return null
+    const target = settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined
+    const options: Electron.SaveDialogOptions = {
+      title: mt('导出日程（ICS）'),
+      defaultPath: 'yu-calendar.ics',
+      filters: [{ name: 'ICS', extensions: ['ics'] }]
+    }
+    const picked = target ? await dialog.showSaveDialog(target, options) : await dialog.showSaveDialog(options)
+    if (picked.canceled || !picked.filePath) return null
+    await writeFile(picked.filePath, calendar.exportIcs(), 'utf8')
+    return { path: picked.filePath }
+  })
   // The settings page reads `{ ok, voices }` (see `@shared/api`); answering with
   // a bare array looks like a failed call and leaves the dropdown empty even
   // when the machine has voices installed.
@@ -1098,6 +1179,21 @@ function registerIpc(): void {
     }
   })
   ipcMain.handle('life:speak', (_event, text: string) => speech?.speak(text) ?? { spoken: 0, skipped: true })
+  ipcMain.handle('workflow:list', () => workflows?.list() ?? [])
+  ipcMain.handle('workflow:save', (_event, input: { name: string; steps: import('@shared/workflow').WorkflowStep[] }, id?: string) => {
+    if (!workflows) return null
+    const saved = workflows.save(input, id)
+    announceWorkflows()
+    return saved
+  })
+  ipcMain.handle('workflow:manage', (_event, id: string, action: 'archive' | 'restore' | 'remove') => {
+    if (!workflows) return null
+    if (action === 'archive') workflows.archive(id)
+    else if (action === 'restore') workflows.restore(id)
+    else workflows.remove(id)
+    announceWorkflows()
+    return workflows.list()
+  })
   ipcMain.handle('sync:now', async () => {
     if (!sync) return null
     return sync.now()
@@ -1468,6 +1564,8 @@ function wireHotkeys(): void {
           // The context reader is started here rather than at boot: it costs a
           // process, and a take is the only thing that needs a snapshot.
           if (!event.purpose) uia.warm()
+          // Same rule as the wake word: a new take ends any read-aloud first.
+          speech?.stop()
           pipeline.start(event.mode, { handsFree: event.handsFree, purpose: event.purpose })
           break
         case 'mode':
@@ -1682,6 +1780,7 @@ async function bootstrap(): Promise<void> {
     // The stamp is written only once the notification is up: a failed delivery
     // leaves it unset so the next tick retries instead of losing the warning.
     deliver: (event, at) => { deliverCalendarEvent(event); calendar?.markNotified(event.id, at) }, log })
+  workflows = new WorkflowStore(join(app.getPath('userData'), 'workflows.json'))
   briefing = new BriefingScheduler({ settings: () => store.get().briefing, compose: () => composeDailyBriefing(),
     deliver: value => deliverBriefing(value), load: loadBriefingState, save: saveBriefingState, log })
 

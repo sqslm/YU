@@ -14,7 +14,7 @@ import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders, nor
 import { DEFAULT_LOCAL_MODEL, findModel } from './local-asr'
 import { DEFAULT_VOICE_COMMANDS, normalizeVoiceCommands } from './voiceCommands'
 import { DEFAULT_CALENDAR_SETTINGS, MAX_EVENT_LEAD_MINUTES } from './calendar'
-import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingTime } from './briefing'
+import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingSettings } from './briefing'
 import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings } from './speech'
 
 export const SETTINGS_VERSION = 1
@@ -235,7 +235,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   // A hand-edited group comes back through the same normalizers the settings UI
   // uses: a typo must land on the documented default, never on a schedule that
   // silently never fires (or a voice at 400% volume).
-  merged.briefing = { ...merged.briefing, time: normalizeBriefingTime(merged.briefing.time) }
+  merged.briefing = normalizeBriefingSettings(merged.briefing)
   merged.tts = normalizeTtsSettings(merged.tts)
   merged.calendar = { ...merged.calendar,
     defaultLeadMinutes: clampNumber(merged.calendar.defaultLeadMinutes, 0, MAX_EVENT_LEAD_MINUTES, DEFAULT_CALENDAR_SETTINGS.defaultLeadMinutes) }

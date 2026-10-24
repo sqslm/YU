@@ -632,6 +632,13 @@ export interface CalendarSettings {
   defaultLeadMinutes: number
 }
 
+/** A local `HH:mm` window during which the briefing waits; `start > end` wraps midnight. */
+export interface BriefingQuietHours {
+  enabled: boolean
+  start: string
+  end: string
+}
+
 export interface BriefingSettings {
   enabled: boolean
   /** Local wall-clock `HH:mm`. */
@@ -642,6 +649,8 @@ export interface BriefingSettings {
   notify: boolean
   /** A briefing with nothing in it is skipped instead of sent. */
   skipEmpty: boolean
+  /** Night hours the briefing must not interrupt. */
+  quietHours: BriefingQuietHours
 }
 
 export interface TtsSettings {

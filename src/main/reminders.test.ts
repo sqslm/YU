@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { ReminderInput } from '@shared/reminders'
+import { DatabaseSync } from 'node:sqlite'
+import type { Reminder, ReminderInput } from '@shared/reminders'
+import { isOverdue, sortTodos } from '@shared/reminders'
 import { ReminderScheduler, ReminderStore } from './reminders'
 const base = new Date(2026, 9, 23, 8).getTime()
 const entry = (dueAt: number | null): ReminderInput => ({ title: 'Call the technician', dueAt, level: 'normal', source: 'manual', recurrence: null })
@@ -157,4 +159,66 @@ it('editing a completed reminder does not reactivate it; editing a due title doe
     const recurring = store.save({ ...entry(now + 3600000), recurrence: { frequency: 'daily', hour: 9, minute: 0 } })
     expect(store.action(recurring.id, 'complete').dueAt).toBeGreaterThan(recurring.dueAt!)
   } finally { store.close() }
+})
+
+describe('todo priority and deadlines', () => {
+  const task = (overrides: Partial<Reminder> & { id: string }): Reminder => ({ title: 'Task', dueAt: null, level: 'normal',
+    recurrence: null, source: 'manual', createdAt: base, updatedAt: base, status: 'pending', deliveredAt: null,
+    priority: 'normal', deadlineAt: null, ...overrides })
+  it('fills a default priority and no deadline for rows written before those fields existed', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'yu-reminders-')), file = join(dir, 'reminders.sqlite')
+    try {
+      // Written by hand: the old JSON shape had neither field at all.
+      const legacy = { id: 'legacy', title: 'Old task', dueAt: base + 60000, level: 'normal', recurrence: null,
+        source: 'manual', createdAt: base, updatedAt: base, status: 'pending', deliveredAt: null }
+      const db = new DatabaseSync(file)
+      db.exec('CREATE TABLE reminders (id TEXT PRIMARY KEY, dueAt INTEGER, status TEXT NOT NULL, data TEXT NOT NULL)')
+      db.prepare('INSERT INTO reminders (id,dueAt,status,data) VALUES (?,?,?,?)')
+        .run(legacy.id, legacy.dueAt, legacy.status, JSON.stringify(legacy))
+      db.close()
+      const store = new ReminderStore(file, () => base)
+      try {
+        expect(store.get('legacy')).toMatchObject({ title: 'Old task', priority: 'normal', deadlineAt: null })
+        expect(store.list()).toMatchObject([{ id: 'legacy', priority: 'normal', deadlineAt: null }])
+        expect(store.scheduled()).toMatchObject([{ id: 'legacy', priority: 'normal' }])
+      } finally { store.close() }
+    } finally { rmSync(dir, { recursive: true }) }
+  })
+  it('keeps priority and deadline across save, restart, schedule-preserving edits and completion', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'yu-reminders-')), file = join(dir, 'reminders.sqlite')
+    let store = new ReminderStore(file, () => base)
+    try {
+      const deadlineAt = base + 1800000
+      const row = store.save({ ...entry(base + 7200000), priority: 'high', deadlineAt })
+      store.close(); store = new ReminderStore(file, () => base)
+      expect(store.get(row.id)).toMatchObject({ priority: 'high', deadlineAt })
+      // An edit that only renames the task must not silently reset the new fields.
+      expect(store.save({ ...entry(base + 7200000), title: 'Call again' }, row.id)).toMatchObject({ priority: 'high', deadlineAt })
+      expect(store.action(row.id, 'complete')).toMatchObject({ status: 'completed', priority: 'high', deadlineAt })
+      expect(store.list()).toMatchObject([{ priority: 'high', deadlineAt }])
+      expect(store.save(entry(base + 60000))).toMatchObject({ priority: 'normal', deadlineAt: null })
+    } finally { store.close(); rmSync(dir, { recursive: true }) }
+  })
+  it('sorts open work first, then by priority, then by the effective deadline without touching the input', () => {
+    const rows = [task({ id: 'low', priority: 'low', dueAt: base + 1000 }),
+      task({ id: 'high-late', priority: 'high', deadlineAt: base + 900000 }),
+      task({ id: 'high-soon', priority: 'high', dueAt: base + 900000, deadlineAt: base + 1000 }),
+      task({ id: 'cancelled', status: 'cancelled', dueAt: base }),
+      task({ id: 'untimed', createdAt: base + 5000 }),
+      task({ id: 'done', priority: 'high', dueAt: base, status: 'completed' })]
+    // Closed work sinks as a group, then the same priority order applies inside it.
+    expect(sortTodos(rows).map(row => row.id)).toEqual(['high-soon', 'high-late', 'untimed', 'low', 'done', 'cancelled'])
+    expect(rows.map(row => row.id)[0]).toBe('low')
+  })
+  it('judges overdue on the deadline, never on a finished task and never without a time', () => {
+    expect(isOverdue(task({ id: 'a', dueAt: base + 60000, deadlineAt: base - 1000 }), base)).toBe(true)
+    // The alert has not fired yet but the work is already late.
+    expect(isOverdue(task({ id: 'b', dueAt: base - 60000, deadlineAt: base + 60000 }), base)).toBe(false)
+    expect(isOverdue(task({ id: 'c', dueAt: base - 60000, deadlineAt: base - 1000, status: 'completed' }), base)).toBe(false)
+    expect(isOverdue(task({ id: 'd', status: 'cancelled', dueAt: base - 1000 }), base)).toBe(false)
+    expect(isOverdue(task({ id: 'e' }), base)).toBe(false)
+    // Rows from before deadlines existed fall back to their alert time.
+    expect(isOverdue(task({ id: 'f', dueAt: base - 1000 }), base)).toBe(true)
+    expect(isOverdue({ ...task({ id: 'g', dueAt: base - 1000 }), deadlineAt: undefined } as unknown as Reminder, base)).toBe(true)
+  })
 })

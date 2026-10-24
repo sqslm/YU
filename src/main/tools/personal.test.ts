@@ -74,7 +74,7 @@ describe('personal tools share real application services', () => {
     expect(api.action).toHaveBeenCalledWith('task-1', 'complete', undefined)
   })
   it('only opens a registered existing page, and copies after authorization', async () => {
-    expect((await runTool('open_page', { page: 'calendar' }, ctx)).ok).toBe(false)
+    expect((await runTool('open_page', { page: 'nowhere' }, ctx)).ok).toBe(false)
     await runTool('open_page', { page: 'history' }, ctx); expect(api.open).toHaveBeenCalledExactlyOnceWith('history')
     await runTool('copy_to_clipboard', { text: 'Answer' }, ctx); expect(api.copy).toHaveBeenCalledExactlyOnceWith('Answer')
   })
@@ -92,10 +92,11 @@ describe('personal tools share real application services', () => {
       { id: 'tomorrow', title: 'Tomorrow', dueAt: now + 86400000, status: 'pending', level: 'normal' }
     ] as Reminder[])
     const result = await runTool('list_reminders', { today: true }, ctx)
+    // Ordered by the shared todo order: open work by deadline, untimed work last.
     expect(result.data.items).toMatchObject([
-      { id: 'todo', kind: 'todo', remainingSeconds: null },
-      { id: 'due', level: 'strong', remainingSeconds: -60, overdue: true, triggerTime: expect.any(String) },
-      { id: 'future', remainingSeconds: 120 }
+      { id: 'due', level: 'strong', remainingSeconds: -60, overdue: true, triggerTime: expect.any(String), priorityLabel: '普通' },
+      { id: 'future', remainingSeconds: 120 },
+      { id: 'todo', kind: 'todo', remainingSeconds: null }
     ])
     expect((await runTool('list_reminders', { kind: 'todo' }, ctx)).data.total).toBe(1)
     expect((await runTool('list_reminders', { today: true, kind: 'reminder' }, ctx)).data.total).toBe(2)
@@ -168,6 +169,57 @@ describe('personal tools share real application services', () => {
   it('reads only explicitly requested current clipboard text without a confirmation popup', async () => {
     expect((await runTool('read_clipboard', {}, { ...ctx, question:'Read the clipboard' })).ok).toBe(true)
     expect(api.readClipboard).toHaveBeenCalledOnce()
+  })
+  it('records an explicit priority and an independently parsed deadline without moving the alert', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
+    const reminder = { id: 'new', title: 'Take the slides', dueAt: new Date(2026, 9, 24, 14, 50).getTime(), level: 'normal',
+      recurrence: null, source: 'manual', status: 'pending', createdAt: 1, updatedAt: 1, deliveredAt: null, priority: 'normal', deadlineAt: null } as Reminder
+    vi.mocked(api.remind).mockResolvedValue({ message: '提醒已创建', reminder })
+    const result = await runTool('create_reminder', { priority: 'high', deadline: '今天18点' }, ctx)
+    const deadlineAt = new Date(2026, 9, 23, 18).getTime()
+    expect(result.ok).toBe(true)
+    expect(api.saveReminder).toHaveBeenCalledWith(expect.objectContaining({ id: 'new', dueAt: reminder.dueAt, priority: 'high', deadlineAt }), 'new')
+    expect(result.data).toMatchObject({ item: { priority: 'high', priorityLabel: '高', deadlineAt, dueAt: reminder.dueAt } })
+    expect(result.summary).toContain('高优先级'); expect(result.summary).toContain('截止')
+  })
+  it('refuses an unparsable deadline without saving anything', async () => {
+    const result = await runTool('create_reminder', { deadline: '尽快' }, ctx)
+    expect(result.ok).toBe(false); expect(result.error).toContain('时间不够精确，请选择日期和时间')
+    expect(api.remind).not.toHaveBeenCalled(); expect(api.saveReminder).not.toHaveBeenCalled()
+  })
+  it('judges list_reminders overdue on the deadline and reports the priority label', async () => {
+    vi.useFakeTimers(); const now = new Date(2026, 9, 23, 18, 30).getTime(); vi.setSystemTime(now)
+    vi.mocked(api.reminders).mockReturnValue([
+      { id: 'late', title: 'Slides', dueAt: now - 3600000, deadlineAt: now - 1800000, priority: 'high', status: 'pending', level: 'normal' },
+      { id: 'finished', title: 'Done', dueAt: now - 3600000, deadlineAt: now - 1800000, priority: 'high', status: 'completed', level: 'normal' },
+      { id: 'soon', title: 'Notes', dueAt: now - 600000, deadlineAt: now + 3600000, priority: 'low', status: 'due', level: 'normal' },
+      { id: 'plain', title: 'Untimed', dueAt: null, status: 'pending', level: 'normal' }
+    ] as Reminder[])
+    const result = await runTool('list_reminders', { status: 'all' }, ctx)
+    // High first, then normal (untimed included), then low; finished work last.
+    expect(result.data.items).toMatchObject([
+      { id: 'late', priority: 'high', priorityLabel: '高', overdue: true },
+      { id: 'plain', priority: 'normal', priorityLabel: '普通', deadlineAt: null, overdue: false },
+      { id: 'soon', priority: 'low', priorityLabel: '低', overdue: false },
+      { id: 'finished', overdue: false }
+    ])
+  })
+  it('edits priority and deadline in place without moving the alert time', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
+    const row = { id: 'plan', title: 'Plan', dueAt: new Date(2026, 9, 24, 9).getTime(), deadlineAt: null, priority: 'normal',
+      recurrence: null, status: 'pending', level: 'normal', source: 'manual', createdAt: 1, updatedAt: 1, deliveredAt: null } as Reminder
+    vi.mocked(api.reminders).mockReturnValue([row])
+    const result = await runTool('manage_reminder', { id: 'plan', action: 'update', priority: 'high', deadline: '今天18点' }, ctx)
+    const deadlineAt = new Date(2026, 9, 23, 18).getTime()
+    expect(result.ok).toBe(true)
+    expect(api.saveReminder).toHaveBeenCalledWith(expect.objectContaining({ dueAt: row.dueAt, priority: 'high', deadlineAt }), 'plan')
+    expect(result.summary).toContain('优先级 普通 → 高'); expect(result.summary).toContain('截止')
+    expect(result.data).toMatchObject({ item: { priority: 'high', deadlineAt } })
+  })
+  it('rejects a priority outside the declared values before any work happens', async () => {
+    expect((await runTool('create_reminder', { priority: 'urgent' }, ctx)).ok).toBe(false)
+    expect((await runTool('manage_reminder', { id: 'task-1', action: 'update', priority: 'P1' }, ctx)).ok).toBe(false)
+    expect(api.remind).not.toHaveBeenCalled(); expect(api.saveReminder).not.toHaveBeenCalled()
   })
 })
 

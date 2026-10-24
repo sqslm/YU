@@ -1,19 +1,20 @@
 import type { HistoryEntry, NoteCategory, NoteEntry, NotePatch } from '@shared/types'
 import { randomUUID } from 'node:crypto'
-import type { Reminder, ReminderAction, ReminderInput } from '@shared/reminders'
+import type { Reminder, ReminderAction, ReminderInput, TodoPriority } from '@shared/reminders'
+import { isOverdue, normalizePriority, PRIORITY_LABELS, sortTodos, TODO_PRIORITIES } from '@shared/reminders'
 import { mainLanguage, mt } from '@shared/mainI18n'
 import { nextOccurrence, resolveReminderTime } from '../reminder-time'
 import { directVoiceIntent } from '../voice-intent'
 import type { ToolDefinition, ToolOutcome } from './registry'
 
 export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_reminder', 'create_note', 'search_notes', 'update_note_tags', 'update_note', 'extract_note_tasks', 'search_history', 'read_clipboard', 'copy_to_clipboard', 'open_page'] as const
-export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'corrections', 'settings'] as const
+export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'calendar', 'corrections', 'settings'] as const
 export type HubPage = typeof HUB_PAGES[number]
 export function personalCommand(text: string): { name: string; args: Record<string, unknown> } | null {
-  const match = /^(?:请|帮我)?(?:打开|进入)(?:语的|YU的|轻令的|软件的)?(概览|首页|历史记录|随记|提醒|待办|纠正规则|设置)(?:页面|页)?[。！!]?$/iu.exec(text.trim()) ||
-    /^open (?:the )?(?:YU )?(home|overview|history|notes|reminders|todos|corrections|settings)(?: page)?[.!]?$/iu.exec(text.trim())
+  const match = /^(?:请|帮我)?(?:打开|进入)(?:语的|YU的|轻令的|软件的)?(概览|首页|历史记录|随记|提醒|待办|日程|日历|纠正规则|设置)(?:页面|页)?[。！!]?$/iu.exec(text.trim()) ||
+    /^open (?:the )?(?:YU )?(home|overview|history|notes|reminders|todos|calendar|corrections|settings)(?: page)?[.!]?$/iu.exec(text.trim())
   if (!match) return null
-  const page = ({ 概览: 'overview', 首页: 'overview', 历史记录: 'history', 随记: 'notes', 提醒: 'reminders', 待办: 'reminders', 纠正规则: 'corrections', 设置: 'settings', home: 'overview', todos: 'reminders' } as Record<string, string>)[match[1].toLowerCase()] || match[1].toLowerCase()
+  const page = ({ 概览: 'overview', 首页: 'overview', 历史记录: 'history', 随记: 'notes', 提醒: 'reminders', 待办: 'reminders', 日程: 'calendar', 日历: 'calendar', 纠正规则: 'corrections', 设置: 'settings', home: 'overview', todos: 'reminders' } as Record<string, string>)[match[1].toLowerCase()] || match[1].toLowerCase()
   return { name: 'open_page', args: { page } }
 }
 export interface PersonalTools {
@@ -52,11 +53,34 @@ function dateRange(day: string, now: number): { from: number; until: number } | 
   return { from: +start, until: +end }
 }
 
+/**
+ * The shared label table is data about a field, not a sentence, so it has no
+ * MAIN_MESSAGES key yet. Localize here and let an added dictionary entry win.
+ */
+const PRIORITY_LABELS_EN: Record<TodoPriority, string> = { low: 'Low', normal: 'Normal', high: 'High' }
+function priorityText(value: unknown): string {
+  const priority = normalizePriority(value), translated = mt(PRIORITY_LABELS[priority])
+  return translated === PRIORITY_LABELS[priority] && mainLanguage() === 'en' ? PRIORITY_LABELS_EN[priority] : translated
+}
+const priorityName = (priority: TodoPriority): string => mt(priority === 'high' ? '高优先级' : priority === 'low' ? '低优先级' : '普通优先级')
+
+/** Relative days keep a spoken receipt readable; the absolute time is still exact. */
+function deadlineText(value: number, now: number): string {
+  const target = new Date(value), base = new Date(now)
+  const time = target.toLocaleTimeString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (target.toDateString() === base.toDateString()) return mt('今天 {{time}}', { time })
+  const tomorrow = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1)
+  if (target.toDateString() === tomorrow.toDateString()) return mt('明天 {{time}}', { time })
+  return `${mainLanguage() === 'en' ? `${target.getMonth() + 1}/${target.getDate()}` : `${target.getMonth() + 1}月${target.getDate()}日`} ${time}`
+}
+
 function reminderDetails(row: Reminder, now: number): Record<string, unknown> {
   const time = row.dueAt === null ? mt('未设置提醒时间') : new Date(row.dueAt).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN')
   const remainingSeconds = row.dueAt === null ? null : Math.ceil((row.dueAt - now) / 1000)
-  return { ...row, triggerTime: time, remainingSeconds, overdue: remainingSeconds !== null && remainingSeconds < 0,
-    kind: row.dueAt === null ? 'todo' : 'reminder', levelName: mt(row.level === 'strong' ? '强提醒' : '普通提醒') }
+  // Overdue follows the deadline, not the alert time: finishing work late is about the deadline.
+  return { ...row, triggerTime: time, remainingSeconds, overdue: isOverdue(row, now),
+    kind: row.dueAt === null ? 'todo' : 'reminder', levelName: mt(row.level === 'strong' ? '强提醒' : '普通提醒'),
+    priority: normalizePriority(row.priority), priorityLabel: priorityText(row.priority), deadlineAt: row.deadlineAt ?? null }
 }
 
 // Tolerate the brand's ASR homophones only while matching searches; never rewrite notes.
@@ -70,17 +94,32 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     const intent = directVoiceIntent(question)
     if (intent?.kind === 'assistant' || intent?.kind === 'dictation') throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
     if (!/提醒|待办|代办|(?:添加|创建|新建|加个|记个).{0,8}任务|\b(?:remind|reminder|to-?do|notify|alert)\b|\b(?:create|add|save)\b.{0,30}\btask\b/iu.test(question)) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
+    // Resolve the deadline before anything is stored: a failed parse must abort
+    // instead of quietly saving a task without the deadline the user asked for.
+    const deadlineExpression = string(args.deadline)
+    let deadlineAt: number | null = null
+    if (deadlineExpression) {
+      const resolved = resolveReminderTime(deadlineExpression, Date.now())
+      if (resolved.issue || resolved.dueAt === null) throw new Error(resolved.issue || mt('请补充具体截止时间'))
+      deadlineAt = resolved.dueAt
+    }
+    const priority = args.priority === undefined ? 'normal' : normalizePriority(args.priority)
     const result = await api.remind(question, signal, submittedAt)
-    return ok(result.message, { ...(result.reminder ? { item: reminderDetails(result.reminder, Date.now()) } : {}) })
+    // The parser already persisted the row; re-save only to attach the explicit fields.
+    const reminder = result.reminder && (args.priority !== undefined || deadlineAt !== null)
+      ? api.saveReminder({ ...result.reminder, priority, deadlineAt }, result.reminder.id) : result.reminder
+    // A pending confirmation has no stored row yet, so claiming these values would be a lie.
+    const tags = !reminder ? [] : [...(args.priority === undefined ? [] : [priorityName(priority)]),
+      ...(deadlineAt === null ? [] : [mt('截止 {{time}}', { time: deadlineText(deadlineAt, Date.now()) })])]
+    return ok(tags.length ? `${result.message} · ${tags.join(' · ')}` : result.message, { ...(reminder ? { item: reminderDetails(reminder, Date.now()) } : {}) })
   }
   if (name === 'list_reminders') {
     const status = string(args.status) || 'active', query = string(args.query).toLowerCase()
     const now = Date.now(), range = dateRange(string(args.day) || (args.today === true ? 'today' : ''), now)
-    const matching = api.reminders().filter(row => (status === 'all' || status === 'active' ? status === 'all' || ['pending', 'due'].includes(row.status) : row.status === status) &&
+    const matching = sortTodos(api.reminders().filter(row => (status === 'all' || status === 'active' ? status === 'all' || ['pending', 'due'].includes(row.status) : row.status === status) &&
       (!query || `${row.title} ${row.description ?? ''}`.toLowerCase().includes(query)) &&
       (args.kind !== 'todo' || row.dueAt === null) && (args.kind !== 'reminder' || row.dueAt !== null) &&
-      (!range || row.dueAt === null || row.dueAt >= range.from && row.dueAt < range.until))
-      .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0))
+      (!range || row.dueAt === null || row.dueAt >= range.from && row.dueAt < range.until)))
     return ok(mt('找到 {{count}} 个事项', { count: matching.length }), { total: matching.length, asOf: now,
       items: matching.slice(0, 40).map(row => reminderDetails(row, now)), truncated: matching.length > 40 })
   }
@@ -90,8 +129,9 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     if (!row) throw new Error(mt('提醒不存在'))
     const before = reminderDetails(row, Date.now())
     if (args.action === 'update') {
-      const expression = string(args.time_expression)
-      if (!expression && !args.level) throw new Error(mt('请输入要修改的时间或提醒等级'))
+      const expression = string(args.time_expression), deadlineExpression = string(args.deadline)
+      const priority = args.priority === undefined ? undefined : normalizePriority(args.priority)
+      if (!expression && !args.level && priority === undefined && !deadlineExpression) throw new Error(mt('请输入要修改的时间、提醒等级、优先级或截止时间'))
       let dueAt = row.dueAt, recurrence = row.recurrence
       if (expression) {
         // A clock-only edit inherits this task's date, never the assistant window's date.
@@ -111,12 +151,22 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
         } else recurrence = resolved.recurrence
       }
 
+      let deadlineAt = row.deadlineAt ?? null
+      if (deadlineExpression) {
+        const resolved = resolveReminderTime(deadlineExpression, Date.now())
+        if (resolved.issue || resolved.dueAt === null) throw new Error(resolved.issue || mt('请补充具体截止时间'))
+        deadlineAt = resolved.dueAt
+      }
+
       const current = api.reminders().find(item => item.id === row.id)
       if (!current || JSON.stringify(current) !== JSON.stringify(row)) throw new Error(mt('事项已更改，请重新查询后操作'))
       const saved = api.saveReminder({ ...row, dueAt, recurrence, level: args.level as Reminder['level'] ?? row.level,
-        timeExpression: expression || row.timeExpression }, row.id)
-      const after = reminderDetails(saved, Date.now())
-      return ok(`${mt('事项已更新')} · ${saved.title}\n${before.triggerTime} → ${after.triggerTime} · ${after.levelName}`, { id: row.id, action: 'update', before, item: after })
+        priority: priority ?? normalizePriority(row.priority), deadlineAt, timeExpression: expression || row.timeExpression }, row.id)
+      const after = reminderDetails(saved, Date.now()), now = Date.now()
+      const changes: string[] = []
+      if (priority !== undefined && priority !== normalizePriority(row.priority)) changes.push(mt('优先级 {{from}} → {{to}}', { from: priorityText(row.priority), to: priorityText(priority) }))
+      if (deadlineExpression) changes.push(mt('截止 {{from}} → {{to}}', { from: before.deadlineAt == null ? mt('未设置') : deadlineText(before.deadlineAt as number, now), to: deadlineText(deadlineAt!, now) }))
+      return ok(`${mt('事项已更新')} · ${saved.title}\n${before.triggerTime} → ${after.triggerTime} · ${after.levelName}${changes.length ? `\n${changes.join(' · ')}` : ''}`, { id: row.id, action: 'update', before, item: after })
     }
     const action = string(args.action) as ReminderAction | 'delete'
     const label = { complete: '确认完成', cancel: '取消提醒', snooze: '稍后提醒', restore: '恢复', delete: '删除' }[action]
@@ -209,9 +259,9 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
 
 const schemas: Record<typeof PERSONAL_TOOLS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
   update_note: { description: 'Rename or categorize an actual existing note ID, preserving its original transcript, polished text, audio and tags. title sets or clears its custom name. category_id uses a real returned ID (empty clears it); category_name uses an existing exact name or creates that category. Do not provide both category fields. Resolve latest/previous references with search_notes first. Executes directly without a confirmation popup.', properties: { id: { type: 'string' }, title: { type: 'string' }, category_id: { type: 'string' }, category_name: { type: 'string' } }, required: ['id'] },
-  create_reminder: { description: 'Create clear reminders/todos directly from the actual user request using the existing parser. Ask for missing details in text; never invent times or open confirmation dialogs. No timestamp arguments.', properties: {} },
-  list_reminders: { description: 'Query actual reminders and untimed todos, including untimed active tasks in day queries. kind=todo means only untimed tasks, reminder means timed, omitted means both. day: today/yesterday/tomorrow/YYYY-MM-DD. Returns real IDs, level, status, absolute triggerTime, remainingSeconds at asOf (negative=overdue). Do not use the original relative timeExpression as a countdown.', properties: { query: { type: 'string' }, status: { type: 'string', enum: ['active', 'pending', 'due', 'completed', 'cancelled', 'all'] }, today: { type: 'boolean' }, day: { type: 'string' }, kind: { type: 'string', enum: ['todo', 'reminder', 'all'] } } },
-  manage_reminder: { description: 'Modify a real task ID from query/create results. action=update edits time_expression and/or level in place, preserving ID and unrelated fields. Clock-only edits preserve its date and weekly rule. Other actions: complete/cancel/snooze/restore/delete. Never guess the target; query first if unknown.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['complete', 'cancel', 'snooze', 'restore', 'delete', 'update'] }, minutes: { type: 'number' }, time_expression: { type: 'string' }, level: { type: 'string', enum: ['normal', 'strong'] } }, required: ['id', 'action'] },
+  create_reminder: { description: 'Create clear reminders/todos directly from the actual user request using the existing parser. Ask for missing details in text; never invent times or open confirmation dialogs. No timestamp arguments: due times still come from the request. Optional priority (low/normal/high, default normal) and optional deadline, a natural-language expression for when the work must be finished, which is independent of when the alert fires. An unparsable deadline fails the call.', properties: { priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } } },
+  list_reminders: { description: 'Query actual reminders and untimed todos, including untimed active tasks in day queries. kind=todo means only untimed tasks, reminder means timed, omitted means both. day: today/yesterday/tomorrow/YYYY-MM-DD. Returns real IDs, level, priority, priorityLabel, deadlineAt, status, absolute triggerTime, remainingSeconds at asOf. overdue is judged on deadlineAt when present and otherwise on the alert time, and never on completed/cancelled tasks. Ordered open first, then priority, then deadline. Do not use the original relative timeExpression as a countdown.', properties: { query: { type: 'string' }, status: { type: 'string', enum: ['active', 'pending', 'due', 'completed', 'cancelled', 'all'] }, today: { type: 'boolean' }, day: { type: 'string' }, kind: { type: 'string', enum: ['todo', 'reminder', 'all'] } } },
+  manage_reminder: { description: 'Modify a real task ID from query/create results. action=update edits time_expression, level, priority and/or deadline in place, preserving ID and unrelated fields. Clock-only edits preserve its date and weekly rule. deadline is a natural-language expression for when the work must be finished; it does not move the alert. Other actions: complete/cancel/snooze/restore/delete. Never guess the target; query first if unknown.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['complete', 'cancel', 'snooze', 'restore', 'delete', 'update'] }, minutes: { type: 'number' }, time_expression: { type: 'string' }, level: { type: 'string', enum: ['normal', 'strong'] }, priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } }, required: ['id', 'action'] },
   create_note: { description: 'Save explicitly requested text or a previous answer as a local text note. Do not claim it includes an audio recording.', properties: { text: { type: 'string' } }, required: ['text'] },
   search_notes: { description: 'Search local notes by content keyword, newest created first. For latest/previous note set position, omit query: never search for the literal words note/latest/随记/随机. day: today/yesterday/tomorrow/YYYY-MM-DD. Returns IDs, tags and excerpts.', properties: { query: { type: 'string' }, day: { type: 'string' }, position: { type: 'string', enum: ['latest', 'previous'] } } },
   update_note_tags: { description: 'Add/remove tags on a real existing note ID, preserving original text, audio and other tags. resolve a recent reference with search_notes first.', properties: { id: { type: 'string' }, add_tags: { type: 'array', items: { type: 'string' }, maxItems: 30 }, remove_tags: { type: 'array', items: { type: 'string' }, maxItems: 30 } }, required: ['id'] },
@@ -219,7 +269,7 @@ const schemas: Record<typeof PERSONAL_TOOLS[number], { description: string; prop
   search_history: { description: 'Read actual completed recognition/Ask history, newest first. Set day=today/yesterday/YYYY-MM-DD for local calendar date filtering BEFORE limiting results. query is a content keyword, never put the date phrase there. Executes the user request directly.', properties: { query: { type: 'string' }, day: { type: 'string' } } },
   copy_to_clipboard: { description: 'Copy explicitly requested text or a previous answer to the clipboard. Does not read clipboard contents or paste into another application.', properties: { text: { type: 'string' } }, required: ['text'] },
   read_clipboard: { description: 'Read ONLY current clipboard text only when the user requested clipboard content. No monitoring or clipboard history. Prefer the actual previous answer for references; use get_selection for explicitly selected text.', properties: {} },
-  open_page: { description: 'Open existing overview, history, notes, reminders/todos, corrections or settings pages. Use settings for existing configuration (models, prompts, hotkeys, sync, etc). Does not modify any setting.', properties: { page: { type: 'string', enum: HUB_PAGES } }, required: ['page'] }
+  open_page: { description: 'Open existing overview, history, notes, reminders/todos, calendar, corrections or settings pages. Use settings for existing configuration (models, prompts, hotkeys, sync, etc). Does not modify any setting.', properties: { page: { type: 'string', enum: HUB_PAGES } }, required: ['page'] }
 }
 
 export const PERSONAL_DEFINITIONS: ToolDefinition[] = PERSONAL_TOOLS.map(name => ({ name, description: schemas[name].description,

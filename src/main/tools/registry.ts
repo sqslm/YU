@@ -40,6 +40,7 @@ import { WINDOWS_DEFINITIONS, WINDOWS_TOOLS, type WindowsTools } from './windows
 import type { AssistantLocalResult } from '@shared/assistant'
 import { PERSONAL_DEFINITIONS, PERSONAL_TOOLS, type PersonalTools } from './personal'
 import { LIFE_DEFINITIONS, LIFE_TOOLS, type LifeTools } from './life'
+import { WORKFLOW_DEFINITIONS, WORKFLOW_TOOLS, type WorkflowTools } from './workflow'
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
@@ -50,6 +51,8 @@ export interface ToolContext {
   analyzeScreenshot?: (question: string, ocr: boolean) => Promise<string>
   personal?: PersonalTools
   life?: LifeTools
+  /** Saved workflows: replay needs the store, not the model. */
+  workflow?: WorkflowTools
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
   allowedTools?: readonly string[]
@@ -127,7 +130,10 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   get_weather: 8000,
   // Speech synthesis is a second process plus a device handshake; the ceiling
   // only stops a wedged voice from holding the answer hostage for a minute.
-  speak_text: 20_000
+  speak_text: 20_000,
+  // A replay is up to eight ordinary tool calls back to back, so it gets the sum
+  // of what its steps could each take rather than one step's ceiling.
+  run_workflow: 180_000
 }
 
 /** Reuse reads and identical personal writes within one task, never across tasks. */
@@ -541,6 +547,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   ...PERSONAL_DEFINITIONS,
   ...LIFE_DEFINITIONS,
+  ...WORKFLOW_DEFINITIONS,
   ...WINDOWS_DEFINITIONS,
   {
     name: 'get_weather',
@@ -650,7 +657,7 @@ export const TOOL_NAMES: string[] = TOOL_DEFINITIONS.map((tool) => tool.name)
 
 /** OpenAI `tools` array. */
 export function toolSchemas(allowed?: readonly string[]): Array<Record<string, unknown>> {
-  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, 'analyze_screenshot'].includes(tool.name)).map((tool) => ({
+  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(tool.name)).map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -715,6 +722,7 @@ export async function runTool(
   const tool = getTool(name)
   if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number]) && (!ctx.personal || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number]) && (!ctx.life || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number]) && (!ctx.workflow || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) && (!ctx.windows || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
   if (!tool) return fail(mt('未知工具：{{name}}', { name }))
@@ -737,7 +745,7 @@ export async function runTool(
   const attempt = attemptTool(tool, input, ctx)
   if (key) ctx.cache?.set(key, attempt)
   const outcome = await attempt
-  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
+  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
     items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
     detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[perf] tool:${name} ${Date.now() - started}ms ok=${outcome.ok}`)

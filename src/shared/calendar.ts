@@ -73,9 +73,9 @@ export interface CalendarEventInput {
   status?: EventStatus
 }
 
-export type CalendarRange = 'today' | 'tomorrow' | 'week' | 'upcoming' | 'yesterday'
+export type CalendarRange = 'today' | 'tomorrow' | 'week' | 'upcoming' | 'yesterday' | 'month'
 
-const RANGES: readonly CalendarRange[] = ['today', 'tomorrow', 'yesterday', 'week', 'upcoming']
+const RANGES: readonly CalendarRange[] = ['today', 'tomorrow', 'yesterday', 'week', 'upcoming', 'month']
 
 export function isCalendarRange(value: string): value is CalendarRange {
   return (RANGES as readonly string[]).includes(value)
@@ -118,6 +118,16 @@ export function rangeFor(range: CalendarRange, now: number): { from: number; unt
     }
     case 'upcoming':
       return { from: now, until: now + 7 * DAY }
+    // The whole grid the month view paints, which starts on the Monday before the
+    // 1st and ends after the last week: a dot for the 1st has to be visible while
+    // the user is looking at the trailing days of the previous month.
+    case 'month': {
+      const cursor = new Date(today)
+      const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
+      const offset = (first.getDay() + 6) % 7
+      const from = shiftDays(first.getTime(), -offset)
+      return { from, until: shiftDays(from, 42) }
+    }
   }
 }
 

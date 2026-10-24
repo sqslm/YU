@@ -3,7 +3,7 @@ import type { Reminder } from '@shared/reminders'
 import { reminderDateBounds, reminderView } from './reminderView'
 
 const stamp = (day: number, hour = 12): number => new Date(2026, 9, day, hour).getTime()
-const row = (id: string, dueAt: number | null, extra: Partial<Reminder> = {}): Reminder => ({ id, title: id, dueAt, createdAt: stamp(24), updatedAt: stamp(24), level: 'normal', status: 'pending', recurrence: null, deliveredAt: null, source: 'manual', ...extra })
+const row = (id: string, dueAt: number | null, extra: Partial<Reminder> = {}): Reminder => ({ id, title: id, dueAt, deadlineAt: null, priority: 'normal', createdAt: stamp(24), updatedAt: stamp(24), level: 'normal', status: 'pending', recurrence: null, deliveredAt: null, source: 'manual', ...extra })
 const all = { status: 'active', kind: 'all' as const, query: '', bounds: reminderDateBounds('all') }
 describe('reminder and todo views', () => {
   it('separates scheduled reminders and undated todos using the existing data model', () => {

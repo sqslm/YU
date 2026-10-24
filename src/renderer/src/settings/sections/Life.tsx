@@ -51,6 +51,9 @@ export function LifeSection({ settings, patch }: {
   }, [])
 
   useEffect(() => { void loadEvents(range) }, [loadEvents, range])
+  // The hub calendar page and the assistant write the same store, so the list has
+  // to follow their edits instead of showing what was true when the tab opened.
+  useEffect(() => window.api.life.onChanged(() => { void loadEvents(range) }), [loadEvents, range])
   useEffect(() => {
     let alive = true
     void window.api.life.briefing().then(
