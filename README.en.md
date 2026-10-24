@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.4**, Windows 10/11 x64, MIT.
+> Current version **1.0.0-rc.5**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -20,7 +20,10 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | **Translation** | A dedicated translation mode and a selection-translation hotkey; 1–3 target languages, source language left to the ASR |
 | **Notes** | Voice or typed notes with categories and tags, playback, and audio import with re-transcription; polished text and raw transcript are kept separately |
 | **Reminders / to-dos** | Natural-language times (Chrono plus a program-side validator), recurrence, snooze, a strong-alert overlay window, missed-reminder recovery |
-| **Memory / schedule / briefing** | Say “remember this” and it becomes a standing preference; events carry a start, an end and an advance alert; a daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud. All of it stays on this machine |
+| **Reminders / to-dos** | Natural-language Chinese times (Chrono plus programmatic checks), repeats, snooze, a strong-alert overlay, missed-item recovery; each to-do can carry a priority and a deadline |
+| **Events** | Its own page: month grid, day list, create and edit (start, end, location, advance alert), ICS import and export — the page and the assistant write the same data |
+| **Briefing / read-aloud** | A daily paragraph folding today's events, due to-dos, overdue items and tomorrow's preview, readable aloud; quiet hours hold delivery back, and the last two weeks of briefings stay on this machine |
+| **Automation** | Save a sequence of steps you repeat as a named workflow and replay it with one sentence, with no model in the loop; each step runs with the saved arguments and reports its result |
 | **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR and smart translation |
 | **Wake word** | Optional offline wake word using Windows on-device speech; nothing is uploaded or stored before it fires |
 | **Sync** | Optional self-hosted server for history, notes, note audio and per-device personal stats; dictation audio stays on the machine that recorded it |
@@ -41,9 +44,9 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 A fresh install has no working connections: this is where you add a recognition and a text connection — address, key, model — test it, then save. Records shown in these screenshots are demo content.
 
-![Memory & schedule](resources/screenshots/prefs-life.png)
+![Schedule & briefing](resources/screenshots/prefs-life.png)
 
-Say “remember this from now on” and the preference is kept as long-term memory. Events have a start, an end and an advance alert. The daily briefing puts today's events, due to-dos, overdue items and tomorrow's preview into one paragraph, and can read it out. This data stays local and is never uploaded.
+Events carry a start, an end, a location and an advance alert, and can be imported from or exported to ICS. The daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud, and quiet hours hold it back. Events have their own page under Reminders in the main window, and the calendar and its data stay on this machine.
 
 ## Quick start
 
@@ -90,7 +93,8 @@ Three things worth knowing:
 - **Trigger mode** can be switched in the Shortcuts page between "press to start, press to stop" (default) and "hold to talk". In press mode, dictation, Ask and voice translation all end with another single `Right Alt`.
 - **Press `Esc` while recording** to throw the take away: it is neither inserted nor written to history.
 - Every shortcut can be re-recorded or cleared, and the tray menu can suspend all of them temporarily. Recording a shortcut distinguishes left and right Shift / Ctrl / Alt.
-- **Say it, and it is noted**: in Ask, “remember this: lead with the conclusion from now on” becomes standing memory, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, and “read today’s briefing” speaks it. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
+- **Say it, and it is noted**: in Ask, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, “read today’s briefing” speaks it, and “mark that to-do high priority, due Friday” updates it. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
+- **Say it once, replay it with one sentence**: tell it “from now on, when I say morning check, look at today's calendar, build the briefing and read it out” and it saves those steps as a workflow. Saying “run morning check” then runs each step with the saved arguments, with no model in the loop, and lists what every step returned. Workflows can be archived or restored in settings under Automation.
 
 ## Configuration
 
@@ -116,7 +120,7 @@ The server only handles accounts and sync (history, notes, note audio, personal 
 
 ## Data and privacy
 
-- The data directory lives under `%APPDATA%`, in a folder named after the application's technical identifier (the legacy identifier is kept so upgrades don't lose settings or the signed-in session): `settings.json`, `history.sqlite`, `notes.json` and `notes/audio/`, plus `memory.json`, `calendar.json` and `briefing-state.json`. Notes can be moved to a custom directory.
+- The data directory lives under `%APPDATA%`, in a folder named after the application's technical identifier (the legacy identifier is kept so upgrades don't lose settings or the signed-in session): `settings.json`, `history.sqlite`, `notes.json` and `notes/audio/`, plus `calendar.json`, `workflows.json` and `briefing-state.json`. Notes can be moved to a custom directory.
 - Keys are encrypted with the system keystore (DPAPI / safeStorage) and only ciphertext is written to disk. Where the platform provides no keystore, keys are stored as-is and the UI says so.
 - No always-on recording, no background clipboard watching, no background screenshots, no window polling. Selection reads and screenshots happen only on an explicit trigger, the original window is re-verified before and after, and password managers are refused.
 - Every local tool of the assistant goes through an allowlist plus argument validation: irreversible deletion, arbitrary commands, software installation and system changes are refused outright. Opening a web page requires the URL to come from real search results — the model may not guess domains.
@@ -194,9 +198,9 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.4`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos, long-term memory and a local calendar, the daily briefing and read-aloud, screen capture with OCR, offline wake word, accounts and sync, self-hosted server.
+Release candidate (`1.0.0-rc.5`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines, a local events page with ICS, the daily briefing and read-aloud, quiet hours, simple sequential workflows, screen capture with OCR, offline wake word, accounts and sync, self-hosted server.
 
-**Not implemented** (don't read these as available): calendar, long-term memory, daily briefings, TTS, cross-feature workflows, cloud reminders. The installer is unsigned and the update feed is a placeholder — run your own feed or turn update checks off.
+**Not implemented** (don't read these as available): external calendar authorisation and two-way sync (Google / Outlook), cloud reminders, document text search, Everything integration, model-written briefings (today's is assembled from templates), conversational references (“make the second one eleven”), wake-word device selection. The installer is unsigned and the update feed is a placeholder — run your own feed or turn update checks off.
 
 Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integration paths, and end-to-end runs use the fake backend. The [roadmap](ASSISTANT_ROADMAP.md) records the 81-item field comparison from 0.35.0 and what remained unresolved. A real microphone, physical hotkeys, overwrite installs, how Windows toasts actually look, and the real quotas of vendor accounts still have to be verified by you; the [API audit](PROVIDER_API_AUDIT.md) marks which endpoints were never confirmed with a real account.
 
@@ -216,7 +220,8 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
-- **1.0.0-rc.4**: long-term memory, a local calendar, the daily briefing and read-aloud become eleven allowlisted tools, and Ask no longer claims those abilities are missing; settings gain a Memory & schedule section; the calendar and briefing timers re-check after sleep and a briefing missed today is still delivered today.
+- **1.0.0-rc.5**: the long-term memory system is gone (spoken preferences are no longer kept forever; notes carry them instead); events get their own page (month grid, day list, form, ICS import/export), to-dos gain a priority and a deadline, the briefing honours quiet hours and keeps two weeks of text on this machine, and a new dictation stops a read-aloud in progress; workflows let you save a sequence of tool steps under a name and replay it with one sentence.
+- **1.0.0-rc.4**: a local calendar, the daily briefing and read-aloud become allowlisted tools, and Ask no longer claims those abilities are missing; settings gain a Memory & schedule section; the calendar and briefing timers re-check after sleep and a briefing missed today is still delivered today.
 - **1.0.0-rc.3**: release-audit fixes, Electron 42.11.18 and Vitest 4.1.12, known dependency vulnerabilities patched; brand assets and icons unified, settings folded into six groups, diagnostics exports redacted, and the legacy application identifier and user directory kept so upgrades lose nothing.
 - **1.0.0-rc.2**: the Ask card waits for its subscription before sending and keeps early messages; sequential search failover no longer splits the deadline evenly (8 s per connection, 24 s overall, at most two merged sources in flight); today's news separates "service failure" from "successful query with no matches", and after midnight keeps reports from the last 48 hours with their real dates; model forms link official platforms and key pages; long wake phrases drop to 0.80 / 0.50 confidence while short words stay at 0.94 / 0.75.
 - **0.41.0**: capture snaps to the topmost real window under the cursor, filtering transparent and click-through overlays with Alt to bypass; eight-handle resize and undo in the annotation layer; missed reminders are reported together after restart or wake, and "got it" does not change the item's state.
