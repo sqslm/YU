@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YU 云端数据管理</title>
+  <link rel="stylesheet" href="/admin/style.css">
+  <script src="/admin/app.js" defer></script>
+</head>
+<body>
+  <header><a class="brand" href="/admin">YU</a><strong>云端数据管理</strong><div class="session"><span id="actor"></span><button id="logout" class="text" hidden>退出登录</button></div></header>
+  <main id="login-view" class="login">
+    <form id="login-form" class="panel">
+      <h1>管理员登录</h1><p class="muted">使用服务端管理员账号管理云端数据。</p>
+      <label for="email">邮箱</label><input id="email" type="email" autocomplete="username" required>
+      <label for="password">密码</label><input id="password" type="password" autocomplete="current-password" required>
+      <button class="primary" type="submit">登录</button>
+      <p id="login-error" class="error" role="alert"></p>
+      <p class="muted small">管理员由服务端 CLI 创建或提权。</p>
+    </form>
+  </main>
+  <div id="workspace" hidden>
+    <aside class="rail"><button id="nav-accounts" class="nav-item nav-active"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22v-4a8 8 0 0 1 16 0v4z"/></svg>账号管理</button><button id="nav-settings" class="nav-item">服务端设置</button><span id="version" class="muted small"></span></aside>
+    <main class="content">
+      <nav class="mobile-nav" aria-label="管理页面"><button id="mobile-accounts">账号管理</button><button id="mobile-settings">服务端设置</button></nav>
+      <div id="notice" role="status" aria-live="polite" hidden></div>
+      <div id="account-view">
+      <div class="heading"><h1>账号与云端数据</h1><button id="refresh">刷新数据</button></div>
+      <section class="summary panel" aria-label="云端数据概况">
+        <div><span>账号</span><strong id="count-accounts">—</strong></div><div><span>随记</span><strong id="count-notes">—</strong></div>
+        <div><span>听写历史</span><strong id="count-history">—</strong></div><div><span>音频</span><strong id="count-audio">—</strong></div>
+      </section>
+      <div class="columns">
+        <section class="accounts panel" aria-label="账号列表">
+          <form id="user-search" class="search"><input id="user-query" type="search" aria-label="搜索账号邮箱" placeholder="搜索账号邮箱"><button>搜索</button></form>
+          <div id="users"></div>
+          <div class="pager"><button id="users-prev" aria-label="账号上一页">上一页</button><span id="users-page"></span><button id="users-next" aria-label="账号下一页">下一页</button></div>
+        </section>
+        <section class="details panel" aria-label="账号云端数据">
+          <p id="no-selection" class="empty">选择账号，查看云端数据。</p>
+          <div id="selected" hidden>
+            <div class="account-header"><div><h2 id="selected-email"></h2><p id="selected-status" class="muted"></p></div><div class="actions"><button id="export" class="accent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>导出 JSON</button><button id="toggle-user" class="danger"></button></div></div>
+            <div class="quota"><span id="usage"></span><progress id="usage-bar" max="100" value="0" aria-label="音频配额使用率"></progress><form id="quota-form"><label for="quota-mb">配额 MB</label><input id="quota-mb" type="number" min="0" max="1000000" step="1" required><button>保存</button><span class="muted small">0 表示默认</span></form></div>
+            <nav class="tabs" aria-label="数据类型"><button data-tab="notes" aria-pressed="true">随记</button><button data-tab="history" aria-pressed="false">听写历史</button><button data-tab="stats" aria-pressed="false">个人统计</button></nav>
+            <div class="records"><p id="stats-help" class="muted small" hidden>按设备保存的个人统计快照。查看中包含每日字数、时长和应用统计；客户端会继续更新快照。</p>
+              <form id="record-search" class="search"><input id="record-query" type="search" aria-label="搜索标题或内容" placeholder="搜索标题或内容"><button>搜索</button></form>
+              <div class="table-scroll"><table><thead><tr><th id="record-label">标题 / 内容</th><th>更新时间</th><th id="extra-label">音频</th><th>操作</th></tr></thead><tbody id="records"></tbody></table></div>
+              <p id="record-empty" class="empty" hidden>没有匹配的云端数据。</p>
+              <div class="pager"><span id="record-total" class="muted"></span><button id="records-prev">上一页</button><span id="records-page"></span><button id="records-next">下一页</button></div>
+            </div>
+          </div>
+        </section>
+      </div>
+      </div>
+      <section id="settings-view" hidden>
+        <div class="heading"><h1>服务端设置</h1><button id="reload-settings">重新加载</button></div>
+        <p class="muted">保存后立即生效，重启后保留。Web 设置优先于环境变量；会话时长用于后续签发或刷新的令牌。</p>
+        <p id="settings-warnings" class="muted"></p>
+        <form id="settings-form" class="settings-form">
+          <fieldset class="panel"><legend>账号与验证</legend><div class="settings-grid">
+            <label class="check"><input type="checkbox" data-setting="REGISTRATION_ENABLED">开放公开注册</label>
+            <label class="check"><input type="checkbox" data-setting="EMAIL_VERIFICATION_REQUIRED">注册需要邮箱验证码</label>
+            <label>验证码有效期（秒）<input type="number" min="30" max="3600" required data-setting="CODE_TTL_SECONDS"></label>
+            <label>验证码发送间隔（秒）<input type="number" min="0" max="3600" required data-setting="CODE_COOLDOWN_SECONDS"></label>
+            <label>验证码最大试错次数<input type="number" min="1" max="20" required data-setting="CODE_MAX_ATTEMPTS"></label>
+            <label>新账号试用期（天）<input type="number" min="0" max="3650" required data-setting="TRIAL_DAYS"></label>
+            <label>访问令牌有效期（秒）<input type="number" min="60" max="2592000" required data-setting="ACCESS_TTL_SECONDS"></label>
+            <label>刷新令牌有效期（天）<input type="number" min="1" max="3650" required data-setting="REFRESH_TTL_DAYS"></label>
+          </div></fieldset>
+          <fieldset class="panel"><legend>存储与请求</legend><div class="settings-grid">
+            <label>默认账号音频配额（MB）<input type="number" min="1" max="1048576" required data-setting="DEFAULT_USER_STORAGE_MB"></label>
+            <label>单个录音上传上限（MB）<input type="number" min="1" max="2048" required data-setting="MAX_AUDIO_UPLOAD_MB"></label>
+            <label>JSON 请求体上限（字节）<input type="number" min="4096" max="33554432" required data-setting="MAX_BODY_BYTES"></label>
+          </div><p class="muted small">降低配额不会删除已有录音。上传还受反向代理的请求体上限约束；提高到代理限额以上时，需同步修改部署配置。</p></fieldset>
+          <fieldset class="panel"><legend>邮件服务 SMTP</legend><div class="settings-grid">
+            <label>主机<input type="text" data-setting="SMTP_HOST" autocomplete="off"></label>
+            <label>端口<input type="number" min="1" max="65535" required data-setting="SMTP_PORT"></label>
+            <label>用户名<input type="text" data-setting="SMTP_USERNAME" autocomplete="off"></label>
+            <label>新密码 / 授权码<input id="smtp-password" type="password" autocomplete="new-password" placeholder="留空保留原值"></label>
+            <label>发件人<input type="text" data-setting="SMTP_FROM" placeholder="YU &lt;no-reply@example.com&gt;"></label>
+            <label>连接加密<select data-setting="SMTP_TLS_MODE"><option value="implicit">隐式 TLS（通常 465）</option><option value="starttls">STARTTLS（通常 587）</option><option value="none">不加密（仅可信内部中继）</option></select></label>
+            <label>连接超时（秒）<input type="number" min="1" max="120" required data-setting="SMTP_TIMEOUT_SECONDS"></label>
+            <label class="check"><input id="clear-smtp-password" type="checkbox">清除已有 SMTP 密码</label>
+          </div><p id="smtp-status" class="muted small"></p></fieldset>
+          <fieldset class="panel"><legend>访问频率限制</legend><div class="settings-grid">
+            <label>每 IP 每分钟总请求数<input type="number" min="0" max="100000" required data-setting="RATE_LIMIT_PER_MINUTE"></label>
+            <label>每 IP 每分钟认证请求数<input type="number" min="0" max="100000" required data-setting="AUTH_LIMIT_PER_MINUTE"></label>
+            <label>每 IP 每小时验证码发送数<input type="number" min="0" max="10000" required data-setting="CODE_LIMIT_PER_HOUR_PER_IP"></label>
+            <label>每邮箱每小时验证码发送数<input type="number" min="0" max="10000" required data-setting="CODE_LIMIT_PER_HOUR_PER_EMAIL"></label>
+          </div><p class="muted small">0 表示关闭对应限制。降低总请求限制会影响当前管理页面访问。</p></fieldset>
+          <fieldset class="panel"><legend>地址与运行</legend><div class="settings-grid">
+            <label>对外服务地址<input type="url" data-setting="PUBLIC_URL" placeholder="https://sync.example.com"></label>
+            <label>允许的浏览器来源<input type="text" data-setting="CORS_ORIGIN" placeholder="* 或 https://example.com"></label>
+            <label>日志级别<select data-setting="LOG_LEVEL"><option value="info">常规信息</option><option value="warn">警告与错误</option><option value="error">仅错误</option><option value="debug">调试</option></select></label>
+            <label class="check"><input type="checkbox" data-setting="TRUST_PROXY">信任反向代理传入的客户端 IP</label>
+          </div><p class="muted small">仅在可信反向代理后启用 IP 信任。监听地址、端口、数据目录和运行模式由部署配置决定，不能在页面更改。</p><p id="deployment-info" class="muted small"></p></fieldset>
+          <div class="settings-save"><button id="save-settings" class="primary" type="submit">保存服务端设置</button><span class="muted small">SMTP 密码不会回显，空白表示保留。</span></div>
+        </form>
+      </section>
+    </main>
+  </div>
+  <dialog id="detail-dialog"><div class="dialog-header"><h2 id="detail-title">数据详情</h2><button id="close-detail" aria-label="关闭详情">关闭</button></div><div id="detail-body"></div></dialog>
+  <dialog id="confirm-dialog"><form method="dialog"><h2 id="confirm-title"></h2><p id="confirm-message"></p><div class="actions"><button value="cancel">取消</button><button value="confirm" class="danger">确认</button></div></form></dialog>
+</body>
+</html>

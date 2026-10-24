@@ -6,6 +6,8 @@
  * off, which is what the test suite does.
  */
 export class RateLimiter {
+  get enabled() { return this.limit > 0 }
+
   constructor(limitPerMinute, windowMs = 60_000) {
     this.limit = limitPerMinute
     this.windowMs = windowMs

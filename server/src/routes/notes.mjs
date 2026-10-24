@@ -144,7 +144,7 @@ function safeTags(value) {
 }
 
 /** One row plus its audio metadata, the shape every route returns. */
-function readNote(db, userId, id) {
+export function readNote(db, userId, id) {
   const row = db.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').get(id, userId)
   return row ? serialize(row, audioRow(db, userId, id)) : null
 }

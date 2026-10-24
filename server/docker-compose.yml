@@ -1,7 +1,7 @@
 services:
   typeless-server:
     build: .
-    image: typeless-server:2.0.1
+    image: typeless-server:2.1.0
     restart: unless-stopped
     ports:
       - "${SERVER_PORT:-8787}:8787"

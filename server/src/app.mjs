@@ -5,12 +5,14 @@ import { createLogger } from './log.mjs'
 import { createMailer } from './mail.mjs'
 import { RateLimiter } from './ratelimit.mjs'
 import { registerAuthRoutes } from './routes/auth.mjs'
+import { registerAdminRoutes } from './routes/admin.mjs'
 import { registerMetaRoutes } from './routes/meta.mjs'
 import { registerNoteRoutes } from './routes/notes.mjs'
 import { registerStatsRoutes } from './routes/stats.mjs'
 import { registerSyncRoutes } from './routes/sync.mjs'
 import { registerUserRoutes } from './routes/user.mjs'
 import { SERVER_VERSION } from './version.mjs'
+import { applyStoredSettings } from './settings.mjs'
 
 const CLIENT_IP_TRUSTED = Symbol('clientIp')
 
@@ -21,14 +23,26 @@ const CLIENT_IP_TRUSTED = Symbol('clientIp')
  * can start a real server on port 0 without touching environment variables.
  */
 export function createApp({ config, logger, db = openDatabase(config.dataDir) }) {
+  applyStoredSettings(config, db)
   const log = logger ?? createLogger({ level: config.logLevel })
-  const mailer = createMailer(config, log)
+  log.setLevel?.(config.logLevel)
+  let mailer = createMailer(config, log)
   const startedAt = Date.now()
 
   const rateLimiter = new RateLimiter(config.rateLimitPerMinute)
   const authLimiter = new RateLimiter(config.authLimitPerMinute)
   const codeIpLimiter = new RateLimiter(config.codeLimitPerHourPerIp, 3600_000)
   const codeEmailLimiter = new RateLimiter(config.codeLimitPerHourPerEmail, 3600_000)
+
+  function applySettings(next) {
+    Object.assign(config, next)
+    log.setLevel?.(config.logLevel)
+    mailer = createMailer(config, log)
+    for (const [limiter, limit] of [[rateLimiter, config.rateLimitPerMinute], [authLimiter, config.authLimitPerMinute],
+      [codeIpLimiter, config.codeLimitPerHourPerIp], [codeEmailLimiter, config.codeLimitPerHourPerEmail]]) {
+      if (limiter.limit !== limit) { limiter.limit = limit; limiter.buckets.clear() }
+    }
+  }
 
   const router = new Router()
   router.get('/health', async (ctx) => ({
@@ -51,6 +65,7 @@ export function createApp({ config, logger, db = openDatabase(config.dataDir) })
   registerStatsRoutes(router)
   // Kept so existing builds that already sync the dictation history stay working.
   registerSyncRoutes(router)
+  registerAdminRoutes(router)
 
   function clientIp(req) {
     if (config.trustProxy) {
@@ -133,6 +148,7 @@ export function createApp({ config, logger, db = openDatabase(config.dataDir) })
         authLimiter,
         codeIpLimiter,
         codeEmailLimiter,
+        applySettings,
         setClientIp: undefined,
         reply: (statusCode, payload) => {
           send(res, statusCode, payload)

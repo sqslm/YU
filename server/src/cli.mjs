@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { loadConfig } from './config.mjs'
 import { openDatabase, readMeta, writeMeta } from './db.mjs'
 import { hashPassword } from './password.mjs'
+import { applyStoredSettings } from './settings.mjs'
 
 const USAGE = `typeless-server 管理命令
 
@@ -20,6 +21,7 @@ const USAGE = `typeless-server 管理命令
   set-quota --email <邮箱> --mb <MB>
                                   单独设置存储配额，--mb 0 表示恢复默认
   registration on|off             开关公开注册（覆盖环境变量）
+  reset-web-settings              清除 Web 设置和注册覆盖，重启后恢复环境变量配置
   backup   [--out <目录>]         一致性备份数据库与音频（默认 <DATA_DIR>/backups/<时间>）
   help                            显示这段说明
 
@@ -158,6 +160,7 @@ async function main() {
 
   const config = loadConfig()
   const db = openDatabase(config.dataDir)
+  applyStoredSettings(config, db)
   try {
     switch (command) {
       case 'create-admin':
@@ -214,6 +217,10 @@ async function main() {
       }
       case 'backup':
         backup(db, config, flags)
+        return
+      case 'reset-web-settings':
+        db.prepare("DELETE FROM meta WHERE key IN ('web_settings', 'registration_enabled')").run()
+        process.stdout.write('Web 设置与注册覆盖已清除；请重启服务，使环境变量配置重新生效。\n')
         return
       case 'status': {
         const users = Number(db.prepare('SELECT COUNT(*) AS n FROM users').get().n)

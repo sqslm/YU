@@ -13,7 +13,7 @@ function describe(error) {
 }
 
 export function createLogger({ level = 'info', out = process.stdout, err = process.stderr, silent = false } = {}) {
-  const threshold = LEVELS[level] ?? LEVELS.info
+  let threshold = LEVELS[level] ?? LEVELS.info
   const write = (stream, text) => {
     if (silent) return
     try {
@@ -25,6 +25,7 @@ export function createLogger({ level = 'info', out = process.stdout, err = proce
   const stamp = () => new Date().toISOString()
 
   return {
+    setLevel(value) { threshold = LEVELS[value] ?? LEVELS.info },
     log(message) {
       if (threshold >= LEVELS.info) write(out, `${stamp()} INFO  ${message}\n`)
     },

@@ -1,5 +1,29 @@
 # 语（YU）自建服务端 API
 
+## Web 管理接口（2.1.0）
+
+页面入口为 `/admin`，静态资源位于 `/admin/app.js`、`/admin/style.css`。登录、刷新和退出沿用 `/api/v1/auth/*`。以下接口都要求有效 Bearer 会话且账号 `is_admin=1`；未登录返回 401，普通账号或管理员被降权返回 403。每次请求重新检查权限，不在 URL 中传令牌。
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/api/v1/admin/overview` | 当前管理员、服务版本、账号数、有效随记/历史数、音频字节数 |
+| GET | `/api/v1/admin/settings` | 生效设置 `values`、并发版本 `revision`、`smtpPasswordSet`、SMTP 配置状态/警告、只读部署信息；永不返回 SMTP 密码 |
+| PUT | `/api/v1/admin/settings` | JSON `{revision,values}`，设置键沿用 `.env.example`；仅允许可热更新字段；错误整体拒绝，过期版本 409；保存后立即生效且持久化 |
+| GET | `/api/v1/admin/users?page=1&q=` | 按邮箱搜索；每页 30 条，返回 `users,total,page` |
+| GET | `/api/v1/admin/users/:userId` | 账号公开信息、禁用状态、有效配额/覆盖值、音频用量、随记/历史/统计设备数 |
+| PUT | `/api/v1/admin/users/:userId` | JSON `{disabled?:boolean,quotaMb?:number}`；配额为 0–1000000 整数 MB，0 恢复默认。停用撤销全部会话；网页禁止停用管理员 |
+| GET | `/api/v1/admin/users/:userId/notes` | 有效随记，`items,total,page`；`q` 搜索标题/原文/润色，`page` 默认 1，每页 30 |
+| GET | `/api/v1/admin/users/:userId/history` | 有效听写历史，`items,total,page`；`q` 搜索存储的 JSON 正文 |
+| GET | `/api/v1/admin/users/:userId/stats` | 设备统计快照，`items,total,page`；`q` 搜索设备 ID |
+| GET/HEAD | `/api/v1/admin/users/:userId/notes/:id/audio` | 指定账号随记录音；下载鉴权同样要求管理员，无 URL 令牌 |
+| DELETE | `/api/v1/admin/users/:userId/notes/:id` | JSON `{version}`；版本不匹配返回 409。清除文字/录音，递增版本和游标，保留墓碑 |
+| DELETE | `/api/v1/admin/users/:userId/history/:id` | JSON `{updatedAt}`；时间戳不匹配返回 409。清除正文并写入更大的删除时间戳、游标和 revision |
+| GET | `/api/v1/admin/users/:userId/export` | 流式 JSON 附件：`exportedAt,user,notes,history,stats`，只含该账号有效数据，不含密码/令牌及音频二进制 |
+
+统计只读，删除随记/历史不会重置统计。导出过程中允许客户端继续写入，因此不是跨表原子快照；完整灾备请用管理员 CLI。已有客户端未上传的本地修改可能重新上传，管理删除前应先完成同步。
+
+设置 `values` 支持 `.env.example` 中除 `HOST`、`PORT`、`DATA_DIR` 以外的设置。`NODE_ENV` 同样只读。布尔字段必须为 JSON boolean，数字字段必须为 number。`SMTP_PASSWORD` 缺省保留、字符串更换、空字符串清除，读取接口仅返回是否已设置。设置覆盖优先于环境变量，保存在现有 `meta` 表中，无需数据库迁移；账号 JSON 导出不会包含它们。注册开关沿用 `registration_enabled`，CLI 的开关同样反映到页面。
+
 协议版本：`1`（`GET /api/v1/meta` → `protocolVersion`）。所有接口在 `/api/v1/` 下，除 `meta`、`health`、`auth/*` 外都要求 `Authorization: Bearer <accessToken>`。
 
 - 请求与响应都是 JSON（音频上传/下载除外）。

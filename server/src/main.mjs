@@ -6,9 +6,8 @@ import { SERVER_VERSION } from './version.mjs'
 const config = loadConfig()
 const log = createLogger({ level: config.logLevel })
 
-for (const warning of config.warnings) log.warn(warning)
-
 const app = createApp({ config, logger: log })
+for (const warning of config.warnings) log.warn(warning)
 
 app.server.listen(config.port, config.host, () => {
   const address = app.server.address()
