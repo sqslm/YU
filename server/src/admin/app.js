@@ -11,6 +11,8 @@ function notice(text = '') { $('notice').textContent = text; $('notice').hidden 
 
 function resetLogin() {
   settingsRevision = undefined; $('smtp-password').value = ''; $('settings-form').reset()
+  $('nav-accounts').classList.add('nav-active'); $('nav-settings').classList.remove('nav-active')
+  $('mobile-accounts').setAttribute('aria-pressed', 'true'); $('mobile-settings').setAttribute('aria-pressed', 'false')
   state.access = ''; state.refresh = ''; state.user = null
   state.userRequest++; state.recordRequest++; state.selectionRequest++
   state.users = []; state.items = []
@@ -210,6 +212,7 @@ function renderSettings(data) {
 }
 async function showSection(settings) {
   if (settings) renderSettings(await json('/api/v1/admin/settings'))
+  else await refreshAccount()
   $('account-view').hidden = settings; $('settings-view').hidden = !settings
   $('nav-accounts').classList.toggle('nav-active', !settings); $('nav-settings').classList.toggle('nav-active', settings)
   $('mobile-accounts').setAttribute('aria-pressed', String(!settings)); $('mobile-settings').setAttribute('aria-pressed', String(settings))
