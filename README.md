@@ -6,10 +6,10 @@ Windows 上的语音输入与本地 AI 助手：按一下热键说话，松手�
 
 [English](README.en.md) · [设计理念](resources/brand/PHILOSOPHY.zh-CN.md) · [路线图](ASSISTANT_ROADMAP.md) · [服务端部署](server/README.md)
 
-![语 / YU](resources/brand/logo-light.png)
-
 > 当前版本 **1.0.0-rc.3**，Windows 10/11 x64，MIT。
 > 这是发布候选版：已完成的功能可用，未完成项在[路线图](ASSISTANT_ROADMAP.md)里逐条标注。
+
+![语 / YU](resources/brand/logo-light.png)
 
 ## 能做什么
 
@@ -24,14 +24,30 @@ Windows 上的语音输入与本地 AI 助手：按一下热键说话，松手�
 | **唤醒** | 可选的离线唤醒词（Windows 本地语音识别），唤醒前不上传、不保存音频 |
 | **同步** | 可选自建服务端：听写历史、随记、随记录音、按设备的个人统计；听写录音只留本机 |
 
+## 界面
+
+![概览](resources/screenshots/hub-home.png)
+
+| 录音时的悬浮条 | Ask 回答卡 |
+| --- | --- |
+| ![悬浮条](resources/screenshots/bar-recording.png) | ![回答卡](resources/screenshots/card-answer.png) |
+
+| 历史记录 | 模型配置 |
+| --- | --- |
+| ![历史](resources/screenshots/hub-history.png) | ![模型配置](resources/screenshots/prefs-models.png) |
+
+| 快捷键 |  |
+| --- | --- |
+| ![快捷键](resources/screenshots/prefs-shortcuts.png) | 权限全部按需申请；悬浮条常驻但只在触发时录音，界面上能直接看到当前是待命、录音还是处理中。 |
+
 ## 快速开始
 
-需要 Windows 10/11 x64、Node.js ≥ 22（自建服务端要求 ≥ 22.5，它用 `node:sqlite`）和 pnpm。
+需要 Windows 10/11 x64、Node.js 22.18 或更新（自建服务端要求 ≥ 22.5，它用 `node:sqlite`）和 pnpm 11。
 
 ```powershell
 git clone https://github.com/sqslm/YU.git
 cd YU
-pnpm install
+pnpm install --frozen-lockfile
 
 # 可选：起一个本地假后端，没有 API Key 也能自测
 pnpm mock                     # http://127.0.0.1:8787/v1
@@ -94,7 +110,7 @@ pnpm start                # 或按 server/README.md 用 Docker
 
 ## 数据与隐私
 
-- 数据目录：`%APPDATA%\typeless-rebuild\`（`settings.json`、`history.sqlite`、`notes.json` 与 `notes/audio/`；随记可迁移到自定义目录）。
+- 数据目录在 `%APPDATA%` 下以应用技术标识命名的文件夹里（沿用旧标识，升级不丢配置与登录态）：`settings.json`、`history.sqlite`、`notes.json` 与 `notes/audio/`；随记可迁移到自定义目录。
 - 密钥用系统密钥库（DPAPI / safeStorage）加密保存，配置文件里只留密文；系统不支持时按原样明文保存并在界面上说明。
 - 不常驻录音、不后台监听剪贴板、不后台截图、不轮询窗口。选区与截图只在明确触发时发生，读取前后都复核原窗口，密码类应用拒绝自动读取。
 - 助手的本地工具全部走白名单 + 参数校验：不可逆删除、任意命令、软件安装、系统修改直接拒绝；打开网页要求 URL 来自真实检索结果，不允许模型猜域名。
@@ -124,11 +140,11 @@ history.sqlite（SQLite 检索，含来源与链路标记）
 几个值得单独说明的模块：
 
 - `src/main/hotkey/child.ts` — 全局键盘钩子。`PeekMessageW` + 4 ms 定时器泵消息（阻塞式 `GetMessageW` 会让 V8 无法执行 koffi 回调）；手势状态以钩子事件账本为准，`GetAsyncKeyState` 只允许「删除」条目；回调指针必须声明成 `const KBDLLHOOKSTRUCT *` 才会自动解码。
-- `src/main/pipeline.ts` — 一次听写的完整生命周期（2218 行）：`MIN_DURATION_MS=350` 防误触、`STOP_GRACE_MS=500` 等最后一块音频、每步 async 都用 run token 复检，取消之后绝不可能再插入。
+- `src/main/pipeline.ts` — 一次听写的完整生命周期（2200 行）：`MIN_DURATION_MS=350` 防误触、`STOP_GRACE_MS=500` 等最后一块音频、每步 async 都用 run token 复检，取消之后绝不可能再插入。
 - `src/main/insert.ts` — 剪贴板整段粘贴优先，SendInput 用 40 字节手写 `INPUT` 布局，注入前 `AttachThreadInput` 强制前台；剪贴板只在内容仍是我们写的时才恢复。
 - `src/main/agent.ts` + `src/main/tools/` — Ask 的调度与 9 个工具。原生 `tool_calls` 优先，不支持时降级为严格 JSON 意图；`runTool` 永不抛异常，网络类工具每个都有 ≤8 秒的硬预算。
-- `src/main/foreground.ts` / `selection-target.ts` — 「原窗口」快照：录音开始时记下前台窗口，读取或写入选区前用 pid + 标题 + 类名复核，事后还要再验一次。
-- `src/main/providers/` — 一套 OpenAI 形状的传输 + 逐厂商字段改写（OpenAI 推理模型、Gemini、DeepSeek 的差异都在 `adaptChatBody`），加上 13 个搜索后端的适配器。
+- `src/main/foreground.ts`、`selection-target.ts` — 「原窗口」快照：录音开始时记下前台窗口，读取或写入选区前用 pid + 标题 + 类名复核，事后还要再验一次。
+- `src/main/providers/` — 一套 OpenAI 形状的传输 + 逐厂商字段改写（OpenAI 推理模型、Gemini、DeepSeek 的差异都在 `adaptChatBody`），加上 13 种搜索后端的适配器。
 - `src/renderer/src/bar/capture.ts` — 麦克风常开（`setActive` 只控制是否上报），避免冷启动 200–800 ms 丢音。
 
 ## 开发
@@ -139,14 +155,12 @@ pnpm typecheck                # 主进程与渲染层两套 project 都查
 
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）
 pnpm mock
-$env:TYPELESS_SELFTEST='1'; $env:TYPELESS_IGNORE_SILENCE='1'
-node_modules\electron\dist\electron.exe .
-
-# 只截 UI，不需要人操作
-$env:TYPELESS_CAPTURE='1'     # → screenshots\hub-*.png、prefs-*.png、bar-*.png
+node_modules\electron\dist\electron.exe .        # 启动前按 README 顶部的环境变量打开自检
 ```
 
 `scripts/mock-openai.mjs` 提供假 ASR / LLM / Gemini / SearXNG，还带 A–I 九个检索场景：`curl http://127.0.0.1:8787/__scenario?id=C` 切场景后，下一次 Ask 就会走「官方文档优先 / 旧文剔除 / 转载折叠 / 数值冲突」这些分支，`src/main/ask-acceptance.test.ts` 用同一套场景做离线断言。
+
+调试开关（自检模式、跳过静音门槛、只截 UI、指定 FFmpeg 可执行文件）都通过环境变量控制，读取处见 `src/main/index.ts` 顶部的常量与 `src/main/audio/transcode.ts`。只截 UI 时生成的图片落在 `screenshots/`，该目录不入库。
 
 技术栈：Electron 42 + electron-vite 4 + React 18 + MUI 6 + TypeScript 5.9 + Vitest 4。运行时依赖只有四个（`chrono-node`、`electron-updater`、`koffi`、`sherpa-onnx-node`），React 和 MUI 只在开发期存在。
 
@@ -156,24 +170,25 @@ $env:TYPELESS_CAPTURE='1'     # → screenshots\hub-*.png、prefs-*.png、bar-*.
 - **Electron 主进程走 CJS**：ESM 下 `import { BrowserWindow } from 'electron'` 运行时报 `does not provide an export named 'BrowserWindow'`，所以 `package.json` 不设 `"type": "module"`。
 - **pnpm 11** 不再读 `package.json` 的 `pnpm.onlyBuiltDependencies`，构建脚本白名单要写在 `pnpm-workspace.yaml` 的 `allowBuilds`。
 - **koffi 回调指针**：参数声明成 `const KBDLLHOOKSTRUCT *` 才会自动解成对象；声明 `intptr_t` 拿到的是 number，`koffi.decode` 会报 `expected external or TypedArray`。
-- **FFmpeg 编码**：启用 Opus 需要带 `libopus` 的 FFmpeg，否则退回 WAV（不影响转写）；导入非 WAV 录音需要系统里有 FFmpeg，或用 `TYPELESS_FFMPEG` 指定。
+- **FFmpeg 编码**：启用 Opus 需要带 `libopus` 的 FFmpeg，否则退回 WAV（不影响转写）；导入非 WAV 录音需要系统里有 FFmpeg，或用环境变量指定可执行文件。
 - **粘贴回退会短暂占用剪贴板**，设置里可开启「粘贴后恢复剪贴板内容」。
 - **工具 Agent 依赖函数调用能力**：支持的模型走原生 `tool_calls`，不支持的（或网关回 400/404/422）自动降级成「只输出一个 JSON 意图」，能力弱一些但不会整条失败。
 
-## 与 Typeless 的差异（有意为之）
+## 设计取舍（有意为之）
 
-本项目是独立实现，不隶属于 Typeless，也不包含其客户端源码、录音、历史、截图或逆向取证产物——功能规格来自黑盒观察与公开行为。
+本项目是独立实现，不包含任何第三方客户端源码、录音、历史、截图或取证产物；规格来自公开行为观察与自己的判断。
 
-- 登录可选，默认没有可用模型连接，ASR / LLM / Gemini 都要自己配。
+- 登录可选，默认没有可用模型连接，ASR / 文本模型 / 多模态都要自己配。
 - 检索先由模型判断是否联网，来源列表由本项目补充，方便核对；天气这类问句直接查数据源。
 - 服务端不提供支付；套餐与配额由管理员设置。
 - 提供首次使用引导，没有团队空间和订阅流程。
+- 不做常驻录音、剪贴板监听、后台截图，也不把「模型说做过」当成「已经做过」。
 
 ## 项目状态
 
 处于发布候选阶段（`1.0.0-rc.3`）。**已完成**：听写与翻译、Ask + 工具 Agent、随记、提醒/待办、截图与 OCR、离线唤醒、账号与同步、自建服务端。
 
-**未实现**（不要误读为可用）：日程（calendar）、长期记忆、每日简报、TTS、跨功能联动工作流、云同步提醒。安装器未签名，更新源是占位地址，需自建 feed 或设 `TYPELESS_NO_UPDATE=1` 关闭检查。
+**未实现**（不要误读为可用）：日程（calendar）、长期记忆、每日简报、TTS、跨功能联动工作流、云同步提醒。安装器未签名，更新源是占位地址，需自建 feed 或关闭更新检查。
 
 验证边界：`pnpm test` 与 `pnpm typecheck` 覆盖单元与联调，端到端由假后端驱动；[路线图](ASSISTANT_ROADMAP.md)记录了 0.35.0 的 81 项实测对照与未解决事项。真人麦克风、实体快捷键、覆盖安装、Windows 通知的实际呈现，以及各厂商账号的真实配额，仍需自行验证；[API 核对记录](PROVIDER_API_AUDIT.md)标出了尚未用真实账号确认的接口。
 
