@@ -119,7 +119,7 @@ export function AccountSection({ settings, patch }: SectionProps): JSX.Element {
       <SettingsGroup icon={<IconUser />} title={i18n.t('登录状态')}>
         <SettingsRow
           label={signedIn ? i18n.t('当前账户') : i18n.t('未登录')}
-          description={signedIn ? view.email : view?.needsSignIn ? i18n.t('登录已过期，请重新登录。') : i18n.t('登录后可跨设备同步历史、随记和录音。')}
+          description={signedIn ? view.email : view?.needsSignIn ? i18n.t('登录已过期，请重新登录。') : i18n.t('登录后可跨设备同步历史、随记、录音和个人统计。')}
         >
           {signedIn ? (
             <Button variant="outlined" data-account-signout disabled={busy !== '' || syncing} onClick={() => void signOut()}>{i18n.t('退出登录')}</Button>
@@ -130,7 +130,7 @@ export function AccountSection({ settings, patch }: SectionProps): JSX.Element {
       </SettingsGroup>
 
       <SettingsGroup icon={<IconFolder />} title={i18n.t('云同步')}>
-        <SettingsRow label={i18n.t('同步历史与随记')} description={i18n.t('包含随记原始录音；听写录音不上传。')}>
+        <SettingsRow label={i18n.t('同步历史与随记')} description={i18n.t('同步听写记录、随记及随记录音，并同步每日统计（数量、时长和应用名称）；听写录音留在本机。')}>
           <Switch size="small" data-sync-enabled checked={settings.syncEnabled} disabled={!signedIn || syncing} onChange={(event) => patch({ syncEnabled: event.target.checked })} />
         </SettingsRow>
         <SettingsRow label={i18n.t('自动同步')} description={i18n.t('选择同步频率，也可随时手动同步。')}>

@@ -15,9 +15,10 @@
 4. [当前用户与用量](#4-当前用户与用量)
 5. [随记同步](#5-随记同步)
 6. [音频](#6-音频)
-7. [旧版听写历史（兼容保留）](#7-旧版听写历史兼容保留)
-8. [错误码](#8-错误码)
-9. [客户端同步流程](#9-客户端同步流程)
+7. [设备统计同步](#7-设备统计同步)
+8. [旧版听写历史（兼容保留）](#8-旧版听写历史兼容保留)
+9. [错误码](#9-错误码)
+10. [客户端同步流程](#10-客户端同步流程)
 
 ---
 
@@ -45,7 +46,7 @@ GET /api/v1/meta
     "notesPerPush": 200,
     "notesPerPull": 500
   },
-  "features": { "notes": true, "notesAudio": true, "history": true, "passwordReset": true }
+  "features": { "notes": true, "notesAudio": true, "history": true, "statistics": true, "passwordReset": true }
 }
 ```
 
@@ -344,7 +345,21 @@ DELETE /api/v1/notes/:id/audio
 
 只删录音，保留随记。
 
-## 7. 旧版听写历史（兼容保留）
+## 7. 设备统计同步
+
+统计数据按设备保存为独立快照，客户端汇总展示。请求需要登录；每个账号只能读写自己的设备快照。数据只包含每日计数、累计数字及应用名称，不含听写文本或录音。
+
+```http
+PUT /api/v1/stats/devices/:deviceId
+{ "stats": { "version": 1, "records": 10, "lastAt": 1792890000000, "days": {}, "apps": {} } }
+
+GET /api/v1/stats/devices
+→ { "devices": [{ "deviceId": "…", "stats": { "version": 1, "records": 10, "lastAt": 1792890000000, "days": {}, "apps": {} } }] }
+```
+
+上传同一设备的新快照会替换旧快照，不会累加重复数据。历史记录清空不会删除统计快照。
+
+## 8. 旧版听写历史（兼容保留）
 
 已经发布的客户端只认这组接口，所以服务端继续提供，行为与 1.x 一致（payload 原样 JSON、LWW 合并、墓碑）：
 
@@ -358,7 +373,7 @@ DELETE /api/v1/notes/:id/audio
 
 新客户端应优先用第 5 节的随记接口（结构化字段、真实冲突检测）。
 
-## 8. 错误码
+## 9. 错误码
 
 | HTTP | `error` | 含义 / 客户端动作 |
 | --- | --- | --- |
@@ -385,7 +400,7 @@ DELETE /api/v1/notes/:id/audio
 | 500 | `internal_error` | 服务端异常，不暴露细节 |
 | 502/503 | `email_send_failed` / `email_not_configured` | 发信问题，联系管理员 |
 
-## 9. 客户端同步流程
+## 10. 客户端同步流程
 
 推荐的最小实现（客户端已有本地存储，服务端只是备份节点）：
 

@@ -28,6 +28,7 @@ export function registerMetaRoutes(router) {
       notes: true,
       notesAudio: true,
       history: true,
+      statistics: true,
       passwordReset: ctx.config.smtpConfigured
     }
   }))

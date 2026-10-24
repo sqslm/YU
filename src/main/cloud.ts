@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
@@ -14,6 +14,8 @@ import type {
 import type { AccountStore, Session } from './account'
 import { toSyncRow, type HistoryStore } from './history'
 import type { RemoteAudio } from './notes'
+import type { StatsFile } from '@shared/stats'
+import { statsAccountKey } from './stats'
 import { mt } from '@shared/mainI18n'
 import { normalizeServerUrl } from '@shared/defaults'
 
@@ -449,6 +451,11 @@ export interface NotesSyncSource {
   retargetTombstone(id: string, version: number): void
 }
 
+export interface StatsSyncSource {
+  localSnapshot(): StatsFile
+  setCloudContributions(devices: Array<{ deviceId: string; stats: unknown }>, ownDeviceId: string, accountKey: string): Promise<void>
+}
+
 /** A note as the server expects it in a change list. */
 function toNoteChange(note: NoteEntry): Record<string, unknown> {
   return {
@@ -479,6 +486,8 @@ interface SyncState {
   lastSyncAt: number
   lastError: string
   remoteCount: number
+  deviceId: string
+  statsHashes: Record<string, string>
 }
 
 const EMPTY_STATE: SyncState = {
@@ -487,7 +496,9 @@ const EMPTY_STATE: SyncState = {
   notesCursor: 0,
   lastSyncAt: 0,
   lastError: '',
-  remoteCount: -1
+  remoteCount: -1,
+  deviceId: '',
+  statsHashes: {}
 }
 
 interface PullPage {
@@ -510,6 +521,7 @@ export class SyncEngine {
   private statusListeners = new Set<(status: SyncStatus) => void>()
   /** Recordings the last pull page mentioned but this machine does not have yet. */
   private pendingAudio: RemoteAudio[] = []
+  private statsUnsupportedServer = ''
 
   constructor(
     private readonly history: HistoryStore,
@@ -518,9 +530,12 @@ export class SyncEngine {
     private readonly getSettings: () => Settings,
     private readonly log: (line: string) => void,
     private readonly filePath = join(app.getPath('userData'), 'sync-state.json'),
-    private readonly notes: NotesSyncSource | null = null
+    private readonly notes: NotesSyncSource | null = null,
+    private readonly stats: StatsSyncSource | null = null
   ) {
     this.state = this.readState()
+    if (!this.state.deviceId) this.state.deviceId = randomUUID()
+    this.writeState()
   }
 
   private readState(): SyncState {
@@ -533,7 +548,9 @@ export class SyncEngine {
         notesCursor: Number(parsed.notesCursor) || 0,
         lastSyncAt: Number(parsed.lastSyncAt) || 0,
         lastError: typeof parsed.lastError === 'string' ? parsed.lastError : '',
-        remoteCount: Number.isFinite(Number(parsed.remoteCount)) ? Number(parsed.remoteCount) : -1
+        remoteCount: Number.isFinite(Number(parsed.remoteCount)) ? Number(parsed.remoteCount) : -1,
+        deviceId: typeof parsed.deviceId === 'string' ? parsed.deviceId : '',
+        statsHashes: parsed.statsHashes && typeof parsed.statsHashes === 'object' ? parsed.statsHashes as Record<string, string> : {}
       }
     } catch (err) {
       console.error('[sync] cannot read sync-state.json, starting from zero:', err)
@@ -635,6 +652,7 @@ export class SyncEngine {
       await this.pushAll()
       await this.pullAll()
       await this.syncNoteAudio()
+      await this.syncStats()
       // Keep the old durable cursor until recordings are on disk as well. A
       // failed download (or a restart) must replay the page that advertised it.
       this.state.notesCursor = notesCursor
@@ -648,6 +666,39 @@ export class SyncEngine {
     }
     this.writeState()
     return this.emit(this.snapshot())
+  }
+
+  /** Sync per-install rollups so multiple machines add without echo-counting. */
+  private async syncStats(): Promise<void> {
+    if (!this.stats) return
+    const session = this.accounts.get()
+    if (!session || this.statsUnsupportedServer === session.serverUrl) return
+    const local = this.stats.localSnapshot()
+    const serialized = JSON.stringify(local)
+    const hash = createHash('sha256').update(serialized).digest('hex')
+    const accountKey = statsAccountKey(session.serverUrl, session.userId)
+    try {
+      if (hash !== this.state.statsHashes[accountKey]) {
+        await this.client.request('PUT', `/api/v1/stats/devices/${this.state.deviceId}`, { stats: local })
+        this.state.statsHashes[accountKey] = hash
+        this.writeState()
+      }
+      const result = await this.client.request<{ devices?: Array<{ deviceId: string; stats: unknown }> }>(
+        'GET', '/api/v1/stats/devices'
+      )
+      await this.stats.setCloudContributions(
+        Array.isArray(result.devices) ? result.devices : [],
+        this.state.deviceId,
+        accountKey
+      )
+    } catch (error) {
+      // Older self-hosted servers can still sync history and notes.
+      if (error instanceof CloudError && error.status === 404) {
+        this.statsUnsupportedServer = session.serverUrl
+        return
+      }
+      throw error
+    }
   }
 
   /**

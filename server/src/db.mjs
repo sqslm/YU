@@ -177,7 +177,18 @@ function migration2(db) {
 const MIGRATIONS = [
   { version: 1, name: 'baseline', up: migration1 },
   { version: 2, name: 'sessions-notes-audio', up: migration2 },
-  { version: 3, name: 'note-titles', up: db => addColumn(db, 'notes', 'title', "TEXT NOT NULL DEFAULT ''") }
+  { version: 3, name: 'note-titles', up: db => addColumn(db, 'notes', 'title', "TEXT NOT NULL DEFAULT ''") },
+  {
+    version: 4,
+    name: 'per-device-statistics',
+    up: db => db.exec(`CREATE TABLE IF NOT EXISTS usage_stats (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      device_id TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, device_id)
+    ); CREATE INDEX IF NOT EXISTS usage_stats_user ON usage_stats (user_id);`)
+  }
 ]
 
 /**

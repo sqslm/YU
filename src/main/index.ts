@@ -20,7 +20,7 @@ import { HistoryStore } from './history'
 import { exportHistory } from './history-export'
 import { AccountStore } from './account'
 import { CloudClient, SyncEngine } from './cloud'
-import { StatsStore } from './stats'
+import { StatsStore, statsAccountKey } from './stats'
 import { HotkeyHost, type HotkeyHostEvent } from './hotkey/host'
 import { UiaHost } from './uia/host'
 import { Updater } from './updater'
@@ -965,7 +965,10 @@ function registerIpc(): void {
   ipcMain.handle('history:clear-abnormal', () => history.clearAbnormal())
   ipcMain.handle('history:downloadAudio', (_event, id: string) => history.downloadAudio(id))
   // Lifetime counters for 概览. Read-only: the pipeline is the only writer.
-  ipcMain.handle('stats:get', () => stats.get())
+  ipcMain.handle('stats:get', () => {
+    const session = accounts.get()
+    return stats.get(session && store.get().syncEnabled ? statsAccountKey(session.serverUrl, session.userId) : '')
+  })
   ipcMain.handle('history:feedback', (_event, input: { id?: string; text: string }) =>
     appendFeedback(input)
   )
@@ -1498,7 +1501,8 @@ async function bootstrap(): Promise<void> {
     () => store.get(),
     log,
     join(app.getPath('userData'), 'sync-state.json'),
-    notes
+    notes,
+    stats
   )
   sync.onStatus((status) => {
     for (const win of [settingsWindow, barWindow]) {

@@ -13,7 +13,7 @@ export interface ServerMeta {
   registrationEnabled: boolean
   emailVerificationRequired: boolean
   smtpConfigured: boolean
-  features: { passwordReset: boolean; notes: boolean; notesAudio: boolean; history: boolean }
+  features: { passwordReset: boolean; notes: boolean; notesAudio: boolean; history: boolean; statistics?: boolean }
 }
 
 /** How a shortcut starts and stops capture. */

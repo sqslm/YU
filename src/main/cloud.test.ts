@@ -7,6 +7,7 @@ import type { Settings } from '@shared/types'
 import { AccountStore } from './account'
 import { CloudClient, CloudError, SyncEngine } from './cloud'
 import { HistoryStore } from './history'
+import { StatsStore, statsAccountKey } from './stats'
 
 /**
  * The sync client against a fake server.
@@ -328,10 +329,48 @@ describe('SyncEngine', () => {
     expect((callsTo('/push')[1].body?.entries as Array<{ final: string }>)[0].final).toBe('edited during sync')
   })
 
-  function engine(store: HistoryStore, accounts: AccountStore, overrides: Partial<Settings> = {}): SyncEngine {
+  function engine(store: HistoryStore, accounts: AccountStore, overrides: Partial<Settings> = {}, stats?: StatsStore): SyncEngine {
     const client = new CloudClient(accounts)
-    return new SyncEngine(store, accounts, client, () => settings(overrides), () => undefined, join(dir, 'sync-state.json'))
+    return new SyncEngine(store, accounts, client, () => settings(overrides), () => undefined, join(dir, 'sync-state.json'), null, stats)
   }
+
+  it('uploads one local statistics snapshot and merges other device snapshots by account', async () => {
+    const history = openStore()
+    await history.load()
+    const localStats = new StatsStore(join(dir, 'stats.json'))
+    await localStats.load()
+    localStats.add({ id: 'local-take', createdAt: Date.now(), mode: 'dictation', transcript: '私密文本', final: '私密文本', durationMs: 1200, app: 'Editor' })
+    const accounts = new AccountStore(join(dir, 'account.json'))
+    signIn(accounts)
+    route('/transcription_history/pull', 'GET', { status: 200, body: { revision: 0, entries: [], hasMore: false, nextSince: 0 } })
+    route('/transcription_history/sync_status', 'GET', { status: 200, body: { count: 0 } })
+    route('/api/v1/stats/devices/', 'PUT', { status: 200, body: { ok: true } })
+    route('/api/v1/stats/devices', 'GET',
+      { status: 200, body: { devices: [
+        { deviceId: 'another-device', stats: { version: 1, records: 4, lastAt: 20, days: {}, apps: { Editor: 4 } } }
+      ] } },
+      { status: 200, body: { devices: [] } })
+
+    const sync = engine(history, accounts, {}, localStats)
+    await sync.now()
+
+    const upload = callsTo('/api/v1/stats/devices/', 'PUT')[0]
+    expect(upload.body?.stats).toMatchObject({ records: 1, apps: { Editor: 1 } })
+    expect(JSON.stringify(upload.body)).not.toContain('私密文本')
+    expect(localStats.get(statsAccountKey(accounts.get()!.serverUrl, 'u1')).records).toBe(5)
+    expect(localStats.get('').records).toBe(1)
+
+    const otherAccount = new AccountStore(join(dir, 'other-account.json'))
+    signIn(otherAccount)
+    otherAccount.set({ ...otherAccount.get()!, userId: 'u2' })
+    route('/transcription_history/pull', 'GET', { status: 200, body: { revision: 0, entries: [], hasMore: false, nextSince: 0 } })
+    route('/transcription_history/sync_status', 'GET', { status: 200, body: { count: 0 } })
+    route('/api/v1/stats/devices/', 'PUT', { status: 200, body: { ok: true } })
+    const otherSync = new SyncEngine(history, otherAccount, new CloudClient(otherAccount), () => settings(), () => undefined, join(dir, 'other-sync-state.json'), null, localStats)
+    await otherSync.now()
+    expect(callsTo('/api/v1/stats/devices/', 'PUT')).toHaveLength(2)
+    expect(localStats.get(statsAccountKey(otherAccount.get()!.serverUrl, 'u2')).records).toBe(1)
+  })
 
   it('pushes local rows once and sends nothing on the next run', async () => {
     const store = openStore()

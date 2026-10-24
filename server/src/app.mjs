@@ -7,6 +7,7 @@ import { RateLimiter } from './ratelimit.mjs'
 import { registerAuthRoutes } from './routes/auth.mjs'
 import { registerMetaRoutes } from './routes/meta.mjs'
 import { registerNoteRoutes } from './routes/notes.mjs'
+import { registerStatsRoutes } from './routes/stats.mjs'
 import { registerSyncRoutes } from './routes/sync.mjs'
 import { registerUserRoutes } from './routes/user.mjs'
 import { SERVER_VERSION } from './version.mjs'
@@ -47,6 +48,7 @@ export function createApp({ config, logger, db = openDatabase(config.dataDir) })
   registerAuthRoutes(router)
   registerUserRoutes(router)
   registerNoteRoutes(router)
+  registerStatsRoutes(router)
   // Kept so existing builds that already sync the dictation history stay working.
   registerSyncRoutes(router)
 

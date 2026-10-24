@@ -5,7 +5,7 @@
  * runtime breaks as soon as the server is packaged or run from another directory,
  * and one string is cheaper than that failure mode.
  */
-export const SERVER_VERSION = '2.0.1'
+export const SERVER_VERSION = '2.0.4'
 
 /** Bumped only when the REST contract changes incompatibly. */
 export const PROTOCOL_VERSION = 1

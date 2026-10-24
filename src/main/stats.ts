@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
@@ -28,21 +29,58 @@ const FLUSH_DELAY_MS = 800
  */
 export class StatsStore {
   private readonly path: string
+  private readonly cloudPath: string
   private stats: StatsFile = emptyStats()
+  private cloudStats: Record<string, StatsFile[]> = {}
   private timer: NodeJS.Timeout | null = null
   private writing: Promise<void> = Promise.resolve()
   private dirty = false
 
   constructor(filePath = join(app.getPath('userData'), 'stats.json')) {
     this.path = filePath
+    this.cloudPath = `${filePath}.cloud.json`
   }
 
   get file(): string {
     return this.path
   }
 
-  get(): StatsFile {
+  get(accountKey = ''): StatsFile {
+    return this.aggregate([this.stats, ...(this.cloudStats[accountKey] ?? [])])
+  }
+
+  /** The snapshot belonging to this installation; never includes pulled devices. */
+  localSnapshot(): StatsFile {
     return this.stats
+  }
+
+  /** Replaces the cached contributions from other installations. */
+  async setCloudContributions(devices: Array<{ deviceId: string; stats: unknown }>, ownDeviceId: string, accountKey: string): Promise<void> {
+    this.cloudStats[accountKey] = devices
+      .filter((device) => device.deviceId !== ownDeviceId)
+      .map((device) => sanitizeStats(device.stats))
+    const body = JSON.stringify(this.cloudStats)
+    const temp = `${this.cloudPath}.${process.pid}.tmp`
+    await mkdir(dirname(this.cloudPath), { recursive: true })
+    await writeFile(temp, body, 'utf8')
+    await rename(temp, this.cloudPath)
+  }
+
+  private aggregate(sources: StatsFile[]): StatsFile {
+    const result = emptyStats()
+    for (const source of sources) {
+      result.records += source.records
+      result.lastAt = Math.max(result.lastAt, source.lastAt)
+      for (const [day, totals] of Object.entries(source.days)) {
+        const target = result.days[day] ?? (result.days[day] = {
+          entries: 0, len: 0, ms: 0, used: 0, records: 0, usedMs: 0,
+          chars: 0, units: 0, measured: 0, measuredUnits: 0, measuredMs: 0, savedMs: 0
+        })
+        for (const key of Object.keys(target) as Array<keyof typeof target>) target[key] += totals[key]
+      }
+      for (const [name, count] of Object.entries(source.apps)) result.apps[name] = (result.apps[name] ?? 0) + count
+    }
+    return result
   }
 
   /**
@@ -63,7 +101,16 @@ export class StatsStore {
       this.dirty = true
       await this.flush()
     }
-    return this.stats
+    try {
+      const raw = await readFile(this.cloudPath, 'utf8')
+      const parsed: unknown = JSON.parse(raw)
+      this.cloudStats = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, Array.isArray(value) ? value.map(sanitizeStats) : []]))
+        : {}
+    } catch {
+      this.cloudStats = {}
+    }
+    return this.get()
   }
 
   /** Records one freshly stored take. Never rejects into the pipeline. */
@@ -108,4 +155,9 @@ export class StatsStore {
     // A pending counter write must never keep the app alive.
     this.timer.unref()
   }
+}
+
+/** Stable local namespace for cloud data belonging to one self-hosted account. */
+export function statsAccountKey(serverUrl: string, userId: string): string {
+  return createHash('sha256').update(`${serverUrl}\0${userId}`).digest('hex')
 }

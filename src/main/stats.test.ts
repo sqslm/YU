@@ -91,4 +91,25 @@ describe('StatsStore', () => {
     expect(loaded.records).toBe(1)
     expect(Object.keys(loaded.days)).toEqual(['2026-10-19'])
   })
+
+  it('combines per-device statistics without modifying or counting them into this device snapshot', async () => {
+    const store = new StatsStore(path)
+    await store.load()
+    store.add(entry())
+    await store.setCloudContributions([
+      { deviceId: 'this-device', stats: { version: 1, records: 99, lastAt: 0, days: {}, apps: {} } },
+      { deviceId: 'other-device', stats: { version: 1, records: 2, lastAt: 2, days: { '2026-10-19': { entries: 2, records: 2, chars: 8 } }, apps: { Editor: 2 } } }
+    ], 'this-device', 'account-a')
+
+    expect(store.localSnapshot().records).toBe(1)
+    expect(store.get('account-a').records).toBe(3)
+    expect(store.get('account-a').days['2026-10-19']).toMatchObject({ entries: 3, records: 3, chars: 12 })
+    expect(store.get('account-a').apps.Editor).toBe(2)
+    expect(store.get('account-b').records).toBe(1)
+    await store.flush()
+
+    const reopened = new StatsStore(path)
+    await reopened.load()
+    expect(reopened.get('account-a').records).toBe(3)
+  })
 })
