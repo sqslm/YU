@@ -1990,15 +1990,14 @@ async function bootstrap(): Promise<void> {
         )
         await new Promise((resolve) => setTimeout(resolve, 500))
         for (const [section, file] of [
+          // Section ids, not page ids: the dialog groups pages under a section,
+          // so clicking a page id (shortcuts, prompts…) always failed.
           ['account', 'prefs-account.png'],
           ['general', 'prefs-general.png'],
-          ['life', 'prefs-life.png'],
-          ['shortcuts', 'prefs-shortcuts.png'],
+          ['speech', 'prefs-speech.png'],
           ['models', 'prefs-models.png'],
-          ['prompts', 'prefs-prompts.png'],
-          ['routing', 'prefs-routing.png'],
-          ['search', 'prefs-search.png'],
-          ['guide', 'prefs-guide.png'],
+          ['life', 'prefs-life.png'],
+          ['storage', 'prefs-storage.png'],
           ['about', 'prefs-about.png']
         ] as const) {
           const clicked = await hub.webContents.executeJavaScript(
