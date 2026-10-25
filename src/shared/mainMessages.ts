@@ -7,6 +7,18 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '已打开截图编辑器；请确认选区后点击 OCR 或分析，关闭即可取消。本次尚未发送图片。': 'Screenshot editor opened. Confirm the region, then choose OCR or Analyze; close to cancel. No image has been sent yet.',
+  '提醒内容必须来自原始请求': 'Reminder text must come from the original request',
+  '提醒内容必须保留完整的时间和改口': 'Reminder text must preserve the complete time context and corrections',
+  '没有可下载的新版本': 'No newer version is available to download',
+  '简报设置服务尚未就绪': 'Briefing settings are not ready',
+  '请提供有效的简报时间（HH:mm）': 'Provide a valid briefing time (HH:mm)',
+  '每日简报已开启，每天 {{time}} 生成': 'Daily briefing is enabled at {{time}}',
+  '每日简报已关闭': 'Daily briefing is disabled',
+  '朗读设置服务尚未就绪': 'Speech settings are not ready',
+  '已停止朗读，后续仅显示文字': 'Speech stopped; future responses will use text only',
+  '请补充有效的日程结束时间': 'Provide a valid event end time',
+  '已提取 {{count}} 个候选事项，请确认后保存': 'Extracted {{count}} candidates; review them before saving',
   'Everything 找到 {{n}} 个文件': "Everything found {{n}} files",
   'Everything 检索只允许本机回环地址': "Everything lookups only allow loopback addresses",
   'Everything 里没有匹配「{{query}}」的文件': "Everything has no file matching \"{{query}}\"",

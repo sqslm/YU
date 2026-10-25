@@ -28,7 +28,7 @@ import { WindowsTools } from './tools/windows'
 import { windowsNative } from './windows-native'
 import { captureOriginalWindow } from './screenshot'
 import { ScreenshotTool } from './screenshot-tool'
-import { needsAssistantContext } from './voice-intent'
+import { needsAssistantContext, screenshotNeedsEditor } from './voice-intent'
 import { generateFromImage } from './providers/gemini'
 import { chainFor, withFailover } from './providers/chain'
 import { complete } from './providers/llm'
@@ -162,6 +162,11 @@ const windowsTools = new WindowsTools({
 })
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
   analyzeScreenshot: async (context, question, ocr, signal) => {
+    if (screenshotNeedsEditor(question)) {
+      signal.throwIfAborted()
+      await screenshotTool.open()
+      return mt('已打开截图编辑器；请确认选区后点击 OCR 或分析，关闭即可取消。本次尚未发送图片。')
+    }
     const settings = store.get(), profiles = chainFor(settings, 'multimodal')
     if (!ocr && !profiles.length) throw new Error(mt('请先在模型设置中启用支持图片的多模态模型；当前文本模型不能查看截图'))
     const image = await captureOriginalWindow(context, signal)
@@ -225,6 +230,17 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
       return saved
     },
     briefing: () => composeDailyBriefing(),
+    briefingSettings: () => store.get().briefing,
+    setBriefingSettings: async patch => {
+      const next = await store.update({ briefing: { ...store.get().briefing, ...patch } })
+      briefing?.start()
+      for (const win of [settingsWindow, barWindow, cardWindow]) if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next)
+      return next.briefing
+    },
+    setTtsEnabled: async enabled => {
+      const next = await store.update({ tts: { ...store.get().tts, enabled } })
+      for (const win of [settingsWindow, barWindow, cardWindow]) if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next)
+    },
     speak: text => speech!.speak(text),
     stopSpeaking: () => speech!.stop(),
     ttsEnabled: () => store.get().tts.enabled,
@@ -1039,7 +1055,7 @@ function registerIpc(): void {
   handle('screenshot:open', () => openScreenshot())
   handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
   handle('assistant:navigate', (_event, page: unknown) => {
-    if (!['overview', 'history', 'notes', 'reminders', 'corrections', 'settings'].includes(page as string)) throw new Error('Invalid page')
+    if (!['overview', 'history', 'notes', 'reminders', 'calendar', 'briefing', 'corrections', 'settings'].includes(page as string)) throw new Error('Invalid page')
     navigateHub(page as import('./tools/personal').HubPage)
   })
   handle('app:chooseDownloadFolder', async event => {
@@ -1060,6 +1076,7 @@ function registerIpc(): void {
     refreshWakeWord()
     tray?.refresh()
     reminders?.settingsChanged()
+    if (patch.briefing) briefing?.start()
     hotkeys?.apply(next)
     if (next.launchAtStartup !== previous.launchAtStartup) {
       app.setLoginItemSettings({ name: 'typeless-rebuild', openAtLogin: next.launchAtStartup, args: ['--background'] })

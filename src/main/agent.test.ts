@@ -184,6 +184,17 @@ beforeEach(() => {
 })
 
 describe('native function calling', () => {
+  it('queries then updates a note in separate rounds without requiring Windows tools', async () => {
+    const note = { id: 'actual-note', tags: [], transcript: 'Owned note', createdAt: 1, updatedAt: 1 }
+    const updateNoteTags = vi.fn().mockResolvedValue({ ...note, tags: ['work'] })
+    const personal = { notes: () => [note], categories: () => [], updateNoteTags } as unknown as PersonalTools
+    const fetchImpl = makeFetch(toolCallResponse('search_notes', { position: 'latest' }), toolCallResponse('update_note_tags', { id: 'actual-note', add_tags: ['work'] }), textResponse('Tag saved'))
+    await askAgent(makeSettings(), 'Tag my latest note as work', {}, signal, () => {}, {
+      reset: true, personal, allowedTools: ['search_notes', 'update_note_tags'], fetchImpl: fetchImpl as unknown as typeof fetch
+    })
+    expect(updateNoteTags).toHaveBeenCalledExactlyOnceWith('actual-note', ['work'])
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+  })
   it('delivers string arrays from a native tool call to the existing tag mutation', async () => {
     const note = { id: 'note-1', tags: [], transcript: 'Owned note', updatedAt: 1 }
     const updateNoteTags = vi.fn().mockResolvedValue({ ...note, tags: ['development'] })

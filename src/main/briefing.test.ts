@@ -287,6 +287,16 @@ function harness(options: { now?: number; settings?: BriefingSettings | { briefi
 }
 
 describe('BriefingScheduler', () => {
+  it('re-arms one timer after settings enable a previously disabled briefing', () => {
+    const h = harness({ now: SLOT - 60_000, settings: { ...DEFAULT_BRIEFING_SETTINGS, enabled: false, quietHours: { ...DEFAULT_QUIET_HOURS, enabled: false } } })
+    h.scheduler.start()
+    expect(h.timers.size).toBe(0)
+    h.settings.value = { ...DEFAULT_BRIEFING_SETTINGS, enabled: true, quietHours: { ...DEFAULT_QUIET_HOURS, enabled: false } }
+    h.scheduler.start(); h.scheduler.start()
+    expect(h.timers.size).toBe(1)
+    h.run(60_000)
+    expect(h.deliver).toHaveBeenCalledOnce()
+  })
   it('does not arm anything while the briefing is disabled', () => {
     const h = harness({ settings: { ...DEFAULT_BRIEFING_SETTINGS, enabled: false } })
     h.scheduler.start()

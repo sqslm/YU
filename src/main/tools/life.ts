@@ -2,6 +2,7 @@ import { formatEventTime, localDayKey, rangeFor, type CalendarRange } from '@sha
 import { mainLanguage, mt } from '@shared/mainI18n'
 import { resolveReminderTime } from '../reminder-time'
 import type { ToolDefinition, ToolOutcome } from './registry'
+import type { BriefingSettings } from '@shared/types'
 
 /**
  * Tools for the capabilities that used to be advertised as "not connected":
@@ -14,7 +15,7 @@ import type { ToolDefinition, ToolOutcome } from './registry'
  * flips a setting. Keeping them separable lets the assistant turn individual
  * groups on without dragging the rest in.
  */
-export const LIFE_TOOLS = ['create_event', 'list_events', 'manage_event', 'daily_briefing', 'speak_text', 'stop_speaking', 'sync_status', 'sync_control'] as const
+export const LIFE_TOOLS = ['create_event', 'list_events', 'manage_event', 'daily_briefing', 'configure_briefing', 'speak_text', 'stop_speaking', 'sync_status', 'sync_control'] as const
 
 /** Shapes the stores project into. Structural on purpose: `index.ts` owns the mapping. */
 export interface LifeEvent {
@@ -46,6 +47,9 @@ export interface LifeTools {
   saveEvent(input: LifeEventInput, id?: string): LifeEvent
   controlEvent(id: string, action: 'cancel' | 'restore'): LifeEvent
   briefing(): LifeBriefing
+  briefingSettings?(): BriefingSettings
+  setBriefingSettings?(patch: Partial<BriefingSettings>): Promise<BriefingSettings>
+  setTtsEnabled?(enabled: boolean): Promise<void>
   speak(text: string): Promise<{ spoken: number; skipped: boolean }>
   stopSpeaking(): void
   ttsEnabled(): boolean
@@ -73,19 +77,21 @@ function resolveStart(expression: string, now: number): number {
 /**
  * Resolves the end of a range. "下午三点到四点" drops the daypart on the second
  * half, so the first attempt fails and we retry with the start's half of the
- * day; if it still fails the range falls back to one hour, which is what a user
- * means by "a meeting at three" far more often than "until four".
+ * day. Explicit invalid ends must be clarified instead of silently replacing them.
  */
-function resolveEnd(expression: string, startAt: number): number {
-  let resolved = resolveReminderTime(expression, startAt - 1)
-  if (resolved.issue || resolved.dueAt === null) {
+function resolveEnd(expression: string, startAt: number, referenceTime: number): number {
+  const hasDate = /今天|明天|后天|周|星期|\d{4}-\d{1,2}-\d{1,2}|[年月日号]|\b(?:today|tomorrow|next|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/iu.test(expression)
+  const source = hasDate ? expression : `${localDayKey(startAt)} ${expression}`
+  let resolved = resolveReminderTime(source, referenceTime)
+  if (!hasDate && (resolved.issue || resolved.dueAt === null || resolved.dueAt <= startAt)) {
     const daypart = new Date(startAt).getHours() >= 12 ? '下午' : '上午'
-    resolved = resolveReminderTime(`${daypart}${expression}`, startAt - 1)
+    resolved = resolveReminderTime(`${localDayKey(startAt)} ${daypart}${expression}`, referenceTime)
   }
-  return !resolved.issue && resolved.dueAt !== null && resolved.dueAt > startAt ? resolved.dueAt : startAt + 60 * MINUTE
+  if (resolved.issue || resolved.dueAt === null || resolved.dueAt <= startAt) throw new Error(mt('请补充有效的日程结束时间'))
+  return resolved.dueAt
 }
 
-async function run(name: string, args: Record<string, unknown>, api: LifeTools): Promise<ToolOutcome> {
+async function run(name: string, args: Record<string, unknown>, api: LifeTools, submittedAt = Date.now()): Promise<ToolOutcome> {
   if (name === 'create_event') {
     const title = string(args.title)
     if (!title) throw new Error(mt('请提供日程标题'))
@@ -98,10 +104,10 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools):
     // date at all and keeps its original complaint.
     let start: number
     try {
-      start = resolveStart(startText, Date.now())
+      start = resolveStart(startText, submittedAt)
     } catch (error) {
       if (!allDay) throw error
-      start = resolveStart(`${startText} 上午八点`, Date.now())
+      start = resolveStart(`${startText} 上午八点`, submittedAt)
     }
     let end: number
     if (allDay) {
@@ -111,7 +117,7 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools):
       end = start + DAY
     } else {
       const endText = string(args.end)
-      end = endText ? resolveEnd(endText, start) : start + 60 * MINUTE
+      end = endText ? resolveEnd(endText, start, submittedAt) : start + 60 * MINUTE
     }
     const saved = api.saveEvent({ title, start, end, allDay,
       location: string(args.location) || undefined, notes: string(args.notes) || undefined,
@@ -151,8 +157,9 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools):
     const title = typeof args.title === 'string' ? string(args.title) : current.title
     if (!title) throw new Error(mt('请提供日程标题'))
     const startText = string(args.start), endText = string(args.end)
-    const start = startText ? resolveStart(startText, Date.now()) : current.start
-    const end = endText ? resolveEnd(endText, start) : start === current.start ? current.end : start + (current.end - current.start)
+    const clockOnly = /^(?:凌晨|早上|早晨|上午|中午|下午|傍晚|晚上)?\s*[零〇一二两三四五六七八九十\d:：点點时時分半刻\s]+$/.test(startText) || /^(?:at\s+)?\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?$/i.test(startText)
+    const start = startText ? resolveStart(clockOnly ? `${localDayKey(current.start)} ${startText}` : startText, submittedAt) : current.start
+    const end = endText ? resolveEnd(endText, start, submittedAt) : start === current.start ? current.end : start + (current.end - current.start)
     const allDay = typeof args.all_day === 'boolean' ? args.all_day : current.allDay
     const location = typeof args.location === 'string' ? args.location : current.location
     const notes = typeof args.notes === 'string' ? args.notes : current.notes
@@ -172,6 +179,12 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools):
     }
     return ok(briefing.body, { title: briefing.title, body: briefing.body, empty: briefing.empty })
   }
+  if (name === 'configure_briefing') {
+    if (!api.briefingSettings || !api.setBriefingSettings) throw new Error(mt('简报设置服务尚未就绪'))
+    if (args.time !== undefined && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(string(args.time))) throw new Error(mt('请提供有效的简报时间（HH:mm）'))
+    const current = Object.keys(args).length ? await api.setBriefingSettings(args as Partial<BriefingSettings>) : api.briefingSettings()
+    return ok(mt(current.enabled ? '每日简报已开启，每天 {{time}} 生成' : '每日简报已关闭', { time: current.time }), { settings: current })
+  }
   if (name === 'speak_text') {
     const text = string(args.text)
     if (!text) throw new Error(mt('请提供要朗读的内容'))
@@ -183,6 +196,11 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools):
   }
   if (name === 'stop_speaking') {
     api.stopSpeaking()
+    if (args.text_only === true) {
+      if (!api.setTtsEnabled) throw new Error(mt('朗读设置服务尚未就绪'))
+      await api.setTtsEnabled(false)
+      return ok(mt('已停止朗读，后续仅显示文字'), { textOnly: true })
+    }
     return ok(mt('已停止朗读'))
   }
   if (name === 'sync_status') {
@@ -215,8 +233,9 @@ const schemas: Record<typeof LIFE_TOOLS[number], { description: string; properti
   list_events: { description: 'Read actual confirmed calendar events. range: today/tomorrow/week/upcoming/yesterday by local calendar day, or day=YYYY-MM-DD for one date. Returns real IDs and absolute times; answer from these fields instead of counting down relative phrases.', properties: { range: { type: 'string', enum: ['today', 'tomorrow', 'week', 'upcoming', 'yesterday'] }, day: { type: 'string' }, query: { type: 'string' } } },
   manage_event: { description: 'Change a real event ID returned by list_events. action=update edits title/start/end/all_day/location/notes/lead_minutes in place and keeps the ID; cancel keeps the data recoverable and restore undoes it. Deletion is not available.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['update', 'cancel', 'restore'] }, title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, all_day: { type: 'boolean' }, location: { type: 'string' }, notes: { type: 'string' }, lead_minutes: { type: 'number' } }, required: ['id', 'action'] },
   daily_briefing: { description: 'Build today\'s briefing from real local data: today\'s schedule, due todos, overdue items, tomorrow preview and yesterday\'s dictation recap. Use this instead of guessing what is scheduled, and answer from the returned text. speak only when the user asked to hear it.', properties: { speak: { type: 'boolean' } } },
+  configure_briefing: { description: 'Read or configure the ONE existing local daily briefing schedule. enabled turns it on/off; time is the explicitly requested local HH:mm clock. speak/notify control delivery. Preserve unspecified settings; do not create a reminder, event, workflow or duplicate schedule. Empty arguments read current settings. Use for daily task briefings and changes to their time.', properties: { enabled: { type: 'boolean' }, time: { type: 'string' }, speak: { type: 'boolean' }, notify: { type: 'boolean' } } },
   speak_text: { description: 'Read text aloud through the local Windows voice only on the explicit user request. Report the real outcome: when reading is disabled in settings nothing is read.', properties: { text: { type: 'string' } }, required: ['text'] },
-  stop_speaking: { description: 'Stop the current read-aloud. Safe to call when nothing is being read.', properties: {} },
+  stop_speaking: { description: 'Stop the current read-aloud immediately. text_only=true also disables future automatic speech when explicitly requested; otherwise preserve the current preference.', properties: { text_only: { type: 'boolean' } } },
   sync_status: { description: 'Read the actual cloud-sync state: enabled, signed in, server, last successful sync time. Never guess whether something was synced or claim a sync succeeded.', properties: {} },
   sync_control: { description: 'Pause or resume cloud sync on the explicit user request. Pausing never deletes local data, and reminders keep working while sync is paused.', properties: { action: { type: 'string', enum: ['pause', 'resume'] } }, required: ['action'] }
 }
@@ -232,6 +251,6 @@ export const LIFE_DEFINITIONS: ToolDefinition[] = LIFE_TOOLS.map(name => ({ name
       const validType = field?.type === 'array' ? Array.isArray(value) && value.length <= (field.maxItems ?? 30) && value.every(tag => typeof tag === 'string' && tag.trim() && tag.length <= 100) : typeof value === field?.type
       if (!field || !validType || field.enum && !field.enum.includes(value as string)) throw new Error(mt('工具参数无效：{{name}}', { name: key }))
     }
-    return run(name, args, ctx.life)
+    return run(name, args, ctx.life, ctx.submittedAt)
   }
 }))

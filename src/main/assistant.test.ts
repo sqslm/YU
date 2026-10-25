@@ -9,6 +9,7 @@ import { askAgent } from './agent'
 import { runTool, toolSchemas } from './tools/registry'
 import type { AssistantState } from '@shared/assistant'
 import type { PersonalTools } from './tools/personal'
+import type { LifeTools } from './tools/life'
 import { WindowsTools } from './tools/windows'
 
 const settings = mergeSettings({ profiles: [{ id: 'text', kind: 'llm', name: 'Text', enabled: true,
@@ -25,6 +26,31 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it.each(['把我框选区域里的文字提取出来。', '我想让你分析这张截图，但先给我看一下准备发送的内容。'])('preserves the complete region/preview request for the screenshot boundary: %s', async input => {
+    const analyzeScreenshot = vi.fn().mockResolvedValue('Local editor opened; no image sent')
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), analyzeScreenshot })
+    await current.send(input)
+    expect(analyzeScreenshot).toHaveBeenCalledWith({}, input, input.includes('提取'), expect.any(AbortSignal))
+    expect(ask).not.toHaveBeenCalled()
+  })
+  it('re-reads stored reminders for persistence questions instead of trusting a previous answer', async () => {
+    const reminders = vi.fn().mockReturnValue([])
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), personal: { reminders } as unknown as PersonalTools })
+    current.rememberAnswer('创建提醒', '旧的提醒已保存', { savedReminder: { id: 'old', title: 'Old', dueAt: 123, level: 'strong' } })
+    await current.send('我重启软件后，刚才的强提醒还在吗？')
+    expect(reminders).toHaveBeenCalledOnce()
+    expect(ask.mock.calls[0][5]?.conversation?.toolNotes).toContain('"total":0')
+    expect(current.snapshot().turns.at(-1)?.localResults).toContainEqual(expect.objectContaining({ tool: 'list_reminders', ok: true }))
+  })
+  it('stops speech directly and persists a text-only request without waiting for a model', async () => {
+    const stopSpeaking = vi.fn(), setTtsEnabled = vi.fn().mockResolvedValue(undefined)
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), life: { stopSpeaking, setTtsEnabled } as unknown as LifeTools })
+    await current.send('别说话了，后面都只显示文字。')
+    expect(stopSpeaking).toHaveBeenCalledOnce()
+    expect(setTtsEnabled).toHaveBeenCalledExactlyOnceWith(false)
+    expect(ask).not.toHaveBeenCalled()
+    expect(current.snapshot().turns.at(-1)?.state).toBe('done')
+  })
   it('honors the intent model decision for ambiguous follow-ups and self-contained requests', async () => {
     session.rememberAnswer('Old question', 'Actual old answer')
     await session.send('How long does it take to boil an egg?', undefined, undefined, now, {}, false)

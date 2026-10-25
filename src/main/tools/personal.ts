@@ -8,13 +8,13 @@ import { directVoiceIntent } from '../voice-intent'
 import type { ToolDefinition, ToolOutcome } from './registry'
 
 export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_reminder', 'create_note', 'search_notes', 'update_note_tags', 'update_note', 'extract_note_tasks', 'search_history', 'read_clipboard', 'copy_to_clipboard', 'open_page'] as const
-export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'calendar', 'corrections', 'settings'] as const
+export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'calendar', 'briefing', 'corrections', 'settings'] as const
 export type HubPage = typeof HUB_PAGES[number]
 export function personalCommand(text: string): { name: string; args: Record<string, unknown> } | null {
-  const match = /^(?:请|帮我)?(?:打开|进入)(?:语的|YU的|轻令的|软件的)?(概览|首页|历史记录|随记|提醒|待办|日程|日历|纠正规则|设置)(?:页面|页)?[。！!]?$/iu.exec(text.trim()) ||
-    /^open (?:the )?(?:YU )?(home|overview|history|notes|reminders|todos|calendar|corrections|settings)(?: page)?[.!]?$/iu.exec(text.trim())
+  const match = /^(?:请|帮我)?(?:打开|进入)(?:语的|YU的|轻令的|软件的)?(概览|首页|历史记录|随记|提醒|待办|日程|日历|简报|纠正规则|设置)(?:页面|页)?[。！!]?$/iu.exec(text.trim()) ||
+    /^open (?:the )?(?:YU )?(home|overview|history|notes|reminders|todos|calendar|briefing|corrections|settings)(?: page)?[.!]?$/iu.exec(text.trim())
   if (!match) return null
-  const page = ({ 概览: 'overview', 首页: 'overview', 历史记录: 'history', 随记: 'notes', 提醒: 'reminders', 待办: 'reminders', 日程: 'calendar', 日历: 'calendar', 纠正规则: 'corrections', 设置: 'settings', home: 'overview', todos: 'reminders' } as Record<string, string>)[match[1].toLowerCase()] || match[1].toLowerCase()
+  const page = ({ 概览: 'overview', 首页: 'overview', 历史记录: 'history', 随记: 'notes', 提醒: 'reminders', 待办: 'reminders', 日程: 'calendar', 日历: 'calendar', 简报: 'briefing', 纠正规则: 'corrections', 设置: 'settings', home: 'overview', todos: 'reminders' } as Record<string, string>)[match[1].toLowerCase()] || match[1].toLowerCase()
   return { name: 'open_page', args: { page } }
 }
 export interface PersonalTools {
@@ -96,9 +96,19 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
   if (name === 'create_reminder') {
     // The established full-template refinement / time parser is authoritative.
     // Never accept a model-invented timestamp or silently drop a correction.
-    const intent = directVoiceIntent(question)
+    const originalIntent = directVoiceIntent(question)
+    if (originalIntent?.kind === 'assistant' || originalIntent?.kind === 'dictation') throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
+    let request = args.text === undefined ? question : string(args.text)
+    if (!request || !question.includes(request)) throw new Error(mt('提醒内容必须来自原始请求'))
+    if (originalIntent?.kind === 'reminder' && request !== question) throw new Error(mt('提醒内容必须保留完整的时间和改口'))
+    // A scoped todo's content may omit the creation verb, whose authority still
+    // comes from the original command. Carry that mode into the existing parser.
+    if (args.text !== undefined && !/提醒|待办|代办|\b(?:remind|to-?do)\b/iu.test(request) &&
+        /(?:加个|添加|创建|新建|记个).{0,6}(?:待办|代办)|\b(?:add|create)\b.{0,20}\bto-?do\b/iu.test(question) &&
+        !/提醒|通知|\b(?:remind|notify)\b/iu.test(question)) request = `待办：${request}`
+    const intent = directVoiceIntent(request)
     if (intent?.kind === 'assistant' || intent?.kind === 'dictation') throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
-    if (!/提醒|待办|代办|(?:添加|创建|新建|加个|记个).{0,8}任务|\b(?:remind|reminder|to-?do|notify|alert)\b|\b(?:create|add|save)\b.{0,30}\btask\b/iu.test(question)) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
+    if (!/提醒|待办|代办|(?:添加|创建|新建|加个|记个).{0,8}任务|\b(?:remind|reminder|to-?do|notify|alert)\b|\b(?:create|add|save)\b.{0,30}\btask\b/iu.test(request)) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
     const now = Date.now()
     // A deadline names a day, not an instant: "by Friday" is a usable target, and
     // failing the whole reminder because no clock was spoken loses a task the user
@@ -115,8 +125,8 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     // paths keep them; the parser itself can never invent them.
     const explicit = args.priority !== undefined || deadlineAt !== null
     const recorded = explicit
-      ? await api.remind(question, signal, submittedAt, fields)
-      : await api.remind(question, signal, submittedAt)
+      ? await api.remind(request, signal, submittedAt, fields)
+      : await api.remind(request, signal, submittedAt)
     // The parser already persisted the row, so this re-save only patches the extra
     // fields. A deadline with no alert time would notify nobody, so the alert moves
     // onto the deadline instead of the task sitting silent forever.
@@ -141,8 +151,9 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
         ? mt(deadlineAt === null ? '优先级已应用到本次的 {{count}} 个事项' : '优先级和截止时间已应用到本次的 {{count}} 个事项', { count: saved })
         : mt('这次没有落库，优先级和截止时间没有记住'))
     }
-    return ok(notes.length ? `${recorded.message} · ${notes.join(' · ')}` : recorded.message,
-      { ...(reminder ? { item: reminderDetails(reminder, now) } : {}) })
+    const summary = notes.length ? `${recorded.message} · ${notes.join(' · ')}` : recorded.message
+    if (!reminder && !(recorded.saved && recorded.saved > 0)) return { ok: false, summary, data: { ok: false, saved: 0, needsClarification: true } }
+    return ok(summary, { saved: recorded.saved ?? 1, ...(reminder ? { item: reminderDetails(reminder, now) } : {}) })
   }
   if (name === 'list_reminders') {
     const status = string(args.status) || 'active', query = string(args.query).toLowerCase()
@@ -290,13 +301,13 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
 
 const schemas: Record<typeof PERSONAL_TOOLS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
   update_note: { description: 'Rename or categorize an actual existing note ID, preserving its original transcript, polished text, audio and tags. title sets or clears its custom name. category_id uses a real returned ID (empty clears it); category_name uses an existing exact name or creates that category. Do not provide both category fields. Resolve latest/previous references with search_notes first. Executes directly without a confirmation popup.', properties: { id: { type: 'string' }, title: { type: 'string' }, category_id: { type: 'string' }, category_name: { type: 'string' } }, required: ['id'] },
-  create_reminder: { description: 'Create clear reminders/todos directly from the actual user request using the existing parser. Ask for missing details in text; never invent times or open confirmation dialogs. No timestamp arguments: due times still come from the request. Optional priority (low/normal/high, default normal) and optional deadline, a natural-language expression for when the work must be finished, which is independent of when the alert fires. A date-only deadline is put at the end of that day, a deadline with no alert time becomes the alert time, and an unclear deadline still creates the task while the receipt says the deadline was not set.', properties: { priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } } },
+  create_reminder: { description: 'Create clear reminders/todos using the existing parser. For a compound request, text MUST be the EXACT substring containing the entire reminder/todo clause, including all its corrections, negations and date context; exclude unrelated note or other action clauses. Omit text for a single reminder request. Never paraphrase or invent content. Ask for missing details in text; never invent times or open confirmation dialogs. An explicitly requested todo needs no alert time: preserve a planned day/weekend in its description. Optional priority (low/normal/high) and deadline (natural-language expression for when the work must be finished) are independent of the alert time. A date-only deadline is end of day; with no alert time it also becomes the alert. No timestamp arguments.', properties: { text: { type: 'string' }, priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } } },
   list_reminders: { description: 'Query actual reminders and untimed todos, including untimed active tasks in day queries. kind=todo means only untimed tasks, reminder means timed, omitted means both. day: today/yesterday/tomorrow/YYYY-MM-DD. Returns real IDs, level, priority, priorityLabel, deadlineAt, status, absolute triggerTime, remainingSeconds at asOf. overdue is judged on deadlineAt when present and otherwise on the alert time, and never on completed/cancelled tasks. Ordered open first, then priority, then deadline. Do not use the original relative timeExpression as a countdown.', properties: { query: { type: 'string' }, status: { type: 'string', enum: ['active', 'pending', 'due', 'completed', 'cancelled', 'all'] }, today: { type: 'boolean' }, day: { type: 'string' }, kind: { type: 'string', enum: ['todo', 'reminder', 'all'] } } },
   manage_reminder: { description: 'Modify a real task ID from query/create results. action=update edits time_expression, level, priority and/or deadline in place, preserving ID and unrelated fields. Clock-only edits preserve its date and weekly rule. deadline is a natural-language expression for when the work must be finished; it does not move the alert. Other actions: complete/cancel/snooze/restore/delete. Never guess the target; query first if unknown.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['complete', 'cancel', 'snooze', 'restore', 'delete', 'update'] }, minutes: { type: 'number' }, time_expression: { type: 'string' }, level: { type: 'string', enum: ['normal', 'strong'] }, priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } }, required: ['id', 'action'] },
   create_note: { description: 'Save explicitly requested text or a previous answer as a local text note. Do not claim it includes an audio recording.', properties: { text: { type: 'string' } }, required: ['text'] },
   search_notes: { description: 'Search local notes by content keyword, newest created first. For latest/previous note set position, omit query: never search for the literal words note/latest/随记/随机. day: today/yesterday/tomorrow/YYYY-MM-DD. Returns IDs, tags and excerpts.', properties: { query: { type: 'string' }, day: { type: 'string' }, position: { type: 'string', enum: ['latest', 'previous'] } } },
   update_note_tags: { description: 'Add/remove tags on a real existing note ID, preserving original text, audio and other tags. resolve a recent reference with search_notes first.', properties: { id: { type: 'string' }, add_tags: { type: 'array', items: { type: 'string' }, maxItems: 30 }, remove_tags: { type: 'array', items: { type: 'string' }, maxItems: 30 } }, required: ['id'] },
-  extract_note_tasks: { description: 'Extract and save clear todos/reminders from an explicitly requested note ID returned by search_notes. Reuses the complete reminder prompt; skips ambiguous items and never overwrites the note. No confirmation popup.', properties: { id: { type: 'string' } }, required: ['id'] },
+  extract_note_tasks: { description: 'Extract candidate todos/reminders from an explicitly requested real note ID and open the existing review editor. Nothing is saved until the user confirms. Preserve the source note ID and never overwrite its text.', properties: { id: { type: 'string' } }, required: ['id'] },
   search_history: { description: 'Read actual completed recognition/Ask history, newest first. Set day=today/yesterday/YYYY-MM-DD for local calendar date filtering BEFORE limiting results. query is a content keyword, never put the date phrase there. Executes the user request directly.', properties: { query: { type: 'string' }, day: { type: 'string' } } },
   copy_to_clipboard: { description: 'Copy explicitly requested text or a previous answer to the clipboard. Does not read clipboard contents or paste into another application.', properties: { text: { type: 'string' } }, required: ['text'] },
   read_clipboard: { description: 'Read ONLY current clipboard text only when the user requested clipboard content. No monitoring or clipboard history. Prefer the actual previous answer for references; use get_selection for explicitly selected text.', properties: {} },

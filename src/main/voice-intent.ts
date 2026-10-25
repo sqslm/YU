@@ -16,6 +16,7 @@ export function isDictatedContent(text: string): boolean {
 }
 
 function isReadOnlySelectionRequest(text: string): boolean {
+  if (/剪贴板|\bclipboard\b/iu.test(text)) return false
   return !isDictatedContent(text) && /选中|选区|这段(?:代码|文字|文本|注释)|\b(?:selected|selection|this code|this text|this comment)\b/iu.test(text) &&
     /解释|说明|分析|总结|\b(?:explain|summarize|analyse|analyze|describe)\b/iu.test(text) &&
     !/润色|改写|修改|替换|翻译|\b(?:polish|rewrite|edit|replace|translate)\b/iu.test(text)
@@ -34,11 +35,28 @@ export function needsAssistantContext(text: string): boolean {
   return /刚才|之前|上一(?:个|条|次|段|轮)|那(?:个|条|些|段|份)|第[一二三四五六七八九十\d]+(?:个|项)|(?:把|将|修改|改成|改为|取消|删除).{0,6}(?:这条|这个)|^(?:继续|再试|重试|再改|改成|改为|再详细|展开说|具体点)|^(?:为什么|为什么呢|是吗)[？?。\s]*$|^(?:那|那么).{0,14}呢[？?。\s]*$|^(?:那|那么|所以).{0,8}(?:怎么|如何)|(?:用|换成)(?:英文|中文|英语|汉语).{0,5}(?:回答|解释|说)|\b(?:that|those|these|them|previous|earlier|second|third|last (?:answer|result|task)|continue|retry|try again|what about|tell me more|explain more)\b|^(?:why|how so|really|yes|no)[?!.\s]*$|^(?:(?:please|can you|could you)\s+)?(?:open|save|copy|translate|summarize|explain|analy[sz]e|polish|change|move|delete|cancel|complete|make|read|rewrite|tag)\b.{0,40}\bit\b|^(?:so\s+)?how\b.{0,30}\b(?:fix|solve|change|open|use)\b.{0,12}\bit\b/iu.test(text)
 }
 
+export function stopSpeakingRequest(text: string): { text_only: boolean } | null {
+  if (isDictatedContent(text)) return null
+  if (!/^(?:(?:请|帮我|请帮我)\s*)?(?:别说话|别再(?:说|念)|不要再(?:说话|朗读)|停止(?:朗读|说话|播报)|stop\s+(?:speaking|reading|talking))/iu.test(text.trim())) return null
+  return { text_only: /后[面续]|(?:只|直接|仅).{0,5}文字|text.only|from now/iu.test(text) }
+}
+
+/** A selected region or a requested upload preview needs the local editor first. */
+export function screenshotNeedsEditor(text: string): boolean {
+  return !isDictatedContent(text) && /框选|选区|准备发送|先.{0,8}(?:看|预览)|\b(?:preview|selected (?:area|region))\b/iu.test(text) &&
+    /截图|屏幕|框选区域|\b(?:screenshot|screen|region)\b/iu.test(text)
+}
+
 /** Unambiguous whole-utterance commands avoid a second model round trip. */
 export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceIntent | null {
   const value = text.trim()
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
+  if (stopSpeakingRequest(value)) return { kind: 'assistant' }
+  if (screenshotNeedsEditor(value)) return { kind: 'assistant' }
+  if (/^(?:只|仅)(?:给我|提供).{0,8}(?:建议|意见)/u.test(value)) return { kind: 'ask' }
+  if (/(?:这篇|当前|该).{0,6}(?:文章|网页)|当前浏览器/iu.test(value) && /总结|主要|内容|说什么|讲什么|阅读/u.test(value)) return { kind: 'assistant' }
+  if (/剪贴板|\bclipboard\b/iu.test(value) && /读取|读|复制|总结|解释|翻译|\b(?:read|copied?|summari[sz]e|explain|translate)\b/iu.test(value)) return { kind: 'assistant' }
   if (isCurrentWindowQuestion(value)) return { kind: 'assistant' }
   if (/^(?:(?:请|帮我|请帮我)\s*)?(?:把|给|将|为|分类|重命名|命名).{0,60}(?:随记|笔记).{0,30}(?:分类|命名|改名)|^(?:(?:请|帮我|请帮我)\s*)?(?:分类|重命名|命名).{0,30}(?:随记|笔记)|^(?:please\s+)?(?:rename|name|categorize|categorise)\b.{0,70}\bnotes?\b/iu.test(value)) return { kind: 'assistant' }
   if (isReadOnlySelectionRequest(value)) return { kind: 'ask' }
@@ -47,8 +65,16 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceI
     /提醒|待办|代办/u.test(value) && /改|取消|删除|完成|恢复|延后|推迟|提前|不要了|不用了/u.test(value)
   if (existingTask || /^(?:please\s+)?(?:change|update|reschedule|cancel|delete|complete|restore|snooze|postpone|move)\b.{0,100}\b(?:reminder|to-?do|task)\b/iu.test(value)) return { kind: 'assistant' }
   if (/提醒我.{0,12}(?:这件事|这项任务|刚才那)|\bremind me\b.{0,35}\b(?:about (?:it|that)|this task|that task)\b/iu.test(value)) return { kind: 'assistant' }
-  if (/然后|并且|同时|[,，;；]\s*(?:打开|帮我|保存|创建)|\b(?:and then|then|also)\b|\band (?:open|find|save|create|search)\b/iu.test(value)) return null
-  if (/(?:你觉得|你认为).{0,12}(?:怎么|如何|怎样)|\b(?:how would you|what do you think|what(?:'s| is) (?:the )?best way to)\b/iu.test(value)) return { kind: 'ask' }
+  const noteInput = value.replace(/^(?:(?:呃+|嗯+|啊+|那个|就是)[，,\s]*)+/u, '')
+    .replace(/^(?:现在)?(?:断网了?|没网了?|网络断了|离线了?)[，,\s]*/u, '')
+  if (/然后|并且|同时|[,，;；]\s*(?:打开|帮我(?!记下来|记录下来|保存到随记)|保存|创建)|\b(?:and then|then|also)\b|\band (?:open|find|save|create|search)\b/iu.test(noteInput)) return null
+  const suppliedNote = /^(?:(?:请|帮我|请帮我|我想|我想要)\s*)?(?:记(?:一)?下|记录(?:一)?下|记到随记(?:里|里面)?|保存(?:到|为)(?:一条)?随记|记一条随记)[\s，,:：。]*(.+)$/u.exec(noteInput) ||
+    /^(.+?)[，,。]\s*(?:请|帮我|请帮我)?(?:记下来|记录下来|保存到随记)[。！!\s]*$/u.exec(noteInput)
+  if (suppliedNote) return { kind: 'notes', text: suppliedNote[1].trim() }
+  if (/日程|简报|\b(?:calendar|briefing)\b/iu.test(value) ||
+      /(?:今天|明天|后天|周[一二三四五六日天]|星期|\d{1,2}月\d{1,2}[日号]).{0,18}[点:：].{0,10}(?:到|至|[-–]).{0,12}[点:：].{0,20}(?:会议|开会|讨论|面试|预约|约会|安排)/u.test(value)) return { kind: 'assistant' }
+  if (/^(?:请|帮我|请帮我)?(?:加个|新建|添加|创建|记个).{0,6}(?:待办|代办)/u.test(value)) return { kind: 'reminder' }
+  if (/(?:你觉得|你认为).{0,12}(?:怎么|如何|怎样)|(?:这个功能|这个方案|软件).{0,12}(?:应该|可以)?(?:怎么|如何)(?:开发|实现|设计)|\b(?:how would you|what do you think|what(?:'s| is) (?:the )?best way to)\b/iu.test(value)) return { kind: 'ask' }
   if (/^(?:(?:请|帮我|请帮我)\s*)?(?:提醒我|设置.{0,8}提醒|创建.{0,8}(?:提醒|待办)|添加.{0,8}待办)|^(?:今天|明天|后天|[零〇一二两三四五六七八九十百\d]+\s*(?:分钟|小时)后|半小时后).{0,8}提醒我|^(?:please\s+)?(?:remind me\b|(?:set|create|add)\b.{0,20}\b(?:reminder|to-?do)\b)/iu.test(value)) return { kind: 'reminder' }
   const note = /^(?:(?:请|帮我|请帮我)\s*)?(?:记到随记(?:里|里面)?|保存(?:到|为)(?:一条)?随记|记一条随记)[\s，,:：]*(.+)$/u.exec(value) ||
     /^(?:please\s+)?(?:save (?:a |this )?note|take a note|note down)[\s,:]*(.+)$/iu.exec(value)
@@ -67,8 +93,8 @@ Use assistant for reading or summarizing the current browser page/article, inclu
 selection: an explicit request to polish or translate the currently selected text (not supplied dictation). operation must be polish or translate. Replacement/append follows the user's existing selection settings. For explaining/summarizing selected text use ask. For a request to rewrite a previous assistant answer, use assistant instead so the actual answer is the target. Never invent text when no target exists.
 translate: an explicit request to translate supplied text. text MUST be an exact nonempty substring of the input, containing only the source passage, with no paraphrase. target is an explicitly requested BCP-47 language code (en, zh, ja, etc), otherwise null; do not infer a target from the source language.
 notes: an explicit request to record supplied content in a note; spoken fillers before or inside that request do not change its intent. Recording a software idea is not creating a reminder or executing the feature described in the idea. text MUST be the exact content substring without cleaning or rewriting punctuation; leave null only for references like 'the previous answer' that require the assistant to resolve a target.
-reminder: an explicit instruction to create reminders or todos; retain the entire utterance for the existing reminder parser. Do not calculate timestamps. Missing time must not be guessed. Ordinary statements of plans, obligations or appointments without a request to save/notify remain dictation; a future date alone is not permission to create a reminder or open its editor.
-assistant: requests to operate Windows (applications/folders/files/websites), search local files, query/manage existing reminders/todos/notes, extract tasks from a note, search recognition history, copy requested results to clipboard, or open existing application pages/settings. If the input reports completion of a task matching the supplied activeTasks, route to assistant to resolve/confirm the real task ID; without a matching task ordinary completed statements remain dictation. Also use assistant for multiple operations and follow-up questions/references to a prior assistant exchange (e.g. explain more, save that answer, open the second). Requests for calendar scheduling, automatic daily briefings, speech playback or sync administration also go to assistant, which must explain unsupported capabilities. Never silently substitute a note or timed reminder for these actions.
+reminder: an explicit instruction to create reminders or todos; retain the entire utterance for the existing reminder parser. Do not calculate timestamps. Missing time must not be guessed. A concrete appointment with an explicit start/end range and meeting/appointment subject is a calendar candidate: use assistant to create or clarify the calendar event. A future date alone is not permission to create a reminder or open its editor.
+assistant: requests to operate Windows (applications/folders/files/websites), search local files, query/manage existing reminders/todos/notes, extract tasks from a note, search recognition history, copy requested results to clipboard, or open existing application pages/settings. If the input reports completion of a task matching the supplied activeTasks, route to assistant to resolve/confirm the real task ID; without a matching task ordinary completed statements remain dictation. Also use assistant for multiple operations and follow-up questions/references to a prior assistant exchange (e.g. explain more, save that answer, open the second). Requests for calendar scheduling, automatic daily briefings, speech playback or sync administration also go to assistant, which must use registered tools and explain only capabilities that are actually unavailable. Never silently substitute a note or timed reminder for these actions.
 Do NOT mistake 'how do I open X?' for an instruction to open it. Do NOT mistake dictated development tasks or quoted prompts for actions. Respect negations and corrections. For a multi-action request use assistant rather than dropping subsequent steps.
 For all kinds other than translate/notes keep text null. Do not include explanations.`
 

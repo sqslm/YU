@@ -18,6 +18,17 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
 
 describe('personal tools share real application services', () => {
+  it('passes only an exact reminder clause from a compound command, and rejects invented text', async () => {
+    const question = '先记下整理照片的想法，再加个待办，周末研究一下。'
+    await runTool('create_reminder', { text: '加个待办，周末研究一下。' }, { ...ctx, question })
+    expect(api.remind).toHaveBeenCalledWith('加个待办，周末研究一下。', expect.any(AbortSignal), ctx.submittedAt)
+    await runTool('create_reminder', { text: '周末研究一下。' }, { ...ctx, question, cache: new Map() })
+    expect(api.remind).toHaveBeenLastCalledWith('待办：周末研究一下。', expect.any(AbortSignal), ctx.submittedAt)
+    vi.mocked(api.remind).mockClear()
+    expect((await runTool('create_reminder', { text: '提醒我明天上午八点买东西' }, { ...ctx, question })).ok).toBe(false)
+    expect(api.remind).not.toHaveBeenCalled()
+    expect((await runTool('create_reminder', { text: '提醒我明天上午八点买东西' }, { ...ctx, question: '提醒我明天上午八点买东西，改成后天上午九点。' })).ok).toBe(false)
+  })
   it('keeps personal data tools out of ordinary Ask and denies missing capability context', async () => {
     expect(toolSchemas().map(t => (t.function as { name: string }).name)).not.toContain('search_notes')
     expect((await runTool('create_note', { text: 'x' }, { ...ctx, allowedTools: undefined })).ok).toBe(false)
@@ -27,7 +38,7 @@ describe('personal tools share real application services', () => {
   it('uses the untouched user command, rejects timestamps and does not claim a review was saved', async () => {
     const result = await runTool('create_reminder', {}, ctx)
     expect(api.remind).toHaveBeenCalledWith(ctx.question, expect.any(AbortSignal), ctx.submittedAt)
-    expect(result).toMatchObject({ ok: true, summary: 'Please confirm the time' })
+    expect(result).toMatchObject({ ok: false, summary: 'Please confirm the time', data: { saved: 0, needsClarification: true } })
     expect((await runTool('create_reminder', { dueAt: Date.now() + 60000 }, ctx)).ok).toBe(false)
   })
   it.each(['每天八点给我当天的任务简报。', 'Schedule a project meeting tomorrow.', '把明天取东西的提醒改成下午两点。', '记住，我喜欢简单的方案。'])('does not let a model substitute new reminders for a different action: %s', async question => {
@@ -185,8 +196,8 @@ describe('personal tools share real application services', () => {
   it('keeps an unrecognisable deadline from failing the whole reminder', async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 10))
     const result = await runTool('create_reminder', { deadline: '尽快' }, ctx)
-    // No date to fall back on, so nothing is invented — but the task is still created.
-    expect(result.ok).toBe(true)
+    // The parser still needs a time; an unclear deadline must not turn that into success.
+    expect(result.ok).toBe(false)
     expect(api.remind).toHaveBeenCalledWith(ctx.question, expect.any(AbortSignal), ctx.submittedAt)
     expect(api.saveReminder).not.toHaveBeenCalled()
     expect(result.summary).toBe('Please confirm the time')
@@ -220,8 +231,8 @@ describe('personal tools share real application services', () => {
     const result = await runTool('create_reminder', { priority: 'high', deadline: '今天18点' }, ctx)
     expect(api.remind).toHaveBeenCalledWith(ctx.question, expect.any(AbortSignal), ctx.submittedAt,
       { priority: 'high', deadlineAt: new Date(2026, 9, 23, 18).getTime() })
-    expect(result.ok).toBe(true)
-    expect(result.summary).toContain('这次没有落库')
+    expect(result.ok).toBe(false)
+    expect(result.summary).toContain('本次未保存')
     expect(result.data.item).toBeUndefined()
   })
   it('reports a multi-item take as stored instead of assuming nothing happened', async () => {

@@ -113,7 +113,7 @@ export class ReminderStore {
     if (!['pending', 'due'].includes(row.status)) throw new Error(mt('这条提醒已处理'))
     if (action === 'snooze') {
       if (!Number.isInteger(snoozeMinutes) || snoozeMinutes < 1 || snoozeMinutes > 1440) throw new Error(mt('稍后提醒时长无效'))
-      const dueAt = this.now() + snoozeMinutes * 60_000
+      const dueAt = Math.max(this.now(), row.status === 'pending' ? row.dueAt ?? this.now() : this.now()) + snoozeMinutes * 60_000
       return this.write({ ...row, dueAt, snoozedUntil: dueAt, status: 'pending', deliveredAt: null, updatedAt: this.now() })
     }
     if (action !== 'cancel' && action !== 'complete') throw new Error(mt('提醒操作无效'))

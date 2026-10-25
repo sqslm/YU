@@ -1,7 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { directVoiceIntent, parseVoiceIntent, isCurrentWindowQuestion, needsAssistantContext } from './voice-intent'
+import { directVoiceIntent, parseVoiceIntent, isCurrentWindowQuestion, needsAssistantContext, screenshotNeedsEditor } from './voice-intent'
 
 describe('unified voice decisions', () => {
+  it.each(['把我框选区域里的文字提取出来。', '我想让你分析这张截图，但先给我看一下准备发送的内容。'])('keeps region and upload-preview requests in the local editor first: %s', text => {
+    expect(screenshotNeedsEditor(text)).toBe(true)
+    expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })
+  })
+  it('answers development advice without executing or dictating the feature request', () => {
+    expect(directVoiceIntent('我想让软件能自动打开应用，这个功能应该怎么开发？')).toEqual({ kind: 'ask' })
+  })
+  it('saves an explicitly requested offline note without requiring the intent model', () => {
+    expect(directVoiceIntent('断网了，帮我记一下，明天检查网络设备。')).toMatchObject({ kind: 'notes', text: '明天检查网络设备。' })
+  })
+  it.each(['总结一下我刚刚复制到剪贴板里的这段文字。', 'Explain the text I copied to the clipboard'])('reads an explicitly requested clipboard through tools before answering: %s', text => {
+    expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })
+  })
+  it.each(['明天下午三点到四点有个项目讨论。', '后天上午十点到十一点开项目会议。'])('routes a concrete calendar time range to the calendar rather than dictation: %s', text => {
+    expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })
+  })
+  it.each(['呃，我想记一下，那个，做个能自动整理下载文件的小功能。', '帮我记一下，今天完成了软件测试。', '我想到一种新的提醒软件设计，帮我记下来。'])('recognizes note intent without turning mentioned features into actions: %s', text => {
+    expect(directVoiceIntent(text)?.kind).toBe('notes')
+  })
   it.each(['这是什么窗口？', '我在什么窗口？', '告诉我当前是什么应用', '现在用的什么软件？', 'What app am I using?', 'Which window is active?', 'What is this window?'])('uses the new task window without conversational context: %s', text => {
     expect(isCurrentWindowQuestion(text)).toBe(true)
     expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })

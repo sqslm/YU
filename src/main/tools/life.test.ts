@@ -50,6 +50,35 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
 
 describe('life tools reach real stores and stay out of ordinary answers', () => {
+  it('resolves both tomorrow endpoints against the original request day, and refuses a reversed range', async () => {
+    expect((await runTool('create_event', { title: '项目讨论', start: '明天下午三点', end: '明天下午四点' }, ctx)).ok).toBe(true)
+    expect(api.saveEvent).toHaveBeenCalledWith(expect.objectContaining({ start: +new Date(2026,9,24,15), end: +new Date(2026,9,24,16) }))
+    vi.mocked(api.saveEvent).mockClear()
+    expect((await runTool('create_event', { title: '错误时间', start: '明天下午三点', end: '明天下午两点' }, ctx)).ok).toBe(false)
+    expect(api.saveEvent).not.toHaveBeenCalled()
+  })
+  it('persists text-only mode only when requested while always stopping current speech', async () => {
+    api.setTtsEnabled = vi.fn().mockResolvedValue(undefined)
+    await runTool('stop_speaking', { text_only: true }, ctx)
+    expect(api.stopSpeaking).toHaveBeenCalledOnce()
+    expect(api.setTtsEnabled).toHaveBeenCalledExactlyOnceWith(false)
+  })
+  it('edits an event clock on its existing day and uses the submission time for relative starts', async () => {
+    await runTool('manage_event', { id: 'e1', action: 'update', start: '下午四点', end: '下午五点' }, ctx)
+    expect(api.saveEvent).toHaveBeenCalledWith(expect.objectContaining({ start: new Date(2026,9,24,16).getTime(), end: new Date(2026,9,24,17).getTime() }), 'e1')
+    vi.mocked(api.saveEvent).mockClear()
+    await runTool('create_event', { title: '相对日程', start: '十分钟后' }, { ...ctx, submittedAt: Date.now()-120000 })
+    expect(api.saveEvent).toHaveBeenCalledWith(expect.objectContaining({ start: Date.now()+8*60000 }))
+  })
+  it('configures one persisted daily briefing without creating a reminder', async () => {
+    let current = { ...mergeSettings({}).briefing, enabled: false }
+    api.briefingSettings = () => current
+    api.setBriefingSettings = vi.fn(async patch => { current = { ...current, ...patch }; return current })
+    const result = await runTool('configure_briefing', { enabled: true, time: '08:00' }, { ...ctx, allowedTools: [...LIFE_TOOLS, 'configure_briefing'] })
+    expect(result.ok).toBe(true); expect(current).toMatchObject({ enabled: true, time: '08:00' })
+    expect(api.saveEvent).not.toHaveBeenCalled()
+    expect((await runTool('configure_briefing', { time: '25:00' }, { ...ctx, allowedTools: [...LIFE_TOOLS, 'configure_briefing'] })).ok).toBe(false)
+  })
   it('keeps calendar and sync tools out of plain Ask and denies a missing capability', async () => {
     const names = toolSchemas().map(tool => (tool.function as { name: string }).name)
     for (const name of LIFE_TOOLS) expect(names).not.toContain(name)

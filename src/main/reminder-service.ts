@@ -154,16 +154,8 @@ export class ReminderService {
       if (!current) throw new Error(mt('随记不存在'))
       if ((current.transcript.trim() || current.polished.trim()) !== text) throw new Error(mt('随记内容已更改，请重新提取'))
       if (!drafts.length) throw new Error(mt('没有发现待办或提醒事项'))
-      const valid = drafts.filter(draft => !draft.needs_confirmation && (
-        draft.intent === 'todo' && draft.time_expression === null && draft.rule === null ||
-        draft.intent === 'create_reminder' && draft.dueAt !== null && draft.dueAt > Date.now()
-      ))
-      if (!valid.length) return mt('没有明确可保存的事项，请补充事项或具体时间')
-      this.store.saveMany(valid.map(draft => ({ title: draft.title, description: draft.description,
-        dueAt: draft.intent === 'todo' ? null : draft.dueAt, level: draft.level, recurrence: draft.rule,
-        source: 'note', noteId: id, timeExpression: draft.time_expression ?? undefined })))
-      this.refresh()
-      return mt('已保存 {{count}} 个事项，{{skipped}} 个不明确事项未保存', { count: valid.length, skipped: drafts.length - valid.length })
+      this.open({ drafts, noteId: id })
+      return mt('已提取 {{count}} 个候选事项，请确认后保存', { count: drafts.length })
     } finally { this.extracting = false; if (this.noteAbort === controller) this.noteAbort = null }
   }
 

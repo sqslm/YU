@@ -25,6 +25,7 @@ interface RefinedReminder {
   status: 'ready' | 'needs_clarification'
   missing_fields: string[]
 }
+const PLANNED_DAY = /^(?:今[天日]|明[天日]|后天|(?:本|这|下)?周末|(?:本|这|下)?(?:周|星期)[一二三四五六日天]|today|tomorrow|(?:this|next) weekend)$/i
 
 function parseRefinement(raw: string): { reminders: RefinedReminder[] } {
   const payload = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) as { reminders?: unknown }
@@ -46,7 +47,7 @@ function parseRefinement(raw: string): { reminders: RefinedReminder[] } {
   return payload as { reminders: RefinedReminder[] }
 }
 
-export function parseReminderOutput(raw: string, referenceTime: number): ReminderDraft[] {
+export function parseReminderOutput(raw: string, referenceTime: number, todoOnly = false): ReminderDraft[] {
   const clean = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
   const payload = JSON.parse(clean) as { items?: unknown }
   if (!payload || !Array.isArray(payload.items) || payload.items.length > 20) throw new Error(mt('提醒解析格式无效'))
@@ -59,12 +60,13 @@ export function parseReminderOutput(raw: string, referenceTime: number): Reminde
       !(row.time_expression === null || typeof row.time_expression === 'string' && row.time_expression.length <= 200) ||
       !['normal', 'strong'].includes(String(row.level)) || ![null, 'daily', 'weekly'].includes(row.recurrence as string | null) ||
       typeof row.needs_confirmation !== 'boolean' || !(row.unsupported_recurrence === undefined || typeof row.unsupported_recurrence === 'boolean')) throw new Error(mt('提醒解析字段无效'))
-    const untimedTodo = row.intent === 'todo' && row.time_expression === null && row.recurrence === null && !row.unsupported_recurrence
+    const plannedTodo = todoOnly && row.intent === 'todo' && PLANNED_DAY.test(String(row.time_expression ?? '').trim()) && row.recurrence === null && !row.unsupported_recurrence
+    const untimedTodo = row.intent === 'todo' && (row.time_expression === null || plannedTodo) && row.recurrence === null && !row.unsupported_recurrence
     const time = untimedTodo ? { dueAt: null, recurrence: null } : row.unsupported_recurrence
       ? { dueAt: null, recurrence: null, issue: mt('暂不支持此重复规则，请手动确认') }
       : resolveReminderTime(row.time_expression as string | null, referenceTime)
     const mismatch = row.recurrence !== (time.recurrence?.frequency ?? null)
-    return { intent: row.intent as ReminderDraft['intent'], title: row.title.trim(), description: (row.description as string | undefined)?.trim() ?? '', time_expression: row.time_expression as string | null,
+    return { intent: row.intent as ReminderDraft['intent'], title: row.title.trim(), description: [(row.description as string | undefined)?.trim(), plannedTodo ? row.time_expression : null].filter(Boolean).join('；'), time_expression: plannedTodo ? null : row.time_expression as string | null,
       level: row.level as ReminderDraft['level'], recurrence: row.recurrence as ReminderDraft['recurrence'],
       needs_confirmation: row.needs_confirmation || Boolean(time.issue) || mismatch, dueAt: time.dueAt, rule: time.recurrence,
       issue: time.issue || (mismatch ? '请确认重复规则' : undefined) }
@@ -87,6 +89,17 @@ export async function extractReminders(settings: Settings, text: string, source:
       { role: 'user', content: JSON.stringify({ ...context, ASR_TEXT: text }) }] })
     signal?.throwIfAborted()
     const refined = parseRefinement(refinedRaw)
+    // A planned day on an explicitly requested todo is context, not an alert time.
+    const todoOnly = /(?:待办|\bto-?do\b)/i.test(text) && !/(?:提醒|通知|\bremind|\bnotify)/i.test(text)
+    if (todoOnly) {
+      for (const row of refined.reminders) {
+        if (!PLANNED_DAY.test(row.time_expression?.trim() ?? '')) continue
+        row.description = [row.description, row.time_expression].filter(Boolean).join('；')
+        row.time_expression = null
+        row.missing_fields = row.missing_fields.filter(field => !/^(?:time|time_period|clock_time|hour|minute|具体时间|时刻|时间段)$/.test(field))
+        if (!row.missing_fields.length) row.status = 'ready'
+      }
+    }
     if (!refined.reminders.length) return []
     onProgress?.(mt('提取提醒事项…'))
     const raw = await complete({ ...settings.polish, ...profile }, { temperature: 0, maxTokens: 4096, signal,
@@ -95,8 +108,15 @@ export async function extractReminders(settings: Settings, text: string, source:
       }) }] })
     signal?.throwIfAborted()
     const requiresReview = refined.reminders.some(row => row.status === 'needs_clarification' || row.missing_fields.length > 0)
-    return parseReminderOutput(raw, referenceTime).filter(item => item.intent !== 'none').map(item =>
-      requiresReview ? { ...item, needs_confirmation: true, issue: item.issue || mt('请核对提炼后的提醒内容') } : item)
+    return parseReminderOutput(raw, referenceTime, todoOnly).filter(item => item.intent !== 'none').map(item => {
+      if (requiresReview) return { ...item, needs_confirmation: true, issue: item.issue || mt('请核对提炼后的提醒内容') }
+      // The extractor may repeat a planned day or demand a clock again, despite
+      // a ready, explicitly untimed todo. Preserve the day without scheduling it.
+      if (todoOnly && item.intent === 'todo' && item.time_expression === null && !item.issue) {
+        return { ...item, needs_confirmation: false }
+      }
+      return item
+    })
   })
   return result.value
 }

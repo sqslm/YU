@@ -83,4 +83,14 @@ describe('fixed full-document reminder refinement', () => {
       { intent: 'create_reminder', needs_confirmation: true, dueAt: null }
     ])
   })
+  it('preserves a planned weekend on an explicit todo without requiring an alert clock', async () => {
+    mocks.complete.mockResolvedValueOnce(JSON.stringify({ reminders: [candidate({ time_expression: '周末', status: 'needs_clarification', missing_fields: ['clock_time'] })] }))
+      .mockResolvedValueOnce(JSON.stringify({ items: [extracted({ intent: 'todo', time_expression: '周末', needs_confirmation: true })] }))
+    const rows = await extractReminders(settings(), '记下整理照片的想法，再加个待办，周末研究一下。', 'voice', undefined, undefined, now)
+    const refined = JSON.parse(JSON.parse(mocks.complete.mock.calls[1][1].messages.at(-1).content).text)
+    expect(refined.reminders[0]).toMatchObject({ time_expression: null, status: 'ready', missing_fields: [] })
+    expect(refined.reminders[0].description).toContain('周末')
+    expect(rows[0]).toMatchObject({ dueAt: null, needs_confirmation: false })
+    expect(rows[0].description).toContain('周末')
+  })
 })

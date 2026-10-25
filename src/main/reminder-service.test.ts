@@ -49,9 +49,9 @@ describe('shared reminder delivery and entry points', () => {
       service.registerIpc({ list: () => ({ notes: [] }) } as never)
       const row = service.save({ title: 'Task', dueAt: now + 60000, level: 'normal', source: 'manual', recurrence: null })
       mock.handlers.get('reminders:action')!(null, row.id, 'snooze', 15)
-      expect(service.store.get(row.id)?.dueAt).toBe(now + 900000)
+      expect(service.store.get(row.id)?.dueAt).toBe(now + 960000)
       mock.handlers.get('reminders:action')!(null, row.id, 'snooze')
-      expect(service.store.get(row.id)?.dueAt).toBe(now + 600000)
+      expect(service.store.get(row.id)?.dueAt).toBe(now + 1560000)
       expect(settings.reminders.snoozeMinutes).toBe(10)
       service.action(row.id, 'cancel'); service.action(row.id, 'restore')
       expect(service.store.get(row.id)?.status).toBe('pending')
@@ -174,15 +174,14 @@ describe('shared reminder delivery and entry points', () => {
       expect(service.store.list().some(row => row.level === 'strong' && row.status === 'due')).toBe(true)
     } finally { service.stop() }
   })
-  it('saves clear extracted items with their note link and skips ambiguous items without a popup', async () => {
+  it('opens all extracted candidates for review with their source note and saves nothing yet', async () => {
     const { service, open } = harness()
     try {
       service.registerIpc({ list: () => ({ notes: [{ id: 'note-1', transcript: 'Call tomorrow; report before Friday', polished: 'do not overwrite' }] }) } as never)
       mock.extract.mockResolvedValue([draft(), draft({ intent: 'todo', title: 'Submit report', dueAt: null, needs_confirmation: true })])
       await mock.handlers.get('reminders:extract-note')!(null, 'note-1')
-      expect(open).not.toHaveBeenCalled()
-      expect(service.store.list()).toHaveLength(1)
-      expect(service.store.list()[0]).toMatchObject({ source: 'note', noteId: 'note-1', title:'Clean up' })
+      expect(open).toHaveBeenCalledWith({ noteId: 'note-1', drafts: [expect.objectContaining({ title: 'Clean up' }), expect.objectContaining({ title: 'Submit report', needs_confirmation: true })] })
+      expect(service.store.list()).toHaveLength(0)
 
     } finally { service.stop() }
   })
