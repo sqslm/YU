@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.11**, Windows 10/11 x64, MIT.
+> Current version **1.0.0-rc.12**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -54,7 +54,7 @@ A fresh install has no working connections: this is where you add a recognition 
 
 ![Schedule & briefing](resources/screenshots/prefs-life.png)
 
-Events carry a start, an end, a location and an advance alert, and can be imported from or exported to ICS. The daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud, and quiet hours hold it back. Events have their own page under Reminders in the main window, and the calendar and its data stay on this machine.
+Events carry a start, an end, a location and an advance alert, and can be imported from or exported to ICS. The daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud, and quiet hours hold it back. Events have their own page under Reminders in the main window, and local calendar data works offline and can sync when cloud sync is enabled and signed in.
 
 The automation page lists the workflows you saved: describe a run of steps once, then replay it with a single sentence — no model in the loop, each step reported as it finishes.
 
@@ -103,7 +103,7 @@ Three things worth knowing:
 - **Trigger mode** can be switched in the Shortcuts page between "press to start, press to stop" (default) and "hold to talk". In press mode, dictation, Ask and voice translation all end with another single `Right Alt`.
 - **Press `Esc` while recording** to throw the take away: it is neither inserted nor written to history.
 - Every shortcut can be re-recorded or cleared, and the tray menu can suspend all of them temporarily. Recording a shortcut distinguishes left and right Shift / Ctrl / Alt.
-- **Say it, and it is noted**: in Ask, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, “read today’s briefing” speaks it, and “mark that to-do high priority, due Friday” updates it. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
+- **Say it, and it is noted**: in Ask, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, “read today’s briefing” speaks it, and “mark that to-do high priority, due Friday” updates it. Right Alt routes calendar, reminders, notes and queries through the same entry. Asking for a daily task briefing configures the existing schedule. Compound operations use actual tool results and report failed writes. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
 - **Follow-ups do not need the context repeated**: "make the second one eleven", "mark the last one high priority" — the assistant resolves the target against the previous turn's real results, and asks first when it cannot tell which item you mean instead of guessing.
 - **Say it once, replay it with one sentence**: tell it “from now on, when I say morning check, look at today's calendar, build the briefing and read it out” and it saves those steps as a workflow. Saying “run morning check” then runs each step with the saved arguments, with no model in the loop, and lists what every step returned. Workflows can be archived or restored in settings under Automation.
 
@@ -224,7 +224,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.11`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.0.0-rc.12`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Not implemented** (don't read these as available): per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -246,6 +246,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
+- **1.0.0-rc.12**: fixes Windows taskbar icon property order; disables RC downgrades across update checks, events, downloads and installation; connects calendar, daily briefing configuration and compound tasks through Right Alt; restarts briefing scheduling immediately after settings changes; fixes event end dates, future reminder postponement, false save receipts and unreviewed note extraction; shares polish output constraints and artifact/duplicate cleanup. See the [100-case acceptance record](src/main/fixtures/voice-routing-100-rc12.md) for exact validation boundaries.
 - **1.0.0-rc.11**: screenshot translation replaces text at its original position in the full-screen view, with original comparison and image export; adds downward scrolling screenshots matched by overlap; gives taskbar windows an external YU icon; fixes late capture windows after closing, plus focus and control interaction during scrolling.
 - **1.0.0-rc.10**: the hub was laid out again — the four numbers became one strip (characters, time and pace today, with the lifetime count behind a divider), the schedule and the to-dos share one list in time order on the left with the briefing in its own column on the right, the week chart sits beside the lifetime insights, and the year heat map closes the page; "average paragraph" became "today's pace" because it was repeating the footnote under the duration. Local installer only, nothing published to GitHub.
 - **1.0.0-rc.9**: notifications now carry our own icon — the tray's "check for updates", briefing, calendar and reminder toasts shipped without one, so Windows fell back to the host executable's picture and showed Electron's atom logo; the hub dropped its recent-takes list (the history page is the same data with search and replay), the week chart takes the full width again but is capped and centred, and a Chinese interface no longer labels the heat-map axis "Nov Dec Jan" — the twelve month keys had been written into both locales with English values. This build is a local installer only; nothing was published to GitHub.

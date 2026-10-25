@@ -17,6 +17,7 @@ import type {
   VoiceCommandsSettings
 } from '@shared/types'
 import { applyReplacements, countRuleHits } from '@shared/text'
+import { cleanPolishedText, POLISH_OUTPUT_RULES } from '@shared/polish'
 import { countUnits } from '@shared/count'
 import { MAX_SUGGESTIONS, MAX_TRANSLATE_TARGETS } from '@shared/defaults'
 import { mergeSuggestion, pruneSuggestions } from '@shared/suggestions'
@@ -1426,7 +1427,7 @@ export class Pipeline {
         final = this.shapeMultimodalTranslation(final, settings)
       }
 
-      const beforeRules = unwrapModelText(final)
+      const beforeRules = mode === 'dictation' && settings.polish.enabled ? cleanPolishedText(unwrapModelText(final), transcript) : unwrapModelText(final)
       final = applyReplacements(beforeRules, settings.replacements)
       if (!final.trim()) throw new Error(mt('模型返回了空文本'))
       this.countRuleHits(transcript, settings.replacements)
@@ -1718,7 +1719,10 @@ export class Pipeline {
 
   private async processSelectedText(mode: Mode, text: string, settings: Settings, signal: AbortSignal, context: PromptContext, instruction?: string): Promise<string> {
     const comments = mode === 'dictation' ? commentSelection(text) : null
-    if (!comments) return applyReplacements(unwrapModelText(await this.postProcess(mode, text, settings, signal, context, instruction)), settings.replacements)
+    if (!comments) {
+      const output = unwrapModelText(await this.postProcess(mode, text, settings, signal, context, instruction))
+      return applyReplacements(mode === 'dictation' ? cleanPolishedText(output, text) : output, settings.replacements)
+    }
     const kind = this.promptKindFor(settings, context)
     const raw = await this.llm(settings, { messages: [
       { role: 'system', content: this.systemPromptFor(kind, settings, context) },
@@ -1750,6 +1754,7 @@ export class Pipeline {
     return this.llm(settings, {
       messages: [
         { role: 'system', content: this.systemPromptFor(kind, settings, context) },
+        ...(mode === 'dictation' ? [{ role: 'system' as const, content: POLISH_OUTPUT_RULES }] : []),
         ...(instruction ? [{ role: 'system' as const, content: `Requested edit: ${instruction}` }] : []),
         { role: 'user', content: transcript }
       ],

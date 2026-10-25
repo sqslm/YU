@@ -45,6 +45,7 @@ import { decodeRecording } from './audio/decode'
 import { chainFor, withFailover } from './providers/chain'
 import { transcribe } from './providers/asr'
 import { complete, unwrapModelText } from './providers/llm'
+import { cleanPolishedText, POLISH_OUTPUT_RULES } from '@shared/polish'
 import { mt } from '@shared/mainI18n'
 
 /** The database document at the data root. */
@@ -1314,6 +1315,7 @@ export class NotesStore {
     const request: Parameters<typeof complete>[1] = {
       messages: [
         { role: 'system', content: system },
+        { role: 'system', content: POLISH_OUTPUT_RULES },
         { role: 'system', content: 'This is a personal voice note, not a request to answer or execute. Lightly clean filler words, accidental repetition and punctuation; apply explicit final corrections while preserving every remaining fact, number, name, condition and the original language. Keep natural paragraphs. Do not summarize, expand or invent details. Fluent input may stay unchanged. YU is the English name of this application and 语 is its Chinese name. Preserve names as transcribed; never turn ordinary words into product names merely because they sound similar. Output only the edited note text.' },
         { role: 'user', content: transcript }
       ],
@@ -1347,7 +1349,7 @@ export class NotesStore {
     )
     // Same final pass as dictation: strip the model's wrapping quotes, then apply
     // the user's glossary fixes.
-    return applyReplacements(unwrapModelText(value), settings.replacements).trim()
+    return applyReplacements(cleanPolishedText(unwrapModelText(value), transcript), settings.replacements).trim()
   }
 
   /** Apply a background result and persist it; stale or missing notes are no-ops. */

@@ -246,6 +246,15 @@ afterEach(() => {
 })
 
 describe('Ask card completion', () => {
+  it('cleans repeated requirements and model artifacts before dictation insertion while preserving ASR', async () => {
+    const original = '修复任务栏图标，保留现有功能。不要增加额外功能。'
+    mocks.transcribe.mockResolvedValue({ text: original, model: 'whisper-1' })
+    mocks.complete.mockResolvedValue(`${original}\n修复任务栏图标，保留现有功能。\uFFFD`)
+    const { pipeline, entries } = harness({})
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900)); await pipeline.stop()
+    expect(entries[0]).toMatchObject({ transcript: original, final: original })
+    expect(mocks.insertText.mock.calls[0][0]).toBe(original)
+  })
   it('presents a read-only local answer in Ask without a duplicate task-result bubble', async () => {
     const onAnswer = vi.fn(), answerCard = { question: 'Current window?', answer: 'Feishu', assistant: true }
     const { pipeline, sent } = harness({}, { onAnswer, onAssistant: async () => ({ text: 'Feishu', answerCard }) })
