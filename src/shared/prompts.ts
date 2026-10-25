@@ -1,4 +1,5 @@
 import type { InputAreaType, Mode } from './types'
+import type { TaskContext } from './task'
 
 /**
  * Prompt construction for the three voice modes.
@@ -19,6 +20,8 @@ import type { InputAreaType, Mode } from './types'
  */
 
 export interface PromptContext {
+  /** Shared task metadata; renderContext deliberately renders only its explicit fields. */
+  task?: TaskContext
   /** Frozen original HWND, used by explicit native context tools, not prompt text. */
   windowHandle?: string
   /** Foreground application the dictation is going into, e.g. `Cursor.exe`. */

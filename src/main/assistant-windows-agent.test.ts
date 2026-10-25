@@ -33,7 +33,7 @@ it('uses the existing strict JSON fallback for a gateway without native tools', 
   const fetch = vi.fn().mockResolvedValue(new Response('', { status: 400 }))
   mocks.complete.mockResolvedValueOnce('{"tool":"open_folder","args":{"folder":"downloads"}}').mockResolvedValueOnce('{"tool":"answer","args":{}}').mockResolvedValueOnce('Folder opened.')
   const result = await askAgent(settings, 'Please show my downloads', {}, undefined, undefined, { windows, allowedTools: WINDOWS_TOOLS, fetchImpl: fetch, conversation: { messages: [], toolNotes: '' } })
-  expect(windows.run).toHaveBeenCalledExactlyOnceWith('open_folder', { folder: 'downloads' }, expect.any(AbortSignal), {})
+  expect(windows.run).toHaveBeenCalledExactlyOnceWith('open_folder', { folder: 'downloads' }, expect.any(AbortSignal), expect.objectContaining({ task: expect.objectContaining({ source: 'text' }) }))
   expect(result.tools).toEqual(['open_folder'])
 })
 

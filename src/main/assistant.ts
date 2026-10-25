@@ -7,6 +7,8 @@ import { chainFor } from './providers/chain'
 import { WINDOWS_TOOLS, type WindowsTools } from './tools/windows'
 import { runTool } from './tools/registry'
 import { redactSecrets } from './diagnostics'
+import { attachTask, createTask } from './task-context'
+import type { TaskContext } from '@shared/task'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
 import { WORKFLOW_TOOLS, type WorkflowTools } from './tools/workflow'
@@ -349,6 +351,7 @@ export class AssistantSession {
   private status = ''
   private lastUsed = 0
   private nextId = 0
+  private task: TaskContext | null = null
 
   constructor(private readonly deps: {
     settings: () => Settings
@@ -393,7 +396,9 @@ export class AssistantSession {
     this.controller = null
     controller.abort()
     const turn = this.turns.at(-1)
-    if (turn?.state === 'working') turn.state = 'cancelled'
+    if (turn?.state === 'working') { turn.state = 'cancelled'; turn.taskState = 'cancelled' }
+    if (this.task) this.task.state = 'cancelled'
+    this.task = null
     this.status = ''
     this.lastUsed = this.now()
     this.notify()
@@ -443,6 +448,9 @@ export class AssistantSession {
     if (this.busy) throw new Error(mt('助手正在处理，请先停止当前任务'))
     if (typeof input !== 'string' || !input.trim() || input.length > 10_000) throw new Error(mt('请输入 1–10000 字的请求'))
     signal?.throwIfAborted()
+    const task = context.task ?? createTask('text', context, input)
+    context = attachTask(context, task)
+    task.originalInput ??= input; task.submittedAt ??= submittedAt; task.state = 'running'
     this.snapshot()
     // A pointer ("第二个", "刚才那条") is context even when the phrasing rule below
     // does not recognise it: dropping the thread here would make it unanswerable.
@@ -474,7 +482,8 @@ export class AssistantSession {
     } } : settings
     const controller = new AbortController()
     this.controller = controller
-    const turn: AssistantTurn = { id: ++this.nextId, question: input.trim(), answer: '', sources: [], state: 'working', localResults: [] }
+    this.task = task
+    const turn: AssistantTurn = { id: ++this.nextId, taskId: task.id, taskState: 'running', question: input.trim(), answer: '', sources: [], state: 'working', localResults: [] }
     this.turns = [...this.turns, turn].slice(-12)
     this.lastUsed = this.now()
     this.status = mt('正在思考…')
@@ -552,16 +561,21 @@ export class AssistantSession {
       turn.answer = result.text
       turn.sources = result.sources
       turn.state = 'done'
+      task.state = 'completed'; turn.taskState = task.state
       this.refreshReference()
     } catch (error) {
       if (this.controller !== controller) return
       turn.state = controller.signal.aborted ? 'cancelled' : 'error'
+      task.state = controller.signal.aborted ? 'cancelled' : 'failed'; turn.taskState = task.state
       turn.answer = error instanceof Error ? error.message : String(error)
       const completed=turn.localResults?.filter(item=>item.ok&&/^(?:create_|manage_|update_|configure_)/.test(item.tool))??[]
       if(completed.length&&!controller.signal.aborted){turn.answer=`${mt('已完成的操作：')}\n${completed.map(item=>item.summary).join('\n')}\n${mt('未完成的操作：')}\n${turn.answer}`;this.refreshReference()}
       // Never log the question, answer, provider credentials or tool payloads.
       this.deps.log('[assistant] request failed')
     } finally {
+      if (task.state === 'running') task.state = controller.signal.aborted ? 'cancelled' : turn.state === 'done' ? 'completed' : 'failed'
+      turn.taskState = task.state
+      if (this.task === task) this.task = null
       signal?.removeEventListener('abort', cancelled)
       if (this.controller === controller) {
         this.controller = null; this.status = ''; this.lastUsed = this.now(); this.notify()

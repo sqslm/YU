@@ -1550,6 +1550,21 @@ describe('unified voice entry', () => {
     await finish(h.pipeline)
     expect(onAssistant.mock.calls[0][3]).toMatchObject({ appName: 'code', windowTitle: 'Original code', processId: 42, windowHandle: '1234' })
     expect(onAssistant.mock.calls[0][3]).not.toHaveProperty('fieldContent')
+    const task = onAssistant.mock.calls[0][3]?.task
+    expect(task).toMatchObject({ source: 'voice', originalInput: '我当前用的是什么应用？', target: { windowHandle: '1234', processId: 42, windowTitle: 'Original code' } })
+    expect(task?.id).toEqual(expect.any(String))
+  })
+  it('passes the frozen target into delayed UIA reads after smart dictation is resolved', async () => {
+    const original = { appName: 'code', title: 'Original code', className: 'Code', pid: 42, handle: '1234', appPath: 'C:\\Code.exe', rect: null }
+    mocks.foregroundWindow.mockReturnValue(original)
+    mocks.transcribe.mockResolvedValue({ text: '你好世界' })
+    mocks.complete.mockResolvedValueOnce('{"kind":"dictation"}').mockResolvedValueOnce('你好世界')
+    const readContext = vi.fn().mockResolvedValue(null), h = harness({ voiceCommands: smart }, { readContext })
+    h.pipeline.start('dictation')
+    expect(readContext).not.toHaveBeenCalled()
+    mocks.foregroundWindow.mockReturnValue({ ...original, title: 'Assistant', pid: 99 })
+    await finish(h.pipeline)
+    expect(readContext).toHaveBeenCalledWith(expect.objectContaining({ windowHandle: '1234', processId: 42, windowTitle: 'Original code' }))
   })
   it('uses the existing assistant answer for a voice follow-up instead of starting an empty Ask thread', async () => {
     mocks.transcribe.mockResolvedValue({ text: '那我要怎么解决？' })

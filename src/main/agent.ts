@@ -22,6 +22,7 @@
 
 import type { AskRetrieval, CardAction, SearchResult, Settings } from '@shared/types'
 import type { PromptContext } from '@shared/prompts'
+import { attachTask, createTask } from './task-context'
 import type { ChatMessage } from './providers/llm'
 import {
   buildAskPrompt,
@@ -1535,6 +1536,7 @@ export async function askAgent(
 
   const question = transcript.replace(/\s+/g, ' ').trim()
   if (!question) return { text: '', sources: [], searched: false }
+  context = attachTask(context, context.task ?? createTask('text', context, transcript))
 
   const abort = signal ?? new AbortController().signal
   const onStatus = options.onStatus

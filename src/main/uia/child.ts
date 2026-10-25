@@ -7,6 +7,16 @@
  * context" until the next read.
  */
 import { readFocusedSnapshot } from './reader'
+import { foregroundWindow } from '../foreground'
+import { matchesTaskTarget } from '../task-context'
+import type { TaskTarget } from '@shared/task'
+
+/** Validate before touching UIA and again after a slow provider returns. */
+export function readTargetSnapshot(target?: TaskTarget, read = readFocusedSnapshot, foreground = foregroundWindow): ReturnType<typeof readFocusedSnapshot> {
+  if (target && !matchesTaskTarget(target, foreground())) return null
+  const snapshot = read()
+  return target && !matchesTaskTarget(target, foreground()) ? null : snapshot
+}
 
 interface ParentPort {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -17,11 +27,11 @@ const parent = (process as unknown as { parentPort?: ParentPort }).parentPort
 
 if (parent) {
   parent.on('message', (event) => {
-    const message = event?.data as { type?: string; id?: number } | undefined
+    const message = event?.data as { type?: string; id?: number; target?: TaskTarget } | undefined
     if (!message || message.type !== 'read') return
     let snapshot = null
     try {
-      snapshot = readFocusedSnapshot()
+      snapshot = readTargetSnapshot(message.target)
     } catch {
       snapshot = null
     }

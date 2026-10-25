@@ -1,4 +1,5 @@
 import type { SearchResult } from './types'
+import type { TaskState } from './task'
 
 export interface AssistantItem { id: string; name: string; path: string; kind: 'file' | 'application'; appId?: string; bytes?: number; modified?: string }
 export interface AssistantLocalResult { tool: string; ok: boolean; summary: string; items?: AssistantItem[]; detail?: string; fallback?: boolean }
@@ -9,6 +10,8 @@ export function unresolvedToolFailure(results: readonly AssistantLocalResult[] =
 }
 
 export interface AssistantTurn {
+  taskId?: string
+  taskState?: TaskState
   id: number
   question: string
   answer: string

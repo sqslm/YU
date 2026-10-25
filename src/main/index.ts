@@ -1915,7 +1915,7 @@ async function bootstrap(): Promise<void> {
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
     checkAsr: () => checkAsrReadiness(store.get(), localAsr),
     preserveAudio: async (pcm, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16), recovery: true }, signal) },
-    captureSelection: () => captureSelectionTarget(store.get()),
+    captureSelection: (context, signal) => captureSelectionTarget(store.get(), context, signal),
     voiceContext: text => {
       const last = needsAssistantContext(text) ? assistant.snapshot().turns.at(-1) : undefined
       const completion = /已经|做完|完成|检查完|\b(?:finished|completed|done)\b/iu.test(text)
@@ -1939,7 +1939,7 @@ async function bootstrap(): Promise<void> {
     onCompletedAnswer: (question, answer) => assistant.rememberAnswer(question, answer),
     // Surrounding text comes from a utility process: a crashing accessibility
     // provider must cost us one context read, never the UI.
-    readContext: () => uia.read(),
+    readContext: target => uia.read(undefined, target),
     // Learned words land in the suggestion pool, never straight in the
     // dictionary: an edit proves the user typed something, not that it is a term.
     saveSuggestions: (suggestions) => {

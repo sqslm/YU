@@ -41,7 +41,7 @@ describe('assistant session', () => {
     const analyzeScreenshot = vi.fn().mockResolvedValue('Local editor opened; no image sent')
     const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), analyzeScreenshot })
     await current.send(input)
-    expect(analyzeScreenshot).toHaveBeenCalledWith({}, input, input.includes('提取'), expect.any(AbortSignal))
+    expect(analyzeScreenshot).toHaveBeenCalledWith(expect.objectContaining({task: expect.objectContaining({source: 'text'})}), input, input.includes('提取'), expect.any(AbortSignal))
     expect(ask).not.toHaveBeenCalled()
   })
   it('re-reads stored reminders for persistence questions instead of trusting a previous answer', async () => {
@@ -124,7 +124,7 @@ describe('assistant session', () => {
     const context = { appName: 'code', processId: 42, windowHandle: '1234' }
     await current.send('Analyze this screenshot', undefined, undefined, now, context)
     expect(ask).toHaveBeenCalledOnce()
-    expect(analyzeScreenshot).toHaveBeenCalledWith(context, 'Analyze this screenshot', false, expect.any(AbortSignal))
+    expect(analyzeScreenshot).toHaveBeenCalledWith(expect.objectContaining(context), 'Analyze this screenshot', false, expect.any(AbortSignal))
     expect(current.snapshot().turns.at(-1)?.answer).toBe('Actual screen content')
     await current.send('截一下当前窗口，帮我看看这个错误。', undefined, undefined, now, context)
     expect(analyzeScreenshot).toHaveBeenCalledTimes(2)
@@ -135,7 +135,7 @@ describe('assistant session', () => {
     await current.send('Which application is this window?')
     expect(analyzeScreenshot).toHaveBeenCalledTimes(3)
     await current.send('Extract text from this image', undefined, undefined, now, context)
-    expect(analyzeScreenshot).toHaveBeenLastCalledWith(context, 'Extract text from this image', true, expect.any(AbortSignal))
+    expect(analyzeScreenshot).toHaveBeenLastCalledWith(expect.objectContaining(context), 'Extract text from this image', true, expect.any(AbortSignal))
     await current.send('How do I fix that?')
     expect(ask.mock.calls.at(-1)?.[5]?.conversation?.toolNotes).toContain('Actual screen content')
     expect(ask.mock.calls.at(-1)?.[5]?.conversation?.toolNotes).toContain('"ok":true')
@@ -143,7 +143,8 @@ describe('assistant session', () => {
   it('passes the original application snapshot to Ask without detecting another foreground window', async () => {
     const context = { appName: 'code', windowTitle: 'Original document', processId: 42, windowHandle: '1234' }
     await session.send('Which application am I using?', undefined, undefined, now, context)
-    expect(ask.mock.calls[0][2]).toEqual(context)
+    expect(ask.mock.calls[0][2]).toMatchObject(context)
+    expect(ask.mock.calls[0][2].task?.target).toMatchObject(context)
   })
   it('uses the configured provider, existing Ask and its own bounded conversation', async () => {
     await session.send('Hello')
@@ -151,7 +152,7 @@ describe('assistant session', () => {
     await session.send('Explain that')
     expect(ask.mock.calls[1][5]!.conversation).toBe(firstConversation)
     expect(ask.mock.calls[0][0].polish).toMatchObject({ model: 'model', apiKey: 'private' })
-    expect(ask.mock.calls[0][2]).toEqual({})
+    expect(ask.mock.calls[0][2].task).toMatchObject({ source: 'text', originalInput: 'Hello' })
     expect(ask.mock.calls[0][5]?.allowedTools).toEqual(ASSISTANT_TOOLS)
     expect(session.snapshot().turns.map(t => t.state)).toEqual(['done', 'done'])
     const snapshot = session.snapshot(); snapshot.turns[0].answer = 'modified'

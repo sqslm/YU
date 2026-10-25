@@ -16,6 +16,7 @@
 import { utilityProcess, type UtilityProcess } from 'electron'
 import { join } from 'node:path'
 import type { UiaSnapshot } from './reader'
+import type { TaskTarget } from '@shared/task'
 
 interface PendingRead {
   resolve: (snapshot: UiaSnapshot | null) => void
@@ -190,11 +191,11 @@ export class UiaHost {
    * Reads the focused control, or resolves null when the child dies, the read
    * times out, or UI Automation reports nothing usable.
    */
-  read(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<UiaSnapshot | null> {
-    return this.readWithBudget(timeoutMs)
+  read(timeoutMs = DEFAULT_TIMEOUT_MS, target?: TaskTarget): Promise<UiaSnapshot | null> {
+    return this.readWithBudget(timeoutMs, target)
   }
 
-  private async readWithBudget(timeoutMs: number): Promise<UiaSnapshot | null> {
+  private async readWithBudget(timeoutMs: number, target?: TaskTarget): Promise<UiaSnapshot | null> {
     if (this.stopped || !this.wanted) return null
     this.warm()
     if (!this.ready) {
@@ -212,7 +213,7 @@ export class UiaHost {
       }, timeoutMs)
       this.pending.set(id, { resolve, timer })
       try {
-        proc.postMessage({ type: 'read', id })
+        proc.postMessage({ type: 'read', id, ...(target ? { target } : {}) })
       } catch {
         this.pending.delete(id)
         clearTimeout(timer)
