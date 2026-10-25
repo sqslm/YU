@@ -4,6 +4,7 @@ import type { BarWindowLayout, ThemeMode } from '@shared/types'
 import { BAR_HEIGHT, BAR_WIDTH, barCaptionRect } from './barLayout'
 import { openExternalSafely } from './safeLink'
 import { mt } from '@shared/mainI18n'
+import { trustWindow } from './ipc-trust'
 import {
   CARD_INITIAL_HEIGHT,
   CARD_MAX_HEIGHT,
@@ -35,6 +36,7 @@ export function createReminderWindow(_mode: ThemeMode): BrowserWindow {
     minimizable: false, maximizable: false, fullscreenable: false,
     backgroundColor: '#00000000',
     webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true } })
+  trustWindow(win)
   // Windows constrains constructor bounds to the work area; include the taskbar backdrop too.
   win.setBounds(display.bounds)
   // Show once in front, without continually stealing focus or suppressing OS shortcuts.
@@ -144,6 +146,7 @@ export function createSettingsWindow(mode: ThemeMode = 'dark'): BrowserWindow {
       spellcheck: false
     }
   })
+  trustWindow(win)
 
   win.on('ready-to-show', () => win.show())
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -195,6 +198,7 @@ export function openLoginWindow(mode: ThemeMode = 'dark'): BrowserWindow {
       spellcheck: false
     }
   })
+  trustWindow(win)
 
   win.on('ready-to-show', () => win.show())
   win.on('closed', () => {
@@ -277,6 +281,7 @@ export function createBarWindow(position: BarPlacement | null): BrowserWindow {
       backgroundThrottling: false
     }
   })
+  trustWindow(win)
 
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -491,6 +496,7 @@ export function createCardWindow(): BrowserWindow {
       spellcheck: false
     }
   })
+  trustWindow(win)
 
   // Below the bar's 'screen-saver' level but above normal app windows.
   win.setAlwaysOnTop(true, 'floating')

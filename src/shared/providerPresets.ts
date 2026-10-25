@@ -83,7 +83,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'siliconflow',
-    name: '硅基流动',
+    get name() { return mt('硅基流动') },
     kind: 'asr',
     protocol: 'openai',
     baseUrl: 'https://api.siliconflow.cn/v1',
@@ -120,7 +120,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'stepfun',
-    name: '阶跃星辰 StepFun',
+    get name() { return mt('阶跃星辰 StepFun') },
     kind: 'asr',
     protocol: 'openai',
     baseUrl: 'https://api.stepfun.com/v1',
@@ -132,7 +132,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'zhipu',
-    name: '智谱 GLM',
+    get name() { return mt('智谱 GLM') },
     kind: 'asr',
     protocol: 'openai',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
@@ -157,7 +157,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'local',
-    name: '本地服务（自建 /v1/audio/transcriptions）',
+    get name() { return mt('本地服务（自建 /v1/audio/transcriptions）') },
     kind: 'asr',
     protocol: 'openai',
     baseUrl: 'http://127.0.0.1:8000/v1',
@@ -199,7 +199,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   // 字段数量与请求形态都不相同，所以预设只声明身份与默认值，请求由适配器负责。
   {
     id: 'cohere-transcribe',
-    name: 'Cohere（转写）',
+    get name() { return mt('Cohere（转写）') },
     asrAdapter: 'cohere',
     kind: 'asr',
     protocol: 'openai',
@@ -213,7 +213,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'minimax-asr',
-    name: 'MiniMax（语音转文字）',
+    get name() { return mt('MiniMax（语音转文字）') },
     asrAdapter: 'minimax',
     kind: 'asr',
     protocol: 'openai',
@@ -305,7 +305,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'azure-openai',
-    name: 'Azure OpenAI（转写）',
+    get name() { return mt('Azure OpenAI（转写）') },
     asrAdapter: 'azure-openai',
     kind: 'asr',
     protocol: 'openai',
@@ -320,7 +320,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'aliyun-asr',
-    name: '阿里云百炼（转写）',
+    get name() { return mt('阿里云百炼（转写）') },
     asrAdapter: 'aliyun',
     kind: 'asr',
     protocol: 'openai',
@@ -333,7 +333,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'tencent-asr',
-    name: '腾讯云语音识别',
+    get name() { return mt('腾讯云语音识别') },
     asrAdapter: 'tencent',
     kind: 'asr',
     protocol: 'openai',
@@ -346,7 +346,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'iflytek',
-    name: '科大讯飞（语音听写）',
+    get name() { return mt('科大讯飞（语音听写）') },
     asrAdapter: 'xfyun',
     kind: 'asr',
     protocol: 'openai',
@@ -359,7 +359,7 @@ const ASR_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'baidu-asr',
-    name: '百度短语音识别',
+    get name() { return mt('百度短语音识别') },
     asrAdapter: 'baidu',
     kind: 'asr',
     protocol: 'openai',
@@ -400,7 +400,7 @@ const ASR_PRESETS: ProviderPreset[] = [
 const LLM_PRESETS: ProviderPreset[] = [
   {
     id: 'deepseek',
-    name: 'DeepSeek 深度求索',
+    get name() { return mt('DeepSeek 深度求索') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://api.deepseek.com',
@@ -467,7 +467,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'siliconflow',
-    name: '硅基流动 SiliconFlow',
+    get name() { return mt('硅基流动 SiliconFlow') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://api.siliconflow.cn/v1',
@@ -479,7 +479,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'moonshot',
-    name: '月之暗面 Kimi',
+    get name() { return mt('月之暗面 Kimi') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://api.moonshot.cn/v1',
@@ -491,7 +491,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'zhipu',
-    name: '智谱 BigModel',
+    get name() { return mt('智谱 BigModel') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4/',
@@ -504,7 +504,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'aliyun-dashscope',
-    name: '阿里云百炼',
+    get name() { return mt('阿里云百炼') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -517,7 +517,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'volcengine-ark',
-    name: '火山方舟',
+    get name() { return mt('火山方舟') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
@@ -529,7 +529,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'tencent-hunyuan',
-    name: '腾讯混元',
+    get name() { return mt('腾讯混元') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
@@ -541,7 +541,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'baidu-qianfan',
-    name: '百度千帆',
+    get name() { return mt('百度千帆') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://qianfan.baidubce.com/v2',
@@ -716,7 +716,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'local',
-    name: '本地部署（LM Studio / Ollama / llama.cpp）',
+    get name() { return mt('本地部署（LM Studio / Ollama / llama.cpp）') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'http://127.0.0.1:8080/v1',
@@ -751,7 +751,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'vllm',
-    name: 'vLLM（本机服务）',
+    get name() { return mt('vLLM（本机服务）') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'http://127.0.0.1:8000/v1',
@@ -775,7 +775,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'stepfun',
-    name: '阶跃星辰 StepFun',
+    get name() { return mt('阶跃星辰 StepFun') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://api.stepfun.com/v1',
@@ -788,7 +788,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'xfyun-spark',
-    name: '讯飞星火（HTTP）',
+    get name() { return mt('讯飞星火（HTTP）') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://spark-api-open.xf-yun.com/v1',
@@ -800,7 +800,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'yi',
-    name: '零一万物 Yi',
+    get name() { return mt('零一万物 Yi') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://api.lingyiwanwu.com/v1',
@@ -812,7 +812,7 @@ const LLM_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'baichuan',
-    name: '百川智能 Baichuan',
+    get name() { return mt('百川智能 Baichuan') },
     kind: 'llm',
     protocol: 'openai',
     baseUrl: 'https://api.baichuan-ai.com/v1',
@@ -827,7 +827,7 @@ const LLM_PRESETS: ProviderPreset[] = [
 const MULTIMODAL_PRESETS: ProviderPreset[] = [
   {
     id: 'google-gemini',
-    name: 'Google Gemini（多模态）',
+    get name() { return mt('Google Gemini（多模态）') },
     kind: 'multimodal',
     protocol: 'gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
@@ -866,7 +866,7 @@ export function providerLinks(preset: ProviderPreset): { website: string; docs?:
 export function customPreset(kind: ProviderKind): ProviderPreset {
   return {
     id: CUSTOM_PRESET_ID,
-    name: '自定义（自己填地址）',
+    name: mt('自定义（自己填地址）'),
     kind,
     protocol: kind === 'multimodal' ? 'gemini' : 'openai',
     baseUrl: '',

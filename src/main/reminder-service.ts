@@ -1,4 +1,5 @@
-import { Notification, ipcMain, type BrowserWindow } from 'electron'
+import { handle, subscribe } from './ipc-trust'
+import { Notification, type BrowserWindow } from 'electron'
 import type { Settings } from '@shared/types'
 import type { Reminder, ReminderAction, ReminderInput, ReminderView, TodoPriority } from '@shared/reminders'
 import type { NotesStore } from './notes'
@@ -119,21 +120,21 @@ export class ReminderService {
     this.undoId = null
   }
   registerIpc(notes: NotesStore): void {
-    ipcMain.handle('reminders:list', () => this.store.list())
-    ipcMain.handle('reminders:acknowledge-missed', (_event, id: string, dueAt: number, completed: boolean) => {
+    handle('reminders:list', () => this.store.list())
+    handle('reminders:acknowledge-missed', (_event, id: string, dueAt: number, completed: boolean) => {
       if (typeof id !== 'string' || !Number.isSafeInteger(dueAt) || typeof completed !== 'boolean') throw new Error('Invalid missed reminder action')
       this.store.acknowledgeMissed(id, dueAt, completed); this.refresh()
     })
-    ipcMain.handle('reminders:save', (_event, input: ReminderInput, id?: string) => this.save(input, id))
-    ipcMain.handle('reminders:save-many', (_event, inputs: ReminderInput[]) => {
+    handle('reminders:save', (_event, input: ReminderInput, id?: string) => this.save(input, id))
+    handle('reminders:save-many', (_event, inputs: ReminderInput[]) => {
       const rows = this.store.saveMany(inputs); this.refresh(); return rows
     })
-    ipcMain.handle('reminders:action', (_event, id: string, action: ReminderAction, snoozeMinutes?: number) => this.action(id, action, snoozeMinutes))
-    ipcMain.handle('reminders:remove', (_event, id: string) => this.remove(id))
-    ipcMain.handle('reminders:view', () => { const view = this.view; this.view = null; return view })
-    ipcMain.handle('reminders:strong', () => this.strongRows())
-    ipcMain.on('reminders:close-strong', () => this.strong?.close())
-    ipcMain.handle('reminders:extract-note', (_event, id: string) => this.extractNote(notes, id))
+    handle('reminders:action', (_event, id: string, action: ReminderAction, snoozeMinutes?: number) => this.action(id, action, snoozeMinutes))
+    handle('reminders:remove', (_event, id: string) => this.remove(id))
+    handle('reminders:view', () => { const view = this.view; this.view = null; return view })
+    handle('reminders:strong', () => this.strongRows())
+    subscribe('reminders:close-strong', () => this.strong?.close())
+    handle('reminders:extract-note', (_event, id: string) => this.extractNote(notes, id))
   }
   async extractNote(notes: NotesStore, id: string, signal?: AbortSignal): Promise<string> {
     signal?.throwIfAborted()

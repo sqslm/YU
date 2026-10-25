@@ -11,7 +11,10 @@ vi.mock('electron', () => ({
   screen: { dipToScreenRect: () => ({ x: -1920, y: 0, width: 1920, height: 1080 }), getCursorScreenPoint: () => ({ x: -100, y: 50 }), getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 } }) },
   ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => mocks.handlers.set(name, handler) },
   BrowserWindow: class extends EventEmitter {
-    webContents = Object.assign(new EventEmitter(), { mainFrame: {}, setWindowOpenHandler: vi.fn() }); destroyed = false
+    // `id` and `isDestroyed` are what the IPC trust layer reads when the window
+    // registers itself, so the fixture has to look like a real webContents.
+    id = mocks.windows.length + 100
+    webContents = Object.assign(new EventEmitter(), { id: this.id, mainFrame: {}, setWindowOpenHandler: vi.fn(), isDestroyed: () => false }); destroyed = false
     constructor(public options: unknown) { super(); mocks.windows.push(this) }
     setAlwaysOnTop = vi.fn(); loadFile = vi.fn(); loadURL = vi.fn(); show = vi.fn(); focus = vi.fn()
     isDestroyed(): boolean { return this.destroyed }
@@ -71,7 +74,10 @@ describe('explicit screenshot tool', () => {
   it('rejects screenshot and clipboard calls from any other renderer or subframe', async () => {
     await tool.open()
     expect(() => mocks.handlers.get('screenshot:frame')!({ sender: {} })).toThrow('Screenshot editor required')
-    expect(() => mocks.handlers.get('screenshot:copy-text')!({ ...event(), senderFrame: {} }, 'secret')).toThrow('Screenshot editor required')
+    // A subframe of a trusted window never reaches the handler: the IPC trust
+    // layer refuses anything whose senderFrame is not the window's mainFrame.
+    expect(() => mocks.handlers.get('screenshot:copy-text')!({ ...event(), senderFrame: {} }, 'secret')).toThrow('Blocked IPC from an untrusted renderer')
+    expect(() => mocks.handlers.get('screenshot:copy-text')!({ sender: { id: 999 }, senderFrame: null }, 'secret')).toThrow('Blocked IPC from an untrusted renderer')
     expect(mocks.copyText).not.toHaveBeenCalled()
   })
   it('copies the selected PNG and releases the editor without a model or disk write', async () => {

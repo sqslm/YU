@@ -6,10 +6,11 @@
  * settings window only — the bar and the answer card have no business repainting
  * for a file progress bar.
  */
-import { ipcMain, dialog, shell } from 'electron'
+import { dialog, shell } from 'electron'
 import type { LocalAsrMirror } from '@shared/local-asr'
 import type { LocalAsrHost } from './host'
 import { mt } from '@shared/mainI18n'
+import { handle } from '../ipc-trust'
 
 export interface LocalAsrIpcOptions {
   host: LocalAsrHost
@@ -21,30 +22,30 @@ export interface LocalAsrIpcOptions {
 export function registerLocalAsrIpc(options: LocalAsrIpcOptions): void {
   const { host, patch, log } = options
 
-  ipcMain.handle('localAsr:status', () => host.status())
+  handle('localAsr:status', () => host.status())
 
-  ipcMain.handle('localAsr:activate', async () => {
+  handle('localAsr:activate', async () => {
     const status = await host.activate()
     log(`[local-asr] activate → ${status.phase}: ${status.message}`)
     return status
   })
 
-  ipcMain.handle('localAsr:release', async () => {
+  handle('localAsr:release', async () => {
     host.release()
     return host.status()
   })
 
-  ipcMain.handle('localAsr:rescan', () => host.rescan())
+  handle('localAsr:rescan', () => host.rescan())
 
-  ipcMain.handle('localAsr:download', async (_event, mirror?: LocalAsrMirror) => {
+  handle('localAsr:download', async (_event, mirror?: LocalAsrMirror) => {
     const status = await host.download(mirror)
     log(`[local-asr] download → present=${status.present}: ${status.message}`)
     return status
   })
 
-  ipcMain.handle('localAsr:remove', () => host.remove())
+  handle('localAsr:remove', () => host.remove())
 
-  ipcMain.handle('localAsr:pickDir', async () => {
+  handle('localAsr:pickDir', async () => {
     const current = await host.status()
     const picked = await dialog.showOpenDialog({
       title: mt('选择模型所在的目录'),
@@ -56,12 +57,12 @@ export function registerLocalAsrIpc(options: LocalAsrIpcOptions): void {
     return host.rescan()
   })
 
-  ipcMain.handle('localAsr:clearDir', async () => {
+  handle('localAsr:clearDir', async () => {
     await patch({ modelDir: '' })
     return host.rescan()
   })
 
-  ipcMain.handle('localAsr:openDir', async () => {
+  handle('localAsr:openDir', async () => {
     const status = await host.status()
     if (!status.dir) return false
     await shell.openPath(status.dir)

@@ -1,15 +1,4 @@
-import {
-  app,
-  clipboard,
-  dialog,
-  ipcMain,
-  nativeTheme,
-  Notification,
-  powerMonitor,
-  protocol,
-  session,
-  shell
-} from 'electron'
+import { app, clipboard, dialog, nativeTheme, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -56,6 +45,7 @@ import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { safeFetch } from './safe-fetch'
+import { handle, subscribe } from './ipc-trust'
 import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
 import { RemindersSync } from './reminders-sync'
 import { BriefingScheduler, type BriefingState } from './briefing'
@@ -1043,24 +1033,24 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 
 function registerIpc(): void {
   screenshotTool.register()
-  ipcMain.handle('screenshot:open', () => openScreenshot())
-  ipcMain.handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
-  ipcMain.handle('assistant:navigate', (_event, page: unknown) => {
+  handle('screenshot:open', () => openScreenshot())
+  handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
+  handle('assistant:navigate', (_event, page: unknown) => {
     if (!['overview', 'history', 'notes', 'reminders', 'corrections', 'settings'].includes(page as string)) throw new Error('Invalid page')
     navigateHub(page as import('./tools/personal').HubPage)
   })
-  ipcMain.handle('app:chooseDownloadFolder', async event => {
+  handle('app:chooseDownloadFolder', async event => {
     if (event.sender !== settingsWindow?.webContents) throw new Error('Invalid settings window')
     const result = await dialog.showOpenDialog(settingsWindow!, { title: mt('选择下载目录'),
       defaultPath: store.get().assistantDownloadFolder || app.getPath('downloads'), properties: ['openDirectory'] })
     return result.canceled ? null : result.filePaths[0] ?? null
   })
-  ipcMain.handle('net:probe-search', (_event, input) => probeSearch(input))
-  ipcMain.handle('settings:capture-shortcut', (event, active: boolean) => {
+  handle('net:probe-search', (_event, input) => probeSearch(input))
+  handle('settings:capture-shortcut', (event, active: boolean) => {
     if (event.sender === settingsWindow?.webContents) hotkeys?.setCapturing(active === true)
   })
-  ipcMain.handle('settings:get', () => store.get())
-  ipcMain.handle('settings:update', async (_event, patch: Partial<Settings>) => {
+  handle('settings:get', () => store.get())
+  handle('settings:update', async (_event, patch: Partial<Settings>) => {
     const previous = store.get()
     const next = await store.update(patch)
     setMainLanguage(next.uiLanguage)
@@ -1102,7 +1092,7 @@ function registerIpc(): void {
     return next
   })
 
-  ipcMain.handle('account:status', async () => {
+  handle('account:status', async () => {
     const view = sync?.accountView() ?? null
     if (!view?.signedIn) return view
     // Storage numbers live on the server and change without this machine doing
@@ -1115,18 +1105,18 @@ function registerIpc(): void {
       return view
     }
   })
-  ipcMain.handle('account:meta', (_event, serverUrl: string) => cloud.meta(serverUrl))
-  ipcMain.handle('account:open-login', () => {
+  handle('account:meta', (_event, serverUrl: string) => cloud.meta(serverUrl))
+  handle('account:open-login', () => {
     openLoginWindow(store.get().themeMode)
     return true
   })
-  ipcMain.handle('account:close-login', () => {
+  handle('account:close-login', () => {
     closeLoginWindow()
     // No broadcast: the settings window regains focus when this closes, and its
     // account section re-reads state on `focus` — one path instead of two.
     return true
   })
-  ipcMain.handle(
+  handle(
     'account:send-code',
     async (_event, input: { serverUrl?: string; email: string; purpose?: 'register' | 'reset' }) => {
       const serverUrl = String(input?.serverUrl ?? store.get().syncServerUrl ?? '').trim()
@@ -1135,7 +1125,7 @@ function registerIpc(): void {
       return cloud.requestCode(serverUrl, input.email, input.purpose === 'reset' ? 'reset' : 'register')
     }
   )
-  ipcMain.handle(
+  handle(
     'account:reset-password',
     async (_event, input: { serverUrl?: string; email: string; code: string; password: string }) => {
       const serverUrl = String(input?.serverUrl ?? store.get().syncServerUrl ?? '').trim()
@@ -1144,7 +1134,7 @@ function registerIpc(): void {
       await cloud.resetPassword(serverUrl, input.email, input.code, input.password)
     }
   )
-  ipcMain.handle(
+  handle(
     'account:sign-in',
     async (
       _event,
@@ -1188,51 +1178,51 @@ function registerIpc(): void {
       return sync?.accountView() ?? null
     }
   )
-  ipcMain.handle('account:sign-out', async () => {
+  handle('account:sign-out', async () => {
     sync?.stop()
     await cloud.logout()
     return sync?.accountView() ?? null
   })
-  ipcMain.handle('account:refresh', async () => {
+  handle('account:refresh', async () => {
     await cloud.me()
     return sync?.accountView() ?? null
   })
   // No checkout/confirm/cancel/resume here: the self-hosted server bills nobody.
   // Plans and quotas are set by the operator, and the account card only reports
   // what the server says the account currently has.
-  ipcMain.handle('sync:status', () => sync?.status() ?? null)
-  ipcMain.handle('update:state', () => updater?.getState() ?? null)
-  ipcMain.handle('update:check', async () => {
+  handle('sync:status', () => sync?.status() ?? null)
+  handle('update:state', () => updater?.getState() ?? null)
+  handle('update:check', async () => {
     if (!updater) return null
     await updater.check()
     return updater.getState()
   })
-  ipcMain.handle('update:download', async () => {
+  handle('update:download', async () => {
     if (!updater) return { ok: false, message: mt('更新不可用') }
     const result = await updater.download()
     log(`[update] ${result.message}`)
     return result
   })
-  ipcMain.handle('update:install', () => updater?.install() ?? false)
+  handle('update:install', () => updater?.install() ?? false)
   // The last composed briefing, handed to the UI instead of recomposed there:
   // two composers would drift apart on what "today" means.
-  ipcMain.handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())
-  ipcMain.handle('briefing:refresh', async () => {
+  handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())
+  handle('briefing:refresh', async () => {
     const value = await briefingCompose()
     latestBriefing = value
     return value
   })
   // Delivery history is stored by the scheduler and used to be invisible: the page
   // could only show the latest briefing, never what was actually delivered.
-  ipcMain.handle('briefing:history', () => briefing?.status().history ?? [])
+  handle('briefing:history', () => briefing?.status().history ?? [])
   /**
    * Subscribed calendars.
    *
    * The URL check happens here rather than in the renderer: it decides whether a
    * fetch is even attempted, and only the main process may open a socket.
    */
-  ipcMain.handle('calendar:feeds', () => store.get().calendar.externalCalendars ?? [])
-  ipcMain.handle('calendar:feed-add', (_event, input: { name?: string; url?: string }) => {
+  handle('calendar:feeds', () => store.get().calendar.externalCalendars ?? [])
+  handle('calendar:feed-add', (_event, input: { name?: string; url?: string }) => {
     const url = (input?.url ?? '').trim()
     const check = checkFeedUrl(url)
     if (!check.ok) return { ok: false, error: check.reason }
@@ -1242,7 +1232,7 @@ function registerIpc(): void {
     saveFeeds(feeds)
     return { ok: true, calendar: feed }
   })
-  ipcMain.handle('calendar:feed-update', (_event, input: { id: string; patch?: Partial<ExternalCalendar> }) => {
+  handle('calendar:feed-update', (_event, input: { id: string; patch?: Partial<ExternalCalendar> }) => {
     const current = store.get().calendar.externalCalendars ?? []
     const patch = input?.patch ?? {}
     if (patch.url !== undefined) {
@@ -1252,11 +1242,11 @@ function registerIpc(): void {
     }
     return { ok: true, feeds: saveFeeds(current.map(feed => feed.id === input.id ? { ...feed, ...patch, id: feed.id } : feed)) }
   })
-  ipcMain.handle('calendar:feed-remove', (_event, id: string) => {
+  handle('calendar:feed-remove', (_event, id: string) => {
     const current = store.get().calendar.externalCalendars ?? []
     return { ok: true, feeds: saveFeeds(current.filter(feed => feed.id !== id)) }
   })
-  ipcMain.handle('calendar:feed-refresh', async () => {
+  handle('calendar:feed-refresh', async () => {
     try { return { ok: true, result: await refreshFeeds() } }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
   })
@@ -1266,22 +1256,22 @@ function registerIpc(): void {
    * These return whole lists so a click never needs a second round trip to
    * redraw the table it just changed.
    */
-  ipcMain.handle('life:events', (_event, range: CalendarRange, anchor?: { year: number; month: number }) => {
+  handle('life:events', (_event, range: CalendarRange, anchor?: { year: number; month: number }) => {
     const { from, until } = rangeFor(range, Date.now(), anchor)
     return calendar?.range(from, until) ?? []
   })
   // Paging the month view hands in a window the renderer computed from its own
   // cursor: which month the user is looking at is renderer state, not a clock.
-  ipcMain.handle('life:events-between', (_event, from: number, until: number) => {
+  handle('life:events-between', (_event, from: number, until: number) => {
     if (!Number.isFinite(from) || !Number.isFinite(until) || until <= from) return []
     return calendar?.range(from, until) ?? []
   })
-  ipcMain.handle('life:event-cancel', (_event, id: string, action: 'cancel' | 'restore') => {
+  handle('life:event-cancel', (_event, id: string, action: 'cancel' | 'restore') => {
     const changed = action === 'restore' ? calendar?.action(id, 'restore') : calendar?.action(id, 'cancel')
     if (changed) announceCalendar()
     return changed ?? null
   })
-  ipcMain.handle('life:event-save', (_event, input: CalendarEventInput, id?: string) => {
+  handle('life:event-save', (_event, input: CalendarEventInput, id?: string) => {
     if (!calendar) return null
     const saved = calendar.save(input, id)
     announceCalendar()
@@ -1289,7 +1279,7 @@ function registerIpc(): void {
   })
   // Import and export go through the main process because only it may touch the
   // file system: the renderer stays sandboxed and never sees a raw path it chose.
-  ipcMain.handle('life:ics-import', async () => {
+  handle('life:ics-import', async () => {
     if (!calendar) return null
     const target = settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined
     const options: Electron.OpenDialogOptions = {
@@ -1307,7 +1297,7 @@ function registerIpc(): void {
     announceCalendar()
     return result
   })
-  ipcMain.handle('life:ics-export', async () => {
+  handle('life:ics-export', async () => {
     if (!calendar) return null
     const target = settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined
     const options: Electron.SaveDialogOptions = {
@@ -1323,7 +1313,7 @@ function registerIpc(): void {
   // The settings page reads `{ ok, voices }` (see `@shared/api`); answering with
   // a bare array looks like a failed call and leaves the dropdown empty even
   // when the machine has voices installed.
-  ipcMain.handle('life:voices', async () => {
+  handle('life:voices', async () => {
     if (!speech) return { ok: false, error: 'speech is not ready', voices: [] as string[] }
     try {
       return { ok: true, voices: await speech.voices() }
@@ -1331,15 +1321,15 @@ function registerIpc(): void {
       return { ok: false, error: String(error), voices: [] as string[] }
     }
   })
-  ipcMain.handle('life:speak', (_event, text: string) => speech?.speak(text) ?? { spoken: 0, skipped: true })
-  ipcMain.handle('workflow:list', () => workflows?.list() ?? [])
-  ipcMain.handle('workflow:save', (_event, input: { name: string; steps: import('@shared/workflow').WorkflowStep[] }, id?: string) => {
+  handle('life:speak', (_event, text: string) => speech?.speak(text) ?? { spoken: 0, skipped: true })
+  handle('workflow:list', () => workflows?.list() ?? [])
+  handle('workflow:save', (_event, input: { name: string; steps: import('@shared/workflow').WorkflowStep[] }, id?: string) => {
     if (!workflows) return null
     const saved = workflows.save(input, id)
     announceWorkflows()
     return saved
   })
-  ipcMain.handle('workflow:manage', (_event, id: string, action: 'archive' | 'restore' | 'remove') => {
+  handle('workflow:manage', (_event, id: string, action: 'archive' | 'restore' | 'remove') => {
     if (!workflows) return null
     if (action === 'archive') workflows.archive(id)
     else if (action === 'restore') workflows.restore(id)
@@ -1347,53 +1337,53 @@ function registerIpc(): void {
     announceWorkflows()
     return workflows.list()
   })
-  ipcMain.handle('sync:now', async () => {
+  handle('sync:now', async () => {
     if (!sync) return null
     return sync.now()
   })
-  ipcMain.handle('sync:wipe-remote', async () => {
+  handle('sync:wipe-remote', async () => {
     if (!sync) return null
     await sync.wipeRemote()
     return sync.now()
   })
 
-  ipcMain.handle('history:list', (_event, query: string) => history.list(query ?? '', store.get().historyLimit))
-  ipcMain.handle('history:export-text', (_event, ids, format) => exportHistory(history, ids, format))
-  ipcMain.handle('history:latest', () => history.latest())
-  ipcMain.handle('history:remove', (_event, id: string) => history.remove(id))
-  ipcMain.handle('history:archive', (_event, id: string, archived?: boolean) =>
+  handle('history:list', (_event, query: string) => history.list(query ?? '', store.get().historyLimit))
+  handle('history:export-text', (_event, ids, format) => exportHistory(history, ids, format))
+  handle('history:latest', () => history.latest())
+  handle('history:remove', (_event, id: string) => history.remove(id))
+  handle('history:archive', (_event, id: string, archived?: boolean) =>
     history.archive(id, archived !== false)
   )
-  ipcMain.handle('history:clear', () => history.clear())
-  ipcMain.handle('history:clear-abnormal', () => history.clearAbnormal())
-  ipcMain.handle('history:downloadAudio', (_event, id: string) => history.downloadAudio(id))
+  handle('history:clear', () => history.clear())
+  handle('history:clear-abnormal', () => history.clearAbnormal())
+  handle('history:downloadAudio', (_event, id: string) => history.downloadAudio(id))
   // Lifetime counters for 概览. Read-only: the pipeline is the only writer.
-  ipcMain.handle('stats:get', () => {
+  handle('stats:get', () => {
     const session = accounts.get()
     return stats.get(session && store.get().syncEnabled ? statsAccountKey(session.serverUrl, session.userId) : '')
   })
-  ipcMain.handle('history:feedback', (_event, input: { id?: string; text: string }) =>
+  handle('history:feedback', (_event, input: { id?: string; text: string }) =>
     appendFeedback(input)
   )
 
-  ipcMain.handle('pipeline:pasteLast', async () => (pipeline ? pipeline.pasteLast() : false))
-  ipcMain.handle('pipeline:state', () => (pipeline?.isRecording ? 'recording' : 'idle'))
-  ipcMain.on('notes:recording', (event, active: boolean) => {
+  handle('pipeline:pasteLast', async () => (pipeline ? pipeline.pasteLast() : false))
+  handle('pipeline:state', () => (pipeline?.isRecording ? 'recording' : 'idle'))
+  subscribe('notes:recording', (event, active: boolean) => {
     if (event.sender !== settingsWindow?.webContents) return
     notesRecording = active === true
     refreshHotkeyActivity()
   })
-  ipcMain.handle('pipeline:retry', async (_event, id?: string) =>
+  handle('pipeline:retry', async (_event, id?: string) =>
     pipeline ? pipeline.retry(id) : { ok: false, message: mt('尚未就绪') }
   )
 
-  ipcMain.handle('app:openDataFolder', async () => {
+  handle('app:openDataFolder', async () => {
     await shell.openPath(app.getPath('userData'))
   })
   const resources = (): ReturnType<typeof collectResources> =>
     collectResources(app.getAppMetrics(), localAsr.memoryState())
-  ipcMain.handle('app:resources', resources)
-  ipcMain.handle('app:releaseResources', async () => {
+  handle('app:resources', resources)
+  handle('app:releaseResources', async () => {
     if (pipeline?.isBusy || localAsr.inUse) throw new Error(mt('录音或识别进行中，请结束后再释放资源'))
     localAsr.reclaim()
     uia.reclaim()
@@ -1412,27 +1402,27 @@ function registerIpc(): void {
    * bug report; `list`/`read` back the "最近几次听写" panel; `clear` is the
    * privacy exit that app.log never had.
    */
-  ipcMain.handle('recording:open', async (): Promise<boolean> => {
+  handle('recording:open', async (): Promise<boolean> => {
     const dir = recordingLog.directory()
     if (!dir) return false
     return (await shell.openPath(dir)) === ''
   })
-  ipcMain.handle('recording:list', () => recordingLog.list())
-  ipcMain.handle('recording:read', (_event, id: unknown) =>
+  handle('recording:list', () => recordingLog.list())
+  handle('recording:read', (_event, id: unknown) =>
     typeof id === 'string' ? recordingLog.read(id) : null
   )
-  ipcMain.handle('recording:clear', () => recordingLog.clear())
-  ipcMain.handle('app:openSettings', () => {
+  handle('recording:clear', () => recordingLog.clear())
+  handle('app:openSettings', () => {
     ensureSettingsWindow()
   })
 
   // Renderers live on file:// and get no clipboard permission from Chromium, so
   // every "复制" button routes through here instead of navigator.clipboard.
-  ipcMain.handle('app:copyText', (_event, text: unknown) => {
+  handle('app:copyText', (_event, text: unknown) => {
     if (typeof text === 'string' && text) clipboard.writeText(text)
   })
 
-  ipcMain.handle('app:version', (): string => app.getVersion())
+  handle('app:version', (): string => app.getVersion())
 
   /**
    * The hub dims its own page behind a dialog, but the native window buttons sit
@@ -1440,7 +1430,7 @@ function registerIpc(): void {
    * take the theme's dimmed glyph colour so they stop being the brightest thing
    * on a black window.
    */
-  ipcMain.handle('app:chromeDim', (_event, dimmed: unknown) => {
+  handle('app:chromeDim', (_event, dimmed: unknown) => {
     chromeDimmed = dimmed === true
     if (!settingsWindow || settingsWindow.isDestroyed()) return
     applyHubTheme(settingsWindow, store.get().themeMode, chromeDimmed)
@@ -1452,7 +1442,7 @@ function registerIpc(): void {
    * it in Explorer. The devices come from the caller because only a renderer can
    * enumerate them (Chromium owns the permission prompt).
    */
-  ipcMain.handle('app:diagnostics', async (_event, devices: unknown) => {
+  handle('app:diagnostics', async (_event, devices: unknown) => {
     try {
       const settings = store.get()
       const list = Array.isArray(devices)
@@ -1486,14 +1476,14 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle('media:devices', (): MediaDeviceSummary[] => micDevices)
+  handle('media:devices', (): MediaDeviceSummary[] => micDevices)
 
   /**
    * Saves the share card the hub rendered. The renderer owns the canvas (it has
    * the fonts and the theme), the main process owns the file, and the dialog
    * makes the destination the user's choice rather than a silent drop.
    */
-  ipcMain.handle(
+  handle(
     'app:saveImage',
     async (
       _event,
@@ -1532,7 +1522,7 @@ function registerIpc(): void {
   // Window routing evidence for the settings page: every visible window plus
   // what the classifier would pick for it right now. Classified in the main
   // process because only it can read the window stack.
-  ipcMain.handle('windows:list', () => {
+  handle('windows:list', () => {
     const current = store.get()
     return listRoutedWindows({
       autoActivatePrompts: current.autoActivatePrompts,
@@ -1543,7 +1533,7 @@ function registerIpc(): void {
 
   // One-click model list. A failed fetch returns the cached list with
   // `cached: true` + `error`, so the settings UI can keep the user's choice.
-  ipcMain.handle(
+  handle(
     'models:list',
     async (
       _event,
@@ -1551,7 +1541,7 @@ function registerIpc(): void {
     ): Promise<ModelListResult> => listModels(input)
   )
 
-  ipcMain.handle(
+  handle(
     'net:probe',
     async (
       _event,
@@ -1580,7 +1570,7 @@ function registerIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handle(
     'net:probeMultimodal',
     async (
       _event,
@@ -1620,19 +1610,19 @@ function registerIpc(): void {
   )
 
   // --- bar window <-> pipeline --------------------------------------------
-  ipcMain.on('audio:chunk', (_event, payload: Int16Array) => {
+  subscribe('audio:chunk', (_event, payload: Int16Array) => {
     if (!payload) return
     const copy = payload instanceof Int16Array ? payload.slice() : Int16Array.from(payload as number[])
     pipeline?.pushAudio(copy)
   })
-  ipcMain.on('capture:encoded', (_event, payload: Uint8Array, contentType: string) => {
+  subscribe('capture:encoded', (_event, payload: Uint8Array, contentType: string) => {
     if (!payload) return
     const bytes =
       payload instanceof Uint8Array ? new Uint8Array(payload) : new Uint8Array(payload as ArrayBuffer)
     pipeline?.pushEncoded(bytes, typeof contentType === 'string' ? contentType : '')
   })
-  ipcMain.on('capture:stopped', () => pipeline?.audioStopped())
-  ipcMain.on('capture:error', (_event, message: string) => {
+  subscribe('capture:stopped', () => pipeline?.audioStopped())
+  subscribe('capture:error', (_event, message: string) => {
     const text = String(message ?? '')
     if (!pipeline) {
       // Before the pipeline exists there is nothing to alert or record against,
@@ -1647,13 +1637,13 @@ function registerIpc(): void {
     void pipeline.reportCaptureError(text, classified.kind)
     pipeline.showAlert(buildBarAlert(classified))
   })
-  ipcMain.on('bar:log', (_event, message: string) => log(`[bar] ${message}`))
+  subscribe('bar:log', (_event, message: string) => log(`[bar] ${message}`))
   // --- answer card --------------------------------------------------------
   // The card's close button / ESC path asks the main process to hide it, so
   // the window object stays warm for the next answer.
-  ipcMain.on('card:hide', () => hideCard())
+  subscribe('card:hide', () => hideCard())
   // Card buttons: copy / replace selection / follow-up question.
-  ipcMain.on('card:action', (event, action: CardAction) => {
+  subscribe('card:action', (event, action: CardAction) => {
     if (event.sender !== cardWindow?.webContents || event.senderFrame !== cardWindow.webContents.mainFrame) return
     if (!action || typeof action.id !== 'string') return
     void handleCardAction(action).catch(error => {
@@ -1663,35 +1653,35 @@ function registerIpc(): void {
     })
   })
   // The card reports its rendered height so the window fits a long answer.
-  ipcMain.on('card:ready', (event) => {
+  subscribe('card:ready', (event) => {
     if (event.sender !== cardWindow?.webContents) return
     cardReady = true
     const payload = pendingCard
     pendingCard = null
     if (payload) showAnswerCard(payload)
   })
-  ipcMain.on('card:height', (_event, height: number) => {
+  subscribe('card:height', (_event, height: number) => {
     if (typeof height !== 'number' || !Number.isFinite(height)) return
     if (cardWindow && !cardWindow.isDestroyed()) resizeCardToContent(cardWindow, height)
   })
   // Device labels are only readable from a renderer that holds microphone
   // access, so the bar reports them and the settings window reads the cache.
-  ipcMain.on('bar:devices', (_event, devices: MediaDeviceSummary[]) => {
+  subscribe('bar:devices', (_event, devices: MediaDeviceSummary[]) => {
     micDevices = Array.isArray(devices) ? devices : []
     log(`[media] ${micDevices.length} input device(s): ${micDevices.map((d) => d.label).join(' | ')}`)
   })
 
   // The pill is click-through unless an alert with buttons is showing; the
   // renderer decides per state, main just applies it (REQ-01).
-  ipcMain.on('bar:interactive', (_event, interactive: boolean) => {
+  subscribe('bar:interactive', (_event, interactive: boolean) => {
     setBarInteractive(interactive === true)
   })
-  ipcMain.on('bar:caption-visible', (event, visible: boolean) => {
+  subscribe('bar:caption-visible', (event, visible: boolean) => {
     if (event.sender !== barWindow?.webContents) return
     setBarCaptionVisible(visible === true)
   })
 
-  ipcMain.on('bar:action', (_event, id: BarActionId) => {
+  subscribe('bar:action', (_event, id: BarActionId) => {
     handleBarAction(id)
   })
 }
@@ -1970,19 +1960,19 @@ async function bootstrap(): Promise<void> {
   powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); reminders?.refresh() })
 
   registerIpc()
-  ipcMain.handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
-  ipcMain.handle('wake:status', () => wakeWord.snapshot())
+  handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
+  handle('wake:status', () => wakeWord.snapshot())
   // Enumerating inputs cold-starts PowerShell and compiles Add-Type (~1s), and the
   // settings page asks again on every open, so a short cache keeps the dropdown
   // instant without hiding a device the user just plugged in.
   let wakeDevices: { at: number; items: Array<{ id: string; name: string }> } | null = null
-  ipcMain.handle('wake:devices', async () => {
+  handle('wake:devices', async () => {
     if (wakeDevices && Date.now() - wakeDevices.at < 15_000) return wakeDevices.items
     const items = await wakeWord.listDevices()
     wakeDevices = { at: Date.now(), items }
     return items
   })
-  ipcMain.handle('wake:retry', () => { refreshWakeWord(undefined, true); return wakeWord.snapshot() })
+  handle('wake:retry', () => { refreshWakeWord(undefined, true); return wakeWord.snapshot() })
   refreshWakeWord()
   reminders.registerIpc(notes)
   reminders.start()

@@ -1,4 +1,4 @@
-import { clipboard, dialog, ipcMain, protocol } from 'electron'
+import { clipboard, dialog, protocol } from 'electron'
 import { open } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
@@ -6,6 +6,7 @@ import type { NotesStore } from './notes'
 import { mt } from '@shared/mainI18n'
 import { exportNoteAudio, exportNoteText } from './notes-export'
 import { decodeRecording } from './audio/decode'
+import { handle as ipcHandle } from './ipc-trust'
 
 /**
  * Notes are the one place where the renderer has to read a file from disk.
@@ -66,8 +67,8 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
   const { store, persistDir, broadcast } = options
   let audioJob: AbortController | null = null
 
-  ipcMain.handle('notes:cancelAudioJob', () => audioJob?.abort())
-  ipcMain.handle('notes:importAudio', async (_event, categoryId?: string) => {
+  ipcHandle('notes:cancelAudioJob', () => audioJob?.abort())
+  ipcHandle('notes:importAudio', async (_event, categoryId?: string) => {
     if (audioJob) throw new Error(mt('已有录音正在处理'))
     const job = new AbortController()
     audioJob = job
@@ -84,7 +85,7 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
       throw error
     } finally { if (audioJob === job) audioJob = null }
   })
-  ipcMain.handle('notes:retranscribe', async (_event, id: string) => {
+  ipcHandle('notes:retranscribe', async (_event, id: string) => {
     if (audioJob) throw new Error(mt('已有录音正在处理'))
     const job = new AbortController()
     audioJob = job
@@ -111,10 +112,10 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     }
   })
 
-  ipcMain.handle('notes:list', () => store.list())
-  ipcMain.handle('notes:exportText', (_event, ids: string[], format: NoteExportFormat) => exportNoteText(store, ids, format))
-  ipcMain.handle('notes:exportAudio', (_event, id: string) => exportNoteAudio(store, id))
-  ipcMain.handle('notes:createText', async (_event, input?: { categoryId?: string; fromClipboard?: boolean; text?: string }) => {
+  ipcHandle('notes:list', () => store.list())
+  ipcHandle('notes:exportText', (_event, ids: string[], format: NoteExportFormat) => exportNoteText(store, ids, format))
+  ipcHandle('notes:exportAudio', (_event, id: string) => exportNoteAudio(store, id))
+  ipcHandle('notes:createText', async (_event, input?: { categoryId?: string; fromClipboard?: boolean; text?: string }) => {
     const fromClipboard = input?.fromClipboard === true
     const text = fromClipboard ? clipboard.readText() : input?.text ?? ''
     if (fromClipboard && !text.trim()) throw new Error(mt('剪贴板中没有可用的文字'))
@@ -123,7 +124,7 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     return note
   })
 
-  ipcMain.handle(
+  ipcHandle(
     'notes:create',
     async (
       _event,
@@ -140,44 +141,44 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     }
   )
 
-  ipcMain.handle('notes:update', async (_event, id: string, patch: NotePatch) => {
+  ipcHandle('notes:update', async (_event, id: string, patch: NotePatch) => {
     const note = await store.update(id, patch ?? {})
     broadcast()
     return note
   })
 
-  ipcMain.handle('notes:remove', async (_event, id: string) => {
+  ipcHandle('notes:remove', async (_event, id: string) => {
     await store.remove(id)
     broadcast()
   })
 
   /** Batch operations from the notes sidebar: delete, set category, add tag. */
-  ipcMain.handle('notes:applyBulk', async (_event, ids: string[], bulk: NoteBulk) => {
+  ipcHandle('notes:applyBulk', async (_event, ids: string[], bulk: NoteBulk) => {
     const result = await store.applyBulk(Array.isArray(ids) ? ids : [], bulk ?? {})
     if (result.changed > 0) broadcast()
     return result
   })
 
-  ipcMain.handle('notes:repolish', async (_event, id: string) => {
+  ipcHandle('notes:repolish', async (_event, id: string) => {
     const note = await store.repolish(id)
     broadcast()
     return note
   })
 
-  ipcMain.handle('notes:setCategories', async (_event, categories: NoteCategory[]) => {
+  ipcHandle('notes:setCategories', async (_event, categories: NoteCategory[]) => {
     const next = await store.setCategories(Array.isArray(categories) ? categories : [])
     broadcast()
     return next
   })
 
-  ipcMain.handle('notes:audioUrl', (_event, id: string) => {
+  ipcHandle('notes:audioUrl', (_event, id: string) => {
     if (!id || !store.audioPathOf(id)) return null
     return `${NOTES_AUDIO_SCHEME}://note/${encodeURIComponent(id)}`
   })
 
-  ipcMain.handle('notes:dataDir', () => store.dataDir())
+  ipcHandle('notes:dataDir', () => store.dataDir())
 
-  ipcMain.handle('notes:chooseDataDir', async () => {
+  ipcHandle('notes:chooseDataDir', async () => {
     const result = await dialog.showOpenDialog({
       title: mt('选择随记数据目录'),
       defaultPath: store.dataDir().dir,
@@ -189,7 +190,7 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     return { ok: true, dir: result.filePaths[0] }
   })
 
-  ipcMain.handle('notes:migrate', async (_event, target: string) => {
+  ipcHandle('notes:migrate', async (_event, target: string) => {
     const result = await store.migrate(target ?? '')
     // Only a verified move may change the pointer: a half-copied target that
     // still had the old root would look to the user like deleted notes.

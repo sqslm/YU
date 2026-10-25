@@ -1,10 +1,11 @@
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, screen } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, nativeImage, screen } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Settings } from '@shared/types'
 import type { ScreenshotAction, ScreenshotFrame, ScreenshotResult } from '@shared/screenshot'
 import { captureWindowRegions } from '@shared/screenshot'
 import { mt } from '@shared/mainI18n'
+import { handle, trustWindow } from './ipc-trust'
 import { chainFor, withFailover } from './providers/chain'
 import { complete } from './providers/llm'
 import { generateFromImage } from './providers/gemini'
@@ -27,15 +28,15 @@ export class ScreenshotTool {
     const owned = (event: Electron.IpcMainInvokeEvent): void => {
       if (!this.win || event.sender !== this.win.webContents || event.senderFrame !== this.win.webContents.mainFrame) throw new Error('Screenshot editor required')
     }
-    ipcMain.handle('screenshot:frame', event => { owned(event); return this.frame })
-    ipcMain.handle('screenshot:ready', event => { owned(event); this.win!.show(); this.win!.focus() })
-    ipcMain.handle('screenshot:close', event => { owned(event); this.close() })
-    ipcMain.handle('screenshot:copy-text', (event, text: string) => {
+    handle('screenshot:frame', event => { owned(event); return this.frame })
+    handle('screenshot:ready', event => { owned(event); this.win!.show(); this.win!.focus() })
+    handle('screenshot:close', event => { owned(event); this.close() })
+    handle('screenshot:copy-text', (event, text: string) => {
       owned(event)
       if (typeof text !== 'string' || text.length > 100_000) throw new Error('Invalid text')
       clipboard.writeText(text)
     })
-    ipcMain.handle('screenshot:run', async (event, action: ScreenshotAction, image: string, question?: string, target?: string, ocrLanguage?: string) => {
+    handle('screenshot:run', async (event, action: ScreenshotAction, image: string, question?: string, target?: string, ocrLanguage?: string) => {
       owned(event)
       return this.run(action, image, question, target, ocrLanguage)
     })
@@ -74,6 +75,7 @@ export class ScreenshotTool {
         show: false, alwaysOnTop: true, backgroundColor: '#181818', title: mt('截图'), icon: join(app.getAppPath(), 'resources/icon.png'),
         webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false } })
       this.win = win
+      trustWindow(win)
       win.setAlwaysOnTop(true, 'screen-saver')
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
       win.webContents.on('render-process-gone', () => { if (this.win === win) this.close() })

@@ -8,7 +8,9 @@ import { CalendarStore } from './calendar'
 import {
   CalendarSync,
   DEFAULT_ICS_TIMEOUT_MS,
+  FeedTooLargeError,
   checkFeedUrl,
+  readCappedText,
   refreshExternalCalendars,
   resolveFeedUrl,
   type CalendarPage,
@@ -16,7 +18,8 @@ import {
   type CalendarRemote,
   type CalendarSyncStore,
   type ExternalCalendar,
-  type IcsFetch
+  type IcsFetch,
+  type IcsResponse
 } from './calendar-sync'
 
 /**
@@ -57,6 +60,39 @@ function feed(over: Partial<ExternalCalendar> = {}): ExternalCalendar {
 
 function okFeed(body: string): IcsFetch {
   return async () => ({ ok: true, status: 200, text: async () => body })
+}
+
+/**
+ * A body that arrives in pieces, like a real socket, and reports what was asked
+ * of it: `pulls` counts reads, `onCancel` fires when the reader gives up early.
+ */
+function chunkStream(
+  chunks: Uint8Array[],
+  onCancel?: () => void
+): { stream: ReadableStream<Uint8Array>; pulls: () => number } {
+  let pulls = 0
+  let index = 0
+  // `highWaterMark: 0` so the stream does not fill its internal queue on its own:
+  // then `pulls` counts what a reader actually asked for, not eager prefetching.
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        pulls += 1
+        const chunk = chunks[index]
+        index += 1
+        if (!chunk) {
+          controller.close()
+          return
+        }
+        controller.enqueue(chunk)
+      },
+      cancel() {
+        onCancel?.()
+      }
+    },
+    { highWaterMark: 0 }
+  )
+  return { stream, pulls: () => pulls }
 }
 
 function makeEvent(over: Partial<CalendarEvent> = {}): CalendarEvent {
@@ -182,6 +218,83 @@ describe('订阅地址校验', () => {
   })
 })
 
+describe('响应体读取上限', () => {
+  it('content-length 超过上限时直接拒绝，响应体一次也不读', async () => {
+    let textCalls = 0
+    let cancels = 0
+    const { stream, pulls } = chunkStream([new Uint8Array([0x61])], () => {
+      cancels += 1
+    })
+    const response: IcsResponse = {
+      ok: true,
+      status: 200,
+      headers: { get: (name) => (name.toLowerCase() === 'content-length' ? '900000000' : null) },
+      body: stream,
+      text: async () => {
+        textCalls += 1
+        return 'a'
+      }
+    }
+
+    await expect(readCappedText(response, 1024)).rejects.toBeInstanceOf(FeedTooLargeError)
+    // The whole point: the ceiling is checked before a single byte is buffered.
+    expect(pulls()).toBe(0)
+    expect(cancels).toBe(0)
+    expect(textCalls).toBe(0)
+  })
+
+  it('流式读取越过上限时取消读取器，不再继续累积', async () => {
+    let cancels = 0
+    const chunks = Array.from({ length: 5 }, () => new Uint8Array(8).fill(0x61))
+    const { stream, pulls } = chunkStream(chunks, () => {
+      cancels += 1
+    })
+    const response: IcsResponse = { ok: true, status: 200, text: async () => '', body: stream }
+
+    const error = await readCappedText(response, 10).catch((err: unknown) => err)
+    expect(error).toBeInstanceOf(FeedTooLargeError)
+    expect((error as FeedTooLargeError).name).toBe('FeedTooLargeError')
+    expect(cancels).toBe(1)
+    // Stopped at the chunk that crossed the line instead of draining the feed.
+    expect(pulls()).toBeLessThan(chunks.length)
+  })
+
+  it('正常的小响应体逐块解码', async () => {
+    let textCalls = 0
+    const { stream } = chunkStream([Buffer.from('BEGIN:VCALENDAR\r\n'), Buffer.from('END:VCALENDAR')])
+    const response: IcsResponse = {
+      ok: true,
+      status: 200,
+      text: async () => {
+        textCalls += 1
+        return 'unused'
+      },
+      body: stream
+    }
+
+    expect(await readCappedText(response, 1024)).toBe('BEGIN:VCALENDAR\r\nEND:VCALENDAR')
+    expect(textCalls).toBe(0)
+  })
+
+  it('多字节字符被切在两个块之间也能正确解码', async () => {
+    const bytes = Buffer.from('会议日程确认', 'utf8')
+    // 会 is three bytes, so a cut at 4 lands inside 议: exactly the boundary the
+    // streaming decoder has to survive.
+    const { stream } = chunkStream([bytes.subarray(0, 4), bytes.subarray(4)])
+    const response: IcsResponse = { ok: true, status: 200, text: async () => '', body: stream }
+
+    expect(await readCappedText(response, 1024)).toBe('会议日程确认')
+  })
+
+  it('没有可读流时退回 text()，大小照样检查', async () => {
+    const small: IcsResponse = { ok: true, status: 200, text: async () => 'BEGIN:VCALENDAR' }
+    expect(await readCappedText(small, 1024)).toBe('BEGIN:VCALENDAR')
+
+    const big: IcsResponse = { ok: true, status: 200, body: null, text: async () => 'a'.repeat(64) }
+    await expect(readCappedText(big, 10)).rejects.toBeInstanceOf(FeedTooLargeError)
+  })
+})
+
 describe('外部日历订阅', () => {
   it('拉取后按 uid 合并，重复拉取只更新不新增', async () => {
     const store = new CalendarStore(join(tempDir(), 'calendar.json'))
@@ -295,6 +408,28 @@ describe('外部日历订阅', () => {
     })
     expect(result.failed).toBe(1)
     expect(lines.join('\n')).toContain('500')
+  })
+
+  it('订阅体超过上限时记「文件过大」并算一次失败', async () => {
+    const store = new CalendarStore(join(tempDir(), 'calendar.json'))
+    const lines: string[] = []
+    const result = await refreshExternalCalendars({
+      getCalendars: () => [feed()],
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        // Over 5 MB announced: the body must never be read at all.
+        headers: { get: () => '6291456' },
+        text: async () => {
+          throw new Error('不该读响应体')
+        }
+      }),
+      store,
+      log: (line) => lines.push(line)
+    })
+    expect(result).toEqual({ feeds: 1, added: 0, updated: 0, failed: 1 })
+    expect(lines.join('\n')).toContain('文件过大')
+    expect(store.list()).toHaveLength(0)
   })
 
   it('一个订阅坏掉不影响另一个', async () => {

@@ -46,6 +46,92 @@ export interface IcsResponse {
   ok: boolean
   status: number
   text(): Promise<string>
+  /**
+   * Both optional so a fake that only answers `text()` stays valid: the cap can
+   * then only be checked on the finished string, which is the old behaviour.
+   */
+  headers?: { get(name: string): string | null }
+  body?: ReadableStream<Uint8Array> | null
+}
+
+/**
+ * The feed announced or streamed more than the ceiling allows.
+ *
+ * A distinct type because `refreshOne` owes the user a different sentence for
+ * this case: "file too large" is something they can act on, while a generic
+ * transport error is not. `name` is set as well so the check still works when
+ * only an error's shape survives a transport or a bundle boundary.
+ */
+export class FeedTooLargeError extends Error {
+  constructor(readonly limit: number) {
+    super(`feed exceeds ${limit} bytes`)
+    this.name = 'FeedTooLargeError'
+  }
+}
+
+function isFeedTooLarge(err: unknown): boolean {
+  return err instanceof FeedTooLargeError || (err instanceof Error && err.name === 'FeedTooLargeError')
+}
+
+/**
+ * Reads a feed body without ever holding more than `limit` bytes of it.
+ *
+ * `response.text()` is not a guard: it resolves only once the whole body is in
+ * memory, so a feed that streams a gigabyte is already a gigabyte of string by
+ * the time its length can be checked. The ceiling is therefore applied at every
+ * stage available — the announced length, then the running byte count while
+ * reading, then (only when there is no stream to cap) the finished string.
+ *
+ * One chunk may push the total past `limit` before it is noticed; that is what
+ * "limit plus one chunk" means, and the chunk is dropped, not accumulated.
+ */
+export async function readCappedText(response: IcsResponse, limit: number): Promise<string> {
+  const announced = response.headers?.get('content-length')
+  if (announced) {
+    const bytes = Number(announced)
+    // An unparseable header says nothing about the size; the stream check below
+    // still holds the line.
+    if (Number.isFinite(bytes) && bytes > limit) throw new FeedTooLargeError(limit)
+  }
+  const body = response.body
+  if (!body) {
+    // Test stubs, or a transport that already decoded: there is no stream left to
+    // stop, so the decoded size is all we can inspect.
+    const text = await response.text()
+    if (Buffer.byteLength(text, 'utf8') > limit) throw new FeedTooLargeError(limit)
+    return text
+  }
+  const reader = body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let received = 0
+  let text = ''
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      received += value.byteLength
+      if (received > limit) {
+        // Cancel before rejecting: the socket is the only thing still growing,
+        // and nobody is going to drain it.
+        await reader.cancel().catch(() => {})
+        throw new FeedTooLargeError(limit)
+      }
+      // `stream: true` keeps a character split across two chunks intact instead
+      // of decoding each chunk as if it ended on a boundary.
+      text += decoder.decode(value, { stream: true })
+    }
+    text += decoder.decode()
+    return text
+  } finally {
+    // The lock is what keeps the transport from closing the body; a cancelled
+    // read in particular leaves it held unless it is released.
+    try {
+      reader.releaseLock()
+    } catch {
+      /* some implementations release it in cancel(); nothing left to do */
+    }
+  }
 }
 
 /** Only the slice of `fetch` this module needs, so a test can hand in a fake. */
@@ -121,10 +207,10 @@ export function checkFeedUrl(raw: string): { ok: true; url: string } | { ok: fal
 /**
  * The transport used when the caller injected none.
  *
- * Only `ok`, `status` and `text()` are consumed here, so `safeFetch`'s real
- * `Response` already satisfies `IcsResponse` — no wrapper and no cast. A URL the
- * guard refuses throws, and `refreshOne` turns that into one log line like any
- * other failure.
+ * Only `ok`, `status`, `headers.get`, `body` and `text()` are consumed here, all
+ * of which `safeFetch`'s real `Response` provides — no wrapper and no cast. A URL
+ * the guard refuses throws, and `refreshOne` turns that into one log line like
+ * any other failure.
  */
 const defaultFeedFetch: IcsFetch = async (url, init) => safeFetch(url, init)
 
@@ -189,11 +275,13 @@ async function refreshOne(
       options.log(mt('订阅日历 {{name}} 拉取失败：HTTP {{status}}', { name: label, status: response.status }))
       return null
     }
-    const text = await withTimeout(response.text(), timeoutMs, () => controller.abort())
-    if (text.length > MAX_ICS_BYTES) {
-      options.log(mt('订阅日历 {{name}} 拉取失败：文件过大', { name: label }))
-      return null
-    }
+    // The cap is enforced inside the read, not after it: `response.text()` would
+    // have already buffered the whole body by the time its length could be seen.
+    const text = await withTimeout(
+      readCappedText(response, MAX_ICS_BYTES),
+      timeoutMs,
+      () => controller.abort()
+    )
     const merged = options.store.importIcs(text)
     options.onFetched?.(calendar.id, (options.now ?? Date.now)())
     options.log(mt('订阅日历 {{name}} 已更新：新增 {{added}} 条，更新 {{updated}} 条', {
@@ -203,6 +291,10 @@ async function refreshOne(
     }))
     return merged
   } catch (err) {
+    if (isFeedTooLarge(err)) {
+      options.log(mt('订阅日历 {{name}} 拉取失败：文件过大', { name: label }))
+      return null
+    }
     options.log(mt('订阅日历 {{name}} 拉取失败：{{reason}}', { name: label, reason: describe(err) }))
     return null
   }

@@ -142,6 +142,7 @@ The server only handles accounts and sync (history, notes, note audio, events, r
 - Calendar subscription addresses stay in the local `settings.json`; a failed fetch writes a log line and nothing else.
 - Local body search runs only inside the folder you name, skipping `node_modules`, `.git` and system directories, and caches results in memory by path + mtime + size — nothing is written to disk.
 - Exported diagnostics redact credentials, URLs, e-mail addresses, private-network addresses and local paths.
+- Every IPC call from a renderer passes a trust check: only a `webContents` this app created, calling from that window's main frame (never an embedded iframe), is accepted.
 
 ## Architecture
 
@@ -221,7 +222,7 @@ This project is an independent implementation. It contains no third-party client
 
 Release candidate (`1.0.0-rc.6`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
-**Not implemented** (don't read these as available): direct Google / Outlook OAuth (subscriptions are read-only ICS today), per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
+**Not implemented** (don't read these as available): per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
 Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integration paths, and end-to-end runs use the fake backend. The [roadmap](ASSISTANT_ROADMAP.md) records the 81-item field comparison from 0.35.0 and what remained unresolved. A real microphone, physical hotkeys, overwrite installs, how Windows toasts actually look, and the real quotas of vendor accounts still have to be verified by you; the [API audit](PROVIDER_API_AUDIT.md) marks which endpoints were never confirmed with a real account.
 

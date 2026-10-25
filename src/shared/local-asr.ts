@@ -74,7 +74,7 @@ export const LOCAL_MODELS: readonly LocalModel[] = [
   },
   {
     id: 'paraformer-zh',
-    name: 'Paraformer 中文',
+    get name() { return mt('Paraformer 中文') },
     folder: 'Paraformer-ZH',
     get hint() { return mt('只做中文，但同样精度下更快、内存更省') },
     languages: ['zh', 'auto'],
