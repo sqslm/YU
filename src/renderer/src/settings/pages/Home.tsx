@@ -3,7 +3,7 @@ import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material'
 import type { HistoryEntry, Settings } from '@shared/types'
 import { emptyStats, type StatsFile } from '@shared/stats'
 import { palettes, type Tokens } from '../theme'
-import { IconBook, IconChart, IconClock, IconCopy, IconMic, IconSparkles } from '../icons'
+import { IconBook, IconChart, IconClock, IconMic, IconSparkles } from '../icons'
 import {
   WEEKDAY,
   bucketFromStats,
@@ -21,7 +21,6 @@ import { PRIORITY_LABELS, isOverdue, sortTodos, type Reminder } from '@shared/re
 import { buildShareCard, drawShareCard, shareCardFileName } from './shareCard'
 import { AppShareDialog } from './AppShareDialog'
 import { appColor, piePercentages } from './pie'
-import { recentChipText } from './recentChip'
 import i18n, { currentUiLanguage } from '../../i18n'
 
 interface HomeProps {
@@ -77,7 +76,6 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
   const [stats, setStats] = useState<StatsFile>(NO_STATS)
   const [range, setRange] = useState<Range>(7)
   const [metric, setMetric] = useState<Metric>('count')
-  const [copied, setCopied] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
   const [shareHint, setShareHint] = useState<string | null>(null)
   /** Per-app breakdown dialog; its open state is independent of `hover`. */
@@ -262,17 +260,9 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
     }
   }, [heat, insights, sharing, t])
 
-  const recent = useMemo(() => entries.slice(0, 6), [entries])
 
   // The renderer runs on file://, which has no clipboard permission — the copy
   // has to go through the main process (same path the history page uses).
-  const copy = async (text: string, id: string): Promise<void> => {
-    if (!text) return
-    await window.api.app.copyText(text)
-    setCopied(id)
-    window.setTimeout(() => setCopied(null), 1200)
-  }
-
   const card = {
     bgcolor: t.surface,
     border: `1px solid ${t.line}`,
@@ -363,8 +353,11 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
         sx={{
           flex: 1,
           minHeight: 250,
+          // One column now that the recent takes are gone: the chart keeps the
+          // whole width, which is what its bars want, and history lives on its
+          // own page where it can be searched.
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.12fr) minmax(0, 1fr)',
+          gridTemplateColumns: 'minmax(0, 1fr)',
           gap: 1
         }}
       >
@@ -425,7 +418,13 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
                 display: 'flex',
                 alignItems: 'flex-end',
                 gap: range === 7 ? 1.75 : 0.4,
-                position: 'relative'
+                position: 'relative',
+                // The card is full width now; without a cap seven buckets spread
+                // across ~800 px read as slabs floating in a gap. 620 px keeps the
+                // pitch of a normal week and centres the plot under the numbers.
+                width: '100%',
+                maxWidth: 620,
+                mx: 'auto'
               }}
             >
               {[0, 0.5, 1].map((ratio) => (
@@ -630,95 +629,6 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
           </Box>
         </Box>
 
-        <Box
-          sx={{
-            ...card,
-            p: 1.5,
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{i18n.t(i18n.t('最近识别'))}</Typography>
-            <Button
-              size="small"
-              sx={{ ml: 'auto', fontSize: 11, color: t.textDim, minWidth: 0, py: 0 }}
-              onClick={() => onOpenHistory()}
-            >
-              {i18n.t('全部记录 →')}
-            </Button>
-          </Box>
-          <Box sx={{ mt: 0.75, flex: 1, minHeight: 0, overflow: 'auto' }}>
-            {recent.length === 0 && (
-              <Typography sx={{ fontSize: 11.5, color: t.textFaint, mt: 1 }}>
-                {i18n.t('还没有记录，按住快捷键说第一句话。')}
-              </Typography>
-            )}
-            {recent.map((item) => {
-              const chip = recentChipText(item)
-              const text = item.final || item.transcript || ''
-              return (
-                <Box
-                  key={item.id}
-                  sx={{
-                    py: 0.8,
-                    borderTop: `1px solid ${t.line}`,
-                    '&:first-of-type': { borderTop: 'none' }
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography
-                      sx={{ fontSize: 10.5, color: t.textFaint, fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {timeLabel(item.createdAt)}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        fontSize: 11.5,
-                        color: t.textDim,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        flex: 1,
-                        minWidth: 0
-                      }}
-                    >
-                      {text || i18n.t('（空）')}
-                    </Typography>
-                    <Typography sx={{ fontSize: 10.5, color: t.textFaint }}>
-                      {shortClock(item.durationMs || 0)}
-                    </Typography>
-                    <ButtonBase
-                      disabled={!text}
-                      onClick={() => void copy(text, item.id)}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.4,
-                        px: 0.75,
-                        height: 20,
-                        borderRadius: '5px',
-                        border: `1px solid ${t.line}`,
-                        color: t.textDim,
-                        flexShrink: 0,
-                        opacity: text ? 1 : 0.45,
-                        fontSize: 10.5
-                      }}
-                    >
-                      <IconCopy size={11} />
-                      {copied === item.id ? i18n.t('已复制') : i18n.t('复制')}
-                    </ButtonBase>
-                  </Box>
-                  <Box data-recent-tags sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.4, minWidth: 0 }}>
-                    <MiniTag t={t} label={i18n.t(MODE_LABEL[item.mode] ?? item.mode)} />
-                    {chip && <MiniTag t={t} label={chip} card />}
-                  </Box>
-                </Box>
-              )
-            })}
-          </Box>
-        </Box>
       </Box>
 
       {/* The year in one picture, with no caption: the four numbers above already
@@ -884,12 +794,6 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
       />
     </Box>
   )
-}
-
-const MODE_LABEL: Record<string, string> = {
-  dictation: '听写',
-  translate: '翻译',
-  ask: 'Ask'
 }
 
 interface TodayBoardProps {
@@ -1141,40 +1045,6 @@ function Pills({ t, items, value, onChange }: PillsProps): JSX.Element {
           </Box>
         )
       })}
-    </Box>
-  )
-}
-
-function MiniTag({
-  t,
-  label,
-  card = false
-}: {
-  t: { surfaceHi: string; textDim: string }
-  label: string
-  card?: boolean
-}): JSX.Element {
-  return (
-    <Box
-      data-prompt-chip={card || undefined}
-      title={label}
-      sx={{
-        px: 0.6,
-        height: 16,
-        minWidth: 0,
-        maxWidth: card ? '65%' : undefined,
-        flexShrink: card ? 1 : 0,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        lineHeight: '14px',
-        borderRadius: '4px',
-        fontSize: 9.5,
-        color: t.textDim,
-        border: `1px solid ${t.surfaceHi}`
-      }}
-    >
-      {label}
     </Box>
   )
 }

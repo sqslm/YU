@@ -5,6 +5,7 @@ import type { Reminder, ReminderAction, ReminderInput, ReminderView, TodoPriorit
 import type { NotesStore } from './notes'
 import { ReminderScheduler, ReminderStore } from './reminders'
 import { extractReminders } from './reminder-parser'
+import { appIcon } from './app-icon'
 import { createReminderWindow } from './windows'
 import { mainLanguage, mt } from '@shared/mainI18n'
 
@@ -71,7 +72,7 @@ export class ReminderService {
     if (row.level === 'strong') { this.updateStrong(); return }
     if (!this.settings().reminders.notifications) return
     if (!Notification.isSupported()) { this.log('[reminders] Windows notifications are unavailable'); return }
-    const notice = new Notification({ title: `${mt('提醒')} · ${row.title}`, body: new Date(row.dueAt!).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN') + (row.description ? `\n${row.description}` : ''), silent: false })
+    const notice = new Notification({ title: `${mt('提醒')} · ${row.title}`, body: new Date(row.dueAt!).toLocaleString(mainLanguage() === 'en' ? 'en-US' : 'zh-CN') + (row.description ? `\n${row.description}` : ''), silent: false, icon: appIcon() })
     this.notices.set(row.id, notice)
     notice.on('click', () => this.open({ id: row.id }))
     notice.on('close', () => { if (this.notices.get(row.id) === notice) this.notices.delete(row.id) })

@@ -1,4 +1,5 @@
 import { Menu, Notification, Tray, app, nativeTheme } from 'electron'
+import { appIcon } from './app-icon'
 import { join } from 'node:path'
 import { mt } from '@shared/mainI18n'
 
@@ -66,7 +67,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
           label: mt('重置键盘状态'),
           click: () => {
             const message = handlers.resetKeyboard?.() ?? mt('未处理')
-            new Notification({ title: mt('语'), body: message }).show()
+            new Notification({ title: mt('语'), body: message, icon: appIcon() }).show()
           }
         },
         {
@@ -74,7 +75,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
           click: () => {
             // A tray item must always answer: a silent click looks like a hang.
             void (handlers.checkUpdate?.() ?? Promise.resolve('更新不可用')).then((message) => {
-              new Notification({ title: mt('语'), body: message }).show()
+              new Notification({ title: mt('语'), body: message, icon: appIcon() }).show()
             })
           }
         },

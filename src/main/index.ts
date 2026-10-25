@@ -45,6 +45,7 @@ import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { safeFetch } from './safe-fetch'
+import { appIcon } from './app-icon'
 import { handle, subscribe } from './ipc-trust'
 import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
 import { RemindersSync } from './reminders-sync'
@@ -373,7 +374,8 @@ function deliverBriefing(briefing: Briefing): void {
   const settings = store.get()
   log(`[briefing] ${briefing.empty ? 'empty' : 'delivered'}, ${briefing.body.length} chars`)
   if (settings.briefing.notify && Notification.isSupported()) {
-    const notice = new Notification({ title: briefing.title, body: briefing.body.slice(0, 240), silent: false })
+    // No icon means Windows paints Electron's atom logo; the toast must wear ours.
+    const notice = new Notification({ title: briefing.title, body: briefing.body.slice(0, 240), silent: false, icon: appIcon() })
     notice.on('click', () => navigateHub('overview'))
     notice.on('failed', (_event, error) => log(`[briefing] notification failed: ${String(error)}`))
     notice.show()
@@ -391,7 +393,7 @@ function deliverCalendarEvent(event: CalendarEvent): void {
   if (!Notification.isSupported()) { log('[calendar] Windows notifications are unavailable'); return }
   const when = formatEventTime(event, mainLanguage())
   const notice = new Notification({ title: `${mt('日程提醒')} · ${event.title}`,
-    body: [when, event.location, event.notes].filter(Boolean).join(' · '), silent: false })
+    body: [when, event.location, event.notes].filter(Boolean).join(' · '), silent: false, icon: appIcon() })
   notice.on('click', () => navigateHub('overview'))
   notice.on('failed', (_event, error) => log(`[calendar] notification failed: ${String(error)}`))
   notice.show()
