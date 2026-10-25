@@ -16,13 +16,16 @@ export function appIconPath(): string {
 /** The Windows shell cannot read icons inside app.asar, and dev runs host electron.exe. */
 export function setTaskbarIcon(win: BrowserWindow): void {
   if (process.platform !== 'win32') return
+  const iconPath = app.isPackaged ? join(process.resourcesPath, 'shortcut.ico') : join(app.getAppPath(), 'resources', 'app.ico')
+  win.setIcon(nativeImage.createFromPath(iconPath))
+  // Windows requires relaunch properties before the explicit window AppUserModelID.
   win.setAppDetails({
-    appId: 'com.typeless.rebuild',
-    appIconPath: app.isPackaged ? join(process.resourcesPath, 'shortcut.ico') : join(app.getAppPath(), 'resources', 'app.ico'),
+    appIconPath: iconPath,
     appIconIndex: 0,
     relaunchCommand: `"${process.execPath}"${app.isPackaged ? '' : ` "${app.getAppPath()}"`}`,
     relaunchDisplayName: 'YU'
   })
+  win.setAppDetails({ appId: 'com.typeless.rebuild' })
 }
 
 /**

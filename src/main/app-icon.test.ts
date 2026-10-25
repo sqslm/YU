@@ -51,14 +51,18 @@ describe('appIcon', () => {
   })
   it.skipIf(process.platform !== 'win32')('gives the taskbar a real ICO path and relaunch command in development and packages', () => {
     const details = vi.fn()
-    setTaskbarIcon({ setAppDetails: details } as never)
-    expect(details).toHaveBeenLastCalledWith(expect.objectContaining({ appId: 'com.typeless.rebuild',
+    const setIcon = vi.fn()
+    setTaskbarIcon({ setAppDetails: details, setIcon } as never)
+    expect(setIcon).toHaveBeenCalledWith(mock.image)
+    expect(details.mock.calls[0][0]).not.toHaveProperty('appId')
+    expect(details).toHaveBeenNthCalledWith(1, expect.objectContaining({
       appIconPath: join(mock.appPath, 'resources', 'app.ico'), relaunchCommand: `"${process.execPath}" "${mock.appPath}"`, relaunchDisplayName: 'YU' }))
+    expect(details).toHaveBeenNthCalledWith(2, { appId: 'com.typeless.rebuild' })
     mock.packaged = true
     vi.stubGlobal('process', { ...process, resourcesPath: 'C:/installed/resources' })
     try {
-      setTaskbarIcon({ setAppDetails: details } as never)
-      expect(details).toHaveBeenLastCalledWith(expect.objectContaining({ appIconPath: join('C:/installed/resources', 'shortcut.ico'), relaunchCommand: `"${process.execPath}"` }))
+      setTaskbarIcon({ setAppDetails: details, setIcon } as never)
+      expect(details).toHaveBeenNthCalledWith(3, expect.objectContaining({ appIconPath: join('C:/installed/resources', 'shortcut.ico'), relaunchCommand: `"${process.execPath}"` }))
     } finally { vi.unstubAllGlobals() }
   })
 

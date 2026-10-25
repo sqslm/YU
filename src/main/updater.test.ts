@@ -1,7 +1,8 @@
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { autoUpdater } from 'electron-updater'
 
 /**
  * Feed resolution (REQ-13). The updater must be honest about *why* it did not
@@ -12,17 +13,22 @@ import { describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   checkForUpdates: vi.fn(),
   setFeedURL: vi.fn(),
-  on: vi.fn()
+  on: vi.fn((name: string, callback: (...args: any[]) => void) => mocks.handlers.set(name, callback)),
+  handlers: new Map<string, (...args: any[]) => void>(),
+  download: vi.fn(), version: '0.9.0'
 }))
 
 vi.mock('electron', () => ({
-  app: { getVersion: () => '0.9.0', isPackaged: true }
+  app: { getVersion: () => mocks.version, isPackaged: true }
 }))
 vi.mock('electron-updater', () => ({
   autoUpdater: {
     checkForUpdates: mocks.checkForUpdates,
     setFeedURL: mocks.setFeedURL,
     on: mocks.on,
+    downloadUpdate: mocks.download,
+    allowDowngrade: false,
+    set channel(_value: string) { this.allowDowngrade = true },
     logger: null,
     autoDownload: true,
     autoInstallOnAppQuit: true,
@@ -33,10 +39,12 @@ vi.mock('electron-updater', () => ({
 const { DEFAULT_FEED_URL, Updater, canSelfUpdate, resolveFeedUrl, isNewerVersion } = await import(
   './updater'
 )
+beforeEach(() => { vi.clearAllMocks(); mocks.handlers.clear(); mocks.version = '0.9.0' })
 
 it.each([
   ['1.0.0-rc.2', '1.0.0-rc.1', true],
   ['1.0.0-rc.10', '1.0.0-rc.2', true],
+  ['1.0.0-rc.8', '1.0.0-rc.11', false],
   ['1.0.0', '1.0.0-rc.2', true],
   ['1.0.0-rc.2', '1.0.0', false],
   ['1.0.0-rc.1', '1.0.0-rc.2', false],
@@ -91,6 +99,42 @@ describe('canSelfUpdate', () => {
 })
 
 describe('Updater.check', () => {
+  it('downloads and accepts a genuinely newer release after rejecting a stale event', async () => {
+    mocks.version = '1.0.0-rc.11'
+    mocks.checkForUpdates.mockResolvedValueOnce({ updateInfo: { version: '1.0.0-rc.12' } })
+    const callbacks = options(), updater = new Updater(callbacks)
+    await updater.check()
+    expect((await updater.download()).ok).toBe(true)
+    expect(mocks.download).toHaveBeenCalledOnce()
+    mocks.handlers.get('update-downloaded')!({ version: '1.0.0-rc.8' })
+    expect(callbacks.onDownloaded).not.toHaveBeenCalled()
+    mocks.handlers.get('update-downloaded')!({ version: '1.0.0-rc.12' })
+    expect(callbacks.onDownloaded).toHaveBeenCalledExactlyOnceWith('1.0.0-rc.12')
+    expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
+  })
+  it('disables downgrade after selecting the prerelease channel and suppresses older event notifications', async () => {
+    mocks.version = '1.0.0-rc.11'
+    mocks.checkForUpdates.mockImplementationOnce(async () => {
+      mocks.handlers.get('update-available')!({ version: '1.0.0-rc.8' })
+      return { updateInfo: { version: '1.0.0-rc.8' } }
+    })
+    const callbacks = options(), updater = new Updater(callbacks)
+    expect(await updater.check()).toEqual({ ok: true, status: 'none' })
+    expect(autoUpdater.allowDowngrade).toBe(false)
+    expect(callbacks.onAvailable).not.toHaveBeenCalled()
+    expect(updater.getState()).toMatchObject({ phase: 'up-to-date', currentVersion: '1.0.0-rc.11' })
+    expect((await updater.download()).ok).toBe(false)
+    expect(mocks.download).not.toHaveBeenCalled()
+  })
+  it('rejects stale downloaded events and never installs an older cached release', async () => {
+    mocks.version = '1.0.0-rc.11'
+    mocks.checkForUpdates.mockResolvedValueOnce({ updateInfo: { version: '1.0.0-rc.8' } })
+    const callbacks = options(), updater = new Updater(callbacks)
+    await updater.check()
+    mocks.handlers.get('update-downloaded')!({ version: '1.0.0-rc.8' })
+    expect(callbacks.onDownloaded).not.toHaveBeenCalled()
+    expect(updater.install()).toBe(false)
+  })
   it('never contacts the network when checks are switched off', async () => {
     const log = vi.fn()
     const updater = new Updater({ ...options(join(tmpdir(), 'typeless-missing-dir')), log })

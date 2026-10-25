@@ -130,6 +130,7 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 export class Updater {
   private configured = false
   private downloadedVersion: string | null = null
+  private availableVersion: string | null = null
   /** One check at a time: the startup timer and a click must share it. */
   private checking: Promise<UpdateCheck> | null = null
   private state: UpdateState = { phase: 'idle', currentVersion: app.getVersion() }
@@ -154,13 +155,15 @@ export class Updater {
   private configure(feedUrl: string): void {
     if (this.configured) return
     autoUpdater.autoDownload = false
-    autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.autoInstallOnAppQuit = false
     // A prerelease build publishes `rc.yml` — electron-builder names the channel
     // after the prerelease tag — so asking for `latest.yml` would 404 against our
     // own feed and every rc install would silently stop seeing new builds.
     const tag = /^\d+\.\d+\.\d+-([0-9A-Za-z]+)/.exec(app.getVersion())?.[1]
     autoUpdater.allowPrerelease = Boolean(tag)
     if (tag) autoUpdater.channel = tag
+    // Setting channel implicitly enables downgrades in electron-updater.
+    autoUpdater.allowDowngrade = false
     autoUpdater.logger = {
       info: (msg?: unknown) => this.options.log(`[update] ${String(msg ?? '')}`),
       warn: (msg?: unknown) => this.options.log(`[update] warn ${String(msg ?? '')}`),
@@ -170,11 +173,17 @@ export class Updater {
     autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl })
 
     autoUpdater.on('update-available', (info) => {
+      if (!isNewerVersion(info.version, app.getVersion())) {
+        this.options.log(`[update] ignored older/equal available event ${info.version}`)
+        return
+      }
+      this.availableVersion = info.version
       this.options.log(`[update] available ${info.version}`)
       this.setState({ phase: 'available', version: info.version, percent: undefined, message: undefined })
       this.options.onAvailable({ version: info.version, notes: notesOf(info.releaseNotes) })
     })
     autoUpdater.on('update-not-available', () => {
+      this.availableVersion = null
       this.options.log('[update] up to date')
       this.setState({ phase: 'up-to-date', version: undefined, percent: undefined, message: undefined })
     })
@@ -184,7 +193,13 @@ export class Updater {
       this.options.onProgress?.(percent)
     })
     autoUpdater.on('update-downloaded', (info) => {
+      if (!isNewerVersion(info.version, app.getVersion()) || info.version !== this.availableVersion) {
+        autoUpdater.autoInstallOnAppQuit = false
+        this.options.log(`[update] ignored unaccepted downloaded version ${info.version}`)
+        return
+      }
       this.downloadedVersion = info.version
+      autoUpdater.autoInstallOnAppQuit = true
       this.options.log(`[update] downloaded ${info.version}`)
       this.setState({ phase: 'downloaded', version: info.version, percent: 100, message: undefined })
       this.options.onDownloaded(info.version)
@@ -230,10 +245,12 @@ export class Updater {
       const result = await autoUpdater.checkForUpdates()
       const version = result?.updateInfo?.version
       if (version && isNewerVersion(version, app.getVersion())) {
+        this.availableVersion = version
         this.setState({ phase: 'available', version, percent: undefined, message: undefined })
         return { ok: true, status: 'available', version }
       }
       if (version) this.options.log(`[update] feed has ${version}, installed ${app.getVersion()}`)
+      this.availableVersion = null
       this.setState({ phase: 'up-to-date', version: undefined, percent: undefined, message: undefined })
       return { ok: true, status: 'none' }
     } catch (err) {
@@ -247,19 +264,21 @@ export class Updater {
   /** Starts the download for a version the user accepted in the bar. */
   async download(): Promise<{ ok: boolean; message: string }> {
     if (!this.configured) return { ok: false, message: mt('尚未检查更新') }
+    if (!this.availableVersion || !isNewerVersion(this.availableVersion, app.getVersion())) return { ok: false, message: mt('没有可下载的新版本') }
     this.setState({ phase: 'downloading', percent: 0, message: undefined })
     try {
       await autoUpdater.downloadUpdate()
       return { ok: true, message: mt('更新已下载，退出时自动安装') }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      this.setState({ phase: 'error', message })
       return { ok: false, message }
     }
   }
 
   /** Installs what was downloaded and restarts into the new version. */
   install(): boolean {
-    if (!this.downloadedVersion) return false
+    if (!this.downloadedVersion || !isNewerVersion(this.downloadedVersion, app.getVersion())) return false
     this.options.log(`[update] installing ${this.downloadedVersion}`)
     setImmediate(() => autoUpdater.quitAndInstall(false, true))
     return true

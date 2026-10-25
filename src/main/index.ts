@@ -99,6 +99,7 @@ if (resolve(app.getPath('userData')) === resolve(join(app.getPath('appData'), ap
   app.setPath('userData', join(app.getPath('appData'), 'typeless-rebuild'))
 }
 app.setName('YU')
+if (process.platform === 'win32') app.setAppUserModelId('com.typeless.rebuild')
 const store = new SettingsStore()
 const history = new HistoryStore()
 /**
@@ -1821,7 +1822,6 @@ async function bootstrap(): Promise<void> {
     callback(permission === 'media')
   })
 
-  if (process.platform === 'win32') app.setAppUserModelId('com.typeless.rebuild')
   reminders = new ReminderService(join(app.getPath('userData'), 'reminders.sqlite'), () => store.get(), view => {
     const win = ensureSettingsWindow()
     win.webContents.send('reminders:open', view)
