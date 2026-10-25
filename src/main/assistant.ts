@@ -1,3 +1,5 @@
+import { win32 } from 'node:path'
+import { finishTaskTrace } from './task-diagnostics'
 import { unresolvedToolFailure, type AssistantState, type AssistantTurn } from '@shared/assistant'
 import type { Settings } from '@shared/types'
 import type { PromptContext } from '@shared/prompts'
@@ -342,6 +344,23 @@ export function referenceBlock(thread: ReferenceContext | null, outcome: Referen
   return lines.join('\n')
 }
 
+/** Resolve only explicit opens against actual rows, never a model-invented path. */
+export function referenceOperation(input: string, pointer: ReferenceOutcome): { name: string; args: Record<string, unknown> } | null {
+  if (pointer.kind === 'none' || pointer.kind === 'clarify' || isDictatedContent(input)) return null
+  const item = pointer.item, path = item.fields.path
+  if (item.fields.kind !== 'file' && item.fields.kind !== 'folder' && item.fields.kind !== 'application') return null
+  if (/^(?:请|帮我)?(?:把)?(?:它|这个|那个|刚才那个)(?:的|所在的|所在)?(?:父目录|文件夹|目录)(?:也)?打开[。！!]?$/u.test(input.trim()) &&
+      typeof path === 'string' && win32.isAbsolute(path) && item.fields.kind === 'file') {
+    return { name: 'open_folder', args: { folder: win32.dirname(path) } }
+  }
+  if (/^(?:请|帮我)?(?:打开|open )(?:第)?(?:\d+|[一二三四五六七八九十]+|first|second|third|它|这个|那个|刚才那个|最后一)(?:个|项|个文件)?[。.!]?$/iu.test(input.trim())) {
+    if (item.fields.kind === 'file') return { name: 'open_file', args: { id: item.id } }
+    if (item.fields.kind === 'application') return { name: 'open_application', args: { id: item.id } }
+    if (typeof path === 'string') return { name: 'open_folder', args: { folder: path } }
+  }
+  return null
+}
+
 export class AssistantSession {
   private conversation: AgentConversation = { messages: [], toolNotes: '' }
   /** The rows the last turn showed: what "第二个"/"刚才那条" resolve against. */
@@ -473,6 +492,8 @@ export class AssistantSession {
       this.conversation = { messages: [], toolNotes: '' }
       this.reference = null
     }
+    const previous = this.turns.findLast(turn => turn.state === 'done')
+    if (previous && this.conversation.messages.length) task.recentExchange = { question: previous.question, answer: previous.answer }
     const settings = this.deps.settings()
     const windows = this.deps.windows
     windows?.beginTask()
@@ -481,7 +502,7 @@ export class AssistantSession {
       /截|看|分析|反映|提取|识别|解释|总结|什么|\b(?:analyze|extract|read|explain|describe|show|capture|what)\b/iu.test(input) &&
       !/然后|并且|同时|保存|创建|复制|打开|\b(?:then|also|save|create|copy|open)\b/iu.test(input))
     const stopSpeech = this.deps.life ? stopSpeakingRequest(input) : null
-    const direct = operation || (stopSpeech ? { name: 'stop_speaking', args: stopSpeech } : null) || (this.deps.life ? speechPlaybackRequest(input) : null) || (screenshotRequest ? { name: 'analyze_screenshot', args: { question: input, task: /文字.{0,8}(?:提取|识别)|提取.{0,8}文字|\b(?:OCR|extract text|read text)\b/iu.test(input) ? 'ocr' : 'analyze' } } : null) ||
+    const direct = operation || (windows ? referenceOperation(input, pointer) : null) || (stopSpeech ? { name: 'stop_speaking', args: stopSpeech } : null) || (this.deps.life ? speechPlaybackRequest(input) : null) || (screenshotRequest ? { name: 'analyze_screenshot', args: { question: input, task: /文字.{0,8}(?:提取|识别)|提取.{0,8}文字|\b(?:OCR|extract text|read text)\b/iu.test(input) ? 'ocr' : 'analyze' } } : null) ||
       (this.deps.personal ? personalCommand(input) : null) || windows?.command(input.trim())
     const allowedTools = this.allowedTools(input)
     const taskReference = Boolean(this.deps.personal) && directVoiceIntent(input)?.kind === 'assistant' && /提醒|待办|代办|\b(?:reminder|to-?do|task)\b/iu.test(input)
@@ -586,6 +607,9 @@ export class AssistantSession {
       turn.state = 'done'
       task.state = result.taskState ?? (turn.localResults?.some(item => item.status === 'awaiting_confirmation') ? 'awaiting_confirmation' : 'completed'); turn.taskState = task.state
       this.refreshReference()
+      if (direct && ['open_file', 'open_application'].includes(direct.name) && task.state === 'completed' && pointer.kind !== 'none' && pointer.kind !== 'clarify') {
+        this.reference = { ...(this.reference ?? { tool: direct.name, items: [] }), lastObject: pointer.item }
+      }
     } catch (error) {
       if (this.controller !== controller) return
       turn.state = controller.signal.aborted ? 'cancelled' : 'error'
@@ -598,6 +622,7 @@ export class AssistantSession {
     } finally {
       if (task.state === 'running') task.state = controller.signal.aborted ? 'cancelled' : turn.state === 'done' ? 'completed' : 'failed'
       turn.taskState = task.state
+      if (task.source === 'text') finishTaskTrace(task, this.deps.log)
       if (this.task === task) this.task = null
       signal?.removeEventListener('abort', cancelled)
       if (this.controller === controller) {

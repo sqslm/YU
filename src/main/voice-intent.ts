@@ -63,7 +63,7 @@ export function isReminderCreationRequest(value: string): boolean {
   return REMIND_ME_PREFIX.test(value) || /^(?:(?:请|帮我|请帮我)\s*)?(?:设置.{0,8}提醒|创建.{0,8}(?:提醒|待办)|添加.{0,8}待办)|^(?:please\s+)?(?:set|create|add)\b.{0,20}\b(?:reminder|to-?do)\b/iu.test(value)
 }
 
-export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceIntent | null {
+export function directVoiceIntent(text: string, hasRecentAnswer = false, operation?: (input: string) => unknown): VoiceIntent | null {
   const value = text.trim()
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
@@ -101,7 +101,7 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceI
   const note = /^(?:(?:请|帮我|请帮我)\s*)?(?:记到随记(?:里|里面)?|保存(?:到|为)(?:一条)?随记|记一条随记)[\s，,:：]*(.+)$/u.exec(value) ||
     /^(?:please\s+)?(?:save (?:a |this )?note|take a note|note down)[\s,:]*(.+)$/iu.exec(value)
   if (note) return { kind: 'notes', text: note[1].trim() }
-  return null
+  return operation?.(value) ? { kind: 'assistant' } : null
 }
 
 export const VOICE_INTENT_PROMPT = `Classify ONE voice input for YU, a bilingual Chinese/English desktop assistant. Return ONLY JSON:

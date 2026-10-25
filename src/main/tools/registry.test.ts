@@ -445,7 +445,7 @@ it('does not read a new foreground selection after the original voice target cha
 
 it('requires screenshot capability and valid arguments, shares one request, and never captures on cancellation', async () => {
   const analyzeScreenshot = vi.fn().mockResolvedValue('Actual visible content')
-  const ctx = { ...makeContext(), analyzeScreenshot, allowedTools: ['analyze_screenshot'], cache: new Map() }
+  const ctx = { ...makeContext(), question: '分析截图', analyzeScreenshot, allowedTools: ['analyze_screenshot'], cache: new Map() }
   expect(toolSchemas().map(schema => (schema.function as { name: string }).name)).not.toContain('analyze_screenshot')
   expect((await runTool('analyze_screenshot', { question: 'Explain screenshot' }, { ...ctx, allowedTools: [] })).ok).toBe(false)
   expect((await runTool('analyze_screenshot', { question: 'Explain', path: 'C:\\secret.png' }, ctx)).ok).toBe(false)

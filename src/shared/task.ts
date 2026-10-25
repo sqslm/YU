@@ -21,5 +21,10 @@ export interface TaskContext {
   state: TaskState
   /** Only populated after an explicit selection request. */
   selection?: string
+  directory?: string
+  pageUrl?: string
+  screenshot?: { png: Uint8Array; width: number; height: number }
+  recentExchange?: { question: string; answer: string }
+  results?: Array<{ tool: string; state: ToolState; data: Record<string, unknown> }>
   receipts: Array<{ tool: string; state: ToolState; durationMs: number }>
 }

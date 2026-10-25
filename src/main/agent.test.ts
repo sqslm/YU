@@ -265,7 +265,10 @@ describe('native function calling', () => {
 
     const first = JSON.parse(bodies[0]) as Record<string, unknown>
     expect(first.tool_choice).toBe('auto')
-    expect((first.tools as unknown[]).length).toBe(8)
+    const names = (first.tools as { function: { name: string } }[]).map(tool => tool.function.name)
+    expect(names).toContain('calculate')
+    expect(names).not.toContain('get_selection')
+    expect(names).not.toContain('replace_selection')
 
     // The second request must carry the tool result back to the model.
     const second = JSON.parse(bodies[1]) as { messages: Array<Record<string, unknown>> }

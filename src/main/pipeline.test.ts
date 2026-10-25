@@ -1,3 +1,5 @@
+import { WindowsTools } from './tools/windows'
+import { personalCommand } from './tools/personal'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BarAlert, BarState, HistoryEntry, Settings , ProviderProfile} from '@shared/types'
@@ -260,7 +262,7 @@ describe('Ask card completion', () => {
     const { pipeline, sent } = harness({}, { onAnswer, onAssistant: async () => ({ text: 'Feishu', answerCard }) })
     pipeline.start('ask', { purpose: 'assistant' }); pipeline.pushAudio(tone(900))
     const pending = pipeline.stop(); pipeline.audioStopped(); await pending
-    expect(onAnswer).toHaveBeenCalledWith(answerCard)
+    expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining(answerCard), expect.objectContaining({ task: expect.objectContaining({ source: 'voice' }) }))
     expect(sent.some(state => state.phase === 'done' && state.feedback)).toBe(false)
   })
   it('reports completed actions only on the voice bar, without assistant-window buttons', async () => {
@@ -369,7 +371,7 @@ describe('Ask card completion', () => {
     const { pipeline } = harness({}, { onAnswer })
     await pipeline.followUp('继续查 AI 新闻')
     await vi.advanceTimersByTimeAsync(100)
-    expect(onAnswer).toHaveBeenLastCalledWith(expect.objectContaining({ answer: '最终回答', retrieval }))
+    expect(onAnswer).toHaveBeenLastCalledWith(expect.objectContaining({ answer: '最终回答', retrieval }), expect.objectContaining({ task: expect.objectContaining({ source: 'text' }) }))
     expect(onAnswer.mock.calls.at(-1)?.[0].streaming).not.toBe(true)
   })
 
@@ -378,7 +380,7 @@ describe('Ask card completion', () => {
     mocks.askFollowUp.mockRejectedValue(new Error('provider unavailable'))
     const { pipeline } = harness({}, { onAnswer })
     await pipeline.followUp('再详细一点')
-    expect(onAnswer).toHaveBeenLastCalledWith(expect.objectContaining({ question: '再详细一点', answer: 'provider unavailable', streaming: false }))
+    expect(onAnswer).toHaveBeenLastCalledWith(expect.objectContaining({ question: '再详细一点', answer: 'provider unavailable', streaming: false }), expect.objectContaining({ task: expect.objectContaining({ state: 'failed' }) }))
   })
 })
 
@@ -1401,6 +1403,47 @@ describe('opening phrase mode activation', () => {
 
 
 describe('unified voice entry', () => {
+  it('keeps the original target for a typed card follow-up after focus moves to YU', async () => {
+    const h = harness({})
+    const original = { windowHandle: '1234', processId: 42, appName: 'Editor', windowTitle: 'Original code' }
+    mocks.foregroundWindow.mockReturnValue({ title: 'YU card', pid: 999, appName: 'YU', className: 'YU', appPath: 'YU.exe', rect: null })
+    mocks.askFollowUp.mockResolvedValue({ text: 'More detail', sources: [], searched: false })
+    await h.pipeline.followUp('再详细一点', original)
+    expect(mocks.askFollowUp.mock.calls.at(-1)?.[2]).toMatchObject({ ...original, task: expect.objectContaining({ source: 'text', target: original }) })
+  })
+
+  it('can preview selection inside the same voice assistant task without treating itself as a competing request', async () => {
+    let sharedTask: unknown
+    const onAssistant = vi.fn(async (_text, _signal, _at, context) => {
+      sharedTask = context.task
+      const result = await h.pipeline.transformSelection('original selected text', 'polish', context)
+      expect(result?.text).toBe('Improved selection')
+      expect(context.task).toBe(sharedTask)
+      return { text: result!.text, taskState: 'awaiting_confirmation' as const }
+    })
+    const h = harness({ voiceCommands: { ...DEFAULT_VOICE_COMMANDS, smartRouting: true } }, { onAssistant })
+    mocks.transcribe.mockResolvedValue({ text: '先预览一下选区润色结果' })
+    mocks.complete.mockResolvedValue('Improved selection')
+    h.pipeline.start('dictation'); h.pipeline.pushAudio(tone(1200)); const pending = h.pipeline.stop(); h.pipeline.audioStopped(); await pending
+    expect(onAssistant).toHaveBeenCalledOnce()
+    expect(sharedTask).toMatchObject({ state: 'awaiting_confirmation', selection: 'original selected text' })
+    expect(h.pipeline.isBusy).toBe(false)
+    expect(h.log.mock.calls.filter(([line]) => line.includes('stage=total'))).toHaveLength(1)
+  })
+
+  it.each(['帮我打开E盘的AI文件夹', '打开下载文件夹', '打开随记页面', '把系统音量调到30%'])('reuses actual command parsers without model classification: %s', async text => {
+    const windows = new WindowsTools({ folders: { downloads: 'C:\\test', desktop: 'C:\\test', documents: 'C:\\test' },
+      native: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })
+    const onAssistant = vi.fn().mockResolvedValue({ text: 'Actual service result' })
+    const h = harness({ voiceCommands: { ...DEFAULT_VOICE_COMMANDS, smartRouting: true } }, {
+      directOperation: input => personalCommand(input) ?? windows.command(input), onAssistant })
+    mocks.transcribe.mockResolvedValue({ text })
+    h.pipeline.start('dictation'); h.pipeline.pushAudio(tone(1200)); const pending = h.pipeline.stop(); h.pipeline.audioStopped(); await pending
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(onAssistant).toHaveBeenCalledWith(text, expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ task: expect.objectContaining({ route: { kind: 'assistant', via: 'rule' } }) }), undefined)
+    expect(mocks.insertText).not.toHaveBeenCalled()
+  })
+
   const smart = { ...DEFAULT_VOICE_COMMANDS, smartRouting: true }
   const finish = async (pipeline: InstanceType<typeof Pipeline>): Promise<HistoryEntry | null> => {
     pipeline.pushAudio(tone(1200)); const pending = pipeline.stop(); pipeline.audioStopped(); return pending
@@ -1535,7 +1578,7 @@ describe('unified voice entry', () => {
     const captureSelection = vi.fn().mockRejectedValue(new Error('没有选中文字')), onAnswer = vi.fn()
     const h = harness({ voiceCommands: smart }, { captureSelection, onAnswer })
     h.pipeline.start('dictation'); await finish(h.pipeline)
-    expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ answer: '请先选中文字，或提供要处理的文本', streaming: false }))
+    expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ answer: '请先选中文字，或提供要处理的文本', streaming: false }), expect.any(Object))
     expect(mocks.complete).toHaveBeenCalledOnce(); expect(mocks.insertText).not.toHaveBeenCalled()
     expect(h.entries).toHaveLength(0); expect(h.pipeline.isBusy).toBe(false)
   })

@@ -289,7 +289,7 @@ export class WindowsTools {
     if (name !== 'open_folder' && name !== 'search_files') return failed(mt('未知工具：{{name}}', { name }))
     let input = string(args.folder) || 'downloads'
     if (input === 'current') {
-      const result = await originalContext('explorer-folder')
+      const result = context?.task?.directory ? { folder: context.task.directory } : await originalContext('explorer-folder')
       if (!result.folder) return failed(mt('无法确定原窗口的文件夹，请提供具体路径'))
       input = string(result.folder)
     }

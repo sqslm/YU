@@ -11,6 +11,18 @@ import type { WindowsTools } from './windows'
 import type { PersonalTools } from './personal'
 
 let root = ''
+it('keeps unknown tool names out of diagnostic logs', async () => {
+  const log = vi.fn(), ctx = { ...context(), log }
+  await runTool('private clipboard secret', {}, ctx)
+  expect(JSON.stringify(log.mock.calls)).not.toContain('private clipboard secret')
+  expect(JSON.stringify(log.mock.calls)).toContain('tool=unknown')
+})
+it.each(['今天天气如何', '十分钟后提醒我截图', '不要读取当前屏幕'])('does not capture screenshots without authority: %s', async question => {
+  const analyzeScreenshot = vi.fn(), ctx = { ...context(), question, analyzeScreenshot, allowedTools: ['analyze_screenshot'] }
+  expect(toolSchemas(ctx.allowedTools, ctx)).toEqual([])
+  expect((await runTool('analyze_screenshot', { question: 'model-requested capture' }, ctx)).status).toBe('awaiting_confirmation')
+  expect(analyzeScreenshot).not.toHaveBeenCalled()
+})
 afterEach(async () => { vi.restoreAllMocks(); vi.useRealTimers(); if (root) await rm(root, { recursive: true, force: true }); root = '' })
 const context = (): ToolContext => ({ settings: mergeSettings({}), question: '安排明天下午三点讨论', log: () => {}, taskContext: attachTask({}, createTask('text')) })
 

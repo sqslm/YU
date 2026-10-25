@@ -18,7 +18,8 @@ vi.mock('koffi', () => ({ default: {
 vi.mock('./foreground', () => ({ foregroundWindow: () => ({ appName: 'Editor', title: 'Document', pid: 42, appPath: 'editor.exe' }) }))
 vi.mock('./tools/selection', () => ({ getSelection: mocks.selected }))
 vi.mock('./insert', () => ({ insertText: mocks.insert }))
-import { captureSelectionTarget } from './selection-target'
+import { createTask, attachTask } from './task-context'
+import { captureSelectionTarget, applyAnswerSelection } from './selection-target'
 
 describe('applying a captured selection', () => {
   beforeEach(() => {
@@ -70,4 +71,17 @@ describe('applying a captured selection', () => {
     await expect(captureSelectionTarget(mergeSettings({}), { ...target, appName: 'Bitwarden' })).rejects.toThrow('敏感应用')
     expect(mocks.selected).not.toHaveBeenCalled()
   })
+})
+
+it('refuses card replacement without an authorized selection or after the selected text changes', async () => {
+  vi.clearAllMocks(); Object.assign(mocks, { foreground: 10, pid: 42, exists: true, restore: true })
+  await expect(applyAnswerSelection(mergeSettings({}), undefined, 'answer', new AbortController().signal)).rejects.toThrow()
+  const task = createTask('text', { windowHandle: '10', processId: 42, windowTitle: 'Document' }); task.selection = 'old selection'
+  mocks.selected.mockResolvedValue({ ok: true, text: 'different selection' })
+  await expect(applyAnswerSelection(mergeSettings({}), attachTask({}, task), 'answer', new AbortController().signal)).rejects.toThrow('选区内容已变化')
+  expect(mocks.insert).not.toHaveBeenCalled()
+  mocks.selected.mockResolvedValue({ ok: true, text: 'old selection' })
+  await applyAnswerSelection(mergeSettings({}), attachTask({}, task), 'answer', new AbortController().signal)
+  expect(task.state).toBe('completed')
+  expect(mocks.insert).toHaveBeenCalledWith('answer', expect.any(Object))
 })

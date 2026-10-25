@@ -1,3 +1,4 @@
+import { traceTaskStage } from '../task-diagnostics'
 import type { PolishSettings } from '@shared/types'
 import { ProviderError, joinUrl, parseHeaderLines } from './asr'
 import { requestUserAgent } from './models'
@@ -120,7 +121,11 @@ export function chatPath(cfg: Pick<PolishSettings, 'requestPath' | 'baseUrl'>): 
 }
 
 /** Chat completion through any OpenAI-compatible `/chat/completions` endpoint. */
-export async function complete(
+export function complete(...args: Parameters<typeof completeRequest>): Promise<string> {
+  return traceTaskStage('llm', () => completeRequest(...args))
+}
+
+async function completeRequest(
   cfg: Pick<
     PolishSettings,
     | 'baseUrl'

@@ -1,3 +1,4 @@
+import { traceTaskStage } from '../task-diagnostics'
 import type { MultimodalSettings } from '@shared/types'
 import { ProviderError, joinUrl, parseHeaderLines } from './asr'
 import { mt } from '@shared/mainI18n'
@@ -16,7 +17,11 @@ export interface AudioRequest {
   signal?: AbortSignal
 }
 
-export async function generateFromAudio(
+export function generateFromAudio(...args: Parameters<typeof audioRequest>): Promise<string> {
+  return traceTaskStage('llm', () => audioRequest(...args))
+}
+
+async function audioRequest(
   cfg: MultimodalSettings,
   req: AudioRequest
 ): Promise<string> {
@@ -24,7 +29,11 @@ export async function generateFromAudio(
 }
 
 /** Uses the same configured Gemini-compatible provider; images stay inline for this request. */
-export async function generateFromImage(cfg: MultimodalSettings, req: { png: Uint8Array; prompt: string; signal?: AbortSignal }): Promise<string> {
+export function generateFromImage(...args: Parameters<typeof imageRequest>): Promise<string> {
+  return traceTaskStage('llm', () => imageRequest(...args))
+}
+
+async function imageRequest(cfg: MultimodalSettings, req: { png: Uint8Array; prompt: string; signal?: AbortSignal }): Promise<string> {
   return generateInlineMedia(cfg, req, req.png, 'image/png', req.prompt)
 }
 

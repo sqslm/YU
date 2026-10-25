@@ -20,6 +20,7 @@
  * runs under an explicit deadline, so no slow hop can turn a take into a wait.
  */
 
+import { traceTaskStage, withTaskTrace, finishTaskTrace } from './task-diagnostics'
 import type { AskRetrieval, CardAction, SearchResult, Settings } from '@shared/types'
 import type { PromptContext } from '@shared/prompts'
 import { attachTask, createTask } from './task-context'
@@ -712,7 +713,11 @@ async function readSse(
   return { text, chunks }
 }
 
-async function postNative(
+function postNative(...args: Parameters<typeof postNativeRequest>): Promise<NativeReply | null> {
+  return traceTaskStage('llm', () => postNativeRequest(...args))
+}
+
+async function postNativeRequest(
   settings: Settings,
   messages: unknown[],
   options: {
@@ -1410,7 +1415,11 @@ async function completeWithDeadline(
  * one normal completion. One extra request is cheaper than losing the answer.
  * Text already emitted is never discarded, even if the connection then dies.
  */
-async function streamAnswerText(
+function streamAnswerText(...args: Parameters<typeof streamAnswerRequest>): Promise<string | null> {
+  return traceTaskStage('llm', () => streamAnswerRequest(...args))
+}
+
+async function streamAnswerRequest(
   settings: Settings,
   messages: ChatMessage[],
   options: AnswerCallOptions
@@ -1524,7 +1533,20 @@ function plainAnswer(
  * 4. JSON intent fallback → one tool, answer;
  * 5. `search.decideWithModel === false` → skip the router, search directly.
  */
-export async function askAgent(
+export async function askAgent(...args: Parameters<typeof askTask>): Promise<AgentResult> {
+  const [settings, text, suppliedContext, signal, log = () => {}, options] = args
+  const task = suppliedContext.task ?? createTask('text', suppliedContext, text)
+  return withTaskTrace(task, log, async () => {
+    try {
+      const result = await askTask(settings, text, attachTask(suppliedContext, task), signal, log, options)
+      task.state = result.taskState ?? 'completed'
+      return result
+    } catch (error) { task.state = signal?.aborted ? 'cancelled' : 'failed'; throw error }
+    finally { if (!suppliedContext.task) finishTaskTrace(task, log) }
+  })
+}
+
+async function askTask(
   settings: Settings,
   transcript: string,
   context: PromptContext,
@@ -1797,7 +1819,7 @@ export async function askAgent(
       if (abort.aborted) throw inner
       log(`[agent] plain answer failed: ${messageOf(inner)}`)
       // An empty card reads as a broken app. Say what happened instead.
-      return { text: mt('这次没能拿到回答，检查模型配置或网络后再试一次。'), sources: [], searched: false }
+      return { text: mt('这次没能拿到回答，检查模型配置或网络后再试一次。'), sources: [], searched: false, taskState: 'failed' }
     }
   } finally {
     log(`[perf] ask total ${Date.now() - started}ms`)

@@ -11,6 +11,8 @@ Windows 上的语音输入与本地 AI 助手：按一下热键说话，松手�
 
 ![语 / YU](resources/brand/logo-light.png)
 
+统一入口的现行调用链、工具状态、测量结果与人工验收范围见[架构说明](ASSISTANT_ROADMAP.md#统一入口现行架构2026-10-26)。
+
 ## 能做什么
 
 | 能力 | 一句话说明 |

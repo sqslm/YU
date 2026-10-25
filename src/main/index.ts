@@ -1,3 +1,5 @@
+import { personalCommand } from './tools/personal'
+import { taskDiagnosticSummary } from './task-diagnostics'
 import { app, clipboard, dialog, nativeTheme, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -36,10 +38,9 @@ import { registerNotesIpc } from './notes-ipc'
 import { LocalAsrHost } from './local-asr/host'
 import { registerLocalAsrIpc } from './local-asr/ipc'
 import { collectResources } from './resources'
-import { applyReplaceText } from './agent'
 import { SelectionEditor } from './selection-editor'
 import { NoteAudioPlayer } from './note-audio'
-import { captureSelectionTarget } from './selection-target'
+import { captureSelectionTarget, applyAnswerSelection } from './selection-target'
 import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
@@ -182,7 +183,8 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     }
     const settings = store.get(), profiles = chainFor(settings, 'multimodal')
     if (!ocr && !profiles.length) throw new Error(mt('请先在模型设置中启用支持图片的多模态模型；当前文本模型不能查看截图'))
-    const image = await captureOriginalWindow(context, signal)
+    const image = context.task?.screenshot ?? await captureOriginalWindow(context, signal)
+    if (context.task) context.task.screenshot = image
     signal.throwIfAborted()
     if (ocr) {
       const result = await windowsNative({ action: 'ocr', png: Buffer.from(image.png).toString('base64') }, signal)
@@ -957,9 +959,11 @@ function ensureCardWindow(): BrowserWindow {
 
 /** Last payload pushed into the card, used by the copy/replace actions. */
 let lastAnswer: AnswerCardPayload | null = null
+let lastAnswerContext: PromptContext | undefined
 let selectionEditor: SelectionEditor | null = null
 
-function showAnswerCard(payload: AnswerCardPayload): void {
+function showAnswerCard(payload: AnswerCardPayload, context?: PromptContext): void {
+  lastAnswerContext = context
   clearCardRetire()
   const win = ensureCardWindow()
   lastAnswer = payload
@@ -1017,8 +1021,8 @@ async function handleCardAction(action: CardAction): Promise<void> {
   }
   if (action.id === 'replace') {
     if (!answer) return
-    const result = await applyReplaceText(answer)
-    if (!result.ok) log(`[card] replace failed: ${result.error ?? 'unknown'}`)
+    await applyAnswerSelection(store.get(), lastAnswerContext, answer, new AbortController().signal)
+    if (lastAnswer) showAnswerCard({ ...lastAnswer, taskState: 'completed', actions: lastAnswer.actions?.filter(item => item.id !== 'replace') }, lastAnswerContext)
     return
   }
   if (action.id === 'ask') {
@@ -1029,7 +1033,7 @@ async function handleCardAction(action: CardAction): Promise<void> {
       const result = await runAssistant(question, undefined, undefined, undefined, needsAssistantContext(question), true)
       if (result?.answerCard) showAnswerCard(result.answerCard)
       else if (result?.text) { hideCard(); pipeline.reportTaskResult(result.text, result.failed) }
-    } else await pipeline.followUp(question)
+    } else await pipeline.followUp(question, lastAnswerContext)
   }
 }
 
@@ -1548,6 +1552,7 @@ function registerIpc(): void {
         settings: redactSettings(settings),
         devices: list,
         connectivity: await probeProviders(settings),
+        taskMetrics: taskDiagnosticSummary(),
         logTail: recentLog.tail(50)
       })
       const path = join(app.getPath('userData'), diagnosticsFileName())
@@ -1916,6 +1921,7 @@ async function bootstrap(): Promise<void> {
     checkAsr: () => checkAsrReadiness(store.get(), localAsr),
     preserveAudio: async (pcm, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16), recovery: true }, signal) },
     captureSelection: (context, signal) => captureSelectionTarget(store.get(), context, signal),
+    directOperation: text => personalCommand(text) ?? windowsTools.command(text),
     voiceContext: text => {
       const last = needsAssistantContext(text) ? assistant.snapshot().turns.at(-1) : undefined
       const completion = /已经|做完|完成|检查完|\b(?:finished|completed|done)\b/iu.test(text)
@@ -1942,7 +1948,7 @@ async function bootstrap(): Promise<void> {
     },
     // Ask mode answers land in the card window; dictation/translate keep
     // typing straight into the foreground app.
-    onAnswer: (payload) => showAnswerCard(payload),
+    onAnswer: (payload, context) => showAnswerCard(payload, context),
     onCompletedAnswer: (question, answer) => assistant.rememberAnswer(question, answer),
     // Surrounding text comes from a utility process: a crashing accessibility
     // provider must cost us one context read, never the UI.

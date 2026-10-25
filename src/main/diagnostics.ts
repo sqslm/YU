@@ -75,12 +75,14 @@ export interface DiagnosticsInput {
   devices: Array<{ deviceId: string; label: string }>
   connectivity: string[]
   logTail: string[]
+  taskMetrics?: object
   now?: Date
 }
 
 /** Renders the report. Pure so the shape can be asserted in tests. */
 export function renderDiagnostics(input: DiagnosticsInput): string {
   const at = (input.now ?? new Date()).toISOString()
+  const metrics = input.taskMetrics ? `\n== Task metrics (bounded, ms) ==\n${JSON.stringify(input.taskMetrics, null, 2)}\n` : ''
   const settings = redactSecrets(JSON.stringify(input.settings ?? {}, null, 2))
   const lines: string[] = [
     mt('语 诊断报告'),
@@ -116,7 +118,7 @@ export function renderDiagnostics(input: DiagnosticsInput): string {
   ]
   // Reports are intended to be shared; deployment and workstation identifiers
   // are private even when they are not authentication credentials.
-  return redactSecrets(`${lines.join('\n')}\n`)
+  return redactSecrets(`${lines.join('\n')}\n${metrics}`)
     .replace(/https?:\/\/[^\s"'<>]+/gi, '[URL]')
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
     .replace(/\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2})\b/g, '[private IP]')

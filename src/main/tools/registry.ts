@@ -12,6 +12,7 @@
  *   dependency, no global state beyond one lazily loaded Windows DLL handle.
  */
 
+import { withTaskTrace, recordTaskStage } from '../task-diagnostics'
 import type { CardAction, SearchResult, Settings } from '@shared/types'
 import { formatToday } from '@shared/prompts'
 import {
@@ -479,11 +480,13 @@ async function runGetSelection(
   ctx.onStatus?.('正在读取选中文字…')
   ctx.signal?.throwIfAborted()
   ctx.selectionGuard?.()
-  const selection = ctx.readSelection ? { ok: true, text: await ctx.readSelection() } : await getSelection({ deps: ctx.selectionDeps })
+  const cachedSelection = ctx.taskContext?.task?.selection
+  const selection = cachedSelection !== undefined ? { ok: true, text: cachedSelection } : ctx.readSelection ? { ok: true, text: await ctx.readSelection() } : await getSelection({ deps: ctx.selectionDeps })
   ctx.signal?.throwIfAborted()
   ctx.selectionGuard?.()
   if (!selection.ok) return fail(selection.error ?? '无法读取选中文字')
   const text = selection.text ?? ''
+  if (ctx.taskContext?.task) ctx.taskContext.task.selection = text
   return {
     ok: true,
     data: { ok: true, text, length: text.length },
@@ -696,6 +699,9 @@ export function availableToolNames(ctx: ToolContext): string[] {
     const name = tool.name
     if (tool.available && !tool.available(ctx)) return false
     if (disabled.includes(name) || ctx.allowedTools && !ctx.allowedTools.includes(name)) return false
+    if (!ctx.workflowReplay && name === 'read_clipboard' && !requestsContextRead(ctx.question, 'clipboard')) return false
+    if (!ctx.workflowReplay && ['get_selection', 'replace_selection'].includes(name) && !ctx.selectionGuard && ctx.taskContext?.task?.selection === undefined && !requestsContextRead(ctx.question, 'selection')) return false
+    if (!ctx.workflowReplay && name === 'analyze_screenshot' && !requestsContextRead(ctx.question, 'screenshot')) return false
     if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number])) return Boolean(ctx.windows && ctx.allowedTools)
     if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number])) return Boolean(ctx.personal && ctx.allowedTools)
     if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number])) return Boolean(ctx.life && ctx.allowedTools)
@@ -807,7 +813,11 @@ async function runRegisteredTool(
   return outcome
 }
 
-export async function runTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome & { status: ToolState }> {
+export function runTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome & { status: ToolState }> {
+  return withTaskTrace(ctx.taskContext?.task, ctx.log, () => runTaskTool(name, args, ctx))
+}
+
+async function runTaskTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome & { status: ToolState }> {
   if (ctx.access) ctx.settings = { ...ctx.settings, assistantAccess: ctx.access() }
   const started = performance.now(), task = ctx.taskContext?.task
   if (task) {
@@ -821,6 +831,7 @@ export async function runTool(name: string, args: Record<string, unknown>, ctx: 
   else if (!tool) result = { ...fail(mt('未知工具：{{name}}', { name })), status: 'unsupported' }
   else if (ctx.settings.assistantAccess?.disabledTools.includes(name)) result = { ...fail(mt('此工具已在权限设置中关闭：{{name}}', { name })), status: 'unsupported' }
   else if (tool.available && !tool.available(ctx)) result = { ...fail(mt('工具当前不可用：{{name}}', { name })), status: 'unsupported' }
+  else if (!ctx.workflowReplay && name === 'analyze_screenshot' && !requestsContextRead(ctx.question, 'screenshot')) result = { ...fail(mt('请明确要求读取截图')), status: 'awaiting_confirmation' }
   else if (!ctx.workflowReplay && name === 'read_clipboard' && !requestsContextRead(ctx.question, 'clipboard')) result = { ...fail(mt('请明确要求读取剪贴板文字')), status: 'awaiting_confirmation' }
   else if (!ctx.workflowReplay && name === 'get_selection' && !ctx.selectionGuard && ctx.taskContext?.task?.selection === undefined && !requestsContextRead(ctx.question, 'selection')) result = { ...fail(mt('请明确要求读取选中文字')), status: 'awaiting_confirmation' }
   else {
@@ -835,11 +846,17 @@ export async function runTool(name: string, args: Record<string, unknown>, ctx: 
     ? 'awaiting_confirmation' : result.ok ? 'completed' : result.data.available === false ? 'unsupported' : 'failed')
   const outcome = { ...result, status, ...(task ? { taskId: task.id } : {}) }
   const durationMs = Math.round(performance.now() - started)
-  if (task && !outcome.reused) task.receipts.push({ tool: name, state: status, durationMs })
+  if (task && !outcome.reused) {
+    task.receipts.push({ tool: name, state: status, durationMs })
+    task.results = [...(task.results ?? []), { tool: name, state: status, data: outcome.data }].slice(-8)
+    recordTaskStage(task, 'tool', durationMs, ctx.log, status)
+    if (outcome.ok && name === 'get_current_folder' && typeof outcome.data.folder === 'string') task.directory = outcome.data.folder
+    if (outcome.ok && name === 'get_current_page' && typeof outcome.data.url === 'string') task.pageUrl = outcome.data.url
+  }
   if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary, status, taskId: task?.id,
     ...(needsFileSearchFallback(name, outcome) ? { fallback: true } : {}),
     items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
     detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
-  ctx.log(`[task ${task?.id ?? 'unscoped'}] tool=${name} status=${status} ms=${durationMs}${outcome.reused ? ' reused=true' : ''}`)
+  ctx.log(`[task ${task?.id ?? 'unscoped'}] tool=${tool?.name ?? 'unknown'} status=${status} ms=${durationMs}${outcome.reused ? ' reused=true' : ''}`)
   return outcome
 }

@@ -8,6 +8,8 @@
  */
 export const MAIN_MESSAGES: Record<string, string> = {
   '工具当前不可用：{{name}}': 'Tool currently unavailable: {{name}}',
+  '目标文件夹已有随记数据，请选择空文件夹': 'The target already contains notes data. Choose an empty folder.',
+  '请明确要求读取截图': 'Please explicitly request a screenshot',
   '请明确要求读取剪贴板文字': 'Please explicitly request clipboard text',
   '请明确要求读取选中文字': 'Please explicitly request selected text',
   "简报投递：{{accepted}} 个服务已受理，{{failed}} 个失败，{{unknown}} 个状态未知": "Briefing delivery: {{accepted}} providers accepted, {{failed}} failed, {{unknown}} unknown",

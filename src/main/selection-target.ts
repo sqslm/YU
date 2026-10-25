@@ -64,3 +64,14 @@ export async function captureSelectionTarget(settings: Settings, original?: Prom
     }
   }
 }
+
+/** A card owns only the selection its task actually read, never the currently focused app. */
+export async function applyAnswerSelection(settings: Settings, context: PromptContext | undefined, text: string, signal: AbortSignal): Promise<void> {
+  const expected = context?.task?.selection
+  if (!context || !expected) throw new Error(mt('请先选中文字，或提供要处理的文本'))
+  signal.throwIfAborted()
+  const target = await captureSelectionTarget(settings, context, signal)
+  if (target.text !== expected) throw new Error(mt('选区内容已变化，请重新选择文字'))
+  await target.apply(text, false, signal)
+  if (context.task) context.task.state = 'completed'
+}
