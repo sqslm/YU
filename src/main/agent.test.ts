@@ -289,7 +289,7 @@ describe('native function calling', () => {
     expect(result).toEqual({
       text: '你好呀。',
       sources: [],
-      searched: false
+      searched: false, taskState: 'completed'
     })
     expect(mocks.complete).not.toHaveBeenCalled()
     expect(fetchImpl).toHaveBeenCalledTimes(1)
@@ -794,7 +794,7 @@ describe('routing shortcuts', () => {
 
     expect(fetchImpl).not.toHaveBeenCalled()
     expect(mocks.searchWeb).not.toHaveBeenCalled()
-    expect(result).toEqual({ text: '直接回答。', sources: [], searched: false })
+    expect(result).toEqual({ text: '直接回答。', sources: [], searched: false, taskState: 'completed' })
   })
 
   it('searches directly when the router is disabled by policy', async () => {

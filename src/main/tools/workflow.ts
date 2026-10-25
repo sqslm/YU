@@ -273,6 +273,7 @@ async function run(name: WorkflowToolName, args: Record<string, unknown>, api: W
 export const WORKFLOW_DEFINITIONS: ToolDefinition[] = WORKFLOW_TOOLS.map(name => ({
   name,
   description: schemas[name].description,
+  normalizeArguments: name === 'save_workflow' ? args => args.steps === undefined ? args : { ...args, steps: normalizeWorkflowSteps(args.steps) } : undefined,
   parameters: {
     type: 'object',
     properties: schemas[name].properties,

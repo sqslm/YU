@@ -202,13 +202,13 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   },
   personal: {
     latestPromptUse:()=>pipeline?.selectionPromptReceipt()??null,
-    prepareSelectionEdit:async(operation,signal)=>{
+    prepareSelectionEdit:async(operation,signal,context)=>{
       selectionPreview=null
-      const target=await captureSelectionTarget(store.get(),assistantContext(),signal)
+      const target=await captureSelectionTarget(store.get(),context ?? assistantContext(),signal)
       const cancel=():void=>{pipeline?.cancel()}
       signal.addEventListener('abort',cancel,{once:true})
       let result:Awaited<ReturnType<Pipeline['transformSelection']>>
-      try{result=await pipeline!.transformSelection(target.text,operation,target.context)}finally{signal.removeEventListener('abort',cancel)}
+      try{result=await pipeline!.transformSelection(target.text,operation,{...target.context,task:context?.task})}finally{signal.removeEventListener('abort',cancel)}
       signal.throwIfAborted()
       if(!result)throw Error(mt('没有生成可替换的结果'))
       selectionPreview={target,text:result.text,at:Date.now()}
@@ -322,7 +322,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   },
   changed: state => {
     const turn = state.turns.at(-1)
-    if (assistantCardActive && turn) showAnswerCard({ question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
+    if (assistantCardActive && turn) showAnswerCard({ taskId: turn.taskId, taskState: turn.taskState, question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
     tray?.refresh()
     refreshWakeWord()
   } })
@@ -854,7 +854,7 @@ function openAsk(): boolean {
   return true
 }
 
-async function runAssistant(text: string, signal?: AbortSignal, submittedAt?: number, context = assistantContext(), useContext?: boolean, fromCard = false): Promise<{ text: string; failed?: boolean; answerCard?: AnswerCardPayload } | void> {
+async function runAssistant(text: string, signal?: AbortSignal, submittedAt?: number, context = assistantContext(), useContext?: boolean, fromCard = false): Promise<{ text: string; failed?: boolean; taskState?: import('@shared/task').TaskState; answerCard?: AnswerCardPayload } | void> {
   signal?.throwIfAborted()
   if (context.windowHandle) assistantTarget = { handle: context.windowHandle, title: context.windowTitle ?? '', appName: context.appName ?? '', className: '', pid: context.processId ?? 0, appPath: context.appPath ?? '', rect: context.windowRect ?? null }
   assistantCardActive = fromCard
@@ -865,7 +865,7 @@ async function runAssistant(text: string, signal?: AbortSignal, submittedAt?: nu
     if (!turn || turn.state === 'cancelled') return
     const answerCard = assistantAnswer(turn)
     if (!answerCard && (fromCard || lastAnswer?.assistant && cardWindow?.isVisible())) hideCard()
-    return { text: turn.answer, failed: turn.state === 'error' || Boolean(turn.localResults?.some(result => !result.ok)), answerCard }
+    return { text: turn.answer, failed: turn.state === 'error' || turn.taskState === 'failed', taskState: turn.taskState, answerCard }
   } finally { assistantCardActive = false }
 }
 
@@ -1924,14 +1924,21 @@ async function bootstrap(): Promise<void> {
     },
     onAssistant: (text, signal, submittedAt, context, useContext) => runAssistant(text, signal, submittedAt, context, useContext),
     onActivity: () => refreshHotkeyActivity(),
-    onVoiceNote: async (pcm, transcript, signal) => {
-      const note = await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, transcript)
+    onVoiceNote: async (pcm, transcript, signal, context = {}) => {
+      const saved: { note?: Awaited<ReturnType<NotesStore['create']>> } = {}
+      const outcome = await assistant.runLocalTool('create_note', { text: transcript }, transcript, context, signal, undefined,
+        { personal: { createNote: async text => { saved.note = await notes.create({ pcm, durationMs: Math.round(pcm.length / 16) }, signal, text); return saved.note } } })
+      if (!outcome.ok || !saved.note) throw new Error(outcome.summary)
+      const note = saved.note
       assistant.rememberAnswer(transcript, mt('随记已保存'), { savedNote: { id: note.id, text: transcript.slice(0, 1500), createdAt: note.createdAt } })
     },
-    onReminder: async (text, signal, progress, submittedAt) => {
-      const result = await reminders!.voice(text, signal, progress, submittedAt)
-      if (result.reminder) assistant.rememberAnswer(text, result.message, { savedReminder: result.reminder })
-      return result
+    onReminder: async (text, signal, progress, submittedAt, context = {}) => {
+      const result = await assistant.runLocalTool('create_reminder', {}, text, context, signal, submittedAt, {
+        onStatus: progress, personal: { remind: (request, abort, at, extra) => reminders!.voice(request, abort, progress, at, extra) } })
+      const id = (result.data.item as { id?: string } | undefined)?.id
+      const reminder = id ? reminders!.store.list().find(row => row.id === id) : undefined
+      if (reminder) assistant.rememberAnswer(text, result.summary, { savedReminder: reminder })
+      return { message: result.summary, undo: result.data.undo === true, ok: result.ok, status: result.status }
     },
     // Ask mode answers land in the card window; dictation/translate keep
     // typing straight into the foreground app.

@@ -5,7 +5,7 @@ import { mt } from '@shared/mainI18n'
 import { askAgent, resetThread, type AgentConversation, type AgentOptions, type AgentResult } from './agent'
 import { chainFor } from './providers/chain'
 import { WINDOWS_TOOLS, type WindowsTools } from './tools/windows'
-import { runTool } from './tools/registry'
+import { runTool, availableToolNames, type ToolContext, type ToolOutcome } from './tools/registry'
 import { redactSecrets } from './diagnostics'
 import { attachTask, createTask } from './task-context'
 import type { TaskContext } from '@shared/task'
@@ -368,6 +368,20 @@ export class AssistantSession {
   }) {}
 
   get busy(): boolean { return this.controller !== null }
+  private allowedTools(input: string): string[] {
+    return [...ASSISTANT_TOOLS, ...(this.deps.windows ? WINDOWS_TOOLS : []), ...(this.deps.personal ? PERSONAL_TOOLS : []),
+      ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []),
+      ...(this.deps.analyzeScreenshot && (screenshotNeedsEditor(input) || /截.{0,8}(?:图|窗口|屏)|屏幕|图片|图表|这个界面|这张图|\b(?:screenshot|screen|capture|OCR|image|chart|interface)\b/iu.test(input)) ? ['analyze_screenshot'] : [])]
+  }
+
+  /** Fast voice channels share registry rules without starting a conversation or model round. */
+  runLocalTool(name: string, args: Record<string, unknown>, question: string, context: PromptContext, signal: AbortSignal, submittedAt?: number,
+    options: Pick<ToolContext, 'onStatus' | 'onLocalResult'> & { personal?: Partial<PersonalTools> } = {}): Promise<ToolOutcome> {
+    return runTool(name, args, { settings: this.deps.settings(), question, taskContext: context, signal, submittedAt,
+      access: () => this.deps.settings().assistantAccess,
+      log: this.deps.log, windows: this.deps.windows, personal: this.deps.personal ? { ...this.deps.personal, ...options.personal } : undefined, life: this.deps.life, workflow: this.deps.workflow,
+      allowedTools: this.allowedTools(question), onStatus: options.onStatus, onLocalResult: options.onLocalResult })
+  }
   snapshot(): AssistantState {
     if (!this.busy && this.now() - this.lastUsed >= SESSION_TTL) this.clear()
     return { turns: structuredClone(this.turns), busy: this.busy, status: this.status }
@@ -469,7 +483,7 @@ export class AssistantSession {
     const stopSpeech = this.deps.life ? stopSpeakingRequest(input) : null
     const direct = operation || (stopSpeech ? { name: 'stop_speaking', args: stopSpeech } : null) || (this.deps.life ? speechPlaybackRequest(input) : null) || (screenshotRequest ? { name: 'analyze_screenshot', args: { question: input, task: /文字.{0,8}(?:提取|识别)|提取.{0,8}文字|\b(?:OCR|extract text|read text)\b/iu.test(input) ? 'ocr' : 'analyze' } } : null) ||
       (this.deps.personal ? personalCommand(input) : null) || windows?.command(input.trim())
-    const allowedTools = [...ASSISTANT_TOOLS, ...(windows ? WINDOWS_TOOLS : []), ...(this.deps.personal ? PERSONAL_TOOLS : []), ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []), ...(this.deps.analyzeScreenshot && (screenshotNeedsEditor(input) || /截.{0,8}(?:图|窗口|屏)|屏幕|图片|图表|这个界面|这张图|\b(?:screenshot|screen|capture|OCR|image|chart|interface)\b/iu.test(input)) ? ['analyze_screenshot'] : [])]
+    const allowedTools = this.allowedTools(input)
     const taskReference = Boolean(this.deps.personal) && directVoiceIntent(input)?.kind === 'assistant' && /提醒|待办|代办|\b(?:reminder|to-?do|task)\b/iu.test(input)
     const taskEdit = taskReference && /改|取消|删除|完成|恢复|延后|推迟|提前|不要了|不用了|\b(?:change|update|reschedule|cancel|delete|complete|restore|snooze|postpone|move)\b/iu.test(input)
     const taskStatus = Boolean(this.deps.personal) && !isDictatedContent(input) && /提醒|待办|\b(?:reminder|to-?do|task)\b/iu.test(input) && /还在|丢失|是否保存|有没有保存|\bstill\b.{0,20}\b(?:there|saved|exist)/iu.test(input)
@@ -494,12 +508,13 @@ export class AssistantSession {
     const deadline = AbortSignal.timeout(90_000)
     const taskSignal = AbortSignal.any([controller.signal, deadline])
     const logTool = (line: string): void => {
-      if (!line.startsWith('[perf]') && !line.startsWith('[tool]')) return
+      if (!line.startsWith('[perf]') && !line.startsWith('[tool]') && !line.startsWith('[task ')) return
       const success = /^(\[tool\] \w+ ok=true)\b/.exec(line)
       this.deps.log(success?.[1] ?? redactSecrets(line).slice(0, 700))
     }
     try {
       const options: AgentOptions = {
+        toolAccess: () => this.deps.settings().assistantAccess,
         analyzeScreenshot: this.deps.analyzeScreenshot ? (question, ocr) => this.deps.analyzeScreenshot!(context, question, ocr, taskSignal) : undefined,
         readSelection: this.deps.readSelection ? () => this.deps.readSelection!(context, taskSignal) : undefined,
         conversation: this.conversation, allowedTools,
@@ -515,13 +530,17 @@ export class AssistantSession {
           if (this.now() - lastPaint >= 80) { lastPaint = this.now(); this.notify() }
         }
       }
+      options.allowedTools = availableToolNames({ settings, question: turn.question, log: logTool, allowedTools,
+        windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, analyzeScreenshot: options.analyzeScreenshot })
       let result: AgentResult
       if (direct) {
         const outcome = await runTool(direct.name, direct.args, { settings, question: turn.question, signal: taskSignal,
+          access: options.toolAccess,
           log: logTool, windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, taskContext: context, submittedAt, allowedTools, onLocalResult: options.onLocalResult,
           analyzeScreenshot: options.analyzeScreenshot })
         taskSignal.throwIfAborted()
-        result = { text: direct.name === 'analyze_screenshot' && outcome.ok ? String(outcome.data.text) : outcome.summary, sources: [], searched: false }
+        result = { text: direct.name === 'analyze_screenshot' && outcome.ok ? String(outcome.data.text) : outcome.summary, sources: [], searched: false,
+          taskState: outcome.status === 'awaiting_confirmation' ? 'awaiting_confirmation' : outcome.status === 'completed' ? 'completed' : outcome.status === 'cancelled' ? 'cancelled' : 'failed' }
         this.conversation.messages.push({ role: 'user', content: turn.question }, { role: 'assistant', content: result.text })
         this.conversation.toolNotes = JSON.stringify({ name: direct.name, ...outcome })
         this.conversation.messages = this.conversation.messages.slice(-6)
@@ -530,7 +549,7 @@ export class AssistantSession {
         // Reuse the registered query and the agent's existing tool-result context.
         if (taskReference || taskStatus) {
           const current = await runTool('list_reminders', taskStatus ? { status: 'all' } : {}, { settings, question: turn.question, signal: taskSignal,
-            log: () => {}, personal: this.deps.personal, allowedTools, onLocalResult: options.onLocalResult })
+            log: logTool, taskContext: context, access: options.toolAccess, personal: this.deps.personal, allowedTools, onLocalResult: options.onLocalResult })
           if (!current.ok) throw new Error(current.summary)
           this.conversation.toolNotes = JSON.stringify({ name: 'list_reminders', ...current })
           this.reference = mergeReference(referenceContextFrom({ name: 'list_reminders', ...current }), this.reference)
@@ -539,6 +558,7 @@ export class AssistantSession {
         // user is looking at right now rather than one from an older list.
         const reference = resolveReference(turn.question, this.reference)
         if (reference.kind === 'clarify') {
+          task.state = 'awaiting_confirmation'
           // A pointer with no single target is a question, not a guess: asking
           // costs one sentence, guessing edits or opens the wrong object.
           this.conversation.messages.push({ role: 'user', content: turn.question }, { role: 'assistant', content: reference.question })
@@ -554,6 +574,9 @@ export class AssistantSession {
       taskSignal.throwIfAborted()
       if (this.controller !== controller) return
       const failedTool = unresolvedToolFailure(turn.localResults)
+      if (failedTool?.status === 'awaiting_confirmation') {
+        task.state = 'awaiting_confirmation'; turn.answer = failedTool.summary; turn.state = 'done'; return
+      }
       if (failedTool) throw new Error(failedTool.summary)
       if (taskEdit && !turn.localResults?.some(item => item.tool === 'manage_reminder' && item.ok)) {
         throw new Error(turn.localResults?.find(item => item.tool === 'manage_reminder' && !item.ok)?.summary ?? mt('本次未修改提醒或待办，请明确事项后重试'))
@@ -561,7 +584,7 @@ export class AssistantSession {
       turn.answer = result.text
       turn.sources = result.sources
       turn.state = 'done'
-      task.state = 'completed'; turn.taskState = task.state
+      task.state = result.taskState ?? (turn.localResults?.some(item => item.status === 'awaiting_confirmation') ? 'awaiting_confirmation' : 'completed'); turn.taskState = task.state
       this.refreshReference()
     } catch (error) {
       if (this.controller !== controller) return

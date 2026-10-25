@@ -371,6 +371,7 @@ describe('selection tools', () => {
       'get_selection',
       {},
       makeContext({
+        question: '读取选中文字',
         selectionDeps: {
           readClipboard: () => 'old',
           writeClipboard: () => {},

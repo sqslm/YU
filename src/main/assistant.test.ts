@@ -153,7 +153,7 @@ describe('assistant session', () => {
     expect(ask.mock.calls[1][5]!.conversation).toBe(firstConversation)
     expect(ask.mock.calls[0][0].polish).toMatchObject({ model: 'model', apiKey: 'private' })
     expect(ask.mock.calls[0][2].task).toMatchObject({ source: 'text', originalInput: 'Hello' })
-    expect(ask.mock.calls[0][5]?.allowedTools).toEqual(ASSISTANT_TOOLS)
+    expect(new Set(ask.mock.calls[0][5]?.allowedTools)).toEqual(new Set(ASSISTANT_TOOLS))
     expect(session.snapshot().turns.map(t => t.state)).toEqual(['done', 'done'])
     const snapshot = session.snapshot(); snapshot.turns[0].answer = 'modified'
     expect(session.snapshot().turns[0].answer).toBe('Actual answer')

@@ -6,6 +6,7 @@ import { mainLanguage, mt } from '@shared/mainI18n'
 import { nextOccurrence, resolveDeadline, resolveReminderTime } from '../reminder-time'
 import { directVoiceIntent } from '../voice-intent'
 import type { ToolDefinition, ToolOutcome } from './registry'
+import type { PromptContext } from '@shared/prompts'
 
 export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_reminder', 'create_note', 'search_notes', 'update_note_tags', 'update_note', 'extract_note_tasks', 'search_history', 'read_clipboard', 'copy_to_clipboard', 'open_page', 'control_note_audio', 'get_prompt_info', 'note_sync_status', 'prepare_selection_edit', 'apply_selection_edit'] as const
 export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'calendar', 'briefing', 'corrections', 'settings'] as const
@@ -22,7 +23,7 @@ export function personalCommand(text: string): { name: string; args: Record<stri
 }
 export interface PersonalTools {
   latestPromptUse?():Record<string,unknown>|null
-  prepareSelectionEdit?(operation:'polish'|'translate',signal:AbortSignal):Promise<{text:string;promptName:string}>
+  prepareSelectionEdit?(operation:'polish'|'translate',signal:AbortSignal,context?:PromptContext):Promise<{text:string;promptName:string}>
   applySelectionEdit?(signal:AbortSignal):Promise<void>
   /**
    * `extra` carries what the tool read from the user's own words. The extractor
@@ -99,11 +100,11 @@ function reminderDetails(row: Reminder, now: number): Record<string, unknown> {
 // Tolerate the brand's ASR homophones only while matching searches; never rewrite notes.
 function searchText(text: string): string { return text.toLowerCase().replace(/轻令|清令|青令|qinly/giu, 'qinly') }
 
-async function run(name: string, args: Record<string, unknown>, api: PersonalTools, question: string, signal: AbortSignal, submittedAt?: number): Promise<ToolOutcome> {
+async function run(name: string, args: Record<string, unknown>, api: PersonalTools, question: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext): Promise<ToolOutcome> {
   signal.throwIfAborted()
   if(name==='prepare_selection_edit'){
     if(!api.prepareSelectionEdit)throw Error(mt('选区编辑服务尚未就绪'))
-    const result=await api.prepareSelectionEdit(args.operation as 'polish'|'translate',signal)
+    const result=await api.prepareSelectionEdit(args.operation as 'polish'|'translate',signal,context)
     return ok(result.text,{text:result.text,promptName:result.promptName,preview:true,applied:false})
   }
   if(name==='apply_selection_edit'){
@@ -146,11 +147,12 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     // The established full-template refinement / time parser is authoritative.
     // Never accept a model-invented timestamp or silently drop a correction.
     const originalIntent = directVoiceIntent(question)
+    const explicitReminder = context?.task?.route?.kind === 'reminder' && context.task.route.via === 'explicit'
     let request = args.text === undefined ? question : string(args.text)
     if (!request || !question.includes(request)) throw new Error(mt('提醒内容必须来自原始请求'))
     const clauseStart=question.indexOf(request)
     const separateCreation=args.text!==undefined&&clauseStart>0&&/^(?:再)?(?:提醒我|(?:加个|创建|新建|添加).{0,6}(?:提醒|待办))/u.test(request)&&/(?:然后|另外|并且|同时|以及|再|[，,;；。])\s*(?:再|并)?\s*$/u.test(question.slice(0,clauseStart))
-    if (originalIntent?.kind === 'dictation' || originalIntent?.kind === 'assistant'&&!separateCreation) throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
+    if (!explicitReminder && (originalIntent?.kind === 'dictation' || originalIntent?.kind === 'assistant'&&!separateCreation)) throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
     if (originalIntent?.kind === 'reminder' && request !== question) throw new Error(mt('提醒内容必须保留完整的时间和改口'))
     // A scoped todo's content may omit the creation verb, whose authority still
     // comes from the original command. Carry that mode into the existing parser.
@@ -158,8 +160,8 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
         /(?:加个|添加|创建|新建|记个).{0,6}(?:待办|代办)|\b(?:add|create)\b.{0,20}\bto-?do\b/iu.test(question) &&
         !/提醒|通知|\b(?:remind|notify)\b/iu.test(question)) request = `待办：${request}`
     const intent = directVoiceIntent(request)
-    if (intent?.kind === 'assistant' || intent?.kind === 'dictation') throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
-    if (!/提醒|待办|代办|(?:添加|创建|新建|加个|记个).{0,8}任务|\b(?:remind|reminder|to-?do|notify|alert)\b|\b(?:create|add|save)\b.{0,30}\btask\b/iu.test(request)) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
+    if (!explicitReminder && (intent?.kind === 'assistant' || intent?.kind === 'dictation')) throw new Error(mt('本次请求不应创建新提醒，请查询或修改已有事项'))
+    if (!explicitReminder && !/提醒|待办|代办|(?:添加|创建|新建|加个|记个).{0,8}任务|\b(?:remind|reminder|to-?do|notify|alert)\b|\b(?:create|add|save)\b.{0,30}\btask\b/iu.test(request)) throw new Error(mt('没有识别到明确的提醒指令，未创建提醒'))
     const now = Date.now()
     // A deadline names a day, not an instant: "by Friday" is a usable target, and
     // failing the whole reminder because no clock was spoken loses a task the user
@@ -204,7 +206,7 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     }
     const summary = notes.length ? `${recorded.message} · ${notes.join(' · ')}` : recorded.message
     if (!reminder && !(recorded.saved && recorded.saved > 0)) return { ok: false, summary, data: { ok: false, saved: 0, needsClarification: true } }
-    return ok(summary, { saved: recorded.saved ?? 1, ...(reminder ? { item: reminderDetails(reminder, now) } : {}) })
+    return ok(summary, { saved: recorded.saved ?? 1, undo: recorded.undo === true, ...(reminder ? { item: reminderDetails(reminder, now) } : {}) })
   }
   if (name === 'list_reminders') {
     const status = string(args.status) || 'active', query = string(args.query).toLowerCase()
@@ -370,7 +372,12 @@ const schemas: Record<typeof PERSONAL_TOOLS[number], { description: string; prop
   open_page: { description: 'Open existing overview, history, notes, reminders/todos, calendar, corrections or settings pages. Use settings for existing configuration (models, prompts, hotkeys, sync, etc). Does not modify any setting.', properties: { page: { type: 'string', enum: HUB_PAGES } }, required: ['page'] }
 }
 
+const optionalMethods: Partial<Record<typeof PERSONAL_TOOLS[number], keyof PersonalTools>> = {
+  prepare_selection_edit: 'prepareSelectionEdit', apply_selection_edit: 'applySelectionEdit',
+  control_note_audio: 'controlNoteAudio', note_sync_status: 'syncInfo'
+}
 export const PERSONAL_DEFINITIONS: ToolDefinition[] = PERSONAL_TOOLS.map(name => ({ name, description: schemas[name].description,
+  available: ctx => Boolean(ctx.personal && (!optionalMethods[name] || typeof ctx.personal[optionalMethods[name]!] === 'function')),
   parameters: { type: 'object', properties: schemas[name].properties, required: schemas[name].required ?? [], additionalProperties: false },
   run: async (args, ctx) => {
     if (!ctx.personal || !ctx.allowedTools?.includes(name)) throw new Error(mt('本次任务未授权此工具：{{name}}', { name }))
@@ -381,6 +388,6 @@ export const PERSONAL_DEFINITIONS: ToolDefinition[] = PERSONAL_TOOLS.map(name =>
       const validType = field?.type === 'array' ? Array.isArray(value) && value.length <= (field.maxItems ?? 30) && value.every(tag => typeof tag === 'string' && tag.trim() && tag.length <= 100) : typeof value === field?.type
       if (!field || !validType || field.enum && !field.enum.includes(value as string)) throw new Error(mt('工具参数无效：{{name}}', { name: key }))
     }
-    return run(name, args, ctx.personal, ctx.workflowReplay && name === 'create_reminder' && typeof args.text === 'string' ? args.text : ctx.question, ctx.signal ?? new AbortController().signal, ctx.submittedAt)
+    return run(name, args, ctx.personal, ctx.workflowReplay && name === 'create_reminder' && typeof args.text === 'string' ? args.text : ctx.question, ctx.signal ?? new AbortController().signal, ctx.submittedAt, ctx.taskContext)
   }
 }))

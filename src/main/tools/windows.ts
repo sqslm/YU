@@ -12,24 +12,12 @@ import { FileIndex, DEFAULT_MAX_FILES, DEFAULT_TIMEOUT_MS, type ContentSearchOpt
 import { searchEverything, type EverythingOptions, type EverythingResult } from '../everything'
 import { browserDownloads } from '../file-activity'
 import { resolveSpokenFolder } from '../folder-resolution'
+import { argumentError } from './schema'
 
 export const WINDOWS_TOOLS = ['open_application', 'open_folder', 'open_file', 'open_url', 'search_files', 'search_file_contents', 'search_files_everything', 'get_active_window', 'get_disk_space', 'get_current_folder', 'get_current_page', 'get_system_info', 'get_system_volume', 'set_system_volume', 'search_file_activity'] as const
 const documents = new Set(['.pdf', '.txt', '.md', '.csv', '.json', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.rtf', '.mp3', '.wav', '.mp4'])
 const string = (value: unknown): string => typeof value === 'string' ? value.trim() : ''
 const within = (root: string, path: string): boolean => { const part = relative(root, path); return !part.startsWith('..') && !isAbsolute(part) }
-
-/** Only the JSON Schema keywords the model is allowed to see are honoured. */
-interface FieldSchema { type: string; enum?: string[]; items?: { type: string }; maxItems?: number }
-
-const validArgument = (field: FieldSchema, value: unknown): boolean => {
-  if (field.enum && !field.enum.includes(value as string)) return false
-  if (field.type === 'array') {
-    if (!Array.isArray(value) || value.length > (field.maxItems ?? Number.MAX_SAFE_INTEGER)) return false
-    const itemType = field.items?.type ?? 'string'
-    return value.every(item => typeof item === (itemType === 'integer' ? 'number' : itemType))
-  }
-  return typeof value === (field.type === 'integer' ? 'number' : field.type)
-}
 
 /** Why a body scan stopped early, phrased for a card and for the model. */
 const TRUNCATION_NOTE: Record<string, string> = {
@@ -117,15 +105,13 @@ export class WindowsTools {
     signal?.throwIfAborted()
     const ok = (summary: string, data: Record<string, unknown> = {}): ToolOutcome => ({ ok: true, summary, data: { ...data, ok: true, summary } })
     const failed = (message: string): ToolOutcome => ({ ok: false, summary: message, error: message, data: { ok: false, error: message } })
-    const schema = properties[name as keyof typeof properties] as Record<string, FieldSchema> | undefined
+    const schema = WINDOWS_DEFINITIONS.find(tool => tool.name === name)?.parameters
     const access=this.deps.access?.()??DEFAULT_ASSISTANT_ACCESS
     if(access.disabledTools.includes(name))return failed(mt('此工具已在权限设置中关闭：{{name}}',{name}))
     if(['get_active_window','get_current_folder','get_current_page'].includes(name) && assistantAppExcluded(context?.appName,context?.appPath,access))return failed(mt('此应用已排除上下文读取'))
     if (!schema) return failed(mt('未知工具：{{name}}', { name }))
-    for (const [key, value] of Object.entries(args)) {
-      const field = Object.hasOwn(schema, key) ? schema[key] : undefined
-      if (!field || !validArgument(field, value)) return failed(mt('工具参数无效：{{name}}', { name: key }))
-    }
+    const invalid = argumentError(schema, args)
+    if (invalid) return failed(mt('工具参数无效：{{name}}', { name: invalid }))
     if (name === 'get_system_info') {
       const cpus = os.cpus(), total = os.totalmem(), free = os.freemem()
       return ok(mt('CPU：{{cpu}}；内存 {{total}} GiB，可用 {{free}} GiB', { cpu: cpus[0]?.model || 'Unknown', total: (total/1024**3).toFixed(1), free: (free/1024**3).toFixed(1) }),
@@ -208,7 +194,7 @@ export class WindowsTools {
       }
       const items = this.remember(found)
       if (!items.length) return failed(mt('未找到登记的应用：{{name}}', { name: query }))
-      if (items.length !== 1) return ok(mt('找到多个应用，请选择要打开的项目'), { items })
+      if (items.length !== 1) return ok(mt('找到多个应用，请选择要打开的项目'), { items, needsConfirmation: true })
       signal?.throwIfAborted()
       return openItem(items[0])
     }

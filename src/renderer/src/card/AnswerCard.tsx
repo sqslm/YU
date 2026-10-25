@@ -258,7 +258,7 @@ export function AnswerCard(): JSX.Element | null {
   const tools = data.tools ?? []
   const actions = data.actions ?? []
   const busy = pending !== null || data.streaming === true
-  const statusLine = pending !== null ? i18n.t('正在思考…') : (data.status ?? '').trim() || null
+  const statusLine = pending !== null ? i18n.t('正在思考…') : (data.status ?? '').trim() || (data.taskState === 'awaiting_confirmation' ? i18n.t('等待确认') : null)
   const streaming = data.streaming === true
   const sourceList = data.sources ?? []
   const items = data.localResults?.flatMap(result => result.items ?? []) ?? []

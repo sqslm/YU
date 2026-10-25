@@ -284,7 +284,14 @@ const schemas: Record<typeof LIFE_TOOLS[number], { description: string; properti
   sync_control: { description: 'Pause or resume cloud sync on the explicit user request. Pausing never deletes local data, and reminders keep working while sync is paused.', properties: { action: { type: 'string', enum: ['pause', 'resume'] } }, required: ['action'] }
 }
 
+const optionalMethods: Partial<Record<typeof LIFE_TOOLS[number], Array<keyof LifeTools>>> = {
+  configure_briefing: ['briefingSettings', 'setBriefingSettings'],
+  configure_briefing_delivery: ['briefingDeliverySettings', 'configureBriefingDelivery'],
+  send_briefing: ['sendBriefing'], briefing_delivery_status: ['briefingDeliveryHistory'],
+  configure_speech: ['speechSettings', 'setSpeechSettings'], control_speech: ['controlSpeech']
+}
 export const LIFE_DEFINITIONS: ToolDefinition[] = LIFE_TOOLS.map(name => ({ name, description: schemas[name].description,
+  available: ctx => Boolean(ctx.life && (optionalMethods[name] ?? []).every(method => typeof ctx.life![method] === 'function')),
   parameters: { type: 'object', properties: schemas[name].properties, required: schemas[name].required ?? [], additionalProperties: false },
   run: async (args, ctx) => {
     if (!ctx.life || !ctx.allowedTools?.includes(name)) throw new Error(mt('本次任务未授权此工具：{{name}}', { name }))

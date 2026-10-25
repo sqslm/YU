@@ -41,6 +41,9 @@ import type { AssistantLocalResult } from '@shared/assistant'
 import { PERSONAL_DEFINITIONS, PERSONAL_TOOLS, type PersonalTools } from './personal'
 import { LIFE_DEFINITIONS, LIFE_TOOLS, type LifeTools } from './life'
 import { WORKFLOW_DEFINITIONS, WORKFLOW_TOOLS, type WorkflowTools } from './workflow'
+import type { TaskContext, ToolState } from '@shared/task'
+import { argumentError } from './schema'
+import { requestsContextRead } from '../context-access'
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
@@ -58,6 +61,7 @@ export interface ToolContext {
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
   allowedTools?: readonly string[]
+  access?: () => Settings['assistantAccess']
   settings: Settings
   /** The spoken question, for tools that can fall back to it for arguments. */
   question: string
@@ -88,6 +92,10 @@ export interface ToolContext {
 }
 
 export interface ToolOutcome {
+  /** Always populated by runTool; service adapters may still return the legacy shape. */
+  status?: ToolState
+  taskId?: string
+  reused?: boolean
   ok: boolean
   /** JSON-ready payload handed back to the model. */
   data: Record<string, unknown>
@@ -109,11 +117,16 @@ export interface ToolDefinition {
   description: string
   /** JSON Schema for OpenAI function calling. */
   parameters: Record<string, unknown>
+  /** Existing input normalizers, e.g. saved workflow shorthand, run before schema validation. */
+  normalizeArguments?: (args: Record<string, unknown>) => Record<string, unknown>
+  available?: (ctx: ToolContext) => boolean
   run: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolOutcome>
 }
 
 /** What actually ran, as the agent remembers it. */
 export interface ToolRun {
+  status?: ToolState
+  taskId?: string
   name: string
   ok: boolean
   data: Record<string, unknown>
@@ -144,7 +157,8 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
 }
 
 /** Reuse reads and identical personal writes within one task, never across tasks. */
-const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder', 'update_note_tags', 'get_selection', 'read_clipboard', 'analyze_screenshot', 'send_briefing', 'prepare_selection_edit', 'apply_selection_edit'])
+const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_event', 'create_note', 'extract_note_tasks', 'get_selection', 'read_clipboard', 'analyze_screenshot', 'send_briefing', 'prepare_selection_edit', 'apply_selection_edit', 'get_current_folder', 'get_current_page'])
+const taskCaches = new WeakMap<TaskContext, Map<string, Promise<ToolOutcome>>>()
 
 /** Planned queries in flight at once. The plan is two; more is throttling bait. */
 const SEARCH_PLAN_CONCURRENCY = 2
@@ -663,7 +677,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 export const TOOL_NAMES: string[] = TOOL_DEFINITIONS.map((tool) => tool.name)
 
 /** OpenAI `tools` array. */
-export function toolSchemas(allowed?: readonly string[]): Array<Record<string, unknown>> {
+export function toolSchemas(allowed?: readonly string[], ctx?: ToolContext): Array<Record<string, unknown>> {
+  if (ctx) allowed = availableToolNames({ ...ctx, allowedTools: allowed ?? ctx.allowedTools })
   return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(tool.name)).map((tool) => ({
     type: 'function',
     function: {
@@ -672,6 +687,22 @@ export function toolSchemas(allowed?: readonly string[]): Array<Record<string, u
       parameters: tool.parameters
     }
   }))
+}
+
+/** Advertise only the same connected and enabled capabilities that execution can use. */
+export function availableToolNames(ctx: ToolContext): string[] {
+  const disabled = (ctx.access?.() ?? ctx.settings.assistantAccess)?.disabledTools ?? []
+  return TOOL_DEFINITIONS.filter(tool => {
+    const name = tool.name
+    if (tool.available && !tool.available(ctx)) return false
+    if (disabled.includes(name) || ctx.allowedTools && !ctx.allowedTools.includes(name)) return false
+    if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number])) return Boolean(ctx.windows && ctx.allowedTools)
+    if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number])) return Boolean(ctx.personal && ctx.allowedTools)
+    if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number])) return Boolean(ctx.life && ctx.allowedTools)
+    if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number])) return Boolean(ctx.workflow && ctx.allowedTools)
+    if (name === 'analyze_screenshot') return Boolean(ctx.analyzeScreenshot && ctx.allowedTools)
+    return name !== 'web_search' || ctx.settings.search?.enabled !== false
+  }).map(tool => tool.name)
 }
 
 export function getTool(name: string): ToolDefinition | undefined {
@@ -720,14 +751,14 @@ async function attemptTool(
   if (outcome.ok) return outcome.value
   if (outcome.reason === 'timeout') {
     ctx.log(`[tool] ${tool.name} timed out after ${timeoutMs}ms`)
-    return fail(
+    return { ...fail(
       mt('{{tool}} 超时（{{seconds}}s），已跳过这一步', {
         tool: tool.name,
         seconds: Math.round(timeoutMs / 1000)
       })
-    )
+    ), status: 'timeout' }
   }
-  if (outcome.reason === 'aborted') return fail(mt('{{tool}} 已取消', { tool: tool.name }))
+  if (outcome.reason === 'aborted') return { ...fail(mt('{{tool}} 已取消', { tool: tool.name })), status: 'cancelled' }
   ctx.log(`[tool] ${tool.name} threw: ${messageOf(outcome.error)} | args=${argShape(args)}`)
   return fail(mt('{{tool}} 执行失败：{{message}}', { tool: tool.name, message: messageOf(outcome.error) }))
 }
@@ -737,13 +768,12 @@ async function attemptTool(
  * `{ok:false}`. Identical cacheable calls inside one take share a single
  * attempt, so a model that asks for the same page twice pays for it once.
  */
-export async function runTool(
+async function runRegisteredTool(
   name: string,
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolOutcome> {
   const tool = getTool(name)
-  if (ctx.settings.assistantAccess?.disabledTools.includes(name)) return fail(mt('此工具已在权限设置中关闭：{{name}}', { name }))
   const reject = (summary: string): ToolOutcome => {
     ctx.log(`[tool] ${name} rejected: ${summary} | args=${argShape(args ?? {})}`)
     return fail(summary)
@@ -766,17 +796,50 @@ export async function runTool(
     const cached = ctx.cache?.get(key)
     if (cached) {
       ctx.log(`[tool] ${name} 复用本轮的同一请求`)
-      return cached
+      return { ...await cached, reused: true }
     }
   }
   const started = Date.now()
   const attempt = attemptTool(tool, input, ctx)
   if (key) ctx.cache?.set(key, attempt)
   const outcome = await attempt
-  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary,
+  ctx.log(`[perf] tool:${name} ${Date.now() - started}ms ok=${outcome.ok}`)
+  return outcome
+}
+
+export async function runTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome & { status: ToolState }> {
+  if (ctx.access) ctx.settings = { ...ctx.settings, assistantAccess: ctx.access() }
+  const started = performance.now(), task = ctx.taskContext?.task
+  if (task) {
+    let cache = taskCaches.get(task)
+    if (!cache) { cache = ctx.cache ?? new Map(); taskCaches.set(task, cache) }
+    ctx.cache = cache
+  }
+  let result: ToolOutcome
+  const tool = getTool(name)
+  if (ctx.signal?.aborted) result = { ...fail(mt('{{tool}} 已取消', { tool: name })), status: 'cancelled' }
+  else if (!tool) result = { ...fail(mt('未知工具：{{name}}', { name })), status: 'unsupported' }
+  else if (ctx.settings.assistantAccess?.disabledTools.includes(name)) result = { ...fail(mt('此工具已在权限设置中关闭：{{name}}', { name })), status: 'unsupported' }
+  else if (tool.available && !tool.available(ctx)) result = { ...fail(mt('工具当前不可用：{{name}}', { name })), status: 'unsupported' }
+  else if (!ctx.workflowReplay && name === 'read_clipboard' && !requestsContextRead(ctx.question, 'clipboard')) result = { ...fail(mt('请明确要求读取剪贴板文字')), status: 'awaiting_confirmation' }
+  else if (!ctx.workflowReplay && name === 'get_selection' && !ctx.selectionGuard && ctx.taskContext?.task?.selection === undefined && !requestsContextRead(ctx.question, 'selection')) result = { ...fail(mt('请明确要求读取选中文字')), status: 'awaiting_confirmation' }
+  else {
+    try {
+      const rootError = argumentError({ type: 'object' }, args)
+      if (!rootError && tool.normalizeArguments) args = tool.normalizeArguments(args)
+      const invalid = rootError ?? argumentError(tool.parameters, args)
+      result = invalid ? fail(mt('工具参数无效：{{name}}', { name: invalid })) : await runRegisteredTool(name, args, ctx)
+    } catch (error) { result = fail(messageOf(error)) }
+  }
+  const status = result.status ?? (result.action || result.data.needsConfirmation === true || result.data.needsClarification === true || result.data.preview === true && result.data.applied === false
+    ? 'awaiting_confirmation' : result.ok ? 'completed' : result.data.available === false ? 'unsupported' : 'failed')
+  const outcome = { ...result, status, ...(task ? { taskId: task.id } : {}) }
+  const durationMs = Math.round(performance.now() - started)
+  if (task && !outcome.reused) task.receipts.push({ tool: name, state: status, durationMs })
+  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary, status, taskId: task?.id,
     ...(needsFileSearchFallback(name, outcome) ? { fallback: true } : {}),
     items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
     detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
-  ctx.log(`[perf] tool:${name} ${Date.now() - started}ms ok=${outcome.ok}`)
+  ctx.log(`[task ${task?.id ?? 'unscoped'}] tool=${name} status=${status} ms=${durationMs}${outcome.reused ? ' reused=true' : ''}`)
   return outcome
 }

@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { directVoiceIntent, parseVoiceIntent, isCurrentWindowQuestion, needsAssistantContext, screenshotNeedsEditor } from './voice-intent'
 
 describe('unified voice decisions', () => {
+  it.each(['十分钟后提醒我读取剪贴板', '明天提醒我截图', '提醒我看一下日程'])('treats the operation in a timed reminder as reminder content: %s', text => {
+    expect(directVoiceIntent(text)).toEqual({ kind: 'reminder' })
+  })
   it.each(['暂停朗读','继续朗读','把朗读音量调到40','查看我的CPU型号','跨屏截图','把选中文字先润色给我看','把刚才润色结果替换回原选区','我今天下载了哪些文件','查我最近打开的文件','这次用的是哪个提示词卡片？','哪些随记同步失败'])('routes the completed entry capability to real assistant tools: %s',text=>{
     expect(directVoiceIntent(text)).toEqual({kind:'assistant'})
   })

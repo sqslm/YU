@@ -60,7 +60,7 @@ import { mainLanguage, mt } from '@shared/mainI18n'
 import { LiveCaptions } from './live-captions'
 import { matchVoiceCommand } from '@shared/voiceCommands'
 import { commentSelection } from './selection-comments'
-import type { TaskContext, TaskTarget } from '@shared/task'
+import type { TaskContext, TaskTarget, TaskState, ToolState } from '@shared/task'
 import { attachTask, createTask } from './task-context'
 
 const MIN_DURATION_MS = 350
@@ -135,10 +135,10 @@ export interface PipelineOptions {
   captureSelection?: (context?: PromptContext, signal?: AbortSignal) => Promise<SelectionTarget>
   voiceContext?: (text: string) => { recent: { question: string; answer: string } | null; activeTasks?: { id: string; title: string }[] }
   onCompletedAnswer?: (question: string, answer: string) => void
-  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext, useContext?: boolean) => Promise<{ text: string; failed?: boolean; answerCard?: AnswerCardPayload } | void>
-  onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal) => Promise<void>
+  onAssistant?: (text: string, signal: AbortSignal, submittedAt?: number, context?: PromptContext, useContext?: boolean) => Promise<{ text: string; failed?: boolean; taskState?: TaskState; answerCard?: AnswerCardPayload } | void>
+  onVoiceNote?: (pcm: Int16Array, transcript: string, signal: AbortSignal, context?: PromptContext) => Promise<void>
   onActivity?: (recording: boolean, busy: boolean) => void
-  onReminder?: (text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt?: number) => Promise<{ message: string; undo?: boolean }>
+  onReminder?: (text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt?: number, context?: PromptContext) => Promise<{ message: string; undo?: boolean; ok?: boolean; status?: ToolState }>
   /**
    * Ask-mode answers are surfaced in the dedicated answer card window instead
    * of being typed into the foreground app.
@@ -1270,6 +1270,7 @@ export class Pipeline {
         mode = command?.mode === 'ask' || command?.mode === 'translate' ? command.mode : 'dictation'
         purpose = command?.mode === 'reminder' || command?.mode === 'notes' ? command.mode : undefined
         transcript = command ? command.text : transcript
+        if (command) task.route = { kind: purpose ?? mode, via: 'explicit' }
         this.stageMode = mode
         this.takePurpose = purpose
         if (purpose) this.takePrompt.delete(token)
@@ -1341,7 +1342,7 @@ export class Pipeline {
         const original = noteTranscript || transcript || (route === 'multimodal'
           ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
           : await this.asrTranscript(settings, wav, controller.signal, progress))
-        await this.options.onVoiceNote(pcm, original, controller.signal)
+        await this.options.onVoiceNote(pcm, original, controller.signal, context)
         if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), feedback: {}, taskLabel: mt('随记'), showMode: settings.showModeInBar }, 10_000, { force: true })
         return null
       }
@@ -1354,7 +1355,8 @@ export class Pipeline {
         if (!transcript.trim()) throw new Error(mt('模型返回了空文本'))
         if (!this.options.onAssistant) throw new Error(mt('助手尚未就绪'))
         const result = await this.options.onAssistant(transcript, controller.signal, submittedAt, context, assistantUseContext)
-        if (result?.failed) task.state = 'failed'
+        if (result?.taskState) task.state = result.taskState
+        else if (result?.failed) task.state = 'failed'
         if (token === this.runToken) {
           if (result?.answerCard) {
             this.pushCard(result.answerCard, token)
@@ -1373,7 +1375,9 @@ export class Pipeline {
         if (!transcript.trim()) throw new Error('ASR returned an empty transcript')
         progress(mt('解析提醒中…'))
         if (!this.options.onReminder) throw new Error(mt('提醒服务尚未就绪'))
-        const result = await this.options.onReminder(transcript, controller.signal, progress, submittedAt)
+        const result = await this.options.onReminder(transcript, controller.signal, progress, submittedAt, context)
+        if (result.status === 'awaiting_confirmation') task.state = 'awaiting_confirmation'
+        else if (result.ok === false) task.state = result.status === 'cancelled' ? 'cancelled' : 'failed'
         if (token !== this.runToken) return null
         this.showAlert({ kind: 'reminder', level: 'info', text: result.message,
           actions: result.undo ? [{ id: 'undo-reminder', label: mt('撤销') }] : [] })

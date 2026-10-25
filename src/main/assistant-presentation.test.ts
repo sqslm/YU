@@ -22,3 +22,7 @@ it('never renders failed, cancelled or pending operations as successful answers'
   expect(assistantAnswer({ ...turn(), state: 'working' })).toBeUndefined()
   expect(assistantAnswer({ ...turn(['search_files']), localResults: [{ tool: 'search_files', ok: false, summary: 'Not found' }] })).toBeUndefined()
 })
+it('keeps real application candidates visible while waiting for the user to choose', () => {
+  expect(assistantAnswer({ ...turn(['open_application']), taskId: 'task-1', taskState: 'awaiting_confirmation' }))
+    .toMatchObject({ taskId: 'task-1', taskState: 'awaiting_confirmation', streaming: false })
+})

@@ -57,10 +57,18 @@ export function speechPlaybackRequest(text:string):{name:string;args:Record<stri
 }
 
 /** Unambiguous whole-utterance commands avoid a second model round trip. */
+const REMIND_ME_PREFIX = /^(?:(?:请|帮我|请帮我)\s*)?提醒我|^(?:今天|明天|后天|[零〇一二两三四五六七八九十百\d]+\s*(?:分钟|小时)后|半小时后).{0,8}提醒我|^(?:please\s+)?remind me\b/iu
+export function isReminderCreationRequest(value: string): boolean {
+  if (/提醒我.{0,12}(?:这件事|这项任务|刚才那)|\bremind me\b.{0,35}\b(?:about (?:it|that)|this task|that task)\b/iu.test(value)) return false
+  return REMIND_ME_PREFIX.test(value) || /^(?:(?:请|帮我|请帮我)\s*)?(?:设置.{0,8}提醒|创建.{0,8}(?:提醒|待办)|添加.{0,8}待办)|^(?:please\s+)?(?:set|create|add)\b.{0,20}\b(?:reminder|to-?do)\b/iu.test(value)
+}
+
 export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceIntent | null {
   const value = text.trim()
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
+  // The action inside a reminder is its content, not permission to perform it now.
+  if (REMIND_ME_PREFIX.test(value) && isReminderCreationRequest(value) && !/然后|并且|同时|[,，;；]\s*(?:打开|帮我|读取|创建|保存)|\b(?:and then|then|also)\b/iu.test(value)) return { kind: 'reminder' }
   if (stopSpeakingRequest(value)) return { kind: 'assistant' }
   if (speechPlaybackRequest(value)) return {kind:'assistant'}
   if (screenshotNeedsEditor(value)) return { kind: 'assistant' }
@@ -89,7 +97,7 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceI
       /(?:今天|明天|后天|周[一二三四五六日天]|星期|\d{1,2}月\d{1,2}[日号]).{0,18}[点:：].{0,10}(?:到|至|[-–]).{0,12}[点:：].{0,20}(?:会议|开会|讨论|面试|预约|约会|安排)/u.test(value)) return { kind: 'assistant' }
   if (/^(?:请|帮我|请帮我)?(?:加个|新建|添加|创建|记个).{0,6}(?:待办|代办)/u.test(value)) return { kind: 'reminder' }
   if (/(?:你觉得|你认为).{0,12}(?:怎么|如何|怎样)|(?:这个功能|这个方案|软件).{0,12}(?:应该|可以)?(?:怎么|如何)(?:开发|实现|设计)|\b(?:how would you|what do you think|what(?:'s| is) (?:the )?best way to)\b/iu.test(value)) return { kind: 'ask' }
-  if (/^(?:(?:请|帮我|请帮我)\s*)?(?:提醒我|设置.{0,8}提醒|创建.{0,8}(?:提醒|待办)|添加.{0,8}待办)|^(?:今天|明天|后天|[零〇一二两三四五六七八九十百\d]+\s*(?:分钟|小时)后|半小时后).{0,8}提醒我|^(?:please\s+)?(?:remind me\b|(?:set|create|add)\b.{0,20}\b(?:reminder|to-?do)\b)/iu.test(value)) return { kind: 'reminder' }
+  if (isReminderCreationRequest(value)) return { kind: 'reminder' }
   const note = /^(?:(?:请|帮我|请帮我)\s*)?(?:记到随记(?:里|里面)?|保存(?:到|为)(?:一条)?随记|记一条随记)[\s，,:：]*(.+)$/u.exec(value) ||
     /^(?:please\s+)?(?:save (?:a |this )?note|take a note|note down)[\s,:]*(.+)$/iu.exec(value)
   if (note) return { kind: 'notes', text: note[1].trim() }

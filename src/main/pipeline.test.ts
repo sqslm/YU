@@ -1180,7 +1180,7 @@ describe('dedicated voice reminder capture', () => {
     const onReminder = vi.fn(async () => ({ message: 'saved' })), { pipeline } = harness({}, { onReminder })
     pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
     const done = pipeline.stop(); pipeline.audioStopped(); await done
-    expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal), expect.any(Function), submittedAt)
+    expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal), expect.any(Function), submittedAt, expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
   })
   it('uses ASR then its independent parser, without polish, insertion, Ask or voice history', async () => {
     const onReminder = vi.fn(async () => ({ message: 'Clean up · tomorrow at 10 AM · Normal', undo: true }))
@@ -1188,7 +1188,7 @@ describe('dedicated voice reminder capture', () => {
     pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
     const done = pipeline.stop(); pipeline.audioStopped(); await done
     expect(mocks.transcribe).toHaveBeenCalledOnce()
-    expect(onReminder).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Function), expect.any(Number))
+    expect(onReminder).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.complete).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled(); expect(mocks.askAgent).not.toHaveBeenCalled()
     expect(store.add).not.toHaveBeenCalled()
     expect(sent.some(state => state.phase === 'recording' && state.taskLabel === '快速提醒' && !state.promptName)).toBe(true)
@@ -1247,7 +1247,7 @@ describe('opening phrase mode activation', () => {
     const onReminder = vi.fn(async (_text: string) => ({ message: 'saved' }))
     const { pipeline, entries } = harness({ voiceCommands: commands() }, { onReminder })
     pipeline.start('dictation'); pipeline.pushAudio(tone(1200)); await finish(pipeline)
-    expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number))
+    expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(entries).toHaveLength(0)
@@ -1257,7 +1257,7 @@ describe('opening phrase mode activation', () => {
     const onVoiceNote = vi.fn(async () => undefined), pcm = tone(1400)
     const { pipeline, entries } = harness({ voiceCommands: commands() }, { onVoiceNote })
     pipeline.start('dictation'); pipeline.pushAudio(pcm); await finish(pipeline)
-    expect(onVoiceNote).toHaveBeenCalledWith(pcm, '指令笔记：这是灵感', expect.any(AbortSignal))
+    expect(onVoiceNote).toHaveBeenCalledWith(pcm, '指令笔记：这是灵感', expect.any(AbortSignal), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(entries).toHaveLength(0)
@@ -1327,7 +1327,7 @@ describe('opening phrase mode activation', () => {
     pipeline.pushAudio(tone(1000)); await vi.advanceTimersByTimeAsync(1000)
     expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '快速提醒' })
     const done = finish(pipeline); await vi.advanceTimersByTimeAsync(600); await done
-    expect(onReminder).toHaveBeenCalledWith('二十分钟后打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number))
+    expect(onReminder).toHaveBeenCalledWith('二十分钟后打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     const wav = mocks.transcribe.mock.calls.at(-1)![1].wav
     expect(wav.length).toBeLessThan(44 + 16000 * 4 * 2)
     expect(entries).toHaveLength(0)
@@ -1411,7 +1411,7 @@ describe('unified voice entry', () => {
     mocks.complete.mockResolvedValueOnce(JSON.stringify({kind:'notes',text:'我今天想到了一个计划。'}))
     const onVoiceNote=vi.fn().mockResolvedValue(undefined), h=harness({voiceCommands:smart},{onVoiceNote})
     h.pipeline.start('dictation'); await finish(h.pipeline)
-    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array),raw,expect.any(AbortSignal))
+    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array),raw,expect.any(AbortSignal), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.complete).toHaveBeenCalledOnce()
   })
   it.each([true, false])('reuses the intent classification context decision without another model request: %s', async useContext => {
@@ -1429,7 +1429,7 @@ describe('unified voice entry', () => {
     const onReminder = vi.fn().mockResolvedValue({ message: 'saved', undo: true })
     const h = harness({ voiceCommands: smart }, { onReminder })
     h.pipeline.start('dictation'); await finish(h.pipeline)
-    expect(onReminder).toHaveBeenCalledWith(text, expect.any(AbortSignal), expect.any(Function), expect.any(Number))
+    expect(onReminder).toHaveBeenCalledWith(text, expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled()
     expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0)
     expect(h.sent.at(-1)).toMatchObject({ phase: 'alert', alert: { actions: [{ id: 'undo-reminder', label: '撤销' }] } })
@@ -1469,7 +1469,7 @@ describe('unified voice entry', () => {
     mocks.transcribe.mockResolvedValue({ text: '帮我保存到随记：明天研究这个问题。' })
     const onVoiceNote = vi.fn().mockResolvedValue(undefined), h = harness({ voiceCommands: smart }, { onVoiceNote })
     h.pipeline.start('dictation'); await finish(h.pipeline)
-    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array), '帮我保存到随记：明天研究这个问题。', expect.any(AbortSignal))
+    expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array), '帮我保存到随记：明天研究这个问题。', expect.any(AbortSignal), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0)
   })
   it('keeps development requirements on the opening-window prompt route even after switching apps', async () => {

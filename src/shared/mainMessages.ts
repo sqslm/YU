@@ -7,6 +7,9 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '工具当前不可用：{{name}}': 'Tool currently unavailable: {{name}}',
+  '请明确要求读取剪贴板文字': 'Please explicitly request clipboard text',
+  '请明确要求读取选中文字': 'Please explicitly request selected text',
   "简报投递：{{accepted}} 个服务已受理，{{failed}} 个失败，{{unknown}} 个状态未知": "Briefing delivery: {{accepted}} providers accepted, {{failed}} failed, {{unknown}} unknown",
   "CPU：{{cpu}}；内存 {{total}} GiB，可用 {{free}} GiB": "CPU: {{cpu}}; memory {{total}} GiB, {{free}} GiB available",
   "Everything es.exe 路径（可选）": "Everything es.exe path (optional)",

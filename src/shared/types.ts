@@ -997,6 +997,8 @@ export interface CardAction {
 
 /** What the answer card renders. Kept in shared because the preload bridges it. */
 export interface AnswerCardPayload {
+  taskId?: string
+  taskState?: import('./task').TaskState
   assistant?: boolean
   localResults?: import('./assistant').AssistantLocalResult[]
   question: string
