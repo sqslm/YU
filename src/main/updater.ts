@@ -1,18 +1,11 @@
-/**
- * Auto-update plumbing (REQ-13).
- *
- * `electron-updater` reads a feed configured at build time; this rebuild has no
- * hosted release channel, so the feed URL is operator-supplied through
- * `TYPELESS_UPDATE_URL` (or a `update-feed.txt` next to the settings file).
- * Without a feed the updater reports "not configured" instead of pretending an
- * update check happened — a silent success would be indistinguishable from a
- * stale install.
- */
+/** GitHub release checks; concurrent resumable artifacts, upstream verified install. */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import { app, net } from 'electron'
+import { autoUpdater, CancellationToken } from 'electron-updater'
+import type { ElectronHttpExecutor } from 'electron-updater/out/electronHttpExecutor'
 import { mt } from '@shared/mainI18n'
+import { downloadRanges } from './update-download'
 
 export interface UpdateInfo {
   version: string
@@ -48,12 +41,18 @@ export interface UpdateState {
     | 'up-to-date'
     | 'available'
     | 'downloading'
+    | 'paused'
+    | 'verifying'
     | 'downloaded'
     | 'error'
     | 'disabled'
   currentVersion: string
   version?: string
   percent?: number
+  transferred?: number
+  total?: number
+  bytesPerSecond?: number
+  etaSeconds?: number
   message?: string
 }
 
@@ -133,6 +132,8 @@ export class Updater {
   private availableVersion: string | null = null
   /** One check at a time: the startup timer and a click must share it. */
   private checking: Promise<UpdateCheck> | null = null
+  private downloading: Promise<{ ok: boolean; message: string }> | null = null
+  private cancellation: CancellationToken | null = null
   private state: UpdateState = { phase: 'idle', currentVersion: app.getVersion() }
 
   constructor(private readonly options: UpdaterOptions) {}
@@ -156,6 +157,9 @@ export class Updater {
     if (this.configured) return
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = false
+    // Differential requests bypass the artifact executor and cannot persist our
+    // partial ranges. Use one consistent resumable path for every installer.
+    autoUpdater.disableDifferentialDownload = true
     // A prerelease build publishes `rc.yml` — electron-builder names the channel
     // after the prerelease tag — so asking for `latest.yml` would 404 against our
     // own feed and every rc install would silently stop seeing new builds.
@@ -171,6 +175,32 @@ export class Updater {
       debug: (msg?: unknown) => this.options.log(`[update] debug ${String(msg ?? '')}`)
     } as unknown as typeof autoUpdater.logger
     autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl })
+    // electron-updater 6 exposes this at runtime but omits it from its declarations.
+    const executor = (autoUpdater as typeof autoUpdater & { httpExecutor?: ElectronHttpExecutor | null }).httpExecutor
+    if (executor) {
+      const standardDownload = executor.download.bind(executor)
+      executor.download = async (url, destination, options) => {
+        if (!options.sha512) return standardDownload(url, destination, options)
+        const controller = new AbortController()
+        const abort = (): void => controller.abort()
+        options.cancellationToken.once('cancel', abort)
+        if (options.cancellationToken.cancelled) controller.abort()
+        let handled: boolean
+        try { handled = await downloadRanges({
+          url: url.toString(), destination, sha512: options.sha512,
+          cacheDir: join(this.options.userDataPath, 'update-parts'), signal: controller.signal,
+          headers: options.headers as Record<string, string> | undefined,
+          fetchImpl: net.fetch.bind(net) as typeof fetch,
+          onProgress: progress => {
+            this.setState({ phase: 'downloading', ...progress, percent: Math.floor(progress.percent) })
+            this.options.onProgress?.(Math.floor(progress.percent))
+          },
+          onVerifying: () => this.setState({ phase: 'verifying', bytesPerSecond: 0, etaSeconds: 0 })
+        }) } finally { options.cancellationToken.removeListener('cancel', abort) }
+        if (!handled) return standardDownload(url, destination, options)
+        return destination
+      }
+    }
 
     autoUpdater.on('update-available', (info) => {
       if (!isNewerVersion(info.version, app.getVersion())) {
@@ -189,7 +219,7 @@ export class Updater {
     })
     autoUpdater.on('download-progress', (progress) => {
       const percent = Math.round(progress.percent)
-      this.setState({ phase: 'downloading', percent })
+      this.setState({ phase: 'downloading', percent, transferred: progress.transferred, total: progress.total, bytesPerSecond: progress.bytesPerSecond })
       this.options.onProgress?.(percent)
     })
     autoUpdater.on('update-downloaded', (info) => {
@@ -205,6 +235,7 @@ export class Updater {
       this.options.onDownloaded(info.version)
     })
     autoUpdater.on('error', (err) => {
+      if (this.cancellation?.cancelled) return
       const message = err instanceof Error ? err.message : String(err)
       this.options.log(`[update] failed: ${message}`)
       this.setState({ phase: 'error', message })
@@ -219,6 +250,9 @@ export class Updater {
    * just logs.
    */
   async check(): Promise<UpdateCheck> {
+    if (this.downloading || this.state.phase === 'paused' || this.state.phase === 'downloaded') {
+      return { ok: true, status: 'available', version: this.availableVersion ?? undefined }
+    }
     if (this.checking) return this.checking
     this.checking = this.runCheck().finally(() => {
       this.checking = null
@@ -263,17 +297,34 @@ export class Updater {
 
   /** Starts the download for a version the user accepted in the bar. */
   async download(): Promise<{ ok: boolean; message: string }> {
+    if (this.downloading) return this.downloading
     if (!this.configured) return { ok: false, message: mt('尚未检查更新') }
     if (!this.availableVersion || !isNewerVersion(this.availableVersion, app.getVersion())) return { ok: false, message: mt('没有可下载的新版本') }
-    this.setState({ phase: 'downloading', percent: 0, message: undefined })
+    this.cancellation = new CancellationToken()
+    this.downloading = this.runDownload(this.cancellation).finally(() => { this.downloading = null; this.cancellation = null })
+    return this.downloading
+  }
+
+  private async runDownload(token: CancellationToken): Promise<{ ok: boolean; message: string }> {
+    this.setState({ phase: 'downloading', percent: this.state.percent ?? 0, message: undefined, bytesPerSecond: 0, etaSeconds: undefined })
     try {
-      await autoUpdater.downloadUpdate()
+      await autoUpdater.downloadUpdate(token)
       return { ok: true, message: mt('更新已下载，退出时自动安装') }
     } catch (err) {
+      if (token.cancelled) {
+        this.setState({ phase: 'paused', bytesPerSecond: 0, etaSeconds: undefined })
+        return { ok: true, message: mt('更新下载已暂停') }
+      }
       const message = err instanceof Error ? err.message : String(err)
       this.setState({ phase: 'error', message })
       return { ok: false, message }
     }
+  }
+
+  async pause(): Promise<void> {
+    if (!this.downloading || this.state.phase !== 'downloading') return
+    this.cancellation?.cancel()
+    await this.downloading
   }
 
   /** Installs what was downloaded and restarts into the new version. */

@@ -1,6 +1,14 @@
 import { expect, it } from 'vitest'
 import { groupScreenshotLines, parseScreenshotTranslation } from './screenshotTranslation'
 
+it('joins wrapped lines in interleaved OCR columns independently', () => {
+  const lines = [{ x: 10, y: 10, width: 200, height: 20, text: 'Left' },
+    { x: 400, y: 10, width: 200, height: 20, text: 'Right' },
+    { x: 10, y: 36, width: 200, height: 20, text: 'continued left' },
+    { x: 400, y: 36, width: 200, height: 20, text: 'continued right' }]
+  expect(groupScreenshotLines(lines).map(region => region.text)).toEqual(['Left\ncontinued left', 'Right\ncontinued right'])
+})
+
 it('merges split runs on one baseline without clipping taller glyphs', () => {
   expect(groupScreenshotLines([{ text: 'First', x: 10, y: 12, width: 50, height: 18 },
     { text: 'second', x: 75, y: 10, width: 70, height: 20 }]))

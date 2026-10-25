@@ -1927,5 +1927,12 @@
   "服务未返回有效的消息 ID，送达状态未知": "The provider returned no valid message ID; delivery state is unknown",
   "系统安全存储不可用，未保存简报投递密钥": "System secure storage is unavailable; delivery keys were not saved",
   "简报投递密钥加密失败，未写入设置文件": "Delivery key encryption failed; settings were not written",
-  "简报投递：{{accepted}} 个服务已受理，{{failed}} 个失败，{{unknown}} 个状态未知": "Briefing delivery: {{accepted}} providers accepted, {{failed}} failed, {{unknown}} unknown"
+  "简报投递：{{accepted}} 个服务已受理，{{failed}} 个失败，{{unknown}} 个状态未知": "Briefing delivery: {{accepted}} providers accepted, {{failed}} failed, {{unknown}} unknown",
+  "继续下载 {{percent}}%": "Resume download {{percent}}%",
+  "正在校验更新": "Verifying update",
+  "下载失败，点击重试": "Download failed; click to retry",
+  "已保留下载进度，点击继续": "Download progress saved; click to resume",
+  "正在校验安装包，请稍候": "Verifying installer; please wait",
+  "点击暂停下载": "Click to pause download",
+  "部分译文过长，已用省略号标记；可复制文字查看完整译文": "Long translations are marked with an ellipsis. Copy text for the full translation."
 }

@@ -11,6 +11,7 @@ import { isCurrentWindowQuestion } from '../voice-intent'
 import { FileIndex, DEFAULT_MAX_FILES, DEFAULT_TIMEOUT_MS, type ContentSearchOptions, type ContentSearchResult, type FileIndexDeps } from '../file-index'
 import { searchEverything, type EverythingOptions, type EverythingResult } from '../everything'
 import { browserDownloads } from '../file-activity'
+import { resolveSpokenFolder } from '../folder-resolution'
 
 export const WINDOWS_TOOLS = ['open_application', 'open_folder', 'open_file', 'open_url', 'search_files', 'search_file_contents', 'search_files_everything', 'get_active_window', 'get_disk_space', 'get_current_folder', 'get_current_page', 'get_system_info', 'get_system_volume', 'set_system_volume', 'search_file_activity'] as const
 const documents = new Set(['.pdf', '.txt', '.md', '.csv', '.json', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.rtf', '.mp3', '.wav', '.mp4'])
@@ -309,7 +310,16 @@ export class WindowsTools {
     const folders = typeof this.deps.folders === 'function' ? this.deps.folders() : this.deps.folders
     if (!(input in folders) && !isAbsolute(input)) return failed(mt('请选择本地的具体文件夹，不支持全盘或网络目录'))
     let root: string
-    try { root = await realpath(folders[input as keyof typeof folders] || input) }
+    let corrected=false
+    try {
+      const resolved=await resolveSpokenFolder(folders[input as keyof typeof folders] || input)
+      if(!resolved.path){
+        const candidates=[] as string[]
+        for(const path of resolved.candidates??[])if(await this.pathAllowed(path))candidates.push(path)
+        return candidates.length?failed(mt('有多个相近文件夹，请明确名称：{{names}}',{names:candidates.join('、')})):failed(mt('文件夹不存在：{{path}}',{path:input}))
+      }
+      root=resolved.path;corrected=resolved.corrected
+    }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return failed(mt('文件夹不存在：{{path}}', { path: input }))
       throw error
@@ -319,7 +329,7 @@ export class WindowsTools {
     if (name === 'open_folder') {
       signal?.throwIfAborted()
       const error = await this.deps.openPath(root)
-      return error ? failed(error) : ok(mt('已向 Windows 提交打开请求：{{name}}', { name: root }), { path: root })
+      return error ? failed(error) : ok(mt('已向 Windows 提交打开请求：{{name}}', { name: root }), { path: root, ...(corrected?{matchedFrom:input,matchedActual:root}:{}) })
     }
     const query = string(args.name), extension = string(args.extension).replace(/^\./, '')
     if (query.length > 100 || /[%_\[\]\x00-\x1f]/.test(query) || (extension && !/^[a-z0-9]{1,12}$/i.test(extension))) return failed(mt('文件名或扩展名无效'))

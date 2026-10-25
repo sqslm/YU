@@ -6,6 +6,7 @@ import { askAgent, resetThread, type AgentConversation, type AgentOptions, type 
 import { chainFor } from './providers/chain'
 import { WINDOWS_TOOLS, type WindowsTools } from './tools/windows'
 import { runTool } from './tools/registry'
+import { redactSecrets } from './diagnostics'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
 import { WORKFLOW_TOOLS, type WorkflowTools } from './tools/workflow'
@@ -483,6 +484,11 @@ export class AssistantSession {
     signal?.addEventListener('abort', cancelled, { once: true })
     const deadline = AbortSignal.timeout(90_000)
     const taskSignal = AbortSignal.any([controller.signal, deadline])
+    const logTool = (line: string): void => {
+      if (!line.startsWith('[perf]') && !line.startsWith('[tool]')) return
+      const success = /^(\[tool\] \w+ ok=true)\b/.exec(line)
+      this.deps.log(success?.[1] ?? redactSecrets(line).slice(0, 700))
+    }
     try {
       const options: AgentOptions = {
         analyzeScreenshot: this.deps.analyzeScreenshot ? (question, ocr) => this.deps.analyzeScreenshot!(context, question, ocr, taskSignal) : undefined,
@@ -503,7 +509,7 @@ export class AssistantSession {
       let result: AgentResult
       if (direct) {
         const outcome = await runTool(direct.name, direct.args, { settings, question: turn.question, signal: taskSignal,
-          log: () => {}, windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, taskContext: context, submittedAt, allowedTools, onLocalResult: options.onLocalResult,
+          log: logTool, windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, taskContext: context, submittedAt, allowedTools, onLocalResult: options.onLocalResult,
           analyzeScreenshot: options.analyzeScreenshot })
         taskSignal.throwIfAborted()
         result = { text: direct.name === 'analyze_screenshot' && outcome.ok ? String(outcome.data.text) : outcome.summary, sources: [], searched: false }
@@ -534,7 +540,7 @@ export class AssistantSession {
           return
         }
         result = await (this.deps.ask ?? askAgent)(resolveSettings(reference), turn.question, context, taskSignal,
-          line => { if (line.startsWith('[perf]')) this.deps.log(line) }, options)
+          logTool, options)
       }
       taskSignal.throwIfAborted()
       if (this.controller !== controller) return
@@ -551,6 +557,8 @@ export class AssistantSession {
       if (this.controller !== controller) return
       turn.state = controller.signal.aborted ? 'cancelled' : 'error'
       turn.answer = error instanceof Error ? error.message : String(error)
+      const completed=turn.localResults?.filter(item=>item.ok&&/^(?:create_|manage_|update_|configure_)/.test(item.tool))??[]
+      if(completed.length&&!controller.signal.aborted){turn.answer=`${mt('已完成的操作：')}\n${completed.map(item=>item.summary).join('\n')}\n${mt('未完成的操作：')}\n${turn.answer}`;this.refreshReference()}
       // Never log the question, answer, provider credentials or tool payloads.
       this.deps.log('[assistant] request failed')
     } finally {

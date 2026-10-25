@@ -85,7 +85,7 @@ function ScreenshotEditor(): JSX.Element {
   const [longCapture, setLongCapture] = useState<HTMLCanvasElement | null>(null)
   const scrollControls = useRef<HTMLDivElement>(null)
   const longPreview = useMemo(() => longCapture?.toDataURL('image/png'), [longCapture])
-  useEffect(() => window.api.screenshot.onScroll(setScrollProgress), [])
+  useEffect(() => window.api.screenshot.onScroll(next => setScrollProgress(previous => ({ ...next, preview: next.preview ?? previous?.preview }))), [])
   const reportError = (err: unknown): void => setError(String(err instanceof Error ? err.message : err).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''))
   useEffect(() => {
     let previous = view
@@ -253,7 +253,9 @@ function ScreenshotEditor(): JSX.Element {
       const source = exportCanvas()
       const response = await window.api.screenshot.run(action, source.toDataURL('image/png'), question.trim() || t('请分析这张截图'), target, ocrLanguage)
       if (response.translation) {
-        setTranslated({ canvas: paintScreenshotTranslation(source, response.translation), text: response.text ?? '', rect: { ...selection! } })
+        const painted = paintScreenshotTranslation(source, response.translation)
+        setTranslated({ canvas: painted.canvas, text: response.text ?? '', rect: { ...selection! } })
+        if (painted.overflow) setError(t('部分译文过长，已用省略号标记；可复制文字查看完整译文'))
         setShowOriginal(false); setPanel(null); setResult('')
       } else if (response.text) setResult(response.text)
     } catch (err) { reportError(err) } finally { setBusy(false) }
@@ -363,6 +365,7 @@ function ScreenshotEditor(): JSX.Element {
     {scrolling && <Paper ref={scrollControls} data-scroll-controls elevation={5}
       sx={{ position: 'fixed', left: Math.max(8, Math.min(view.width - 420, selection!.x)), top: Math.max(8, Math.min(view.height - 160, selection!.y + selection!.height + 160 < view.height ? selection!.y + selection!.height + 12 : selection!.y - 160)), width: Math.min(410, view.width - 16), height: 148, p: 1.25, borderRadius: 2 }}>
       <Typography fontWeight={600}>{t('滚动截图')} · {scrollProgress ? `${scrollProgress.width} × ${scrollProgress.height}` : t('准备中…')}</Typography>
+      {scrollProgress?.preview && <Box component="img" src={scrollProgress.preview} alt={t('滚动截图')} sx={{ position: 'absolute', right: 0, bottom: '100%', mb: 1, maxWidth: 100, maxHeight: 240, objectFit: 'contain', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', pointerEvents: 'none' }} />}
       <Typography variant="body2" color="text.secondary" sx={{ height: 52, overflow: 'auto' }}>{scrollProgress?.message || t('在选区内缓慢向下滚动，停稳后自动拼接。')}</Typography>
       <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: .5 }}>
         <Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button>

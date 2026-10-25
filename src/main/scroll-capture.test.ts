@@ -34,3 +34,34 @@ it('refuses upward scrolling, unrelated content and memory growth beyond the cap
   expect(capture.add(page(74))).toBe('limit')
   expect(capture.height).toBe(height)
 })
+
+it('keeps a fixed header and footer once while preserving every scrolling row', () => {
+  const frame = (top: number): Buffer => {
+    const pixels = page(top)
+    pixels.fill(40, 0, width * 10 * 4)
+    pixels.fill(80, width * 90 * 4)
+    return pixels
+  }
+  const capture = new ScrollCapture(width, height)
+  capture.add(frame(0)); capture.add(frame(31))
+  expect(capture.add(frame(31))).toBe('added')
+  capture.add(frame(62)); expect(capture.add(frame(62))).toBe('added')
+  const expected = Buffer.concat([frame(0).subarray(0, width * 90 * 4),
+    frame(31).subarray(width * 59 * 4, width * 90 * 4), frame(62).subarray(width * 59 * 4)])
+  expect(capture.height).toBe(162)
+  expect(capture.pixels()).toEqual(expected)
+})
+
+it('does not treat matching blank content above a footer as a permanent fixed band', () => {
+  const frame = (top: number): Buffer => {
+    const pixels = page(top)
+    for (let y = 0; y < height; y++) if ((y + top >= 86 && y + top <= 89) || (y + top >= 117 && y + top <= 120)) pixels.fill(255, y * width * 4, (y + 1) * width * 4)
+    pixels.fill(40, 0, width * 10 * 4); pixels.fill(80, width * 90 * 4)
+    return pixels
+  }
+  const capture = new ScrollCapture(width, height)
+  capture.add(frame(0)); capture.add(frame(31)); expect(capture.add(frame(31))).toBe('added')
+  capture.add(frame(62)); expect(capture.add(frame(62))).toBe('added')
+  expect(capture.pixels()).toEqual(Buffer.concat([frame(0).subarray(0, width * 90 * 4),
+    frame(31).subarray(width * 59 * 4, width * 90 * 4), frame(62).subarray(width * 59 * 4)]))
+})

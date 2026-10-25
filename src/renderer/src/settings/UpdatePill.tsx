@@ -30,23 +30,25 @@ export function UpdatePill(): JSX.Element | null {
 
   const act = useCallback(async () => {
     const phase = state?.phase
-    if (phase === 'available') {
+    if (phase === 'available' || phase === 'paused' || (phase === 'error' && state?.version)) {
       const result = await window.api.update?.download()
       if (result && !result.ok) setState((prev) => ({ ...(prev ?? { currentVersion: '' }), phase: 'error', message: result.message } as UpdateState))
       return
     }
+    if (phase === 'downloading') { await window.api.update?.pause(); return }
+    if (phase === 'verifying') return
     if (phase === 'downloaded') {
       await window.api.update?.install()
       return
     }
     const next = await window.api.update?.check()
     if (next) setState(next)
-  }, [state?.phase])
+  }, [state?.phase, state?.version])
 
   if (!state) return null
   // Nothing to show until a release actually exists: a permanent "up to date"
   // chip would be noise in a window the user keeps open all day.
-  if (state.phase !== 'available' && state.phase !== 'downloading' && state.phase !== 'downloaded') {
+  if (!['available', 'downloading', 'downloaded', 'paused', 'verifying'].includes(state.phase) && !(state.phase === 'error' && state.version)) {
     return null
   }
 
@@ -54,14 +56,20 @@ export function UpdatePill(): JSX.Element | null {
   const label =
     state.phase === 'downloaded'
       ? i18n.t('重启安装 v{{version}}', { version })
+      : state.phase === 'paused' ? i18n.t('继续下载 {{percent}}%', { percent: state.percent ?? 0 })
+      : state.phase === 'verifying' ? i18n.t('正在校验更新')
+      : state.phase === 'error' ? i18n.t('下载失败，点击重试')
       : state.phase === 'downloading'
         ? i18n.t('下载中 {{percent}}%', { percent: state.percent ?? 0 })
         : i18n.t('有新版本 v{{version}}', { version })
   const hint =
     state.phase === 'downloaded'
       ? i18n.t('更新已下载，点击重启并安装')
+      : state.phase === 'paused' ? i18n.t('已保留下载进度，点击继续')
+      : state.phase === 'verifying' ? i18n.t('正在校验安装包，请稍候')
+      : state.phase === 'error' ? state.message
       : state.phase === 'downloading'
-        ? i18n.t('正在后台下载更新')
+        ? `${i18n.t('点击暂停下载')} · ${((state.transferred ?? 0) / 1048576).toFixed(1)} / ${((state.total ?? 0) / 1048576).toFixed(1)} MB · ${((state.bytesPerSecond ?? 0) / 1048576).toFixed(1)} MB/s${state.etaSeconds ? ` · ${state.etaSeconds}s` : ''}`
         : i18n.t('点击下载这个版本')
 
   return (
@@ -92,7 +100,7 @@ export function UpdatePill(): JSX.Element | null {
           color: 'primary.main',
           bgcolor: 'rgba(76,141,255,0.12)',
           whiteSpace: 'nowrap',
-          maxWidth: 132,
+          maxWidth: 180,
           overflow: 'hidden',
           '&:hover': { bgcolor: 'rgba(76,141,255,0.2)' }
         }}

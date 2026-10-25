@@ -1,3 +1,4 @@
+import LockOutlined from '@mui/icons-material/LockOutlined'
 import { useState } from 'react'
 import { Box, Button, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
@@ -8,7 +9,7 @@ export function AssistantAccessSection({settings,patch}:{settings:Settings;patch
   const access=settings.assistantAccess
   const update=(value:Partial<typeof access>):void=>patch({assistantAccess:{...access,...value}})
   const [draft,setDraft]=useState<Record<string,string>>({})
-  return <SettingsGroup icon="🔐" title={i18n.t('助手权限与索引')}>
+  return <SettingsGroup icon={<LockOutlined fontSize="small"/>} title={i18n.t('助手权限与索引')}>
     {(['allowedRoots','excludedPaths','excludedApps','disabledTools'] as const).map((key,index)=><Box key={key} sx={{p:2}}>
       <TextField fullWidth multiline minRows={2} size="small" label={i18n.t(['允许的文件目录（空为不额外限制）','排除的文件目录','排除上下文读取的应用（进程名或完整路径）','关闭的工具（工具名）'][index])}
         value={draft[key]??access[key].join('\n')} onChange={e=>setDraft({...draft,[key]:e.target.value})}/>

@@ -5,7 +5,14 @@ import { mt } from './mainI18n'
 export function groupScreenshotLines(lines: ScreenshotTextRegion[]): ScreenshotTextRegion[] {
   const regions: ScreenshotTextRegion[] = []
   for (const line of lines) {
-    const previous = regions.at(-1)
+    const listItem = /^(?:\d+[.)、]|[-•●▪])\s*/u.test(line.text)
+    const previous = regions.findLast(region => {
+      const size = region.fontSize ?? region.height, gap = line.y - region.y - region.height
+      return (region.height < size * 1.4 && Math.abs(line.y - region.y) < size * .4 &&
+        line.x >= region.x + region.width && line.x - region.x - region.width < size * 3) ||
+        (!listItem && gap >= 0 && gap < Math.min(size, line.height) * .85 &&
+          Math.abs(line.x - region.x) < size * 1.8 && Math.abs(line.height - size) < size * .35)
+    })
     const fontSize = previous?.fontSize ?? previous?.height ?? line.height
     if (previous && previous.height < fontSize * 1.4 && Math.abs(line.y - previous.y) < fontSize * .4 &&
         line.x >= previous.x + previous.width && line.x - previous.x - previous.width < fontSize * 3) {
@@ -18,7 +25,6 @@ export function groupScreenshotLines(lines: ScreenshotTextRegion[]): ScreenshotT
       continue
     }
     const gap = previous ? line.y - previous.y - previous.height : Infinity
-    const listItem = /^(?:\d+[.)、]|[-•●▪])\s*/u.test(line.text)
     if (previous && !listItem && gap >= 0 && gap < Math.min(fontSize, line.height) * .85 &&
         Math.abs(line.x - previous.x) < fontSize * 1.8 && Math.abs(line.height - fontSize) < fontSize * .35) {
       const right = Math.max(previous.x + previous.width, line.x + line.width)

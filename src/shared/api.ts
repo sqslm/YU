@@ -39,12 +39,18 @@ export interface UpdateState {
     | 'up-to-date'
     | 'available'
     | 'downloading'
+    | 'paused'
+    | 'verifying'
     | 'downloaded'
     | 'error'
     | 'disabled'
   currentVersion: string
   version?: string
   percent?: number
+  transferred?: number
+  total?: number
+  bytesPerSecond?: number
+  etaSeconds?: number
   message?: string
 }
 
@@ -309,6 +315,7 @@ export interface TypelessApi {
     state(): Promise<UpdateState | null>
     check(): Promise<UpdateState | null>
     download(): Promise<{ ok: boolean; message: string }>
+    pause(): Promise<void>
     install(): Promise<boolean>
     onState(callback: (state: UpdateState) => void): () => void
   }

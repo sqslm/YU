@@ -212,6 +212,20 @@ describe('assistant session', () => {
     await session.send('Retry')
     expect(session.snapshot().turns[1].state).toBe('done')
   })
+
+  it('reports a saved calendar event when a later reminder fails', async () => {
+    ask.mockImplementationOnce(async (_s, _q, _c, _signal, _log, options) => {
+      options?.onLocalResult?.({ tool: 'create_event', ok: true, summary: '日程已保存：讨论' })
+      options?.onLocalResult?.({ tool: 'create_reminder', ok: false, summary: '提醒时间不明确' })
+      throw Error('提醒时间不明确')
+    })
+    await session.send('帮我安排明天下午的讨论，然后提醒我带资料')
+    const turn = session.snapshot().turns.at(-1)!
+    expect(turn.state).toBe('error')
+    expect(turn.answer).toContain('日程已保存：讨论')
+    expect(turn.answer).toContain('提醒时间不明确')
+    expect(turn.answer).toContain('已完成的操作：')
+  })
 })
 
 it('filters tool schemas and rejects unauthorized selection access before touching the clipboard', async () => {

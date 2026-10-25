@@ -169,7 +169,10 @@ export class ScreenshotTool {
         const status = scroll.add(image.toBitmap())
         if (status === 'waiting' || status === 'unchanged') return
         if (status === 'limit') this.stopScroll()
+        const preview = status === 'added' ? nativeImage.createFromBitmap(scroll.pixels(), { width: scroll.width, height: scroll.height })
+          .resize({ width: Math.max(1, Math.min(120, Math.round(600 * scroll.width / scroll.height))), quality: 'good' }).toDataURL() : undefined
         win.webContents.send('screenshot:scroll-progress', { width: scroll.width, height: scroll.height, frames: scroll.frames,
+          ...(preview ? { preview } : {}),
           ...(status === 'unmatched' ? { message: mt('未匹配到重叠内容，请缓慢向下滚动，或回到上一处位置') } : {}),
           ...(status === 'limit' ? { message: mt('已达到长图尺寸上限，请完成截图'), stopped: true } : {}) })
       } catch (error) {

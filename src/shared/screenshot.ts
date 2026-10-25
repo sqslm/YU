@@ -3,7 +3,7 @@ export type ScreenshotAction = 'copy' | 'save' | 'ocr' | 'translate' | 'ask' | '
 export interface ScreenshotTextRegion extends CaptureRect { text: string; fontSize?: number }
 export interface ScreenshotTranslation { width: number; height: number; regions: ScreenshotTextRegion[] }
 export interface ScreenshotResult { text?: string; saved?: boolean; translation?: ScreenshotTranslation }
-export interface ScrollCaptureProgress { width: number; height: number; frames: number; message?: string; stopped?: boolean }
+export interface ScrollCaptureProgress { width: number; height: number; frames: number; message?: string; stopped?: boolean; preview?: string }
 export interface CaptureRect { x: number; y: number; width: number; height: number }
 export type CapturePoint = { x: number; y: number }
 /** Clip physical Windows bounds to this display, then map to editor coordinates. */

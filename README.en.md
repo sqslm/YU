@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.14**, Windows 10/11 x64, MIT.
+> Current version **1.1.0-rc.1**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -188,7 +188,7 @@ Modules worth calling out:
 - `src/main/calendar-sync.ts`, `src/main/reminders-sync.ts` — the sync side of events and reminders: ICS subscriptions accept only https / webcal and reuse the private-address block from search, sync uses the server's increasing `seq` as a cursor, deletions travel as tombstones, and one failing source never blocks the others.
 - `src/main/file-index.ts`, `src/main/everything.ts` — local search: bodies go through a hand-rolled `node:zlib` zip reader for docx / xlsx / pptx (PDFs are explicitly unsupported), Everything is tried over HTTP first then `es.exe`, and when neither answers the tool says so and the model falls back to the built-in search.
 - `src/main/briefing.ts` + `src/shared/briefing.ts` — briefing scheduling with two sources: the template always works, and a failed model narration falls back to it with `source` recording which one you got; quiet hours hold delivery instead of queueing it, and a window crossing midnight never fires twice.
-- `src/renderer/src/settings/UpdatePill.tsx` — the pill only renders the phase the main process pushes (`available` / `downloading` / `downloaded`); a click downloads or restarts depending on that phase.
+- `src/renderer/src/settings/UpdatePill.tsx` — the pill only renders the phase the main process pushes (`available` / `downloading` / `downloaded`); click to download, pause, resume, retry, or restart; progress includes bytes, speed and estimated remaining time.
 
 ## Development
 
@@ -230,9 +230,9 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.14`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.1.0-rc.1`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
-**Not implemented** (don't read these as available): per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
+**Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
 Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integration paths, and end-to-end runs use the fake backend. The [roadmap](ASSISTANT_ROADMAP.md) records the 81-item field comparison from 0.35.0 and what remained unresolved. A real microphone, physical hotkeys, overwrite installs, how Windows toasts actually look, and the real quotas of vendor accounts still have to be verified by you; the [API audit](PROVIDER_API_AUDIT.md) marks which endpoints were never confirmed with a real account.
 
@@ -252,6 +252,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
+- **1.1.0-rc.1**: four concurrent update ranges, persistent pause/resume, speed/ETA and SHA-512 verification before the upstream verified install; standard download fallback when Range is unsupported. Differential downloads are disabled for a consistent resumable path. Spoken folders use unique real directory matches for spaced initials, repeated drives and trailing s. Independent reminder clauses can accompany calendar actions; partial failures retain completed receipts. UI uses vector icons. Screenshot translation improves columns and legible layout; scrolling handles fixed headers/footers and shows a live thumbnail.
 - **1.0.0-rc.14**: separates development and installed Windows identities and repairs the legacy Electron shortcut collision; routes named drive folders before application lookup; connects Everything interface failure to built-in search and recovered result presentation. The roadmap now separates the current implementation audit from historical delivery records.
 - **1.0.0-rc.12**: fixes Windows taskbar icon property order; disables RC downgrades across update checks, events, downloads and installation; connects calendar, daily briefing configuration and compound tasks through Right Alt; restarts briefing scheduling immediately after settings changes; fixes event end dates, future reminder postponement, false save receipts and unreviewed note extraction; shares polish output constraints and artifact/duplicate cleanup. See the [100-case acceptance record](src/main/fixtures/voice-routing-100-rc12.md) for exact validation boundaries.
 - **1.0.0-rc.11**: screenshot translation replaces text at its original position in the full-screen view, with original comparison and image export; adds downward scrolling screenshots matched by overlap; gives taskbar windows an external YU icon; fixes late capture windows after closing, plus focus and control interaction during scrolling.

@@ -1167,5 +1167,9 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "未匹配到重叠内容，请缓慢向下滚动，或回到上一处位置": "No matching overlap. Scroll down slowly or return to the previous position.",
   "已达到长图尺寸上限，请完成截图": "The long image has reached its size limit. Finish the capture.",
   "尚未采集到滚动截图，请稍后再试": "No scrolling frame has been captured yet. Please try again shortly.",
-  "请先完成滚动截图": "Finish the scrolling capture first"
+  "请先完成滚动截图": "Finish the scrolling capture first",
+  "更新下载已暂停": "Update download paused",
+  "有多个相近文件夹，请明确名称：{{names}}": "Several similar folders exist. Specify a name: {{names}}",
+  "已完成的操作：": "Completed operations:",
+  "未完成的操作：": "Incomplete operations:"
 }

@@ -241,6 +241,7 @@ const api: TypelessApi = {
     state: (): Promise<import('@shared/api').UpdateState | null> => ipcRenderer.invoke('update:state'),
     check: (): Promise<import('@shared/api').UpdateState | null> => ipcRenderer.invoke('update:check'),
     download: (): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('update:download'),
+    pause: (): Promise<void> => ipcRenderer.invoke('update:pause'),
     install: (): Promise<boolean> => ipcRenderer.invoke('update:install'),
     onState: (callback: (state: import('@shared/api').UpdateState) => void) => {
       const listener = (_event: unknown, state: import('@shared/api').UpdateState): void => callback(state)

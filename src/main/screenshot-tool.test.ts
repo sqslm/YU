@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
   Menu: {buildFromTemplate: mocks.menu},
   app: { getPath: () => '/pictures', getAppPath: () => '/app', getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
   globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
-  desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image }, dialog: { showSaveDialog: mocks.save },
+  desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image, createFromBitmap: () => ({ resize: () => ({ toDataURL: () => 'data:image/png;base64,cHJldmlldw==' }) }) }, dialog: { showSaveDialog: mocks.save },
   screen: { dipToScreenRect: (_win: unknown, rect: {x:number;y:number;width:number;height:number}) => Object.fromEntries(Object.entries(rect).map(([key,value]) => [key,Math.round(value*1.5)])), getCursorScreenPoint: () => mocks.cursor, getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 }, workAreaSize:{width:1280,height:720} }) },
   ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => mocks.handlers.set(name, handler) },
   BrowserWindow: class extends EventEmitter {
@@ -87,7 +87,7 @@ describe('explicit screenshot tool', () => {
     mocks.cursor = { x: -100, y: 50 }; await vi.advanceTimersByTimeAsync(200)
     expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(true, { forward: true })
     expect(mocks.capture).toHaveBeenLastCalledWith({ x: -1770, y: 150, width: 90, height: 90 })
-    expect(win.webContents.send).toHaveBeenCalledWith('screenshot:scroll-progress', { width: 90, height: 90, frames: 1 })
+    expect(win.webContents.send).toHaveBeenCalledWith('screenshot:scroll-progress', { width: 90, height: 90, frames: 1, preview: 'data:image/png;base64,cHJldmlldw==' })
     const frame = mocks.handlers.get('screenshot:scroll-finish')!(event())
     expect(frame).toMatchObject({ width: 90, height: 90 }); expect(frame.pixels.subarray(0,4)).toEqual(Buffer.from([30,255,10,255]))
     expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(false)

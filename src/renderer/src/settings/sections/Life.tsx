@@ -1,3 +1,8 @@
+import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined'
+import LinkOutlined from '@mui/icons-material/LinkOutlined'
+import WbSunnyOutlined from '@mui/icons-material/WbSunnyOutlined'
+import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
+import VolumeUpOutlined from '@mui/icons-material/VolumeUpOutlined'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Box, Button, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { ExternalCalendar, Settings } from '@shared/types'
@@ -212,7 +217,7 @@ export function LifeSection({ settings, patch }: {
     <Stack spacing={2}>
       {notice && <Alert severity={notice.error ? 'error' : 'success'} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
-      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>📅</Box>} title={i18n.t('本地日程')}>
+      <SettingsGroup icon={<CalendarMonthOutlined fontSize="small"/>} title={i18n.t('本地日程')}>
         <SettingsRow label={i18n.t('启用日程与提醒')} description={i18n.t('日程独立于提醒：日程有起止时间，到点前按这里的提前量提示。')}>
           <Switch size="small" checked={settings.calendar.enabled}
             onChange={e => patch({ calendar: { ...settings.calendar, enabled: e.target.checked } })} />
@@ -243,7 +248,7 @@ export function LifeSection({ settings, patch }: {
         ))}
       </SettingsGroup>
 
-      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🔗</Box>} title={i18n.t('订阅日历')}>
+      <SettingsGroup icon={<LinkOutlined fontSize="small"/>} title={i18n.t('订阅日历')}>
         <SettingsHint>{i18n.t('把别人分享的 ICS 地址填进来，日程会合并到本地：订阅是只读的，这里的改动不会回写。')}</SettingsHint>
         {feeds.map(feed => (
           <SettingsRow key={feed.id} label={feed.name}
@@ -271,7 +276,7 @@ export function LifeSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
 
-      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🌤</Box>} title={i18n.t('每日简报')}>
+      <SettingsGroup icon={<WbSunnyOutlined fontSize="small"/>} title={i18n.t('每日简报')}>
         <SettingsRow label={i18n.t('每天定时生成简报')} description={i18n.t('汇总今天的日程、到期待办、已经过期的事和明天的预览。')}>
           <Switch size="small" checked={settings.briefing.enabled}
             onChange={e => patch({ briefing: { ...settings.briefing, enabled: e.target.checked } })} />
@@ -336,7 +341,7 @@ export function LifeSection({ settings, patch }: {
       </SettingsGroup>
 
       <BriefingDeliverySection settings={settings} patch={patch}/>
-      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🗂</Box>} title={i18n.t('最近的简报')}
+      <SettingsGroup icon={<HistoryOutlined fontSize="small"/>} title={i18n.t('最近的简报')}
         hint={i18n.t('只读。最多保留最近 {{n}} 份。', { n: MAX_BRIEFING_HISTORY })}>
         {recent.length === 0 && <SettingsHint>{i18n.t('还没有生成过简报。开启后每天会在这里留一份，方便回看。')}</SettingsHint>}
         {recent.map(record => (
@@ -366,7 +371,7 @@ export function LifeSection({ settings, patch }: {
         ))}
       </SettingsGroup>
 
-      <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🔊</Box>} title={i18n.t('朗读')}>
+      <SettingsGroup icon={<VolumeUpOutlined fontSize="small"/>} title={i18n.t('朗读')}>
         <SettingsRow label={i18n.t('启用朗读')}
           description={i18n.t('用 Windows 自带语音朗读简报和你要听的内容。默认关闭，只在你明确要求时发声。')}>
           <Switch size="small" checked={settings.tts.enabled}

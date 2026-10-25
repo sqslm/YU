@@ -1287,6 +1287,7 @@ function registerIpc(): void {
     return result
   })
   handle('update:install', () => updater?.install() ?? false)
+  handle('update:pause', () => updater?.pause())
   // The last composed briefing, handed to the UI instead of recomposed there:
   // two composers would drift apart on what "today" means.
   handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())

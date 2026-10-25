@@ -18,6 +18,15 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
 
 describe('personal tools share real application services', () => {
+  it('allows an explicit reminder clause after a calendar clause without weakening modification/quotation guards',async()=>{
+    const text='提醒我明天上午九点带资料',question=`帮我创建明天下午三点的日程，并${text}`
+    vi.mocked(api.remind).mockResolvedValue({message:'Saved',saved:1})
+    expect((await runTool('create_reminder',{text},{...ctx,question})).ok).toBe(true)
+    expect(api.remind).toHaveBeenCalledWith(text,expect.any(AbortSignal),ctx.submittedAt)
+    vi.mocked(api.remind).mockClear()
+    expect((await runTool('create_reminder',{text},{...ctx,question:`把“${text}”这条提醒取消`,cache:new Map()})).ok).toBe(false)
+    expect(api.remind).not.toHaveBeenCalled()
+  })
   it('returns recorded provenance and actual note sync failures without calling pending data failed',async()=>{
     api.history=vi.fn().mockReturnValue([{id:'h1',createdAt:10,promptId:'card-actual',promptName:'Actual card',promptKind:'dictation',providerId:'fallback'}])
     const prompt=await runTool('get_prompt_info',{},ctx)

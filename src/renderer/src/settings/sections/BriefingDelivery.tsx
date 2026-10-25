@@ -1,3 +1,4 @@
+import MailOutline from '@mui/icons-material/MailOutline'
 import { useEffect, useState } from 'react'
 import { Alert, Box, Button, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
@@ -17,7 +18,7 @@ export function BriefingDeliverySection({settings,patch}:{settings:Settings;patc
     setBusy(true);setError('')
     try{await window.api.life.sendBriefing();setReceipts(await window.api.life.briefingDeliveryHistory())}catch(error){setError(String(error))}finally{setBusy(false)}
   }
-  return <SettingsGroup icon="✉" title={i18n.t('简报邮件与手机推送')}>
+  return <SettingsGroup icon={<MailOutline fontSize="small"/>} title={i18n.t('简报邮件与手机推送')}>
     <SettingsHint>{i18n.t('每天生成简报时投递到已开启的渠道。邮件使用 Resend，需要已验证的发件域名；手机安装 ntfy 并订阅相同服务和主题。公共主题可能被他人订阅，请使用私有主题与访问令牌。')}</SettingsHint>
     <SettingsRow label={i18n.t('邮件投递')}><Switch checked={draft.email.enabled} onChange={(_,enabled)=>setDraft({...draft,email:{...draft.email,enabled}})}/></SettingsRow>
     <Stack spacing={1} sx={{px:2,pb:2}}>

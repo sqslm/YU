@@ -1,3 +1,4 @@
+import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined'
 import { useCallback, useEffect, useState } from 'react'
 import { Box, Button, Stack, Typography } from '@mui/material'
 import type { Workflow } from '@shared/workflow'
@@ -47,7 +48,7 @@ export function WorkflowsSection(): JSX.Element {
   }
 
   return (
-    <SettingsGroup icon="⚡" title={i18n.t('工作流')} hint={i18n.t('把固定的几步存成一个名字，之后一句话重放，不再经过模型')}>
+    <SettingsGroup icon={<AccountTreeOutlined fontSize="small"/>} title={i18n.t('工作流')} hint={i18n.t('把固定的几步存成一个名字，之后一句话重放，不再经过模型')}>
       <Box sx={{ px: 2, py: 1.5 }}>
         <Stack spacing={1}>
           <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.6 }}>

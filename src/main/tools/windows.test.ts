@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, writeFile, unlink, rmdir, realpath, symlink } from 'node:fs/promises'
+import { mkdtemp, writeFile, unlink, rmdir, realpath, symlink, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { WindowsTools, WINDOWS_TOOLS, WINDOWS_DEFINITIONS } from './windows'
@@ -14,6 +14,27 @@ let native: ReturnType<typeof vi.fn<(request: Record<string, unknown>, signal?: 
 let openPath: ReturnType<typeof vi.fn<(path: string) => Promise<string>>>
 let openUrl: ReturnType<typeof vi.fn<(url: string) => Promise<void>>>
 let tools: WindowsTools
+it.each([['AI','A I'],['softwares','Software'],['AI','重复盘符']])('opens a unique actual folder for spoken variation %s/%s',async(actual,spoken)=>{
+  const target=join(root,actual);await mkdir(target)
+  try{
+    const requested=spoken==='重复盘符'?`${root.slice(0,1)}盘的AI`:spoken
+    const result=await tools.run('open_folder',{folder:join(root,requested)})
+    expect(result.ok).toBe(true);expect(openPath).toHaveBeenCalledWith(await realpath(target))
+  }finally{await rmdir(target)}
+})
+it('prefers a real spaced folder and refuses ambiguous corrections', async () => {
+  const names = ['A I', 'A  I']
+  for (const name of names) await mkdir(join(root, name))
+  try {
+    expect((await tools.run('open_folder', { folder: join(root, 'A I') })).ok).toBe(true)
+    expect(openPath).toHaveBeenCalledWith(await realpath(join(root, 'A I')))
+    openPath.mockClear()
+    const ambiguous = await tools.run('open_folder', { folder: join(root, 'AI') })
+    expect(ambiguous.ok).toBe(false)
+    expect(ambiguous.summary).toContain('多个相近文件夹')
+    expect(openPath).not.toHaveBeenCalled()
+  } finally { for (const name of names) await rmdir(join(root, name)) }
+})
 it('applies configured directory and context exclusions before executing tools',async()=>{
   const access={...DEFAULT_ASSISTANT_ACCESS,excludedPaths:[root],excludedApps:['chrome'],disabledTools:['get_system_info']}
   const guarded=new WindowsTools({folders:{downloads:root,desktop:root,documents:root},native,openPath,openUrl,access:()=>access})
@@ -50,6 +71,9 @@ describe('Windows tools permissions and real result selection', () => {
   })
   it.each(['帮我打开E盘的software文件夹', '打开 E 盘的 softwares 文件夹。'])('routes a named drive folder to folder opening instead of registered applications: %s', input => {
     expect(tools.command(input)).toEqual({ name: 'open_folder', args: { folder: input.includes('softwares') ? 'E:\\softwares' : 'E:\\software' } })
+  })
+  it.each([['帮我打开e盘的A I文件夹', 'E:\\A I'], ['帮我打开E盘的 E盘的AI文件夹', 'E:\\E盘的AI']])('retains the complete spoken path for literal-first filesystem resolution: %s', (input, folder) => {
+    expect(tools.command(input)).toEqual({ name: 'open_folder', args: { folder } })
   })
   it.each(['打开 E:\\softwares 文件夹', 'Open folder E:\\softwares', '打开E:\\softwares'])('opens an explicit absolute folder without application discovery: %s', input => {
     expect(tools.command(input)).toEqual({ name: 'open_folder', args: { folder: 'E:\\softwares' } })

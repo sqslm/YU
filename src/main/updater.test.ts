@@ -22,6 +22,12 @@ vi.mock('electron', () => ({
   app: { getVersion: () => mocks.version, isPackaged: true }
 }))
 vi.mock('electron-updater', () => ({
+  CancellationToken: class {
+    cancelled = false
+    callbacks: Array<() => void> = []
+    onCancel(callback: () => void) { this.callbacks.push(callback) }
+    cancel() { this.cancelled = true; this.callbacks.forEach(callback => callback()) }
+  },
   autoUpdater: {
     checkForUpdates: mocks.checkForUpdates,
     setFeedURL: mocks.setFeedURL,
@@ -89,6 +95,23 @@ describe('resolveFeedUrl', () => {
       resolveFeedUrl({ TYPELESS_NO_UPDATE: '1', TYPELESS_UPDATE_URL: 'https://env.test/u' })
     ).toBeNull()
   })
+})
+
+it('coalesces downloads, pauses without an error, and resumes the accepted release', async () => {
+  mocks.checkForUpdates.mockResolvedValueOnce({ updateInfo: { version: '1.1.0-rc.1' } })
+  mocks.download.mockImplementationOnce(token => new Promise((_resolve, reject) => token.onCancel(() => reject(Error('cancelled')))))
+  const updater = new Updater(options())
+  await updater.check()
+  const first = updater.download(), second = updater.download()
+  expect(mocks.download).toHaveBeenCalledOnce()
+  await updater.pause()
+  expect((await first).ok).toBe(true); expect((await second).ok).toBe(true)
+  expect(updater.getState().phase).toBe('paused')
+  await updater.check()
+  expect(mocks.checkForUpdates).toHaveBeenCalledOnce()
+  mocks.download.mockResolvedValueOnce([])
+  await updater.download()
+  expect(mocks.download).toHaveBeenCalledTimes(2)
 })
 
 describe('canSelfUpdate', () => {
