@@ -679,6 +679,22 @@ function cacheKey(name: string, args: Record<string, unknown>): string {
   return `${name}?${keys.map((key) => `${key}=${JSON.stringify(args[key]) ?? 'null'}`).join('&')}`
 }
 
+/**
+ * The shape of a call's arguments, for the log only: key, kind and size, never
+ * the text. When a tool is rejected the question is always "what did the model
+ * actually send" — `steps: string(412)` answers it, the 412 characters do not.
+ */
+function argShape(args: Record<string, unknown>): string {
+  const parts = Object.entries(args).map(([key, value]) => {
+    if (Array.isArray(value)) return `${key}:array(${value.length})`
+    if (value === null) return `${key}:null`
+    if (typeof value === 'object') return `${key}:object`
+    if (typeof value === 'string') return `${key}:string(${Array.from(value).length})`
+    return `${key}:${typeof value}`
+  })
+  return parts.length ? parts.join(', ') : '<none>'
+}
+
 /** Runs the tool body under its ceiling. Never throws: a timeout is data. */
 async function attemptTool(
   tool: ToolDefinition,
@@ -705,7 +721,7 @@ async function attemptTool(
     )
   }
   if (outcome.reason === 'aborted') return fail(mt('{{tool}} 已取消', { tool: tool.name }))
-  ctx.log(`[tool] ${tool.name} threw: ${messageOf(outcome.error)}`)
+  ctx.log(`[tool] ${tool.name} threw: ${messageOf(outcome.error)} | args=${argShape(args)}`)
   return fail(mt('{{tool}} 执行失败：{{message}}', { tool: tool.name, message: messageOf(outcome.error) }))
 }
 
@@ -720,12 +736,16 @@ export async function runTool(
   ctx: ToolContext
 ): Promise<ToolOutcome> {
   const tool = getTool(name)
-  if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number]) && (!ctx.personal || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
-  if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number]) && (!ctx.life || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
-  if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number]) && (!ctx.workflow || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
-  if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) && (!ctx.windows || !ctx.allowedTools?.includes(name))) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
-  if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return fail(mt('本次任务未授权此工具：{{name}}', { name }))
-  if (!tool) return fail(mt('未知工具：{{name}}', { name }))
+  const reject = (summary: string): ToolOutcome => {
+    ctx.log(`[tool] ${name} rejected: ${summary} | args=${argShape(args ?? {})}`)
+    return fail(summary)
+  }
+  if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number]) && (!ctx.personal || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number]) && (!ctx.life || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number]) && (!ctx.workflow || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) && (!ctx.windows || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (!tool) return reject(mt('未知工具：{{name}}', { name }))
   const input = args ?? {}
   if (name === 'open_url' && /官网|官方网站|official (?:web)?site/iu.test(ctx.question) && !ctx.question.includes(textArg(input, 'url'))) {
     const evidence = await Promise.all([...(ctx.cache?.entries() ?? [])].filter(([key]) => key.startsWith('web_search?') || key.startsWith('read_webpage?')).map(([, result]) => result))

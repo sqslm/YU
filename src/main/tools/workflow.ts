@@ -45,7 +45,10 @@ interface Field {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object'
   description: string
   enum?: readonly string[]
-  items?: { type: 'string' | 'object' }
+  // Only `steps` uses a structured item shape: describing it is what stops the
+  // model from inventing a shape of its own, and the validator itself only
+  // checks that the value is an array (or a JSON string holding one).
+  items?: { type: 'string' | 'object'; properties?: Record<string, Field>; required?: string[] }
   maxItems?: number
 }
 
@@ -149,7 +152,18 @@ const schemas: Record<WorkflowToolName, Schema> = {
       name: { type: 'string', description: 'The name the user will say, e.g. 早上例行检查' },
       steps: {
         type: 'array',
-        items: { type: 'object' },
+        // A bare `{type: 'object'}` left the shape to the model's imagination and
+        // it answered with a JSON string instead of an array. Spelling out the
+        // item shape is what makes the documented call the easy call.
+        items: {
+          type: 'object',
+          properties: {
+            tool: { type: 'string', enum: WORKFLOW_STEP_TOOLS as unknown as string[], description: 'Tool to call for this step' },
+            args: { type: 'object', description: 'Arguments for that tool, as the tool itself documents them' },
+            label: { type: 'string', description: 'Short human label, e.g. 读今天的日程' }
+          },
+          required: ['tool']
+        },
         maxItems: 8,
         description:
           'Ordered steps, each {"tool": "<tool name>", "args": {...}, "label": "<short human label>"}. Allowed tools: ' +
@@ -251,7 +265,13 @@ export const WORKFLOW_DEFINITIONS: ToolDefinition[] = WORKFLOW_TOOLS.map(name =>
     for (const key of schema.required ?? []) if (!(key in args)) throw new Error(mt('工具参数无效：{{name}}', { name: key }))
     for (const [key, value] of Object.entries(args)) {
       const field = Object.hasOwn(schema.properties, key) ? schema.properties[key] : undefined
-      const validType = field?.type === 'array' ? Array.isArray(value) && value.length <= (field.maxItems ?? 30) : typeof value === field?.type
+      // Arrays also accept a JSON string: the model double-encodes nested
+      // structures often enough that rejecting it costs the user a whole round
+      // trip, and the normalizer reads the string anyway. Length is left to the
+      // normalizer so "too many steps" can say so instead of "参数无效".
+      const validType = field?.type === 'array'
+        ? Array.isArray(value) || typeof value === 'string'
+        : typeof value === field?.type
       if (!field || !validType || (field.enum && !field.enum.includes(value as string))) {
         throw new Error(mt('工具参数无效：{{name}}', { name: key }))
       }

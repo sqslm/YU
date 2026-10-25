@@ -1012,6 +1012,8 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "请补充日程的开始时间": "Add a start time for the event",
   "请给这个工作流起一个名字": "Give this workflow a name",
   "工作流至少要有一个步骤": "A workflow needs at least one step",
+  "步骤不是一个列表：请给出按顺序排列的步骤数组": "The steps are not a list: send them as an ordered array of steps",
+  "有一步没写工具名，请给每一步指定工具": "One step has no tool name; give every step the tool it should run",
   "一个工作流最多 {{count}} 步": "A workflow holds at most {{count}} steps",
   "这一步的工具不在允许范围内：{{tool}}": "That tool is not allowed as a step: {{tool}}",
   "{{count}} 步：{{steps}}": "{{count}} steps: {{steps}}",

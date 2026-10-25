@@ -34,8 +34,14 @@ export interface AppShareDialogProps {
   total: number
 }
 
-/** Side of the coordinate box the SVG uses; `pie.ts` draws in a 100×100 one. */
-const CHART = 132
+/**
+ * Largest side the ring is allowed to reach, in px.
+ *
+ * The ring used to be a fixed 132 px under the legend, which shrank the chart
+ * as the legend grew. It now takes two thirds of the dialog width and this cap
+ * stops it from ballooning on a wide monitor.
+ */
+const CHART = 320
 
 /**
  * How far a hovered segment slides out of the ring, in viewBox units.
@@ -64,7 +70,7 @@ export function AppShareDialog({ open, onClose, t, apps, total }: AppShareDialog
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="xs"
+      maxWidth="sm"
       fullWidth
       aria-labelledby="app-share-title"
       slotProps={{
@@ -106,210 +112,238 @@ export function AppShareDialog({ open, onClose, t, apps, total }: AppShareDialog
           </Typography>
         ) : (
           <>
+            {/* Legend on the left, ring on the right, ring taking two thirds:
+                the ring is what gets read at a glance, so it gets the room. */}
             <Box
-              sx={{ position: 'relative', width: CHART, height: CHART, mx: 'auto', mt: 2 }}
-              onMouseLeave={() => setHovered(null)}
+              sx={{ display: 'flex', flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 2.5, mt: 2 }}
             >
-              <svg
-                width={CHART}
-                height={CHART}
-                viewBox="0 0 100 100"
-                role="img"
-                aria-label={i18n.t('{{n}} 个 App 的调用占比', { n: slices.length })}
+              <Box
+                sx={{
+                  position: 'relative',
+                  flex: '2 1 0',
+                  minWidth: 0,
+                  width: '100%',
+                  maxWidth: CHART,
+                  aspectRatio: '1 / 1',
+                  display: 'grid',
+                  placeItems: 'center'
+                }}
+                onMouseLeave={() => setHovered(null)}
               >
-                {slices.map((slice) => {
-                  const mid = ((slice.startAngle + slice.endAngle) / 2 - 90) * (Math.PI / 180)
+                <svg
+                  width="100%"
+                  height="100%"
+                  viewBox="0 0 100 100"
+                  role="img"
+                  aria-label={i18n.t('{{n}} 个 App 的调用占比', { n: slices.length })}
+                >
+                  {slices.map((slice) => {
+                    const mid = ((slice.startAngle + slice.endAngle) / 2 - 90) * (Math.PI / 180)
+                    const active = slice.name === hovered
+                    const dim = hovered !== null && !active
+                    return (
+                      // The tooltip is the readable version of the `<title>` that used
+                      // to be here: a native SVG title waits a second and cannot carry
+                      // a layout, and the same information already lives in the legend,
+                      // so nothing is lost by replacing it.
+                      <Tooltip
+                        key={slice.name}
+                        arrow
+                        enterDelay={80}
+                        leaveDelay={0}
+                        disableInteractive
+                        placement="top"
+                        slotProps={{
+                          tooltip: {
+                            sx: {
+                              bgcolor: t.surfaceHi,
+                              color: t.text,
+                              border: 1,
+                              borderColor: 'divider',
+                              boxShadow: '0 6px 18px rgba(0,0,0,.45)',
+                              borderRadius: '8px',
+                              px: 1,
+                              py: 0.75
+                            }
+                          },
+                          arrow: { sx: { color: t.surfaceHi, '&::before': { border: 1, borderColor: 'divider' } } }
+                        }}
+                        title={
+                          <Box data-pie-tip={slice.name}>
+                            <Typography sx={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.35 }}>
+                              {slice.name}
+                            </Typography>
+                            <Typography sx={{ fontSize: 10.5, color: t.textDim, lineHeight: 1.45, mt: 0.25 }}>
+                              {i18n.t('{{n}} 次 · {{pct}}%', { n: group(slice.count), pct: slice.percent })}
+                            </Typography>
+                          </Box>
+                        }
+                      >
+                        <path
+                          data-pie-slice={slice.name}
+                          data-pie-active={active ? 'on' : 'off'}
+                          d={slice.path}
+                          fill={slice.color}
+                          style={{
+                            // The lift is a transform rather than a bigger radius: the
+                            // arc path is already computed, and re-deriving it per hover
+                            // would make the ring stutter on every pointer move.
+                            transform: active
+                              ? `translate(${(Math.cos(mid) * LIFT).toFixed(2)}px, ${(Math.sin(mid) * LIFT).toFixed(2)}px)`
+                              : 'translate(0px, 0px)',
+                            transformOrigin: 'center',
+                            opacity: dim ? 0.45 : 1,
+                            filter: active ? 'brightness(1.16) drop-shadow(0 3px 6px rgba(0,0,0,.4))' : 'none',
+                            transition:
+                              'transform 150ms cubic-bezier(.2,.7,.3,1), opacity 150ms ease, filter 150ms ease',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={() => setHovered(slice.name)}
+                          onFocus={() => setHovered(slice.name)}
+                        />
+                      </Tooltip>
+                    )
+                  })}
+                </svg>
+                {/* Text sits in HTML, not in the SVG: it inherits the app font
+                    stack, and it stays crisp at any zoom level. */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'grid',
+                    placeItems: 'center',
+                    textAlign: 'center',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  {/* Percent, not pixels: the ring grows with the panel. */}
+                  <Box sx={{ maxWidth: '62%', px: 0.5 }}>
+                    {focus ? (
+                      // While hovering, the hole in the ring answers "which one is
+                      // this, and how big" without moving the eye to the legend.
+                      <>
+                        <Typography
+                          data-pie-center={focus.name}
+                          sx={{
+                            fontSize: 15,
+                            fontWeight: 600,
+                            letterSpacing: -0.3,
+                            lineHeight: 1.15,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {focus.name}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: 10,
+                            color: t.textDim,
+                            mt: 0.35,
+                            fontVariantNumeric: 'tabular-nums'
+                          }}
+                        >
+                          {i18n.t('{{n}} 次 · {{pct}}%', { n: group(focus.count), pct: focus.percent })}
+                        </Typography>
+                      </>
+                    ) : (
+                      <>
+                        <Typography
+                          sx={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.7, lineHeight: 1.1 }}
+                        >
+                          {group(total)}
+                        </Typography>
+                        <Typography sx={{ fontSize: 9.5, color: t.textFaint, mt: 0.25 }}>
+                          {i18n.t('次调用')}
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
+                </Box>
+              </Box>
+
+              <Box
+                data-app-share-legend
+                sx={{
+                  flex: '1 1 0',
+                  minWidth: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.6,
+                  // A long list scrolls inside its own third; otherwise it would
+                  // push the ring up and shrink it again, which is the bug this
+                  // layout replaces.
+                  maxHeight: 320,
+                  overflowY: 'auto',
+                  pr: 0.5
+                }}
+              >
+                <PagedList name="app-distribution">{slices.map((slice) => {
                   const active = slice.name === hovered
                   const dim = hovered !== null && !active
                   return (
-                    // The tooltip is the readable version of the `<title>` that used
-                    // to be here: a native SVG title waits a second and cannot carry
-                    // a layout, and the same information already lives in the legend,
-                    // so nothing is lost by replacing it.
-                    <Tooltip
+                    <Box
                       key={slice.name}
-                      arrow
-                      enterDelay={80}
-                      leaveDelay={0}
-                      disableInteractive
-                      placement="top"
-                      slotProps={{
-                        tooltip: {
-                          sx: {
-                            bgcolor: t.surfaceHi,
-                            color: t.text,
-                            border: 1,
-                            borderColor: 'divider',
-                            boxShadow: '0 6px 18px rgba(0,0,0,.45)',
-                            borderRadius: '8px',
-                            px: 1,
-                            py: 0.75
-                          }
-                        },
-                        arrow: { sx: { color: t.surfaceHi, '&::before': { border: 1, borderColor: 'divider' } } }
+                      data-pie-legend={slice.name}
+                      data-pie-legend-active={active ? 'on' : 'off'}
+                      onMouseEnter={() => setHovered(slice.name)}
+                      onMouseLeave={() => setHovered(null)}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.9,
+                        minWidth: 0,
+                        px: 0.75,
+                        py: 0.4,
+                        my: -0.2,
+                        borderRadius: '6px',
+                        // The legend follows the ring: hovering a row lifts its
+                        // segment, so the two halves point at the same thing.
+                        bgcolor: active ? t.accentSoft : 'transparent',
+                        opacity: dim ? 0.6 : 1,
+                        transition: 'background-color 130ms ease, opacity 130ms ease',
+                        cursor: 'default'
                       }}
-                      title={
-                        <Box data-pie-tip={slice.name}>
-                          <Typography sx={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.35 }}>
-                            {slice.name}
-                          </Typography>
-                          <Typography sx={{ fontSize: 10.5, color: t.textDim, lineHeight: 1.45, mt: 0.25 }}>
-                            {i18n.t('{{n}} 次 · {{pct}}%', { n: group(slice.count), pct: slice.percent })}
-                          </Typography>
-                        </Box>
-                      }
                     >
-                      <path
-                        data-pie-slice={slice.name}
-                        data-pie-active={active ? 'on' : 'off'}
-                        d={slice.path}
-                        fill={slice.color}
-                        style={{
-                          // The lift is a transform rather than a bigger radius: the
-                          // arc path is already computed, and re-deriving it per hover
-                          // would make the ring stutter on every pointer move.
-                          transform: active
-                            ? `translate(${(Math.cos(mid) * LIFT).toFixed(2)}px, ${(Math.sin(mid) * LIFT).toFixed(2)}px)`
-                            : 'translate(0px, 0px)',
-                          transformOrigin: 'center',
-                          opacity: dim ? 0.45 : 1,
-                          filter: active ? 'brightness(1.16) drop-shadow(0 3px 6px rgba(0,0,0,.4))' : 'none',
-                          transition:
-                            'transform 150ms cubic-bezier(.2,.7,.3,1), opacity 150ms ease, filter 150ms ease',
-                          cursor: 'pointer'
-                        }}
-                        onMouseEnter={() => setHovered(slice.name)}
-                        onFocus={() => setHovered(slice.name)}
-                      />
-                    </Tooltip>
-                  )
-                })}
-              </svg>
-              {/* Text sits in HTML, not in the SVG: it inherits the app font
-                  stack, and it stays crisp at any zoom level. */}
-              <Box
-                sx={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'grid',
-                  placeItems: 'center',
-                  textAlign: 'center',
-                  pointerEvents: 'none'
-                }}
-              >
-                <Box sx={{ maxWidth: CHART - 52, px: 0.5 }}>
-                  {focus ? (
-                    // While hovering, the hole in the ring answers "which one is
-                    // this, and how big" without moving the eye to the legend.
-                    <>
-                      <Typography
-                        data-pie-center={focus.name}
+                      <Box
                         sx={{
-                          fontSize: 15,
-                          fontWeight: 600,
-                          letterSpacing: -0.3,
-                          lineHeight: 1.15,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden'
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: slice.color,
+                          flexShrink: 0
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 11.5,
+                          color: t.text,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
                         }}
                       >
-                        {focus.name}
+                        {slice.name}
                       </Typography>
                       <Typography
                         sx={{
-                          fontSize: 10,
-                          color: t.textDim,
-                          mt: 0.35,
+                          flexShrink: 0,
+                          fontSize: 11,
+                          color: active ? t.text : t.textDim,
                           fontVariantNumeric: 'tabular-nums'
                         }}
                       >
-                        {i18n.t('{{n}} 次 · {{pct}}%', { n: group(focus.count), pct: focus.percent })}
+                        {i18n.t('{{n}} 次 · {{pct}}%', { n: group(slice.count), pct: slice.percent })}
                       </Typography>
-                    </>
-                  ) : (
-                    <>
-                      <Typography
-                        sx={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.7, lineHeight: 1.1 }}
-                      >
-                        {group(total)}
-                      </Typography>
-                      <Typography sx={{ fontSize: 9.5, color: t.textFaint, mt: 0.25 }}>
-                        {i18n.t('次调用')}
-                      </Typography>
-                    </>
-                  )}
-                </Box>
+                    </Box>
+                  )
+                })}</PagedList>
               </Box>
-            </Box>
-
-            <Box
-              data-app-share-legend
-              sx={{ mt: 1.75, display: 'flex', flexDirection: 'column', gap: 0.6 }}
-            >
-              <PagedList name="app-distribution">{slices.map((slice) => {
-                const active = slice.name === hovered
-                const dim = hovered !== null && !active
-                return (
-                  <Box
-                    key={slice.name}
-                    data-pie-legend={slice.name}
-                    data-pie-legend-active={active ? 'on' : 'off'}
-                    onMouseEnter={() => setHovered(slice.name)}
-                    onMouseLeave={() => setHovered(null)}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.9,
-                      minWidth: 0,
-                      px: 0.75,
-                      py: 0.4,
-                      my: -0.2,
-                      borderRadius: '6px',
-                      // The legend follows the ring: hovering a row lifts its
-                      // segment, so the two halves point at the same thing.
-                      bgcolor: active ? t.accentSoft : 'transparent',
-                      opacity: dim ? 0.6 : 1,
-                      transition: 'background-color 130ms ease, opacity 130ms ease',
-                      cursor: 'default'
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        bgcolor: slice.color,
-                        flexShrink: 0
-                      }}
-                    />
-                    <Typography
-                      sx={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 11.5,
-                        color: t.text,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {slice.name}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        flexShrink: 0,
-                        fontSize: 11,
-                        color: active ? t.text : t.textDim,
-                        fontVariantNumeric: 'tabular-nums'
-                      }}
-                    >
-                      {i18n.t('{{n}} 次 · {{pct}}%', { n: group(slice.count), pct: slice.percent })}
-                    </Typography>
-                  </Box>
-                )
-              })}</PagedList>
             </Box>
 
             {unlisted > 0 && (

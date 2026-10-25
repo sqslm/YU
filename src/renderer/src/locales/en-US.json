@@ -1804,5 +1804,11 @@
   "9月": "Sep",
   "10月": "Oct",
   "11月": "Nov",
-  "12月": "Dec"
+  "12月": "Dec",
+  "今天的日程": "Today's events",
+  "今天没有安排": "Nothing scheduled today",
+  "没有待办": "No open to-dos",
+  "今日简报": "Today's briefing",
+  "今天还没有生成简报": "No briefing has been produced today",
+  "查看": "Open"
 }

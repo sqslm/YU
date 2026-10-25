@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.7**, Windows 10/11 x64, MIT.
+> Current version **1.0.0-rc.8**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -220,7 +220,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.7`). **Done**: dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.0.0-rc.8`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Not implemented** (don't read these as available): per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -242,6 +242,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
+- **1.0.0-rc.8**: the hub gained a today board under the four numbers — events, to-dos and the daily briefing in three columns, each with a one-click jump to its page, and short windows scroll instead of cropping the heat map; the "top apps" dialog now puts the legend on the left and the ring on the right at two thirds width, with a long legend scrolling in its own column; "the workflow was not saved" is fixed — steps sent as a JSON string or as bare tool names now save, and the message says whether it was not a list, a step without a tool, or more than 8 steps; a tool refused by the permission check now logs the arg shapes instead of failing silently.
 - **1.0.0-rc.7**: every IPC call now goes through a trust check — only a `webContents` this app created, calling from that window's main frame, is accepted, so embedded iframes and unknown renderers are refused; provider preset names follow the selected language instead of staying Chinese; the 5 MB cap on subscribed calendars is enforced while streaming, so an oversized feed is dropped instead of buffered whole; external calendars are explicitly read-only ICS subscriptions.
 - **1.0.0-rc.6**: fixes the packaged build reporting no local recognition runtime (the native runtime is an optional dependency that packaging dropped; it is now a real dependency with all three native folders unpacked); update checks move to this project's GitHub Releases with the prerelease channel pinned from the version tag and a pill in the hub when a newer build exists; events and reminders sync both ways with your own server (increasing `seq` as the cursor, tombstones for deletions) and external ICS calendars can be subscribed; Ask reads local docx / xlsx / pptx bodies and the Everything index, degrading honestly when Everything is missing; the briefing can be written by a model with a template fallback, gains its own page and keeps fourteen days; conversational references and a selectable wake-word device land too.
 - **1.0.0-rc.5**: the long-term memory system is gone (spoken preferences are no longer kept forever; notes carry them instead); events get their own page (month grid, day list, form, ICS import/export), to-dos gain a priority and a deadline, the briefing honours quiet hours and keeps two weeks of text on this machine, and a new dictation stops a read-aloud in progress; workflows let you save a sequence of tool steps under a name and replay it with one sentence.

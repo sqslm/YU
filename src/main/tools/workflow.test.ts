@@ -95,3 +95,46 @@ describe('run_workflow authorizes each step against this round', () => {
     expect(result.data.steps).toMatchObject([{ tool: 'open_search', ok: false, summary: '这一步的工具不在允许范围内：open_search' }])
   })
 })
+
+/**
+ * Saving through the real tool path.
+ *
+ * The bug this locks down: a model that sent `steps` as a JSON string, or as a
+ * list of bare tool names, got "工具参数无效：steps" and the user saw "工作流没保存
+ * 成功". The schema now describes the step shape, and validation only insists
+ * that `steps` is a list (or a string holding one) so the normalizer can either
+ * accept the shape or say precisely which part is wrong.
+ */
+describe('save_workflow accepts what a model actually sends', () => {
+  // `ctx.workflow` is read from the outer `beforeEach`; the nested one replaces
+  // `store`, so the context has to be rebuilt against the new object.
+  const saveCtx = (): ToolContext => ({ ...ctx, workflow: store, allowedTools: ['save_workflow'] })
+
+  beforeEach(() => {
+    // The store hands back the row it wrote; the tool echoes its name and steps.
+    store = { ...store, save: vi.fn(() => workflowOf([step('get_datetime')])) }
+  })
+
+  it('saves steps that arrive as a JSON string', async () => {
+    const steps = JSON.stringify([{ tool: 'get_datetime', args: {}, label: '看时间' }])
+    const result = await runTool('save_workflow', { name: '晨间', steps }, saveCtx())
+    expect(result.ok).toBe(true)
+    const [saved] = vi.mocked(store.save).mock.calls[0] as unknown as [{ name: string; steps: WorkflowStep[] }]
+    // The label the model gave survives; only a missing one falls back to the tool.
+    expect(saved).toEqual({ name: '晨间', steps: [{ tool: 'get_datetime', args: {}, label: '看时间' }] })
+  })
+
+  it('saves steps that arrive as bare tool names', async () => {
+    const result = await runTool('save_workflow', { name: '晨间', steps: ['list_events', 'daily_briefing'] }, saveCtx())
+    expect(result.ok).toBe(true)
+    const [saved] = vi.mocked(store.save).mock.calls[0] as unknown as [{ name: string; steps: WorkflowStep[] }]
+    expect(saved).toEqual({ name: '晨间', steps: [step('list_events'), step('daily_briefing')] })
+  })
+
+  it('reports too many steps as too many steps, not as invalid arguments', async () => {
+    const tooMany = Array.from({ length: 9 }, () => 'get_datetime')
+    const result = await runTool('save_workflow', { name: '晨间', steps: tooMany }, saveCtx())
+    expect(result.ok).toBe(false)
+    expect(result.summary).toContain('最多 8 步')
+  })
+})

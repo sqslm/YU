@@ -152,6 +152,7 @@ export function App(): JSX.Element {
       <HomePage
         settings={settings}
         mode={mode}
+        onOpenPage={(id) => setPage(id)}
         onOpenHistory={(query) => {
           setHistoryQuery(query)
           setPage('history')

@@ -111,12 +111,45 @@ describe('workflow store', () => {
   it('rejects an empty step list and too many steps', () => {
     const workflows = store()
     expect(() => workflows.save({ name: '空', steps: [] })).toThrow('工作流至少要有一个步骤')
+    // A value that is not a list at all now says so instead of being folded into
+    // "at least one step": they are different mistakes and the model can act on
+    // the difference.
     expect(() => workflows.save({ name: '空', steps: null as unknown as WorkflowStep[] }))
-      .toThrow('工作流至少要有一个步骤')
+      .toThrow('步骤不是一个列表')
     const tooMany = steps(Array.from({ length: MAX_WORKFLOW_STEPS + 1 }, () => 'get_datetime'))
     expect(() => workflows.save({ name: '太长', steps: tooMany }))
       .toThrow(`一个工作流最多 ${MAX_WORKFLOW_STEPS} 步`)
     expect(workflows.list()).toEqual([])
+  })
+
+  it('accepts the step shapes a model actually emits', () => {
+    const workflows = store()
+    // A JSON string holding the array: models double-encode nested structures,
+    // and refusing that costs the user the whole request.
+    const asText = JSON.stringify([{ tool: 'get_datetime', args: {}, label: '看时间' }])
+    expect(workflows.save({ name: '字符串', steps: asText as unknown as WorkflowStep[] }).steps).toEqual([
+      { tool: 'get_datetime', args: {}, label: '看时间' }
+    ])
+    // Bare tool names are unambiguous, so the label falls back to the tool.
+    expect(workflows.save({ name: '只有名字', steps: ['list_events', 'daily_briefing'] as unknown as WorkflowStep[] }).steps)
+      .toEqual([
+        { tool: 'list_events', args: {}, label: 'list_events' },
+        { tool: 'daily_briefing', args: {}, label: 'daily_briefing' }
+      ])
+    // Per-step args as a JSON string, and `arguments` as an alias for `args`.
+    expect(workflows.save({
+      name: '参数',
+      steps: [
+        { tool: 'calculate', args: '{"expression":"1+1"}' },
+        { tool: 'speak_text', arguments: { text: '早' } }
+      ] as unknown as WorkflowStep[]
+    }).steps).toEqual([
+      { tool: 'calculate', args: { expression: '1+1' }, label: 'calculate' },
+      { tool: 'speak_text', args: { text: '早' }, label: 'speak_text' }
+    ])
+    // A step without a tool name still fails, and says which problem it is.
+    expect(() => workflows.save({ name: '缺', steps: [{ label: '无工具' }] as unknown as WorkflowStep[] }))
+      .toThrow('有一步没写工具名')
   })
 
   it('rejects tools outside the allowlist, including recursion and selection rewrite', () => {

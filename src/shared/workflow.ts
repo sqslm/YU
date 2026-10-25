@@ -105,28 +105,71 @@ export function normalizeWorkflowName(value: unknown): string {
  * Steps as they will be replayed: allowlisted tools, plain-object args, and a
  * label that is never blank.
  *
+ * The input is whatever the model actually emitted, which is not the same thing
+ * as what the schema asked for. All of these are accepted because refusing them
+ * only teaches the user that saving fails:
+ *
+ * - an array of `{tool, args, label}` objects (the documented shape)
+ * - a JSON string holding that array (models double-encode nested structures)
+ * - an array of bare tool names, e.g. `["list_events", "daily_briefing"]`
+ * - per-step `args` given as a JSON string, and `arguments` as an alias for `args`
+ *
  * A step whose label is empty falls back to the tool name instead of being
  * rejected: the tool name is already the one description the user recognises,
  * and losing a half-configured step helps nobody.
  */
 export function normalizeWorkflowSteps(value: unknown): WorkflowStep[] {
-  if (!Array.isArray(value) || value.length === 0) throw new Error(mt('工作流至少要有一个步骤'))
-  if (value.length > MAX_WORKFLOW_STEPS) {
+  const list = stepList(value)
+  if (!list) throw new Error(mt('步骤不是一个列表：请给出按顺序排列的步骤数组'))
+  if (list.length === 0) throw new Error(mt('工作流至少要有一个步骤'))
+  if (list.length > MAX_WORKFLOW_STEPS) {
     throw new Error(mt('一个工作流最多 {{count}} 步', { count: MAX_WORKFLOW_STEPS }))
   }
   const steps: WorkflowStep[] = []
-  for (const raw of value) {
+  for (const raw of list) {
     const item = isPlainRecord(raw) ? raw : {}
-    const tool = typeof item.tool === 'string' ? item.tool.trim() : ''
+    // A bare string is the tool name: "list_events" is unambiguous, and asking
+    // the model again for the object shape it just failed to produce wastes a
+    // round trip on something we can read ourselves.
+    const tool = typeof raw === 'string' ? raw.trim() : typeof item.tool === 'string' ? item.tool.trim() : ''
+    if (!tool) throw new Error(mt('有一步没写工具名，请给每一步指定工具'))
     if (!WORKFLOW_STEP_TOOLS.includes(tool)) {
       throw new Error(mt('这一步的工具不在允许范围内：{{tool}}', { tool }))
     }
     const label = clip(typeof item.label === 'string' ? item.label.trim() : '', MAX_WORKFLOW_LABEL) || tool
     // Args are copied so a later edit of the caller's object cannot rewrite a
     // saved workflow behind the store's back.
-    steps.push({ tool, args: isPlainRecord(item.args) ? { ...item.args } : {}, label })
+    steps.push({ tool, args: stepArgs(item.args ?? item.arguments), label })
   }
   return steps
+}
+
+/** The step array, from an array or from a JSON string that holds one. */
+function stepList(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  if (!text) return null
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/** Step args, from a plain object or from a JSON string that holds one. */
+function stepArgs(value: unknown): Record<string, unknown> {
+  if (isPlainRecord(value)) return { ...value }
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value)
+      return isPlainRecord(parsed) ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
 }
 
 /**

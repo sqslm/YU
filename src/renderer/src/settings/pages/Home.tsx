@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material'
 import type { HistoryEntry, Settings } from '@shared/types'
 import { emptyStats, type StatsFile } from '@shared/stats'
-import { palettes } from '../theme'
+import { palettes, type Tokens } from '../theme'
 import { IconBook, IconChart, IconClock, IconCopy, IconMic, IconSparkles } from '../icons'
 import {
   WEEKDAY,
@@ -15,6 +15,9 @@ import {
   todayFromStats
 } from './overview'
 import { durationLabel, group, insightsFromStats, savedLabel, wpmLabel } from './insights'
+import { formatEventTime, type CalendarEvent } from '@shared/calendar'
+import type { Briefing } from '@shared/briefing'
+import { PRIORITY_LABELS, isOverdue, sortTodos, type Reminder } from '@shared/reminders'
 import { buildShareCard, drawShareCard, shareCardFileName } from './shareCard'
 import { AppShareDialog } from './AppShareDialog'
 import { appColor, piePercentages } from './pie'
@@ -27,6 +30,12 @@ interface HomeProps {
   mode: 'dark' | 'light'
   /** Opens the history page, optionally pre-filtered to a scene name. */
   onOpenHistory: (query?: string) => void
+  /**
+   * Opens one of the pages the today board links to. The board is the only place
+   * that has to send someone elsewhere, so it takes the smallest possible hook
+   * instead of the whole shell's navigator.
+   */
+  onOpenPage: (page: 'reminders' | 'calendar' | 'briefing') => void
 }
 
 type Range = 7 | 30
@@ -62,7 +71,7 @@ function timeLabel(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Element {
+export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProps): JSX.Element {
   const t = palettes[mode]
   const [entries, setEntries] = useState<HistoryEntry[]>([])
   const [stats, setStats] = useState<StatsFile>(NO_STATS)
@@ -75,11 +84,29 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
   const [appShareOpen, setAppShareOpen] = useState(false)
   /** Column under the pointer; the bar and its number brighten together. */
   const [hover, setHover] = useState<number | null>(null)
+  /** Today's board: the day's events, the open to-dos and the briefing. */
+  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [todos, setTodos] = useState<Reminder[]>([])
+  const [briefing, setBriefing] = useState<Briefing | null>(null)
 
   const reload = useCallback(() => {
-    void Promise.all([window.api.history.list(), window.api.stats.get()]).then(([rows, rollup]) => {
+    const start = new Date()
+    const from = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime()
+    const until = from + 86_400_000
+    void Promise.all([
+      window.api.history.list(),
+      window.api.stats.get(),
+      // Today's board is secondary data: a damaged calendar file or an
+      // unavailable briefing must not blank out the numbers above it.
+      window.api.life.eventsBetween(from, until).catch(() => [] as CalendarEvent[]),
+      window.api.reminders.list().catch(() => [] as Reminder[]),
+      window.api.life.briefing().catch(() => null)
+    ]).then(([rows, rollup, todayEvents, openTodos, card]) => {
       setEntries(rows)
       setStats(rollup)
+      setEvents(todayEvents)
+      setTodos(openTodos)
+      setBriefing(card)
     })
   }, [])
 
@@ -262,7 +289,10 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
         pt: 1.25,
         pb: 1.75,
         height: '100%',
-        minHeight: 680,
+        minHeight: 0,
+        // The page grew a today board; on a short window the honest answer is a
+        // scrollbar, not a year heat map clipped at the bottom edge.
+        overflowY: 'auto',
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
@@ -288,7 +318,7 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
         </Button>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1, flexShrink: 0 }}>
         <StatCard
           card={card}
           t={t}
@@ -327,10 +357,12 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
         />
       </Box>
 
+      <TodayBoard card={card} t={t} events={events} todos={todos} briefing={briefing} onOpenPage={onOpenPage} />
+
       <Box
         sx={{
           flex: 1,
-          minHeight: 0,
+          minHeight: 250,
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 1.12fr) minmax(0, 1fr)',
           gap: 1
@@ -342,7 +374,9 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
               ...card,
               p: 1.5,
               flex: 1,
-              minHeight: 0,
+              // Bars are drawn as a percentage of this card, so a card squeezed
+              // to 120 px renders bars shorter than their own labels.
+              minHeight: 186,
               display: 'flex',
               flexDirection: 'column'
             }}
@@ -514,7 +548,7 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
 
           {/* 使用洞察 lives in the left column as one compact grid: four numbers
               do not deserve four cards when the page has to fit one screen. */}
-          <Box sx={{ ...card, px: 1.5, py: 1.1 }}>
+          <Box sx={{ ...card, px: 1.5, py: 1.1, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography sx={{ fontSize: 11.5, color: t.textDim }}>{i18n.t(i18n.t('使用洞察'))}</Typography>
               <Button
@@ -541,9 +575,9 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
               sx={{
                 mt: 0.75,
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                 columnGap: 1.5,
-                rowGap: 0.5
+                rowGap: 0
               }}
             >
               {[
@@ -573,23 +607,23 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
               ].map((item) => (
                 <Box key={item.label} sx={{ minWidth: 0 }}>
                   <Typography sx={{ fontSize: 10, color: t.textFaint }}>{item.label}</Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.6, minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.4 }}>
-                      {item.value}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        fontSize: 9.5,
-                        color: t.textFaint,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        minWidth: 0
-                      }}
-                    >
-                      {item.sub}
-                    </Typography>
-                  </Box>
+                  <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.3 }}>
+                    {item.value}
+                  </Typography>
+                  {/* The footnote gets its own line: four columns are too narrow
+                      for a number and a sentence side by side. */}
+                  <Typography
+                    sx={{
+                      fontSize: 9.5,
+                      color: t.textFaint,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      minWidth: 0
+                    }}
+                  >
+                    {item.sub}
+                  </Typography>
                 </Box>
               ))}
             </Box>
@@ -691,7 +725,7 @@ export function HomePage({ settings, mode, onOpenHistory }: HomeProps): JSX.Elem
           say what period this is, and a 少→多 swatch row only repeated the five
           shades the cells themselves make obvious. Cells are sized to the card so
           the grid fills it edge to edge instead of hugging the left. */}
-      <Box sx={{ ...card, px: 1.5, py: 1.25 }}>
+      <Box sx={{ ...card, px: 1.5, py: 1.25, flexShrink: 0 }}>
         <Box ref={heatBoxRef} sx={{ display: 'flex', gap: 1, minWidth: 0 }}>
           <Box
             sx={{
@@ -856,6 +890,174 @@ const MODE_LABEL: Record<string, string> = {
   dictation: '听写',
   translate: '翻译',
   ask: 'Ask'
+}
+
+interface TodayBoardProps {
+  card: Record<string, unknown>
+  t: Tokens
+  events: CalendarEvent[]
+  todos: Reminder[]
+  briefing: Briefing | null
+  onOpenPage: (page: 'reminders' | 'calendar' | 'briefing') => void
+}
+
+/**
+ * What is on the person today, directly under the four numbers.
+ *
+ * The page used to be statistics from top to bottom. Reminders, to-dos, the
+ * calendar and the briefing all arrived afterwards, and the first question on
+ * opening the app stopped being "how much did I dictate" and became "what is on
+ * me today". One card with three columns, not three more cards: the analytics
+ * below keep the weight of a page, and this reads as the day's strip.
+ */
+function TodayBoard({ card, t, events, todos, briefing, onOpenPage }: TodayBoardProps): JSX.Element {
+  const language = currentUiLanguage() === 'en' ? 'en' : 'zh'
+  const now = Date.now()
+  const open = sortTodos(todos.filter((row) => row.status === 'pending' || row.status === 'due'))
+  const lines = briefing && !briefing.empty
+    ? briefing.body
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        // Bullets belong to the full briefing; a two-line preview reads better
+        // as sentences, and the section title above still says what it is.
+        .map((line) => line.replace(/^[-•*]\s*/, ''))
+        .slice(0, 2)
+    : []
+  const columnSx = { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.6 } as const
+  const divider = { width: '1px', bgcolor: t.line, flexShrink: 0 } as const
+
+  const head = (label: string, page: 'reminders' | 'calendar' | 'briefing', count?: number): JSX.Element => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+      <Typography sx={{ fontSize: 11, color: t.textDim, fontWeight: 600 }}>{label}</Typography>
+      {count !== undefined && count > 0 && (
+        <Typography sx={{ fontSize: 10, color: t.textFaint, fontVariantNumeric: 'tabular-nums' }}>{count}</Typography>
+      )}
+      <ButtonBase
+        onClick={() => onOpenPage(page)}
+        sx={{
+          ml: 'auto',
+          fontSize: 10,
+          color: t.textFaint,
+          borderRadius: '5px',
+          px: 0.5,
+          '&:hover': { color: t.text, bgcolor: t.accentSoft }
+        }}
+      >
+        {i18n.t('查看')}
+      </ButtonBase>
+    </Box>
+  )
+
+  const empty = (text: string): JSX.Element => (
+    <Typography sx={{ fontSize: 11, color: t.textFaint, lineHeight: 1.6, mt: 0.25 }}>{text}</Typography>
+  )
+
+  const row = (key: string, lead: JSX.Element | null, title: string, tail: string, tailColor: string, muted: boolean): JSX.Element => (
+    <Box
+      key={key}
+      sx={{ display: 'flex', alignItems: 'baseline', gap: 0.6, minWidth: 0, opacity: muted ? 0.62 : 1 }}
+    >
+      {lead}
+      <Typography
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          fontSize: 11.5,
+          color: t.text,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {title}
+      </Typography>
+      <Typography sx={{ flexShrink: 0, fontSize: 10, color: tailColor, fontVariantNumeric: 'tabular-nums' }}>
+        {tail}
+      </Typography>
+    </Box>
+  )
+
+  return (
+    <Box
+      data-today-board
+      sx={{ ...card, display: 'flex', alignItems: 'stretch', gap: 1.5, px: 1.5, py: 1.1, minHeight: 96, flexShrink: 0 }}
+    >
+      <Box data-today-events sx={columnSx}>
+        {head(i18n.t('今天的日程'), 'calendar', events.length)}
+        {events.length === 0
+          ? empty(i18n.t('今天没有安排'))
+          : events.slice(0, 2).map((event) =>
+              row(
+                event.id,
+                <Typography sx={{ flexShrink: 0, fontSize: 10, color: t.textFaint, fontVariantNumeric: 'tabular-nums' }}>
+                  {formatEventTime(event, language)}
+                </Typography>,
+                event.title,
+                event.location ?? '',
+                t.textFaint,
+                event.status === 'cancelled'
+              )
+            )}
+      </Box>
+
+      <Box sx={divider} />
+
+      <Box data-today-todos sx={columnSx}>
+        {head(i18n.t('待办'), 'reminders', open.length)}
+        {open.length === 0
+          ? empty(i18n.t('没有待办'))
+          : open.slice(0, 2).map((todo) => {
+              const overdue = isOverdue(todo, now)
+              const when = todo.dueAt === null ? i18n.t('未设置') : timeLabel(todo.dueAt)
+              return row(
+                todo.id,
+                <Box
+                  sx={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    alignSelf: 'center',
+                    bgcolor: todo.priority === 'high' ? t.danger : todo.priority === 'low' ? t.textFaint : t.textDim
+                  }}
+                  aria-label={i18n.t(PRIORITY_LABELS[todo.priority])}
+                />,
+                todo.title,
+                overdue ? i18n.t('已逾期') : when,
+                overdue ? t.danger : t.textFaint,
+                false
+              )
+            })}
+      </Box>
+
+      <Box sx={divider} />
+
+      <Box data-today-briefing sx={columnSx}>
+        {head(i18n.t('今日简报'), 'briefing')}
+        {lines.length === 0 ? (
+          empty(i18n.t('今天还没有生成简报'))
+        ) : (
+          lines.map((line, index) => (
+            <Typography
+              key={index}
+              sx={{
+                fontSize: 11,
+                color: index === 0 ? t.text : t.textDim,
+                lineHeight: 1.55,
+                overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical'
+              }}
+            >
+              {line}
+            </Typography>
+          ))
+        )}
+      </Box>
+    </Box>
+  )
 }
 
 interface StatCardProps {
