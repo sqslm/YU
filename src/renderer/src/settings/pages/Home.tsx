@@ -308,327 +308,379 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
         </Button>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1, flexShrink: 0 }}>
-        <StatCard
-          card={card}
-          t={t}
-          dense
-          icon={<IconSparkles size={12} />}
-          label={i18n.t(i18n.t('今日字数'))}
-          value={String(today.chars)}
-          sub={i18n.t('{{n}} 段', { n: today.segments })}
-        />
-        <StatCard
-          card={card}
-          t={t}
-          dense
-          icon={<IconClock size={12} />}
-          label={i18n.t(i18n.t('今日总时长'))}
-          value={clock(today.spoken)}
-          sub={today.segments > 0 ? `平均 ${shortClock(today.average)}` : i18n.t('今天还没有说话')}
-        />
-        <StatCard
-          card={card}
-          t={t}
-          dense
-          icon={<IconMic size={12} />}
-          label={i18n.t(i18n.t('平均段落'))}
-          value={shortClock(today.average)}
-          sub={i18n.t('今日均值')}
-        />
-        <StatCard
-          card={card}
-          t={t}
-          dense
-          icon={<IconBook size={12} />}
-          label={i18n.t(i18n.t('累计记录'))}
-          value={String(entries.length)}
-          sub={i18n.t('本机存档（上限 {{n}}）', { n: settings.historyLimit })}
-        />
-      </Box>
-
-      <TodayBoard card={card} t={t} events={events} todos={todos} briefing={briefing} onOpenPage={onOpenPage} />
-
+      {/* One strip, four numbers. Four separate tiles made the page read as a
+          dashboard of dashboards; the three "today" numbers belong together, and
+          the lifetime count answers a different question, so it sits behind a
+          divider instead of in a tile of its own. */}
       <Box
-        sx={{
-          flex: 1,
-          minHeight: 250,
-          // One column now that the recent takes are gone: the chart keeps the
-          // whole width, which is what its bars want, and history lives on its
-          // own page where it can be searched.
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr)',
-          gap: 1
-        }}
+        data-today-stats
+        sx={{ ...card, display: 'flex', alignItems: 'stretch', px: 2, py: 1.15, gap: 2, flexShrink: 0 }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minHeight: 0 }}>
-          <Box
+        {[
+          {
+            icon: <IconSparkles size={12} />,
+            label: i18n.t('今日字数'),
+            value: String(today.chars),
+            sub: i18n.t('{{n}} 段', { n: today.segments })
+          },
+          {
+            icon: <IconClock size={12} />,
+            label: i18n.t('今日总时长'),
+            value: clock(today.spoken),
+            sub: today.segments > 0 ? i18n.t('平均 {{n}}', { n: shortClock(today.average) }) : i18n.t('今天还没有说话')
+          },
+          {
+            icon: <IconMic size={12} />,
+            // Pace is the one today-number the old tiles never showed: "average
+            // paragraph" only repeated the footnote under the duration.
+            label: i18n.t('今日语速'),
+            value: today.spoken > 0 ? String(Math.round(today.chars / (today.spoken / 60000))) : '—',
+            sub: today.spoken > 0 ? i18n.t('字/分') : i18n.t('今天还没有说话')
+          }
+        ].map((item) => (
+          <Box key={item.label} sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+              <Box sx={{ display: 'grid', placeItems: 'center', color: t.textDim, opacity: 0.9 }}>{item.icon}</Box>
+              <Typography sx={{ fontSize: 10.5, color: t.textDim }}>{item.label}</Typography>
+            </Box>
+            <Typography
+              sx={{
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: -0.5,
+                lineHeight: 1.35,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {item.value}
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: 9.5,
+                color: t.textFaint,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {item.sub}
+            </Typography>
+          </Box>
+        ))}
+
+        <Box sx={{ width: '1px', bgcolor: t.line, flexShrink: 0 }} />
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+            <Box sx={{ display: 'grid', placeItems: 'center', color: t.textDim, opacity: 0.9 }}>
+              <IconBook size={12} />
+            </Box>
+            <Typography sx={{ fontSize: 10.5, color: t.textDim }}>{i18n.t('累计记录')}</Typography>
+          </Box>
+          <Typography
             sx={{
-              ...card,
-              p: 1.5,
-              flex: 1,
-              // Bars are drawn as a percentage of this card, so a card squeezed
-              // to 120 px renders bars shorter than their own labels.
-              minHeight: 186,
-              display: 'flex',
-              flexDirection: 'column'
+              fontSize: 18,
+              fontWeight: 700,
+              letterSpacing: -0.5,
+              lineHeight: 1.35,
+              fontVariantNumeric: 'tabular-nums'
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {String(entries.length)}
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: 9.5,
+              color: t.textFaint,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {i18n.t('本机存档（上限 {{n}}）', { n: settings.historyLimit })}
+          </Typography>
+        </Box>
+      </Box>
+
+      <TodayCard card={card} t={t} events={events} todos={todos} briefing={briefing} onOpenPage={onOpenPage} />
+
+      {/* Trend and lifetime insights share one band: both answer "how am I
+          doing over time", and side by side they cost a row instead of two. */}
+      <Box
+        data-home-trend
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)',
+          gap: 1,
+          minHeight: 200,
+          flexShrink: 0
+        }}
+      >
+        <Box
+          sx={{
+            ...card,
+            p: 1.5,
+            flex: 1,
+            // Bars are drawn as a percentage of this card, so a card squeezed
+            // to 120 px renders bars shorter than their own labels.
+            minHeight: 186,
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Pills
+              t={t}
+              items={[
+                { id: '7', label: i18n.t('近 7 天') },
+                { id: '30', label: i18n.t('近 30 天') }
+              ]}
+              value={String(range)}
+              onChange={(id) => setRange(id === '30' ? 30 : 7)}
+            />
+            <Box sx={{ ml: 'auto' }}>
               <Pills
                 t={t}
                 items={[
-                  { id: '7', label: i18n.t('近 7 天') },
-                  { id: '30', label: i18n.t('近 30 天') }
+                  { id: 'count', label: i18n.t(METRIC_LABEL.count) },
+                  { id: 'chars', label: i18n.t(METRIC_LABEL.chars) },
+                  { id: 'duration', label: i18n.t(METRIC_LABEL.duration) }
                 ]}
-                value={String(range)}
-                onChange={(id) => setRange(id === '30' ? 30 : 7)}
+                value={metric}
+                onChange={(id) => setMetric(id as Metric)}
               />
-              <Box sx={{ ml: 'auto' }}>
-                <Pills
-                  t={t}
-                  items={[
-                    { id: 'count', label: i18n.t(METRIC_LABEL.count) },
-                    { id: 'chars', label: i18n.t(METRIC_LABEL.chars) },
-                    { id: 'duration', label: i18n.t(METRIC_LABEL.duration) }
-                  ]}
-                  value={metric}
-                  onChange={(id) => setMetric(id as Metric)}
-                />
-              </Box>
             </Box>
+          </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
-              <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8 }}>
-                {chart.total}
-              </Typography>
-              <Typography sx={{ fontSize: 11, color: t.textFaint }}>
-                {i18n.t('日均 {{n}}', { n: chart.average })}
-                {metric === 'duration' ? ' ' + i18n.t('秒') : ''}
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
+            <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8 }}>
+              {chart.total}
+            </Typography>
+            <Typography sx={{ fontSize: 11, color: t.textFaint }}>
+              {i18n.t('日均 {{n}}', { n: chart.average })}
+              {metric === 'duration' ? ' ' + i18n.t('秒') : ''}
+            </Typography>
+          </Box>
 
-            <Box
-              sx={{
-                mt: 1,
-                // Grows to fill the card so the chart's baseline lines up with the
-                // bottom of the neighbouring list instead of leaving a dead band.
-                flex: 1,
-                minHeight: 96,
-                display: 'flex',
-                alignItems: 'flex-end',
-                gap: range === 7 ? 1.75 : 0.4,
-                position: 'relative',
-                // The card is full width now; without a cap seven buckets spread
-                // across ~800 px read as slabs floating in a gap. 620 px keeps the
-                // pitch of a normal week and centres the plot under the numbers.
-                width: '100%',
-                maxWidth: 620,
-                mx: 'auto'
-              }}
-            >
-              {[0, 0.5, 1].map((ratio) => (
-                <Box
-                  key={ratio}
-                  sx={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: `${ratio * 100}%`,
-                    borderTop: `1px dashed ${t.line}`
-                  }}
-                />
-              ))}
-              {chart.values.map((value, index) => {
-                const unit = metric === 'duration' ? i18n.t('秒') : metric === 'chars' ? i18n.t('字') : i18n.t('条')
-                const active = hover === index
-                const bucket = buckets[index]
-                // 30px is reserved for the number above and the weekday below, so
-                // the bar can be a percentage of whatever height the card offers.
-                const ratio = value > 0 ? Math.max(0.05, value / chart.max) : 0
-                /**
-                 * The whole day, not just the plotted metric: the bar answers "which
-                 * day was busiest", and the card answers "so what happened on it".
-                 */
-                const detail = bucket ? (
-                  <Box data-chart-detail={bucket.key} sx={{ py: 0.25 }}>
-                    <Typography sx={{ fontSize: 11, fontWeight: 600, color: t.text }}>
-                      {i18n.t('{{m}} 月 {{d}} 日 · 周', { m: Number(bucket.key.slice(5, 7)), d: Number(bucket.key.slice(8)) })}
-                      {bucket.label}
+          <Box
+            sx={{
+              mt: 1,
+              // Grows to fill the card so the chart's baseline lines up with the
+              // bottom of the neighbouring list instead of leaving a dead band.
+              flex: 1,
+              minHeight: 96,
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: range === 7 ? 1.75 : 0.4,
+              position: 'relative',
+              // The card is full width now; without a cap seven buckets spread
+              // across ~800 px read as slabs floating in a gap. 620 px keeps the
+              // pitch of a normal week and centres the plot under the numbers.
+              width: '100%',
+              maxWidth: 620,
+              mx: 'auto'
+            }}
+          >
+            {[0, 0.5, 1].map((ratio) => (
+              <Box
+                key={ratio}
+                sx={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: `${ratio * 100}%`,
+                  borderTop: `1px dashed ${t.line}`
+                }}
+              />
+            ))}
+            {chart.values.map((value, index) => {
+              const unit = metric === 'duration' ? i18n.t('秒') : metric === 'chars' ? i18n.t('字') : i18n.t('条')
+              const active = hover === index
+              const bucket = buckets[index]
+              // 30px is reserved for the number above and the weekday below, so
+              // the bar can be a percentage of whatever height the card offers.
+              const ratio = value > 0 ? Math.max(0.05, value / chart.max) : 0
+              /**
+               * The whole day, not just the plotted metric: the bar answers "which
+               * day was busiest", and the card answers "so what happened on it".
+               */
+              const detail = bucket ? (
+                <Box data-chart-detail={bucket.key} sx={{ py: 0.25 }}>
+                  <Typography sx={{ fontSize: 11, fontWeight: 600, color: t.text }}>
+                    {i18n.t('{{m}} 月 {{d}} 日 · 周', { m: Number(bucket.key.slice(5, 7)), d: Number(bucket.key.slice(8)) })}
+                    {bucket.label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      mt: 0.4,
+                      fontSize: 10.5,
+                      color: t.textDim,
+                      fontVariantNumeric: 'tabular-nums'
+                    }}
+                  >
+                    {i18n.t('{{count}} 条 · {{chars}} 字 · {{time}}', { count: bucket.count, chars: bucket.chars, time: bucket.ms > 0 ? clock(bucket.ms) : '0:00' })}
+                  </Typography>
+                  {active && (
+                    <Typography sx={{ mt: 0.2, fontSize: 10, color: t.textFaint }}>
+                      {i18n.t('当前按「{{metric}}」排序，这一天 {{value}} {{unit}}', { metric: i18n.t(METRIC_LABEL[metric] ?? ''), value, unit })}
                     </Typography>
-                    <Typography
+                  )}
+                </Box>
+              ) : (
+                ''
+              )
+              return (
+                <Tooltip key={index} arrow placement="top" title={detail}>
+                  <Box
+                    data-chart-column={index}
+                    data-chart-column-active={active ? 'on' : 'off'}
+                    onMouseEnter={() => setHover(index)}
+                    onMouseLeave={() => setHover(null)}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'flex-end',
+                      alignItems: 'center',
+                      position: 'relative',
+                      // No column background on hover: the ring around the bar read
+                      // as a selected cell rather than as the bar reacting.
+                      cursor: 'default'
+                    }}
+                  >
+                    {value > 0 && (
+                      <Typography
+                        sx={{
+                          fontSize: 9.5,
+                          color: active ? 'text.primary' : t.textDim,
+                          mb: 0.5,
+                          fontVariantNumeric: 'tabular-nums',
+                          transition: 'color .12s ease'
+                        }}
+                      >
+                        {value}
+                      </Typography>
+                    )}
+                    <Box
+                      data-chart-bar={index}
+                      data-chart-bar-active={active ? 'on' : 'off'}
                       sx={{
-                        mt: 0.4,
-                        fontSize: 10.5,
-                        color: t.textDim,
-                        fontVariantNumeric: 'tabular-nums'
+                        width: range === 7 ? '52%' : '68%',
+                        height: value > 0 ? `calc((100% - 30px) * ${ratio})` : 2,
+                        borderRadius: '3px',
+                        bgcolor:
+                          value > 0
+                            ? active
+                              ? 'rgba(230,230,236,.98)'
+                              : 'rgba(168,168,172,.58)'
+                            : t.line,
+                        // A 2px lift and a slightly brighter body: enough to feel
+                        // alive under the pointer, small enough not to move the axis.
+                        transform: active && value > 0 ? 'translateY(-2px)' : 'none',
+                        transformOrigin: 'bottom',
+                        boxShadow: active && value > 0 ? '0 3px 10px rgba(0,0,0,.35)' : 'none',
+                        transition:
+                          'transform .16s cubic-bezier(.2,.7,.3,1), background-color .12s ease, box-shadow .16s ease'
                       }}
-                    >
-                      {i18n.t('{{count}} 条 · {{chars}} 字 · {{time}}', { count: bucket.count, chars: bucket.chars, time: bucket.ms > 0 ? clock(bucket.ms) : '0:00' })}
-                    </Typography>
-                    {active && (
-                      <Typography sx={{ mt: 0.2, fontSize: 10, color: t.textFaint }}>
-                        {i18n.t('当前按「{{metric}}」排序，这一天 {{value}} {{unit}}', { metric: i18n.t(METRIC_LABEL[metric] ?? ''), value, unit })}
+                    />
+                    {range === 7 && (
+                      <Typography
+                        sx={{ mt: 0.5, fontSize: 9.5, color: active ? t.textDim : t.textFaint }}
+                      >
+                        {bucket?.label}
                       </Typography>
                     )}
                   </Box>
-                ) : (
-                  ''
-                )
-                return (
-                  <Tooltip key={index} arrow placement="top" title={detail}>
-                    <Box
-                      data-chart-column={index}
-                      data-chart-column-active={active ? 'on' : 'off'}
-                      onMouseEnter={() => setHover(index)}
-                      onMouseLeave={() => setHover(null)}
-                      sx={{
-                        flex: 1,
-                        minWidth: 0,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'flex-end',
-                        alignItems: 'center',
-                        position: 'relative',
-                        // No column background on hover: the ring around the bar read
-                        // as a selected cell rather than as the bar reacting.
-                        cursor: 'default'
-                      }}
-                    >
-                      {value > 0 && (
-                        <Typography
-                          sx={{
-                            fontSize: 9.5,
-                            color: active ? 'text.primary' : t.textDim,
-                            mb: 0.5,
-                            fontVariantNumeric: 'tabular-nums',
-                            transition: 'color .12s ease'
-                          }}
-                        >
-                          {value}
-                        </Typography>
-                      )}
-                      <Box
-                        data-chart-bar={index}
-                        data-chart-bar-active={active ? 'on' : 'off'}
-                        sx={{
-                          width: range === 7 ? '52%' : '68%',
-                          height: value > 0 ? `calc((100% - 30px) * ${ratio})` : 2,
-                          borderRadius: '3px',
-                          bgcolor:
-                            value > 0
-                              ? active
-                                ? 'rgba(230,230,236,.98)'
-                                : 'rgba(168,168,172,.58)'
-                              : t.line,
-                          // A 2px lift and a slightly brighter body: enough to feel
-                          // alive under the pointer, small enough not to move the axis.
-                          transform: active && value > 0 ? 'translateY(-2px)' : 'none',
-                          transformOrigin: 'bottom',
-                          boxShadow: active && value > 0 ? '0 3px 10px rgba(0,0,0,.35)' : 'none',
-                          transition:
-                            'transform .16s cubic-bezier(.2,.7,.3,1), background-color .12s ease, box-shadow .16s ease'
-                        }}
-                      />
-                      {range === 7 && (
-                        <Typography
-                          sx={{ mt: 0.5, fontSize: 9.5, color: active ? t.textDim : t.textFaint }}
-                        >
-                          {bucket?.label}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Tooltip>
-                )
-              })}
-            </Box>
-          </Box>
-
-          {/* 使用洞察 lives in the left column as one compact grid: four numbers
-              do not deserve four cards when the page has to fit one screen. */}
-          <Box sx={{ ...card, px: 1.5, py: 1.1, flexShrink: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography sx={{ fontSize: 11.5, color: t.textDim }}>{i18n.t(i18n.t('使用洞察'))}</Typography>
-              <Button
-                size="small"
-                data-share-insights
-                variant="text"
-                disabled={sharing}
-                onClick={() => void shareInsights()}
-                sx={{
-                  ml: 'auto',
-                  minWidth: 0,
-                  px: 0.75,
-                  py: 0,
-                  fontSize: 10.5,
-                  lineHeight: '16px',
-                  color: t.textDim,
-                  '&:hover': { color: t.text, bgcolor: t.surfaceHi }
-                }}
-              >
-                {shareHint ?? i18n.t('分享成图')}
-              </Button>
-            </Box>
-            <Box
-              sx={{
-                mt: 0.75,
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                columnGap: 1.5,
-                rowGap: 0
-              }}
-            >
-              {[
-                {
-                  label: i18n.t('累计口述字数'),
-                  value: group(insights.units),
-                  sub: i18n.t('字 · 累计 {{span}}', { span: durationLabel(insights.spokenMs) })
-                },
-                {
-                  label: i18n.t('平均语速'),
-                  value: wpmLabel(insights.wpm),
-                  sub:
-                    insights.measured > 0
-                      ? i18n.t('字/分 · {{n}} 条样本', { n: group(insights.measured) })
-                      : i18n.t('字/分 · 暂无样本')
-                },
-                {
-                  label: i18n.t('节省时间'),
-                  value: saved.value,
-                  sub: i18n.t('{{unit}} · 对比 {{wpm}} 字/分', { unit: i18n.t(saved.unit), wpm: insights.typingWpm })
-                },
-                {
-                  label: i18n.t('连续天数'),
-                  value: insights.records === 0 ? '—' : String(insights.streak.current),
-                  sub: insights.records === 0 ? i18n.t('还没有记录') : `天 · 最长 ${insights.streak.longest} 天`
-                }
-              ].map((item) => (
-                <Box key={item.label} sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 10, color: t.textFaint }}>{item.label}</Typography>
-                  <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.3 }}>
-                    {item.value}
-                  </Typography>
-                  {/* The footnote gets its own line: four columns are too narrow
-                      for a number and a sentence side by side. */}
-                  <Typography
-                    sx={{
-                      fontSize: 9.5,
-                      color: t.textFaint,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      minWidth: 0
-                    }}
-                  >
-                    {item.sub}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
+                </Tooltip>
+              )
+            })}
           </Box>
         </Box>
 
+        {/* Lifetime numbers, not today's: these are the ones that make the
+            habit feel worth keeping. */}
+        <Box sx={{ ...card, px: 1.75, py: 1.25, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography sx={{ fontSize: 11.5, color: t.textDim }}>{i18n.t(i18n.t('使用洞察'))}</Typography>
+            <Button
+              size="small"
+              data-share-insights
+              variant="text"
+              disabled={sharing}
+              onClick={() => void shareInsights()}
+              sx={{
+                ml: 'auto',
+                minWidth: 0,
+                px: 0.75,
+                py: 0,
+                fontSize: 10.5,
+                lineHeight: '16px',
+                color: t.textDim,
+                '&:hover': { color: t.text, bgcolor: t.surfaceHi }
+              }}
+            >
+              {shareHint ?? i18n.t('分享成图')}
+            </Button>
+          </Box>
+          <Box
+            sx={{
+              mt: 0.75,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              columnGap: 1.5,
+              rowGap: 1.1
+            }}
+          >
+            {[
+              {
+                label: i18n.t('累计口述字数'),
+                value: group(insights.units),
+                sub: i18n.t('字 · 累计 {{span}}', { span: durationLabel(insights.spokenMs) })
+              },
+              {
+                label: i18n.t('平均语速'),
+                value: wpmLabel(insights.wpm),
+                sub:
+                  insights.measured > 0
+                    ? i18n.t('字/分 · {{n}} 条样本', { n: group(insights.measured) })
+                    : i18n.t('字/分 · 暂无样本')
+              },
+              {
+                label: i18n.t('节省时间'),
+                value: saved.value,
+                sub: i18n.t('{{unit}} · 对比 {{wpm}} 字/分', { unit: i18n.t(saved.unit), wpm: insights.typingWpm })
+              },
+              {
+                label: i18n.t('连续天数'),
+                value: insights.records === 0 ? '—' : String(insights.streak.current),
+                sub: insights.records === 0 ? i18n.t('还没有记录') : `天 · 最长 ${insights.streak.longest} 天`
+              }
+            ].map((item) => (
+              <Box key={item.label} sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 10, color: t.textFaint }}>{item.label}</Typography>
+                <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.3 }}>
+                  {item.value}
+                </Typography>
+                {/* The footnote gets its own line: four columns are too narrow
+                    for a number and a sentence side by side. */}
+                <Typography
+                  sx={{
+                    fontSize: 9.5,
+                    color: t.textFaint,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    minWidth: 0
+                  }}
+                >
+                  {item.sub}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
       </Box>
 
       {/* The year in one picture, with no caption: the four numbers above already
@@ -796,7 +848,7 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProp
   )
 }
 
-interface TodayBoardProps {
+interface TodayCardProps {
   card: Record<string, unknown>
   t: Tokens
   events: CalendarEvent[]
@@ -806,34 +858,45 @@ interface TodayBoardProps {
 }
 
 /**
- * What is on the person today, directly under the four numbers.
+ * What is on the person today: the schedule and the to-dos on the left, the
+ * briefing on the right, all in one card.
  *
- * The page used to be statistics from top to bottom. Reminders, to-dos, the
- * calendar and the briefing all arrived afterwards, and the first question on
- * opening the app stopped being "how much did I dictate" and became "what is on
- * me today". One card with three columns, not three more cards: the analytics
- * below keep the weight of a page, and this reads as the day's strip.
+ * The first question on opening the app stopped being "how much did I dictate"
+ * and became "what is on me today", so this is the hero of the page and the
+ * analytics sit below it. Schedule and to-dos share the left column because they
+ * are one question — what happens next — read in time order; the briefing is a
+ * paragraph, so it gets the narrower column where lines do not wrap into a
+ * three-word ladder.
  */
-function TodayBoard({ card, t, events, todos, briefing, onOpenPage }: TodayBoardProps): JSX.Element {
+function TodayCard({ card, t, events, todos, briefing, onOpenPage }: TodayCardProps): JSX.Element {
   const language = currentUiLanguage() === 'en' ? 'en' : 'zh'
   const now = Date.now()
   const open = sortTodos(todos.filter((row) => row.status === 'pending' || row.status === 'due'))
-  const lines = briefing && !briefing.empty
+  const shownEvents = events.slice(0, 3)
+  const shownTodos = open.slice(0, 3)
+  /**
+   * Three lines is what a preview is worth: past that the paragraph stops being
+   * scannable and the full briefing — which has its own page — is what you want.
+   */
+  const lines: Array<{ text: string; heading: boolean }> = briefing && !briefing.empty
     ? briefing.body
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean)
-        // Bullets belong to the full briefing; a two-line preview reads better
-        // as sentences, and the section title above still says what it is.
-        .map((line) => line.replace(/^[-•*]\s*/, ''))
-        .slice(0, 2)
+        .slice(0, 4)
+        .map((line) =>
+          /^[-•*]\s+/.test(line)
+            ? { text: line.replace(/^[-•*]\s+/, ''), heading: false }
+            : { text: line, heading: true }
+        )
     : []
-  const columnSx = { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.6 } as const
-  const divider = { width: '1px', bgcolor: t.line, flexShrink: 0 } as const
+  // A heading whose lines fell outside the slice reads as a broken section, so
+  // the preview ends on content instead.
+  while (lines.length > 0 && lines[lines.length - 1].heading) lines.pop()
 
   const head = (label: string, page: 'reminders' | 'calendar' | 'briefing', count?: number): JSX.Element => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-      <Typography sx={{ fontSize: 11, color: t.textDim, fontWeight: 600 }}>{label}</Typography>
+      <Typography sx={{ fontSize: 11.5, color: t.textDim, fontWeight: 650 }}>{label}</Typography>
       {count !== undefined && count > 0 && (
         <Typography sx={{ fontSize: 10, color: t.textFaint, fontVariantNumeric: 'tabular-nums' }}>{count}</Typography>
       )}
@@ -857,160 +920,183 @@ function TodayBoard({ card, t, events, todos, briefing, onOpenPage }: TodayBoard
     <Typography sx={{ fontSize: 11, color: t.textFaint, lineHeight: 1.6, mt: 0.25 }}>{text}</Typography>
   )
 
-  const row = (key: string, lead: JSX.Element | null, title: string, tail: string, tailColor: string, muted: boolean): JSX.Element => (
-    <Box
-      key={key}
-      sx={{ display: 'flex', alignItems: 'baseline', gap: 0.6, minWidth: 0, opacity: muted ? 0.62 : 1 }}
-    >
-      {lead}
-      <Typography
-        sx={{
-          flex: 1,
-          minWidth: 0,
-          fontSize: 11.5,
-          color: t.text,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        {title}
-      </Typography>
-      <Typography sx={{ flexShrink: 0, fontSize: 10, color: tailColor, fontVariantNumeric: 'tabular-nums' }}>
-        {tail}
-      </Typography>
-    </Box>
+  const more = (count: number): JSX.Element => (
+    <Typography sx={{ fontSize: 10, color: t.textFaint, mt: 0.1 }}>
+      {i18n.t('还有 {{n}} 条', { n: count })}
+    </Typography>
   )
-
   return (
     <Box
       data-today-board
-      sx={{ ...card, display: 'flex', alignItems: 'stretch', gap: 1.5, px: 1.5, py: 1.1, minHeight: 96, flexShrink: 0 }}
+      sx={{ ...card, display: 'flex', alignItems: 'stretch', px: 0, py: 0, flexShrink: 0, minHeight: 196 }}
     >
-      <Box data-today-events sx={columnSx}>
-        {head(i18n.t('今天的日程'), 'calendar', events.length)}
-        {events.length === 0
-          ? empty(i18n.t('今天没有安排'))
-          : events.slice(0, 2).map((event) =>
-              row(
-                event.id,
-                <Typography sx={{ flexShrink: 0, fontSize: 10, color: t.textFaint, fontVariantNumeric: 'tabular-nums' }}>
-                  {formatEventTime(event, language)}
-                </Typography>,
-                event.title,
-                event.location ?? '',
-                t.textFaint,
-                event.status === 'cancelled'
-              )
-            )}
-      </Box>
-
-      <Box sx={divider} />
-
-      <Box data-today-todos sx={columnSx}>
-        {head(i18n.t('待办'), 'reminders', open.length)}
-        {open.length === 0
-          ? empty(i18n.t('没有待办'))
-          : open.slice(0, 2).map((todo) => {
-              const overdue = isOverdue(todo, now)
-              const when = todo.dueAt === null ? i18n.t('未设置') : timeLabel(todo.dueAt)
-              return row(
-                todo.id,
+      {/* Schedule above to-dos, both in time order: that is the order the day
+          actually happens in, and a single rail reads faster than two lists. */}
+      <Box
+        data-today-agenda
+        sx={{ flex: '1.55 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, px: 1.75, py: 1.25 }}
+      >
+        <Box data-today-events sx={{ display: 'flex', flexDirection: 'column', gap: 0.55, minWidth: 0 }}>
+          {head(i18n.t('今天的日程'), 'calendar', events.length)}
+          {events.length === 0
+            ? empty(i18n.t('今天没有安排'))
+            : shownEvents.map((event) => (
                 <Box
+                  key={event.id}
                   sx={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    flexShrink: 0,
-                    alignSelf: 'center',
-                    bgcolor: todo.priority === 'high' ? t.danger : todo.priority === 'low' ? t.textFaint : t.textDim
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    gap: 1,
+                    minWidth: 0,
+                    opacity: event.status === 'cancelled' ? 0.62 : 1
                   }}
-                  aria-label={i18n.t(PRIORITY_LABELS[todo.priority])}
-                />,
-                todo.title,
-                overdue ? i18n.t('已逾期') : when,
-                overdue ? t.danger : t.textFaint,
-                false
-              )
-            })}
+                >
+                  <Typography
+                    sx={{
+                      flexShrink: 0,
+                      width: 76,
+                      fontSize: 10,
+                      color: t.textFaint,
+                      fontVariantNumeric: 'tabular-nums',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {formatEventTime(event, language)}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: 11.5,
+                      color: t.text,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {event.title}
+                  </Typography>
+                  {event.location && (
+                    <Typography
+                      sx={{
+                        flexShrink: 0,
+                        maxWidth: '38%',
+                        fontSize: 10,
+                        color: t.textFaint,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {event.location}
+                    </Typography>
+                  )}
+                </Box>
+              ))}
+          {events.length > shownEvents.length && more(events.length - shownEvents.length)}
+        </Box>
+
+        <Box sx={{ height: '1px', bgcolor: t.line, flexShrink: 0 }} />
+
+        <Box data-today-todos sx={{ display: 'flex', flexDirection: 'column', gap: 0.55, minWidth: 0 }}>
+          {head(i18n.t('待办'), 'reminders', open.length)}
+          {open.length === 0
+            ? empty(i18n.t('没有待办'))
+            : shownTodos.map((todo) => {
+                const overdue = isOverdue(todo, now)
+                const when = todo.dueAt === null ? i18n.t('未设置') : timeLabel(todo.dueAt)
+                return (
+                  <Box key={todo.id} sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+                    <Box
+                      sx={{
+                        flexShrink: 0,
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        alignSelf: 'center',
+                        ml: '1px',
+                        bgcolor:
+                          todo.priority === 'high' ? t.danger : todo.priority === 'low' ? t.textFaint : t.textDim
+                      }}
+                      aria-label={i18n.t(PRIORITY_LABELS[todo.priority])}
+                    />
+                    <Typography
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 11.5,
+                        color: t.text,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {todo.title}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        flexShrink: 0,
+                        fontSize: 10,
+                        color: overdue ? t.danger : t.textFaint,
+                        fontVariantNumeric: 'tabular-nums'
+                      }}
+                    >
+                      {overdue ? i18n.t('已逾期') : when}
+                    </Typography>
+                  </Box>
+                )
+              })}
+          {open.length > shownTodos.length && more(open.length - shownTodos.length)}
+        </Box>
       </Box>
 
-      <Box sx={divider} />
+      <Box sx={{ width: '1px', bgcolor: t.line, flexShrink: 0 }} />
 
-      <Box data-today-briefing sx={columnSx}>
+      <Box
+        data-today-briefing
+        sx={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.6, px: 1.75, py: 1.25 }}
+      >
         {head(i18n.t('今日简报'), 'briefing')}
         {lines.length === 0 ? (
           empty(i18n.t('今天还没有生成简报'))
         ) : (
-          lines.map((line, index) => (
-            <Typography
-              key={index}
-              sx={{
-                fontSize: 11,
-                color: index === 0 ? t.text : t.textDim,
-                lineHeight: 1.55,
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical'
-              }}
-            >
-              {line}
-            </Typography>
-          ))
+          lines.map((line, index) =>
+            line.heading ? (
+              // Section headings keep their scan value here; stripped of their
+              // markers they were reading as one more stray sentence.
+              <Typography
+                key={index}
+                sx={{ fontSize: 9.5, color: t.textFaint, letterSpacing: 0.3, mt: index === 0 ? 0.25 : 0.15 }}
+              >
+                {line.text}
+              </Typography>
+            ) : (
+              <Typography
+                key={index}
+                sx={{
+                  fontSize: 11,
+                  color: t.textDim,
+                  lineHeight: 1.5,
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 1,
+                  WebkitBoxOrient: 'vertical'
+                }}
+              >
+                {line.text}
+              </Typography>
+            )
+          )
+        )}
+        {briefing?.source === 'model' && (
+          <Typography sx={{ mt: 'auto', fontSize: 9.5, color: t.textFaint }}>{i18n.t('模型撰写')}</Typography>
         )}
       </Box>
     </Box>
   )
 }
 
-interface StatCardProps {
-  card: Record<string, unknown>
-  t: { text: string; textDim: string; textFaint: string }
-  icon: JSX.Element
-  label: string
-  value: string
-  sub: string
-  /**
-   * Tighter type and padding for the four tiles on the overview page: the whole
-   * page has to fit one screen, so a tile is a label line, one number and one
-   * line of footnote.
-   */
-  dense?: boolean
-}
-
-function StatCard({ card, t, icon, label, value, sub, dense = false }: StatCardProps): JSX.Element {
-  return (
-    <Box sx={{ ...card, px: dense ? 1.5 : 2, py: dense ? 1 : 1.75 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, color: t.textDim }}>
-        <Box sx={{ display: 'grid', placeItems: 'center', opacity: 0.9 }}>{icon}</Box>
-        <Typography sx={{ fontSize: dense ? 10.5 : 11.5 }}>{label}</Typography>
-      </Box>
-      <Typography
-        sx={{
-          mt: dense ? 0.25 : 0.75,
-          fontSize: dense ? 21 : 26,
-          fontWeight: 700,
-          letterSpacing: -0.7,
-          lineHeight: 1.25
-        }}
-      >
-        {value}
-      </Typography>
-      <Typography
-        sx={{
-          fontSize: dense ? 9.5 : 10.5,
-          color: t.textFaint,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        {sub}
-      </Typography>
-    </Box>
-  )
-}
 
 interface PillsProps {
   t: { surface: string; surfaceHi: string; text: string; textDim: string; line: string }
