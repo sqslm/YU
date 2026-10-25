@@ -5,6 +5,7 @@ import { BAR_HEIGHT, BAR_WIDTH, barCaptionRect } from './barLayout'
 import { openExternalSafely } from './safeLink'
 import { mt } from '@shared/mainI18n'
 import { trustWindow } from './ipc-trust'
+import { setTaskbarIcon } from './app-icon'
 import {
   CARD_INITIAL_HEIGHT,
   CARD_MAX_HEIGHT,
@@ -37,6 +38,7 @@ export function createReminderWindow(_mode: ThemeMode): BrowserWindow {
     backgroundColor: '#00000000',
     webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true } })
   trustWindow(win)
+  setTaskbarIcon(win)
   // Windows constrains constructor bounds to the work area; include the taskbar backdrop too.
   win.setBounds(display.bounds)
   // Show once in front, without continually stealing focus or suppressing OS shortcuts.
@@ -147,6 +149,7 @@ export function createSettingsWindow(mode: ThemeMode = 'dark'): BrowserWindow {
     }
   })
   trustWindow(win)
+  setTaskbarIcon(win)
 
   win.on('ready-to-show', () => win.show())
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -199,6 +202,7 @@ export function openLoginWindow(mode: ThemeMode = 'dark'): BrowserWindow {
     }
   })
   trustWindow(win)
+  setTaskbarIcon(win)
 
   win.on('ready-to-show', () => win.show())
   win.on('closed', () => {

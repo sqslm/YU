@@ -1,29 +1,32 @@
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { globalShortcut } from 'electron'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeSettings } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 import type { ScreenshotAction } from '@shared/screenshot'
 
-const mocks = vi.hoisted(() => ({ sources: vi.fn(), image: vi.fn(), copyImage: vi.fn(), copyText: vi.fn(), save: vi.fn(), write: vi.fn(), native: vi.fn(), complete: vi.fn(), vision: vi.fn(), handlers: new Map<string, (...args: any[]) => any>(), windows: [] as any[] }))
+const mocks = vi.hoisted(() => ({ cursor: { x: -100, y: 50 }, capture: vi.fn(), sources: vi.fn(), image: vi.fn(), copyImage: vi.fn(), copyText: vi.fn(), save: vi.fn(), write: vi.fn(), native: vi.fn(), complete: vi.fn(), vision: vi.fn(), handlers: new Map<string, (...args: any[]) => any>(), windows: [] as any[] }))
 vi.mock('electron', () => ({
   app: { getPath: () => '/pictures', getAppPath: () => '/app', getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
+  globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
   desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image }, dialog: { showSaveDialog: mocks.save },
-  screen: { dipToScreenRect: () => ({ x: -1920, y: 0, width: 1920, height: 1080 }), getCursorScreenPoint: () => ({ x: -100, y: 50 }), getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 } }) },
+  screen: { dipToScreenRect: (_win: unknown, rect: {x:number;y:number;width:number;height:number}) => Object.fromEntries(Object.entries(rect).map(([key,value]) => [key,Math.round(value*1.5)])), getCursorScreenPoint: () => mocks.cursor, getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 } }) },
   ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => mocks.handlers.set(name, handler) },
   BrowserWindow: class extends EventEmitter {
     // `id` and `isDestroyed` are what the IPC trust layer reads when the window
     // registers itself, so the fixture has to look like a real webContents.
     id = mocks.windows.length + 100
-    webContents = Object.assign(new EventEmitter(), { id: this.id, mainFrame: {}, setWindowOpenHandler: vi.fn(), isDestroyed: () => false }); destroyed = false
+    webContents = Object.assign(new EventEmitter(), { id: this.id, mainFrame: {}, setWindowOpenHandler: vi.fn(), send: vi.fn(), isDestroyed: () => false }); destroyed = false
     constructor(public options: unknown) { super(); mocks.windows.push(this) }
     setAlwaysOnTop = vi.fn(); loadFile = vi.fn(); loadURL = vi.fn(); show = vi.fn(); focus = vi.fn()
+    setIgnoreMouseEvents = vi.fn(); setContentProtection = vi.fn(); setFocusable = vi.fn()
     isDestroyed(): boolean { return this.destroyed }
     destroy(): void { this.destroyed = true; this.emit('closed') }
   }
 }))
 vi.mock('node:fs/promises', () => ({ writeFile: mocks.write }))
 vi.mock('./windows-native', () => ({ windowsNative: mocks.native }))
-vi.mock('./capture-screen', () => ({ captureScreen: () => { throw Error('GDI unavailable in this test') } }))
+vi.mock('./capture-screen', () => ({ captureScreen: mocks.capture }))
 vi.mock('./foreground', () => ({ captureWindowBounds: () => [{ x: -1800, y: 30, width: 1200, height: 900 }] }))
 vi.mock('./ocr', async importOriginal => ({ ...await importOriginal<typeof import('./ocr')>(), prepareOcrImage: () => Buffer.from('ocr pixels') }))
 vi.mock('./providers/llm', () => ({ complete: mocks.complete }))
@@ -38,16 +41,55 @@ const event = (): any => { const win = mocks.windows.at(-1); return { sender: wi
 const run = (action: ScreenshotAction, url = imageUrl, question = 'Explain this error', target = 'en'): Promise<any> => mocks.handlers.get('screenshot:run')!(event(), action, url, question, target)
 beforeEach(() => {
   vi.clearAllMocks(); mocks.handlers.clear(); mocks.windows.length = 0
+  mocks.cursor = { x: -100, y: 50 }
+  mocks.capture.mockReset().mockImplementation(() => { throw Error('GDI unavailable in this test') })
   mocks.sources.mockReset().mockResolvedValue([{ display_id: 'wrong', thumbnail: cropped() }, { display_id: '42', thumbnail: { ...cropped(), getSize: () => ({ width: 1920, height: 1080 }), toBitmap: () => Buffer.from([1, 2, 3, 255]) } }])
   mocks.image.mockReset().mockImplementation(cropped)
-  mocks.native.mockReset().mockResolvedValue({ text: '真实 OCR 文字' }); mocks.complete.mockReset().mockResolvedValue('Real translation'); mocks.vision.mockReset().mockResolvedValue('Actual visual answer')
+  mocks.native.mockReset().mockResolvedValue({ text: '真实 OCR 文字', width: 900, height: 300,
+    lines: [{ text: '真实 OCR 文字', x: 15, y: 30, width: 300, height: 30 }] })
+  mocks.complete.mockReset().mockResolvedValue('[{"id":0,"text":"Real translation"}]'); mocks.vision.mockReset().mockResolvedValue('Actual visual answer')
   mocks.save.mockReset().mockResolvedValue({ canceled: false, filePath: '/chosen/capture.png' })
   settings = mergeSettings({ profiles: [{ id: 'text', name: 'Text', preset: '', kind: 'llm', enabled: true, baseUrl: 'http://text.test', model: 'text-model', apiKey: 'private' },
     { id: 'vision', name: 'Vision', preset: '', kind: 'multimodal', enabled: true, baseUrl: 'http://vision.test', model: 'vision-model', apiKey: 'private' }] })
   tool = new ScreenshotTool(() => settings, active); tool.register()
 })
+afterEach(() => { tool.close(); vi.useRealTimers() })
 
 describe('explicit screenshot tool', () => {
+  it('captures a DPI-correct scrolling region, releases focus, exports pixels and stops its timer', async () => {
+    await tool.open(); vi.useFakeTimers()
+    const pixels = Buffer.alloc(90 * 90 * 4, 255); pixels[0] = 10; pixels[2] = 30
+    mocks.capture.mockReturnValue({ toBitmap: () => pixels })
+    mocks.handlers.get('screenshot:scroll-start')!(event(), { x: 100, y: 100, width: 60, height: 60 }, { x: 100, y: 170, width: 410, height: 100 })
+    const win = mocks.windows[0]
+    expect(win.setContentProtection).toHaveBeenLastCalledWith(true)
+    expect(win.setFocusable).toHaveBeenLastCalledWith(false)
+    expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(true, { forward: true })
+    expect(globalShortcut.register).toHaveBeenCalledWith('Escape', expect.any(Function))
+    mocks.cursor = { x: -1100, y: 200 }; await vi.advanceTimersByTimeAsync(50)
+    expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(false, { forward: true })
+    mocks.cursor = { x: -100, y: 50 }; await vi.advanceTimersByTimeAsync(200)
+    expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(true, { forward: true })
+    expect(mocks.capture).toHaveBeenLastCalledWith({ x: -1770, y: 150, width: 90, height: 90 })
+    expect(win.webContents.send).toHaveBeenCalledWith('screenshot:scroll-progress', { width: 90, height: 90, frames: 1 })
+    const frame = mocks.handlers.get('screenshot:scroll-finish')!(event())
+    expect(frame).toMatchObject({ width: 90, height: 90 }); expect(frame.pixels.subarray(0,4)).toEqual(Buffer.from([30,255,10,255]))
+    expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(false)
+    expect(win.setFocusable).toHaveBeenLastCalledWith(true)
+    expect(globalShortcut.unregister).toHaveBeenCalledWith('Escape')
+    const calls = mocks.capture.mock.calls.length
+    await vi.advanceTimersByTimeAsync(1000); expect(mocks.capture).toHaveBeenCalledTimes(calls)
+  })
+  it('rejects invalid scrolling bounds and never leaves capture running after close', async () => {
+    await tool.open(); vi.useFakeTimers()
+    expect(() => mocks.handlers.get('screenshot:scroll-start')!(event(), { x: -1, y: 0, width: 100, height: 100 }, { x: 0, y: 120, width: 410, height: 100 })).toThrow('滚动截图区域')
+    mocks.capture.mockReturnValue({ toBitmap: () => Buffer.alloc(90 * 90 * 4, 255) })
+    mocks.handlers.get('screenshot:scroll-start')!(event(), { x: 0, y: 0, width: 60, height: 60 }, { x: 0, y: 70, width: 410, height: 100 })
+    await expect(run('copy')).rejects.toThrow('请先完成滚动截图')
+    tool.close(); const calls = mocks.capture.mock.calls.length
+    await vi.advanceTimersByTimeAsync(1000); expect(mocks.capture).toHaveBeenCalledTimes(calls)
+    expect(active).toHaveBeenLastCalledWith(false)
+  })
   it('closes a crashed renderer and restores global shortcuts immediately', async () => {
     await tool.open()
     mocks.windows[0].webContents.emit('render-process-gone', {}, { reason: 'crashed' })
@@ -94,10 +136,25 @@ describe('explicit screenshot tool', () => {
   it('runs OCR locally and translates only real OCR text using the existing text provider', async () => {
     await tool.open()
     expect(await run('ocr')).toEqual({ text: '真实 OCR 文字' }); expect(mocks.complete).not.toHaveBeenCalled(); expect(mocks.vision).not.toHaveBeenCalled()
-    expect(await run('translate')).toEqual({ text: 'Real translation' })
+    expect(await run('translate')).toEqual({ text: 'Real translation', translation: { width: 600, height: 200,
+      regions: [{ text: 'Real translation', x: 10, y: 20, width: 200, height: 20 }] } })
     expect(mocks.complete.mock.calls[0][0]).toMatchObject({ model: 'text-model' })
-    expect(mocks.complete.mock.calls[0][1].messages[1].content).toBe('真实 OCR 文字')
+    expect(JSON.parse(mocks.complete.mock.calls[0][1].messages[1].content)).toEqual([{ id: 0, text: '真实 OCR 文字' }])
     expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('into en')
+  })
+  it('rejects incomplete translations rather than placing words over the wrong source region', async () => {
+    await tool.open(); mocks.complete.mockResolvedValueOnce('[]')
+    await expect(run('translate')).rejects.toThrow('翻译结果不完整，请重试')
+  })
+  it('cancels an in-flight screen capture without opening a late editor', async () => {
+    let resolve!: (value: unknown) => void
+    mocks.sources.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+    const opening = tool.open()
+    tool.close()
+    resolve([{ display_id: '42', thumbnail: { ...cropped(), toBitmap: () => Buffer.from([1, 2, 3, 255]) } }])
+    await expect(opening).rejects.toThrow()
+    expect(mocks.windows).toHaveLength(0); expect(tool.isOpen).toBe(false)
+    expect(active).toHaveBeenLastCalledWith(false)
   })
   it('sends only the selected PNG to the configured vision chain after an explicit Ask action', async () => {
     await tool.open(); expect(await run('ask')).toEqual({ text: 'Actual visual answer' })

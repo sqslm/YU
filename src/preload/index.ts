@@ -34,6 +34,13 @@ const api: TypelessApi = {
     ready: () => ipcRenderer.invoke('screenshot:ready'),
     close: () => ipcRenderer.invoke('screenshot:close'),
     copyText: text => ipcRenderer.invoke('screenshot:copy-text', text),
+    startScroll: (rect, controls) => ipcRenderer.invoke('screenshot:scroll-start', rect, controls),
+    finishScroll: () => ipcRenderer.invoke('screenshot:scroll-finish'),
+    onScroll: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: import('@shared/screenshot').ScrollCaptureProgress): void => callback(progress)
+      ipcRenderer.on('screenshot:scroll-progress', listener)
+      return () => ipcRenderer.removeListener('screenshot:scroll-progress', listener)
+    },
     run: (action, dataUrl, question, target, ocrLanguage) => ipcRenderer.invoke('screenshot:run', action, dataUrl, question, target, ocrLanguage)
   },
   assistant: {

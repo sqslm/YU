@@ -2,14 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Alert, Box, Button, CssBaseline, MenuItem, Paper, Stack, TextField, ThemeProvider, Tooltip, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import type { CaptureRect, ScreenshotAction } from '@shared/screenshot'
+import type { CaptureRect, ScreenshotAction, ScrollCaptureProgress } from '@shared/screenshot'
 import { screenshotCrop, captureWindowAt, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
-import { CropSquare, RadioButtonUnchecked, NorthEast, Create, TextFields, GridOn, Mouse, Undo, RestartAlt, SaveAlt, Check, Close, Translate, TextSnippet, SmartToy } from '@mui/icons-material'
+import { CropSquare, RadioButtonUnchecked, NorthEast, Create, TextFields, GridOn, Mouse, Undo, RestartAlt, SaveAlt, Check, Close, Translate, TextSnippet, SmartToy, UnfoldMore } from '@mui/icons-material'
 import { resolveTranslateTargets } from '@shared/translate'
 import { useSettings } from '../settings/useSettings'
 import { makeTheme, resolveThemeMode, onSystemThemeChange } from '../settings/theme'
 import { applyUiLanguage } from '../i18n'
 import { resizeMark, type Mark } from './layers'
+import { paintScreenshotTranslation } from './translation'
 
 type Point = { x: number; y: number }
 type Tool = 'select' | 'rect' | 'ellipse' | 'arrow' | 'pen' | 'text' | 'mosaic'
@@ -76,6 +77,14 @@ function ScreenshotEditor(): JSX.Element {
   const [text, setText] = useState<{ point: Point; value: string } | null>(null)
   const [busy, setBusy] = useState(false), [result, setResult] = useState(''), [error, setError] = useState('')
   const [question, setQuestion] = useState(''), [target, setTarget] = useState('auto')
+  const [translated, setTranslated] = useState<{ canvas: HTMLCanvasElement; text: string; rect: CaptureRect } | null>(null)
+  const [showOriginal, setShowOriginal] = useState(false)
+  const [scrolling, setScrolling] = useState(false)
+  const [scrollProgress, setScrollProgress] = useState<ScrollCaptureProgress | null>(null)
+  const [longCapture, setLongCapture] = useState<HTMLCanvasElement | null>(null)
+  const scrollControls = useRef<HTMLDivElement>(null)
+  const longPreview = useMemo(() => longCapture?.toDataURL('image/png'), [longCapture])
+  useEffect(() => window.api.screenshot.onScroll(setScrollProgress), [])
   const reportError = (err: unknown): void => setError(String(err instanceof Error ? err.message : err).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''))
   useEffect(() => {
     let previous = view
@@ -104,7 +113,19 @@ function ScreenshotEditor(): JSX.Element {
   useEffect(() => {
     const ctx = canvas.current?.getContext('2d')
     if (!ctx || !loaded || !image.current) return
-    ctx.clearRect(0, 0, view.width, view.height); ctx.drawImage(image.current, 0, 0, view.width, view.height)
+    ctx.clearRect(0, 0, view.width, view.height)
+    if (scrolling && selection) {
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.rect(0, 0, view.width, view.height)
+      ctx.rect(selection.x, selection.y, selection.width, selection.height); ctx.fill('evenodd')
+      ctx.strokeStyle = '#4c8dff'; ctx.lineWidth = 2; ctx.strokeRect(selection.x, selection.y, selection.width, selection.height)
+      return
+    }
+    ctx.drawImage(image.current, 0, 0, view.width, view.height)
+    if (translated) {
+      const r = translated.rect
+      if (!showOriginal) ctx.drawImage(translated.canvas, r.x, r.y, r.width, r.height)
+      return
+    }
     if (selection) {
       ctx.save(); ctx.beginPath(); ctx.rect(selection.x, selection.y, selection.width, selection.height); ctx.clip()
       for (const mark of [...marks, ...(draft ? [draft] : [])]) drawMark(ctx, mark, image.current, view)
@@ -123,7 +144,7 @@ function ScreenshotEditor(): JSX.Element {
         for (const id of CAPTURE_HANDLES) { const p = captureHandle(r, id); ctx.fillRect(p.x - 3, p.y - 3, 6, 6) }
       }
     }
-  }, [loaded, selection, hover, marks, draft, view, selectedMark, tool])
+  }, [loaded, selection, hover, marks, draft, view, selectedMark, tool, translated, showOriginal, scrolling])
 
   useEffect(() => {
     if (!loaded || !settings) return
@@ -137,7 +158,7 @@ function ScreenshotEditor(): JSX.Element {
   }
   const point = (event: React.PointerEvent): Point => ({ x: Math.max(0, Math.min(view.width, event.clientX)), y: Math.max(0, Math.min(view.height, event.clientY)) })
   const begin = (event: React.PointerEvent<HTMLCanvasElement>): void => {
-    if (event.button !== 0 || busy || !loaded || result) return
+    if (event.button !== 0 || busy || !loaded || result || translated || scrolling || longCapture) return
     event.preventDefault()
     const p = point(event); setError(''); commitText()
     const bounds = tool === 'select' && selectedMark !== null && marks[selectedMark] ? markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null) : null
@@ -160,6 +181,7 @@ function ScreenshotEditor(): JSX.Element {
     gesture.current = g; event.currentTarget.setPointerCapture(event.pointerId)
   }
   const move = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (scrolling || translated || longCapture) return
     const g = gesture.current
     const p = point(event)
     if (!g) {
@@ -208,8 +230,10 @@ function ScreenshotEditor(): JSX.Element {
     gesture.current = null; setDraft(null)
   }
   const undo = (): void => { const previous = undoStack.current.pop(); if (previous) setMarks(previous); setSelectedMark(null) }
-  const reset = (): void => { setSelection(null); setMarks([]); setResult(''); setSelectedMark(null); undoStack.current = []; setPanel(null) }
-  const exportImage = (): string => {
+  const reset = (): void => { setSelection(null); setMarks([]); setResult(''); setTranslated(null); setSelectedMark(null); undoStack.current = []; setPanel(null); setText(null); setDraft(null); gesture.current = null }
+  const exportCanvas = (): HTMLCanvasElement => {
+    if (longCapture) return longCapture
+    if (translated) return translated.canvas
     if (!image.current || !selection || selection.width < 4 || selection.height < 4) throw new Error(t('请先框选截图区域'))
     const source = image.current, crop = screenshotCrop(selection, view, { width: source.width, height: source.height })
     const output = document.createElement('canvas'); output.width = crop.width; output.height = crop.height
@@ -218,14 +242,18 @@ function ScreenshotEditor(): JSX.Element {
     const sx = source.width / view.width, sy = source.height / view.height
     ctx.scale(sx, sy); ctx.translate(-crop.x / sx, -crop.y / sy)
     for (const mark of marks) drawMark(ctx, mark, source, view)
-    return output.toDataURL('image/png')
+    return output
   }
   const run = async (action: ScreenshotAction): Promise<void> => {
     if (busy) return
     setError(''); setBusy(true)
     try {
-      const response = await window.api.screenshot.run(action, exportImage(), question.trim() || t('请分析这张截图'), target, ocrLanguage)
-      if (response.text) setResult(response.text)
+      const source = exportCanvas()
+      const response = await window.api.screenshot.run(action, source.toDataURL('image/png'), question.trim() || t('请分析这张截图'), target, ocrLanguage)
+      if (response.translation) {
+        setTranslated({ canvas: paintScreenshotTranslation(source, response.translation), text: response.text ?? '', rect: { ...selection! } })
+        setShowOriginal(false); setPanel(null); setResult('')
+      } else if (response.text) setResult(response.text)
     } catch (err) { reportError(err) } finally { setBusy(false) }
   }
   const runRef = useRef(run); runRef.current = run
@@ -241,30 +269,52 @@ function ScreenshotEditor(): JSX.Element {
     }
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key)
   }, [])
+  const startScroll = (): void => {
+    if (!selection || busy) return
+    if (selection.width < 60 || selection.height < 60) { setError(t('滚动截图区域太小或超出屏幕')); return }
+    setError(''); setPanel(null); setText(null); setScrolling(true); setScrollProgress(null)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const controls = scrollControls.current!.getBoundingClientRect()
+      void window.api.screenshot.startScroll(selection, { x: controls.x, y: controls.y, width: controls.width, height: controls.height }).catch(err => { setScrolling(false); reportError(err) })
+    }))
+  }
+  const finishScroll = async (): Promise<void> => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const frame = await window.api.screenshot.finishScroll()
+      const source = document.createElement('canvas'); source.width = frame.width; source.height = frame.height
+      source.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(frame.pixels), frame.width, frame.height), 0, 0)
+      setLongCapture(source); setScrolling(false); setError('')
+    } catch (err) { reportError(err) } finally { setBusy(false) }
+  }
   const ready = selection && selection.width >= 4 && selection.height >= 4
   const dimensions = ready && image.current ? screenshotCrop(selection, view, { width: image.current.width, height: image.current.height }) : null
   const toolbarWidth = Math.min(610, view.width - 16)
   const toolbarHeight = panel ? 150 : 48
   const toolbarTop = ready ? Math.max(8, selection.y + selection.height + toolbarHeight + 12 < view.height ? selection.y + selection.height + 12 : selection.y - toolbarHeight - 12) : view.height - 60
   return <ThemeProvider theme={theme}><CssBaseline />
+    <style>{'html, body, #root { background: transparent; overflow: hidden; }'}</style>
     <canvas ref={canvas} width={view.width} height={view.height} data-screenshot-canvas data-screenshot-loaded={loaded || undefined}
       data-screenshot-snap={!selection && hover ? JSON.stringify(hover) : undefined} data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
       data-screenshot-layer-bounds={tool === 'select' && selectedMark !== null && marks[selectedMark] ? JSON.stringify(markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null)) : undefined}
-      style={{ position: 'fixed', inset: 0, cursor, touchAction: 'none' }}
+      style={{ position: 'fixed', inset: 0, cursor, touchAction: 'none', pointerEvents: scrolling || longCapture ? 'none' : 'auto' }}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={() => {
         const g = gesture.current
         if (g && g.kind !== 'select') { setSelection(g.rect); setMarks(g.marks) }
         gesture.current = null; setDraft(null)
       }}
-      onDoubleClick={() => { if (tool === 'select' && ready) void run('copy') }}
+      onDoubleClick={() => { if (!translated && !scrolling && !longCapture && tool === 'select' && ready) void run('copy') }}
       onContextMenu={event => { event.preventDefault(); if (selection) reset(); else void window.api.screenshot.close() }} />
     {text && <input autoFocus data-screenshot-text value={text.value} maxLength={160} onChange={event => setText({ ...text, value: event.target.value })}
       onBlur={commitText} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitText() } }}
       style={{ position: 'fixed', left: Math.min(text.point.x, view.width - 240), top: Math.min(text.point.y, view.height - 40), width: 240, color, background: 'rgba(0,0,0,.7)', border: '1px solid #4c8dff', fontSize }} />}
     {!ready && <Paper sx={{ position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)', p: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={2}><Typography>{t('单击选取窗口 · 拖动自由框选 · Esc 退出')}</Typography><Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button></Stack>
+      <Stack direction="row" alignItems="center" spacing={2}><Typography>{t('单击选取窗口 · 拖动自由框选 · Esc 退出')}</Typography>
+        <Button onClick={() => { setSelection({ x: 0, y: 0, ...view }); setPanel('translate') }}>{t('全屏翻译')}</Button>
+        <Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button></Stack>
     </Paper>}
-    {ready && <>
+    {ready && !translated && !scrolling && !longCapture && <>
       <Typography variant="caption" sx={{ position: 'fixed', left: selection.x, top: Math.max(0, selection.y - 23), color: 'white', background: '#202020aa', px: .75, borderRadius: 1 }}>{dimensions?.width} × {dimensions?.height}</Typography>
       <Paper data-screenshot-toolbar elevation={4} sx={{ position: 'fixed', top: toolbarTop, left: Math.max(8, Math.min(view.width - toolbarWidth - 8, selection.x)), width: toolbarWidth, p: .5, borderRadius: 2 }}>
         <Stack direction="row" spacing={.25} alignItems="center" sx={{ overflowX: 'auto', whiteSpace: 'nowrap', '& .MuiButton-root': { minWidth: 32, px: .5, flexShrink: 0 }, '& > span': { display: 'inline-flex' } }}>
@@ -275,6 +325,7 @@ function ScreenshotEditor(): JSX.Element {
             <Tooltip key={id} title={t(label) + ' · ' + t(id === 'ocr' ? '在本机识别' : id === 'translate' ? '仅向模型发送识别文字' : '向视觉模型发送所选截图')}><span><Button size="small" disabled={busy} data-screenshot-action={id} aria-label={t(label)} variant={panel === id ? 'contained' : 'text'}
               onClick={() => { commitText(); setPanel(panel === id ? null : id); if (id === 'ocr') void run('ocr') }}><Icon fontSize="small" /></Button></span></Tooltip>)}
           <Tooltip title={t('撤销')}><span><Button size="small" aria-label={t('撤销')} disabled={busy || !marks.length} onClick={undo}><Undo fontSize="small" /></Button></span></Tooltip>
+          <Tooltip title={t('滚动截图')}><span><Button size="small" aria-label={t('滚动截图')} data-screenshot-action="scroll" disabled={busy} onClick={startScroll}><UnfoldMore fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('重新框选')}><span><Button size="small" aria-label={t('重新框选')} disabled={busy} onClick={reset}><RestartAlt fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('另存为')}><span><Button size="small" aria-label={t('另存为')} disabled={busy} data-screenshot-action="save" onClick={() => run('save')}><SaveAlt fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('取消')}><Button size="small" aria-label={t('取消')} onClick={() => window.api.screenshot.close()}><Close fontSize="small" /></Button></Tooltip>
@@ -305,6 +356,36 @@ function ScreenshotEditor(): JSX.Element {
       </Paper>
     </>}
     {error && <Alert severity="error" sx={{ position: 'fixed', top: 8, left: 8, right: 8 }} onClose={() => setError('')}>{error}</Alert>}
+    {scrolling && <Paper ref={scrollControls} data-scroll-controls elevation={5}
+      sx={{ position: 'fixed', left: Math.max(8, Math.min(view.width - 420, selection!.x)), top: Math.max(8, Math.min(view.height - 160, selection!.y + selection!.height + 160 < view.height ? selection!.y + selection!.height + 12 : selection!.y - 160)), width: Math.min(410, view.width - 16), height: 148, p: 1.25, borderRadius: 2 }}>
+      <Typography fontWeight={600}>{t('滚动截图')} · {scrollProgress ? `${scrollProgress.width} × ${scrollProgress.height}` : t('准备中…')}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ height: 52, overflow: 'auto' }}>{scrollProgress?.message || t('在选区内缓慢向下滚动，停稳后自动拼接。')}</Typography>
+      <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: .5 }}>
+        <Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button>
+        <Button variant="contained" disabled={busy || !scrollProgress?.frames} onClick={() => { void finishScroll() }}>{t('完成')}</Button>
+      </Stack>
+    </Paper>}
+    {longCapture && <Box data-screenshot-long-preview sx={{ position: 'fixed', inset: 0, bgcolor: '#181818', overflow: 'auto', p: '24px 24px 100px' }}>
+      <Box component="img" src={longPreview} alt={t('滚动截图')} sx={{ display: 'block', width: longCapture.width, maxWidth: '100%', height: 'auto', mx: 'auto' }} />
+      <Paper sx={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', p: 1, borderRadius: 2 }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Typography sx={{ px: 1, whiteSpace: 'nowrap' }}>{longCapture.width} × {longCapture.height}</Typography>
+          <Button disabled={busy} onClick={() => run('save')}>{t('另存为')}</Button>
+          <Button disabled={busy} onClick={() => run('copy')}>{t('复制图片')}</Button>
+          <Button onClick={() => window.api.screenshot.close()}>{t('关闭')}</Button>
+        </Stack>
+      </Paper>
+    </Box>}
+    {translated && <Paper data-screenshot-translation elevation={5} sx={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', p: 1, borderRadius: 2 }}>
+      <Stack direction="row" spacing={1}>
+        <Button onClick={() => setShowOriginal(value => !value)}>{t(showOriginal ? '查看译图' : '查看原图')}</Button>
+        <Button onClick={() => window.api.screenshot.copyText(translated.text).catch(reportError)}>{t('复制文字')}</Button>
+        <Button disabled={busy} onClick={() => run('save')}>{t('保存译图')}</Button>
+        <Button disabled={busy} onClick={() => run('copy')}>{t('复制译图')}</Button>
+        <Button disabled={busy} onClick={() => setTranslated(null)}>{t('返回编辑')}</Button>
+        <Button onClick={() => window.api.screenshot.close()}>{t('关闭')}</Button>
+      </Stack>
+    </Paper>}
     {result && <Paper data-screenshot-result elevation={5} sx={{ position: 'fixed', top: '8%', left: '50%', transform: 'translateX(-50%)', width: Math.min(700, view.width - 32), p: 2 }}>
       <Stack direction="row" justifyContent="space-between"><Typography fontWeight={600}>{t('处理结果')}</Typography><Button onClick={() => setResult('')}>{t('关闭')}</Button></Stack>
       <TextField multiline minRows={5} maxRows={14} fullWidth value={result} onChange={event => setResult(event.target.value)} sx={{ my: 1 }} />

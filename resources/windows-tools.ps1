@@ -42,12 +42,20 @@ if ($request.action -eq 'ocr') {
     if ($bitmap.PixelWidth -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension -or $bitmap.PixelHeight -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension) { throw 'Image exceeds Windows OCR dimensions' }
     $result = Await-Result ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
     $lines = @($result.Lines | ForEach-Object {
+      $ocrLine = $_
       $line = $_.Text -replace '([\p{IsCJKUnifiedIdeographs}])\s+(?=[\p{IsCJKUnifiedIdeographs}])', '$1'
       $line = $line -replace '\s+([\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\u3001\uFF09\u300B\u3011\u300D\u300F])', '$1'
       $line = $line -replace '([\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\u3001\uFF08\u300A\u3010\u300C\u300E])\s+', '$1'
-      $line.Trim()
+      $words = @($ocrLine.Words)
+      if ($words.Count -gt 0 -and $line.Trim()) {
+        $left = ($words | ForEach-Object { $_.BoundingRect.X } | Measure-Object -Minimum).Minimum
+        $top = ($words | ForEach-Object { $_.BoundingRect.Y } | Measure-Object -Minimum).Minimum
+        $right = ($words | ForEach-Object { $_.BoundingRect.X + $_.BoundingRect.Width } | Measure-Object -Maximum).Maximum
+        $bottom = ($words | ForEach-Object { $_.BoundingRect.Y + $_.BoundingRect.Height } | Measure-Object -Maximum).Maximum
+        @{text=$line.Trim();x=$left;y=$top;width=($right-$left);height=($bottom-$top)}
+      }
     })
-    @{text=($lines -join "`n");language=$engine.RecognizerLanguage.LanguageTag} | ConvertTo-Json -Compress
+    @{text=(($lines | ForEach-Object { $_.text }) -join "`n");lines=$lines;width=$bitmap.PixelWidth;height=$bitmap.PixelHeight;language=$engine.RecognizerLanguage.LanguageTag} | ConvertTo-Json -Compress -Depth 5
   } finally { if ($bitmap) { $bitmap.Dispose() }; $writer.Dispose(); $stream.Dispose() }
   exit
 }

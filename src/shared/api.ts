@@ -63,6 +63,9 @@ export interface TypelessApi {
     ready(): Promise<void>
     close(): Promise<void>
     copyText(text: string): Promise<void>
+    startScroll(rect: import('./screenshot').CaptureRect, controls: import('./screenshot').CaptureRect): Promise<void>
+    finishScroll(): Promise<import('./screenshot').ScreenshotFrame>
+    onScroll(callback: (progress: import('./screenshot').ScrollCaptureProgress) => void): () => void
     run(action: import('./screenshot').ScreenshotAction, dataUrl: string, question?: string, target?: string, ocrLanguage?: string): Promise<import('./screenshot').ScreenshotResult>
   }
   assistant: {

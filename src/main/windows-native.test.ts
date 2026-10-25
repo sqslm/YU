@@ -84,4 +84,7 @@ finally { $stream.Dispose(); $font.Dispose(); $graphics.Dispose(); $bitmap.Dispo
     throw error
   }
   expect(String(result.text)).toMatch(/QINLY\s+OCR\s+123/i)
+  expect(result).toMatchObject({ width: 640, height: 100, lines: expect.arrayContaining([expect.objectContaining({
+    text: expect.stringMatching(/QINLY/i), x: expect.any(Number), y: expect.any(Number), width: expect.any(Number), height: expect.any(Number)
+  })]) })
 }, 25000)

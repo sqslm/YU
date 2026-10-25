@@ -1042,5 +1042,12 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "第 {{step}} 步未获本轮授权": "Step {{step}} is not authorised in this turn",
   "优先级已应用到本次的 {{count}} 个事项": "Priority applied to all {{count}} items",
   "优先级和截止时间已应用到本次的 {{count}} 个事项": "Priority and deadline applied to all {{count}} items",
-  "这次没有落库，优先级和截止时间没有记住": "Nothing was saved yet, so the priority and deadline were not kept"
+  "这次没有落库，优先级和截止时间没有记住": "Nothing was saved yet, so the priority and deadline were not kept",
+  "翻译结果不完整，请重试": "The translation is incomplete. Please try again.",
+  "未获取到文字位置，请重新截图": "Text positions are unavailable. Please capture again.",
+  "滚动截图区域太小或超出屏幕": "The scrolling region is too small or outside the screen",
+  "未匹配到重叠内容，请缓慢向下滚动，或回到上一处位置": "No matching overlap. Scroll down slowly or return to the previous position.",
+  "已达到长图尺寸上限，请完成截图": "The long image has reached its size limit. Finish the capture.",
+  "尚未采集到滚动截图，请稍后再试": "No scrolling frame has been captured yet. Please try again shortly.",
+  "请先完成滚动截图": "Finish the scrolling capture first"
 }

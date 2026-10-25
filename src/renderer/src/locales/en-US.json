@@ -1815,5 +1815,15 @@
   "模型撰写": "Written by the model",
   "平均 {{n}}": "Avg {{n}}",
   "今日语速": "Today's pace",
-  "字/分": "chars/min"
+  "字/分": "chars/min",
+  "全屏翻译": "Translate full screen",
+  "查看译图": "View translation",
+  "查看原图": "View original",
+  "保存译图": "Save translated image",
+  "复制译图": "Copy translated image",
+  "返回编辑": "Back to editing",
+  "滚动截图": "Scrolling screenshot",
+  "复制图片": "Copy image",
+  "在选区内缓慢向下滚动，停稳后自动拼接。": "Scroll down slowly inside the selection. Frames join when scrolling stops.",
+  "滚动截图区域太小或超出屏幕": "The scrolling region is too small or outside the screen"
 }

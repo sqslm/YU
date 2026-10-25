@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.10**, Windows 10/11 x64, MIT.
+> Current version **1.0.0-rc.11**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -23,7 +23,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | **Events** | Its own page: month grid, day list, create and edit (start, end, location, advance alert), ICS import and export — the page and the assistant write the same data; subscribe to external ICS calendars (including Google / Outlook secret addresses) and sync both ways once you sign in to your own server |
 | **Briefing / read-aloud** | Its own page plus a daily schedule: today's events, due to-dos, overdue items and tomorrow's preview, optionally written as one paragraph by a model (falling back to the template), readable aloud; quiet hours hold delivery back, and the last two weeks stay on this machine |
 | **Automation** | Save a sequence of steps you repeat as a named workflow and replay it with one sentence, with no model in the loop; each step runs with the saved arguments and reports its result |
-| **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR and smart translation |
+| **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR, translation in place and scrolling screenshots |
 | **Wake word** | Optional offline wake word using Windows on-device speech, with a selectable input device; nothing is uploaded or stored before it fires |
 | **Updates** | Checks this project's GitHub Releases by default; when a newer build exists the hub shows a pill at the bottom left, and one click downloads and restarts into it |
 | **Sync** | Optional self-hosted server for history, notes, note audio, events, reminders and per-device personal stats; dictation audio stays on the machine that recorded it |
@@ -106,6 +106,10 @@ Three things worth knowing:
 - **Say it, and it is noted**: in Ask, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, “read today’s briefing” speaks it, and “mark that to-do high priority, due Friday” updates it. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
 - **Follow-ups do not need the context repeated**: "make the second one eleven", "mark the last one high priority" — the assistant resolves the target against the previous turn's real results, and asks first when it cannot tell which item you mean instead of guessing.
 - **Say it once, replay it with one sentence**: tell it “from now on, when I say morning check, look at today's calendar, build the briefing and read it out” and it saves those steps as a workflow. Saying “run morning check” then runs each step with the saved arguments, with no model in the loop, and lists what every step returned. Workflows can be archived or restored in settings under Automation.
+
+Screenshot translation: select a region, then choose Translation → Start translation. Text is replaced at its original position while the surrounding screen stays intact. Before selecting, Translate full screen selects the entire display. Compare with the original, copy text, or copy/save the translated image. OCR recognizes text and coordinates locally; only recognized text goes to your configured text model.
+
+Scrolling screenshots: select the content area and choose Scrolling screenshot. Scroll down slowly inside it; stable frames are joined by matching their overlap. Choose Done to preview, copy or save the long image. Exclude fixed toolbars, overlays and scrollbars from the selection. If overlap cannot be matched, return to the previous position and scroll down more slowly. Downward capture only, limited to 32 million pixels and 30,000 pixels in height; closing releases the capture, with no background capture.
 
 ## Configuration
 
@@ -220,7 +224,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.10`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.0.0-rc.11`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Not implemented** (don't read these as available): per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -242,6 +246,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
+- **1.0.0-rc.11**: screenshot translation replaces text at its original position in the full-screen view, with original comparison and image export; adds downward scrolling screenshots matched by overlap; gives taskbar windows an external YU icon; fixes late capture windows after closing, plus focus and control interaction during scrolling.
 - **1.0.0-rc.10**: the hub was laid out again — the four numbers became one strip (characters, time and pace today, with the lifetime count behind a divider), the schedule and the to-dos share one list in time order on the left with the briefing in its own column on the right, the week chart sits beside the lifetime insights, and the year heat map closes the page; "average paragraph" became "today's pace" because it was repeating the footnote under the duration. Local installer only, nothing published to GitHub.
 - **1.0.0-rc.9**: notifications now carry our own icon — the tray's "check for updates", briefing, calendar and reminder toasts shipped without one, so Windows fell back to the host executable's picture and showed Electron's atom logo; the hub dropped its recent-takes list (the history page is the same data with search and replay), the week chart takes the full width again but is capped and centred, and a Chinese interface no longer labels the heat-map axis "Nov Dec Jan" — the twelve month keys had been written into both locales with English values. This build is a local installer only; nothing was published to GitHub.
 - **1.0.0-rc.8**: the hub gained a today board under the four numbers — events, to-dos and the daily briefing in three columns, each with a one-click jump to its page, and short windows scroll instead of cropping the heat map; the "top apps" dialog now puts the legend on the left and the ring on the right at two thirds width, with a long legend scrolling in its own column; "the workflow was not saved" is fixed — steps sent as a JSON string or as bare tool names now save, and the message says whether it was not a list, a step without a tool, or more than 8 steps; a tool refused by the permission check now logs the arg shapes instead of failing silently.

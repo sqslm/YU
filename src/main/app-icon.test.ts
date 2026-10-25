@@ -12,11 +12,12 @@ const mock = vi.hoisted(() => ({
   appPath: 'C:/app',
   image: { isEmpty: () => false } as { isEmpty: () => boolean },
   throwOnCreate: false,
+  packaged: false,
   seenPath: '' as string
 }))
 
 vi.mock('electron', () => ({
-  app: { getAppPath: () => mock.appPath },
+  app: { getAppPath: () => mock.appPath, get isPackaged() { return mock.packaged } },
   nativeImage: {
     createFromPath: (path: string) => {
       mock.seenPath = path
@@ -26,7 +27,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-const { appIcon, appIconPath } = await import('./app-icon')
+const { appIcon, appIconPath, setTaskbarIcon } = await import('./app-icon')
 
 describe('appIcon', () => {
   beforeEach(() => {
@@ -34,6 +35,7 @@ describe('appIcon', () => {
     mock.image = { isEmpty: () => false }
     mock.throwOnCreate = false
     mock.seenPath = ''
+    mock.packaged = false
   })
   afterEach(() => vi.restoreAllMocks())
 
@@ -46,6 +48,18 @@ describe('appIcon', () => {
   it('returns undefined when the image is empty', () => {
     mock.image = { isEmpty: () => true }
     expect(appIcon()).toBeUndefined()
+  })
+  it.skipIf(process.platform !== 'win32')('gives the taskbar a real ICO path and relaunch command in development and packages', () => {
+    const details = vi.fn()
+    setTaskbarIcon({ setAppDetails: details } as never)
+    expect(details).toHaveBeenLastCalledWith(expect.objectContaining({ appId: 'com.typeless.rebuild',
+      appIconPath: join(mock.appPath, 'resources', 'app.ico'), relaunchCommand: `"${process.execPath}" "${mock.appPath}"`, relaunchDisplayName: 'YU' }))
+    mock.packaged = true
+    vi.stubGlobal('process', { ...process, resourcesPath: 'C:/installed/resources' })
+    try {
+      setTaskbarIcon({ setAppDetails: details } as never)
+      expect(details).toHaveBeenLastCalledWith(expect.objectContaining({ appIconPath: join('C:/installed/resources', 'shortcut.ico'), relaunchCommand: `"${process.execPath}"` }))
+    } finally { vi.unstubAllGlobals() }
   })
 
   it('returns undefined instead of throwing when the decoder fails', () => {

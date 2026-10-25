@@ -1,4 +1,4 @@
-import { app, nativeImage, type NativeImage } from 'electron'
+import { app, nativeImage, type BrowserWindow, type NativeImage } from 'electron'
 import { join } from 'node:path'
 
 /**
@@ -11,6 +11,18 @@ import { join } from 'node:path'
  */
 export function appIconPath(): string {
   return join(app.getAppPath(), 'resources', 'icon.png')
+}
+
+/** The Windows shell cannot read icons inside app.asar, and dev runs host electron.exe. */
+export function setTaskbarIcon(win: BrowserWindow): void {
+  if (process.platform !== 'win32') return
+  win.setAppDetails({
+    appId: 'com.typeless.rebuild',
+    appIconPath: app.isPackaged ? join(process.resourcesPath, 'shortcut.ico') : join(app.getAppPath(), 'resources', 'app.ico'),
+    appIconIndex: 0,
+    relaunchCommand: `"${process.execPath}"${app.isPackaged ? '' : ` "${app.getAppPath()}"`}`,
+    relaunchDisplayName: 'YU'
+  })
 }
 
 /**

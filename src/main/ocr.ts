@@ -1,4 +1,22 @@
 import { nativeImage, type NativeImage } from 'electron'
+import type { ScreenshotTextRegion } from '@shared/screenshot'
+import { mt } from '@shared/mainI18n'
+
+/** OCR runs on a resized copy; overlay bounds must refer to the original crop. */
+export function ocrRegions(result: Record<string, unknown>, size: { width: number; height: number }): ScreenshotTextRegion[] {
+  const { width, height, lines } = result
+  if (typeof width !== 'number' || typeof height !== 'number' || !Number.isFinite(width) || !Number.isFinite(height) ||
+      width <= 0 || height <= 0 || !Array.isArray(lines) || !lines.length) throw new Error(mt('未获取到文字位置，请重新截图'))
+  return lines.map(line => {
+    if (!line || typeof line.text !== 'string' || !line.text.trim() ||
+        ![line.x, line.y, line.width, line.height].every(Number.isFinite) || line.x < 0 || line.y < 0 ||
+        line.width <= 0 || line.height <= 0 || line.x + line.width > width + 1 || line.y + line.height > height + 1) {
+      throw new Error(mt('未获取到文字位置，请重新截图'))
+    }
+    return { text: normalizeOcrText(line.text), x: line.x * size.width / width, y: line.y * size.height / height,
+      width: Math.min(line.width, width - line.x) * size.width / width, height: Math.min(line.height, height - line.y) * size.height / height }
+  })
+}
 
 /** Preserve English word spacing and line breaks, remove Windows OCR's artificial CJK spaces. */
 export function normalizeOcrText(text: string): string {
