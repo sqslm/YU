@@ -156,6 +156,7 @@ export class ScreenshotTool {
     win.setFocusable(false)
     this.scrollEscape = globalShortcut.register('Escape', () => this.close())
     let interactive = false
+    let lastProgress = 0, unmatchedFrames = 0, previewDirty = false
     // Hit-test the actual cursor: forwarded mouseenter is unreliable on unfocused overlays.
     this.scrollPointerTimer = setInterval(() => {
       const point = screen.getCursorScreenPoint(), x = point.x - bounds.x, y = point.y - bounds.y
@@ -167,20 +168,28 @@ export class ScreenshotTool {
       try {
         const image = captureScreen(physical)
         const status = scroll.add(image.toBitmap())
-        if (status === 'waiting' || status === 'unchanged') return
+        if (status === 'added') previewDirty = true
+        if (status === 'unchanged' && !previewDirty) return
+        unmatchedFrames = status === 'unmatched' ? unmatchedFrames + 1 : 0
+        if (status === 'unmatched' && unmatchedFrames < 4 && !previewDirty) return
         if (status === 'limit') this.stopScroll()
-        const preview = status === 'added' ? nativeImage.createFromBitmap(scroll.pixels(), { width: scroll.width, height: scroll.height })
-          .resize({ width: Math.max(1, Math.min(120, Math.round(600 * scroll.width / scroll.height))), quality: 'good' }).toDataURL() : undefined
+        // Sample at 20 fps, but encode/send previews at most five times a second.
+        const now = Date.now()
+        if (status !== 'limit' && now - lastProgress < (status === 'unmatched' ? 1000 : 200)) return
+        lastProgress = now
+        const thumbnail = previewDirty ? scroll.preview() : undefined
+        const preview = thumbnail ? nativeImage.createFromBitmap(thumbnail.pixels, { width: thumbnail.width, height: thumbnail.height }).toDataURL() : undefined
+        previewDirty = false
         win.webContents.send('screenshot:scroll-progress', { width: scroll.width, height: scroll.height, frames: scroll.frames,
           ...(preview ? { preview } : {}),
-          ...(status === 'unmatched' ? { message: mt('未匹配到重叠内容，请缓慢向下滚动，或回到上一处位置') } : {}),
+          ...(status === 'unmatched' ? { message: mt('未找到重叠区域，请稍向上滚动以继续拼接') } : {}),
           ...(status === 'limit' ? { message: mt('已达到长图尺寸上限，请完成截图'), stopped: true } : {}) })
       } catch (error) {
         this.stopScroll()
         win.webContents.send('screenshot:scroll-progress', { width: scroll.width, height: scroll.height, frames: scroll.frames,
           message: error instanceof Error ? error.message : String(error), stopped: true })
       }
-    }, 250)
+    }, 50)
   }
 
   private finishScroll(): ScreenshotFrame {

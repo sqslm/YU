@@ -126,6 +126,10 @@ function ScreenshotEditor(): JSX.Element {
     if (translated) {
       const r = translated.rect
       if (!showOriginal) ctx.drawImage(translated.canvas, r.x, r.y, r.width, r.height)
+      ctx.fillStyle = 'rgba(0,0,0,.48)'; ctx.beginPath(); ctx.rect(0, 0, view.width, view.height)
+      ctx.rect(r.x, r.y, r.width, r.height); ctx.fill('evenodd')
+      ctx.strokeStyle = '#4c8dff'; ctx.lineWidth = 1; ctx.strokeRect(r.x + .5, r.y + .5, r.width, r.height)
+      ctx.fillStyle = '#fff'; for (const id of CAPTURE_HANDLES) { const p = captureHandle(r, id); ctx.fillRect(p.x - 3, p.y - 3, 6, 6) }
       return
     }
     if (selection) {
@@ -316,7 +320,6 @@ function ScreenshotEditor(): JSX.Element {
       style={{ position: 'fixed', left: Math.min(text.point.x, view.width - 240), top: Math.min(text.point.y, view.height - 40), width: 240, color, background: 'rgba(0,0,0,.7)', border: '1px solid #4c8dff', fontSize }} />}
     {!ready && <Paper sx={{ position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)', p: 1.5 }}>
       <Stack direction="row" alignItems="center" spacing={2}><Typography>{t('单击选取窗口 · 拖动自由框选 · Esc 退出')}</Typography>
-        <Button onClick={() => { setSelection({ x: 0, y: 0, ...view }); setPanel('translate') }}>{t('全屏翻译')}</Button>
         <Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button></Stack>
     </Paper>}
     {ready && !translated && !scrolling && !longCapture && <>
@@ -366,7 +369,7 @@ function ScreenshotEditor(): JSX.Element {
       sx={{ position: 'fixed', left: Math.max(8, Math.min(view.width - 420, selection!.x)), top: Math.max(8, Math.min(view.height - 160, selection!.y + selection!.height + 160 < view.height ? selection!.y + selection!.height + 12 : selection!.y - 160)), width: Math.min(410, view.width - 16), height: 148, p: 1.25, borderRadius: 2 }}>
       <Typography fontWeight={600}>{t('滚动截图')} · {scrollProgress ? `${scrollProgress.width} × ${scrollProgress.height}` : t('准备中…')}</Typography>
       {scrollProgress?.preview && <Box component="img" src={scrollProgress.preview} alt={t('滚动截图')} sx={{ position: 'absolute', right: 0, bottom: '100%', mb: 1, maxWidth: 100, maxHeight: 240, objectFit: 'contain', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', pointerEvents: 'none' }} />}
-      <Typography variant="body2" color="text.secondary" sx={{ height: 52, overflow: 'auto' }}>{scrollProgress?.message || t('在选区内缓慢向下滚动，停稳后自动拼接。')}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ height: 52, overflow: 'auto' }}>{scrollProgress?.message || t('在选区内连续向下滚动，无需停稳；实时预览已拼接内容。')}</Typography>
       <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: .5 }}>
         <Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button>
         <Button variant="contained" disabled={busy || !scrollProgress?.frames} onClick={() => { void finishScroll() }}>{t('完成')}</Button>
@@ -384,8 +387,9 @@ function ScreenshotEditor(): JSX.Element {
         </Stack>
       </Paper>
     </Box>}
-    {translated && <Paper data-screenshot-translation elevation={5} sx={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', p: 1, borderRadius: 2 }}>
-      <Stack direction="row" spacing={1}>
+    {translated && <Typography variant="caption" sx={{ position: 'fixed', left: translated.rect.x, top: Math.max(0, translated.rect.y - 23), color: 'white', background: '#202020aa', px: .75, borderRadius: 1 }}>{translated.canvas.width} × {translated.canvas.height}</Typography>}
+    {translated && <Paper data-screenshot-translation elevation={5} sx={{ position: 'fixed', top: Math.max(8, translated.rect.y + translated.rect.height + 70 < view.height ? translated.rect.y + translated.rect.height + 12 : translated.rect.y - 60), left: Math.max(8, Math.min(view.width - Math.min(700, view.width - 16) - 8, translated.rect.x)), maxWidth: 'calc(100vw - 16px)', p: 1, borderRadius: 2 }}>
+      <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', whiteSpace: 'nowrap' }}>
         <Button onClick={() => setShowOriginal(value => !value)}>{t(showOriginal ? '查看译图' : '查看原图')}</Button>
         <Button onClick={() => window.api.screenshot.copyText(translated.text).catch(reportError)}>{t('复制文字')}</Button>
         <Button disabled={busy} onClick={() => run('save')}>{t('保存译图')}</Button>

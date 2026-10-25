@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
   Menu: {buildFromTemplate: mocks.menu},
   app: { getPath: () => '/pictures', getAppPath: () => '/app', getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
   globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
-  desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image, createFromBitmap: () => ({ resize: () => ({ toDataURL: () => 'data:image/png;base64,cHJldmlldw==' }) }) }, dialog: { showSaveDialog: mocks.save },
+  desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image, createFromBitmap: () => ({ toDataURL: () => 'data:image/png;base64,cHJldmlldw==' }) }, dialog: { showSaveDialog: mocks.save },
   screen: { dipToScreenRect: (_win: unknown, rect: {x:number;y:number;width:number;height:number}) => Object.fromEntries(Object.entries(rect).map(([key,value]) => [key,Math.round(value*1.5)])), getCursorScreenPoint: () => mocks.cursor, getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 }, workAreaSize:{width:1280,height:720} }) },
   ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => mocks.handlers.set(name, handler) },
   BrowserWindow: class extends EventEmitter {
@@ -105,6 +105,23 @@ describe('explicit screenshot tool', () => {
     tool.close(); const calls = mocks.capture.mock.calls.length
     await vi.advanceTimersByTimeAsync(1000); expect(mocks.capture).toHaveBeenCalledTimes(calls)
     expect(active).toHaveBeenLastCalledWith(false)
+  })
+  it('flushes the final preview after a short continuous burst even when following frames are unchanged', async () => {
+    await tool.open(); vi.useFakeTimers()
+    const page = (top: number): { toBitmap: () => Buffer } => {
+      const pixels = Buffer.alloc(90 * 90 * 4, 255)
+      for (let y = 0; y < 90; y++) for (let x = 0; x < 90; x++) {
+        const value = (y + top) * 1337 + x * 311, shade = ((value ^ (value >>> 5)) * 13) & 255
+        const i = (y * 90 + x) * 4; pixels[i] = shade; pixels[i + 1] = shade; pixels[i + 2] = shade
+      }
+      return { toBitmap: () => pixels }
+    }
+    mocks.capture.mockReturnValueOnce(page(0)).mockReturnValue(page(31))
+    mocks.handlers.get('screenshot:scroll-start')!(event(), { x: 100, y: 100, width: 60, height: 60 }, { x: 100, y: 170, width: 410, height: 100 })
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(250)
+    const updates = mocks.windows[0].webContents.send.mock.calls.filter((call: any[]) => call[0] === 'screenshot:scroll-progress')
+    expect(updates.at(-1)?.[1]).toMatchObject({ height: 121, frames: 2, preview: expect.stringContaining('data:image/png') })
   })
   it('closes a crashed renderer and restores global shortcuts immediately', async () => {
     await tool.open()

@@ -1934,5 +1934,6 @@
   "已保留下载进度，点击继续": "Download progress saved; click to resume",
   "正在校验安装包，请稍候": "Verifying installer; please wait",
   "点击暂停下载": "Click to pause download",
-  "部分译文过长，已用省略号标记；可复制文字查看完整译文": "Long translations are marked with an ellipsis. Copy text for the full translation."
+  "部分译文过长，已用省略号标记；可复制文字查看完整译文": "Long translations are marked with an ellipsis. Copy text for the full translation.",
+  "在选区内连续向下滚动，无需停稳；实时预览已拼接内容。": "Scroll down continuously inside the selection. No pauses needed; preview updates live."
 }

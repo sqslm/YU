@@ -1171,5 +1171,6 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "更新下载已暂停": "Update download paused",
   "有多个相近文件夹，请明确名称：{{names}}": "Several similar folders exist. Specify a name: {{names}}",
   "已完成的操作：": "Completed operations:",
-  "未完成的操作：": "Incomplete operations:"
+  "未完成的操作：": "Incomplete operations:",
+  "未找到重叠区域，请稍向上滚动以继续拼接": "No overlap found. Scroll back up a little to continue stitching."
 }
