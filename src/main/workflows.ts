@@ -172,6 +172,9 @@ export class WorkflowStore {
     const row = this.find(id)
     if (!row) throw new Error(mt('工作流不存在'))
     if (row.archivedAt === undefined) return
+    if (activeWorkflows(this.workflows).length >= MAX_WORKFLOWS) {
+      throw new Error(mt('工作流数量已达上限（{{count}} 个），请先归档不再需要的', { count: MAX_WORKFLOWS }))
+    }
     this.workflows = this.workflows.map(item => {
       if (item.id !== id) return item
       const { archivedAt: _dropped, ...rest } = item
@@ -237,7 +240,9 @@ export class WorkflowStore {
         if (clean) kept.push(clean)
         else console.warn('[workflows] dropped a workflow row with no allowlisted step')
       }
-      this.workflows = kept.slice(0, MAX_WORKFLOWS)
+      // The 50-row limit applies to live rows, not to archived data. Truncating
+      // the combined list here would erase the tail on the next save.
+      this.workflows = kept
     } catch (error) {
       // The file vanished between the exists check and the read: that is an empty
       // store, not a damaged one worth quarantining.

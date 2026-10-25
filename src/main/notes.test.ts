@@ -620,6 +620,25 @@ describe('data directory', () => {
     expect(store.list().notes).toHaveLength(1)
   })
 
+  it('never overwrites or cleans up existing notes in the target directory', async () => {
+    const store = await loadedStore()
+    const target = join(other, 'existing-data')
+    const targetDb = join(target, 'notes.json')
+    const targetAudio = join(target, 'notes', 'audio', 'existing.ogg')
+    mkdirSync(join(target, 'notes', 'audio'), { recursive: true })
+    writeFileSync(targetDb, JSON.stringify({ notes: [{ id: 'existing' }], categories: [] }))
+    writeFileSync(targetAudio, 'original recording')
+    const dbBefore = readFileSync(targetDb)
+    const audioBefore = readFileSync(targetAudio)
+
+    const result = await store.migrate(target)
+
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('已有随记')
+    expect(readFileSync(targetDb)).toEqual(dbBefore)
+    expect(readFileSync(targetAudio)).toEqual(audioBefore)
+  })
+
   it('refuses a target inside the current root', async () => {
     const store = await loadedStore()
     mkdirSync(join(dir, 'inner'), { recursive: true })

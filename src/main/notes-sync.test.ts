@@ -405,6 +405,27 @@ describe('notes sync against the real server', () => {
     expect(live.map((note) => note.transcript).sort()).toEqual(['桌面上的修改', '笔记本上的修改'])
   })
 
+  it('keeps dirty edits and their recording when another device deletes the note', async () => {
+    const session = await signUp('delete-dirty@example.com')
+    const desktop = await device('delete-dirty-desktop', session, dir => seedNote(dir, { id: 'delete-dirty' }, audioBytes))
+    await desktop.engine.now()
+    const laptop = await device('delete-dirty-laptop', session)
+    await laptop.engine.now()
+    await desktop.store.update('delete-dirty', { transcript: '尚未同步的修改' })
+    laptop.store.remove('delete-dirty')
+    await laptop.engine.now()
+    await desktop.engine.now()
+    const notes = desktop.store.list().notes
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatchObject({ transcript: '尚未同步的修改', pending: true })
+    expect(notes[0].tags).toContain('冲突副本')
+    expect(notes[0].id).not.toBe('delete-dirty')
+    expect(desktop.store.hasAudio(notes[0].id)).toBe(true)
+    await desktop.engine.now()
+    const remote = await desktop.client.request<NotesPage>('GET', '/api/v1/notes?since=0')
+    expect(remote.notes.some(note => note.id === notes[0].id && note.deleted !== true)).toBe(true)
+  })
+
   it('propagates a deletion to the other machine', async () => {
     const carol = await signUp('carol@example.com')
     const desktop = await device('carol-desktop', carol, (dir) => seedNote(dir, { id: 'note-three' }))

@@ -17,15 +17,23 @@ export function applyReplacements(text: string, pairs: Replacement[] | undefined
         typeof pair.from === 'string' &&
         pair.from.length > 0 &&
         // A hint entry is glossary-only: it teaches the model a term without
-        // rewriting text, so it must never reach the literal split/join below.
+        // rewriting text, so it must never reach the literal replacement below.
         pair.mode !== 'hint'
     )
     .sort((a, b) => b.from.length - a.from.length)
 
-  let output = text
-  for (const pair of ordered) {
-    const to = typeof pair.to === 'string' ? pair.to : ''
-    output = output.split(pair.from).join(to)
+  if (ordered.length === 0) return text
+  let output = ''
+  let position = 0
+  while (position < text.length) {
+    const match = ordered.find((pair) => text.startsWith(pair.from, position))
+    if (!match) {
+      output += text[position]
+      position += 1
+      continue
+    }
+    output += typeof match.to === 'string' ? match.to : ''
+    position += match.from.length
   }
   return output
 }

@@ -52,3 +52,16 @@ it('retains both rapid updates in the final file', async () => {
   expect(disk.alertHideSeconds).toBe(9)
   expect(disk.historyLimit).toBe(800)
 })
+
+it('persists an update made while an earlier save is still finishing', async () => {
+  const file = join(dir, 'settings.json')
+  const store = new SettingsStore(file)
+  await store.load()
+  const first = store.update({ alertHideSeconds: 9 })
+  // Yield once so the first job has taken its snapshot and reached file I/O.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const second = store.update({ historyLimit: 800 })
+  await Promise.all([first, second])
+  const disk = JSON.parse(await readFile(file, 'utf8'))
+  expect(disk).toMatchObject({ alertHideSeconds: 9, historyLimit: 800 })
+})

@@ -34,6 +34,20 @@ describe('applyReplacements', () => {
     expect(applyReplacements('a.b * c', [{ from: 'a.b', to: 'X' }])).toBe('X * c')
   })
 
+  it('does not rewrite replacement text produced by another rule', () => {
+    expect(applyReplacements('GTP', [
+      { from: 'GTP', to: 'GPT' },
+      { from: 'GPT', to: 'ChatGPT' }
+    ])).toBe('GPT')
+  })
+
+  it('replaces overlapping rules at their original positions', () => {
+    expect(applyReplacements('GPT4 GPT', [
+      { from: 'GPT', to: 'ChatGPT' },
+      { from: 'GPT4', to: 'GPT-4' }
+    ])).toBe('GPT-4 ChatGPT')
+  })
+
   it('never rewrites a glossary hint, even with an empty target', () => {
     // A hint exists to teach the model a spelling. If it reached the literal
     // path, an empty `to` would silently delete the word from the output.

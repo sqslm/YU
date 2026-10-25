@@ -301,6 +301,18 @@ describe('workflow store', () => {
     workflows.archive(workflows.list()[0].id)
     expect(() => workflows.save({ name: '腾出位置', steps: steps(['get_datetime']) })).not.toThrow()
     expect(workflows.list()).toHaveLength(MAX_WORKFLOWS + 1)
+    const restarted = store()
+    expect(restarted.list()).toHaveLength(MAX_WORKFLOWS + 1)
+    restarted.archive(restarted.list()[1].id)
+    expect(store().list()).toHaveLength(MAX_WORKFLOWS + 1)
+    const archived = restarted.list().find(row => row.archivedAt !== undefined)!
+    for (const row of restarted.list()) {
+      if (row.archivedAt !== undefined && row.id !== archived.id) restarted.restore(row.id)
+    }
+    expect(restarted.active()).toHaveLength(MAX_WORKFLOWS)
+    expect(() => restarted.restore(archived.id)).toThrow(`工作流数量已达上限（${MAX_WORKFLOWS} 个）`)
+    restarted.archive(restarted.active()[0].id)
+    expect(() => restarted.restore(archived.id)).not.toThrow()
   })
 
   it('removes a row only for self-tests', () => {

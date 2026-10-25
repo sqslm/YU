@@ -815,9 +815,19 @@ export class NotesStore {
 
       if (row.deleted === true) {
         if (index >= 0) {
-          const [note] = this.data.notes.splice(index, 1)
+          const note = this.data.notes[index]
+          if (note.pending === true || (note.audioPath && note.audioUploaded !== true)) {
+            // A remote delete does not authorize discarding work this device has
+            // not sent. Keep both text and any unsent recording under a fresh id.
+            const fork = this.forkLocal(note, true)
+            this.data.notes[index] = fork
+            if (fork.audioPath) this.renameAudio(id, fork.id, fork.audioPath)
+            conflicts += 1
+          } else {
+            this.data.notes.splice(index, 1)
+            if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
+          }
           this.bump(id)
-          if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
           changed = true
         }
         // The server's deletion also answers any local tombstone for this id.
@@ -1003,6 +1013,12 @@ export class NotesStore {
     if (isInside(to, from)) return { ok: false, message: mt('目标文件夹不能放在当前数据目录里面') }
     if (isInside(from, to)) return { ok: false, message: mt('目标文件夹不能是当前数据目录的上级文件夹') }
 
+    // Migration is a move, not a merge. Never let copy verification or failure
+    // cleanup touch a database and recordings the user already has at the target.
+    if (existsSync(join(to, DB_FILE)) || existsSync(join(to, NOTES_DIR))) {
+      return { ok: false, message: mt('目标文件夹已有随记数据，请选择空文件夹') }
+    }
+
     try {
       mkdirSync(to, { recursive: true })
       const probe = join(to, `.typeless-notes-probe-${process.pid}`)
@@ -1155,13 +1171,10 @@ export class NotesStore {
   }
 
   /**
-   * Keep a conflict's local edits as their own note.
-   *
-   * The fork is text-only on purpose: the recording belongs to the server's copy,
-   * and duplicating a multi-megabyte file on every conflict is not worth it. The
-   * tag is what tells the user why two nearly identical notes exist.
+   * Keep a conflict's local edits as their own note. Live conflicts keep audio
+   * on the server copy; when the server deleted its copy, the fork must retain it.
    */
-  private forkLocal(note: NoteEntry): NoteEntry {
+  private forkLocal(note: NoteEntry, keepAudio = false): NoteEntry {
     const now = Date.now()
     const copy = cloneNote(note)
     copy.id = randomUUID()
@@ -1170,9 +1183,11 @@ export class NotesStore {
     copy.tags = normalizeTags([...note.tags, '冲突副本'])
     copy.pending = true
     delete copy.version
-    delete copy.audioPath
-    delete copy.audioFormat
-    delete copy.audioBytes
+    if (!keepAudio) {
+      delete copy.audioPath
+      delete copy.audioFormat
+      delete copy.audioBytes
+    }
     delete copy.audioUploaded
     this.options.log(`[notes] 冲突：本机改动另存为 ${copy.id}，采用服务器版本`)
     return copy
@@ -1440,6 +1455,19 @@ export class NotesStore {
       // No document yet: the store is empty, so nothing to copy.
     }
     return size + totalBytes(join(root, NOTES_DIR))
+  }
+
+  private renameAudio(fromId: string, toId: string, oldPath: string): void {
+    const from = join(this.root(), oldPath)
+    const extension = oldPath.slice(oldPath.lastIndexOf('.'))
+    const to = join(this.root(), NOTES_DIR, 'audio', `${toId}${extension}`)
+    try {
+      renameSync(from, to)
+      const fork = this.find(toId)
+      if (fork) fork.audioPath = relative(this.root(), to)
+    } catch (error) {
+      this.options.log(`[notes] 冲突录音未改名，保留原路径 ${fromId}：${describeError(error)}`)
+    }
   }
 
   private unlinkAudio(path: string): void {
