@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.0.0-rc.13**, Windows 10/11 x64, MIT.
+> Current version **1.0.0-rc.14**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -16,17 +16,23 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | Capability | In one line |
 | --- | --- |
 | **Dictation** | Press to talk, press again to stop; the result is inserted at the caret — clipboard paste first, SendInput character injection as fallback, then read back to verify |
-| **Ask** | `Space + Right Alt` to start, retrieval plus a tool-calling agent, the answer lands in a floating card you can pin, follow up on, or save as a note; unified voice tasks can also query local file bodies (plain text, docx, xlsx, pptx) and the Everything index |
+| **Ask** | `Space + Right Alt` to start, retrieval plus a tool-calling agent, the answer lands in a floating card you can pin, follow up on, or save as a note; unified voice tasks can also query local file bodies (plain text, docx, xlsx, pptx, text-based PDF) and the Everything index |
 | **Translation** | A dedicated translation mode and a selection-translation hotkey; 1–3 target languages, source language left to the ASR |
 | **Notes** | Voice or typed notes with categories and tags, playback, and audio import with re-transcription; polished text and raw transcript are kept separately |
 | **Reminders / to-dos** | Natural-language times (Chrono plus programmatic checks), repeats, snooze, a strong-alert overlay, missed-item recovery; each to-do can carry a priority and a deadline |
 | **Events** | Its own page: month grid, day list, create and edit (start, end, location, advance alert), ICS import and export — the page and the assistant write the same data; subscribe to external ICS calendars (including Google / Outlook secret addresses) and sync both ways once you sign in to your own server |
 | **Briefing / read-aloud** | Its own page plus a daily schedule: today's events, due to-dos, overdue items and tomorrow's preview, optionally written as one paragraph by a model (falling back to the template), readable aloud; quiet hours hold delivery back, and the last two weeks stay on this machine |
 | **Automation** | Save a sequence of steps you repeat as a named workflow and replay it with one sentence, with no model in the loop; each step runs with the saved arguments and reports its result |
-| **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR, translation in place and scrolling screenshots |
+| **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR, translation in place, scrolling screenshots, cross-monitor regions and pinned images with copy/save |
 | **Wake word** | Optional offline wake word using Windows on-device speech, with a selectable input device; nothing is uploaded or stored before it fires |
 | **Updates** | Checks this project's GitHub Releases by default; when a newer build exists the hub shows a pill at the bottom left, and one click downloads and restarts into it |
 | **Sync** | Optional self-hosted server for history, notes, note audio, events, reminders and per-device personal stats; dictation audio stays on the machine that recorded it |
+
+## Unified entry capabilities
+
+The [complete capability inventory and operating conditions](ASSISTANT_ROADMAP.md#统一入口功能清单) lists the supported operations for writing your own tests. rc.14 connects note audio control, actual prompt provenance, per-note sync failures, frozen selection preview/apply, hardware and system volume, PDF content, real download/recent records, permissions, monthly/yearly and finite reminders, workflow branches/result bindings, cross-monitor capture/pins, and email/mobile briefing delivery.
+
+External delivery is off by default. Configure Resend email or ntfy mobile push in Calendar & Briefing, then enable the channel. Keys use OS encryption; receipts distinguish provider acceptance, failure and unknown delivery. Everything port/CLI and access exclusions are in Data & Performance. External ICS subscriptions remain read-only; two-way sync refers to local data through the self-hosted server.
 
 ## Screens
 
@@ -224,7 +230,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.0.0-rc.13`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.0.0-rc.14`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Not implemented** (don't read these as available): per-directory or per-app search exclusions, PDF body search, indexers other than Everything, branching or conditional workflows, and non-desktop briefing delivery (mail or phone push). External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -246,7 +252,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 <details>
 <summary>Highlights of earlier versions (expand)</summary>
 
-- **1.0.0-rc.13**: separates development and installed Windows identities and repairs the legacy Electron shortcut collision; routes named drive folders before application lookup; connects Everything interface failure to built-in search and recovered result presentation. The roadmap now separates the current implementation audit from historical delivery records.
+- **1.0.0-rc.14**: separates development and installed Windows identities and repairs the legacy Electron shortcut collision; routes named drive folders before application lookup; connects Everything interface failure to built-in search and recovered result presentation. The roadmap now separates the current implementation audit from historical delivery records.
 - **1.0.0-rc.12**: fixes Windows taskbar icon property order; disables RC downgrades across update checks, events, downloads and installation; connects calendar, daily briefing configuration and compound tasks through Right Alt; restarts briefing scheduling immediately after settings changes; fixes event end dates, future reminder postponement, false save receipts and unreviewed note extraction; shares polish output constraints and artifact/duplicate cleanup. See the [100-case acceptance record](src/main/fixtures/voice-routing-100-rc12.md) for exact validation boundaries.
 - **1.0.0-rc.11**: screenshot translation replaces text at its original position in the full-screen view, with original comparison and image export; adds downward scrolling screenshots matched by overlap; gives taskbar windows an external YU icon; fixes late capture windows after closing, plus focus and control interaction during scrolling.
 - **1.0.0-rc.10**: the hub was laid out again — the four numbers became one strip (characters, time and pace today, with the lifetime count behind a divider), the schedule and the to-dos share one list in time order on the left with the briefing in its own column on the right, the week chart sits beside the lifetime insights, and the year heat map closes the page; "average paragraph" became "today's pace" because it was repeating the footnote under the duration. Local installer only, nothing published to GitHub.

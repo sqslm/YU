@@ -4,6 +4,7 @@ import { setMainLanguage } from '@shared/mainI18n'
 import type { Workflow, WorkflowStep } from '@shared/workflow'
 import { runTool, type ToolContext } from './registry'
 import type { WorkflowTools } from './workflow'
+import type { PersonalTools } from './personal'
 
 /**
  * Replay authorization.
@@ -57,6 +58,27 @@ beforeEach(() => {
 afterEach(() => setMainLanguage('zh'))
 
 describe('run_workflow authorizes each step against this round', () => {
+  it.each([true,false])('branches on a real result and binds its typed fields (has tasks=%s)',async hasTasks=>{
+    const copy=vi.fn(),rows=hasTasks?[{id:'r1',title:'Actual title',dueAt:null,status:'pending',level:'normal'}]:[]
+    const steps:WorkflowStep[]=[step('list_reminders'),{tool:'copy_to_clipboard',label:'Copy result',args:{text:{$ref:'1.items.0.title'}},when:{ref:'1.total',op:'gt',value:0},otherwise:{tool:'copy_to_clipboard',args:{text:'No tasks'},label:'No tasks'}}]
+    vi.mocked(store.get).mockReturnValue(workflowOf(steps))
+    const result=await runTool('run_workflow',{id:'wf-1'},{...context(['run_workflow','list_reminders','copy_to_clipboard']),personal:{reminders:()=>rows,copy} as unknown as PersonalTools})
+    expect(result.ok).toBe(true)
+    expect(copy).toHaveBeenCalledExactlyOnceWith(hasTasks?'Actual title':'No tasks')
+    expect((result.data.results as Record<string,unknown>[])[0]).toMatchObject({total:rows.length})
+  })
+  it('refuses forward references at save, missing fields at replay, and newly disabled tools',async()=>{
+    const invalid=[{...step('copy_to_clipboard'),args:{text:{$ref:'1.title'}}}]
+    expect((await runTool('save_workflow',{name:'invalid',steps:invalid},{...ctx,allowedTools:['save_workflow']})).ok).toBe(false)
+    expect(store.save).not.toHaveBeenCalled()
+    const copy=vi.fn()
+    vi.mocked(store.get).mockReturnValue(workflowOf([step('list_reminders'),{...step('copy_to_clipboard'),args:{text:{$ref:'1.items.0.title'}}}]))
+    const full={...context(['run_workflow','list_reminders','copy_to_clipboard']),personal:{reminders:()=>[],copy} as unknown as PersonalTools}
+    expect((await runTool('run_workflow',{id:'wf-1'},full)).ok).toBe(false);expect(copy).not.toHaveBeenCalled()
+    const settings=mergeSettings({assistantAccess:{...ctx.settings.assistantAccess,disabledTools:['list_reminders']}})
+    const result=await runTool('run_workflow',{id:'wf-1'},{...full,settings})
+    expect(result.ok).toBe(false);expect(result.summary).toContain('权限设置中关闭')
+  })
   it('refuses a step the round never granted instead of widening the allowlist', async () => {
     const result = await runTool('run_workflow', { name: NAME }, context(['run_workflow']))
     expect(result.ok).toBe(false)

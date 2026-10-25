@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { directVoiceIntent, parseVoiceIntent, isCurrentWindowQuestion, needsAssistantContext, screenshotNeedsEditor } from './voice-intent'
 
 describe('unified voice decisions', () => {
+  it.each(['暂停朗读','继续朗读','把朗读音量调到40','查看我的CPU型号','跨屏截图','把选中文字先润色给我看','把刚才润色结果替换回原选区','我今天下载了哪些文件','查我最近打开的文件','这次用的是哪个提示词卡片？','哪些随记同步失败'])('routes the completed entry capability to real assistant tools: %s',text=>{
+    expect(directVoiceIntent(text)).toEqual({kind:'assistant'})
+  })
+  it('keeps generic CPU questions and dictated development requirements out of system actions',()=>{
+    expect(directVoiceIntent('什么是CPU？')).not.toEqual({kind:'assistant'})
+    expect(directVoiceIntent('帮我开发一个查询电脑CPU的功能')).toEqual({kind:'dictation'})
+  })
   it.each(['把我框选区域里的文字提取出来。', '我想让你分析这张截图，但先给我看一下准备发送的内容。'])('keeps region and upload-preview requests in the local editor first: %s', text => {
     expect(screenshotNeedsEditor(text)).toBe(true)
     expect(directVoiceIntent(text)).toEqual({ kind: 'assistant' })

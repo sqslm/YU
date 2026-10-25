@@ -3,6 +3,20 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+if ($request.action -eq 'system-volume') { . (Join-Path $PSScriptRoot 'system-volume.ps1'); exit 0 }
+if ($request.action -eq 'recent-files') {
+  $recent = [Environment]::GetFolderPath('Recent')
+  $shell = New-Object -ComObject WScript.Shell
+  try {
+    $files = @(Get-ChildItem -LiteralPath $recent -Filter '*.lnk' -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 300 | ForEach-Object {
+      $shortcut = $shell.CreateShortcut($_.FullName)
+      if ($shortcut.TargetPath) { @{path=$shortcut.TargetPath;recordedAt=$_.LastWriteTimeUtc.ToString('o');source='Windows Recent'} }
+      [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut)
+    })
+    @{files=$files;source='Windows Recent'} | ConvertTo-Json -Depth 4 -Compress
+  } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
+  exit 0
+}
 if ($request.action -eq 'ocr') {
   Add-Type -AssemblyName System.Runtime.WindowsRuntime
   [void][Windows.Storage.Streams.InMemoryRandomAccessStream,Windows.Storage.Streams,ContentType=WindowsRuntime]

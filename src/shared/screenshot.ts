@@ -1,5 +1,5 @@
-export interface ScreenshotFrame { pixels: Uint8Array; width: number; height: number; windows: CaptureRect[]; cursor: CapturePoint }
-export type ScreenshotAction = 'copy' | 'save' | 'ocr' | 'translate' | 'ask'
+export interface ScreenshotFrame { allScreens?: boolean; pixels: Uint8Array; width: number; height: number; windows: CaptureRect[]; cursor: CapturePoint }
+export type ScreenshotAction = 'copy' | 'save' | 'ocr' | 'translate' | 'ask' | 'pin'
 export interface ScreenshotTextRegion extends CaptureRect { text: string; fontSize?: number }
 export interface ScreenshotTranslation { width: number; height: number; regions: ScreenshotTextRegion[] }
 export interface ScreenshotResult { text?: string; saved?: boolean; translation?: ScreenshotTranslation }

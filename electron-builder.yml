@@ -10,11 +10,22 @@ files:
   - out/**
   - resources/icon.png
   - resources/tray/**
+  - resources/pdf-worker.cjs
   - package.json
   - LICENSE
   - THIRD_PARTY_NOTICES.md
   - licenses/**
+  - '!node_modules/pdfjs-dist/build/**'
+  - '!node_modules/pdfjs-dist/web/**'
+  - '!node_modules/pdfjs-dist/legacy/web/**'
+  - '!node_modules/pdfjs-dist/image_decoders/**'
+  - '!node_modules/pdfjs-dist/legacy/image_decoders/**'
+  - '!node_modules/pdfjs-dist/types/**'
+  - '!node_modules/pdfjs-dist/**/*.map'
+  - '!node_modules/pdfjs-dist/**/*.min.mjs'
 extraResources:
+  - from: resources/system-volume.ps1
+    to: system-volume.ps1
   - from: resources/voice-wake.ps1
     to: voice-wake.ps1
   - from: resources/windows-tools.ps1
@@ -33,6 +44,7 @@ asarUnpack:
   - node_modules/sherpa-onnx-node/**
   - node_modules/sherpa-onnx-win-x64/**
   - node_modules/koffi/**
+  - node_modules/@napi-rs/canvas-win32-x64-msvc/**
 # The shipped feed is the project's own GitHub releases: `/releases/latest/download/`
 # always serves the newest release's assets, so releasing is "upload rc.yml + setup
 # + blockmap" with no update server to run. TYPELESS_UPDATE_URL (or

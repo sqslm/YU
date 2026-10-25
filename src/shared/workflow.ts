@@ -56,12 +56,56 @@ export const WORKFLOW_STEP_TOOLS: readonly string[] = [
   'get_selection',
   'get_active_window',
   'get_disk_space'
+  ,'open_application','open_folder','open_file','open_url','search_files','search_file_contents','search_files_everything','get_current_folder','get_current_page',
+  'search_file_activity','get_system_info','get_system_volume','set_system_volume','control_note_audio','get_prompt_info','note_sync_status','control_speech','configure_speech','stop_speaking','briefing_delivery_status','send_briefing'
 ]
 
 export interface WorkflowStep {
   tool: string
   args: Record<string, unknown>
   label: string
+  when?: { ref: string; op: 'exists' | 'eq' | 'gt' | 'lt' | 'contains'; value?: unknown }
+  otherwise?: { tool: string; args: Record<string, unknown>; label: string }
+}
+
+function reference(ref: unknown, prior: number): string[] {
+  if(typeof ref!=='string')throw new Error(mt('结果引用必须指定前序步骤与字段'))
+  const parts=ref.split('.'), step=Number(parts.shift())
+  if(!Number.isInteger(step)||step<1||step>prior||parts.some(key=>!key||['__proto__','prototype','constructor'].includes(key)))throw new Error(mt('结果引用只能访问已完成步骤的字段'))
+  return [String(step),...parts]
+}
+
+function validateBindings(value: unknown, prior:number, depth=0):void {
+  if(depth>16)throw new Error(mt('工作流参数嵌套过深'))
+  if(Array.isArray(value)){for(const item of value)validateBindings(item,prior,depth+1)}
+  else if(isPlainRecord(value)){
+    if(Object.hasOwn(value,'$ref')){if(Object.keys(value).length!==1)throw new Error(mt('结果引用不能混合其他字段'));reference(value.$ref,prior)}
+    else for(const item of Object.values(value))validateBindings(item,prior,depth+1)
+  }
+}
+
+export function workflowValue(ref:string, results:readonly (Record<string,unknown>|undefined)[]):unknown {
+  const [step,...parts]=reference(ref,results.length)
+  let value:unknown=results[Number(step)-1]
+  for(const key of parts){if(typeof value!=='object'||value===null||!Object.hasOwn(value,key))return undefined;value=(value as Record<string,unknown>)[key]}
+  return value
+}
+export function bindWorkflowArgs(args:Record<string,unknown>,results:readonly (Record<string,unknown>|undefined)[]):Record<string,unknown> {
+  const bind=(value:unknown):unknown=>{
+    if(Array.isArray(value))return value.map(bind)
+    if(!isPlainRecord(value))return value
+    if(Object.hasOwn(value,'$ref')){const found=workflowValue(String(value.$ref),results);if(found===undefined)throw new Error(mt('前序步骤没有该结果字段'));return structuredClone(found)}
+    return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,bind(item)]))
+  }
+  validateBindings(args,results.length)
+  return bind(args) as Record<string,unknown>
+}
+export function workflowCondition(when:NonNullable<WorkflowStep['when']>,results:readonly (Record<string,unknown>|undefined)[]):boolean {
+  const value=workflowValue(when.ref,results)
+  if(when.op==='exists')return value!==undefined&&value!==null
+  if(when.op==='eq')return JSON.stringify(value)===JSON.stringify(when.value)
+  if(when.op==='gt'||when.op==='lt')return typeof value==='number'&&typeof when.value==='number'&&(when.op==='gt'?value>when.value:value<when.value)
+  return typeof value==='string'&&typeof when.value==='string'?value.includes(when.value):Array.isArray(value)&&value.some(item=>JSON.stringify(item)===JSON.stringify(when.value))
 }
 
 export interface Workflow {
@@ -139,7 +183,20 @@ export function normalizeWorkflowSteps(value: unknown): WorkflowStep[] {
     const label = clip(typeof item.label === 'string' ? item.label.trim() : '', MAX_WORKFLOW_LABEL) || tool
     // Args are copied so a later edit of the caller's object cannot rewrite a
     // saved workflow behind the store's back.
-    steps.push({ tool, args: stepArgs(item.args ?? item.arguments), label })
+    const args=stepArgs(item.args ?? item.arguments)
+    validateBindings(args,steps.length)
+    let when:WorkflowStep['when'], otherwise:WorkflowStep['otherwise']
+    if(item.when!==undefined){
+      if(!isPlainRecord(item.when)||!['exists','eq','gt','lt','contains'].includes(String(item.when.op)))throw new Error(mt('工作流条件无效'))
+      reference(item.when.ref,steps.length)
+      when={ref:String(item.when.ref),op:item.when.op as NonNullable<WorkflowStep['when']>['op'],...(Object.hasOwn(item.when,'value')?{value:structuredClone(item.when.value)}:{})}
+    }
+    if(item.otherwise!==undefined){
+      if(!when||!isPlainRecord(item.otherwise)||!WORKFLOW_STEP_TOOLS.includes(String(item.otherwise.tool)))throw new Error(mt('工作流备用分支无效'))
+      const args=stepArgs(item.otherwise.args);validateBindings(args,steps.length)
+      otherwise={tool:String(item.otherwise.tool),args,label:clip(String(item.otherwise.label||item.otherwise.tool),MAX_WORKFLOW_LABEL)}
+    }
+    steps.push({ tool, args:structuredClone(args), label, ...(when?{when}:{}),...(otherwise?{otherwise}:{}) })
   }
   return steps
 }

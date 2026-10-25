@@ -1,3 +1,4 @@
+import { mt } from '@shared/mainI18n'
 import { app, safeStorage } from 'electron'
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -115,6 +116,7 @@ export class SettingsStore {
 
   /** What actually lands in the file: every secret encrypted, plain text gone. */
   private diskView(source: Settings): Settings {
+    if(!this.canEncrypt() && (source.briefingDelivery.email.apiKey||source.briefingDelivery.push.apiKey))throw new Error(mt('系统安全存储不可用，未保存简报投递密钥'))
     if (!this.canEncrypt()) return source
     const view = structuredClone(source)
     this.seal(view.asr)
@@ -123,6 +125,9 @@ export class SettingsStore {
     for (const profile of view.profiles) this.seal(profile)
     for (const entry of Object.values(view.search.providers)) this.seal(entry)
     for (const entry of view.search.connections) this.seal(entry)
+    this.seal(view.briefingDelivery.email)
+    this.seal(view.briefingDelivery.push)
+    if(view.briefingDelivery.email.apiKey||view.briefingDelivery.push.apiKey)throw new Error(mt('简报投递密钥加密失败，未写入设置文件'))
     // The flat mirror is derived again at load time; never leave its key in clear text.
     view.search.apiKey = ''
     return view
@@ -137,6 +142,8 @@ export class SettingsStore {
     for (const profile of view.profiles) this.unseal(profile)
     for (const entry of Object.values(view.search.providers)) this.unseal(entry)
     for (const entry of view.search.connections) this.unseal(entry)
+    this.unseal(view.briefingDelivery.email)
+    this.unseal(view.briefingDelivery.push)
     view.search.apiKey = view.search.providers[view.search.provider].apiKey
     return view
   }

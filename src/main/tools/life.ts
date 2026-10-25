@@ -3,6 +3,8 @@ import { mainLanguage, mt } from '@shared/mainI18n'
 import { resolveReminderTime } from '../reminder-time'
 import type { ToolDefinition, ToolOutcome } from './registry'
 import type { BriefingSettings } from '@shared/types'
+import type { TtsSettings } from '@shared/speech'
+import type { BriefingDeliveryReceipt, DeliveryChannel } from '@shared/briefingDelivery'
 
 /**
  * Tools for the capabilities that used to be advertised as "not connected":
@@ -15,7 +17,7 @@ import type { BriefingSettings } from '@shared/types'
  * flips a setting. Keeping them separable lets the assistant turn individual
  * groups on without dragging the rest in.
  */
-export const LIFE_TOOLS = ['create_event', 'list_events', 'manage_event', 'daily_briefing', 'configure_briefing', 'speak_text', 'stop_speaking', 'sync_status', 'sync_control'] as const
+export const LIFE_TOOLS = ['create_event', 'list_events', 'manage_event', 'daily_briefing', 'configure_briefing', 'speak_text', 'stop_speaking', 'control_speech', 'configure_speech', 'sync_status', 'sync_control', 'send_briefing', 'briefing_delivery_status', 'configure_briefing_delivery'] as const
 
 /** Shapes the stores project into. Structural on purpose: `index.ts` owns the mapping. */
 export interface LifeEvent {
@@ -42,6 +44,10 @@ export interface LifeSyncStatus { enabled: boolean; signedIn: boolean; serverUrl
 export interface LifeBriefing { title: string; body: string; empty: boolean }
 
 export interface LifeTools {
+  briefingDeliverySettings?():Record<string,unknown>
+  configureBriefingDelivery?(patch:{email?:boolean;push?:boolean}):Promise<Record<string,unknown>>
+  sendBriefing?(channels?:DeliveryChannel[],signal?:AbortSignal):Promise<BriefingDeliveryReceipt[]>
+  briefingDeliveryHistory?():BriefingDeliveryReceipt[]
   event(id: string): LifeEvent | undefined
   events(range: { from: number; until: number }): LifeEvent[]
   saveEvent(input: LifeEventInput, id?: string): LifeEvent
@@ -50,6 +56,10 @@ export interface LifeTools {
   briefingSettings?(): BriefingSettings
   setBriefingSettings?(patch: Partial<BriefingSettings>): Promise<BriefingSettings>
   setTtsEnabled?(enabled: boolean): Promise<void>
+  speechSettings?():TtsSettings
+  speechVoices?():Promise<string[]>
+  setSpeechSettings?(patch:Partial<TtsSettings>):Promise<TtsSettings>
+  controlSpeech?(action:'pause'|'resume'|'status'):Promise<Record<string,unknown>>
   speak(text: string): Promise<{ spoken: number; skipped: boolean }>
   stopSpeaking(): void
   ttsEnabled(): boolean
@@ -91,7 +101,36 @@ function resolveEnd(expression: string, startAt: number, referenceTime: number):
   return resolved.dueAt
 }
 
-async function run(name: string, args: Record<string, unknown>, api: LifeTools, submittedAt = Date.now()): Promise<ToolOutcome> {
+async function run(name: string, args: Record<string, unknown>, api: LifeTools, submittedAt = Date.now(), signal?:AbortSignal): Promise<ToolOutcome> {
+  if(name==='configure_briefing_delivery'){
+    if(!api.configureBriefingDelivery||!api.briefingDeliverySettings)throw Error(mt('简报投递服务尚未就绪'))
+    const settings=Object.keys(args).length?await api.configureBriefingDelivery(args as {email?:boolean;push?:boolean}):api.briefingDeliverySettings()
+    return ok(mt('简报投递设置已读取或更新'),{settings})
+  }
+  if(name==='briefing_delivery_status'){
+    if(!api.briefingDeliveryHistory)throw Error(mt('简报投递服务尚未就绪'))
+    return ok(mt('已读取真实投递回执'),{receipts:api.briefingDeliveryHistory().slice(-20),note:mt('服务已受理仅表示收到消息 ID，不保证收件人已收到或阅读')})
+  }
+  if(name==='send_briefing'){
+    if(!api.sendBriefing)throw Error(mt('简报投递服务尚未就绪'))
+    const receipts=await api.sendBriefing(args.channel?[args.channel as DeliveryChannel]:undefined,signal)
+    const accepted=receipts.filter(row=>row.status==='accepted').length
+    const failed=receipts.filter(row=>row.status==='failed').length,unknown=receipts.filter(row=>row.status==='unknown').length
+    const summary=mt('简报投递：{{accepted}} 个服务已受理，{{failed}} 个失败，{{unknown}} 个状态未知',{accepted,failed,unknown})
+    return {ok:accepted===receipts.length,summary,data:{receipts,ok:accepted===receipts.length}}
+  }
+  if(name==='configure_speech'){
+    if(!api.speechSettings||!api.setSpeechSettings)throw Error(mt('朗读设置服务尚未就绪'))
+    if(args.voice && (!api.speechVoices||!(await api.speechVoices()).includes(String(args.voice))))throw Error(mt('本机未安装指定的朗读声音'))
+    if(args.volume!==undefined&&(!Number.isInteger(args.volume)||Number(args.volume)<0||Number(args.volume)>100)||args.rate!==undefined&&(!Number.isInteger(args.rate)||Number(args.rate)<-10||Number(args.rate)>10))throw Error(mt('朗读音量为 0–100，语速为 -10–10'))
+    const settings=Object.keys(args).length?await api.setSpeechSettings(args as Partial<TtsSettings>):api.speechSettings()
+    return ok(mt('朗读设置已更新'),{settings})
+  }
+  if(name==='control_speech'){
+    if(!api.controlSpeech)throw Error(mt('朗读控制服务尚未就绪'))
+    const state=await api.controlSpeech(args.action as 'pause'|'resume'|'status')
+    return ok(mt('朗读状态已读取'),state)
+  }
   if (name === 'create_event') {
     const title = string(args.title)
     if (!title) throw new Error(mt('请提供日程标题'))
@@ -229,6 +268,11 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools, 
 }
 
 const schemas: Record<typeof LIFE_TOOLS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
+  send_briefing:{description:'Send the current actual briefing via explicitly enabled, user-configured Resend email / ntfy mobile push. Requires a sending request. Report per-channel provider receipts and errors, never claim recipient delivery. No configuration means no sending.',properties:{channel:{type:'string',enum:['email','push']}}},
+  briefing_delivery_status:{description:'Read real persistent briefing delivery attempts, provider message IDs and failures. Accepted does not mean received/read by recipient.',properties:{}},
+  configure_briefing_delivery:{description:'Read delivery configuration status or enable/disable email/push for scheduled briefings. Keys and targets must be configured by the user in settings; this tool cannot change or disclose them. Does not send immediately.',properties:{email:{type:'boolean'},push:{type:'boolean'}}},
+  configure_speech:{description:'Read or persist Windows read-aloud settings: enabled, volume 0-100, rate -10 through 10, or installed voice name. This is TTS volume, not system master volume. Preserve unspecified settings; never silently enable speech.',properties:{enabled:{type:'boolean'},volume:{type:'number'},rate:{type:'number'},voice:{type:'string'}}},
+  control_speech:{description:'Pause or resume the existing local speech without restarting its text, or read actual playback status. If speaking=false report nothing is currently active; do not claim paused/resumed audio exists.',properties:{action:{type:'string',enum:['pause','resume','status']}},required:['action']},
   create_event: { description: 'Add a local calendar event from the actual request. start (and optional end) are natural-language time expressions parsed by the existing time parser, e.g. "明天下午三点" or "9:30"; never invent a time and never turn a schedule into a reminder. Set all_day for whole-day items. Missing details must be asked for in text.', properties: { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, all_day: { type: 'boolean' }, location: { type: 'string' }, notes: { type: 'string' }, lead_minutes: { type: 'number' } }, required: ['title', 'start'] },
   list_events: { description: 'Read actual confirmed calendar events. range: today/tomorrow/week/upcoming/yesterday by local calendar day, or day=YYYY-MM-DD for one date. Returns real IDs and absolute times; answer from these fields instead of counting down relative phrases.', properties: { range: { type: 'string', enum: ['today', 'tomorrow', 'week', 'upcoming', 'yesterday'] }, day: { type: 'string' }, query: { type: 'string' } } },
   manage_event: { description: 'Change a real event ID returned by list_events. action=update edits title/start/end/all_day/location/notes/lead_minutes in place and keeps the ID; cancel keeps the data recoverable and restore undoes it. Deletion is not available.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['update', 'cancel', 'restore'] }, title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, all_day: { type: 'boolean' }, location: { type: 'string' }, notes: { type: 'string' }, lead_minutes: { type: 'number' } }, required: ['id', 'action'] },
@@ -251,6 +295,7 @@ export const LIFE_DEFINITIONS: ToolDefinition[] = LIFE_TOOLS.map(name => ({ name
       const validType = field?.type === 'array' ? Array.isArray(value) && value.length <= (field.maxItems ?? 30) && value.every(tag => typeof tag === 'string' && tag.trim() && tag.length <= 100) : typeof value === field?.type
       if (!field || !validType || field.enum && !field.enum.includes(value as string)) throw new Error(mt('工具参数无效：{{name}}', { name: key }))
     }
-    return run(name, args, ctx.life, ctx.submittedAt)
+    if(name==='send_briefing'&&!ctx.workflowReplay&&!/(?:发送|发到|发给|推送|发我)|\b(?:send|email|push)\b/iu.test(ctx.question))throw Error(mt('请明确要求投递简报'))
+    return run(name, args, ctx.life, ctx.submittedAt, ctx.signal)
   }
 }))

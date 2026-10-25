@@ -16,6 +16,8 @@ import { DEFAULT_VOICE_COMMANDS, normalizeVoiceCommands } from './voiceCommands'
 import { DEFAULT_CALENDAR_SETTINGS, MAX_EVENT_LEAD_MINUTES } from './calendar'
 import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingSettings } from './briefing'
 import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings } from './speech'
+import { DEFAULT_BRIEFING_DELIVERY, normalizeBriefingDelivery } from './briefingDelivery'
+import { DEFAULT_ASSISTANT_ACCESS, normalizeAssistantAccess } from './assistantAccess'
 
 export const SETTINGS_VERSION = 1
 
@@ -56,6 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   // never chose, with an error that points at the network instead of the setup.
   selectionInsertMode: 'replace',
   assistantDownloadFolder: '',
+  briefingDelivery: structuredClone(DEFAULT_BRIEFING_DELIVERY),
+  assistantAccess: structuredClone(DEFAULT_ASSISTANT_ACCESS),
   voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
   wakeWord: { enabled: false, phrase: '你好语助手', deviceId: '' },
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
@@ -277,6 +281,8 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   }
   merged.selectionInsertMode = input.selectionInsertMode === 'append' ? 'append' : 'replace'
   merged.assistantDownloadFolder = typeof input.assistantDownloadFolder === 'string' ? input.assistantDownloadFolder.trim() : ''
+  merged.briefingDelivery=normalizeBriefingDelivery(input.briefingDelivery)
+  merged.assistantAccess = normalizeAssistantAccess(input.assistantAccess)
   merged.voiceCommands = normalizeVoiceCommands(input.voiceCommands)
   const phrase = typeof input.wakeWord?.phrase === 'string' ? input.wakeWord.phrase.trim().replace(/\s+/g, ' ') : ''
   // The device index is not validated against the live system here: unplugging a

@@ -1,4 +1,5 @@
 import { clipboard, type BrowserWindow } from 'electron'
+import { assistantAppExcluded } from '@shared/assistantAccess'
 import type {
   AnswerCardPayload,
   AskRetrieval,
@@ -243,6 +244,13 @@ export class Pipeline {
   private takePrompt = new Map<number, { kind: PromptKind; card: NamedPrompt; applied: boolean }>()
   /** Provider profile that answered the take in flight (null when legacy). */
   private usedProvider: { id: string; name: string } | null = null
+  private selectionPromptUse:Record<string,unknown>|null=null
+  selectionPromptReceipt():Record<string,unknown>|null {return this.selectionPromptUse?{...this.selectionPromptUse}:null}
+  private rememberSelectionPrompt(result:string):void {
+    if(!result.trim())return
+    const selected=this.takePrompt.get(this.runToken),prompt=selected?.applied?selected:null
+    this.selectionPromptUse={source:'selection',createdAt:Date.now(),promptKind:prompt?.kind??null,promptId:prompt?.card.id??null,promptName:prompt?.card.name??null,providerId:this.usedProvider?.id??null,providerName:this.usedProvider?.name??null}
+  }
   private runToken = 0
   private cardStreamVersion = 0
   private abort: AbortController | null = null
@@ -320,6 +328,8 @@ export class Pipeline {
 
   /** Starts (or skips) the surrounding-text read. Never throws, never rejects. */
   private readContext(): Promise<UiaSnapshot | null> {
+    const target=foregroundWindow()
+    if(assistantAppExcluded(target.appName,target.appPath,this.getSettings().assistantAccess))return Promise.resolve(null)
     // `TYPELESS_CONTEXT=off` is the escape hatch for a machine whose providers
     // hang: the read is already off the critical path, but a wedged provider
     // still costs a child process per take.
@@ -517,6 +527,7 @@ export class Pipeline {
     target: ForegroundInfo,
     snapshot: UiaSnapshot | null
   ): PromptContext {
+    if(assistantAppExcluded(target.appName,target.appPath,settings.assistantAccess))return {}
     const fieldContent = snapshot?.value.trim() ? snapshot.value : ''
     const area = inferInputAreaType({
       controlType: snapshot?.controlType,
@@ -949,7 +960,7 @@ export class Pipeline {
   }
 
   /** Explicit text editing shares the existing prompts, translation targets and LLM chain. */
-  async transformSelection(text: string, operation: 'polish' | 'translate', context: PromptContext): Promise<{ text: string; promptName: string } | null> {
+  async transformSelection(text: string, operation: 'polish' | 'translate', context: PromptContext): Promise<{ text: string; promptName: string; promptId?:string;promptKind?:PromptKind;providerId?:string;providerName?:string } | null> {
     if (this.isBusy) throw new Error(mt('正在处理上一条，稍后再试'))
     const token = ++this.runToken
     this.takePurpose = undefined
@@ -957,6 +968,7 @@ export class Pipeline {
     this.abort = controller
     this.stage = 'working'
     this.stageMode = operation === 'translate' ? 'translate' : 'dictation'
+    this.usedProvider = null
     const current = this.getSettings()
     const settings = { ...current, polish: { ...current.polish, enabled: true } }
     this.selectTakePrompt(this.stageMode, settings, context)
@@ -966,7 +978,9 @@ export class Pipeline {
       if (token !== this.runToken || controller.signal.aborted) return null
       const result = raw
       if (!result.trim()) throw new Error(mt('模型返回了空文本'))
-      return { text: result, promptName: this.takePrompt.get(token)?.card.name ?? '' }
+      const selected=this.takePrompt.get(token),prompt=selected?.applied?selected:null
+      const provider=this.usedProvider as {id:string;name:string}|null
+      return { text: result, promptName: prompt?.card.name ?? '', ...(prompt?{promptId:prompt.card.id,promptKind:prompt.kind}:{}), ...(provider?{providerId:provider.id,providerName:provider.name}:{}) }
     } catch (error) {
       if (controller.signal.aborted) return null
       throw error
@@ -1537,6 +1551,7 @@ export class Pipeline {
   }
 
   private assertSelectionTarget(target: ForegroundInfo): void {
+    if(assistantAppExcluded(target.appName,target.appPath,this.getSettings().assistantAccess))throw new Error(mt('此应用已排除上下文读取'))
     if (/1password|keepass|bitwarden|lastpass|password|密码/iu.test(`${target.appName} ${target.title}`)) throw new Error(mt('此应用不允许自动读取选区'))
     const current = foregroundWindow()
     if (current.pid !== target.pid || current.title !== target.title || current.className !== target.className) throw new Error(mt('目标窗口已变化，请重新选择文字'))
@@ -1721,7 +1736,9 @@ export class Pipeline {
     const comments = mode === 'dictation' ? commentSelection(text) : null
     if (!comments) {
       const output = unwrapModelText(await this.postProcess(mode, text, settings, signal, context, instruction))
-      return applyReplacements(mode === 'dictation' ? cleanPolishedText(output, text) : output, settings.replacements)
+      const result=applyReplacements(mode === 'dictation' ? cleanPolishedText(output, text) : output, settings.replacements)
+      this.rememberSelectionPrompt(result)
+      return result
     }
     const kind = this.promptKindFor(settings, context)
     const raw = await this.llm(settings, { messages: [
@@ -1730,7 +1747,9 @@ export class Pipeline {
       { role: 'system', content: 'Polish only the supplied comment prose, preserving language, meaning and identifiers. Return ONLY a JSON array with exactly the same line IDs and one text string per item. Do not add comment delimiters, code, newlines, explanations or extra items. Code and indentation are restored by the application.' },
       { role: 'user', content: JSON.stringify(comments.items) }
     ], temperature: this.temperatureFor(kind, settings), signal })
-    return comments.restore(raw, prose => applyReplacements(prose, settings.replacements))
+    const result=comments.restore(raw, prose => applyReplacements(prose, settings.replacements))
+    this.rememberSelectionPrompt(result)
+    return result
   }
 
   private async postProcess(

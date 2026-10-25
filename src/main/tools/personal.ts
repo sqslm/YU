@@ -7,10 +7,13 @@ import { nextOccurrence, resolveDeadline, resolveReminderTime } from '../reminde
 import { directVoiceIntent } from '../voice-intent'
 import type { ToolDefinition, ToolOutcome } from './registry'
 
-export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_reminder', 'create_note', 'search_notes', 'update_note_tags', 'update_note', 'extract_note_tasks', 'search_history', 'read_clipboard', 'copy_to_clipboard', 'open_page'] as const
+export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_reminder', 'create_note', 'search_notes', 'update_note_tags', 'update_note', 'extract_note_tasks', 'search_history', 'read_clipboard', 'copy_to_clipboard', 'open_page', 'control_note_audio', 'get_prompt_info', 'note_sync_status', 'prepare_selection_edit', 'apply_selection_edit'] as const
 export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'calendar', 'briefing', 'corrections', 'settings'] as const
 export type HubPage = typeof HUB_PAGES[number]
 export function personalCommand(text: string): { name: string; args: Record<string, unknown> } | null {
+  if(/^(?:(?:请|帮我)?(?:查|查看|告诉我))?(?:刚才|这次|上一条|本次).{0,10}(?:用了|使用|用的|实际使用).{0,8}(?:提示词|卡片).{0,8}[？?。！!]?$/u.test(text.trim()))return {name:'get_prompt_info',args:{}}
+  const audio=/^(?:请|帮我)?(暂停|继续|停止)(?:播放)?(?:随记)?录音[。！!]?$/u.exec(text.trim())
+  if(audio)return {name:'control_note_audio',args:{action:({暂停:'pause',继续:'resume',停止:'stop'} as Record<string,string>)[audio[1]]}}
   const match = /^(?:请|帮我)?(?:打开|进入)(?:语的|YU的|轻令的|软件的)?(概览|首页|历史记录|随记|提醒|待办|日程|日历|简报|纠正规则|设置)(?:页面|页)?[。！!]?$/iu.exec(text.trim()) ||
     /^open (?:the )?(?:YU )?(home|overview|history|notes|reminders|todos|calendar|briefing|corrections|settings)(?: page)?[.!]?$/iu.exec(text.trim())
   if (!match) return null
@@ -18,6 +21,9 @@ export function personalCommand(text: string): { name: string; args: Record<stri
   return { name: 'open_page', args: { page } }
 }
 export interface PersonalTools {
+  latestPromptUse?():Record<string,unknown>|null
+  prepareSelectionEdit?(operation:'polish'|'translate',signal:AbortSignal):Promise<{text:string;promptName:string}>
+  applySelectionEdit?(signal:AbortSignal):Promise<void>
   /**
    * `extra` carries what the tool read from the user's own words. The extractor
    * cannot produce these fields, and dropping them on the pending path used to
@@ -38,6 +44,8 @@ export interface PersonalTools {
   copy(text: string): void
   readClipboard(): string
   open(page: HubPage): void
+  controlNoteAudio?(action: 'play'|'pause'|'resume'|'stop'|'status', id?: string): Promise<Record<string,unknown>>
+  syncInfo?(): { enabled: boolean; signedIn: boolean; failures: Array<{ id: string; stage: string; error: string; at: number }> }
 }
 
 const string = (value: unknown): string => typeof value === 'string' ? value.trim() : ''
@@ -93,6 +101,47 @@ function searchText(text: string): string { return text.toLowerCase().replace(/�
 
 async function run(name: string, args: Record<string, unknown>, api: PersonalTools, question: string, signal: AbortSignal, submittedAt?: number): Promise<ToolOutcome> {
   signal.throwIfAborted()
+  if(name==='prepare_selection_edit'){
+    if(!api.prepareSelectionEdit)throw Error(mt('选区编辑服务尚未就绪'))
+    const result=await api.prepareSelectionEdit(args.operation as 'polish'|'translate',signal)
+    return ok(result.text,{text:result.text,promptName:result.promptName,preview:true,applied:false})
+  }
+  if(name==='apply_selection_edit'){
+    if(!api.applySelectionEdit)throw Error(mt('选区编辑服务尚未就绪'))
+    if(!/(?:替换|写回|应用|填入|放回).{0,20}(?:选区|选中|原文|文字|输入框)|(?:选区|选中|原文).{0,20}(?:替换|写回|应用)|\b(?:apply|replace|insert)\b/iu.test(question))throw Error(mt('请明确要求将预览结果替换回原选区'))
+    await api.applySelectionEdit(signal)
+    return ok(mt('已将预览结果替换回原选区'))
+  }
+  if (name === 'get_prompt_info') {
+    const rows = api.history('', dateRange(string(args.day),Date.now()))
+    const latest=api.latestPromptUse?.()
+    if(!args.id&&!args.day&&latest&&Number(latest.createdAt)>(rows[0]?.createdAt??0))return ok(mt('实际使用的提示词卡片：{{name}}',{name:String(latest.promptName||mt('未使用卡片'))}),latest)
+    const row = args.id ? rows.find(item => item.id === args.id) : rows[0]
+    if (!row) throw new Error(mt('没有找到使用提示词卡片的历史记录'))
+    return ok(mt('实际使用的提示词卡片：{{name}}', { name: row.promptName || row.promptId || mt('未使用卡片') }),
+      { historyId: row.id, createdAt: row.createdAt, promptKind: row.promptKind ?? null, promptId: row.promptId ?? null, promptName: row.promptName ?? null, providerId: row.providerId ?? null, providerName: row.providerName ?? null, app: row.app })
+  }
+  if (name === 'control_note_audio') {
+    if (!api.controlNoteAudio) throw new Error(mt('录音播放服务尚未就绪'))
+    const id = string(args.id), action = args.action as 'play'|'pause'|'resume'|'stop'|'status'
+    if (id && !api.notes().some(note => note.id === id)) throw new Error(mt('随记不存在'))
+    if (action === 'play' && !id) throw new Error(mt('请先查询并指定要播放的随记'))
+    return ok(mt('录音播放状态已更新'), await api.controlNoteAudio(action,id || undefined))
+  }
+  if (name === 'note_sync_status') {
+    if (!api.syncInfo) throw new Error(mt('同步状态服务尚未就绪'))
+    const state = api.syncInfo(), id = string(args.id)
+    const notes = api.notes().filter(note => !id || note.id === id)
+    if (id && !notes.length) throw new Error(mt('随记不存在'))
+    const items = notes.map(note => {
+      const failures=state.failures.filter(row=>row.id===note.id)
+      const pending=note.pending===true || Boolean(note.audioPath && note.audioUploaded!==true)
+      return { id: note.id, title: note.title || note.transcript.slice(0,80), version: note.version ?? null,
+        textSynced: Boolean(note.version && !note.pending), audioSynced: note.audioPath ? note.audioUploaded===true : null,
+        state: failures.length?'failed':pending?'pending':note.version?'synced':'local', failures }
+    }).filter(note=>args.failed_only!==true || note.failures.length)
+    return ok(mt('查到 {{count}} 条随记同步状态', { count: items.length }), { enabled: state.enabled, signedIn: state.signedIn, total: items.length, items: items.slice(0,30), failures: state.failures.filter(row=>!id||row.id===id), truncated: items.length>30 })
+  }
   if (name === 'create_reminder') {
     // The established full-template refinement / time parser is authoritative.
     // Never accept a model-invented timestamp or silently drop a correction.
@@ -278,7 +327,7 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
   if (name === 'search_history') {
 
     const rows = api.history(string(args.query), dateRange(string(args.day), Date.now()))
-    return ok(mt('找到 {{count}} 条记录', { count: rows.length }), { items: rows.slice(0, 10).map(row => ({ id: row.id, createdAt: row.createdAt, mode: row.mode, text: row.final.slice(0, 2000) })), truncated: rows.length > 10 })
+    return ok(mt('找到 {{count}} 条记录', { count: rows.length }), { items: rows.slice(0, 10).map(row => ({ id: row.id, createdAt: row.createdAt, mode: row.mode, text: row.final.slice(0, 2000), promptKind: row.promptKind, promptId: row.promptId, promptName: row.promptName })), truncated: rows.length > 10 })
   }
   if (name === 'read_clipboard') {
 
@@ -300,6 +349,11 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
 }
 
 const schemas: Record<typeof PERSONAL_TOOLS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
+  prepare_selection_edit:{description:'Generate a preview of polish/translation of the frozen actual selection. The original selection and actual transformed result are retained for a later apply_selection_edit. Does not apply or invent text.',properties:{operation:{type:'string',enum:['polish','translate']}},required:['operation']},
+  apply_selection_edit:{description:'Apply the previous actual prepare_selection_edit preview to its original selection, only on an explicit user apply/replace request. No text arguments allowed. Rechecks the original window, process and exact selection; fails if changed or expired.',properties:{}},
+  control_note_audio: { description: 'Play/pause/resume/stop actual saved note recordings, or read playback status. Resolve a real note ID with search_notes for play. Never synthesize a note transcript as a substitute for its recording.', properties: { action: { type:'string', enum:['play','pause','resume','stop','status'] }, id: { type:'string' } }, required:['action'] },
+  get_prompt_info: { description: 'Read prompt card ID/name/kind and provider recorded on an actual completed history entry, not current settings or the current window. Omit id for the latest entry, including null card fields if no card was applied; a newer actual selection transformation may be returned. Or use a real history id. day filters the local recording date.', properties: { id:{type:'string'}, day:{type:'string'} } },
+  note_sync_status: { description: 'Read actual per-note sync bookkeeping and recorded sync failures for the current account. id is a real note ID, omitted lists notes. failed_only filters actual attempted failures; pending or offline data is not called failed. A previous server version does not mean a newer local edit or its audio has synced.', properties: { id:{type:'string'}, failed_only:{type:'boolean'} } },
   update_note: { description: 'Rename or categorize an actual existing note ID, preserving its original transcript, polished text, audio and tags. title sets or clears its custom name. category_id uses a real returned ID (empty clears it); category_name uses an existing exact name or creates that category. Do not provide both category fields. Resolve latest/previous references with search_notes first. Executes directly without a confirmation popup.', properties: { id: { type: 'string' }, title: { type: 'string' }, category_id: { type: 'string' }, category_name: { type: 'string' } }, required: ['id'] },
   create_reminder: { description: 'Create clear reminders/todos using the existing parser. For a compound request, text MUST be the EXACT substring containing the entire reminder/todo clause, including all its corrections, negations and date context; exclude unrelated note or other action clauses. Omit text for a single reminder request. Never paraphrase or invent content. Ask for missing details in text; never invent times or open confirmation dialogs. An explicitly requested todo needs no alert time: preserve a planned day/weekend in its description. Optional priority (low/normal/high) and deadline (natural-language expression for when the work must be finished) are independent of the alert time. A date-only deadline is end of day; with no alert time it also becomes the alert. No timestamp arguments.', properties: { text: { type: 'string' }, priority: { type: 'string', enum: TODO_PRIORITIES }, deadline: { type: 'string' } } },
   list_reminders: { description: 'Query actual reminders and untimed todos, including untimed active tasks in day queries. kind=todo means only untimed tasks, reminder means timed, omitted means both. day: today/yesterday/tomorrow/YYYY-MM-DD. Returns real IDs, level, priority, priorityLabel, deadlineAt, status, absolute triggerTime, remainingSeconds at asOf. overdue is judged on deadlineAt when present and otherwise on the alert time, and never on completed/cancelled tasks. Ordered open first, then priority, then deadline. Do not use the original relative timeExpression as a countdown.', properties: { query: { type: 'string' }, status: { type: 'string', enum: ['active', 'pending', 'due', 'completed', 'cancelled', 'all'] }, today: { type: 'boolean' }, day: { type: 'string' }, kind: { type: 'string', enum: ['todo', 'reminder', 'all'] } } },
@@ -325,6 +379,6 @@ export const PERSONAL_DEFINITIONS: ToolDefinition[] = PERSONAL_TOOLS.map(name =>
       const validType = field?.type === 'array' ? Array.isArray(value) && value.length <= (field.maxItems ?? 30) && value.every(tag => typeof tag === 'string' && tag.trim() && tag.length <= 100) : typeof value === field?.type
       if (!field || !validType || field.enum && !field.enum.includes(value as string)) throw new Error(mt('工具参数无效：{{name}}', { name: key }))
     }
-    return run(name, args, ctx.personal, ctx.question, ctx.signal ?? new AbortController().signal, ctx.submittedAt)
+    return run(name, args, ctx.personal, ctx.workflowReplay && name === 'create_reminder' && typeof args.text === 'string' ? args.text : ctx.question, ctx.signal ?? new AbortController().signal, ctx.submittedAt)
   }
 }))

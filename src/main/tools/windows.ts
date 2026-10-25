@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, relative, parse } from 'node:path'
+import os from 'node:os'
+import { assistantAppExcluded, assistantPathAllowed, DEFAULT_ASSISTANT_ACCESS, type AssistantAccessSettings } from '@shared/assistantAccess'
 import { mt } from '@shared/mainI18n'
 import type { AssistantItem } from '@shared/assistant'
 import type { ToolDefinition, ToolOutcome } from './registry'
@@ -8,8 +10,9 @@ import type { PromptContext } from '@shared/prompts'
 import { isCurrentWindowQuestion } from '../voice-intent'
 import { FileIndex, DEFAULT_MAX_FILES, DEFAULT_TIMEOUT_MS, type ContentSearchOptions, type ContentSearchResult, type FileIndexDeps } from '../file-index'
 import { searchEverything, type EverythingOptions, type EverythingResult } from '../everything'
+import { browserDownloads } from '../file-activity'
 
-export const WINDOWS_TOOLS = ['open_application', 'open_folder', 'open_file', 'open_url', 'search_files', 'search_file_contents', 'search_files_everything', 'get_active_window', 'get_disk_space', 'get_current_folder', 'get_current_page'] as const
+export const WINDOWS_TOOLS = ['open_application', 'open_folder', 'open_file', 'open_url', 'search_files', 'search_file_contents', 'search_files_everything', 'get_active_window', 'get_disk_space', 'get_current_folder', 'get_current_page', 'get_system_info', 'get_system_volume', 'set_system_volume', 'search_file_activity'] as const
 const documents = new Set(['.pdf', '.txt', '.md', '.csv', '.json', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.rtf', '.mp3', '.wav', '.mp4'])
 const string = (value: unknown): string => typeof value === 'string' ? value.trim() : ''
 const within = (root: string, path: string): boolean => { const part = relative(root, path); return !part.startsWith('..') && !isAbsolute(part) }
@@ -53,7 +56,15 @@ export class WindowsTools {
     everythingOptions?: EverythingOptions
     /** Where a body scan looks when the model gives no roots. */
     contentRoots?: () => string[]
+    access?: () => AssistantAccessSettings
   }) {}
+
+  private async pathAllowed(path:string):Promise<boolean> {
+    const access=this.deps.access?.()??DEFAULT_ASSISTANT_ACCESS
+    const excludedPaths=await Promise.all(access.excludedPaths.map(path=>realpath(path).catch(()=>path)))
+    const allowedRoots=await Promise.all(access.allowedRoots.map(path=>realpath(path).catch(()=>path)))
+    return assistantPathAllowed(path,{...access,excludedPaths,allowedRoots})
+  }
 
   clear(): void { this.items.clear(); this.recent = []; this.permitted.clear() }
   beginTask(): void { this.permitted = new Set(this.items.keys()) }
@@ -76,6 +87,13 @@ export class WindowsTools {
     // A compound request belongs to the existing tool loop, not an app-name match.
     if (/[,，;；\n]|然后|并且|同时|\b(?:and then|then|also)\b|\band (?:open|find|save|create|search|calculate)\b/iu.test(input)) return null
     const url = /^(?:请|帮我)?(?:打开|open )\s*(https?:\/\/\S+)$/i.exec(input)
+    const downloads=/^(?:请|帮我)?(?:查看|查询|列出|查我)?我?(今天|昨天)(?:下载了(?:哪些|什么)|下载的)文件[？?。！!]?$/u.exec(input)
+    if(downloads)return {name:'search_file_activity',args:{kind:'downloads',day:downloads[1]==='今天'?'today':'yesterday'}}
+    if(/^(?:请|帮我)?(?:查看|查询|列出|查我)?我?最近(?:打开|使用)(?:过的|过|的)?(?:哪些|什么)?文件[？?。！!]?$/u.test(input))return {name:'search_file_activity',args:{kind:'recent'}}
+    if(/^(?:请|帮我)?(?:查(?:看|询)?|看看|告诉我)?(?:一下)?(?:我的|这台|本机|电脑|系统).{0,15}(?:CPU|处理器|内存).{0,12}[？?。!！]?$/iu.test(input)||/^内存(?:还有|剩余)多少[？?。!！]?$/u.test(input))return {name:'get_system_info',args:{}}
+    const volume=/^(?:请|帮我)?(?:把|将)?(?:系统|电脑)(?:的)?音量(?:调到|调整到|设为|设置为|改成)\s*(\d{1,3})\s*(?:%|％)?[。！!]?$/u.exec(input)
+    if(volume)return {name:'set_system_volume',args:{volume:Number(volume[1])}}
+    if(/^(?:请|帮我)?(?:把|将)?(?:系统|电脑)(?:设为|设置为)?(?:取消静音|静音)[。！!]?$/u.test(input))return {name:'set_system_volume',args:{muted:!input.includes('取消')}}
     if (url) return { name: 'open_url', args: { url: url[1] } }
     const driveFolder = /^(?:请|帮我)?打开\s*([a-z])\s*盘(?:里|中|下面|下)?的?\s*(.+?)\s*(?:文件夹|目录)[。！!]?$/i.exec(input)
     if (driveFolder && !/[<>:"|?*\x00-\x1f]/.test(driveFolder[2])) return { name: 'open_folder', args: { folder: `${driveFolder[1].toUpperCase()}:\\${driveFolder[2].replace(/\//g, '\\')}` } }
@@ -99,10 +117,47 @@ export class WindowsTools {
     const ok = (summary: string, data: Record<string, unknown> = {}): ToolOutcome => ({ ok: true, summary, data: { ...data, ok: true, summary } })
     const failed = (message: string): ToolOutcome => ({ ok: false, summary: message, error: message, data: { ok: false, error: message } })
     const schema = properties[name as keyof typeof properties] as Record<string, FieldSchema> | undefined
+    const access=this.deps.access?.()??DEFAULT_ASSISTANT_ACCESS
+    if(access.disabledTools.includes(name))return failed(mt('此工具已在权限设置中关闭：{{name}}',{name}))
+    if(['get_active_window','get_current_folder','get_current_page'].includes(name) && assistantAppExcluded(context?.appName,context?.appPath,access))return failed(mt('此应用已排除上下文读取'))
     if (!schema) return failed(mt('未知工具：{{name}}', { name }))
     for (const [key, value] of Object.entries(args)) {
       const field = Object.hasOwn(schema, key) ? schema[key] : undefined
       if (!field || !validArgument(field, value)) return failed(mt('工具参数无效：{{name}}', { name: key }))
+    }
+    if (name === 'get_system_info') {
+      const cpus = os.cpus(), total = os.totalmem(), free = os.freemem()
+      return ok(mt('CPU：{{cpu}}；内存 {{total}} GiB，可用 {{free}} GiB', { cpu: cpus[0]?.model || 'Unknown', total: (total/1024**3).toFixed(1), free: (free/1024**3).toFixed(1) }),
+        { cpu: cpus[0]?.model ?? '', logicalProcessors: cpus.length, totalMemoryBytes: total, freeMemoryBytes: free, platform: os.platform(), arch: os.arch() })
+    }
+    if(name==='search_file_activity'){
+      const query=string(args.query),kind=args.kind
+      if(kind!=='downloads'&&kind!=='recent')return failed(mt('工具参数无效：{{name}}',{name:'kind'}))
+      const downloads=kind==='downloads'?await browserDownloads(query,path=>this.pathAllowed(path)):null
+      const recent=kind==='recent'?await this.deps.native({action:'recent-files'},signal):null
+      const raw: Array<Record<string,unknown>>=downloads?downloads.records.map(row=>({...row})):(Array.isArray(recent?.files)?recent.files:[]) as Array<Record<string,unknown>>
+      const rows:Array<Record<string,unknown>>=[]
+      const now=new Date(),from=new Date(now.getFullYear(),now.getMonth(),now.getDate()-(args.day==='yesterday'?1:0)),until=new Date(from);until.setDate(until.getDate()+1)
+      for(const entry of raw){
+        signal?.throwIfAborted()
+        const path=await realpath(string(entry.path)).catch(()=>'')
+        if(!path||!path.toLowerCase().includes(query.toLowerCase())||!await this.pathAllowed(path))continue
+        const info=await stat(path).catch(()=>null)
+        if(!info?.isFile())continue
+        const at=Date.parse(String(entry.downloadedAt??entry.recordedAt))
+        if(args.day && (!Number.isFinite(at)||at<+from||at>=+until))continue
+        rows.push({...entry,path,name:basename(path),exists:true})
+        if(rows.length>=30)break
+      }
+      if(downloads&&!downloads.sources.length)return failed(mt('无法读取浏览器下载记录，可能未安装、被占用或被权限规则排除；没有使用文件修改时间代替下载时间'))
+      const items=this.remember(rows.filter(row=>documents.has(extname(String(row.path)).toLowerCase())).map(row=>({path:String(row.path),name:String(row.name),kind:'file' as const})))
+      return ok(mt('查到 {{n}} 条真实文件活动记录',{n:rows.length}),{records:rows,items,sources:downloads?.sources??['Windows Recent'],unavailable:downloads?.unavailable??[],partial:rows.length>=30||Boolean(downloads?.unavailable.length),coverage:mt(kind==='downloads'?'读取 Chrome/Edge 下载数据库中的真实开始时间与来源；不读取浏览记录，不以文件修改时间推算。':'读取 Windows 最近项目快捷方式及登记时间；未登记的应用操作不在覆盖范围，时间不是文件修改时间。')})
+    }
+    if (name === 'get_system_volume' || name === 'set_system_volume') {
+      if (name === 'set_system_volume' && (args.volume === undefined && args.muted === undefined || args.volume !== undefined && (!Number.isInteger(args.volume) || Number(args.volume)<0 || Number(args.volume)>100))) return failed(mt('请提供 0–100 的音量或静音状态'))
+      const result = await this.deps.native({ action: 'system-volume', ...(name === 'set_system_volume' ? args : {}) }, signal)
+      if (typeof result.volume !== 'number' || typeof result.muted !== 'boolean') return failed(mt('无法读取默认音频设备'))
+      return ok(mt('系统音量 {{volume}}%，{{state}}', { volume: result.volume, state: mt(result.muted ? '已静音' : '未静音') }), result)
     }
     const originalContext = async (action: 'explorer-folder' | 'browser-url'): Promise<Record<string, unknown>> => {
       if (!context?.windowHandle || !context.processId) throw new Error(mt('没有可用的原窗口信息，请从目标应用重新呼出助手'))
@@ -118,6 +173,7 @@ export class WindowsTools {
       if (!item.path) return failed(mt('请先查找并选择真实结果'))
       if (item.kind === 'file' && !documents.has(extname(item.path).toLowerCase())) return failed(mt('此文件类型不支持自动打开；不会运行脚本、安装程序或未知可执行文件'))
       const current = await realpath(item.path)
+      if(!await this.pathAllowed(current))return failed(mt('此目录不在允许的文件范围内'))
       if (current.toLowerCase() !== item.path.toLowerCase()) return failed(mt('目标路径已变化，请重新查找'))
       signal?.throwIfAborted()
       const error = await this.deps.openPath(current)
@@ -169,6 +225,7 @@ export class WindowsTools {
       const result = await originalContext('explorer-folder')
       if (!result.folder) return failed(mt('无法确定原窗口的文件夹，请提供具体路径'))
       const folder = await realpath(string(result.folder))
+      if(!await this.pathAllowed(folder))return failed(mt('此目录不在允许的文件范围内'))
       return ok(mt('已读取原窗口的文件夹'), { folder })
     }
     if (name === 'get_current_page') {
@@ -194,12 +251,13 @@ export class WindowsTools {
       const scope = await this.contentRoots(args.roots)
       if (!('roots' in scope)) return failed(scope.error)
       const limit = Math.min(Math.max(Math.trunc(Number(args.limit ?? 10)) || 10, 1), 20)
-      const result = await this.contentSearch({ query, roots: scope.roots, limit, signal })
+      const result = await this.contentSearch({ query, roots: scope.roots, limit, signal, pathAllowed:path=>this.pathAllowed(path) })
       signal?.throwIfAborted()
       const items = this.remember(result.hits.map(hit => ({ name: hit.name, path: hit.path, kind: 'file' as const })))
       const notes = [
         result.truncated ? TRUNCATION_NOTE[result.reason] ?? '' : '',
-        result.skipped.unsupported ? mt('{{n}} 个文件类型不支持正文检索（含 PDF）', { n: result.skipped.unsupported }) : '',
+        result.skipped.unsupported ? mt('{{n}} 个文件类型不支持正文检索', { n: result.skipped.unsupported }) : '',
+        result.skipped.unreadable ? mt('{{n}} 个文件未能读取（可能加密、损坏或超时）', { n: result.skipped.unreadable }) : '',
         result.skipped.binary ? mt('跳过 {{n}} 个二进制文件', { n: result.skipped.binary }) : ''
       ].filter(Boolean)
       const summary = result.hits.length
@@ -210,7 +268,7 @@ export class WindowsTools {
         items, query, scope: result.roots, scanned: result.scanned, truncated: result.truncated,
         partial: result.truncated, reason: result.reason, skipped: result.skipped,
         elapsedMs: result.elapsedMs, cache: result.cache,
-        coverage: mt('按正文检索 {{roots}}，最多扫描 {{files}} 个文件、{{seconds}} 秒；不解析 PDF，不扫描整个硬盘。', {
+        coverage: mt('按正文检索 {{roots}}，最多扫描 {{files}} 个文件、{{seconds}} 秒；支持文本型 PDF，不扫描整个硬盘。', {
           roots: result.roots.join('、'), files: DEFAULT_MAX_FILES, seconds: DEFAULT_TIMEOUT_MS / 1000
         })
       })
@@ -226,6 +284,9 @@ export class WindowsTools {
         return { ok: false, summary: mt('Everything 查询接口不可用，请改用内置文件搜索'), error: found.reason,
           data: { ok: false, available: false, backend: found.backend, query, reason: found.reason, fallback: ['search_files', 'search_file_contents'] } }
       }
+      const visible = [] as typeof found.hits
+      for(const hit of found.hits){const real=await realpath(hit.path).catch(()=>hit.path);if(await this.pathAllowed(real))visible.push({...hit,path:real})}
+      found.hits=visible
       const openable = found.hits.filter(hit => documents.has(extname(hit.path).toLowerCase()))
       const items = this.remember(openable.map(hit => ({ name: hit.name, path: hit.path, kind: 'file' as const })))
       const ids = new Map(items.map(item => [item.path.toLowerCase(), item.id]))
@@ -254,6 +315,7 @@ export class WindowsTools {
       throw error
     }
     if (!isAbsolute(root) || root === parse(root).root || root.startsWith('\\\\') || !(await stat(root)).isDirectory()) return failed(mt('请选择本地的具体文件夹，不支持全盘或网络目录'))
+    if(!await this.pathAllowed(root))return failed(mt('此目录不在允许的文件范围内'))
     if (name === 'open_folder') {
       signal?.throwIfAborted()
       const error = await this.deps.openPath(root)
@@ -280,7 +342,7 @@ export class WindowsTools {
     const found: Omit<AssistantItem, 'id'>[] = []
     for (const file of (Array.isArray(result.files) ? result.files : []).slice(0, 40) as { name: string; path: string; bytes: number; modified: string }[]) {
       const path = await realpath(file.path).catch(() => '')
-      if (path && within(root, path) && (await stat(path)).isFile()) found.push({ ...file, path, kind: 'file' })
+      if (path && within(root, path) && await this.pathAllowed(path) && (await stat(path)).isFile()) found.push({ ...file, path, kind: 'file' })
     }
     signal?.throwIfAborted()
     const items = this.remember(found)
@@ -300,13 +362,15 @@ export class WindowsTools {
     const folders = typeof this.deps.folders === 'function' ? this.deps.folders() : this.deps.folders
     const requested = (Array.isArray(input) ? input : typeof input === 'string' ? [input] : []).map(string).filter(Boolean).slice(0, 4)
     const explicit = requested.length > 0
-    const candidates = explicit ? requested : this.deps.contentRoots ? this.deps.contentRoots() : [folders.documents, folders.desktop, folders.downloads].filter(Boolean)
+    const allowed=this.deps.access?.().allowedRoots
+    const candidates = explicit ? requested : this.deps.contentRoots ? this.deps.contentRoots() : allowed?.length ? allowed : [folders.documents, folders.desktop, folders.downloads].filter(Boolean)
     const roots: string[] = []
     const seen = new Set<string>()
     for (const candidate of candidates) {
       const plausible = isAbsolute(candidate) && !candidate.startsWith('\\\\')
       const real = plausible ? await realpath(candidate).catch(() => '') : ''
       const info = real ? await stat(real).catch(() => null) : null
+      if (real && !await this.pathAllowed(real)) { if(explicit)return {error:mt('此目录不在允许的文件范围内')};continue }
       if (!real || !info?.isDirectory() || real === parse(real).root) {
         if (explicit) return { error: invalid }
         continue
@@ -327,11 +391,16 @@ export class WindowsTools {
   }
   private async everythingSearch(query: string, limit: number, signal?: AbortSignal): Promise<EverythingResult> {
     if (this.deps.everything) return this.deps.everything(query, limit, signal)
-    return searchEverything(query, { ...this.deps.everythingOptions, limit, signal })
+    const access=this.deps.access?.()
+    return searchEverything(query, { ...this.deps.everythingOptions, ...(access?{port:access.everythingPort,http:access.everythingHttp,cliPath:access.everythingCli}:{}), limit, signal })
   }
 }
 
 const properties = {
+  search_file_activity:{kind:{type:'string',enum:['downloads','recent']},query:{type:'string'},day:{type:'string',enum:['today','yesterday']}},
+  get_system_info: {},
+  get_system_volume: {},
+  set_system_volume: { volume: { type: 'integer', description: 'Explicit system master volume 0-100' }, muted: { type: 'boolean' } },
   get_current_folder: {},
   get_current_page: {},
   get_active_window: {},
@@ -345,7 +414,10 @@ const properties = {
   search_files_everything: { query: { type: 'string', description: 'File name or path fragment. Everything matches names and paths, never file bodies.' }, limit: { type: 'integer', description: 'How many matches to keep, 1-50; larger values are clamped.' } }
 }
 export const WINDOWS_DEFINITIONS: ToolDefinition[] = WINDOWS_TOOLS.map(name => ({ name,
-  description: ({ get_current_folder: 'Get the real original Explorer folder through Shell by the frozen window handle. Fails on unavailable or ambiguous tabs; never infer a path from the title.', get_current_page: 'Read the original browser address through native accessibility. Then use read_webpage for public content. No cookies or access to logged-in page content; ask for a link when unavailable.', get_active_window: 'Get the original foreground application snapshot captured when this task started. Does not inspect a newly focused window or read its document content.', get_disk_space: 'Read actual ready local disk total/free/used bytes through Windows. No guessed capacity values.', open_application: 'Find registered Windows desktop and Start Apps applications by name; launch a unique match directly without another confirmation. Multiple candidates require user choice by returned id.', open_folder: 'Open a requested specific local folder in Explorer directly, without another confirmation.', open_file: 'Open a requested actual document result by id directly, without another confirmation. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open a requested HTTP/HTTPS URL directly in the default browser, without another confirmation.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus bounded folder fallback. downloads uses the saved custom folder or the Windows known folder; folder=current resolves the original Explorer window. Use type=archive for ZIP/RAR/7Z etc; recursive=true only if requested. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.', search_file_contents: 'Find which documents actually contain given words, by reading body text: plain text plus .docx/.xlsx/.pptx (unzipped in-process). PDF bodies are NOT readable, so never claim a PDF matched. Default scope is Documents, Desktop, Downloads; bounded by file count, file size and a total time budget, and may set truncated=true. Returns matches with a snippet, newest first. Best for "which document mentioned X".', search_files_everything: 'Look a file name or path fragment up in the Everything (voidtools) index — instant, whole-disk, names and paths only, never file bodies. Prefer it over search_files/recursive for "where is the file called X". When it reports available=false the machine has no usable Everything: say so and fall back to search_files or search_file_contents in the next round.' })[name],
-  parameters: { type: 'object', properties: properties[name], additionalProperties: false, required: ({ open_file: ['id'], open_url: ['url'], search_file_contents: ['query'], search_files_everything: ['query'] } as Record<string, string[]>)[name] ?? [] },
-  run: (args, ctx) => ctx.windows!.run(name, args, ctx.signal, ctx.taskContext)
+  description: ({ search_file_activity: 'Search actual Chrome/Edge download records (kind=downloads) or Windows Recent shortcut registration records (kind=recent), optionally today/yesterday. Returns actual provenance/time, not file modification time. Missing/locked sources are reported explicitly.', get_system_info: 'Read actual CPU model, logical processors and total/free system memory. Never guess hardware.', get_system_volume: 'Read the default Windows output device master volume and mute state.', set_system_volume: 'Set master system volume 0-100 or mute/unmute only when explicitly requested, then read back actual state. This changes system output, not TTS-only volume.', get_current_folder: 'Get the real original Explorer folder through Shell by the frozen window handle. Fails on unavailable or ambiguous tabs; never infer a path from the title.', get_current_page: 'Read the original browser address through native accessibility. Then use read_webpage for public content. No cookies or access to logged-in page content; ask for a link when unavailable.', get_active_window: 'Get the original foreground application snapshot captured when this task started. Does not inspect a newly focused window or read its document content.', get_disk_space: 'Read actual ready local disk total/free/used bytes through Windows. No guessed capacity values.', open_application: 'Find registered Windows desktop and Start Apps applications by name; launch a unique match directly without another confirmation. Multiple candidates require user choice by returned id.', open_folder: 'Open a requested specific local folder in Explorer directly, without another confirmation.', open_file: 'Open a requested actual document result by id directly, without another confirmation. No executables/scripts. If multiple search results, ask user to choose; never guess.', open_url: 'Open a requested HTTP/HTTPS URL directly in the default browser, without another confirmation.', search_files: 'Search real file metadata in a specific local folder, using Windows Search plus bounded folder fallback. downloads uses the saved custom folder or the Windows known folder; folder=current resolves the original Explorer window. Use type=archive for ZIP/RAR/7Z etc; recursive=true only if requested. No content search or whole-disk crawl. Date means modification date. Returns ids, paths and ordering. Use a later tool round to open a unique result.', search_file_contents: 'Find which documents actually contain given words, by reading body text: plain text plus .docx/.xlsx/.pptx (unzipped in-process). Text-based PDF bodies are parsed in a bounded worker; scanned/encrypted/damaged PDFs may be unreadable and are reported. Default scope is Documents, Desktop, Downloads; bounded by file count, file size and a total time budget, and may set truncated=true. Returns matches with a snippet, newest first. Best for "which document mentioned X".', search_files_everything: 'Look a file name or path fragment up in the Everything (voidtools) index — instant, whole-disk, names and paths only, never file bodies. Prefer it over search_files/recursive for "where is the file called X". When it reports available=false the machine has no usable Everything: say so and fall back to search_files or search_file_contents in the next round.' })[name],
+  parameters: { type: 'object', properties: properties[name], additionalProperties: false, required: ({ search_file_activity: ['kind'], open_file: ['id'], open_url: ['url'], search_file_contents: ['query'], search_files_everything: ['query'] } as Record<string, string[]>)[name] ?? [] },
+  run: (args, ctx) => {
+    if (name === 'set_system_volume' && !ctx.workflowReplay && !/音量|静音|声音|\b(?:volume|mute|unmute)\b/iu.test(ctx.question)) throw new Error(mt('本次请求未授权修改系统音量'))
+    return ctx.windows!.run(name, args, ctx.signal, ctx.taskContext)
+  }
 }))

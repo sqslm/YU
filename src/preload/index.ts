@@ -29,6 +29,7 @@ const api: TypelessApi = {
     }
   },
   screenshot: {
+    allScreens:()=>ipcRenderer.invoke('screenshot:all-screens'),
     open: () => ipcRenderer.invoke('screenshot:open'),
     frame: () => ipcRenderer.invoke('screenshot:frame'),
     ready: () => ipcRenderer.invoke('screenshot:ready'),
@@ -96,6 +97,9 @@ const api: TypelessApi = {
     briefing: () => ipcRenderer.invoke('briefing:latest'),
     refreshBriefing: () => ipcRenderer.invoke('briefing:refresh'),
     briefingHistory: () => ipcRenderer.invoke('briefing:history'),
+    briefingDeliveryHistory:()=>ipcRenderer.invoke('briefing:delivery-history'),
+    sendBriefing:()=>ipcRenderer.invoke('briefing:send'),
+    onBriefingDelivery:callback=>{const listener=():void=>callback();ipcRenderer.on('briefing:delivery-changed',listener);return ()=>ipcRenderer.removeListener('briefing:delivery-changed',listener)},
     onBriefing: callback => {
       const listener = (_event: unknown, value: import('@shared/briefing').Briefing): void => callback(value)
       ipcRenderer.on('briefing:changed', listener)
@@ -187,6 +191,7 @@ const api: TypelessApi = {
     }
   },
   notes: {
+    audioControl:(action,id,options)=>ipcRenderer.invoke('note-audio:control',action,id,options),
     list: () => ipcRenderer.invoke('notes:list'),
     createText: (input) => ipcRenderer.invoke('notes:createText', input),
     importAudio: (categoryId) => ipcRenderer.invoke('notes:importAudio', categoryId),
@@ -306,6 +311,12 @@ const api: TypelessApi = {
       ipcRenderer.invoke('models:list', input)
   },
   bar: {
+    onNoteAudio:callback=>{
+      const listener=(_event:unknown,request:import('@shared/noteAudio').NoteAudioRequest):void=>callback(request)
+      ipcRenderer.on('note-audio:command',listener)
+      return ()=>ipcRenderer.removeListener('note-audio:command',listener)
+    },
+    replyNoteAudio:reply=>ipcRenderer.invoke('note-audio:reply',reply),
     onLayout: (callback) => {
       const listener = (_event: unknown, layout: import('@shared/types').BarWindowLayout): void => callback(layout)
       ipcRenderer.on('bar:layout', listener)

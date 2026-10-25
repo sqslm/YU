@@ -13,6 +13,7 @@ function readReminder(row: Record<string, unknown>): Reminder {
   const parsed = JSON.parse(String(row.data)) as Reminder
   return { ...parsed, priority: normalizePriority(parsed.priority), deadlineAt: typeof parsed.deadlineAt === 'number' ? parsed.deadlineAt : null }
 }
+const recurrenceKey = (rule:Reminder['recurrence']):string => JSON.stringify(rule ? [rule.frequency,rule.hour,rule.minute,rule.interval??1,rule.day??null,rule.month??null,(rule.interval??1)>1?rule.anchor??null:null,rule.count??null,rule.until??null,[...(rule.weekdays??[])].sort()] : null)
 
 /** Same local SQLite engine as history, kept independent of history retention. */
 export class ReminderStore {
@@ -58,18 +59,20 @@ export class ReminderStore {
   save(input: ReminderInput, id?: string): Reminder {
     const old = id ? this.get(id) : undefined
     if (id && !old) throw new Error(mt('提醒不存在'))
-    const sameSchedule = old && old.dueAt === input?.dueAt && JSON.stringify(old.recurrence) === JSON.stringify(input.recurrence)
+    const sameSchedule = old && old.dueAt === input?.dueAt && recurrenceKey(old.recurrence) === recurrenceKey(input.recurrence)
     if (!input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 300) throw new Error(mt('请输入 1–300 字的提醒事项'))
     if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > 4000)) throw new Error(mt('提醒备注不能超过 4000 字'))
     if (!['normal', 'strong'].includes(input.level) || !['manual', 'voice', 'note'].includes(input.source)) throw new Error(mt('提醒类型无效'))
     if (input.dueAt !== null && (!Number.isSafeInteger(input.dueAt) || input.dueAt <= this.now() && !(sameSchedule && old.status !== 'pending') || input.dueAt > 8640000000000000)) throw new Error(mt('请选择将来的提醒时间'))
     if (input.recurrence !== null && (!validRecurrence(input.recurrence) || input.dueAt === null)) throw new Error(mt('重复规则无效'))
+    if (input.recurrence?.until !== undefined && input.dueAt! > input.recurrence.until) throw new Error(mt('首次提醒不能晚于结束日期'))
     // A deadline may already be in the past (that task is simply overdue); only the shape is checked.
     const deadlineAt = input.deadlineAt === undefined ? old?.deadlineAt ?? null : input.deadlineAt
     if (deadlineAt !== null && (!Number.isSafeInteger(deadlineAt) || deadlineAt > 8640000000000000)) throw new Error(mt('截止时间无效'))
     const reminder: Reminder = { title: input.title.trim(), description: (input.description ?? old?.description ?? '').trim(), dueAt: input.dueAt, level: input.level,
       priority: normalizePriority(input.priority, normalizePriority(old?.priority)), deadlineAt,
-      recurrence: input.recurrence, source: old?.source ?? input.source, noteId: old?.noteId ?? input.noteId,
+      recurrence: input.recurrence ? { ...input.recurrence, anchor: input.recurrence.anchor ?? input.dueAt! } : null,
+      occurrences: sameSchedule ? old.occurrences ?? 0 : 0, source: old?.source ?? input.source, noteId: old?.noteId ?? input.noteId,
       timeExpression: input.timeExpression, id: id ?? randomUUID(), createdAt: old?.createdAt ?? this.now(),
       updatedAt: this.now(), status: sameSchedule ? old.status : 'pending', deliveredAt: sameSchedule ? old.deliveredAt : null,
       snoozedUntil: sameSchedule ? old.snoozedUntil : undefined, lastCompletedAt: old?.lastCompletedAt,
@@ -107,7 +110,8 @@ export class ReminderStore {
     if (!row) throw new Error(mt('提醒不存在'))
     if (action === 'restore') {
       if (row.status !== 'completed' && row.status !== 'cancelled') throw new Error(mt('仅可恢复已完成或已取消的提醒'))
-      const dueAt = row.recurrence ? nextOccurrence(row.recurrence, this.now()) : row.dueAt !== null && row.dueAt > this.now() ? row.dueAt : null
+      const dueAt = row.recurrence ? nextOccurrence(row.recurrence, this.now(), row.occurrences ?? 0) : row.dueAt !== null && row.dueAt > this.now() ? row.dueAt : null
+      if (row.recurrence && dueAt === null) throw new Error(mt('重复提醒已结束，请修改规则后再恢复'))
       return this.write({ ...row, dueAt, status: 'pending', deliveredAt: null, snoozedUntil: undefined, updatedAt: this.now() })
     }
     if (!['pending', 'due'].includes(row.status)) throw new Error(mt('这条提醒已处理'))
@@ -117,15 +121,19 @@ export class ReminderStore {
       return this.write({ ...row, dueAt, snoozedUntil: dueAt, status: 'pending', deliveredAt: null, updatedAt: this.now() })
     }
     if (action !== 'cancel' && action !== 'complete') throw new Error(mt('提醒操作无效'))
-    if (action === 'complete' && row.recurrence) return this.write({ ...row,
-      dueAt: nextOccurrence(row.recurrence, Math.max(this.now(), row.dueAt ?? this.now())), status: 'pending', deliveredAt: null,
-      snoozedUntil: undefined, lastCompletedAt: this.now(), updatedAt: this.now() })
+    if (action === 'complete' && row.recurrence) {
+      const occurrences = (row.occurrences ?? 0) + 1
+      const dueAt = nextOccurrence(row.recurrence, Math.max(this.now(), row.dueAt ?? this.now()), occurrences)
+      return this.write({ ...row, occurrences, dueAt: dueAt ?? row.dueAt, status: dueAt === null ? 'completed' : 'pending', deliveredAt: null,
+        snoozedUntil: undefined, lastCompletedAt: this.now(), updatedAt: this.now() })
+    }
     return this.write({ ...row, status: action === 'complete' ? 'completed' : 'cancelled', updatedAt: this.now() })
   }
   remove(id: string): void { this.db.prepare('DELETE FROM reminders WHERE id = ?').run(id) }
   rebaseRecurrences(): void {
     for (const row of this.scheduled()) if (row.recurrence && row.dueAt! > this.now() && row.snoozedUntil !== row.dueAt) {
-      this.write({ ...row, dueAt: nextOccurrence(row.recurrence, this.now()), updatedAt: this.now() })
+      const dueAt = nextOccurrence(row.recurrence, this.now(), row.occurrences ?? 0)
+      this.write({ ...row, dueAt: dueAt ?? row.dueAt, status: dueAt === null ? 'completed' : row.status, updatedAt: this.now() })
     }
   }
   close(): void { this.db.close() }

@@ -1,6 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TTS_SETTINGS, MAX_SPEECH_CHARS, normalizeTtsSettings, speechText, type TtsSettings } from '@shared/speech'
 import { SpeechService, createWindowsSpeechRunner, type SpeechRequest, type SpeechResult, type SpeechRunner } from './speech'
+
+it('acknowledges real start and preserves the utterance across pause/resume', async () => {
+  let started:(()=>void)|undefined, finish:((r:SpeechResult)=>void)|undefined
+  const run:SpeechRunner=(_request,_signal,onStarted)=>{started=onStarted;return new Promise(resolve=>{finish=resolve})}
+  run.control=vi.fn(async()=>({ok:true}))
+  const service=new SpeechService({settings:()=>({tts:{...DEFAULT_TTS_SETTINGS,enabled:true}}),run,log:vi.fn()})
+  let acknowledged=false
+  const start=service.start('Read this text').then(value=>{acknowledged=true;return value})
+  await Promise.resolve();expect(acknowledged).toBe(false)
+  started!();expect(await start).toMatchObject({skipped:false})
+  expect(await service.pause()).toMatchObject({speaking:true,paused:true})
+  expect(await service.resume()).toMatchObject({speaking:true,paused:false})
+  expect(run.control).toHaveBeenNthCalledWith(1,'pause')
+  expect(run.control).toHaveBeenNthCalledWith(2,'resume')
+  finish!({ok:true});await Promise.resolve();await Promise.resolve()
+  expect(service.status().speaking).toBe(false)
+})
 
 /**
  * Every test drives {@link SpeechService} through a fake runner. Nothing here

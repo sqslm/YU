@@ -214,7 +214,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   const bodyInputRef = useRef<HTMLTextAreaElement | null>(null)
   const focusNewNoteRef = useRef<string | null>(null)
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
   const micRef = useRef<MicCapture | null>(null)
   /**
    * The server-side text the drafts were last built from. Comparing against it
@@ -662,95 +661,46 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   // One element for the whole page: a fresh `<audio>` per note would leak the
   // decoder and race the previous playback's `timeupdate` events.
   useEffect(() => {
-    const el = audioRef.current
-    if (!el) return
-    const onTime = (): void => setPositionMs(el.currentTime * 1000)
-    const onMeta = (): void => {
-      if (Number.isFinite(el.duration) && el.duration > 0) setDurationMs(el.duration * 1000)
+    let alive=true
+    const refresh=async():Promise<void>=>{
+      try {
+        const current=await window.api.notes.audioControl('status')
+        if(!alive)return
+        const selected=current.id===selectedId
+        setPlaying(selected && current.state==='playing')
+        setPositionMs(selected?current.positionMs:0)
+        setDurationMs(selected?current.durationMs:0)
+      }catch { if(alive)setPlaying(false) }
     }
-    const onPlay = (): void => setPlaying(true)
-    const onPause = (): void => setPlaying(false)
-    const onEnded = (): void => {
-      setPlaying(false)
-      setPositionMs(0)
-    }
-    el.addEventListener('timeupdate', onTime)
-    el.addEventListener('loadedmetadata', onMeta)
-    el.addEventListener('durationchange', onMeta)
-    el.addEventListener('play', onPlay)
-    el.addEventListener('pause', onPause)
-    el.addEventListener('ended', onEnded)
-    return () => {
-      el.removeEventListener('timeupdate', onTime)
-      el.removeEventListener('loadedmetadata', onMeta)
-      el.removeEventListener('durationchange', onMeta)
-      el.removeEventListener('play', onPlay)
-      el.removeEventListener('pause', onPause)
-      el.removeEventListener('ended', onEnded)
-      el.pause()
-      el.src = ''
-      el.load()
-    }
-  }, [])
+    setScrubMs(null);void refresh()
+    const timer=setInterval(()=>void refresh(),500)
+    return ()=>{alive=false;clearInterval(timer)}
+  },[selectedId,audioKey])
 
-  useEffect(() => {
-    const el = audioRef.current
-    setPlaying(false)
-    setPositionMs(0)
+  useEffect(()=>{
+    if(selectedId && durationMs>0)void window.api.notes.audioControl('rate',selectedId,{rate}).catch(()=>{})
+  },[rate,selectedId,durationMs])
+
+  const totalMs=durationMs>0?durationMs:(selected?.durationMs??0)
+  const shownMs=scrubMs??positionMs
+  const maxMs=Math.max(totalMs,1)
+  const togglePlay=():void=>{
+    if(!selectedId||!audioKey)return
+    const id=selectedId
+    void window.api.notes.audioControl('status').then(state=>window.api.notes.audioControl(
+      state.id===id&&state.state==='playing'?'pause':state.id===id&&state.state==='paused'?'resume':'play',id,{rate}
+    )).then(current=>{
+      if(selectedRef.current?.id!==id)return
+      setPlaying(current.state==='playing');setPositionMs(current.positionMs);setDurationMs(current.durationMs)
+    }).catch(()=>setNotice(t('notes.playFailed')))
+  }
+  const commitSeek=(value:number|number[]):void=>{
+    if(!selectedId||durationMs<=0)return
+    const ms=Math.max(0,Math.min(Array.isArray(value)?value[0]:value,durationMs))
     setScrubMs(null)
-    setDurationMs(0)
-    if (!el) return
-    el.pause()
-    el.src = ''
-    el.load()
-    if (!selectedId || !audioKey) return
-    let alive = true
-    void window.api.notes
-      .audioUrl(selectedId)
-      .then((url) => {
-        if (!alive || !url) return
-        el.src = url
-        el.load()
-      })
-      .catch(() => undefined)
-    return () => {
-      alive = false
-    }
-  }, [selectedId, audioKey])
-
-  useEffect(() => {
-    const el = audioRef.current
-    if (el) el.playbackRate = rate
-  }, [rate])
-
-  const totalMs = durationMs > 0 ? durationMs : (selected?.durationMs ?? 0)
-  const shownMs = scrubMs ?? positionMs
-  const maxMs = Math.max(totalMs, 1)
-
-  const togglePlay = (): void => {
-    const el = audioRef.current
-    if (!el || !audioKey) return
-    if (el.paused) {
-      el.playbackRate = rate
-      void el.play().catch(() => setNotice(t('notes.playFailed')))
-      return
-    }
-    el.pause()
+    void window.api.notes.audioControl('seek',selectedId,{positionMs:ms}).then(current=>setPositionMs(current.positionMs)).catch(()=>setNotice(t('notes.playFailed')))
   }
-
-  const commitSeek = (value: number | number[]): void => {
-    const el = audioRef.current
-    if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return
-    const ms = Math.max(0, Math.min(Array.isArray(value) ? value[0] : value, el.duration * 1000))
-    setScrubMs(null)
-    setPositionMs(ms)
-    el.currentTime = ms / 1000
-  }
-
-  const skipAudio = (seconds: number): void => {
-    const el = audioRef.current
-    if (el) commitSeek(el.currentTime * 1000 + seconds * 1000)
-  }
+  const skipAudio=(seconds:number):void=>commitSeek(positionMs+seconds*1000)
 
   const copyDraft = async (text: string): Promise<void> => {
     setNotice(''); setFlash('')
@@ -1622,7 +1572,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
         </Box>
       </Box>
 
-      <audio ref={audioRef} preload="metadata" style={{ display: 'none' }} />
+
 
       <Menu anchorEl={createMenuAt} open={Boolean(createMenuAt)} onClose={() => setCreateMenuAt(null)}>
         <MenuItem data-notes-create-blank onClick={() => void createTextNote()} sx={{ fontSize: 12.5 }}>{t('notes.newBlankText')}</MenuItem>

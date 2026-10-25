@@ -44,6 +44,8 @@ import { WORKFLOW_DEFINITIONS, WORKFLOW_TOOLS, type WorkflowTools } from './work
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
+  /** Set only by validated saved-workflow replay; it never widens allowedTools. */
+  workflowReplay?: boolean
   taskContext?: import('@shared/prompts').PromptContext
   submittedAt?: number
   selectionGuard?: () => void
@@ -142,7 +144,7 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
 }
 
 /** Reuse reads and identical personal writes within one task, never across tasks. */
-const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder', 'update_note_tags', 'get_selection', 'read_clipboard', 'analyze_screenshot'])
+const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_note', 'extract_note_tasks', 'manage_reminder', 'update_note_tags', 'get_selection', 'read_clipboard', 'analyze_screenshot', 'send_briefing', 'prepare_selection_edit', 'apply_selection_edit'])
 
 /** Planned queries in flight at once. The plan is two; more is throttling bait. */
 const SEARCH_PLAN_CONCURRENCY = 2
@@ -741,6 +743,7 @@ export async function runTool(
   ctx: ToolContext
 ): Promise<ToolOutcome> {
   const tool = getTool(name)
+  if (ctx.settings.assistantAccess?.disabledTools.includes(name)) return fail(mt('此工具已在权限设置中关闭：{{name}}', { name }))
   const reject = (summary: string): ToolOutcome => {
     ctx.log(`[tool] ${name} rejected: ${summary} | args=${argShape(args ?? {})}`)
     return fail(summary)

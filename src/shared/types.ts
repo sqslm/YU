@@ -429,6 +429,8 @@ export interface BarWindowLayout {
 }
 
 export interface Settings {
+  briefingDelivery: import('./briefingDelivery').BriefingDeliverySettings
+  assistantAccess: import('./assistantAccess').AssistantAccessSettings
   version: number
   hotkeys: {
     enabled: boolean

@@ -12,6 +12,7 @@ import { HISTORY_RETENTIONS } from '@shared/defaults'
 // as the row above: adding names to a shared line restyles it wholesale.
 import { Alert, Chip } from '@mui/material'
 import i18n from '../../i18n'
+import { AssistantAccessSection } from './AssistantAccess'
 
 /* ------------------------------------------------------------------------- *
  * Shared settings-dialog layout kit.
@@ -1295,6 +1296,7 @@ export function StorageSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
       <NotesDataGroup settings={settings} patch={patch} />
+      <AssistantAccessSection settings={settings} patch={patch}/>
       <SettingsGroup icon={<IconFolder />} title={i18n.t('助手文件搜索')}>
         <SettingsRow label={i18n.t('下载目录')} description={settings.assistantDownloadFolder || i18n.t('使用 Windows 下载目录；浏览器另设目录时可在这里指定')}>
           <Stack direction="row" spacing={1}>

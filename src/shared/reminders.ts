@@ -11,11 +11,17 @@ export const PRIORITY_LABELS: Record<TodoPriority, string> = { low: '低', norma
 /** Lower ranks sort first: urgent work must not hide under routine work. */
 export const priorityRank = (priority: TodoPriority): number => priority === 'high' ? 0 : priority === 'normal' ? 1 : 2
 export interface ReminderRecurrence {
-  frequency: 'daily' | 'weekly'
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
   hour: number
   minute: number
   /** Sunday = 0, matching the local calendar. */
   weekdays?: number[]
+  interval?: number
+  day?: number
+  month?: number
+  anchor?: number
+  count?: number
+  until?: number
 }
 export interface ReminderInput {
   title: string
@@ -32,6 +38,8 @@ export interface ReminderInput {
   timeExpression?: string
 }
 export interface Reminder extends ReminderInput {
+  /** Completed occurrences, including the first; snoozing does not consume one. */
+  occurrences?: number
   id: string
   createdAt: number
   updatedAt: number
@@ -78,7 +86,7 @@ export interface ReminderDraft {
   description?: string
   time_expression: string | null
   level: ReminderLevel
-  recurrence: 'daily' | 'weekly' | null
+  recurrence: ReminderRecurrence['frequency'] | null
   needs_confirmation: boolean
   dueAt: number | null
   rule: ReminderRecurrence | null

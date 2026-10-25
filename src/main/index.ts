@@ -38,6 +38,7 @@ import { registerLocalAsrIpc } from './local-asr/ipc'
 import { collectResources } from './resources'
 import { applyReplaceText } from './agent'
 import { SelectionEditor } from './selection-editor'
+import { NoteAudioPlayer } from './note-audio'
 import { captureSelectionTarget } from './selection-target'
 import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
@@ -81,6 +82,8 @@ import { createTray } from './tray'
 import { releaseStuckModifiers } from './insert'
 import { foregroundWindow, listRoutedWindows, type ForegroundInfo } from './foreground'
 import type { PromptContext } from '@shared/prompts'
+import { BriefingDeliveryService } from './briefing-delivery'
+import { assistantAppExcluded } from '@shared/assistantAccess'
 import { mainLanguage, mt, setMainLanguage } from '@shared/mainI18n'
 
 // Chromium keeps its audio device broker in a separate process (~75 MB on
@@ -132,6 +135,7 @@ let reminders: ReminderService | null = null
 let calendar: CalendarStore | null = null
 let calendarScheduler: CalendarScheduler | null = null
 let briefing: BriefingScheduler | null = null
+let briefingDelivery:BriefingDeliveryService|null=null
 let speech: SpeechService | null = null
 let workflows: WorkflowStore | null = null
 /** Past briefings stay in memory so the settings window can show the last one. */
@@ -143,6 +147,12 @@ let tray: ReturnType<typeof createTray> | null = null
 let hubView: import('./tools/personal').HubPage | null = null
 let assistantTarget: ForegroundInfo | undefined
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active); refreshWakeWord(active) }, line => log(line))
+const noteAudio=new NoteAudioPlayer(()=>barWindow,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null)
+let selectionPreview:{target:import('./selection-editor').SelectionTarget;text:string;at:number}|null=null
+function pausePlaybackForRecording(): void {
+  void speech?.pause().catch(error => log(`speech pause: ${String(error)}`))
+  if (barWindow && !barWindow.isDestroyed()) void noteAudio.control('pause').catch(error => log(`note audio pause: ${String(error)}`))
+}
 async function openScreenshot(): Promise<boolean> {
   if (pipeline?.isBusy || notesRecording || assistant.busy || selectionEditor?.isBusy) return false
   try { await screenshotTool.open(); return true }
@@ -153,18 +163,21 @@ async function openScreenshot(): Promise<boolean> {
   }
 }
 function assistantContext(target = assistantTarget): PromptContext {
+  if(assistantAppExcluded(target?.appName,target?.appPath,store.get().assistantAccess))return {}
   return target ? { appName: target.appName, windowTitle: target.title, processId: target.pid, appPath: target.appPath,
     windowRect: target.rect ?? undefined, windowHandle: target.handle } : {}
 }
 const windowsTools = new WindowsTools({
   folders: () => ({ downloads: store.get().assistantDownloadFolder || app.getPath('downloads'), desktop: app.getPath('desktop'), documents: app.getPath('documents') }),
   native: windowsNative, openPath: path => shell.openPath(path), openUrl: url => shell.openExternal(url)
+  ,access:()=>store.get().assistantAccess
 })
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
   analyzeScreenshot: async (context, question, ocr, signal) => {
+    if(assistantAppExcluded(context.appName,context.appPath,store.get().assistantAccess))throw new Error(mt('此应用已排除上下文读取'))
     if (screenshotNeedsEditor(question)) {
       signal.throwIfAborted()
-      await screenshotTool.open()
+      await screenshotTool.open(/跨屏|多屏|all screens|multi.?monitor/iu.test(question))
       return mt('已打开截图编辑器；请确认选区后点击 OCR 或分析，关闭即可取消。本次尚未发送图片。')
     }
     const settings = store.get(), profiles = chainFor(settings, 'multimodal')
@@ -188,6 +201,26 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     signal.throwIfAborted(); return target.text
   },
   personal: {
+    latestPromptUse:()=>pipeline?.selectionPromptReceipt()??null,
+    prepareSelectionEdit:async(operation,signal)=>{
+      selectionPreview=null
+      const target=await captureSelectionTarget(store.get(),assistantContext(),signal)
+      const cancel=():void=>{pipeline?.cancel()}
+      signal.addEventListener('abort',cancel,{once:true})
+      let result:Awaited<ReturnType<Pipeline['transformSelection']>>
+      try{result=await pipeline!.transformSelection(target.text,operation,target.context)}finally{signal.removeEventListener('abort',cancel)}
+      signal.throwIfAborted()
+      if(!result)throw Error(mt('没有生成可替换的结果'))
+      selectionPreview={target,text:result.text,at:Date.now()}
+      return result
+    },
+    applySelectionEdit:async signal=>{
+      const preview=selectionPreview
+      if(!preview||Date.now()-preview.at>10*60_000)throw Error(mt('没有有效的选区预览，请先预览润色或翻译结果'))
+      if(assistantAppExcluded(preview.target.context.appName,preview.target.context.appPath,store.get().assistantAccess))throw Error(mt('此应用已排除上下文读取'))
+      await preview.target.apply(preview.text,false,signal)
+      selectionPreview=null
+    },
     remind: (text, signal, submittedAt, extra) => reminders!.voice(text, signal, undefined, submittedAt, extra),
     reminders: () => reminders!.store.list(),
     saveReminder: (input, id) => reminders!.save(input, id),
@@ -202,7 +235,9 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     history: (query, range) => history.list(query, 40, range),
     copy: text => clipboard.writeText(text),
     readClipboard: () => clipboard.readText(),
-    open: page => navigateHub(page)
+    open: page => navigateHub(page),
+    controlNoteAudio:(action,id)=>noteAudio.control(action,id).then(value=>({...value})),
+    syncInfo:()=>({enabled:store.get().syncEnabled,signedIn:Boolean(accounts.get()),failures:sync?.noteFailures()??[]})
   },
   /**
    * The local calendar, read-aloud and sync administration.
@@ -230,6 +265,18 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
       return saved
     },
     briefing: () => composeDailyBriefing(),
+    sendBriefing: (channels,signal)=>{
+      if(!briefingDelivery)throw Error(mt('简报投递服务尚未就绪'))
+      return briefingDelivery.send(composeDailyBriefing(),channels,signal)
+    },
+    briefingDeliveryHistory:()=>briefingDelivery?.history()??[],
+    briefingDeliverySettings:()=>briefingDeliveryView(),
+    configureBriefingDelivery:async patch=>{
+      const current=store.get().briefingDelivery
+      const next=await store.update({briefingDelivery:{email:{...current.email,...(patch.email!==undefined?{enabled:patch.email}:{})},push:{...current.push,...(patch.push!==undefined?{enabled:patch.push}:{})}}})
+      for(const win of [settingsWindow,barWindow,cardWindow])if(win&&!win.isDestroyed())win.webContents.send('settings:changed',next)
+      return briefingDeliveryView()
+    },
     briefingSettings: () => store.get().briefing,
     setBriefingSettings: async patch => {
       const next = await store.update({ briefing: { ...store.get().briefing, ...patch } })
@@ -241,9 +288,18 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
       const next = await store.update({ tts: { ...store.get().tts, enabled } })
       for (const win of [settingsWindow, barWindow, cardWindow]) if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next)
     },
-    speak: text => speech!.speak(text),
+    speak: text => speech!.start(text),
     stopSpeaking: () => speech!.stop(),
     ttsEnabled: () => store.get().tts.enabled,
+    speechSettings:()=>store.get().tts,
+    speechVoices:()=>speech!.voices(),
+    setSpeechSettings:async patch=>{
+      const next=await store.update({tts:{...store.get().tts,...patch}})
+      if(!next.tts.enabled)speech?.stop()
+      for(const win of [settingsWindow,barWindow,cardWindow])if(win&&!win.isDestroyed())win.webContents.send('settings:changed',next)
+      return next.tts
+    },
+    controlSpeech:async action=>({...(action==='pause'?await speech!.pause():action==='resume'?await speech!.resume():speech!.status())}),
     syncStatus: () => lifeSyncStatus(),
     // Flipping the switch is all it takes: `reconfigure()` re-arms the timer and
     // stops the requests, exactly the path the settings page uses.
@@ -386,9 +442,15 @@ function saveBriefingState(state: BriefingState): void {
   try { writeFileSync(briefingStateFile(), JSON.stringify(state)) } catch (error) { log(`[briefing] cannot save state: ${String(error)}`) }
 }
 
+function briefingDeliveryView():Record<string,unknown> {
+  const {email,push}=store.get().briefingDelivery
+  return {email:{enabled:email.enabled,configured:Boolean(email.apiKey&&email.from&&email.to),to:email.to},push:{enabled:push.enabled,configured:Boolean(push.baseUrl&&push.topic),topic:push.topic}}
+}
+
 function deliverBriefing(briefing: Briefing): void {
   latestBriefing = briefing
   const settings = store.get()
+  if(settings.briefingDelivery.email.enabled||settings.briefingDelivery.push.enabled)void briefingDelivery?.send(briefing).catch(error=>log(`[briefing] external delivery failed: ${String(error)}`))
   log(`[briefing] ${briefing.empty ? 'empty' : 'delivered'}, ${briefing.body.length} chars`)
   if (settings.briefing.notify && Notification.isSupported()) {
     // No icon means Windows paints Electron's atom logo; the toast must wear ours.
@@ -587,7 +649,7 @@ const wakeWord = new WakeWordHost({
     // Listening always wins over speaking: the microphone would otherwise record
     // the assistant's own voice, and asking something new means the old answer can
     // stop being read out.
-    speech?.stop()
+    pausePlaybackForRecording()
     pipeline?.start('dictation', { handsFree: true, viaWake: true })
     refreshWakeWord()
   },
@@ -1051,6 +1113,7 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  noteAudio.register()
   screenshotTool.register()
   handle('screenshot:open', () => openScreenshot())
   handle('assistant:hub-view', () => { const view = hubView; hubView = null; return view })
@@ -1235,6 +1298,8 @@ function registerIpc(): void {
   // Delivery history is stored by the scheduler and used to be invisible: the page
   // could only show the latest briefing, never what was actually delivered.
   handle('briefing:history', () => briefing?.status().history ?? [])
+  handle('briefing:delivery-history',()=>briefingDelivery?.history()??[])
+  handle('briefing:send',()=>{if(!briefingDelivery)throw Error(mt('简报投递服务尚未就绪'));return briefingDelivery.send(composeDailyBriefing())})
   /**
    * Subscribed calendars.
    *
@@ -1728,7 +1793,7 @@ function wireHotkeys(): void {
           // process, and a take is the only thing that needs a snapshot.
           if (!event.purpose) uia.warm()
           // Same rule as the wake word: a new take ends any read-aloud first.
-          speech?.stop()
+          pausePlaybackForRecording()
           pipeline.start(event.mode, { handsFree: event.handsFree, purpose: event.purpose })
           break
         case 'mode':
@@ -1952,6 +2017,9 @@ async function bootstrap(): Promise<void> {
     // leaves it unset so the next tick retries instead of losing the warning.
     deliver: (event, at) => { deliverCalendarEvent(event); calendar?.markNotified(event.id, at) }, log })
   workflows = new WorkflowStore(join(app.getPath('userData'), 'workflows.json'))
+  try{briefingDelivery=new BriefingDeliveryService(join(app.getPath('userData'),'briefing-delivery.json'),()=>store.get().briefingDelivery,()=>{
+    for(const win of [settingsWindow,barWindow])if(win&&!win.isDestroyed())win.webContents.send('briefing:delivery-changed')
+  })}catch(error){log(`[briefing] delivery history unavailable: ${String(error)}`)}
   briefing = new BriefingScheduler({ settings: () => store.get().briefing, compose: () => briefingCompose(),
     deliver: value => deliverBriefing(value), load: loadBriefingState, save: saveBriefingState, log })
 
@@ -2364,6 +2432,7 @@ if (!gotLock) {
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()
     screenshotTool.close()
+    screenshotTool.closePins()
     tray?.destroy()
     tray = null
     selectionEditor?.cancel()
@@ -2371,7 +2440,9 @@ if (!gotLock) {
     reminders?.stop()
     calendarScheduler?.stop()
     briefing?.stop()
+    briefingDelivery?.stop()
     speech?.stop()
+    noteAudio.dispose()
     hotkeys?.stop()
     uia.stop()
     localAsr.release()

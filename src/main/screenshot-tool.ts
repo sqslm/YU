@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, nativeImage, screen } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, nativeImage, screen, Menu } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Settings } from '@shared/types'
@@ -16,6 +16,7 @@ import { captureScreen } from './capture-screen'
 import { captureWindowBounds } from './foreground'
 import { normalizeOcrText, ocrRegions, prepareOcrImage } from './ocr'
 import { ScrollCapture } from './scroll-capture'
+import { captureDisplays } from './capture-displays'
 
 /** One on-demand editor. Closing releases the captured screen and pending work. */
 export class ScreenshotTool {
@@ -29,6 +30,8 @@ export class ScreenshotTool {
   private scrollTimer: ReturnType<typeof setInterval> | null = null
   private scrollPointerTimer: ReturnType<typeof setInterval> | null = null
   private scrollEscape = false
+  private pins = new Set<BrowserWindow>()
+  private allScreens = false
   constructor(private settings: () => Settings, private active: (value: boolean) => void, private log: (text: string) => void = () => {}) {}
   get isOpen(): boolean { return this.opening || Boolean(this.win && !this.win.isDestroyed()) }
 
@@ -39,6 +42,7 @@ export class ScreenshotTool {
     handle('screenshot:frame', event => { owned(event); return this.frame })
     handle('screenshot:ready', event => { owned(event); this.win!.show(); this.win!.focus() })
     handle('screenshot:close', event => { owned(event); this.close() })
+    handle('screenshot:all-screens', async event => { owned(event);this.close();await new Promise(resolve=>setTimeout(resolve,120));await this.open(true) })
     handle('screenshot:scroll-start', (event, rect: CaptureRect, controls: CaptureRect) => { owned(event); this.startScroll(rect, controls) })
     handle('screenshot:scroll-finish', event => { owned(event); return this.finishScroll() })
     handle('screenshot:copy-text', (event, text: string) => {
@@ -52,23 +56,26 @@ export class ScreenshotTool {
     })
   }
 
-  async open(): Promise<void> {
+  async open(allScreens=false): Promise<void> {
     if (this.isOpen) { this.win?.focus(); return }
     this.opening = true
+    this.allScreens = allScreens
     const capture = new AbortController()
     this.captureController = capture
     this.active(true)
     try {
       const cursor = screen.getCursorScreenPoint()
-      const display = screen.getDisplayNearestPoint(cursor)
+      let display = screen.getDisplayNearestPoint(cursor)
+      const combined = allScreens ? captureDisplays(screen.getAllDisplays()) : null
+      if(combined) display={...display,bounds:combined.bounds}
       this.displayBounds = display.bounds
       const physical = screen.dipToScreenRect(null, display.bounds)
       let windows: ScreenshotFrame['windows'] = []
-      try { windows = captureWindowRegions(captureWindowBounds(), physical, display.bounds) }
+      try { if(!allScreens) windows = captureWindowRegions(captureWindowBounds(), physical, display.bounds) }
       catch (error) { this.log(`[screenshot] window bounds unavailable: ${error instanceof Error ? error.message : String(error)}`) }
       let thumbnail: Electron.NativeImage
       try {
-        thumbnail = captureScreen(physical)
+        thumbnail = combined?.image ?? captureScreen(physical)
       } catch (error) {
         this.log(`[screenshot] GDI unavailable: ${error instanceof Error ? error.message : String(error)}`)
         // Remote desktops / unavailable GDI retain the existing capture path.
@@ -85,13 +92,14 @@ export class ScreenshotTool {
       const pixels = thumbnail.toBitmap()
       // Windows nativeImage bitmaps are BGRA; canvas ImageData uses RGBA.
       for (let i = 0; i < pixels.length; i += 4) { const blue = pixels[i]; pixels[i] = pixels[i + 2]; pixels[i + 2] = blue }
-      this.frame = { pixels, ...thumbnail.getSize(), windows, cursor: { x: cursor.x - display.bounds.x, y: cursor.y - display.bounds.y } }
-      const win = new BrowserWindow({ ...display.bounds, fullscreen: true, frame: false, transparent: true, movable: false, skipTaskbar: true,
+      this.frame = { pixels, ...thumbnail.getSize(), allScreens, windows, cursor: { x: cursor.x - display.bounds.x, y: cursor.y - display.bounds.y } }
+      const win = new BrowserWindow({ ...display.bounds, fullscreen: !allScreens, frame: false, transparent: true, movable: false, skipTaskbar: true,
         show: false, alwaysOnTop: true, backgroundColor: '#00000000', title: mt('截图'), icon: join(app.getAppPath(), 'resources/icon.png'),
         webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false } })
       this.win = win
       trustWindow(win)
       win.setAlwaysOnTop(true, 'screen-saver')
+      if(allScreens)win.setBounds(display.bounds)
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
       win.webContents.on('render-process-gone', () => { if (this.win === win) this.close() })
       win.on('closed', () => { this.stopScroll(); this.scroll = null; this.controller?.abort(); this.controller = null; this.frame = null; this.win = null; this.active(false) })
@@ -103,6 +111,22 @@ export class ScreenshotTool {
   }
 
   close(): void { this.stopScroll(); this.scroll = null; this.captureController?.abort(); this.controller?.abort(); this.win?.destroy(); this.win = null; this.frame = null; this.displayBounds = null }
+  closePins():void { for(const win of this.pins)win.destroy();this.pins.clear() }
+
+  private async pin(image:Electron.NativeImage):Promise<void> {
+    const area=screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workAreaSize,size=image.getSize()
+    const width=Math.min(size.width,Math.max(120,area.width-80)),height=Math.min(size.height+40,Math.max(120,area.height-80))
+    const win=new BrowserWindow({width:Math.max(120,width),height:Math.max(100,height),alwaysOnTop:true,skipTaskbar:true,title:mt('贴图 · 右键复制或保存'),icon:join(app.getAppPath(),'resources/icon.png'),backgroundColor:'#181818',webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}})
+    this.pins.add(win);win.on('closed',()=>this.pins.delete(win));win.setMenu(null)
+    win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault())
+    win.webContents.on('context-menu',()=>Menu.buildFromTemplate([
+      {label:mt('复制图片'),click:()=>clipboard.writeImage(image)},
+      {label:mt('另存为'),click:()=>{void (async()=>{const result=await dialog.showSaveDialog(win,{defaultPath:join(app.getPath('pictures'),`YU-pinned-${Date.now()}.png`),filters:[{name:'PNG',extensions:['png']}]});if(!result.canceled&&result.filePath)await writeFile(result.filePath,image.toPNG())})().catch(error=>{if(!win.isDestroyed())void dialog.showMessageBox(win,{type:'error',message:String(error)})})}},
+      {type:'separator'},{label:mt('关闭'),click:()=>win.close()}
+    ]).popup({window:win}))
+    try{await win.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(`<title>${mt('贴图')}</title><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'"><style>html,body{margin:0;width:100%;height:100%;background:#181818}img{width:100%;height:100%;object-fit:contain}</style><img draggable="false" src="${image.toDataURL()}">`))}
+    catch(error){win.destroy();throw error}
+  }
 
   private stopScroll(): void {
     if (this.scrollTimer) clearInterval(this.scrollTimer)
@@ -121,6 +145,9 @@ export class ScreenshotTool {
       throw new Error(mt('滚动截图区域太小或超出屏幕'))
     }
     const physical = screen.dipToScreenRect(null, { x: Math.round(bounds.x + rect.x), y: Math.round(bounds.y + rect.y), width: Math.round(rect.width), height: Math.round(rect.height) })
+    const globalRect={x:bounds.x+rect.x,y:bounds.y+rect.y,width:rect.width,height:rect.height}
+    if(this.allScreens){const display=screen.getDisplayMatching(globalRect).bounds
+      if(globalRect.x<display.x||globalRect.y<display.y||globalRect.x+globalRect.width>display.x+display.width||globalRect.y+globalRect.height>display.y+display.height)throw new Error(mt('滚动区域须位于同一块屏幕；跨屏静态截图可以直接完成'))}
     const scroll = new ScrollCapture(physical.width, physical.height)
     this.scroll = scroll
     win.setContentProtection(true)
@@ -166,12 +193,13 @@ export class ScreenshotTool {
 
   private async run(action: ScreenshotAction, dataUrl: string, question?: string, target?: string, ocrLanguage = 'auto'): Promise<ScreenshotResult> {
     if (this.scroll) throw new Error(mt('请先完成滚动截图'))
-    if (!['copy', 'save', 'ocr', 'translate', 'ask'].includes(action) || typeof dataUrl !== 'string' ||
+    if (!['copy', 'save', 'ocr', 'translate', 'ask', 'pin'].includes(action) || typeof dataUrl !== 'string' ||
       !dataUrl.startsWith('data:image/png;base64,') || dataUrl.length > 64 * 1024 * 1024) throw new Error(mt('截图数据无效或过大'))
     if (this.controller) throw new Error(mt('正在处理上一条，稍后再试'))
     const image = nativeImage.createFromDataURL(dataUrl), size = image.getSize()
     if (image.isEmpty() || !this.frame || size.width > this.frame.width || size.height > this.frame.height) throw new Error(mt('截图数据无效或过大'))
     if (action === 'copy') { clipboard.writeImage(image); this.close(); return {} }
+    if (action === 'pin') { await this.pin(image); this.close(); return {} }
     const win = this.win!
     const controller = new AbortController()
     this.controller = controller

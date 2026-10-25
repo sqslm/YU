@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 function Write-BridgeResult($value) {
   # [Console]::Out bypasses the formatting pipeline, which would otherwise wrap
   # long lines and decorate the object with type headers.
-  [Console]::Out.Write(($value | ConvertTo-Json -Compress -Depth 4))
+  [Console]::Out.WriteLine(($value | ConvertTo-Json -Compress -Depth 4))
   [Console]::Out.Flush()
 }
 
@@ -25,9 +25,10 @@ function Get-ErrorMessage($errorRecord) {
   return [string]$errorRecord
 }
 
+$reader = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [Text.Encoding]::UTF8)
 $request = $null
 try {
-  $raw = [Console]::In.ReadToEnd()
+  $raw = $reader.ReadLine()
   if ([string]::IsNullOrWhiteSpace($raw)) { throw 'Empty request' }
   $request = $raw | ConvertFrom-Json
   if (!$request) { throw 'Empty request' }
@@ -66,9 +67,23 @@ if ($action -eq 'speak') {
         # this call. Falling back to the default voice is better than silence.
         try { $synthesizer.SelectVoice($voice) } catch { }
       }
-      # Blocking on purpose: the process lives exactly as long as the utterance,
-      # and this process is what Node kills to interrupt it.
-      $synthesizer.Speak($text)
+      $prompt=$synthesizer.SpeakAsync($text)
+      while(!$prompt.IsCompleted -and $synthesizer.State -eq 'Ready'){Start-Sleep -Milliseconds 10}
+      Write-BridgeResult @{ok=$true;event='started'}
+      $nextControl=$reader.ReadLineAsync()
+      while(!$prompt.IsCompleted) {
+        if($nextControl.IsCompleted) {
+          $line=$nextControl.Result
+          if($null -eq $line){$synthesizer.SpeakAsyncCancelAll();break}
+          $control=$line|ConvertFrom-Json
+          if($control.action -eq 'pause'){$synthesizer.Pause()}
+          elseif($control.action -eq 'resume'){$synthesizer.Resume()}
+          else {throw 'Invalid speech control'}
+          Write-BridgeResult @{ok=$true;event='control';id=$control.id;paused=($synthesizer.State -eq 'Paused')}
+          $nextControl=$reader.ReadLineAsync()
+        }
+        Start-Sleep -Milliseconds 25
+      }
     } finally {
       if ($synthesizer) { $synthesizer.Dispose(); $synthesizer = $null }
     }

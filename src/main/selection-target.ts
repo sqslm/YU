@@ -6,6 +6,7 @@ import type { Settings } from '@shared/types'
 import type { SelectionTarget } from './selection-editor'
 import { mt } from '@shared/mainI18n'
 import type { PromptContext } from '@shared/prompts'
+import { assistantAppExcluded } from '@shared/assistantAccess'
 
 /** Restore the original window, then recheck the exact selection before editing. */
 export async function captureSelectionTarget(settings: Settings, original?: PromptContext, signal?: AbortSignal): Promise<SelectionTarget> {
@@ -16,6 +17,7 @@ export async function captureSelectionTarget(settings: Settings, original?: Prom
   const isWindow = user32.func('int IsWindow(void *hWnd)')
   const key = user32.func('void keybd_event(uint8_t vk, uint8_t scan, uint32_t flags, uintptr_t extra)')
   if (original) {
+    if(assistantAppExcluded(original.appName,original.appPath,settings.assistantAccess))throw new Error(mt('此应用已排除上下文读取'))
     signal?.throwIfAborted()
     if (!original.windowHandle || !/^\d+$/.test(original.windowHandle) || !original.processId) throw new Error(mt('没有可用的原窗口信息，请从目标应用重新呼出助手'))
     if (/1password|keepass|bitwarden|lastpass|password|密码/iu.test(`${original.appName} ${original.appPath}`)) throw new Error(mt('敏感应用不允许读取上下文'))
@@ -32,6 +34,7 @@ export async function captureSelectionTarget(settings: Settings, original?: Prom
   }
   const handle = getForeground()
   const context = foregroundWindow()
+  if(assistantAppExcluded(context.appName,context.appPath,settings.assistantAccess))throw new Error(mt('此应用已排除上下文读取'))
   const selected = await getSelection()
   if (!selected.ok || !selected.text) throw new Error(mt(selected.error ?? '没有选中文字'))
   const sameWindow = (): boolean => Boolean(handle && getForeground() && koffi.address(getForeground()) === koffi.address(handle))
@@ -47,6 +50,7 @@ export async function captureSelectionTarget(settings: Settings, original?: Prom
       await new Promise(resolve => setTimeout(resolve, 80))
       signal.throwIfAborted()
       if (!sameWindow()) throw new Error(mt('目标窗口已变化，请重新选择文字'))
+      if(foregroundWindow().title!==context.title)throw new Error(mt('目标窗口已变化，请重新选择文字'))
       const current = await getSelection()
       if (!sameWindow() || !current.ok || current.text !== selected.text) throw new Error(mt('选区已变化，未修改文字；请重新选择'))
       signal.throwIfAborted()

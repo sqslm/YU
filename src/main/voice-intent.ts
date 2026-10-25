@@ -43,8 +43,17 @@ export function stopSpeakingRequest(text: string): { text_only: boolean } | null
 
 /** A selected region or a requested upload preview needs the local editor first. */
 export function screenshotNeedsEditor(text: string): boolean {
-  return !isDictatedContent(text) && /框选|选区|准备发送|先.{0,8}(?:看|预览)|\b(?:preview|selected (?:area|region))\b/iu.test(text) &&
+  return !isDictatedContent(text) && /跨屏|多屏|all screens|multi.?monitor|框选|选区|准备发送|先.{0,8}(?:看|预览)|\b(?:preview|selected (?:area|region))\b/iu.test(text) &&
     /截图|屏幕|框选区域|\b(?:screenshot|screen|region)\b/iu.test(text)
+}
+
+export function speechPlaybackRequest(text:string):{name:string;args:Record<string,unknown>}|null {
+  const value=text.trim(),control=/^(?:请|帮我)?(暂停|继续|恢复)(?:一下)?(?:朗读|阅读|播报)[。！!]?$/u.exec(value)||/^(?:please )?(pause|resume|continue) (?:reading|read.aloud|speech)[.!]?$/iu.exec(value)
+  if(control)return {name:'control_speech',args:{action:/暂停|pause/i.test(control[1])?'pause':'resume'}}
+  const volume=/^(?:请|帮我)?(?:把|将)?朗读音量(?:调到|调整到|设为|设置为|改成)\s*(\d{1,3})\s*(?:%|％|百分比)?[。！!]?$/u.exec(value)
+  if(volume)return {name:'configure_speech',args:{volume:Number(volume[1])}}
+  const rate=/^(?:请|帮我)?(?:把|将)?朗读语速(?:调到|调整到|设为|设置为|改成)\s*(-?\d{1,2})[。！!]?$/u.exec(value)
+  return rate?{name:'configure_speech',args:{rate:Number(rate[1])}}:null
 }
 
 /** Unambiguous whole-utterance commands avoid a second model round trip. */
@@ -53,7 +62,12 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false): VoiceI
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
   if (stopSpeakingRequest(value)) return { kind: 'assistant' }
+  if (speechPlaybackRequest(value)) return {kind:'assistant'}
   if (screenshotNeedsEditor(value)) return { kind: 'assistant' }
+  if(/(?:今天|昨天|最近|刚才).{0,15}(?:下载|打开|使用).{0,10}(?:文件|文档)|\b(?:recent|today|yesterday)\b.{0,30}\b(?:downloads?|files?)\b/iu.test(value)&&/哪|什么|查询|查找|查看|查我|列出|\b(?:find|list|show|which|what|open)\b/iu.test(value))return {kind:'assistant'}
+  if (/提示词卡片|实际.{0,8}(?:卡片|提示词)|随记.{0,12}(?:同步|录音)|(?:播放|暂停|继续).{0,12}录音|同步失败|(?:我的|本机|电脑|系统).{0,12}(?:CPU|处理器|内存|音量)|\b(?:my (?:cpu|memory)|system volume|note recording)\b/iu.test(value)) return { kind:'assistant' }
+  if(/选区|选中(?:的)?(?:文字|文本)|selected (?:text|selection)/iu.test(value)&&/润色|翻译|polish|translate/iu.test(value)&&/预览|先.{0,12}看|给我看|不要替换|preview/iu.test(value))return {kind:'assistant'}
+  if(/(?:刚才|上次|上轮|预览).{0,12}(?:润色|翻译|结果)|(?:润色|翻译).{0,12}(?:结果|预览)/u.test(value)&&/替换|写回|应用|填入|放回/u.test(value))return {kind:'assistant'}
   if (/^(?:只|仅)(?:给我|提供).{0,8}(?:建议|意见)/u.test(value)) return { kind: 'ask' }
   if (/(?:这篇|当前|该).{0,6}(?:文章|网页)|当前浏览器/iu.test(value) && /总结|主要|内容|说什么|讲什么|阅读/u.test(value)) return { kind: 'assistant' }
   if (/剪贴板|\bclipboard\b/iu.test(value) && /读取|读|复制|总结|解释|翻译|\b(?:read|copied?|summari[sz]e|explain|translate)\b/iu.test(value)) return { kind: 'assistant' }

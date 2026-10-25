@@ -1,6 +1,6 @@
 {
   "name": "typeless-rebuild",
-  "version": "1.0.0-rc.13",
+  "version": "1.0.0-rc.14",
   "license": "MIT",
   "author": "YU contributors",
   "private": true,
@@ -25,6 +25,7 @@
     "chrono-node": "2.10.3",
     "electron-updater": "^6.6.2",
     "koffi": "^2.14.1",
+    "pdfjs-dist": "6.4.299",
     "sherpa-onnx-node": "1.13.8",
     "sherpa-onnx-win-x64": "1.13.8"
   },

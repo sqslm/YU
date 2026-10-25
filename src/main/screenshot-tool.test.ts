@@ -5,12 +5,13 @@ import { mergeSettings } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 import type { ScreenshotAction } from '@shared/screenshot'
 
-const mocks = vi.hoisted(() => ({ cursor: { x: -100, y: 50 }, capture: vi.fn(), sources: vi.fn(), image: vi.fn(), copyImage: vi.fn(), copyText: vi.fn(), save: vi.fn(), write: vi.fn(), native: vi.fn(), complete: vi.fn(), vision: vi.fn(), handlers: new Map<string, (...args: any[]) => any>(), windows: [] as any[] }))
+const mocks = vi.hoisted(() => ({ menu: vi.fn(), popup: vi.fn(), cursor: { x: -100, y: 50 }, capture: vi.fn(), sources: vi.fn(), image: vi.fn(), copyImage: vi.fn(), copyText: vi.fn(), save: vi.fn(), write: vi.fn(), native: vi.fn(), complete: vi.fn(), vision: vi.fn(), handlers: new Map<string, (...args: any[]) => any>(), windows: [] as any[] }))
 vi.mock('electron', () => ({
+  Menu: {buildFromTemplate: mocks.menu},
   app: { getPath: () => '/pictures', getAppPath: () => '/app', getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
   globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
   desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image }, dialog: { showSaveDialog: mocks.save },
-  screen: { dipToScreenRect: (_win: unknown, rect: {x:number;y:number;width:number;height:number}) => Object.fromEntries(Object.entries(rect).map(([key,value]) => [key,Math.round(value*1.5)])), getCursorScreenPoint: () => mocks.cursor, getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 } }) },
+  screen: { dipToScreenRect: (_win: unknown, rect: {x:number;y:number;width:number;height:number}) => Object.fromEntries(Object.entries(rect).map(([key,value]) => [key,Math.round(value*1.5)])), getCursorScreenPoint: () => mocks.cursor, getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 }, workAreaSize:{width:1280,height:720} }) },
   ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => mocks.handlers.set(name, handler) },
   BrowserWindow: class extends EventEmitter {
     // `id` and `isDestroyed` are what the IPC trust layer reads when the window
@@ -18,9 +19,10 @@ vi.mock('electron', () => ({
     id = mocks.windows.length + 100
     webContents = Object.assign(new EventEmitter(), { id: this.id, mainFrame: {}, setWindowOpenHandler: vi.fn(), send: vi.fn(), isDestroyed: () => false }); destroyed = false
     constructor(public options: unknown) { super(); mocks.windows.push(this) }
-    setAlwaysOnTop = vi.fn(); loadFile = vi.fn(); loadURL = vi.fn(); show = vi.fn(); focus = vi.fn()
+    setMenu = vi.fn(); setAlwaysOnTop = vi.fn(); loadFile = vi.fn(); loadURL = vi.fn(); show = vi.fn(); focus = vi.fn()
     setIgnoreMouseEvents = vi.fn(); setContentProtection = vi.fn(); setFocusable = vi.fn()
     isDestroyed(): boolean { return this.destroyed }
+    close(): void {this.destroy()}
     destroy(): void { this.destroyed = true; this.emit('closed') }
   }
 }))
@@ -36,7 +38,7 @@ import { ScreenshotTool } from './screenshot-tool'
 let settings: Settings, tool: ScreenshotTool
 const active = vi.fn()
 const imageUrl = 'data:image/png;base64,c2VsZWN0ZWQ='
-const cropped = () => ({ isEmpty: () => false, getSize: () => ({ width: 600, height: 200 }), toPNG: () => Buffer.from('selected pixels') })
+const cropped = () => ({ isEmpty: () => false, getSize: () => ({ width: 600, height: 200 }), toDataURL:()=>imageUrl, toPNG: () => Buffer.from('selected pixels') })
 const event = (): any => { const win = mocks.windows.at(-1); return { sender: win.webContents, senderFrame: win.webContents.mainFrame } }
 const run = (action: ScreenshotAction, url = imageUrl, question = 'Explain this error', target = 'en'): Promise<any> => mocks.handlers.get('screenshot:run')!(event(), action, url, question, target)
 beforeEach(() => {
@@ -49,6 +51,7 @@ beforeEach(() => {
     lines: [{ text: '真实 OCR 文字', x: 15, y: 30, width: 300, height: 30 }] })
   mocks.complete.mockReset().mockResolvedValue('[{"id":0,"text":"Real translation"}]'); mocks.vision.mockReset().mockResolvedValue('Actual visual answer')
   mocks.save.mockReset().mockResolvedValue({ canceled: false, filePath: '/chosen/capture.png' })
+  mocks.menu.mockReset().mockReturnValue({popup:mocks.popup})
   settings = mergeSettings({ profiles: [{ id: 'text', name: 'Text', preset: '', kind: 'llm', enabled: true, baseUrl: 'http://text.test', model: 'text-model', apiKey: 'private' },
     { id: 'vision', name: 'Vision', preset: '', kind: 'multimodal', enabled: true, baseUrl: 'http://vision.test', model: 'vision-model', apiKey: 'private' }] })
   tool = new ScreenshotTool(() => settings, active); tool.register()
@@ -56,6 +59,19 @@ beforeEach(() => {
 afterEach(() => { tool.close(); vi.useRealTimers() })
 
 describe('explicit screenshot tool', () => {
+  it('keeps a pin in an independent topmost window with working copy/save/close actions',async()=>{
+    await tool.open();const editor=mocks.windows[0]
+    await run('pin')
+    const pin=mocks.windows.at(-1)
+    expect(pin).not.toBe(editor);expect(editor.isDestroyed()).toBe(true)
+    expect(pin.options).toMatchObject({alwaysOnTop:true,skipTaskbar:true,webPreferences:{nodeIntegration:false,sandbox:true}})
+    pin.webContents.emit('context-menu')
+    const menu=mocks.menu.mock.calls.at(-1)![0]
+    menu[0].click();expect(mocks.copyImage).toHaveBeenCalled()
+    menu[1].click();await vi.waitFor(()=>expect(mocks.write).toHaveBeenCalledWith('/chosen/capture.png',Buffer.from('selected pixels')))
+    menu[3].click();expect(pin.isDestroyed()).toBe(true)
+    expect(tool.isOpen).toBe(false)
+  })
   it('captures a DPI-correct scrolling region, releases focus, exports pixels and stops its timer', async () => {
     await tool.open(); vi.useFakeTimers()
     const pixels = Buffer.alloc(90 * 90 * 4, 255); pixels[0] = 10; pixels[2] = 30

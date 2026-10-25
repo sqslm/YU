@@ -8,6 +8,7 @@ import { MAX_BRIEFING_HISTORY, isWithinQuietHours, nextAllowedAt, normalizeBrief
 import { MAX_EVENT_LEAD_MINUTES } from '@shared/calendar'
 import { SettingsGroup, SettingsHint, SettingsRow, controlSx, narrowControlSx } from './General'
 import i18n from '../../i18n'
+import { BriefingDeliverySection } from './BriefingDelivery'
 
 /**
  * The local calendar, the daily briefing and read-aloud.
@@ -334,6 +335,7 @@ export function LifeSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
 
+      <BriefingDeliverySection settings={settings} patch={patch}/>
       <SettingsGroup icon={<Box sx={{ fontSize: 15 }}>🗂</Box>} title={i18n.t('最近的简报')}
         hint={i18n.t('只读。最多保留最近 {{n}} 份。', { n: MAX_BRIEFING_HISTORY })}>
         {recent.length === 0 && <SettingsHint>{i18n.t('还没有生成过简报。开启后每天会在这里留一份，方便回看。')}</SettingsHint>}

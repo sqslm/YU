@@ -58,6 +58,7 @@ export interface TypelessApi {
     onChanged(callback: (status: import('./wake-word').WakeWordStatus) => void): () => void
   }
   screenshot: {
+    allScreens(): Promise<void>
     open(): Promise<boolean>
     frame(): Promise<import('./screenshot').ScreenshotFrame>
     ready(): Promise<void>
@@ -130,6 +131,9 @@ export interface TypelessApi {
     refreshBriefing(): Promise<import('./briefing').Briefing>
     /** What was actually delivered, newest last: the page shows real history, not a recomposition. */
     briefingHistory(): Promise<import('./briefing').BriefingRecord[]>
+    briefingDeliveryHistory():Promise<import('./briefingDelivery').BriefingDeliveryReceipt[]>
+    sendBriefing():Promise<import('./briefingDelivery').BriefingDeliveryReceipt[]>
+    onBriefingDelivery(callback:()=>void):()=>void
     onBriefing(callback: (briefing: import('./briefing').Briefing) => void): () => void
   }
   /**
@@ -250,6 +254,7 @@ export interface TypelessApi {
     onProgress(callback: (progress: LocalDownloadProgress | null) => void): () => void
   }
   notes: {
+    audioControl(action:import('./noteAudio').NoteAudioAction,id?:string,options?:{positionMs?:number;rate?:number}):Promise<import('./noteAudio').NoteAudioState>
     list(): Promise<NoteStore>
     createText(input?: { categoryId?: string; fromClipboard?: boolean; text?: string }): Promise<NoteEntry>
     importAudio(categoryId?: string): Promise<NoteEntry | null>
@@ -391,6 +396,8 @@ export interface TypelessApi {
     >
   }
   bar: {
+    onNoteAudio(callback:(request:import('./noteAudio').NoteAudioRequest)=>void):()=>void
+    replyNoteAudio(reply:import('./noteAudio').NoteAudioReply):Promise<void>
     onLayout(callback: (layout: import('./types').BarWindowLayout) => void): () => void
     captionVisible(visible: boolean): void
     onState(callback: (state: BarState) => void): () => void

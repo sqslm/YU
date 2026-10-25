@@ -18,6 +18,35 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
 
 describe('personal tools share real application services', () => {
+  it('returns recorded provenance and actual note sync failures without calling pending data failed',async()=>{
+    api.history=vi.fn().mockReturnValue([{id:'h1',createdAt:10,promptId:'card-actual',promptName:'Actual card',promptKind:'dictation',providerId:'fallback'}])
+    const prompt=await runTool('get_prompt_info',{},ctx)
+    expect(prompt.data).toMatchObject({historyId:'h1',promptId:'card-actual',providerId:'fallback'})
+    api.history=vi.fn().mockReturnValue([{id:'plain-latest',createdAt:15},{id:'h1',createdAt:10,promptId:'card-actual',promptName:'Actual card'}])
+    expect((await runTool('get_prompt_info',{},ctx)).data).toMatchObject({historyId:'plain-latest',promptId:null,promptName:null})
+    api.latestPromptUse=()=>({createdAt:20,promptName:'Preview card',promptId:'preview-actual',source:'selection-preview'})
+    expect((await runTool('get_prompt_info',{},ctx)).data).toMatchObject({source:'selection-preview',promptId:'preview-actual'})
+    expect((await runTool('get_prompt_info',{id:'missing'},ctx)).ok).toBe(false)
+    const base=api.notes()[0]
+    api.notes=()=>[{...base,id:'pending',version:4,pending:true},{...base,id:'failed',version:3,pending:false,audioPath:'recording.wav',audioUploaded:false}]
+    api.syncInfo=()=>({enabled:true,signedIn:true,failures:[{id:'failed',stage:'audio-upload',error:'HTTP 503',at:20}]})
+    const states=await runTool('note_sync_status',{},ctx)
+    expect(states.data.items).toMatchObject([{id:'pending',state:'pending',textSynced:false,failures:[]},{id:'failed',state:'failed',audioSynced:false,failures:[{error:'HTTP 503'}]}])
+    expect((await runTool('note_sync_status',{failed_only:true},ctx)).data).toMatchObject({total:1,items:[{id:'failed'}]})
+  })
+  it('controls real recordings and applies only the frozen preview on explicit request',async()=>{
+    api.controlNoteAudio=vi.fn().mockResolvedValue({id:'note-1',state:'paused',positionMs:7200})
+    expect((await runTool('control_note_audio',{action:'pause'},ctx)).data).toMatchObject({state:'paused',positionMs:7200})
+    expect((await runTool('control_note_audio',{action:'play',id:'invented'},ctx)).ok).toBe(false)
+    api.prepareSelectionEdit=vi.fn().mockResolvedValue({text:'Actual polished preview',promptName:'Actual prompt'})
+    api.applySelectionEdit=vi.fn().mockResolvedValue(undefined)
+    expect((await runTool('prepare_selection_edit',{operation:'polish'},ctx)).data).toMatchObject({text:'Actual polished preview',applied:false})
+    expect((await runTool('apply_selection_edit',{},ctx)).ok).toBe(false)
+    expect(api.applySelectionEdit).not.toHaveBeenCalled()
+    expect((await runTool('apply_selection_edit',{}, {...ctx,cache:new Map(),question:'把刚才润色结果替换回原选区'})).ok).toBe(true)
+    expect(api.applySelectionEdit).toHaveBeenCalledTimes(1)
+    expect((await runTool('apply_selection_edit',{text:'Invented result'},{...ctx,question:'替换选中文字'})).ok).toBe(false)
+  })
   it('passes only an exact reminder clause from a compound command, and rejects invented text', async () => {
     const question = '先记下整理照片的想法，再加个待办，周末研究一下。'
     await runTool('create_reminder', { text: '加个待办，周末研究一下。' }, { ...ctx, question })

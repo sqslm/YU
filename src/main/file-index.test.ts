@@ -238,13 +238,21 @@ describe('content search over a bounded tree', () => {
     const result = await new FileIndex(deps).search({ query: '下季度预算 复核', roots: [ROOT] })
     expect(result.hits.map(hit => hit.name)).toEqual(['a.txt'])
   })
+  it('does not read or reuse cached content from an excluded directory',async()=>{
+    const {deps,reads}=mount(tree()),index=new FileIndex(deps)
+    await index.search({query:'下季度预算',roots:[ROOT]})
+    const before=reads.length
+    const result=await index.search({query:'下季度预算',roots:[ROOT],pathAllowed:async path=>!path.includes(`${sep}nested`)})
+    expect(result.hits.map(hit=>hit.name)).not.toContain('doc.txt')
+    expect(reads.slice(before).some(path=>path.includes(`${sep}nested`))).toBe(false)
+  })
   it('counts binary, unsupported and unreadable files instead of hiding them', async () => {
     const { deps } = mount(tree())
     const result = await new FileIndex(deps).search({ query: '下季度预算', roots: [ROOT] })
     expect(result.skipped.binary).toBe(1)
-    // A PDF cannot be read in-process; it is counted, never claimed as a match.
-    expect(result.skipped.unsupported).toBe(1)
-    expect(result.skipped.unreadable).toBe(1)
+    // This fixture only carries plain bytes under a PDF suffix: parsing must fail.
+    expect(result.skipped.unsupported).toBe(0)
+    expect(result.skipped.unreadable).toBe(2)
     expect(result.hits.some(hit => hit.path.endsWith('.pdf'))).toBe(false)
   })
   it('never walks into node_modules, and never follows a symlink', async () => {
@@ -297,12 +305,12 @@ describe('content search over a bounded tree', () => {
     expect(first.cache.hits).toBe(0)
     const before = reads.length
     const second = await index.search({ query: '下季度预算', roots: [ROOT] })
-    // Binary and locked files were never cached, so they are re-examined (2 misses)
+    // Binary, invalid PDF and locked files are re-examined (3 misses)
     // while every real body comes from the cache.
-    expect(second.cache.hits).toBe(first.cache.misses - 2)
-    expect(second.cache.misses).toBe(2)
-    // Only the binary file is read again: nothing was cached for it.
-    expect(reads.length).toBe(before + 1)
+    expect(second.cache.hits).toBe(first.cache.misses - 3)
+    expect(second.cache.misses).toBe(3)
+    // Binary and invalid PDF bodies are read again; the locked read is refused.
+    expect(reads.length).toBe(before + 2)
     expect(index.size).toBeGreaterThan(0)
 
     files[at(ROOT, 'a.txt')] = { text: '会议纪要：预算口径变了', mtimeMs: Date.parse('2026-10-09T00:00:00Z') }

@@ -3,6 +3,7 @@ import { mkdtemp, writeFile, unlink, rmdir, realpath, symlink } from 'node:fs/pr
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { WindowsTools, WINDOWS_TOOLS, WINDOWS_DEFINITIONS } from './windows'
+import { DEFAULT_ASSISTANT_ACCESS } from '@shared/assistantAccess'
 import type { FileIndex } from '../file-index'
 import type { EverythingResult } from '../everything'
 import { runTool, toolSchemas } from './registry'
@@ -13,6 +14,14 @@ let native: ReturnType<typeof vi.fn<(request: Record<string, unknown>, signal?: 
 let openPath: ReturnType<typeof vi.fn<(path: string) => Promise<string>>>
 let openUrl: ReturnType<typeof vi.fn<(url: string) => Promise<void>>>
 let tools: WindowsTools
+it('applies configured directory and context exclusions before executing tools',async()=>{
+  const access={...DEFAULT_ASSISTANT_ACCESS,excludedPaths:[root],excludedApps:['chrome'],disabledTools:['get_system_info']}
+  const guarded=new WindowsTools({folders:{downloads:root,desktop:root,documents:root},native,openPath,openUrl,access:()=>access})
+  expect((await guarded.run('open_folder',{folder:root})).ok).toBe(false)
+  expect(openPath).not.toHaveBeenCalled()
+  expect((await guarded.run('get_active_window',{},undefined,{appName:'chrome',processId:123})).ok).toBe(false)
+  expect((await guarded.run('get_system_info',{})).ok).toBe(false)
+})
 const owned: string[] = []
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'qinly-tools-')))
@@ -26,6 +35,19 @@ const file = async (name: string): Promise<string> => { const path = join(root, 
 const row = (path: string) => ({ name: path.split(/[\\/]/).at(-1)!, path, bytes: 5, modified: '2026-10-22T01:00:00Z' })
 
 describe('Windows tools permissions and real result selection', () => {
+  it('reads actual hardware fields and validates volume changes before calling Core Audio', async () => {
+    const hardware = await tools.run('get_system_info', {})
+    expect(hardware.ok).toBe(true)
+    expect(hardware.data.logicalProcessors).toBeGreaterThan(0)
+    expect(hardware.data.totalMemoryBytes).toBeGreaterThan(0)
+    native.mockResolvedValueOnce({ volume: 30, muted: false })
+    expect((await tools.run('set_system_volume', { volume: 30 })).data).toMatchObject({ volume: 30, muted: false })
+    expect(native).toHaveBeenCalledWith({ action: 'system-volume', volume: 30 }, undefined)
+    native.mockClear()
+    expect((await tools.run('set_system_volume', { volume: 101 })).ok).toBe(false)
+    expect((await tools.run('set_system_volume', {})).ok).toBe(false)
+    expect(native).not.toHaveBeenCalled()
+  })
   it.each(['帮我打开E盘的software文件夹', '打开 E 盘的 softwares 文件夹。'])('routes a named drive folder to folder opening instead of registered applications: %s', input => {
     expect(tools.command(input)).toEqual({ name: 'open_folder', args: { folder: input.includes('softwares') ? 'E:\\softwares' : 'E:\\software' } })
   })

@@ -41,8 +41,11 @@ describe('bilingual reminder time interpretation', () => {
   it('does not advance a weekly recurrence by a fixed 7*24-hour duration', () => {
     expect(nextOccurrence({ frequency: 'weekly', weekdays: [1], hour: 9, minute: 0 }, local(26, 10))).toBe(new Date(2026, 10, 2, 9).getTime())
   })
-  it.each(['每天上午9点，持续7天', 'every day at 9 AM for seven days', 'every Monday at 9 AM until November 1'])('does not silently weaken unsupported recurrence: %s', text => {
-    expect(resolveReminderTime(text, now)).toMatchObject({ dueAt: null, recurrence: null })
+  it.each(['每天上午9点，持续7天', 'every day at 9 AM for seven days', 'every Monday at 9 AM until November 1'])('keeps the actual end of bounded recurrence: %s', text => {
+    const result=resolveReminderTime(text, now)
+    expect(result.dueAt).not.toBeNull()
+    expect(result.recurrence?.until).toBeGreaterThan(now)
+    expect(nextOccurrence(result.recurrence!, result.recurrence!.until!)).toBeNull()
   })
   it.each([
     ['每周一、三、五晚上八点', [1, 3, 5], 20], ['每周一三五晚上9点', [1, 3, 5], 21],
@@ -72,12 +75,12 @@ describe('bilingual reminder time interpretation', () => {
     expect(resolveReminderTime('November 5 at 10 AM', now).dueAt).toBe(new Date(2026, 10, 5, 10).getTime())
     expect(resolveReminderTime('every Tuesday at noon', now).recurrence).toMatchObject({ weekdays: [2], hour: 12 })
     expect(resolveReminderTime('明天三点半', now).dueAt).toBeNull()
-    expect(resolveReminderTime('every month on the 1st at 9AM', now).dueAt).toBeNull()
+    expect(resolveReminderTime('every month on the 1st at 9AM', now)).toMatchObject({recurrence:{frequency:'monthly',day:1},dueAt:new Date(2026,10,1,9).getTime()})
   })
   it('keeps local calendar recurrence across daylight saving and rejects nonexistent one-off times', () => {
     vi.stubEnv('TZ', 'America/New_York')
     const before = new Date(2026, 2, 7, 9).getTime()
-    expect(nextOccurrence({ frequency: 'daily', hour: 9, minute: 0 }, before) - before).toBe(23 * 3600000)
+    expect(nextOccurrence({ frequency: 'daily', hour: 9, minute: 0 }, before)! - before).toBe(23 * 3600000)
     expect(nextOccurrence({ frequency: 'weekly', hour: 2, minute: 30, weekdays: [0] }, new Date(2026, 2, 7, 8).getTime()))
       .toBe(new Date(2026, 2, 15, 2, 30).getTime())
     expect(resolveReminderTime('March 8 2026 at 2:30 AM', new Date(2026, 2, 7, 8).getTime()).dueAt).toBeNull()

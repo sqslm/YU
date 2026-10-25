@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 import { AccountStore } from './account'
-import { CloudClient, CloudError, SyncEngine } from './cloud'
+import { CloudClient, CloudError, SyncEngine, type NotesSyncSource } from './cloud'
+import type { NoteEntry } from '@shared/types'
 import { HistoryStore } from './history'
 import { StatsStore, statsAccountKey } from './stats'
 
@@ -333,6 +334,26 @@ describe('SyncEngine', () => {
     const client = new CloudClient(accounts)
     return new SyncEngine(store, accounts, client, () => settings(overrides), () => undefined, join(dir, 'sync-state.json'), null, stats)
   }
+
+  it('persists real per-note upload failure, isolates accounts, and clears it after successful retry',async()=>{
+    const history=openStore();await history.load()
+    const accounts=new AccountStore(join(dir,'account.json'));signIn(accounts)
+    let pending=true
+    const note={id:'actual-note',transcript:'Actual note',polished:'',createdAt:1,updatedAt:1,durationMs:0,tags:[],pending:true,polishStatus:'skipped'} as NoteEntry
+    const notes:NotesSyncSource={pendingChanges:()=>({live:pending?[note]:[],dead:[]}),pendingCount:()=>Number(pending),markPushed:()=>{pending=false},markDeleted:()=>{},applyRemote:()=>({applied:0,conflicts:0,audio:[]}),audioPending:()=>[],hasAudio:()=>false,audioData:()=>null,writeRemoteAudio:()=>{},markAudioUploaded:()=>{},retargetTombstone:()=>{}}
+    route('/notes/changes','POST',{status:503,body:{error:'storage_down',message:'Actual storage failure'}},{status:200,body:{applied:['actual-note']}})
+    route('/notes?','GET',{status:200,body:{notes:[],hasMore:false,cursor:0}})
+    route('/transcription_history/pull','GET',{status:200,body:{entries:[],hasMore:false,nextSince:0}})
+    route('/transcription_history/sync_status','GET',{status:200,body:{count:0}})
+    const file=join(dir,'note-sync-state.json'),make=()=>new SyncEngine(history,accounts,new CloudClient(accounts),()=>settings(),()=>{},file,notes)
+    const first=make();await first.now()
+    expect(first.noteFailures()).toMatchObject([{id:'actual-note',stage:'text-upload',error:'Actual storage failure'}])
+    const restarted=make();expect(restarted.noteFailures()).toEqual(first.noteFailures())
+    const original=accounts.get()!;accounts.set({...original,userId:'different-user'});expect(restarted.noteFailures()).toEqual([])
+    accounts.set(original);await restarted.now()
+    expect(restarted.noteFailures()).toEqual([]);expect(pending).toBe(false)
+    expect(make().noteFailures()).toEqual([])
+  })
 
   it('uploads one local statistics snapshot and merges other device snapshots by account', async () => {
     const history = openStore()

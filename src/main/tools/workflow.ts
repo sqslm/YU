@@ -21,6 +21,7 @@ import {
   describeWorkflow,
   normalizeWorkflowName,
   normalizeWorkflowSteps,
+  bindWorkflowArgs, workflowCondition,
   type Workflow,
   type WorkflowStep
 } from '@shared/workflow'
@@ -109,7 +110,21 @@ async function runWorkflow(
   // top-level import back would be a cycle at load time.
   const { runTool } = await import('./registry')
   const results: Array<{ label: string; tool: string; ok: boolean; summary: string }> = []
-  for (const [index, step] of workflow.steps.entries()) {
+  const actual: Array<Record<string,unknown>|undefined> = []
+  let steps:WorkflowStep[]
+  try { steps=normalizeWorkflowSteps(workflow.steps) }
+  catch(error){
+    const step=workflow.steps.find(item=>!WORKFLOW_STEP_TOOLS.includes(item.tool))??workflow.steps[0]
+    const summary=error instanceof Error?error.message:String(error)
+    api.recordRun(workflow.id)
+    return {ok:false,summary,data:{ok:false,workflowId:workflow.id,steps:[{label:step?.label,tool:step?.tool,ok:false,summary}],stoppedAt:step?.label}}
+  }
+  for (const [index, saved] of steps.entries()) {
+    let step: Pick<WorkflowStep,'tool'|'args'|'label'> = saved
+    if(saved.when && !workflowCondition(saved.when, actual)){
+      if(saved.otherwise)step=saved.otherwise
+      else { results.push({label:saved.label,tool:saved.tool,ok:true,summary:mt('条件不满足，已跳过')});actual.push(undefined);continue }
+    }
     ctx.log(`[workflow] ${workflow.name}: ${step.tool}`)
     // A hand-edited store must not reach a non-step tool even if the load-time
     // filter was bypassed, so the whitelist is asserted again right before use.
@@ -121,8 +136,11 @@ async function runWorkflow(
       results.push({ label: step.label, tool: step.tool, ok: false, summary: mt('第 {{step}} 步未获本轮授权', { step: index + 1 }) })
       break
     }
-    const stepCtx: ToolContext = { ...ctx, allowedTools: [...(granted ?? []), step.tool] }
-    const outcome = await runTool(step.tool, step.args, stepCtx)
+    const stepCtx: ToolContext = { ...ctx, workflowReplay: true, allowedTools: [...(granted ?? []), step.tool] }
+    let outcome:ToolOutcome
+    try { outcome = await runTool(step.tool, bindWorkflowArgs(step.args,actual), stepCtx) }
+    catch(error){outcome={ok:false,summary:String(error instanceof Error?error.message:error),data:{ok:false}}}
+    actual.push(outcome.data)
     results.push({ label: step.label, tool: step.tool, ok: outcome.ok, summary: outcome.summary })
     if (!outcome.ok) break
   }
@@ -141,7 +159,7 @@ async function runWorkflow(
     }
   }
   // The summary is assembled above, not translated: it is already user-facing.
-  return ok(summary, { workflowId: workflow.id, steps: results })
+  return ok(summary, { workflowId: workflow.id, steps: results, results:actual })
 }
 
 const schemas: Record<WorkflowToolName, Schema> = {
@@ -161,13 +179,15 @@ const schemas: Record<WorkflowToolName, Schema> = {
             tool: { type: 'string', enum: WORKFLOW_STEP_TOOLS as unknown as string[], description: 'Tool to call for this step' },
             args: { type: 'object', description: 'Arguments for that tool, as the tool itself documents them' },
             label: { type: 'string', description: 'Short human label, e.g. 读今天的日程' }
+            ,when: {type:'object',description:'Optional condition {ref:"1.total",op:"exists"|"eq"|"gt"|"lt"|"contains",value:0}. Ref is a 1-based prior step and dot path into its actual data. False skips this step unless otherwise is supplied.'},
+            otherwise:{type:'object',description:'Optional false branch {tool,args,label}. Only allowlisted tools; no nesting.'}
           },
           required: ['tool']
         },
         maxItems: 8,
         description:
           'Ordered steps, each {"tool": "<tool name>", "args": {...}, "label": "<short human label>"}. Allowed tools: ' +
-          WORKFLOW_STEP_TOOLS.join(', ')
+          WORKFLOW_STEP_TOOLS.join(', ') + '. Any args value may be {"$ref":"1.items.0.id"} to bind a prior actual result. Only earlier steps, no expressions or scripts. Conditions use when and otherwise.'
       },
       id: { type: 'string', description: 'Existing workflow id when replacing one instead of creating a new one' }
     },

@@ -532,6 +532,7 @@ interface SyncState {
   remoteCount: number
   deviceId: string
   statsHashes: Record<string, string>
+  noteErrors?: Record<string, { id: string; stage: string; error: string; at: number; account: string }>
 }
 
 const EMPTY_STATE: SyncState = {
@@ -599,7 +600,8 @@ export class SyncEngine {
         lastError: typeof parsed.lastError === 'string' ? parsed.lastError : '',
         remoteCount: Number.isFinite(Number(parsed.remoteCount)) ? Number(parsed.remoteCount) : -1,
         deviceId: typeof parsed.deviceId === 'string' ? parsed.deviceId : '',
-        statsHashes: parsed.statsHashes && typeof parsed.statsHashes === 'object' ? parsed.statsHashes as Record<string, string> : {}
+        statsHashes: parsed.statsHashes && typeof parsed.statsHashes === 'object' ? parsed.statsHashes as Record<string, string> : {},
+        noteErrors: parsed.noteErrors && typeof parsed.noteErrors === 'object' && !Array.isArray(parsed.noteErrors) ? parsed.noteErrors : undefined
       }
     } catch (err) {
       console.error('[sync] cannot read sync-state.json, starting from zero:', err)
@@ -657,6 +659,25 @@ export class SyncEngine {
     const snapshot = this.snapshot()
     if (snapshot.state === 'off' || !this.running) return this.emit(snapshot)
     return this.emit({ ...snapshot, state: 'syncing' })
+  }
+
+  /** Actual per-item failures for the current account; pending data is not called failed. */
+  noteFailures(): Array<{ id: string; stage: string; error: string; at: number }> {
+    const session = this.accounts.get()
+    if (!session) return []
+    const account = statsAccountKey(session.serverUrl, session.userId)
+    return Object.values(this.state.noteErrors ?? {}).filter(item => item && item.account === account && typeof item.id === 'string' && typeof item.error === 'string')
+      .map(({ id, stage, error, at }) => ({ id, stage, error, at })).sort((a, b) => b.at-a.at)
+  }
+  private noteFailure(id: string, stage: string, error: unknown, session:Session|null=this.accounts.get()): void {
+    if (!session) return
+    const account = statsAccountKey(session.serverUrl, session.userId)
+    const errors = this.state.noteErrors ??= {}
+    errors[`${account}:${id}:${stage}`] = { id, stage, error: describeError(error).slice(0,500), at: Date.now(), account }
+  }
+  private clearNoteFailure(id: string, stage: string, session:Session|null=this.accounts.get()): void {
+    if (!session || !this.state.noteErrors) return
+    delete this.state.noteErrors[`${statsAccountKey(session.serverUrl,session.userId)}:${id}:${stage}`]
   }
 
   /** Re-arms the timer after a settings change. */
@@ -807,9 +828,13 @@ export class SyncEngine {
         ...live.map(toNoteChange),
         ...dead.map((item) => ({ id: item.id, version: item.version, deleted: true }))
       ]
-      const result = await this.client.pushNotes(changes)
+      let result: Awaited<ReturnType<CloudClient['pushNotes']>>
+      const account=this.accounts.get()
+      try { result = await this.client.pushNotes(changes) }
+      catch (error) { for (const item of changes) if(typeof item.id==='string')this.noteFailure(item.id, 'text-upload', error, account); throw error }
       const payload = result.payload ?? {}
       const accepted = [...(payload.applied ?? []), ...(payload.duplicates ?? [])]
+      for (const id of accepted) this.clearNoteFailure(id, 'text-upload', account)
       notes.markPushed(accepted.map((id) => {
         const sent = live.find((note) => note.id === id)
         return sent ? { id, version: (sent.version ?? 0) + 1, updatedAt: sent.updatedAt } : { id }
@@ -831,6 +856,7 @@ export class SyncEngine {
         if (!id) continue
         const server = conflict.server
         if (!server) {
+          this.noteFailure(id, 'text-upload', new Error(conflict.error || 'Server rejected this note'), account)
           // The id exists under another account. There is nothing to merge, and
           // retrying it forever would keep the sync permanently red.
           this.log(`[sync] note ${id} refused by the server (${conflict.error ?? 'conflict'})`)
@@ -843,6 +869,7 @@ export class SyncEngine {
           continue
         }
         notes.applyRemote([server])
+        this.clearNoteFailure(id,'text-upload',account)
       }
       // The merge above leaves work for the next pass (the forked copies). Stopping
       // here keeps one sync bounded instead of pushing in a loop.
@@ -882,6 +909,7 @@ export class SyncEngine {
   private async syncNoteAudio(): Promise<void> {
     const notes = this.notes
     if (!notes) return
+    const account=this.accounts.get()
     let failure: Error | null = null
     for (const item of this.pendingAudio) {
       if (notes.hasAudio(item.id)) continue
@@ -896,7 +924,9 @@ export class SyncEngine {
         }
         notes.writeRemoteAudio(item.id, bytes, item.format)
         if (!notes.hasAudio(item.id)) throw new Error(`录音 ${item.id} 未能保存到本机`)
+        this.clearNoteFailure(item.id, 'audio-download',account)
       } catch (err) {
+        this.noteFailure(item.id, 'audio-download', err,account)
         this.log(`[sync] 下载录音失败 ${item.id}：${describeError(err)}`)
         failure ??= new Error(`下载录音失败：${describeError(err)}`)
       }
@@ -906,13 +936,16 @@ export class SyncEngine {
     for (const item of notes.audioPending(PAGE)) {
       const local = notes.audioData(item.id)
       if (!local) {
+        this.noteFailure(item.id, 'audio-upload', new Error('Cannot read local recording'),account)
         failure ??= new Error(`无法读取待上传的录音 ${item.id}`)
         continue
       }
       try {
         await this.client.uploadNoteAudio(item.id, local.format, local.data)
         notes.markAudioUploaded(item.id)
+        this.clearNoteFailure(item.id, 'audio-upload',account)
       } catch (err) {
+        this.noteFailure(item.id, 'audio-upload', err,account)
         // Quota and size limits fail the same way every time; report once per pass
         // and let the rest of the account keep syncing.
         this.log(`[sync] 上传录音失败 ${item.id}：${describeError(err)}`)

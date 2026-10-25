@@ -7,21 +7,16 @@
  * - **A per-query budget.** Four seconds, N files, one size ceiling, a result
  *   cap. Running out is reported as `truncated` with the reason, never as
  *   "nothing matched", because a half-finished scan is not evidence of absence.
- * - **No third-party parsers.** `.docx/.xlsx/.pptx` are zip containers, and the
- *   only thing needed is `node:zlib.inflateRawSync` over the central directory.
- *   A DSH runtime ships four dependencies and none of them parse OOXML; adding
- *   one (plus its transitive tree, its advisory surface and its update cadence)
- *   to zip-read a file is a worse trade than ~120 lines here.
- * - **`.pdf` is refused on purpose.** Text sits in compressed object streams
- *   behind xref tables, font encoding maps and optional encryption: a hand-rolled
- *   extractor would return plausible-looking nonsense for scanned or CJK PDFs.
- *   Saying "PDF not supported" is honest; guessing is not.
+ * - **Document readers.** OOXML uses the bounded ZIP reader; text-based PDF
+ *   uses PDF.js in a worker with memory/time limits. Scanned or encrypted
+ *   files are reported as unreadable instead of guessed.
  * - **Everything is injected.** Traversal, stat, read and the clock all come from
  *   `deps`, so the tests below run on a virtual tree without touching a profile.
  */
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, relative } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
+import { pdfText } from './pdf-text'
 
 /** Above this a single file is a project archive, not a document to scan. */
 export const MAX_FILE_BYTES = 8 * 1024 * 1024
@@ -57,7 +52,7 @@ const OFFICE_EXTENSIONS = new Set(['.docx', '.xlsx', '.pptx'])
  * Known-unreadable formats. Counted so the caller can say "3 个 PDF 未读取"
  * instead of silently reporting a smaller corpus than it was asked about.
  */
-const UNSUPPORTED_EXTENSIONS = new Set(['.pdf', '.doc', '.xls', '.ppt', '.rtf', '.odt', '.ods', '.odp', '.zip', '.rar', '.7z'])
+const UNSUPPORTED_EXTENSIONS = new Set(['.doc', '.xls', '.ppt', '.rtf', '.odt', '.ods', '.odp', '.zip', '.rar', '.7z'])
 
 /**
  * Directories that never contain the user's own prose and can be enormous.
@@ -121,6 +116,7 @@ export interface ContentSearchResult {
 }
 
 export interface ContentSearchOptions {
+  pathAllowed?: (path:string)=>Promise<boolean>
   query: string
   /** Absolute folders. Defaults to Documents/Desktop/Downloads under the profile. */
   roots?: string[]
@@ -424,6 +420,7 @@ export class FileIndex {
       if (scanned >= maxFiles) { reason = 'file-limit'; break }
       options.signal?.throwIfAborted()
       const folder = queue.shift()!
+      if(options.pathAllowed && !await options.pathAllowed(folder.path))continue
       let entries: DirEntry[]
       try { entries = await this.deps.readdir(folder.path) } catch { continue }
       // Name order keeps a bounded scan reproducible; otherwise "the first N
@@ -442,11 +439,12 @@ export class FileIndex {
           continue
         }
         if (!entry.isFile) continue
+        if(options.pathAllowed && !await options.pathAllowed(join(folder.path,entry.name)))continue
         const extension = extname(entry.name).toLowerCase()
         if (UNSUPPORTED_EXTENSIONS.has(extension)) { skipped.unsupported++; continue }
-        if (!TEXT_EXTENSIONS.has(extension) && !OFFICE_EXTENSIONS.has(extension)) { skipped.unsupported++; continue }
+        if (!TEXT_EXTENSIONS.has(extension) && !OFFICE_EXTENSIONS.has(extension) && extension !== '.pdf') { skipped.unsupported++; continue }
         scanned++
-        const hit = await this.inspect(join(folder.path, entry.name), extension, tokens, options.refresh === true, skipped, cache)
+        const hit = await this.inspect(join(folder.path, entry.name), extension, tokens, options.refresh === true, skipped, cache, deadline-this.deps.now(), options.signal)
         if (hit) hits.push(hit)
       }
     }
@@ -462,7 +460,7 @@ export class FileIndex {
     tokens: RegExp[],
     refresh: boolean,
     skipped: ContentSearchResult['skipped'],
-    cache: ContentSearchResult['cache']
+    cache: ContentSearchResult['cache'], timeoutMs:number, signal?:AbortSignal
   ): Promise<ContentHit | null> {
     let info: FileStat
     try { info = await this.deps.stat(path) } catch { skipped.unreadable++; return null }
@@ -482,7 +480,9 @@ export class FileIndex {
       cache.misses++
       let bytes: Uint8Array
       try { bytes = await this.deps.readFile(path) } catch { skipped.unreadable++; return null }
-      const decoded = documentText(bytes, extension)
+      let decoded:string|null
+      try { decoded = extension === '.pdf' ? await pdfText(bytes,timeoutMs,signal) : documentText(bytes, extension) }
+      catch { signal?.throwIfAborted();skipped.unreadable++;return null }
       if (decoded === null) { skipped.binary++; return null }
       text = decoded
       if (text.length <= CACHE_ENTRY_BYTES) this.store(key, { mtimeMs: info.mtimeMs, size: info.size, text })

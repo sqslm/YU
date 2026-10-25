@@ -26,9 +26,10 @@ export interface SpeechResult {
   ok: boolean
   error?: string
   voices?: string[]
+  paused?: boolean
 }
 
-export type SpeechRunner = (request: SpeechRequest, signal?: AbortSignal) => Promise<SpeechResult>
+export type SpeechRunner = ((request: SpeechRequest, signal?: AbortSignal, onStarted?:()=>void) => Promise<SpeechResult>) & { control?:(action:'pause'|'resume')=>Promise<SpeechResult> }
 
 /** A synthesizer has no reason to print megabytes; the cap bounds memory. */
 const OUTPUT_LIMIT = 2_000_000
@@ -50,85 +51,58 @@ function detail(text: string, fallback: string): string {
  * packaged/unpackaged decision (`windows-native.ts`) and this stays testable.
  */
 export function createWindowsSpeechRunner(scriptPath: string): SpeechRunner {
-  return function runWindowsSpeech(request, signal) {
-    return new Promise<SpeechResult>((resolve) => {
-      let child: ChildProcess
+  let active:ChildProcess|null=null
+  let sequence=0
+  const controls=new Map<number,{child:ChildProcess;resolve:(result:SpeechResult)=>void;timer:ReturnType<typeof setTimeout>}>()
+  const run:SpeechRunner=(request,signal,onStarted)=>new Promise(resolve=>{
+    let child:ChildProcess
+    try {child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',scriptPath],{windowsHide:true,stdio:['pipe','pipe','pipe']})}
+    catch(error){resolve({ok:false,error:messageOf(error)});return}
+    if(request.action==='speak')active=child
+    let buffer='',errorText='',bytes=0,settled=false
+    const finish=(result:SpeechResult):void=>{
+      if(settled)return
+      settled=true;clearTimeout(timer);signal?.removeEventListener('abort',cancel)
+      if(active===child)active=null
+      for(const [id,control] of controls)if(control.child===child){clearTimeout(control.timer);control.resolve({ok:false,error:'Speech stopped'});controls.delete(id)}
+      resolve(result)
+    }
+    const kill=(message:string):void=>{try{child.kill()}catch{}finish({ok:false,error:message})}
+    const cancel=():void=>kill('cancelled')
+    const timer=setTimeout(()=>kill('Speech startup timeout'),TIMEOUT_MS)
+    const frame=(line:string):void=>{
+      if(settled)return
       try {
-        child = spawn('powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
-          { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
-      } catch (error) {
-        resolve({ ok: false, error: messageOf(error) })
-        return
-      }
-
-      let output = ''
-      let errorText = ''
-      let settled = false
-      let timer: ReturnType<typeof setTimeout> | undefined
-
-      function finish(result: SpeechResult): void {
-        if (settled) return
-        settled = true
-        if (timer) clearTimeout(timer)
-        signal?.removeEventListener('abort', cancel)
-        resolve(result)
-      }
-      function kill(result: SpeechResult): void {
-        if (!settled) {
-          try { child.kill() } catch { /* the process already exited */ }
-        }
-        finish(result)
-      }
-      function cancel(): void {
-        kill({ ok: false, error: 'cancelled' })
-      }
-
-      timer = setTimeout(() => kill({ ok: false, error: 'timeout' }), TIMEOUT_MS)
-      child.stdout?.setEncoding('utf8')
-      child.stderr?.setEncoding('utf8')
-      child.stdout?.on('data', (chunk: string) => {
-        output += chunk
-        if (output.length > OUTPUT_LIMIT) kill({ ok: false, error: 'output too large' })
-      })
-      child.stderr?.on('data', (chunk: string) => {
-        errorText = (errorText + chunk).slice(0, 2000)
-      })
-      // A missing powershell.exe arrives here; it must read as a failed read-out,
-      // not as an unhandled rejection in the middle of a dictation.
-      child.on('error', (error) => finish({ ok: false, error: messageOf(error) }))
-      child.stdin?.on('error', (error) => finish({ ok: false, error: messageOf(error) }))
-      child.on('close', () => {
-        const raw = output.replace(/^\uFEFF/, '').trim()
-        if (!raw) {
-          finish({ ok: false, error: detail(errorText, 'no response') })
-          return
-        }
-        try {
-          const parsed = JSON.parse(raw) as { ok?: unknown; error?: unknown; voices?: unknown }
-          finish({
-            ok: parsed.ok === true,
-            error: typeof parsed.error === 'string' ? parsed.error : undefined,
-            voices: Array.isArray(parsed.voices)
-              ? parsed.voices.filter((name): name is string => typeof name === 'string')
-              : undefined
-          })
-        } catch {
-          // Not JSON at all: the script never ran (execution policy, syntax
-          // error). stderr is the only useful thing left to report.
-          finish({ ok: false, error: detail(errorText || raw, 'invalid response') })
-        }
-      })
-
-      if (signal?.aborted) {
-        cancel()
-        return
-      }
-      signal?.addEventListener('abort', cancel, { once: true })
-      // JSON on stdin, UTF-8: this is the only channel that carries the text.
-      child.stdin?.end(JSON.stringify(request), 'utf8')
+        const value=JSON.parse(line.replace(/^\uFEFF/,'')) as SpeechResult & {event?:string;id?:number}
+        if(value.event==='started'){clearTimeout(timer);onStarted?.();return}
+        if(value.event==='control' && value.id!==undefined){const pending=controls.get(value.id);if(pending?.child===child){clearTimeout(pending.timer);controls.delete(value.id);pending.resolve(value)};return}
+        finish({ok:value.ok===true,error:value.error,voices:Array.isArray(value.voices)?value.voices.filter(name=>typeof name==='string'&&name.trim()):undefined})
+      }catch(error){kill(detail(messageOf(error),'Invalid speech response'))}
+    }
+    child.stdout?.setEncoding('utf8');child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data',(chunk:string)=>{
+      bytes+=chunk.length;if(bytes>OUTPUT_LIMIT){kill('Speech output too large');return}
+      buffer+=chunk;let newline:number
+      while((newline=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,newline).trim();buffer=buffer.slice(newline+1);if(line)frame(line)}
     })
-  }
+    child.stderr?.on('data',(text:string)=>{errorText=(errorText+text).slice(0,2000)})
+    child.on('error',error=>finish({ok:false,error:messageOf(error)}))
+    child.stdin?.on('error',error=>finish({ok:false,error:messageOf(error)}))
+    child.on('close',()=>{if(buffer.trim())frame(buffer.trim());if(!settled)finish({ok:false,error:detail(errorText,'Speech bridge closed')})})
+    if(signal?.aborted){cancel();return}
+    signal?.addEventListener('abort',cancel,{once:true})
+    if(request.action==='speak')child.stdin?.write(JSON.stringify(request)+'\n','utf8')
+    else child.stdin?.end(JSON.stringify(request)+'\n','utf8')
+  })
+  run.control=action=>new Promise(resolve=>{
+    const child=active
+    if(!child?.stdin?.writable){resolve({ok:false,error:'No active speech'});return}
+    const id=++sequence
+    const timer=setTimeout(()=>{controls.delete(id);resolve({ok:false,error:'Speech control timeout'})},5000)
+    controls.set(id,{child,resolve,timer})
+    child.stdin.write(JSON.stringify({action,id})+'\n','utf8')
+  })
+  return run
 }
 
 export interface SpeechDeps {
@@ -143,6 +117,8 @@ export class SpeechService {
   private readonly deps: SpeechDeps
   /** The live bridge call, if a read-out is in progress. */
   private active: AbortController | null = null
+  private paused = false
+  private lastError = ''
 
   /** Placeholder: read-aloud is never translated, the synthesizer speaks as-is. */
   translate?: never
@@ -166,7 +142,7 @@ export class SpeechService {
    * switched off, or the message cleaned down to nothing. The tool layer
    * reports that honestly instead of letting the model claim it read the answer.
    */
-  async speak(text: unknown, signal?: AbortSignal): Promise<{ spoken: number; skipped: boolean }> {
+  async speak(text: unknown, signal?: AbortSignal, onStarted?:()=>void): Promise<{ spoken: number; skipped: boolean }> {
     const tts = normalizeTtsSettings(this.deps.settings().tts)
     if (!tts.enabled) return { spoken: 0, skipped: true }
     const spoken = speechText(text)
@@ -180,6 +156,7 @@ export class SpeechService {
     const relay = (): void => controller.abort()
     signal?.addEventListener('abort', relay, { once: true })
     this.active = controller
+    this.lastError = ''
     const started = this.now()
 
     try {
@@ -189,7 +166,7 @@ export class SpeechService {
         rate: tts.rate,
         volume: tts.volume,
         ...(tts.voice ? { voice: tts.voice } : {})
-      }, controller.signal)
+      }, controller.signal, onStarted)
       if (!result.ok) throw new Error(result.error || 'unknown')
       return { spoken: spoken.length, skipped: false }
     } catch (error) {
@@ -201,11 +178,37 @@ export class SpeechService {
         return { spoken: 0, skipped: true }
       }
       this.deps.log(`speech: failed after ${this.now() - started}ms: ${message}`)
+      this.lastError = message
       throw new Error(mt('朗读失败：{{message}}', { message }))
     } finally {
       signal?.removeEventListener('abort', relay)
-      if (this.active === controller) this.active = null
+      if (this.active === controller) { this.active = null; this.paused = false }
     }
+  }
+
+  /** A tool acknowledges actual playback start; the reader remains controllable in the background. */
+  start(text:string,signal?:AbortSignal):Promise<{spoken:number;skipped:boolean}> {
+    return new Promise((resolve,reject)=>{
+      let started=false
+      void this.speak(text,signal,()=>{started=true;resolve({spoken:speechText(text).length,skipped:false})}).then(result=>{if(!started)resolve(result)},error=>{if(!started)reject(error)})
+    })
+  }
+  status():{speaking:boolean;paused:boolean;error:string} {return {speaking:this.active!==null,paused:this.paused,error:this.lastError}}
+  async pause():Promise<ReturnType<SpeechService['status']>> {
+    if(!this.active)return this.status()
+    const current=this.active
+    const result=await this.deps.run.control?.('pause')
+    if(!result?.ok)throw new Error(result?.error||'Cannot pause speech')
+    if(this.active===current)this.paused=true
+    return this.status()
+  }
+  async resume():Promise<ReturnType<SpeechService['status']>> {
+    if(!this.active)return this.status()
+    const current=this.active
+    const result=await this.deps.run.control?.('resume')
+    if(!result?.ok)throw new Error(result?.error||'Cannot resume speech')
+    if(this.active===current)this.paused=false
+    return this.status()
   }
 
   /**
@@ -216,6 +219,7 @@ export class SpeechService {
     const controller = this.active
     if (!controller) return
     this.active = null
+    this.paused = false
     try {
       controller.abort()
     } catch (error) {

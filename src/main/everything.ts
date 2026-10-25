@@ -21,7 +21,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { stat as statFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, join, isAbsolute } from 'node:path'
 import { mt } from '@shared/mainI18n'
 
 /** Everything's HTTP server default. */
@@ -80,6 +80,7 @@ export interface ChildLike {
 }
 
 export interface EverythingOptions {
+  cliPath?: string
   /** HTTP port of the Everything service. `false` disables tier 1 entirely. */
   port?: number
   http?: boolean
@@ -353,6 +354,7 @@ export function esCandidates(options: EverythingOptions = {}): string[] {
   const env = options.env ?? process.env
   const pathValue = options.pathValue ?? env.PATH ?? env.Path ?? ''
   const list: string[] = []
+  if (options.cliPath) list.push(options.cliPath)
   for (const folder of pathValue.split(';')) {
     const clean = folder.trim().replace(/^"|"$/g, '')
     if (clean) list.push(join(clean, 'es.exe'))
@@ -364,6 +366,7 @@ export function esCandidates(options: EverythingOptions = {}): string[] {
 }
 
 async function findEs(options: EverythingOptions): Promise<string> {
+  if(options.cliPath && (!isAbsolute(options.cliPath)||basename(options.cliPath).toLowerCase()!=='es.exe'))throw new Error('Everything CLI path must be an absolute path to es.exe')
   const probe = options.fileExists ?? existsSync
   for (const candidate of esCandidates(options)) {
     if (await probe(candidate)) return candidate

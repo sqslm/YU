@@ -66,6 +66,7 @@ export function WorkflowsSection(): JSX.Element {
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 650, lineHeight: 1.4 }}>{row.name}</Typography>
                 <Typography sx={{ fontSize: 11.5, color: 'text.secondary', overflowWrap: 'anywhere' }}>{describeWorkflow(row)}</Typography>
+                <Box component="details" sx={{fontSize:11,mt:1}}><summary>{i18n.t('查看步骤、条件与参数')}</summary><Box component="pre" sx={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(row.steps,null,2)}</Box></Box>
                 <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{row.archivedAt ? i18n.t('已归档') : runsLabel(row)}</Typography>
               </Box>
               <Button size="small" onClick={() => void manage(row.id, row.archivedAt ? 'restore' : 'archive')}>

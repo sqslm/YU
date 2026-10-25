@@ -18,6 +18,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { mt } from '@shared/mainI18n'
 import type { Reminder, ReminderLevel, ReminderRecurrence, ReminderStatus, TodoPriority } from '@shared/reminders'
 import { isTodoPriority } from '@shared/reminders'
+import { validRecurrence } from './reminder-time'
 
 /** Matches the server's MAX_PUSH so one pass never builds a batch it would refuse. */
 const PAGE = 200
@@ -167,16 +168,7 @@ function asOptionalStamp(value: unknown): number | undefined {
 
 /** A recurrence rule crosses the wire as JSON; anything unshaped is dropped. */
 function asRecurrence(value: unknown): ReminderRecurrence | null {
-  const raw = asRecord(value)
-  if (!raw) return null
-  if (raw.frequency !== 'daily' && raw.frequency !== 'weekly') return null
-  const hour = Number(raw.hour)
-  const minute = Number(raw.minute)
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null
-  const weekdays = Array.isArray(raw.weekdays)
-    ? raw.weekdays.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-    : undefined
-  return { frequency: raw.frequency, hour, minute, ...(weekdays ? { weekdays } : {}) }
+  return validRecurrence(value) ? { ...value } : null
 }
 
 /** One change plus the signature it was built from, so acceptance can be recorded. */
@@ -444,6 +436,7 @@ export class RemindersSync {
       ...(asOptionalStamp(data.lastCompletedAt) !== undefined
         ? { lastCompletedAt: Number(data.lastCompletedAt) }
         : {}),
+      ...(Number.isInteger(data.occurrences) && Number(data.occurrences) >= 0 ? { occurrences: Number(data.occurrences) } : {}),
       ...(asOptionalStamp(data.missedAt) !== undefined ? { missedAt: Number(data.missedAt) } : {}),
       ...(asOptionalStamp(data.missedAcknowledgedAt) !== undefined
         ? { missedAcknowledgedAt: Number(data.missedAcknowledgedAt) }

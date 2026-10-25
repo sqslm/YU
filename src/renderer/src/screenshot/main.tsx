@@ -80,6 +80,7 @@ function ScreenshotEditor(): JSX.Element {
   const [translated, setTranslated] = useState<{ canvas: HTMLCanvasElement; text: string; rect: CaptureRect } | null>(null)
   const [showOriginal, setShowOriginal] = useState(false)
   const [scrolling, setScrolling] = useState(false)
+  const [allScreens,setAllScreens]=useState(false)
   const [scrollProgress, setScrollProgress] = useState<ScrollCaptureProgress | null>(null)
   const [longCapture, setLongCapture] = useState<HTMLCanvasElement | null>(null)
   const scrollControls = useRef<HTMLDivElement>(null)
@@ -107,6 +108,7 @@ function ScreenshotEditor(): JSX.Element {
       const source = document.createElement('canvas'); source.width = frame.width; source.height = frame.height
       source.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(frame.pixels), frame.width, frame.height), 0, 0)
       image.current = source; windows.current = frame.windows; setHover(captureWindowAt(frame.cursor, frame.windows)); setLoaded(true)
+      setAllScreens(frame.allScreens===true)
     }).catch(reportError)
     return () => { alive = false; image.current = null }
   }, [])
@@ -306,6 +308,7 @@ function ScreenshotEditor(): JSX.Element {
       }}
       onDoubleClick={() => { if (!translated && !scrolling && !longCapture && tool === 'select' && ready) void run('copy') }}
       onContextMenu={event => { event.preventDefault(); if (selection) reset(); else void window.api.screenshot.close() }} />
+    {!scrolling&&!longCapture&&!allScreens&&<Button variant="contained" size="small" data-screenshot-action="all-screens" sx={{position:'fixed',top:10,right:10}} onClick={()=>void window.api.screenshot.allScreens().catch(reportError)}>{t('跨屏截图')}</Button>}
     {text && <input autoFocus data-screenshot-text value={text.value} maxLength={160} onChange={event => setText({ ...text, value: event.target.value })}
       onBlur={commitText} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitText() } }}
       style={{ position: 'fixed', left: Math.min(text.point.x, view.width - 240), top: Math.min(text.point.y, view.height - 40), width: 240, color, background: 'rgba(0,0,0,.7)', border: '1px solid #4c8dff', fontSize }} />}
@@ -328,6 +331,7 @@ function ScreenshotEditor(): JSX.Element {
           <Tooltip title={t('滚动截图')}><span><Button size="small" aria-label={t('滚动截图')} data-screenshot-action="scroll" disabled={busy} onClick={startScroll}><UnfoldMore fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('重新框选')}><span><Button size="small" aria-label={t('重新框选')} disabled={busy} onClick={reset}><RestartAlt fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('另存为')}><span><Button size="small" aria-label={t('另存为')} disabled={busy} data-screenshot-action="save" onClick={() => run('save')}><SaveAlt fontSize="small" /></Button></span></Tooltip>
+          <Tooltip title={t('贴图')}><span><Button size="small" aria-label={t('贴图')} disabled={busy} data-screenshot-action="pin" onClick={()=>run('pin')}>▣</Button></span></Tooltip>
           <Tooltip title={t('取消')}><Button size="small" aria-label={t('取消')} onClick={() => window.api.screenshot.close()}><Close fontSize="small" /></Button></Tooltip>
           <Tooltip title={t('完成')}><span><Button size="small" aria-label={t('完成')} disabled={busy} color="success" data-screenshot-action="copy" onClick={() => run('copy')}><Check fontSize="small" /></Button></span></Tooltip>
         </Stack>
@@ -371,6 +375,7 @@ function ScreenshotEditor(): JSX.Element {
         <Stack direction="row" alignItems="center" spacing={1}>
           <Typography sx={{ px: 1, whiteSpace: 'nowrap' }}>{longCapture.width} × {longCapture.height}</Typography>
           <Button disabled={busy} onClick={() => run('save')}>{t('另存为')}</Button>
+          <Button disabled={busy} onClick={()=>run('pin')}>{t('贴图')}</Button>
           <Button disabled={busy} onClick={() => run('copy')}>{t('复制图片')}</Button>
           <Button onClick={() => window.api.screenshot.close()}>{t('关闭')}</Button>
         </Stack>
@@ -381,6 +386,7 @@ function ScreenshotEditor(): JSX.Element {
         <Button onClick={() => setShowOriginal(value => !value)}>{t(showOriginal ? '查看译图' : '查看原图')}</Button>
         <Button onClick={() => window.api.screenshot.copyText(translated.text).catch(reportError)}>{t('复制文字')}</Button>
         <Button disabled={busy} onClick={() => run('save')}>{t('保存译图')}</Button>
+        <Button disabled={busy} onClick={()=>run('pin')}>{t('贴图')}</Button>
         <Button disabled={busy} onClick={() => run('copy')}>{t('复制译图')}</Button>
         <Button disabled={busy} onClick={() => setTranslated(null)}>{t('返回编辑')}</Button>
         <Button onClick={() => window.api.screenshot.close()}>{t('关闭')}</Button>

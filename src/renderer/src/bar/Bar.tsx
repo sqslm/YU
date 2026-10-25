@@ -4,6 +4,7 @@ import { AlertRow, alertOf, alertTone, hasAlertActions } from './AlertRow'
 import { MicCapture } from './capture'
 import { disposeCues, playCue } from './cues'
 import { CaptionTicker } from './CaptionTicker'
+import { createNoteAudioPlayer } from './noteAudio'
 import i18n, { applyUiLanguage } from '../i18n'
 
 /**
@@ -53,6 +54,13 @@ export function modeLabelFor(state: BarState, showMode: boolean): string | null 
  * rounded glass pill with a live waveform, then collapses again.
  */
 export function Bar(): JSX.Element {
+  useEffect(()=>{
+    const player=createNoteAudioPlayer()
+    const off=window.api.bar.onNoteAudio(request=>{
+      void player.run(request).then(state=>window.api.bar.replyNoteAudio({requestId:request.requestId,state}),error=>window.api.bar.replyNoteAudio({requestId:request.requestId,error:error instanceof Error?error.message:String(error)}))
+    })
+    return ()=>{off();player.dispose()}
+  },[])
   const [state, setState] = useState<BarState>({ phase: 'idle' })
   const [level, setLevel] = useState(0)
   const [elapsed, setElapsed] = useState(0)

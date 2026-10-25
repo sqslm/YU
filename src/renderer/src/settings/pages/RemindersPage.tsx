@@ -2,19 +2,20 @@ import { useEffect, useState } from 'react'
 import { Alert, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, Menu, MenuItem, Stack, Tab, Tabs, TextField, Tooltip, Typography } from '@mui/material'
 import { Add, ArrowDropDown, CheckCircleOutline, MoreHoriz, RadioButtonUnchecked } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
-import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderView, TodoPriority } from '@shared/reminders'
+import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderView, TodoPriority, ReminderRecurrence } from '@shared/reminders'
 import { isOverdue, localDateTime, normalizePriority, PRIORITY_LABELS, TODO_PRIORITIES } from '@shared/reminders'
 import { PagedList } from '../Pagination'
 import { ReminderDateTime } from './ReminderDateTime'
 import { SnoozeButton } from '../../reminder/SnoozeButton'
 import { formatDeadline, reminderDateBounds, reminderView, type ReminderKind, type ReminderPeriod, type ReminderPriorityFilter } from './reminderView'
 
-interface Form { kind: 'reminder' | 'todo'; title: string; description: string; timeExpression: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | 'daily' | 'weekly'; weekday: number; priority: TodoPriority; deadline: string }
-const empty = (kind: Form['kind'] = 'reminder'): Form => ({ kind, title: '', description: '', timeExpression: '', date: '', level: 'normal', repeat: 'none', weekday: 1, priority: 'normal', deadline: '' })
-const fromReminder = (row: Reminder): Form => ({ kind: row.dueAt === null ? 'todo' : 'reminder', title: row.title, description: row.description ?? '', timeExpression: row.timeExpression ?? '', date: localDateTime(row.dueAt), level: row.level,
-  repeat: row.recurrence?.frequency ?? 'none', weekday: row.recurrence?.weekdays?.[0] ?? 1, priority: normalizePriority(row.priority), deadline: localDateTime(row.deadlineAt ?? null) })
-const fromDraft = (row: ReminderDraft): Form => ({ kind: row.dueAt === null ? 'todo' : 'reminder', title: row.title, description: row.description ?? '', timeExpression: row.time_expression ?? '', date: localDateTime(row.dueAt), level: row.level,
-  repeat: row.dueAt === null ? 'none' : row.rule?.frequency ?? row.recurrence ?? 'none', weekday: row.rule?.weekdays?.[0] ?? -1, priority: 'normal', deadline: '' })
+interface Form { kind: 'reminder' | 'todo'; title: string; description: string; timeExpression: string; date: string; level: 'normal' | 'strong'; repeat: 'none' | ReminderRecurrence['frequency']; weekday: number; weekdays: number[]; priority: TodoPriority; deadline: string; interval: number; count: string; until: string }
+const limits = (rule?: ReminderRecurrence | null) => ({interval:rule?.interval??1,count:rule?.count?.toString()??'',until:rule?.until?localDateTime(rule.until).slice(0,10):''})
+const empty = (kind: Form['kind'] = 'reminder'): Form => ({ ...limits(), kind, title: '', description: '', timeExpression: '', date: '', level: 'normal', repeat: 'none', weekday: 1, weekdays: [], priority: 'normal', deadline: '' })
+const fromReminder = (row: Reminder): Form => ({ ...limits(row.recurrence), kind: row.dueAt === null ? 'todo' : 'reminder', title: row.title, description: row.description ?? '', timeExpression: row.timeExpression ?? '', date: localDateTime(row.dueAt), level: row.level,
+  repeat: row.recurrence?.frequency ?? 'none', weekday: row.recurrence?.weekdays?.[0] ?? 1, weekdays: row.recurrence?.weekdays ?? [], priority: normalizePriority(row.priority), deadline: localDateTime(row.deadlineAt ?? null) })
+const fromDraft = (row: ReminderDraft): Form => ({ ...limits(row.rule), kind: row.dueAt === null ? 'todo' : 'reminder', title: row.title, description: row.description ?? '', timeExpression: row.time_expression ?? '', date: localDateTime(row.dueAt), level: row.level,
+  repeat: row.dueAt === null ? 'none' : row.rule?.frequency ?? row.recurrence ?? 'none', weekday: row.rule?.weekdays?.[0] ?? -1, weekdays: row.rule?.weekdays ?? [], priority: 'normal', deadline: '' })
 
 function input(form: Form, source: ReminderInput['source'], noteId?: string, original?: Reminder): ReminderInput {
   const sameDate = original && form.date === localDateTime(original.dueAt)
@@ -32,8 +33,13 @@ function input(form: Form, source: ReminderInput['source'], noteId?: string, ori
   const date = new Date(dueAt ?? Date.now())
   return { title: form.title, description: form.description, timeExpression: form.timeExpression || undefined, dueAt, level: form.kind === 'todo' ? 'normal' : form.level, source, noteId,
     priority: form.priority, deadlineAt,
-    recurrence: sameDate && form.repeat === (original.recurrence?.frequency ?? 'none') && form.weekday === (original.recurrence?.weekdays?.[0] ?? 1) ? original.recurrence : form.repeat === 'none' ? null : { frequency: form.repeat, hour: date.getHours(), minute: date.getMinutes(),
-      ...(form.repeat === 'weekly' ? { weekdays: [form.weekday] } : {}) } }
+    recurrence: form.repeat === 'none' ? null : { frequency: form.repeat, hour: date.getHours(), minute: date.getMinutes(),
+      ...(sameDate && original.recurrence?.anchor ? {anchor:original.recurrence.anchor}:{}),
+      ...(form.repeat === 'weekly' ? { weekdays: form.weekdays.includes(form.weekday) ? form.weekdays : [form.weekday] } : {}),
+      ...(['monthly','yearly'].includes(form.repeat)?{day:sameDate?original.recurrence?.day??date.getDate():date.getDate()}:{}),
+      ...(form.repeat==='yearly'?{month:date.getMonth()+1}:{}),
+      ...(form.interval!==1?{interval:form.interval}:{}),...(form.count?{count:Number(form.count)}:{}),
+      ...(form.until?{until:new Date(`${form.until}T23:59:59.999`).getTime()}:{}) } }
 }
 
 function Fields({ form, change }: { form: Form; change: (form: Form) => void }): JSX.Element {
@@ -56,7 +62,7 @@ function Fields({ form, change }: { form: Form; change: (form: Form) => void }):
         InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-deadline-editor': true }} onChange={e => change({ ...form, deadline: e.target.value })} />
     </Stack>
     {form.kind === 'reminder' && <><ReminderDateTime required value={form.date} onChange={date => change({ ...form, date,
-      weekday: form.repeat === 'weekly' && date ? new Date(date).getDay() : form.weekday })} />
+      weekday: form.repeat === 'weekly' && date && !form.weekdays.includes(new Date(date).getDay()) ? new Date(date).getDay() : form.weekday })} />
     <Stack direction="row" spacing={1}>
       <TextField select label={t('提醒等级')} size="small" value={form.level} onChange={e => change({ ...form, level: e.target.value as Form['level'] })}>
         <MenuItem value="normal">{t('普通提醒')}</MenuItem><MenuItem value="strong">{t('强提醒')}</MenuItem>
@@ -64,16 +70,23 @@ function Fields({ form, change }: { form: Form; change: (form: Form) => void }):
       <TextField select label={t('重复规则')} size="small" value={form.repeat} onChange={e => change({ ...form, repeat: e.target.value as Form['repeat'],
         weekday: e.target.value === 'weekly' && form.date ? new Date(form.date).getDay() : form.weekday })}>
         <MenuItem value="none">{t('不重复')}</MenuItem><MenuItem value="daily">{t('每天')}</MenuItem><MenuItem value="weekly">{t('每周')}</MenuItem>
+        <MenuItem value="monthly">{t('每月')}</MenuItem><MenuItem value="yearly">{t('每年')}</MenuItem>
       </TextField>
       {form.repeat === 'weekly' && <TextField select label={t('星期')} size="small" value={form.weekday} onChange={e => {
         const weekday = Number(e.target.value), date = form.date ? new Date(form.date) : null
         if (date) date.setDate(date.getDate() + (weekday - date.getDay() + 7) % 7)
-        change({ ...form, weekday, date: date ? localDateTime(date.getTime()) : '' })
+        change({ ...form, weekday, weekdays: [weekday], date: date ? localDateTime(date.getTime()) : '' })
       }}>
         <MenuItem value={-1} disabled>{t('请选择每周的星期')}</MenuItem>
         {['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'].map((day, i) => <MenuItem key={day} value={i}>{t(day)}</MenuItem>)}
       </TextField>}
-    </Stack></>}
+    </Stack>
+    {form.repeat!=='none' && <><Stack direction="row" spacing={1}>
+      <TextField type="number" size="small" label={t('重复间隔')} value={form.interval} inputProps={{min:1,max:100}} onChange={e=>change({...form,interval:Number(e.target.value)})}/>
+      <TextField type="number" size="small" label={t('总次数（可选）')} value={form.count} inputProps={{min:1,max:10000}} onChange={e=>change({...form,count:e.target.value})}/>
+      <TextField type="date" size="small" label={t('结束日期（可选）')} value={form.until} InputLabelProps={{shrink:true}} onChange={e=>change({...form,until:e.target.value})}/>
+    </Stack><Typography variant="caption" color="text.secondary">{t('次数包含首次，完成一次消耗一次；月末缺少该日期时在最后一天提醒。')}</Typography></>}
+    </>}
   </Stack>
 }
 
@@ -194,7 +207,7 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
             {t('截止 {{time}}', { time: formatDeadline(row.deadlineAt, language) })}{overdue ? ` · ${t('已逾期')}` : ''}
           </Typography>}
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{row.dueAt === null ? t('创建于 {{date}}', { date: format(row.createdAt) }) : row.recurrence ? `${t(row.recurrence.frequency === 'daily' ? '每天' : '每周')}${row.recurrence.weekdays?.map(day => ` ${t(['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][day]!)}`).join('') ?? ''}` : t(sourceLabel[row.source])}</Typography>
+            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{row.dueAt === null ? t('创建于 {{date}}', { date: format(row.createdAt) }) : row.recurrence ? `${t(({daily:'每天',weekly:'每周',monthly:'每月',yearly:'每年'})[row.recurrence.frequency])}${row.recurrence.weekdays?.map(day => ` ${t(['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][day]!)}`).join('') ?? ''}` : t(sourceLabel[row.source])}</Typography>
             {row.noteId && <Button size="small" onClick={() => onOpenNote(row.noteId!)}>{t('查看原始随记')}</Button>}
           </Stack>
           </Box>
