@@ -184,6 +184,15 @@ beforeEach(() => {
 })
 
 describe('native function calling', () => {
+  it('continues with built-in file search when the Everything interface is unavailable', async () => {
+    const run = vi.fn().mockResolvedValueOnce({ ok: false, summary: 'Everything interface unavailable', data: { available: false, fallback: ['search_files'] } })
+      .mockResolvedValueOnce({ ok: true, summary: 'One file', data: { items: [] } })
+    const windows = { run } as unknown as WindowsTools
+    const fetchImpl = makeFetch(toolCallResponse('search_files_everything', { query: 'notes' }), toolCallResponse('search_files', { folder: 'downloads', name: 'notes' }), textResponse('Built-in search used'))
+    const result = await askAgent(makeSettings(), 'Find notes in my downloads', {}, signal, () => {}, { reset: true, windows, allowedTools: ['search_files_everything', 'search_files'], fetchImpl: fetchImpl as unknown as typeof fetch })
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(result.text).toBe('Built-in search used')
+  })
   it('queries then updates a note in separate rounds without requiring Windows tools', async () => {
     const note = { id: 'actual-note', tags: [], transcript: 'Owned note', createdAt: 1, updatedAt: 1 }
     const updateNoteTags = vi.fn().mockResolvedValue({ ...note, tags: ['work'] })
@@ -532,6 +541,16 @@ describe('latency budget', () => {
 })
 
 describe('JSON intent fallback', () => {
+  it('can recover an unavailable Everything index through the built-in search in JSON mode', async () => {
+    const run = vi.fn().mockResolvedValueOnce({ ok: false, summary: 'Index unavailable', data: { available: false, fallback: ['search_files'] } })
+      .mockResolvedValueOnce({ ok: true, summary: 'Built-in result', data: { items: [] } })
+    mocks.complete.mockResolvedValueOnce('{"tool":"search_files_everything","args":{"query":"notes"}}')
+      .mockResolvedValueOnce('{"tool":"search_files","args":{"name":"notes"}}')
+      .mockResolvedValueOnce('{"tool":"answer","args":{}}').mockResolvedValueOnce('Built-in search result')
+    await askAgent(makeSettings(), 'Find notes in Downloads', {}, signal, () => {}, { reset: true, windows: { run } as unknown as WindowsTools,
+      allowedTools: ['search_files_everything', 'search_files'], fetchImpl: makeFetch(new Response('unsupported', { status: 400 })) as unknown as typeof fetch })
+    expect(run).toHaveBeenCalledTimes(2)
+  })
   it('falls back when the gateway rejects tools', async () => {
     const fetchImpl = makeFetch(new Response('{"error":"tools unsupported"}', { status: 400 }))
     mocks.complete

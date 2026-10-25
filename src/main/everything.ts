@@ -471,5 +471,5 @@ export async function searchEverything(query: string, options: EverythingOptions
   reasons.push(cli.code === 'missing'
     ? mt('没有找到 es.exe（{{message}}）', { message: cli.error })
     : mt('es.exe 运行失败（{{message}}）', { message: cli.error }))
-  return unavailable(mt('这台机器没有 Everything（{{detail}}），已改用内置文件搜索', { detail: reasons.join('；') }))
+  return unavailable(mt('无法连接 Everything 查询接口（{{detail}}）', { detail: reasons.join('；') }))
 }

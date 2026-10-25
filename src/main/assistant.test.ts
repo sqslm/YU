@@ -26,6 +26,17 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it.each([true, false])('accepts an unavailable Everything probe only when a later built-in search succeeds: %s', async recovered => {
+    const windows = new WindowsTools({ folders: { downloads: '.', desktop: '.', documents: '.' }, native: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })
+    ask.mockImplementationOnce(async (...args) => {
+      args[5]?.onLocalResult?.({ tool: 'search_files_everything', ok: false, fallback: true, summary: 'Index unavailable' })
+      if (recovered) args[5]?.onLocalResult?.({ tool: 'search_files', ok: true, summary: 'Built-in search finished' })
+      return { text: 'Actual built-in results', sources: [], searched: false }
+    })
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), windows })
+    await current.send('Find the notes in my downloads')
+    expect(current.snapshot().turns.at(-1)?.state).toBe(recovered ? 'done' : 'error')
+  })
   it.each(['把我框选区域里的文字提取出来。', '我想让你分析这张截图，但先给我看一下准备发送的内容。'])('preserves the complete region/preview request for the screenshot boundary: %s', async input => {
     const analyzeScreenshot = vi.fn().mockResolvedValue('Local editor opened; no image sent')
     const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), analyzeScreenshot })

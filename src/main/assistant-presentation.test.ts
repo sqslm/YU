@@ -3,6 +3,11 @@ import type { AssistantTurn } from '@shared/assistant'
 import { assistantAnswer } from './assistant-presentation'
 
 const turn = (tools: string[] = []): AssistantTurn => ({ id: 1, question: 'What is this window?', answer: 'Feishu', sources: [], state: 'done', localResults: tools.map(tool => ({ tool, ok: true, summary: 'Real result' })) })
+it('keeps recovered file-search results in the answer card, but rejects an unrecovered index failure', () => {
+  const failed = { tool: 'search_files_everything', ok: false, fallback: true, summary: 'Index unavailable' }
+  expect(assistantAnswer({ ...turn(), localResults: [failed, { tool: 'search_files', ok: true, summary: 'Actual results' }] })).toBeDefined()
+  expect(assistantAnswer({ ...turn(), localResults: [failed] })).toBeUndefined()
+})
 it('puts normal answers and actual read-only tool results in the existing Ask card', () => {
   for (const tools of [[], ['get_active_window'], ['search_files'], ['list_reminders'], ['search_notes'], ['analyze_screenshot']]) {
     expect(assistantAnswer(turn(tools))).toMatchObject({ answer: 'Feishu', assistant: true, streaming: false })

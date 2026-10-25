@@ -95,7 +95,7 @@ describe('tier 1: the HTTP service', () => {
     const result = await searchEverything('a', { fetchImpl, fileExists: () => false, pathValue: '', env: {} })
     expect(result.available).toBe(false)
     expect(result.backend).toBe('none')
-    expect(result.reason).toContain('这台机器没有 Everything')
+    expect(result.reason).toContain('无法连接 Everything 查询接口')
   })
   it('degrades when the service answers an error or HTML', async () => {
     for (const fetchImpl of [
@@ -165,12 +165,13 @@ describe('tier 3: honest absence', () => {
     expect(result.available).toBe(false)
     expect(result.reason).toContain('已按设置关闭')
   })
-  it('says the machine has no Everything so the caller can fall back', async () => {
+  it('reports an unavailable query interface without claiming fallback already ran', async () => {
     const result = await searchEverything('a', { fetchImpl: async () => { throw new Error('off') }, fileExists: () => false, pathValue: '', env: {} })
     expect(result).toEqual({
       available: false, backend: 'none', query: 'a', hits: [], total: 0, truncated: false,
-      reason: expect.stringContaining('已改用内置文件搜索')
+      reason: expect.stringContaining('无法连接 Everything 查询接口')
     })
+    expect(result.reason).not.toContain('已改用')
   })
   it('refuses an empty query without touching the network', async () => {
     const fetchImpl = vi.fn(async () => page([]))

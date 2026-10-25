@@ -7,6 +7,9 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '文件夹不存在：{{path}}': 'Folder does not exist: {{path}}',
+  'Everything 查询接口不可用，请改用内置文件搜索': 'The Everything query interface is unavailable; use the built-in file search',
+  '无法连接 Everything 查询接口（{{detail}}）': 'Cannot connect to the Everything query interface ({{detail}})',
   '已打开截图编辑器；请确认选区后点击 OCR 或分析，关闭即可取消。本次尚未发送图片。': 'Screenshot editor opened. Confirm the region, then choose OCR or Analyze; close to cancel. No image has been sent yet.',
   '提醒内容必须来自原始请求': 'Reminder text must come from the original request',
   '提醒内容必须保留完整的时间和改口': 'Reminder text must preserve the complete time context and corrections',

@@ -1,4 +1,4 @@
-import type { AssistantState, AssistantTurn } from '@shared/assistant'
+import { unresolvedToolFailure, type AssistantState, type AssistantTurn } from '@shared/assistant'
 import type { Settings } from '@shared/types'
 import type { PromptContext } from '@shared/prompts'
 import { mt } from '@shared/mainI18n'
@@ -538,7 +538,7 @@ export class AssistantSession {
       }
       taskSignal.throwIfAborted()
       if (this.controller !== controller) return
-      const failedTool = turn.localResults?.find(item => !item.ok)
+      const failedTool = unresolvedToolFailure(turn.localResults)
       if (failedTool) throw new Error(failedTool.summary)
       if (taskEdit && !turn.localResults?.some(item => item.tool === 'manage_reminder' && item.ok)) {
         throw new Error(turn.localResults?.find(item => item.tool === 'manage_reminder' && !item.ok)?.summary ?? mt('本次未修改提醒或待办，请明确事项后重试'))

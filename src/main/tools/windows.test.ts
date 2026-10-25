@@ -26,6 +26,16 @@ const file = async (name: string): Promise<string> => { const path = join(root, 
 const row = (path: string) => ({ name: path.split(/[\\/]/).at(-1)!, path, bytes: 5, modified: '2026-10-22T01:00:00Z' })
 
 describe('Windows tools permissions and real result selection', () => {
+  it.each(['帮我打开E盘的software文件夹', '打开 E 盘的 softwares 文件夹。'])('routes a named drive folder to folder opening instead of registered applications: %s', input => {
+    expect(tools.command(input)).toEqual({ name: 'open_folder', args: { folder: input.includes('softwares') ? 'E:\\softwares' : 'E:\\software' } })
+  })
+  it.each(['打开 E:\\softwares 文件夹', 'Open folder E:\\softwares', '打开E:\\softwares'])('opens an explicit absolute folder without application discovery: %s', input => {
+    expect(tools.command(input)).toEqual({ name: 'open_folder', args: { folder: 'E:\\softwares' } })
+  })
+  it('does not treat unnamed folders or an absolute document as registered applications', () => {
+    expect(tools.command('打开software文件夹')).toBeNull()
+    expect(tools.command('打开 E:\\notes.txt')).toBeNull()
+  })
   it('leaves compound requests to the tool loop instead of using the whole sentence as an app name', () => {
     expect(tools.command('打开计算器，帮我算一下 258 乘以 36。')).toBeNull()
     expect(tools.command('Open Calculator and calculate 258 times 36.')).toBeNull()
@@ -37,7 +47,7 @@ describe('Windows tools permissions and real result selection', () => {
     await dynamic.run('search_files', { type: 'archive', recursive: true })
     expect(native.mock.calls[0][0]).toMatchObject({ root, recursive: true, extensions: expect.arrayContaining(['zip', 'rar', '7z']) })
     folder = join(root, 'nonexistent-download-folder')
-    await expect(dynamic.run('search_files', {})).rejects.toThrow()
+    expect(await dynamic.run('search_files', {})).toMatchObject({ ok: false, summary: expect.stringContaining('文件夹不存在') })
     expect(native).toHaveBeenCalledTimes(1)
   })
   it('resolves Explorer by its original handle and does not silently substitute Downloads', async () => {
@@ -296,7 +306,7 @@ describe('file body search and the Everything index', () => {
     const local = new WindowsTools({ folders: { downloads: root, desktop: root, documents: root }, native, openPath, openUrl, everything: lookUp })
     const result = await local.run('search_files_everything', { query: '预算.xlsx' })
     expect(result.ok).toBe(false)
-    expect(result.summary).toBe('这台机器没有 Everything，已改用内置文件搜索')
+    expect(result.summary).toBe('Everything 查询接口不可用，请改用内置文件搜索')
     expect(result.data).toMatchObject({ available: false, backend: 'none', fallback: ['search_files', 'search_file_contents'] })
   })
   it('keeps only openable Everything hits as items while listing every hit', async () => {

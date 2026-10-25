@@ -77,6 +77,10 @@ export class WindowsTools {
     if (/[,，;；\n]|然后|并且|同时|\b(?:and then|then|also)\b|\band (?:open|find|save|create|search|calculate)\b/iu.test(input)) return null
     const url = /^(?:请|帮我)?(?:打开|open )\s*(https?:\/\/\S+)$/i.exec(input)
     if (url) return { name: 'open_url', args: { url: url[1] } }
+    const driveFolder = /^(?:请|帮我)?打开\s*([a-z])\s*盘(?:里|中|下面|下)?的?\s*(.+?)\s*(?:文件夹|目录)[。！!]?$/i.exec(input)
+    if (driveFolder && !/[<>:"|?*\x00-\x1f]/.test(driveFolder[2])) return { name: 'open_folder', args: { folder: `${driveFolder[1].toUpperCase()}:\\${driveFolder[2].replace(/\//g, '\\')}` } }
+    const absoluteFolder = /^(?:(?:请|帮我)?打开|open(?: the)?(?: folder)?)\s*[“"]?([a-z]:[\\/][^"”\n]*?)[”"]?\s*(?:文件夹|目录)?[。！!]?$/i.exec(input)
+    if (absoluteFolder && (!extname(absoluteFolder[1]) || /文件夹|目录|\bfolder\b/i.test(input)) && !/[<>"|?*\x00-\x1f]/.test(absoluteFolder[1])) return { name: 'open_folder', args: { folder: absoluteFolder[1] } }
     const folder = /^(?:请|帮我)?打开(?:我的)?(下载(?:目录|文件夹)?|桌面|文档)(?:目录|文件夹)?[。！!]?$/i.exec(input)
       || /^open (?:my |the )?(downloads|desktop|documents)(?: folder)?[.!]?$/i.exec(input)
     if (folder) return { name: 'open_folder', args: { folder: /下载|downloads/i.test(folder[1]) ? 'downloads' : /桌面|desktop/i.test(folder[1]) ? 'desktop' : 'documents' } }
@@ -87,7 +91,7 @@ export class WindowsTools {
       return { name: item?.kind === 'application' ? 'open_application' : 'open_file', args: { id: item?.id ?? '' } }
     }
     const app = /^(?:请|帮我)?打开\s*([^。！？\n]{1,80})[。！!]?$/i.exec(input) || /^open (?:the )?([\w .+()-]{1,80})[.!]?$/i.exec(input)
-    if (app && !/[\\/:]|然后|再|并且|官网|网站|网页|website|webpage|homepage|official|\.(?:com|org|net)\b|and |then /i.test(app[1])) return { name: 'open_application', args: { name: app[1] } }
+    if (app && !/[\\/:]|文件夹|目录|[a-z]\s*盘|\bfolder\b|然后|再|并且|官网|网站|网页|website|webpage|homepage|official|\.(?:com|org|net)\b|and |then /i.test(app[1])) return { name: 'open_application', args: { name: app[1] } }
     return null
   }
   async run(name: string, args: Record<string, unknown>, signal?: AbortSignal, context?: PromptContext): Promise<ToolOutcome> {
@@ -219,7 +223,7 @@ export class WindowsTools {
       if (!found.available) {
         // Not an error: the model is expected to retry with the built-in search,
         // and the summary has to say that out loud or it will just apologise.
-        return { ok: false, summary: mt('这台机器没有 Everything，已改用内置文件搜索'), error: found.reason,
+        return { ok: false, summary: mt('Everything 查询接口不可用，请改用内置文件搜索'), error: found.reason,
           data: { ok: false, available: false, backend: found.backend, query, reason: found.reason, fallback: ['search_files', 'search_file_contents'] } }
       }
       const openable = found.hits.filter(hit => documents.has(extname(hit.path).toLowerCase()))
@@ -243,7 +247,12 @@ export class WindowsTools {
     }
     const folders = typeof this.deps.folders === 'function' ? this.deps.folders() : this.deps.folders
     if (!(input in folders) && !isAbsolute(input)) return failed(mt('请选择本地的具体文件夹，不支持全盘或网络目录'))
-    const root = await realpath(folders[input as keyof typeof folders] || input)
+    let root: string
+    try { root = await realpath(folders[input as keyof typeof folders] || input) }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return failed(mt('文件夹不存在：{{path}}', { path: input }))
+      throw error
+    }
     if (!isAbsolute(root) || root === parse(root).root || root.startsWith('\\\\') || !(await stat(root)).isDirectory()) return failed(mt('请选择本地的具体文件夹，不支持全盘或网络目录'))
     if (name === 'open_folder') {
       signal?.throwIfAborted()
