@@ -1,5 +1,22 @@
-import { app, nativeImage, type BrowserWindow, type NativeImage } from 'electron'
-import { join } from 'node:path'
+import { app, nativeImage, shell, type BrowserWindow, type NativeImage } from 'electron'
+import { existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
+
+/** Development notifications must never register Electron under the installed app's identity. */
+export function appUserModelId(): string {
+  return app.isPackaged ? 'com.typeless.rebuild' : 'com.typeless.rebuild.dev'
+}
+
+/** Repair only the legacy Electron shortcut that this app registered with its production ID. */
+export function repairDevelopmentShortcut(): boolean {
+  if (process.platform !== 'win32') return false
+  const file = join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Electron.lnk')
+  if (!existsSync(file)) return false
+  const shortcut = shell.readShortcutLink(file)
+  if (shortcut.appUserModelId !== 'com.typeless.rebuild' || basename(shortcut.target).toLowerCase() !== 'electron.exe') return false
+  if (!shell.writeShortcutLink(file, 'update', { target: shortcut.target, appUserModelId: 'com.typeless.rebuild.dev' })) throw new Error('Cannot repair the legacy development shortcut identity')
+  return true
+}
 
 /**
  * Our icon, for the places Windows would otherwise fill in with Electron's own
@@ -25,7 +42,7 @@ export function setTaskbarIcon(win: BrowserWindow): void {
     relaunchCommand: `"${process.execPath}"${app.isPackaged ? '' : ` "${app.getAppPath()}"`}`,
     relaunchDisplayName: 'YU'
   })
-  win.setAppDetails({ appId: 'com.typeless.rebuild' })
+  win.setAppDetails({ appId: appUserModelId() })
 }
 
 /**

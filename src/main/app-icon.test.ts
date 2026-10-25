@@ -13,11 +13,14 @@ const mock = vi.hoisted(() => ({
   image: { isEmpty: () => false } as { isEmpty: () => boolean },
   throwOnCreate: false,
   packaged: false,
+  shortcutExists: false,
+  readShortcut: vi.fn(), writeShortcut: vi.fn(),
   seenPath: '' as string
 }))
 
 vi.mock('electron', () => ({
-  app: { getAppPath: () => mock.appPath, get isPackaged() { return mock.packaged } },
+  app: { getAppPath: () => mock.appPath, getPath: () => 'C:/profiles', get isPackaged() { return mock.packaged } },
+  shell: { readShortcutLink: mock.readShortcut, writeShortcutLink: mock.writeShortcut },
   nativeImage: {
     createFromPath: (path: string) => {
       mock.seenPath = path
@@ -26,8 +29,9 @@ vi.mock('electron', () => ({
     }
   }
 }))
+vi.mock('node:fs', () => ({ existsSync: () => mock.shortcutExists }))
 
-const { appIcon, appIconPath, setTaskbarIcon } = await import('./app-icon')
+const { appIcon, appIconPath, setTaskbarIcon, repairDevelopmentShortcut } = await import('./app-icon')
 
 describe('appIcon', () => {
   beforeEach(() => {
@@ -36,6 +40,8 @@ describe('appIcon', () => {
     mock.throwOnCreate = false
     mock.seenPath = ''
     mock.packaged = false
+    mock.shortcutExists = false
+    mock.readShortcut.mockReset(); mock.writeShortcut.mockReset().mockReturnValue(true)
   })
   afterEach(() => vi.restoreAllMocks())
 
@@ -43,6 +49,18 @@ describe('appIcon', () => {
     expect(appIconPath()).toBe(join('C:/app', 'resources', 'icon.png'))
     expect(appIcon()).toBe(mock.image)
     expect(mock.seenPath).toBe(join('C:/app', 'resources', 'icon.png'))
+  })
+  it.skipIf(process.platform !== 'win32')('repairs only a legacy Electron shortcut using this application production identity', () => {
+    mock.shortcutExists = true
+    mock.readShortcut.mockReturnValue({ target: 'C:/tools/electron.exe', appUserModelId: 'com.typeless.rebuild' })
+    expect(repairDevelopmentShortcut()).toBe(true)
+    expect(mock.writeShortcut).toHaveBeenCalledExactlyOnceWith(join('C:/profiles','Microsoft','Windows','Start Menu','Programs','Electron.lnk'), 'update', { target: 'C:/tools/electron.exe', appUserModelId: 'com.typeless.rebuild.dev' })
+    mock.writeShortcut.mockClear()
+    mock.readShortcut.mockReturnValue({ target: 'C:/other/electron.exe', appUserModelId: 'other.app' })
+    expect(repairDevelopmentShortcut()).toBe(false)
+    mock.readShortcut.mockReturnValue({ target: 'C:/installed/YU.exe', appUserModelId: 'com.typeless.rebuild' })
+    expect(repairDevelopmentShortcut()).toBe(false)
+    expect(mock.writeShortcut).not.toHaveBeenCalled()
   })
 
   it('returns undefined when the image is empty', () => {
@@ -57,7 +75,7 @@ describe('appIcon', () => {
     expect(details.mock.calls[0][0]).not.toHaveProperty('appId')
     expect(details).toHaveBeenNthCalledWith(1, expect.objectContaining({
       appIconPath: join(mock.appPath, 'resources', 'app.ico'), relaunchCommand: `"${process.execPath}" "${mock.appPath}"`, relaunchDisplayName: 'YU' }))
-    expect(details).toHaveBeenNthCalledWith(2, { appId: 'com.typeless.rebuild' })
+    expect(details).toHaveBeenNthCalledWith(2, { appId: 'com.typeless.rebuild.dev' })
     mock.packaged = true
     vi.stubGlobal('process', { ...process, resourcesPath: 'C:/installed/resources' })
     try {

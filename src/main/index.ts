@@ -45,7 +45,7 @@ import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { safeFetch } from './safe-fetch'
-import { appIcon } from './app-icon'
+import { appIcon, appUserModelId, repairDevelopmentShortcut } from './app-icon'
 import { handle, subscribe } from './ipc-trust'
 import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
 import { RemindersSync } from './reminders-sync'
@@ -99,7 +99,7 @@ if (resolve(app.getPath('userData')) === resolve(join(app.getPath('appData'), ap
   app.setPath('userData', join(app.getPath('appData'), 'typeless-rebuild'))
 }
 app.setName('YU')
-if (process.platform === 'win32') app.setAppUserModelId('com.typeless.rebuild')
+if (process.platform === 'win32') app.setAppUserModelId(appUserModelId())
 const store = new SettingsStore()
 const history = new HistoryStore()
 /**
@@ -1811,6 +1811,8 @@ async function openLogFile(): Promise<void> {
 
 async function bootstrap(): Promise<void> {
   await openLogFile()
+  try { if (app.isPackaged && repairDevelopmentShortcut()) log('[app] repaired legacy development shortcut identity') }
+  catch (error) { log(`[app] development shortcut repair failed: ${String(error)}`) }
   // Per-take session logs live beside app.log. Configured here rather than in
   // `recordingLog` itself so the module stays Electron-free and unit-testable.
   recordingLog.configure(join(app.getPath('userData'), 'recordings'))
