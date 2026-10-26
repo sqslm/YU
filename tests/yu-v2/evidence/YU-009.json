@@ -1,0 +1,238 @@
+{
+  "case_id": "YU-009",
+  "input": "我想到一种新的提醒软件设计，帮我记下来。",
+  "spoken_input": "我想到一种新的提醒软件设计，帮我记下来。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-009",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "保存随记中…",
+            "showMode": true,
+            "taskLabel": "随记"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "随记已保存",
+            "feedback": {},
+            "taskLabel": "随记",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "0593b0df-ca26-4602-8f0c-53ce508c23d4",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "我想到一种新的提醒软件设计，帮我记下来。",
+          "target": {
+            "windowHandle": "10009",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-009"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 26
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "notes",
+            "via": "rule"
+          },
+          "transcript": "我想到一种新的提醒软件设计，帮我记下来。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "3fab7875-f08d-408d-84d2-3e3686d9e269",
+                "tags": [],
+                "text": "我想到一种新的提醒软件设计，帮我记下来。",
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "3fab7875-f08d-408d-84d2-3e3686d9e269",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "我想到一种新的提醒软件设计，帮我记下来。",
+            "polished": "我想到一种新的提醒软件设计，帮我记下来。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/3fab7875-f08d-408d-84d2-3e3686d9e269.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_note",
+      "args": {
+        "text": "我想到一种新的提醒软件设计，帮我记下来。"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "随记已保存",
+        "data": {
+          "id": "3fab7875-f08d-408d-84d2-3e3686d9e269",
+          "tags": [],
+          "text": "我想到一种新的提醒软件设计，帮我记下来。",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "0593b0df-ca26-4602-8f0c-53ce508c23d4"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "3fab7875-f08d-408d-84d2-3e3686d9e269",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600002,
+      "durationMs": 1200,
+      "transcript": "我想到一种新的提醒软件设计，帮我记下来。",
+      "polished": "我想到一种新的提醒软件设计，帮我记下来。",
+      "polishStatus": "ok",
+      "audioPath": "notes/audio/3fab7875-f08d-408d-84d2-3e3686d9e269.wav",
+      "audioFormat": "wav",
+      "audioBytes": 38444,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "0593b0df-ca26-4602-8f0c-53ce508c23d4",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我想到一种新的提醒软件设计，帮我记下来。",
+    "target": {
+      "windowHandle": "10009",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-009"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "durationMs": 26
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "notes",
+      "via": "rule"
+    },
+    "transcript": "我想到一种新的提醒软件设计，帮我记下来。",
+    "results": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "data": {
+          "id": "3fab7875-f08d-408d-84d2-3e3686d9e269",
+          "tags": [],
+          "text": "我想到一种新的提醒软件设计，帮我记下来。",
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-009）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-009\"",
+    "[task 0593b0df-ca26-4602-8f0c-53ce508c23d4] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-009\"",
+    "[asr] local sense-voice-small: 20 chars",
+    "[task 0593b0df-ca26-4602-8f0c-53ce508c23d4] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-009\"",
+    "[task 0593b0df-ca26-4602-8f0c-53ce508c23d4] stage=routing ms=0",
+    "[voice-entry] notes",
+    "[notes] 音频压缩不可用（failed：Unrecognized option 'application'.\r\nError splitting the argument list: Option not found），保存为 WAV",
+    "[notes] 新随记 3fab7875-f08d-408d-84d2-3e3686d9e269 已保存（wav, 38 KB, 1200 ms）",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task 0593b0df-ca26-4602-8f0c-53ce508c23d4] stage=tool ms=26 state=completed",
+    "[task 0593b0df-ca26-4602-8f0c-53ce508c23d4] tool=create_note status=completed ms=26",
+    "[task 0593b0df-ca26-4602-8f0c-53ce508c23d4] stage=total ms=0 state=completed",
+    "[task 0593b0df-ca26-4602-8f0c-53ce508c23d4] stage=llm ms=1528"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-009",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1527,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

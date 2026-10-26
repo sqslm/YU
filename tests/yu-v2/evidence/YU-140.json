@@ -1,0 +1,54 @@
+{
+  "case_id": "YU-140",
+  "input": "先展示你打算上传的截图，我确认之后你再分析。",
+  "spoken_input": "先展示你打算上传的截图，我确认之后你再分析。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-140",
+  "observations": [
+    {
+      "label": "controlled_image",
+      "value": {
+        "sha256": "234eabb13a040ffe3058a1f5c18b3d250d68d528dc6ef06b296a2f23d11b688d",
+        "bytes": 16528,
+        "source": "generated non-private test image; not a desktop screenshot"
+      }
+    },
+    {
+      "label": "preview_guard",
+      "value": {
+        "opensEditor": false,
+        "source": "src/main/index.ts analyzeScreenshot checks screenshotNeedsEditor before capture/upload",
+        "modelCalls": 185
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "102ea426-d0e6-48b0-8fb7-ec15ee0d0cf5",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "先展示你打算上传的截图，我确认之后你再分析。",
+    "target": {
+      "windowHandle": "10140",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-140"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-140）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "FAIL"
+}

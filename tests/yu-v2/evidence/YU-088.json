@@ -1,0 +1,299 @@
+{
+  "case_id": "YU-088",
+  "input": "每天早上八点给我一份当天的任务简报。",
+  "spoken_input": "每天早上八点给我一份当天的任务简报。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-088",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "669e1abe-2b5e-48c7-bf51-8a20e9dbc517",
+        "taskState": "completed",
+        "question": "每天早上八点给我一份当天的任务简报。",
+        "answer": "每日简报已经设好：每天 08:00 自动生成，并以通知方式提醒，不朗读；没有内容的日子会跳过。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "configure_briefing",
+            "ok": true,
+            "summary": "每日简报已开启，每天 08:00 生成",
+            "status": "completed",
+            "taskId": "669e1abe-2b5e-48c7-bf51-8a20e9dbc517"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "每日简报已经设好：每天 08:00 自动生成，并以通知方式提醒，不朗读；没有内容的日子会跳过。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "669e1abe-2b5e-48c7-bf51-8a20e9dbc517",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "每天早上八点给我一份当天的任务简报。",
+          "target": {
+            "windowHandle": "10088",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-088"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "configure_briefing",
+              "state": "completed",
+              "durationMs": 0
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "rule"
+          },
+          "transcript": "每天早上八点给我一份当天的任务简报。",
+          "results": [
+            {
+              "tool": "configure_briefing",
+              "state": "completed",
+              "data": {
+                "settings": {
+                  "enabled": true,
+                  "time": "08:00",
+                  "speak": false,
+                  "notify": true,
+                  "skipEmpty": true,
+                  "narrative": true,
+                  "quietHours": {
+                    "enabled": true,
+                    "start": "22:00",
+                    "end": "07:30"
+                  }
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "calendar_after",
+      "value": [
+        {
+          "id": "450d82f1-418d-47d4-8f8e-f1409538690c",
+          "title": "项目讨论",
+          "start": 1793084400000,
+          "end": 1793088000000,
+          "allDay": false,
+          "source": "manual",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "confirmed"
+        },
+        {
+          "id": "66738354-c480-43dd-b72c-1f37e8e01da8",
+          "title": "后天任务",
+          "start": 1793170800000,
+          "end": 1793174400000,
+          "allDay": false,
+          "source": "manual",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "confirmed"
+        }
+      ]
+    },
+    {
+      "label": "briefing_settings",
+      "value": {
+        "enabled": true,
+        "time": "08:00",
+        "speak": false,
+        "notify": true,
+        "skipEmpty": true,
+        "narrative": true,
+        "quietHours": {
+          "enabled": true,
+          "start": "22:00",
+          "end": "07:30"
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [
+    {
+      "id": "450d82f1-418d-47d4-8f8e-f1409538690c",
+      "title": "项目讨论",
+      "start": 1793084400000,
+      "end": 1793088000000,
+      "allDay": false,
+      "source": "manual",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "confirmed"
+    },
+    {
+      "id": "66738354-c480-43dd-b72c-1f37e8e01da8",
+      "title": "后天任务",
+      "start": 1793170800000,
+      "end": 1793174400000,
+      "allDay": false,
+      "source": "manual",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "confirmed"
+    }
+  ],
+  "task": {
+    "id": "669e1abe-2b5e-48c7-bf51-8a20e9dbc517",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "每天早上八点给我一份当天的任务简报。",
+    "target": {
+      "windowHandle": "10088",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-088"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "configure_briefing",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "rule"
+    },
+    "transcript": "每天早上八点给我一份当天的任务简报。",
+    "results": [
+      {
+        "tool": "configure_briefing",
+        "state": "completed",
+        "data": {
+          "settings": {
+            "enabled": true,
+            "time": "08:00",
+            "speak": false,
+            "notify": true,
+            "skipEmpty": true,
+            "narrative": true,
+            "quietHours": {
+              "enabled": true,
+              "start": "22:00",
+              "end": "07:30"
+            }
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-088）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-088\"",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-088\"",
+    "[asr] local sense-voice-small: 18 chars",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-088\"",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] stage=routing ms=0",
+    "[voice-entry] assistant",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] stage=llm ms=1684",
+    "[perf] llm round0 0ms",
+    "[perf] tool:configure_briefing 0ms ok=true",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] stage=tool ms=0 state=completed",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] tool=configure_briefing status=completed ms=0",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] configure_briefing ok=true",
+    "[perf] enrich 0ms",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] stage=llm ms=1180",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task 669e1abe-2b5e-48c7-bf51-8a20e9dbc517] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-088",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1684,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-088",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1180,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

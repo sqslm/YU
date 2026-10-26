@@ -1,0 +1,60 @@
+{
+  "case_id": "YU-006",
+  "input": "打开记事本。",
+  "spoken_input": "打开记事本。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-006",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "via": "rule",
+        "text": "打开记事本。"
+      }
+    },
+    {
+      "label": "installed_application_candidates",
+      "value": [
+        {
+          "name": "notepad",
+          "path": "C:\\Program Files\\WindowsApps\\Microsoft.WindowsNotepad_11.2607.14.0_x64__8wekyb3d8bbwe\\Notepad\\Notepad.exe"
+        },
+        {
+          "appId": "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App",
+          "path": "",
+          "name": "记事本"
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "882a0e86-d7c7-492b-b3ad-36876acf133f",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开记事本。",
+    "target": {
+      "windowHandle": "10006",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-006"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-006）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

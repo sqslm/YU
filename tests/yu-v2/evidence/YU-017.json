@@ -1,0 +1,323 @@
+{
+  "case_id": "YU-017",
+  "input": "明天上午九点去银行，哦不对，改成下午两点提醒。",
+  "spoken_input": "明天上午九点去银行，哦不对，改成下午两点提醒。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-017",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "2026/10/27 14:00 · 普通提醒 · 去银行",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "44f377ee-2953-4b1f-9abb-f72c60b8b413",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "明天上午九点去银行，哦不对，改成下午两点提醒。",
+          "target": {
+            "windowHandle": "10017",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-017"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 3170
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "model"
+          },
+          "transcript": "明天上午九点去银行，哦不对，改成下午两点提醒。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "去银行",
+                  "description": "",
+                  "dueAt": 1793080800000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "明天下午两点",
+                  "id": "b77a3162-e4ba-45c1-a709-5f735f1598d0",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/27 14:00:00",
+                  "remainingSeconds": 79200,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": [
+        {
+          "title": "去银行",
+          "description": "",
+          "dueAt": 1793080800000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "voice",
+          "timeExpression": "明天下午两点",
+          "id": "b77a3162-e4ba-45c1-a709-5f735f1598d0",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "2026/10/27 14:00 · 普通提醒 · 去银行",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "去银行",
+            "description": "",
+            "dueAt": 1793080800000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "明天下午两点",
+            "id": "b77a3162-e4ba-45c1-a709-5f735f1598d0",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/27 14:00:00",
+            "remainingSeconds": 79200,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "44f377ee-2953-4b1f-9abb-f72c60b8b413"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "去银行",
+      "description": "",
+      "dueAt": 1793080800000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "voice",
+      "timeExpression": "明天下午两点",
+      "id": "b77a3162-e4ba-45c1-a709-5f735f1598d0",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "44f377ee-2953-4b1f-9abb-f72c60b8b413",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "明天上午九点去银行，哦不对，改成下午两点提醒。",
+    "target": {
+      "windowHandle": "10017",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-017"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 3170
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "model"
+    },
+    "transcript": "明天上午九点去银行，哦不对，改成下午两点提醒。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "去银行",
+            "description": "",
+            "dueAt": 1793080800000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "明天下午两点",
+            "id": "b77a3162-e4ba-45c1-a709-5f735f1598d0",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/27 14:00:00",
+            "remainingSeconds": 79200,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-017）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-017\"",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-017\"",
+    "[asr] local sense-voice-small: 23 chars",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-017\"",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=llm ms=1517",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=routing ms=1517",
+    "[voice-entry] reminder",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=llm ms=1524",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=llm ms=1643",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=tool ms=3170 state=completed",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] tool=create_reminder status=completed ms=3170",
+    "[task 44f377ee-2953-4b1f-9abb-f72c60b8b413] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-017",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1517,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-017",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1523,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-017",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1643,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

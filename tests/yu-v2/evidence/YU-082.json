@@ -1,0 +1,52 @@
+{
+  "case_id": "YU-082",
+  "input": "你看得出这张截图的错误在哪里吗？",
+  "spoken_input": "你看得出这张截图的错误在哪里吗？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-082",
+  "observations": [
+    {
+      "label": "controlled_image",
+      "value": {
+        "sha256": "234eabb13a040ffe3058a1f5c18b3d250d68d528dc6ef06b296a2f23d11b688d",
+        "bytes": 16528,
+        "source": "generated non-private test image; not a desktop screenshot"
+      }
+    },
+    {
+      "label": "unsupported_visual_result",
+      "value": {
+        "error": "请先在模型设置中启用支持图片的多模态模型；当前文本模型不能查看截图"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "74b62470-da1f-4a89-a691-6b53f657219a",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "你看得出这张截图的错误在哪里吗？",
+    "target": {
+      "windowHandle": "10082",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-082"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-082）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "PASS"
+}

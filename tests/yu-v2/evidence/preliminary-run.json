@@ -1,0 +1,17 @@
+{
+  "environment": {
+    "os": "win32 10.0.26300",
+    "app_commit": "37c4e78fdada7a332641fdfe5ab7ef3127634f7d",
+    "version": "1.1.0-rc.1",
+    "tester": "Codex",
+    "timezone": "Asia/Singapore",
+    "started_at": "2026-10-26T06:46:19.814Z",
+    "notes": "Real product modules and isolated data; ASR input and native GUI boundary are controlled fixtures. No real speech/desktop E2E claim. Provider credentials are read-only, decrypted in an isolated Electron process and kept in memory only.",
+    "live_model": "cn:deepseek-v4.1-flash",
+    "network_requests": 43,
+    "model_requests": 43,
+    "elapsed_ms": 71600,
+    "fixture_root": "E:\\CPANQI~1\\Temp\\yu-v2-150-mIagAD"
+  },
+  "note": "Harness calibration only; statuses are not final acceptance counts."
+}

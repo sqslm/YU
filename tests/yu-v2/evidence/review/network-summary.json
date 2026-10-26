@@ -1,0 +1,209 @@
+[
+  {
+    "case": "YU-021",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1527,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-021",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1992,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-021",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1619,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-042",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1586,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-042",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1498,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-042",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1908,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-070",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1630,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-070",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1994,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 2231,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 3034,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1902,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 6430,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-070",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1009,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-087",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1355,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-087",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1643,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-087",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1775,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-087",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1547,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-087",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1532,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-104",
+    "kind": "model",
+    "prompt_marker_in_actual_request": true,
+    "request_body_sha256": "8d60920ec4ef2e7b57462ab11abbbf82a33bb470f400d1999f27ed2a2d30558b",
+    "status": 200,
+    "duration_ms": 1250,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-105",
+    "kind": "model",
+    "prompt_marker_in_actual_request": true,
+    "request_body_sha256": "9c3d6cecda768d46c0d1b208bfbab6096cbe99941b019ea292b139bd00968383",
+    "status": 200,
+    "duration_ms": 1193,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1083,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1932,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1704,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-120",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1447,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-120",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1502,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-120",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1375,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1448,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1864,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1460,
+    "host": "api.huyangmq.icu"
+  }
+]

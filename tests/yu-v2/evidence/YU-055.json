@@ -1,0 +1,99 @@
+{
+  "case_id": "YU-055",
+  "input": "把电脑音量调到 30%。",
+  "spoken_input": "把电脑音量调到 30%。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-055",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "via": "rule",
+        "text": "把电脑音量调到 30%。"
+      }
+    },
+    {
+      "label": "original_volume_read_only",
+      "value": {
+        "ok": true,
+        "summary": "系统音量 40%，未静音",
+        "data": {
+          "volume": 40,
+          "muted": false,
+          "ok": true,
+          "summary": "系统音量 40%，未静音"
+        },
+        "status": "completed",
+        "taskId": "a707dfa1-bafa-4782-95ac-9ffc5ca4943d"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "get_system_volume",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "系统音量 40%，未静音",
+        "data": {
+          "volume": 40,
+          "muted": false,
+          "ok": true,
+          "summary": "系统音量 40%，未静音"
+        },
+        "status": "completed",
+        "taskId": "a707dfa1-bafa-4782-95ac-9ffc5ca4943d"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "a707dfa1-bafa-4782-95ac-9ffc5ca4943d",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把电脑音量调到 30%。",
+    "target": {
+      "windowHandle": "10055",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-055"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "get_system_volume",
+        "state": "completed",
+        "durationMs": 364
+      }
+    ],
+    "results": [
+      {
+        "tool": "get_system_volume",
+        "state": "completed",
+        "data": {
+          "volume": 40,
+          "muted": false,
+          "ok": true,
+          "summary": "系统音量 40%，未静音"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-055）",
+    "[perf] tool:get_system_volume 0ms ok=true",
+    "[task a707dfa1-bafa-4782-95ac-9ffc5ca4943d] stage=tool ms=364 state=completed",
+    "[task a707dfa1-bafa-4782-95ac-9ffc5ca4943d] tool=get_system_volume status=completed ms=364"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

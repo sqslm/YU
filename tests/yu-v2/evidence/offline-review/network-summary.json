@@ -1,0 +1,71 @@
+[
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "error": "network_request_failed",
+    "duration_ms": 4
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 2,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 2,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1,
+    "host": "127.0.0.1"
+  },
+  {
+    "case": "YU-147",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1,
+    "host": "127.0.0.1"
+  }
+]

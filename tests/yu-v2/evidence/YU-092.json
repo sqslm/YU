@@ -1,0 +1,239 @@
+{
+  "case_id": "YU-092",
+  "input": "刚才这条随记已经同步到云端了吗？",
+  "spoken_input": "刚才这条随记已经同步到云端了吗？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-092",
+  "observations": [
+    {
+      "label": "local_before_sync",
+      "value": {
+        "id": "8ca53d44-350e-4048-9023-5b5a53891b25",
+        "pending": true
+      }
+    },
+    {
+      "label": "actual_sync_confirmation",
+      "value": {
+        "local": {
+          "id": "8ca53d44-350e-4048-9023-5b5a53891b25",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "editedAt": 1793001600000,
+          "transcript": "YU_V2 YU-092 刚才这条随记已经同步到云端了吗？",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "version": 1
+        },
+        "remoteRows": [
+          {
+            "id": "8ca53d44-350e-4048-9023-5b5a53891b25",
+            "version": 1,
+            "deleted": false
+          }
+        ],
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v1/auth/register"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/notes/changes"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/notes?since=0&limit=200"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/transcription_history/pull?since=0&limit=200"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/transcription_history/sync_status"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/notes?since=0"
+          }
+        ]
+      }
+    },
+    {
+      "label": "note_sync_query",
+      "value": {
+        "ok": true,
+        "summary": "查到 1 条随记同步状态",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "8ca53d44-350e-4048-9023-5b5a53891b25",
+              "title": "YU_V2 YU-092 刚才这条随记已经同步到云端了吗？",
+              "version": 1,
+              "textSynced": true,
+              "audioSynced": null,
+              "state": "synced",
+              "failures": []
+            }
+          ],
+          "failures": [],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "17a36bc7-6f21-45a0-8c3d-58c6bebd854b"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "note_sync_status",
+      "args": {
+        "id": "8ca53d44-350e-4048-9023-5b5a53891b25"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "查到 1 条随记同步状态",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "8ca53d44-350e-4048-9023-5b5a53891b25",
+              "title": "YU_V2 YU-092 刚才这条随记已经同步到云端了吗？",
+              "version": 1,
+              "textSynced": true,
+              "audioSynced": null,
+              "state": "synced",
+              "failures": []
+            }
+          ],
+          "failures": [],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "17a36bc7-6f21-45a0-8c3d-58c6bebd854b"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "8ca53d44-350e-4048-9023-5b5a53891b25",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "YU_V2 YU-092 刚才这条随记已经同步到云端了吗？",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "version": 1
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "17a36bc7-6f21-45a0-8c3d-58c6bebd854b",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "刚才这条随记已经同步到云端了吗？",
+    "target": {
+      "windowHandle": "10092",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-092"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "note_sync_status",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "note_sync_status",
+        "state": "completed",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "8ca53d44-350e-4048-9023-5b5a53891b25",
+              "title": "YU_V2 YU-092 刚才这条随记已经同步到云端了吗？",
+              "version": 1,
+              "textSynced": true,
+              "audioSynced": null,
+              "state": "synced",
+              "failures": []
+            }
+          ],
+          "failures": [],
+          "truncated": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-092）",
+    "[sync] done, 0 row(s) on the server",
+    "[perf] tool:note_sync_status 0ms ok=true",
+    "[task 17a36bc7-6f21-45a0-8c3d-58c6bebd854b] stage=tool ms=0 state=completed",
+    "[task 17a36bc7-6f21-45a0-8c3d-58c6bebd854b] tool=note_sync_status status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-092",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 3,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-092",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-092",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-092",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-092",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    }
+  ],
+  "final_status": "PASS"
+}

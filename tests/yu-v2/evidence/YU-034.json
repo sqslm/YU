@@ -1,0 +1,289 @@
+{
+  "case_id": "YU-034",
+  "input": "给刚才那条随记加个“软件开发”标签。",
+  "spoken_input": "给刚才那条随记加个“软件开发”标签。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-034",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "ede46451-adcd-4896-bb72-653fad246f40",
+        "taskState": "completed",
+        "question": "给刚才那条随记加个“软件开发”标签。",
+        "answer": "已给那条「Docker 最新想法」随记加上「软件开发」标签。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "update_note_tags",
+            "ok": true,
+            "summary": "随记标签已更新",
+            "status": "completed",
+            "taskId": "ede46451-adcd-4896-bb72-653fad246f40"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "已给那条「Docker 最新想法」随记加上「软件开发」标签。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "ede46451-adcd-4896-bb72-653fad246f40",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "给刚才那条随记加个“软件开发”标签。",
+          "target": {
+            "windowHandle": "10034",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-034"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "update_note_tags",
+              "state": "completed",
+              "durationMs": 1
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "给刚才那条随记加个“软件开发”标签。",
+          "recentExchange": {
+            "question": "保存随记",
+            "answer": "已保存测试随记"
+          },
+          "results": [
+            {
+              "tool": "update_note_tags",
+              "state": "completed",
+              "data": {
+                "id": "e9a26e1f-09b4-4d01-9a8b-2b5bc23fa1b8",
+                "tags": [
+                  "软件开发"
+                ],
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_after",
+      "value": [
+        {
+          "id": "e9a26e1f-09b4-4d01-9a8b-2b5bc23fa1b8",
+          "createdAt": 1793001601000,
+          "updatedAt": 1793001601001,
+          "editedAt": 1793001601000,
+          "transcript": "Docker 最新想法",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [
+            "软件开发"
+          ],
+          "pending": true
+        },
+        {
+          "id": "8e7bd313-882d-4134-89cc-2dac9d9f3d50",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "editedAt": 1793001600000,
+          "transcript": "Docker old fixture",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "pending": true
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "e9a26e1f-09b4-4d01-9a8b-2b5bc23fa1b8",
+      "createdAt": 1793001601000,
+      "updatedAt": 1793001601001,
+      "editedAt": 1793001601000,
+      "transcript": "Docker 最新想法",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [
+        "软件开发"
+      ],
+      "pending": true
+    },
+    {
+      "id": "8e7bd313-882d-4134-89cc-2dac9d9f3d50",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "Docker old fixture",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "ede46451-adcd-4896-bb72-653fad246f40",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "给刚才那条随记加个“软件开发”标签。",
+    "target": {
+      "windowHandle": "10034",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-034"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "update_note_tags",
+        "state": "completed",
+        "durationMs": 1
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "给刚才那条随记加个“软件开发”标签。",
+    "recentExchange": {
+      "question": "保存随记",
+      "answer": "已保存测试随记"
+    },
+    "results": [
+      {
+        "tool": "update_note_tags",
+        "state": "completed",
+        "data": {
+          "id": "e9a26e1f-09b4-4d01-9a8b-2b5bc23fa1b8",
+          "tags": [
+            "软件开发"
+          ],
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-034）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-034\"",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-034\"",
+    "[asr] local sense-voice-small: 18 chars",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-034\"",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=llm ms=1056",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=routing ms=1057",
+    "[voice-entry] assistant",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=llm ms=3395",
+    "[perf] llm round0 0ms",
+    "[perf] tool:update_note_tags 0ms ok=true",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=tool ms=1 state=completed",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] tool=update_note_tags status=completed ms=1",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] update_note_tags ok=true",
+    "[perf] enrich 0ms",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=llm ms=1608",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task ede46451-adcd-4896-bb72-653fad246f40] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-034",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1056,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-034",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 3394,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-034",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1608,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

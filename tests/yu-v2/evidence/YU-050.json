@@ -1,0 +1,175 @@
+{
+  "case_id": "YU-050",
+  "input": "把这个文件夹的子目录也搜一下，找所有 PNG 图片。",
+  "spoken_input": "把这个文件夹的子目录也搜一下，找所有 PNG 图片。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "file_results",
+      "value": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050\\photo.png",
+              "name": "photo.png",
+              "bytes": 320,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "87af5f6e-e850-4fec-a482-fe404868fd67"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050\\sub\\nested.png",
+              "name": "nested.png",
+              "bytes": 75,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "4cc020ed-7043-481f-b083-e635603ffdaf"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查最多 3 层子目录、5000 个条目、5 秒；不跟随目录链接。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "4f3d3ca3-fc91-4f2d-a2c6-35ee8e060c9c"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050",
+        "extension": ".png",
+        "recursive": true
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050\\photo.png",
+              "name": "photo.png",
+              "bytes": 320,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "87af5f6e-e850-4fec-a482-fe404868fd67"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050\\sub\\nested.png",
+              "name": "nested.png",
+              "bytes": 75,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "4cc020ed-7043-481f-b083-e635603ffdaf"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查最多 3 层子目录、5000 个条目、5 秒；不跟随目录链接。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "4f3d3ca3-fc91-4f2d-a2c6-35ee8e060c9c"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "4f3d3ca3-fc91-4f2d-a2c6-35ee8e060c9c",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把这个文件夹的子目录也搜一下，找所有 PNG 图片。",
+    "target": {
+      "windowHandle": "10050",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-050"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 354
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050\\photo.png",
+              "name": "photo.png",
+              "bytes": 320,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "87af5f6e-e850-4fec-a482-fe404868fd67"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050\\sub\\nested.png",
+              "name": "nested.png",
+              "bytes": 75,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "4cc020ed-7043-481f-b083-e635603ffdaf"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查最多 3 层子目录、5000 个条目、5 秒；不跟随目录链接。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-050）",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task 4f3d3ca3-fc91-4f2d-a2c6-35ee8e060c9c] stage=tool ms=354 state=completed",
+    "[task 4f3d3ca3-fc91-4f2d-a2c6-35ee8e060c9c] tool=search_files status=completed ms=354"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-050",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1995,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

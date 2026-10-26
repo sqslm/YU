@@ -1,0 +1,172 @@
+[
+  {
+    "id": "YU-019",
+    "status": "PASS",
+    "original_id": "f51758c0-54bb-438c-812a-c37b350aea89",
+    "delivered": [
+      {
+        "id": "f51758c0-54bb-438c-812a-c37b350aea89",
+        "dueAt": 1793016000000,
+        "at": 1793016000000
+      },
+      {
+        "id": "f51758c0-54bb-438c-812a-c37b350aea89",
+        "dueAt": 1793188800000,
+        "at": 1793188800000
+      },
+      {
+        "id": "f51758c0-54bb-438c-812a-c37b350aea89",
+        "dueAt": 1793361600000,
+        "at": 1793361600000
+      },
+      {
+        "id": "f51758c0-54bb-438c-812a-c37b350aea89",
+        "dueAt": 1793620800000,
+        "at": 1793620800000
+      },
+      {
+        "id": "f51758c0-54bb-438c-812a-c37b350aea89",
+        "dueAt": 1793793600000,
+        "at": 1793793600000
+      },
+      {
+        "id": "f51758c0-54bb-438c-812a-c37b350aea89",
+        "dueAt": 1793966400000,
+        "at": 1793966400000
+      }
+    ],
+    "scope": "real ReminderStore + ReminderScheduler, isolated SQLite; no notification UI"
+  },
+  {
+    "id": "YU-020",
+    "status": "PASS",
+    "original_id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+    "delivered": [
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793026800000,
+        "at": 1793026800000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793113200000,
+        "at": 1793113200000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793199600000,
+        "at": 1793199600000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793286000000,
+        "at": 1793286000000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793372400000,
+        "at": 1793372400000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793458800000,
+        "at": 1793458800000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793545200000,
+        "at": 1793545200000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793631600000,
+        "at": 1793631600000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793718000000,
+        "at": 1793718000000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793804400000,
+        "at": 1793804400000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793890800000,
+        "at": 1793890800000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1793977200000,
+        "at": 1793977200000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1794063600000,
+        "at": 1794063600000
+      },
+      {
+        "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+        "dueAt": 1794150000000,
+        "at": 1794150000000
+      }
+    ],
+    "scope": "real ReminderStore + ReminderScheduler, isolated SQLite; no notification UI"
+  },
+  {
+    "id": "YU-025",
+    "status": "PASS",
+    "original_id": "8eb84203-b475-4ca7-bf5d-cdd1ca82b60d",
+    "delivered": [
+      {
+        "id": "8eb84203-b475-4ca7-bf5d-cdd1ca82b60d",
+        "dueAt": 1793080800000,
+        "at": 1793080800000
+      }
+    ],
+    "scope": "real ReminderStore + ReminderScheduler, isolated SQLite; no notification UI"
+  },
+  {
+    "id": "YU-119",
+    "status": "PASS",
+    "original_id": "6e0cc673-f4d3-4edc-9c72-8e2746ccaee1",
+    "delivered": [
+      {
+        "id": "6e0cc673-f4d3-4edc-9c72-8e2746ccaee1",
+        "dueAt": 1793030400000,
+        "at": 1793030400000
+      },
+      {
+        "id": "6e0cc673-f4d3-4edc-9c72-8e2746ccaee1",
+        "dueAt": 1793203200000,
+        "at": 1793203200000
+      },
+      {
+        "id": "6e0cc673-f4d3-4edc-9c72-8e2746ccaee1",
+        "dueAt": 1793635200000,
+        "at": 1793635200000
+      },
+      {
+        "id": "6e0cc673-f4d3-4edc-9c72-8e2746ccaee1",
+        "dueAt": 1793808000000,
+        "at": 1793808000000
+      }
+    ],
+    "scope": "real ReminderStore + ReminderScheduler, isolated SQLite; no notification UI"
+  },
+  {
+    "id": "YU-121",
+    "status": "PASS",
+    "original_id": "e8d7e899-4381-409f-bca6-e0d4fb112e9a",
+    "delivered": [
+      {
+        "id": "e8d7e899-4381-409f-bca6-e0d4fb112e9a",
+        "dueAt": 1793003400000,
+        "at": 1793003400000
+      }
+    ],
+    "scope": "real ReminderStore + ReminderScheduler, isolated SQLite; no notification UI"
+  }
+]

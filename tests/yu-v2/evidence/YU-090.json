@@ -1,0 +1,91 @@
+{
+  "case_id": "YU-090",
+  "input": "别说话了，后面直接用文字显示就行。",
+  "spoken_input": "别说话了，后面直接用文字显示就行。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-090",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "via": "rule",
+        "text": "别说话了，后面直接用文字显示就行。"
+      }
+    },
+    {
+      "label": "text_only_setting",
+      "value": {
+        "enabled": false,
+        "voice": "",
+        "rate": 0,
+        "volume": 100
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "stop_speaking",
+      "args": {
+        "text_only": true
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "已停止朗读，后续仅显示文字",
+        "data": {
+          "textOnly": true,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "32343266-fbb6-4080-8a06-13c2c7634482"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "32343266-fbb6-4080-8a06-13c2c7634482",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "别说话了，后面直接用文字显示就行。",
+    "target": {
+      "windowHandle": "10090",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-090"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "stop_speaking",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "stop_speaking",
+        "state": "completed",
+        "data": {
+          "textOnly": true,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-090）",
+    "[perf] tool:stop_speaking 0ms ok=true",
+    "[task 32343266-fbb6-4080-8a06-13c2c7634482] stage=tool ms=0 state=completed",
+    "[task 32343266-fbb6-4080-8a06-13c2c7634482] tool=stop_speaking status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

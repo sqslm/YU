@@ -1,0 +1,46 @@
+{
+  "case_id": "YU-084",
+  "input": "把我正在使用的这个屏幕上的当前窗口截下来。",
+  "spoken_input": "把我正在使用的这个屏幕上的当前窗口截下来。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-084",
+  "observations": [
+    {
+      "label": "controlled_image",
+      "value": {
+        "sha256": "234eabb13a040ffe3058a1f5c18b3d250d68d528dc6ef06b296a2f23d11b688d",
+        "bytes": 16528,
+        "source": "generated non-private test image; not a desktop screenshot"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "39c9bebb-7d12-48c8-8ae5-eab831548858",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把我正在使用的这个屏幕上的当前窗口截下来。",
+    "target": {
+      "windowHandle": "10084",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-084"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-084）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "ENV_BLOCKED"
+}

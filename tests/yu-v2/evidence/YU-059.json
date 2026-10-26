@@ -1,0 +1,125 @@
+{
+  "case_id": "YU-059",
+  "input": "把我选中的段落改得正式一点。",
+  "spoken_input": "把我选中的段落改得正式一点。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-059",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "正在处理选中文字…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "明天15:00请发来3份测试报告，我们要在16:00开会讨论。",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "d698fc74-3267-42c6-9ea4-299701f9d1c6",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "把我选中的段落改得正式一点。",
+          "target": {
+            "windowHandle": "10059",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "windowTitle": "V2 controlled editor YU-059"
+          },
+          "state": "pending",
+          "receipts": []
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "selection_result",
+      "value": {
+        "original": "明天15:00请发来3份测试报告，我们要在16:00开会讨论。",
+        "actual": "明天15:00请发来3份测试报告，我们要在16:00开会讨论。",
+        "applied": "明天15:00请发来3份测试报告，我们要在16:00开会讨论。",
+        "answer": "明天15:00请发来3份测试报告，我们要在16:00开会讨论。"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "d698fc74-3267-42c6-9ea4-299701f9d1c6",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把我选中的段落改得正式一点。",
+    "target": {
+      "windowHandle": "10059",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-059"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-059）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-059\"",
+    "[task dcf1e264-3547-47ea-a285-6fb1b9fe91f8] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-059\"",
+    "[asr] local sense-voice-small: 14 chars",
+    "[task dcf1e264-3547-47ea-a285-6fb1b9fe91f8] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-059\"",
+    "[task dcf1e264-3547-47ea-a285-6fb1b9fe91f8] stage=llm ms=1656",
+    "[task dcf1e264-3547-47ea-a285-6fb1b9fe91f8] stage=routing ms=1656",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-059\"",
+    "[task dcf1e264-3547-47ea-a285-6fb1b9fe91f8] stage=llm ms=1343",
+    "[task dcf1e264-3547-47ea-a285-6fb1b9fe91f8] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-059",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1656,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-059",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1343,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

@@ -1,0 +1,221 @@
+{
+  "case_id": "YU-127",
+  "input": "在测试文档里找正文包含 SQLite 备份的 PDF。",
+  "spoken_input": "在测试文档里找正文包含 SQLite 备份的 PDF。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "pdf_body_search",
+      "value": {
+        "ok": true,
+        "summary": "在文件正文里找到 1 个匹配文件；10 个文件类型不支持正文检索",
+        "data": {
+          "hits": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127\\one.pdf",
+              "name": "one.pdf",
+              "modifiedAt": "2026-10-26T07:16:47.252Z",
+              "size": 840,
+              "snippet": "SQLite 备份",
+              "id": "2ad8191d-9415-4a81-9466-6fd09f86a7f4"
+            }
+          ],
+          "items": [
+            {
+              "name": "one.pdf",
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127\\one.pdf",
+              "kind": "file",
+              "id": "2ad8191d-9415-4a81-9466-6fd09f86a7f4"
+            }
+          ],
+          "query": "SQLite 备份",
+          "scope": [
+            "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127"
+          ],
+          "scanned": 2,
+          "truncated": false,
+          "partial": false,
+          "reason": "",
+          "skipped": {
+            "binary": 0,
+            "tooLarge": 0,
+            "unsupported": 10,
+            "unreadable": 0
+          },
+          "elapsedMs": 0,
+          "cache": {
+            "hits": 0,
+            "misses": 2
+          },
+          "coverage": "按正文检索 E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127，最多扫描 800 个文件、4 秒；支持文本型 PDF，不扫描整个硬盘。",
+          "ok": true,
+          "summary": "在文件正文里找到 1 个匹配文件；10 个文件类型不支持正文检索"
+        },
+        "status": "completed",
+        "taskId": "bf93f485-e4ea-47ec-96ae-12bb282f6a26"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_file_contents",
+      "args": {
+        "query": "SQLite 备份",
+        "roots": [
+          "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127"
+        ]
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "在文件正文里找到 1 个匹配文件；10 个文件类型不支持正文检索",
+        "data": {
+          "hits": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127\\one.pdf",
+              "name": "one.pdf",
+              "modifiedAt": "2026-10-26T07:16:47.252Z",
+              "size": 840,
+              "snippet": "SQLite 备份",
+              "id": "2ad8191d-9415-4a81-9466-6fd09f86a7f4"
+            }
+          ],
+          "items": [
+            {
+              "name": "one.pdf",
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127\\one.pdf",
+              "kind": "file",
+              "id": "2ad8191d-9415-4a81-9466-6fd09f86a7f4"
+            }
+          ],
+          "query": "SQLite 备份",
+          "scope": [
+            "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127"
+          ],
+          "scanned": 2,
+          "truncated": false,
+          "partial": false,
+          "reason": "",
+          "skipped": {
+            "binary": 0,
+            "tooLarge": 0,
+            "unsupported": 10,
+            "unreadable": 0
+          },
+          "elapsedMs": 0,
+          "cache": {
+            "hits": 0,
+            "misses": 2
+          },
+          "coverage": "按正文检索 E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127，最多扫描 800 个文件、4 秒；支持文本型 PDF，不扫描整个硬盘。",
+          "ok": true,
+          "summary": "在文件正文里找到 1 个匹配文件；10 个文件类型不支持正文检索"
+        },
+        "status": "completed",
+        "taskId": "bf93f485-e4ea-47ec-96ae-12bb282f6a26"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "bf93f485-e4ea-47ec-96ae-12bb282f6a26",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "在测试文档里找正文包含 SQLite 备份的 PDF。",
+    "target": {
+      "windowHandle": "10127",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-127"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_file_contents",
+        "state": "completed",
+        "durationMs": 293
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_file_contents",
+        "state": "completed",
+        "data": {
+          "hits": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127\\one.pdf",
+              "name": "one.pdf",
+              "modifiedAt": "2026-10-26T07:16:47.252Z",
+              "size": 840,
+              "snippet": "SQLite 备份",
+              "id": "2ad8191d-9415-4a81-9466-6fd09f86a7f4"
+            }
+          ],
+          "items": [
+            {
+              "name": "one.pdf",
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127\\one.pdf",
+              "kind": "file",
+              "id": "2ad8191d-9415-4a81-9466-6fd09f86a7f4"
+            }
+          ],
+          "query": "SQLite 备份",
+          "scope": [
+            "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127"
+          ],
+          "scanned": 2,
+          "truncated": false,
+          "partial": false,
+          "reason": "",
+          "skipped": {
+            "binary": 0,
+            "tooLarge": 0,
+            "unsupported": 10,
+            "unreadable": 0
+          },
+          "elapsedMs": 0,
+          "cache": {
+            "hits": 0,
+            "misses": 2
+          },
+          "coverage": "按正文检索 E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127，最多扫描 800 个文件、4 秒；支持文本型 PDF，不扫描整个硬盘。",
+          "ok": true,
+          "summary": "在文件正文里找到 1 个匹配文件；10 个文件类型不支持正文检索"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-127）",
+    "[perf] tool:search_file_contents 0ms ok=true",
+    "[task bf93f485-e4ea-47ec-96ae-12bb282f6a26] stage=tool ms=293 state=completed",
+    "[task bf93f485-e4ea-47ec-96ae-12bb282f6a26] tool=search_file_contents status=completed ms=293"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-127",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 991,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

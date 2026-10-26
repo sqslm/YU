@@ -1,0 +1,93 @@
+{
+  "case_id": "YU-112",
+  "input": "搜索测试目录里全部文件，如果超过时间限制就停止。",
+  "spoken_input": "搜索测试目录里全部文件，如果超过时间限制就停止。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-112",
+  "observations": [
+    {
+      "label": "deadline",
+      "value": {
+        "r": {
+          "ok": false,
+          "data": {
+            "ok": false,
+            "error": "search_files 超时（0s），已跳过这一步"
+          },
+          "summary": "search_files 超时（0s），已跳过这一步",
+          "error": "search_files 超时（0s），已跳过这一步",
+          "status": "timeout",
+          "taskId": "d6b3aea5-9430-485a-a484-4ad9a5aad0fd"
+        },
+        "aborted": true
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-112"
+      },
+      "outcome": {
+        "ok": false,
+        "data": {
+          "ok": false,
+          "error": "search_files 超时（0s），已跳过这一步"
+        },
+        "summary": "search_files 超时（0s），已跳过这一步",
+        "error": "search_files 超时（0s），已跳过这一步",
+        "status": "timeout",
+        "taskId": "d6b3aea5-9430-485a-a484-4ad9a5aad0fd"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "d6b3aea5-9430-485a-a484-4ad9a5aad0fd",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "搜索测试目录里全部文件，如果超过时间限制就停止。",
+    "target": {
+      "windowHandle": "10112",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-112"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "timeout",
+        "durationMs": 18
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "timeout",
+        "data": {
+          "ok": false,
+          "error": "search_files 超时（0s），已跳过这一步"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-112）",
+    "[tool] search_files timed out after 10ms",
+    "[perf] tool:search_files 0ms ok=false",
+    "[task d6b3aea5-9430-485a-a484-4ad9a5aad0fd] stage=tool ms=18 state=timeout",
+    "[task d6b3aea5-9430-485a-a484-4ad9a5aad0fd] tool=search_files status=timeout ms=18"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

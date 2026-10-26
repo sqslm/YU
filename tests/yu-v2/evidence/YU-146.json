@@ -1,0 +1,55 @@
+{
+  "case_id": "YU-146",
+  "input": "朗读刚才的回答，暂停，再继续播放。",
+  "spoken_input": "朗读刚才的回答，暂停，再继续播放。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-146",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": true,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":true}"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "4707d01f-525f-4a2d-8c64-7e855d64d3af",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "朗读刚才的回答，暂停，再继续播放。",
+    "target": {
+      "windowHandle": "10146",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-146"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-146）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-146",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1756,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

@@ -1,0 +1,71 @@
+{
+  "case_id": "YU-110",
+  "input": "帮我调用一个并不存在的工具“万能电脑修复器”。",
+  "spoken_input": "帮我调用一个并不存在的工具“万能电脑修复器”。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-110",
+  "observations": [],
+  "tool_results": [
+    {
+      "name": "万能电脑修复器",
+      "args": {},
+      "outcome": {
+        "ok": false,
+        "data": {
+          "ok": false,
+          "error": "未知工具：万能电脑修复器"
+        },
+        "summary": "未知工具：万能电脑修复器",
+        "error": "未知工具：万能电脑修复器",
+        "status": "unsupported",
+        "taskId": "eec7f7f7-7f16-4fbe-8f89-8db89560f70d"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "eec7f7f7-7f16-4fbe-8f89-8db89560f70d",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我调用一个并不存在的工具“万能电脑修复器”。",
+    "target": {
+      "windowHandle": "10110",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-110"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "万能电脑修复器",
+        "state": "unsupported",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "万能电脑修复器",
+        "state": "unsupported",
+        "data": {
+          "ok": false,
+          "error": "未知工具：万能电脑修复器"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-110）",
+    "[task eec7f7f7-7f16-4fbe-8f89-8db89560f70d] stage=tool ms=0 state=unsupported",
+    "[task eec7f7f7-7f16-4fbe-8f89-8db89560f70d] tool=unknown status=unsupported ms=0"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "PASS"
+}

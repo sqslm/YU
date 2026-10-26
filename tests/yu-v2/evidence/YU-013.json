@@ -1,0 +1,330 @@
+{
+  "case_id": "YU-013",
+  "input": "一分钟后提醒我喝水。",
+  "spoken_input": "一分钟后提醒我喝水。",
+  "fixed_clock": "2026-10-26T08:01:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-013",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "2026/10/26 16:01 · 普通提醒 · 喝水",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "226b31ca-316d-4191-b38d-5a92f58830ca",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "一分钟后提醒我喝水。",
+          "target": {
+            "windowHandle": "10013",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-013"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 3226
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "rule"
+          },
+          "transcript": "一分钟后提醒我喝水。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "喝水",
+                  "description": "",
+                  "dueAt": 1793001660000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "1分钟后",
+                  "id": "8e7c30c2-eed5-47e9-988a-b2af93884ddd",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:01:00",
+                  "remainingSeconds": 60,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "created_reminders",
+      "value": [
+        {
+          "title": "喝水",
+          "description": "",
+          "dueAt": 1793001660000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "voice",
+          "timeExpression": "1分钟后",
+          "id": "8e7c30c2-eed5-47e9-988a-b2af93884ddd",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      ]
+    },
+    {
+      "label": "scheduler_deliveries",
+      "value": [
+        {
+          "title": "喝水",
+          "description": "",
+          "dueAt": 1793001660000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "voice",
+          "timeExpression": "1分钟后",
+          "id": "8e7c30c2-eed5-47e9-988a-b2af93884ddd",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001660000,
+          "status": "due",
+          "deliveredAt": 1793001660000
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "2026/10/26 16:01 · 普通提醒 · 喝水",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "喝水",
+            "description": "",
+            "dueAt": 1793001660000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "1分钟后",
+            "id": "8e7c30c2-eed5-47e9-988a-b2af93884ddd",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:01:00",
+            "remainingSeconds": 60,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "226b31ca-316d-4191-b38d-5a92f58830ca"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "喝水",
+      "description": "",
+      "dueAt": 1793001660000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "voice",
+      "timeExpression": "1分钟后",
+      "id": "8e7c30c2-eed5-47e9-988a-b2af93884ddd",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001660000,
+      "status": "due",
+      "deliveredAt": 1793001660000
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "226b31ca-316d-4191-b38d-5a92f58830ca",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "一分钟后提醒我喝水。",
+    "target": {
+      "windowHandle": "10013",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-013"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 3226
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "rule"
+    },
+    "transcript": "一分钟后提醒我喝水。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "喝水",
+            "description": "",
+            "dueAt": 1793001660000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "1分钟后",
+            "id": "8e7c30c2-eed5-47e9-988a-b2af93884ddd",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:01:00",
+            "remainingSeconds": 60,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-013）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-013\"",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-013\"",
+    "[asr] local sense-voice-small: 10 chars",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-013\"",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] stage=routing ms=0",
+    "[voice-entry] reminder",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] stage=llm ms=1594",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] stage=llm ms=1627",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] stage=tool ms=3226 state=completed",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] tool=create_reminder status=completed ms=3226",
+    "[task 226b31ca-316d-4191-b38d-5a92f58830ca] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-013",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1594,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-013",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1627,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

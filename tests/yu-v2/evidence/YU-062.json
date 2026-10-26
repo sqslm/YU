@@ -1,0 +1,94 @@
+{
+  "case_id": "YU-062",
+  "input": "现在这个窗口标题是什么？",
+  "spoken_input": "现在这个窗口标题是什么？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-062",
+  "observations": [
+    {
+      "label": "frozen_window_response",
+      "value": {
+        "ok": true,
+        "summary": "当前窗口：V2Editor · V2 controlled editor YU-062",
+        "data": {
+          "appName": "V2Editor",
+          "title": "V2 controlled editor YU-062",
+          "processId": 1001,
+          "ok": true,
+          "summary": "当前窗口：V2Editor · V2 controlled editor YU-062"
+        },
+        "status": "completed",
+        "taskId": "8a1b3a71-ab66-4dde-882e-05442301c31e"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "get_active_window",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "当前窗口：V2Editor · V2 controlled editor YU-062",
+        "data": {
+          "appName": "V2Editor",
+          "title": "V2 controlled editor YU-062",
+          "processId": 1001,
+          "ok": true,
+          "summary": "当前窗口：V2Editor · V2 controlled editor YU-062"
+        },
+        "status": "completed",
+        "taskId": "8a1b3a71-ab66-4dde-882e-05442301c31e"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "8a1b3a71-ab66-4dde-882e-05442301c31e",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "现在这个窗口标题是什么？",
+    "target": {
+      "windowHandle": "10062",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-062"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "get_active_window",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "get_active_window",
+        "state": "completed",
+        "data": {
+          "appName": "V2Editor",
+          "title": "V2 controlled editor YU-062",
+          "processId": 1001,
+          "ok": true,
+          "summary": "当前窗口：V2Editor · V2 controlled editor YU-062"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-062）",
+    "[perf] tool:get_active_window 0ms ok=true",
+    "[task 8a1b3a71-ab66-4dde-882e-05442301c31e] stage=tool ms=0 state=completed",
+    "[task 8a1b3a71-ab66-4dde-882e-05442301c31e] tool=get_active_window status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

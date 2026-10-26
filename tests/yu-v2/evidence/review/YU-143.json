@@ -1,0 +1,259 @@
+{
+  "case_id": "YU-143",
+  "input": "如果下载目录里有 PDF，就打开最新的；如果没有，直接告诉我。",
+  "spoken_input": "如果下载目录里有 PDF，就打开最新的；如果没有，直接告诉我。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143",
+  "observations": [],
+  "tool_results": [
+    {
+      "name": "save_workflow",
+      "args": {
+        "name": "有PDF",
+        "steps": [
+          {
+            "tool": "search_files",
+            "args": {
+              "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf",
+              "type": "pdf"
+            }
+          },
+          {
+            "tool": "open_file",
+            "args": {
+              "id": {
+                "$ref": "1.items.0.id"
+              }
+            },
+            "when": {
+              "ref": "1.total",
+              "op": "gt",
+              "value": 0
+            }
+          }
+        ]
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "工作流已保存：有PDF",
+        "data": {
+          "id": "d1c0d711-61c7-4ed5-856b-4f29fa2eb95f",
+          "name": "有PDF",
+          "detail": "2 步：search_files → open_file",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "35a66bec-cb4e-4dda-89cf-aa3191bb3bce"
+      }
+    },
+    {
+      "name": "run_workflow",
+      "args": {
+        "id": "d1c0d711-61c7-4ed5-856b-4f29fa2eb95f"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "有PDF：✓ search_files → ✓ open_file",
+        "data": {
+          "workflowId": "d1c0d711-61c7-4ed5-856b-4f29fa2eb95f",
+          "steps": [
+            {
+              "label": "search_files",
+              "tool": "search_files",
+              "ok": true,
+              "summary": "找到 2 个文件"
+            },
+            {
+              "label": "open_file",
+              "tool": "open_file",
+              "ok": true,
+              "summary": "条件不满足，已跳过"
+            }
+          ],
+          "results": [
+            {
+              "items": [
+                {
+                  "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf\\old.pdf",
+                  "name": "old.pdf",
+                  "bytes": 579,
+                  "modified": "2026-10-26T07:59:00.0000000Z",
+                  "kind": "file",
+                  "id": "2e35b52e-7bae-4c4a-901b-1b9a13278958"
+                },
+                {
+                  "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf\\new.pdf",
+                  "name": "new.pdf",
+                  "bytes": 580,
+                  "modified": "2026-10-26T07:19:58.1629425Z",
+                  "kind": "file",
+                  "id": "59d1d338-bd94-4a23-9121-30a872e8437b"
+                }
+              ],
+              "backend": "windows-search+folder",
+              "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf",
+              "partial": false,
+              "indexUnavailable": false,
+              "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+              "ok": true,
+              "summary": "找到 2 个文件"
+            },
+            null
+          ],
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "35a66bec-cb4e-4dda-89cf-aa3191bb3bce"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "35a66bec-cb4e-4dda-89cf-aa3191bb3bce",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "如果下载目录里有 PDF，就打开最新的；如果没有，直接告诉我。",
+    "target": {
+      "windowHandle": "10143",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-143"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "durationMs": 1
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 336
+      },
+      {
+        "tool": "run_workflow",
+        "state": "completed",
+        "durationMs": 337
+      }
+    ],
+    "results": [
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "data": {
+          "id": "d1c0d711-61c7-4ed5-856b-4f29fa2eb95f",
+          "name": "有PDF",
+          "detail": "2 步：search_files → open_file",
+          "ok": true
+        }
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf\\old.pdf",
+              "name": "old.pdf",
+              "bytes": 579,
+              "modified": "2026-10-26T07:59:00.0000000Z",
+              "kind": "file",
+              "id": "2e35b52e-7bae-4c4a-901b-1b9a13278958"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf\\new.pdf",
+              "name": "new.pdf",
+              "bytes": 580,
+              "modified": "2026-10-26T07:19:58.1629425Z",
+              "kind": "file",
+              "id": "59d1d338-bd94-4a23-9121-30a872e8437b"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        }
+      },
+      {
+        "tool": "run_workflow",
+        "state": "completed",
+        "data": {
+          "workflowId": "d1c0d711-61c7-4ed5-856b-4f29fa2eb95f",
+          "steps": [
+            {
+              "label": "search_files",
+              "tool": "search_files",
+              "ok": true,
+              "summary": "找到 2 个文件"
+            },
+            {
+              "label": "open_file",
+              "tool": "open_file",
+              "ok": true,
+              "summary": "条件不满足，已跳过"
+            }
+          ],
+          "results": [
+            {
+              "items": [
+                {
+                  "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf\\old.pdf",
+                  "name": "old.pdf",
+                  "bytes": 579,
+                  "modified": "2026-10-26T07:59:00.0000000Z",
+                  "kind": "file",
+                  "id": "2e35b52e-7bae-4c4a-901b-1b9a13278958"
+                },
+                {
+                  "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf\\new.pdf",
+                  "name": "new.pdf",
+                  "bytes": 580,
+                  "modified": "2026-10-26T07:19:58.1629425Z",
+                  "kind": "file",
+                  "id": "59d1d338-bd94-4a23-9121-30a872e8437b"
+                }
+              ],
+              "backend": "windows-search+folder",
+              "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143\\with-pdf",
+              "partial": false,
+              "indexUnavailable": false,
+              "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+              "ok": true,
+              "summary": "找到 2 个文件"
+            },
+            null
+          ],
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-143）",
+    "[perf] tool:save_workflow 0ms ok=true",
+    "[task 35a66bec-cb4e-4dda-89cf-aa3191bb3bce] stage=tool ms=1 state=completed",
+    "[task 35a66bec-cb4e-4dda-89cf-aa3191bb3bce] tool=save_workflow status=completed ms=1",
+    "[workflow] 有PDF: search_files",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task 35a66bec-cb4e-4dda-89cf-aa3191bb3bce] stage=tool ms=336 state=completed",
+    "[task 35a66bec-cb4e-4dda-89cf-aa3191bb3bce] tool=search_files status=completed ms=336",
+    "[perf] tool:run_workflow 0ms ok=true",
+    "[task 35a66bec-cb4e-4dda-89cf-aa3191bb3bce] stage=tool ms=337 state=completed",
+    "[task 35a66bec-cb4e-4dda-89cf-aa3191bb3bce] tool=run_workflow status=completed ms=337"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "FAIL"
+}

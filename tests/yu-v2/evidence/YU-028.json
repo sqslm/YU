@@ -1,0 +1,320 @@
+{
+  "case_id": "YU-028",
+  "input": "把检查备份这项待办标记为完成。",
+  "spoken_input": "把检查备份这项待办标记为完成。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-028",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "f84f35d1-465e-4ffc-8db5-feee9229a6ba",
+        "taskState": "completed",
+        "question": "把检查备份这项待办标记为完成。",
+        "answer": "「检查备份」已标记为完成。另一条「B 第二个提醒」还在，今天 16:40 触发。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 2 个事项",
+            "status": "completed",
+            "taskId": "f84f35d1-465e-4ffc-8db5-feee9229a6ba"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "确认完成 · 检查备份\n未设置提醒时间 · 普通提醒",
+            "status": "completed",
+            "taskId": "f84f35d1-465e-4ffc-8db5-feee9229a6ba"
+          }
+        ]
+      }
+    },
+    {
+      "label": "before_after",
+      "value": {
+        "before": {
+          "title": "检查备份",
+          "description": "",
+          "dueAt": null,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "3b717db2-f287-425e-ad3f-ed4525e88a4c",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "after": {
+          "title": "检查备份",
+          "description": "",
+          "dueAt": null,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "3b717db2-f287-425e-ad3f-ed4525e88a4c",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "completed",
+          "deliveredAt": null
+        },
+        "other_before": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "0828b236-4b5c-40a5-bb73-33cafaaa38fc",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_after": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "0828b236-4b5c-40a5-bb73-33cafaaa38fc",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "B 第二个提醒",
+      "description": "",
+      "dueAt": 1793004000000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "0828b236-4b5c-40a5-bb73-33cafaaa38fc",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "检查备份",
+      "description": "",
+      "dueAt": null,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "3b717db2-f287-425e-ad3f-ed4525e88a4c",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "completed",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "f84f35d1-465e-4ffc-8db5-feee9229a6ba",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把检查备份这项待办标记为完成。",
+    "target": {
+      "windowHandle": "10028",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-028"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 3
+      }
+    ],
+    "submittedAt": 1793001600000,
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "B 第二个提醒",
+              "description": "",
+              "dueAt": 1793004000000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "0828b236-4b5c-40a5-bb73-33cafaaa38fc",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:40:00",
+              "remainingSeconds": 2400,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "检查备份",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "3b717db2-f287-425e-ad3f-ed4525e88a4c",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "3b717db2-f287-425e-ad3f-ed4525e88a4c",
+          "action": "complete",
+          "before": {
+            "title": "检查备份",
+            "description": "",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "3b717db2-f287-425e-ad3f-ed4525e88a4c",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "未设置提醒时间",
+            "remainingSeconds": null,
+            "overdue": false,
+            "kind": "todo",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "检查备份",
+            "description": "",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "3b717db2-f287-425e-ad3f-ed4525e88a4c",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "completed",
+            "deliveredAt": null,
+            "triggerTime": "未设置提醒时间",
+            "remainingSeconds": null,
+            "overdue": false,
+            "kind": "todo",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-028）",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task f84f35d1-465e-4ffc-8db5-feee9229a6ba] stage=tool ms=0 state=completed",
+    "[task f84f35d1-465e-4ffc-8db5-feee9229a6ba] tool=list_reminders status=completed ms=0",
+    "[task f84f35d1-465e-4ffc-8db5-feee9229a6ba] stage=llm ms=2428",
+    "[perf] llm round0 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task f84f35d1-465e-4ffc-8db5-feee9229a6ba] stage=tool ms=3 state=completed",
+    "[task f84f35d1-465e-4ffc-8db5-feee9229a6ba] tool=manage_reminder status=completed ms=3",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task f84f35d1-465e-4ffc-8db5-feee9229a6ba] stage=llm ms=1351",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-028",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2428,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-028",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1351,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

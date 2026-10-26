@@ -1,0 +1,166 @@
+{
+  "case_id": "YU-010",
+  "input": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+  "spoken_input": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-010",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+            "answer": "",
+            "status": "正在思考…",
+            "streaming": true,
+            "taskId": "9a81844e-07a1-4e15-8f63-2084adc608b5",
+            "taskState": "running"
+          },
+          {
+            "question": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+            "answer": "这个要看你的软件运行在什么平台，方案差别很大。下面按常见场景给思路：\n\n## Windows 桌面程序\n- **启动外部程序**：用 `Process.Start(\"notepad.exe\")`（.NET）、`ShellExecute`（Win32）、或 Qt 的 `QProcess::startDetached`。传参就放在第二个参数里。\n- **开机自启**：写注册表 `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`，或者把快捷方式放进「启动」文件夹。前者不需要管理员权限，推荐。\n\n## macOS\n- 用 `NSWorkspace.shared.openApplication(at:configuration:)` 启动其他 App，比 `open -a` 更可控。\n- 开机自启用 `SMAppService.mainApp.register()`（macOS 13+），旧系统用 LaunchAgent plist。\n\n## Android\n- 用 Intent 拉起：`Intent(Intent.ACTION_MAIN).addCategory(CATEGORY_LAUNCHER).setComponent(...)`。Android 11 以后要先在 Manifest 里声明 `<queries>`，否则查不到目标应用。\n- 拉起自己开机的自启动需要 `RECEIVE_BOOT_COMPLETED` 权限 + 广播接收器。\n\n## iOS\n- 基本不让随便拉起别人的 App，只能通过 URL Scheme（对方需要暴露）或 Universal Link，且必须用户主动点击，不能静默启动。\n\n## Web / 浏览器\n- 没有真正的「打开本地应用」权限。只能靠自定义协议 `myapp://`，前提是用户装过并注册了协议，且仍需用户手势触发。\n- PWA 可以用 `beforeinstallprompt` 引导安装，但不能自启。\n\n## 几个通用坑\n- **路径别写死**：用 `PATH` 查找或从注册表读安装路径，避免用户装在非默认目录就失效。\n- **空格和引号**：路径带空格一定要加引号，否则参数会被拆开。\n- **安全软件拦截**：静默启动 + 自启动组合容易被判可疑，首次启动最好给用户明确开关。\n- **UWP / 沙盒应用**：沙盒内进程通常没有被拉起其他应用的权限，需要走协议。\n\n你具体是哪个平台、什么技术栈？说清楚我可以给一段能直接用的代码。",
+            "taskId": "9a81844e-07a1-4e15-8f63-2084adc608b5",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "9a81844e-07a1-4e15-8f63-2084adc608b5",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+          "target": {
+            "windowHandle": "10010",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-010"
+          },
+          "state": "completed",
+          "receipts": [],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "rule"
+          },
+          "transcript": "我想让软件能自动打开应用，这个功能应该怎么开发？"
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [],
+        "reminders": [],
+        "events": []
+      }
+    },
+    {
+      "label": "answer",
+      "value": "这个要看你的软件运行在什么平台，方案差别很大。下面按常见场景给思路：\n\n## Windows 桌面程序\n- **启动外部程序**：用 `Process.Start(\"notepad.exe\")`（.NET）、`ShellExecute`（Win32）、或 Qt 的 `QProcess::startDetached`。传参就放在第二个参数里。\n- **开机自启**：写注册表 `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`，或者把快捷方式放进「启动」文件夹。前者不需要管理员权限，推荐。\n\n## macOS\n- 用 `NSWorkspace.shared.openApplication(at:configuration:)` 启动其他 App，比 `open -a` 更可控。\n- 开机自启用 `SMAppService.mainApp.register()`（macOS 13+），旧系统用 LaunchAgent plist。\n\n## Android\n- 用 Intent 拉起：`Intent(Intent.ACTION_MAIN).addCategory(CATEGORY_LAUNCHER).setComponent(...)`。Android 11 以后要先在 Manifest 里声明 `<queries>`，否则查不到目标应用。\n- 拉起自己开机的自启动需要 `RECEIVE_BOOT_COMPLETED` 权限 + 广播接收器。\n\n## iOS\n- 基本不让随便拉起别人的 App，只能通过 URL Scheme（对方需要暴露）或 Universal Link，且必须用户主动点击，不能静默启动。\n\n## Web / 浏览器\n- 没有真正的「打开本地应用」权限。只能靠自定义协议 `myapp://`，前提是用户装过并注册了协议，且仍需用户手势触发。\n- PWA 可以用 `beforeinstallprompt` 引导安装，但不能自启。\n\n## 几个通用坑\n- **路径别写死**：用 `PATH` 查找或从注册表读安装路径，避免用户装在非默认目录就失效。\n- **空格和引号**：路径带空格一定要加引号，否则参数会被拆开。\n- **安全软件拦截**：静默启动 + 自启动组合容易被判可疑，首次启动最好给用户明确开关。\n- **UWP / 沙盒应用**：沙盒内进程通常没有被拉起其他应用的权限，需要走协议。\n\n你具体是哪个平台、什么技术栈？说清楚我可以给一段能直接用的代码。"
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "9a81844e-07a1-4e15-8f63-2084adc608b5",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+    "target": {
+      "windowHandle": "10010",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-010"
+    },
+    "state": "completed",
+    "receipts": [],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "rule"
+    },
+    "transcript": "我想让软件能自动打开应用，这个功能应该怎么开发？"
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-010）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-010\"",
+    "[task 9a81844e-07a1-4e15-8f63-2084adc608b5] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-010\"",
+    "[asr] local sense-voice-small: 24 chars",
+    "[task 9a81844e-07a1-4e15-8f63-2084adc608b5] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-010\"",
+    "[task 9a81844e-07a1-4e15-8f63-2084adc608b5] stage=routing ms=0",
+    "[voice-entry] ask",
+    "[task 9a81844e-07a1-4e15-8f63-2084adc608b5] stage=llm ms=5129",
+    "[perf] llm round0 0ms",
+    "[perf] ask total 0ms",
+    "[task 9a81844e-07a1-4e15-8f63-2084adc608b5] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-010",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 5128,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

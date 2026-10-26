@@ -3,3 +3,5 @@
 *.ico binary
 *.exe binary
 *.node binary
+/tests/yu-v2/evidence/fixtures/*.pdf binary
+/tests/yu-v2/evidence/fixtures/*.wav binary

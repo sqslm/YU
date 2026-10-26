@@ -1,0 +1,233 @@
+{
+  "case_id": "YU-064",
+  "input": "总结一下我刚刚复制到剪贴板里的这段文字。",
+  "spoken_input": "总结一下我刚刚复制到剪贴板里的这段文字。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-064",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "6e0df7e5-1aee-45ef-9dca-95473e85d705",
+        "taskState": "completed",
+        "question": "总结一下我刚刚复制到剪贴板里的这段文字。",
+        "answer": "剪贴板里的文字是：「测试项目在2026年10月26日完成，三个待办中两个已验收，一个待复核。」\n\n一句话总结：测试项目今天（10月26日）完成，三个待办中两项已通过验收，还剩一项待复核。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "read_clipboard",
+            "ok": true,
+            "summary": "已读取当前剪贴板文字",
+            "status": "completed",
+            "taskId": "6e0df7e5-1aee-45ef-9dca-95473e85d705"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "",
+            "showMode": true
+          }
+        ],
+        "cards": [
+          {
+            "taskId": "6e0df7e5-1aee-45ef-9dca-95473e85d705",
+            "taskState": "completed",
+            "question": "总结一下我刚刚复制到剪贴板里的这段文字。",
+            "answer": "剪贴板里的文字是：「测试项目在2026年10月26日完成，三个待办中两个已验收，一个待复核。」\n\n一句话总结：测试项目今天（10月26日）完成，三个待办中两项已通过验收，还剩一项待复核。",
+            "sources": [],
+            "localResults": [
+              {
+                "tool": "read_clipboard",
+                "ok": true,
+                "summary": "已读取当前剪贴板文字",
+                "status": "completed",
+                "taskId": "6e0df7e5-1aee-45ef-9dca-95473e85d705"
+              }
+            ],
+            "assistant": true,
+            "streaming": false
+          }
+        ],
+        "task": {
+          "id": "6e0df7e5-1aee-45ef-9dca-95473e85d705",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "总结一下我刚刚复制到剪贴板里的这段文字。",
+          "target": {
+            "windowHandle": "10064",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-064"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "read_clipboard",
+              "state": "completed",
+              "durationMs": 0
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "rule"
+          },
+          "transcript": "总结一下我刚刚复制到剪贴板里的这段文字。",
+          "results": [
+            {
+              "tool": "read_clipboard",
+              "state": "completed",
+              "data": {
+                "text": "测试项目在2026年10月26日完成，三个待办中两个已验收，一个待复核。",
+                "length": 36,
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "isolated_clipboard",
+      "value": {
+        "text": "测试项目在2026年10月26日完成，三个待办中两个已验收，一个待复核。",
+        "readCalls": 1
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "6e0df7e5-1aee-45ef-9dca-95473e85d705",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "总结一下我刚刚复制到剪贴板里的这段文字。",
+    "target": {
+      "windowHandle": "10064",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-064"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "read_clipboard",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "rule"
+    },
+    "transcript": "总结一下我刚刚复制到剪贴板里的这段文字。",
+    "results": [
+      {
+        "tool": "read_clipboard",
+        "state": "completed",
+        "data": {
+          "text": "测试项目在2026年10月26日完成，三个待办中两个已验收，一个待复核。",
+          "length": 36,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-064）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-064\"",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-064\"",
+    "[asr] local sense-voice-small: 20 chars",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-064\"",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] stage=routing ms=0",
+    "[voice-entry] assistant",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] stage=llm ms=1267",
+    "[perf] llm round0 0ms",
+    "[perf] tool:read_clipboard 0ms ok=true",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] stage=tool ms=0 state=completed",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] tool=read_clipboard status=completed ms=0",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] read_clipboard ok=true",
+    "[perf] enrich 0ms",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] stage=llm ms=1741",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task 6e0df7e5-1aee-45ef-9dca-95473e85d705] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-064",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1266,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-064",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1740,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

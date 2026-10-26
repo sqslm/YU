@@ -1,0 +1,309 @@
+{
+  "case_id": "YU-037",
+  "input": "查找昨天记的关于 Docker 的想法。",
+  "spoken_input": "查找昨天记的关于 Docker 的想法。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-037",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "f50a560a-b87b-4861-ad75-9c510baa1c0f",
+        "taskState": "completed",
+        "question": "查找昨天记的关于 Docker 的想法。",
+        "answer": "找到了昨天记的一条 Docker 笔记，ID 是 `ea91009d-bf27-4698-b691-1692e7b2da93`，正文只有一行「Docker old fixture」，没有标签，创建于 10 月 25 日。\n\n这条内容看起来像是测试用的占位文字，不像完整记录的想法。如果你要找的是另一条，我可以换关键词再找一次。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "search_notes",
+            "ok": true,
+            "summary": "找到 1 条随记",
+            "status": "completed",
+            "taskId": "f50a560a-b87b-4861-ad75-9c510baa1c0f"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "",
+            "showMode": true
+          }
+        ],
+        "cards": [
+          {
+            "taskId": "f50a560a-b87b-4861-ad75-9c510baa1c0f",
+            "taskState": "completed",
+            "question": "查找昨天记的关于 Docker 的想法。",
+            "answer": "找到了昨天记的一条 Docker 笔记，ID 是 `ea91009d-bf27-4698-b691-1692e7b2da93`，正文只有一行「Docker old fixture」，没有标签，创建于 10 月 25 日。\n\n这条内容看起来像是测试用的占位文字，不像完整记录的想法。如果你要找的是另一条，我可以换关键词再找一次。",
+            "sources": [],
+            "localResults": [
+              {
+                "tool": "search_notes",
+                "ok": true,
+                "summary": "找到 1 条随记",
+                "status": "completed",
+                "taskId": "f50a560a-b87b-4861-ad75-9c510baa1c0f"
+              }
+            ],
+            "assistant": true,
+            "streaming": false
+          }
+        ],
+        "task": {
+          "id": "f50a560a-b87b-4861-ad75-9c510baa1c0f",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "查找昨天记的关于 Docker 的想法。",
+          "target": {
+            "windowHandle": "10037",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-037"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "search_notes",
+              "state": "completed",
+              "durationMs": 0
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "查找昨天记的关于 Docker 的想法。",
+          "results": [
+            {
+              "tool": "search_notes",
+              "state": "completed",
+              "data": {
+                "total": 1,
+                "categories": [],
+                "items": [
+                  {
+                    "id": "ea91009d-bf27-4698-b691-1692e7b2da93",
+                    "text": "Docker old fixture",
+                    "tags": [],
+                    "createdAt": 1792915200000,
+                    "updatedAt": 1793001600000
+                  }
+                ],
+                "truncated": false,
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_after",
+      "value": [
+        {
+          "id": "517055d8-b435-47f8-8b4f-21537b9ed890",
+          "createdAt": 1793001601000,
+          "updatedAt": 1793001601000,
+          "durationMs": 0,
+          "transcript": "Docker 最新想法",
+          "polished": "",
+          "polishStatus": "skipped",
+          "tags": [],
+          "editedAt": 1793001601000,
+          "pending": true
+        },
+        {
+          "id": "ea91009d-bf27-4698-b691-1692e7b2da93",
+          "createdAt": 1792915200000,
+          "updatedAt": 1793001600000,
+          "durationMs": 0,
+          "transcript": "Docker old fixture",
+          "polished": "",
+          "polishStatus": "skipped",
+          "tags": [],
+          "editedAt": 1793001600000,
+          "pending": true
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "517055d8-b435-47f8-8b4f-21537b9ed890",
+      "createdAt": 1793001601000,
+      "updatedAt": 1793001601000,
+      "durationMs": 0,
+      "transcript": "Docker 最新想法",
+      "polished": "",
+      "polishStatus": "skipped",
+      "tags": [],
+      "editedAt": 1793001601000,
+      "pending": true
+    },
+    {
+      "id": "ea91009d-bf27-4698-b691-1692e7b2da93",
+      "createdAt": 1792915200000,
+      "updatedAt": 1793001600000,
+      "durationMs": 0,
+      "transcript": "Docker old fixture",
+      "polished": "",
+      "polishStatus": "skipped",
+      "tags": [],
+      "editedAt": 1793001600000,
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "f50a560a-b87b-4861-ad75-9c510baa1c0f",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "查找昨天记的关于 Docker 的想法。",
+    "target": {
+      "windowHandle": "10037",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-037"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "search_notes",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "查找昨天记的关于 Docker 的想法。",
+    "results": [
+      {
+        "tool": "search_notes",
+        "state": "completed",
+        "data": {
+          "total": 1,
+          "categories": [],
+          "items": [
+            {
+              "id": "ea91009d-bf27-4698-b691-1692e7b2da93",
+              "text": "Docker old fixture",
+              "tags": [],
+              "createdAt": 1792915200000,
+              "updatedAt": 1793001600000
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-037）",
+    "[notes] 已加载 2 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-037）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-037\"",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-037\"",
+    "[asr] local sense-voice-small: 20 chars",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-037\"",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=llm ms=1556",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=routing ms=1556",
+    "[voice-entry] assistant",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=llm ms=1897",
+    "[perf] llm round0 0ms",
+    "[perf] tool:search_notes 0ms ok=true",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=tool ms=0 state=completed",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] tool=search_notes status=completed ms=0",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] search_notes ok=true",
+    "[perf] enrich 0ms",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=llm ms=1463",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task f50a560a-b87b-4861-ad75-9c510baa1c0f] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-037",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1556,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-037",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1897,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-037",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1463,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

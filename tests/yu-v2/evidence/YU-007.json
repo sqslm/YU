@@ -1,0 +1,125 @@
+{
+  "case_id": "YU-007",
+  "input": "把我选中的这句话改得更自然一些，别太正式。",
+  "spoken_input": "把我选中的这句话改得更自然一些，别太正式。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-007",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "正在处理选中文字…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "明天 3 点发我 3 份测试报告吧，我们 4 点开会讨论。",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "435f0c6a-f600-487f-be0f-2ca4b640ceab",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "把我选中的这句话改得更自然一些，别太正式。",
+          "target": {
+            "windowHandle": "10007",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "windowTitle": "V2 controlled editor YU-007"
+          },
+          "state": "pending",
+          "receipts": []
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "selection_result",
+      "value": {
+        "original": "明天15:00请发来3份测试报告，我们要在16:00开会讨论。",
+        "actual": "明天 3 点发我 3 份测试报告吧，我们 4 点开会讨论。",
+        "applied": "明天 3 点发我 3 份测试报告吧，我们 4 点开会讨论。",
+        "answer": "明天 3 点发我 3 份测试报告吧，我们 4 点开会讨论。"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "435f0c6a-f600-487f-be0f-2ca4b640ceab",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把我选中的这句话改得更自然一些，别太正式。",
+    "target": {
+      "windowHandle": "10007",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-007"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-007）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-007\"",
+    "[task 95f60a2f-93fc-4b99-8f8f-b7c2c166ade7] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-007\"",
+    "[asr] local sense-voice-small: 21 chars",
+    "[task 95f60a2f-93fc-4b99-8f8f-b7c2c166ade7] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-007\"",
+    "[task 95f60a2f-93fc-4b99-8f8f-b7c2c166ade7] stage=llm ms=1474",
+    "[task 95f60a2f-93fc-4b99-8f8f-b7c2c166ade7] stage=routing ms=1474",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-007\"",
+    "[task 95f60a2f-93fc-4b99-8f8f-b7c2c166ade7] stage=llm ms=1028",
+    "[task 95f60a2f-93fc-4b99-8f8f-b7c2c166ade7] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-007",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1474,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-007",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1028,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

@@ -1,0 +1,65 @@
+{
+  "case_id": "YU-132",
+  "input": "帮我打开计算器；如果找不到，就明确告诉我原因。",
+  "spoken_input": "帮我打开计算器；如果找不到，就明确告诉我原因。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-132",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "installed_application_candidates",
+      "value": [
+        {
+          "appId": "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App",
+          "path": "",
+          "name": "计算器"
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "7b1dbbb5-967e-4f2f-9533-4ad67e86079f",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我打开计算器；如果找不到，就明确告诉我原因。",
+    "target": {
+      "windowHandle": "10132",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-132"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-132）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-132",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1627,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

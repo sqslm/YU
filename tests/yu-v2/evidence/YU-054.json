@@ -1,0 +1,99 @@
+{
+  "case_id": "YU-054",
+  "input": "看一下我电脑现在有多少内存和是什么 CPU。",
+  "spoken_input": "看一下我电脑现在有多少内存和是什么 CPU。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-054",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "via": "rule",
+        "text": "看一下我电脑现在有多少内存和是什么 CPU。"
+      }
+    },
+    {
+      "label": "os_comparison",
+      "value": {
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "totalMemoryBytes": 33346146304
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "get_system_info",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "CPU：AMD Ryzen 7 9700X 8-Core Processor             ；内存 31.1 GiB，可用 16.6 GiB",
+        "data": {
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalProcessors": 16,
+          "totalMemoryBytes": 33346146304,
+          "freeMemoryBytes": 17821773824,
+          "platform": "win32",
+          "arch": "x64",
+          "ok": true,
+          "summary": "CPU：AMD Ryzen 7 9700X 8-Core Processor             ；内存 31.1 GiB，可用 16.6 GiB"
+        },
+        "status": "completed",
+        "taskId": "899b7fd0-c451-45a5-9fbf-113f494e3f60"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "899b7fd0-c451-45a5-9fbf-113f494e3f60",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "看一下我电脑现在有多少内存和是什么 CPU。",
+    "target": {
+      "windowHandle": "10054",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-054"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "get_system_info",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "get_system_info",
+        "state": "completed",
+        "data": {
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalProcessors": 16,
+          "totalMemoryBytes": 33346146304,
+          "freeMemoryBytes": 17821773824,
+          "platform": "win32",
+          "arch": "x64",
+          "ok": true,
+          "summary": "CPU：AMD Ryzen 7 9700X 8-Core Processor             ；内存 31.1 GiB，可用 16.6 GiB"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-054）",
+    "[perf] tool:get_system_info 0ms ok=true",
+    "[task 899b7fd0-c451-45a5-9fbf-113f494e3f60] stage=tool ms=0 state=completed",
+    "[task 899b7fd0-c451-45a5-9fbf-113f494e3f60] tool=get_system_info status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "PASS"
+}

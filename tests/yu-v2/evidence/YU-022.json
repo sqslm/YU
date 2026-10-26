@@ -1,0 +1,210 @@
+{
+  "case_id": "YU-022",
+  "input": "明天提醒我买牛奶。",
+  "spoken_input": "明天提醒我买牛奶。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-022",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "请补充明确的事项和提醒时间，本次未保存",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "d1d15bbf-c005-4794-81d9-9d19264be730",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "明天提醒我买牛奶。",
+          "target": {
+            "windowHandle": "10022",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-022"
+          },
+          "state": "awaiting_confirmation",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "awaiting_confirmation",
+              "durationMs": 3098
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "rule"
+          },
+          "transcript": "明天提醒我买牛奶。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "awaiting_confirmation",
+              "data": {
+                "ok": false,
+                "saved": 0,
+                "needsClarification": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": false,
+        "summary": "请补充明确的事项和提醒时间，本次未保存",
+        "data": {
+          "ok": false,
+          "saved": 0,
+          "needsClarification": true
+        },
+        "status": "awaiting_confirmation",
+        "taskId": "d1d15bbf-c005-4794-81d9-9d19264be730"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "d1d15bbf-c005-4794-81d9-9d19264be730",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "明天提醒我买牛奶。",
+    "target": {
+      "windowHandle": "10022",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-022"
+    },
+    "state": "awaiting_confirmation",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "awaiting_confirmation",
+        "durationMs": 3098
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "rule"
+    },
+    "transcript": "明天提醒我买牛奶。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "awaiting_confirmation",
+        "data": {
+          "ok": false,
+          "saved": 0,
+          "needsClarification": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-022）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-022\"",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-022\"",
+    "[asr] local sense-voice-small: 9 chars",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-022\"",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] stage=routing ms=0",
+    "[voice-entry] reminder",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] stage=llm ms=1727",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] stage=llm ms=1370",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=false",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] stage=tool ms=3098 state=awaiting_confirmation",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] tool=create_reminder status=awaiting_confirmation ms=3098",
+    "[task d1d15bbf-c005-4794-81d9-9d19264be730] stage=total ms=0 state=awaiting_confirmation"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-022",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1727,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-022",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1370,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

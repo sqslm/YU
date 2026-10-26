@@ -18,6 +18,9 @@
 !/src/
 !/build/
 !/resources/
+!/tests/
+/tests/*
+!/tests/yu-v2/
 !/logo/
 !/licenses/
 !/server/

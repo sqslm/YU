@@ -1,0 +1,233 @@
+{
+  "case_id": "YU-109",
+  "input": "把明天那条取快递提醒改成下午两点。",
+  "spoken_input": "把明天那条取快递提醒改成下午两点。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-109",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "a3a9b8e5-06b2-4c3a-86f4-f78006d9b15a",
+        "taskState": "awaiting_confirmation",
+        "question": "把明天那条取快递提醒改成下午两点。",
+        "answer": "刚才有 2 条：1. 取快递 / 2. B 第二个提醒。请说要改哪一条。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 2 个事项",
+            "status": "completed",
+            "taskId": "a3a9b8e5-06b2-4c3a-86f4-f78006d9b15a"
+          }
+        ]
+      }
+    },
+    {
+      "label": "before_after",
+      "value": {
+        "before": {
+          "title": "取快递",
+          "description": "",
+          "dueAt": 1793059200000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "198aefca-e9c9-4ad8-968b-166ce076b9cd",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "after": {
+          "title": "取快递",
+          "description": "",
+          "dueAt": 1793059200000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "198aefca-e9c9-4ad8-968b-166ce076b9cd",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_before": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793059800000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "35033ec2-8b80-4095-b9c6-2a2c25cc5952",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_after": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793059800000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "35033ec2-8b80-4095-b9c6-2a2c25cc5952",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "取快递",
+      "description": "",
+      "dueAt": 1793059200000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "198aefca-e9c9-4ad8-968b-166ce076b9cd",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "B 第二个提醒",
+      "description": "",
+      "dueAt": 1793059800000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "35033ec2-8b80-4095-b9c6-2a2c25cc5952",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "a3a9b8e5-06b2-4c3a-86f4-f78006d9b15a",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把明天那条取快递提醒改成下午两点。",
+    "target": {
+      "windowHandle": "10109",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-109"
+    },
+    "state": "awaiting_confirmation",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "submittedAt": 1793001600000,
+    "recentExchange": {
+      "question": "已查询本次事项",
+      "answer": "两条测试事项"
+    },
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "取快递",
+              "description": "",
+              "dueAt": 1793059200000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "198aefca-e9c9-4ad8-968b-166ce076b9cd",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/27 08:00:00",
+              "remainingSeconds": 57600,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "B 第二个提醒",
+              "description": "",
+              "dueAt": 1793059800000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "35033ec2-8b80-4095-b9c6-2a2c25cc5952",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/27 08:10:00",
+              "remainingSeconds": 58200,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-109）",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task a3a9b8e5-06b2-4c3a-86f4-f78006d9b15a] stage=tool ms=0 state=completed",
+    "[task a3a9b8e5-06b2-4c3a-86f4-f78006d9b15a] tool=list_reminders status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "FAIL"
+}

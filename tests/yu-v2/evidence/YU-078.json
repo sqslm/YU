@@ -1,0 +1,319 @@
+{
+  "case_id": "YU-078",
+  "input": "今天上海天气怎么样？",
+  "spoken_input": "今天上海天气怎么样？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-078",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "今天上海天气怎么样？",
+            "answer": "今天上海多云，气温 15.5~22.8°C，降水概率 0%；当前晴间多云，22.7°C，体感 22.2°C，湿度 59%，风速约 13.1 km/h[1]。",
+            "status": "",
+            "streaming": true,
+            "taskId": "7cc2caef-b293-40d3-b06d-ecc1e62fe529",
+            "taskState": "running"
+          },
+          {
+            "question": "今天上海天气怎么样？",
+            "answer": "今天上海多云，气温 15.5~22.8°C，降水概率 0%；当前晴间多云，22.7°C，体感 22.2°C，湿度 59%，风速约 13.1 km/h[1]。",
+            "sources": [
+              {
+                "title": "上海市 上海 实时天气 · Open-Meteo",
+                "url": "https://open-meteo.com/en/docs?latitude=31.22222&longitude=121.45806",
+                "snippet": "晴间多云 22.7°C"
+              }
+            ],
+            "retrieval": {
+              "searched": true,
+              "failed": false,
+              "queries": [],
+              "pagesRead": 0,
+              "digest": false,
+              "partial": false
+            },
+            "tools": [
+              "get_weather"
+            ],
+            "taskId": "7cc2caef-b293-40d3-b06d-ecc1e62fe529",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "7cc2caef-b293-40d3-b06d-ecc1e62fe529",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "今天上海天气怎么样？",
+          "target": {
+            "windowHandle": "10078",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-078"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "get_weather",
+              "state": "completed",
+              "durationMs": 3798
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "model"
+          },
+          "transcript": "今天上海天气怎么样？",
+          "results": [
+            {
+              "tool": "get_weather",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "place": "上海市 上海",
+                "region": "中国",
+                "when": "today",
+                "current": {
+                  "temperature": 22.7,
+                  "apparent": 22.2,
+                  "humidity": 59,
+                  "precipitation": 0,
+                  "wind": 13.1,
+                  "description": "晴间多云"
+                },
+                "today": {
+                  "date": "2026-10-26",
+                  "description": "多云",
+                  "high": 22.8,
+                  "low": 15.5,
+                  "rainChance": 0
+                },
+                "tomorrow": {
+                  "date": "2026-10-27",
+                  "description": "小毛毛雨",
+                  "high": 20.4,
+                  "low": 13.9,
+                  "rainChance": 0
+                },
+                "sourceUrl": "https://open-meteo.com/en/docs?latitude=31.22222&longitude=121.45806",
+                "text": "地点：上海市 上海\n实况（更新于查询时刻）：晴间多云，22.7°C，体感 22.2°C，相对湿度 59%，风速 13.1 km/h，降水 0 mm\n今天：多云，15.5~22.8°C，降水概率 0%\n2026-10-27：小毛毛雨，13.9~20.4°C，降水概率 0%",
+                "fetchedAt": "2026-10-26T08:00:00.000Z"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "live_answer",
+      "value": "今天上海多云，气温 15.5~22.8°C，降水概率 0%；当前晴间多云，22.7°C，体感 22.2°C，湿度 59%，风速约 13.1 km/h[1]。"
+    },
+    {
+      "label": "weather_tool",
+      "value": {
+        "tool": "get_weather",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "place": "上海市 上海",
+          "region": "中国",
+          "when": "today",
+          "current": {
+            "temperature": 22.7,
+            "apparent": 22.2,
+            "humidity": 59,
+            "precipitation": 0,
+            "wind": 13.1,
+            "description": "晴间多云"
+          },
+          "today": {
+            "date": "2026-10-26",
+            "description": "多云",
+            "high": 22.8,
+            "low": 15.5,
+            "rainChance": 0
+          },
+          "tomorrow": {
+            "date": "2026-10-27",
+            "description": "小毛毛雨",
+            "high": 20.4,
+            "low": 13.9,
+            "rainChance": 0
+          },
+          "sourceUrl": "https://open-meteo.com/en/docs?latitude=31.22222&longitude=121.45806",
+          "text": "地点：上海市 上海\n实况（更新于查询时刻）：晴间多云，22.7°C，体感 22.2°C，相对湿度 59%，风速 13.1 km/h，降水 0 mm\n今天：多云，15.5~22.8°C，降水概率 0%\n2026-10-27：小毛毛雨，13.9~20.4°C，降水概率 0%",
+          "fetchedAt": "2026-10-26T08:00:00.000Z"
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "7cc2caef-b293-40d3-b06d-ecc1e62fe529",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "今天上海天气怎么样？",
+    "target": {
+      "windowHandle": "10078",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-078"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "get_weather",
+        "state": "completed",
+        "durationMs": 3798
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "model"
+    },
+    "transcript": "今天上海天气怎么样？",
+    "results": [
+      {
+        "tool": "get_weather",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "place": "上海市 上海",
+          "region": "中国",
+          "when": "today",
+          "current": {
+            "temperature": 22.7,
+            "apparent": 22.2,
+            "humidity": 59,
+            "precipitation": 0,
+            "wind": 13.1,
+            "description": "晴间多云"
+          },
+          "today": {
+            "date": "2026-10-26",
+            "description": "多云",
+            "high": 22.8,
+            "low": 15.5,
+            "rainChance": 0
+          },
+          "tomorrow": {
+            "date": "2026-10-27",
+            "description": "小毛毛雨",
+            "high": 20.4,
+            "low": 13.9,
+            "rainChance": 0
+          },
+          "sourceUrl": "https://open-meteo.com/en/docs?latitude=31.22222&longitude=121.45806",
+          "text": "地点：上海市 上海\n实况（更新于查询时刻）：晴间多云，22.7°C，体感 22.2°C，相对湿度 59%，风速 13.1 km/h，降水 0 mm\n今天：多云，15.5~22.8°C，降水概率 0%\n2026-10-27：小毛毛雨，13.9~20.4°C，降水概率 0%",
+          "fetchedAt": "2026-10-26T08:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-078）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-078\"",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-078\"",
+    "[asr] local sense-voice-small: 10 chars",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-078\"",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] stage=llm ms=1366",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] stage=routing ms=1366",
+    "[voice-entry] ask",
+    "[weather] 上海市 上海 晴间多云 22.7°C",
+    "[perf] tool:get_weather 0ms ok=true",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] stage=tool ms=3798 state=completed",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] tool=get_weather status=completed ms=3798",
+    "[perf] llm weather 0ms streamed=true",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] stage=llm ms=1423",
+    "[perf] ask total 0ms",
+    "[task 7cc2caef-b293-40d3-b06d-ecc1e62fe529] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-078",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1366,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-078",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1940,
+      "host": "geocoding-api.open-meteo.com"
+    },
+    {
+      "case": "YU-078",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1856,
+      "host": "api.open-meteo.com"
+    },
+    {
+      "case": "YU-078",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1018,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

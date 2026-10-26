@@ -1,0 +1,257 @@
+{
+  "case_id": "YU-033",
+  "input": "帮我记一下，给语 YU 增加一个文件整理功能。",
+  "spoken_input": "帮我记一下，给语 YU 增加一个文件整理功能。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-033",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "保存随记中…",
+            "showMode": true,
+            "taskLabel": "随记"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "随记已保存",
+            "feedback": {},
+            "taskLabel": "随记",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "c348cc0f-fef3-45a1-a686-88c6c364d76b",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "帮我记一下，给语 YU 增加一个文件整理功能。",
+          "target": {
+            "windowHandle": "10033",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-033"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 24
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "notes",
+            "via": "rule"
+          },
+          "transcript": "帮我记一下，给语 YU 增加一个文件整理功能。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "2dab0e35-f108-41de-bca5-d7edb6b4c5c1",
+                "tags": [],
+                "text": "帮我记一下，给语 YU 增加一个文件整理功能。",
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "2dab0e35-f108-41de-bca5-d7edb6b4c5c1",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "帮我记一下，给语 YU 增加一个文件整理功能。",
+            "polished": "给语 YU 增加一个文件整理功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/2dab0e35-f108-41de-bca5-d7edb6b4c5c1.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [
+          {
+            "id": "2dab0e35-f108-41de-bca5-d7edb6b4c5c1",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "帮我记一下，给语 YU 增加一个文件整理功能。",
+            "polished": "给语 YU 增加一个文件整理功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/2dab0e35-f108-41de-bca5-d7edb6b4c5c1.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "reminders": [],
+        "events": []
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_note",
+      "args": {
+        "text": "帮我记一下，给语 YU 增加一个文件整理功能。"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "随记已保存",
+        "data": {
+          "id": "2dab0e35-f108-41de-bca5-d7edb6b4c5c1",
+          "tags": [],
+          "text": "帮我记一下，给语 YU 增加一个文件整理功能。",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "c348cc0f-fef3-45a1-a686-88c6c364d76b"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "2dab0e35-f108-41de-bca5-d7edb6b4c5c1",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600002,
+      "durationMs": 1200,
+      "transcript": "帮我记一下，给语 YU 增加一个文件整理功能。",
+      "polished": "给语 YU 增加一个文件整理功能。",
+      "polishStatus": "ok",
+      "audioPath": "notes/audio/2dab0e35-f108-41de-bca5-d7edb6b4c5c1.wav",
+      "audioFormat": "wav",
+      "audioBytes": 38444,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "c348cc0f-fef3-45a1-a686-88c6c364d76b",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我记一下，给语 YU 增加一个文件整理功能。",
+    "target": {
+      "windowHandle": "10033",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-033"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "durationMs": 24
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "notes",
+      "via": "rule"
+    },
+    "transcript": "帮我记一下，给语 YU 增加一个文件整理功能。",
+    "results": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "data": {
+          "id": "2dab0e35-f108-41de-bca5-d7edb6b4c5c1",
+          "tags": [],
+          "text": "帮我记一下，给语 YU 增加一个文件整理功能。",
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-033）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-033\"",
+    "[task c348cc0f-fef3-45a1-a686-88c6c364d76b] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-033\"",
+    "[asr] local sense-voice-small: 23 chars",
+    "[task c348cc0f-fef3-45a1-a686-88c6c364d76b] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-033\"",
+    "[task c348cc0f-fef3-45a1-a686-88c6c364d76b] stage=routing ms=0",
+    "[voice-entry] notes",
+    "[notes] 音频压缩不可用（failed：Unrecognized option 'application'.\r\nError splitting the argument list: Option not found），保存为 WAV",
+    "[notes] 新随记 2dab0e35-f108-41de-bca5-d7edb6b4c5c1 已保存（wav, 38 KB, 1200 ms）",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task c348cc0f-fef3-45a1-a686-88c6c364d76b] stage=tool ms=24 state=completed",
+    "[task c348cc0f-fef3-45a1-a686-88c6c364d76b] tool=create_note status=completed ms=24",
+    "[task c348cc0f-fef3-45a1-a686-88c6c364d76b] stage=total ms=0 state=completed",
+    "[task c348cc0f-fef3-45a1-a686-88c6c364d76b] stage=llm ms=1270"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-033",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1270,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

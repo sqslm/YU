@@ -1,0 +1,224 @@
+{
+  "case_id": "YU-148",
+  "input": "查看上一条随记同步失败的原因，先不要重试。",
+  "spoken_input": "查看上一条随记同步失败的原因，先不要重试。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-148",
+  "observations": [
+    {
+      "label": "local_before_sync",
+      "value": {
+        "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+        "pending": true
+      }
+    },
+    {
+      "label": "actual_sync_failure",
+      "value": {
+        "failures": [
+          {
+            "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+            "stage": "text-upload",
+            "error": "V2_CONTROLLED_SYNC_503",
+            "at": 1793001600000
+          }
+        ],
+        "status": {
+          "enabled": true,
+          "state": "error",
+          "pending": 1,
+          "lastSyncAt": 0,
+          "lastError": "V2_CONTROLLED_SYNC_503"
+        }
+      }
+    },
+    {
+      "label": "failure_query",
+      "value": {
+        "ok": true,
+        "summary": "查到 1 条随记同步状态",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+              "title": "YU_V2 YU-148 查看上一条随记同步失败的原因，先不要重试。",
+              "version": null,
+              "textSynced": false,
+              "audioSynced": null,
+              "state": "failed",
+              "failures": [
+                {
+                  "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+                  "stage": "text-upload",
+                  "error": "V2_CONTROLLED_SYNC_503",
+                  "at": 1793001600000
+                }
+              ]
+            }
+          ],
+          "failures": [
+            {
+              "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+              "stage": "text-upload",
+              "error": "V2_CONTROLLED_SYNC_503",
+              "at": 1793001600000
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "1968c6a5-fc6b-4ad6-a106-ce12a11d4298"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "note_sync_status",
+      "args": {
+        "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+        "failed_only": true
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "查到 1 条随记同步状态",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+              "title": "YU_V2 YU-148 查看上一条随记同步失败的原因，先不要重试。",
+              "version": null,
+              "textSynced": false,
+              "audioSynced": null,
+              "state": "failed",
+              "failures": [
+                {
+                  "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+                  "stage": "text-upload",
+                  "error": "V2_CONTROLLED_SYNC_503",
+                  "at": 1793001600000
+                }
+              ]
+            }
+          ],
+          "failures": [
+            {
+              "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+              "stage": "text-upload",
+              "error": "V2_CONTROLLED_SYNC_503",
+              "at": 1793001600000
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "1968c6a5-fc6b-4ad6-a106-ce12a11d4298"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "YU_V2 YU-148 查看上一条随记同步失败的原因，先不要重试。",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "1968c6a5-fc6b-4ad6-a106-ce12a11d4298",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "查看上一条随记同步失败的原因，先不要重试。",
+    "target": {
+      "windowHandle": "10148",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-148"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "note_sync_status",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "note_sync_status",
+        "state": "completed",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+              "title": "YU_V2 YU-148 查看上一条随记同步失败的原因，先不要重试。",
+              "version": null,
+              "textSynced": false,
+              "audioSynced": null,
+              "state": "failed",
+              "failures": [
+                {
+                  "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+                  "stage": "text-upload",
+                  "error": "V2_CONTROLLED_SYNC_503",
+                  "at": 1793001600000
+                }
+              ]
+            }
+          ],
+          "failures": [
+            {
+              "id": "09cb22eb-5d87-468f-a85e-985f0e4a2372",
+              "stage": "text-upload",
+              "error": "V2_CONTROLLED_SYNC_503",
+              "at": 1793001600000
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-148）",
+    "[sync] failed: V2_CONTROLLED_SYNC_503",
+    "[perf] tool:note_sync_status 0ms ok=true",
+    "[task 1968c6a5-fc6b-4ad6-a106-ce12a11d4298] stage=tool ms=0 state=completed",
+    "[task 1968c6a5-fc6b-4ad6-a106-ce12a11d4298] tool=note_sync_status status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-148",
+      "kind": "network",
+      "status": 503,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    }
+  ],
+  "final_status": "PASS"
+}

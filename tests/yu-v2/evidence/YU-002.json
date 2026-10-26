@@ -1,0 +1,174 @@
+{
+  "case_id": "YU-002",
+  "input": "我想问一下，为什么电脑用久了会越来越卡？",
+  "spoken_input": "我想问一下，为什么电脑用久了会越来越卡？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-002",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "我想问一下，为什么电脑用久了会越来越卡？",
+            "answer": "",
+            "status": "正在思考…",
+            "streaming": true,
+            "taskId": "62b18b61-87a9-474d-bf9d-4b2d7c8c7a14",
+            "taskState": "running"
+          },
+          {
+            "question": "我想问一下，为什么电脑用久了会越来越卡？",
+            "answer": "电脑越用越卡，本质上不是硬件「老化」那么简单，主要是软件层面的资源被越占越多。常见原因有这么几类：\n\n**1. 后台自启动项堆积**\n装软件时顺手绑上开机自启的更新程序、云盘同步、输入法、各种助手，日积月累几十个进程常驻内存，开机和日常都变慢。\n\n**2. 硬盘被写满、碎片化**\n系统盘剩余空间低于 10%~15% 时，虚拟内存和临时文件没法高效调度；机械硬盘长期读写后文件碎片增多，寻道变慢。这是最常被忽略的一条。\n\n**3. 内存不够导致的换页**\n多开浏览器标签页、微信、办公软件，物理内存吃满后系统频繁读写硬盘上的页面文件，表现就是「一卡一顿」甚至风扇狂转。\n\n**4. 显卡驱动与系统更新残留**\n旧驱动没清干净、系统大版本更新后残留的旧组件，会和当前驱动冲突，表现为界面卡顿、掉帧。\n\n**5. 散热劣化导致降频**\n灰尘堵住散热口、硅脂干化，CPU/GPU 温度一高就自动降频。用了两三年的笔记本尤其明显，这属于「硬件层面」，但可以通过清灰换硅脂改善。\n\n**6. 恶意软件 / 捆绑软件**\n挖矿脚本、弹窗推广、浏览器劫持插件会偷偷占用 CPU 和网络。\n\n**实操建议（按性价比排序）：**\n- 任务管理器（Ctrl+Shift+Esc）看 CPU、内存、磁盘占用，先定位是谁在吃资源\n- 关掉不必要的开机自启（任务管理器 → 启动，或系统设置里的启动项）\n- 系统盘腾出 15% 以上空间，机械硬盘定期碎片整理（固态别整理，用 TRIM）\n- 笔记本两三年清一次灰、换硅脂\n- 实在不行重装系统，比逐项排查快\n\n如果告诉我你的机器配置（CPU、内存、是固态还是机械、装的什么系统），我可以帮你判断瓶颈更可能在哪一块。",
+            "taskId": "62b18b61-87a9-474d-bf9d-4b2d7c8c7a14",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "62b18b61-87a9-474d-bf9d-4b2d7c8c7a14",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "我想问一下，为什么电脑用久了会越来越卡？",
+          "target": {
+            "windowHandle": "10002",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-002"
+          },
+          "state": "completed",
+          "receipts": [],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "model"
+          },
+          "transcript": "我想问一下，为什么电脑用久了会越来越卡？"
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [],
+        "reminders": [],
+        "events": []
+      }
+    },
+    {
+      "label": "answer",
+      "value": "电脑越用越卡，本质上不是硬件「老化」那么简单，主要是软件层面的资源被越占越多。常见原因有这么几类：\n\n**1. 后台自启动项堆积**\n装软件时顺手绑上开机自启的更新程序、云盘同步、输入法、各种助手，日积月累几十个进程常驻内存，开机和日常都变慢。\n\n**2. 硬盘被写满、碎片化**\n系统盘剩余空间低于 10%~15% 时，虚拟内存和临时文件没法高效调度；机械硬盘长期读写后文件碎片增多，寻道变慢。这是最常被忽略的一条。\n\n**3. 内存不够导致的换页**\n多开浏览器标签页、微信、办公软件，物理内存吃满后系统频繁读写硬盘上的页面文件，表现就是「一卡一顿」甚至风扇狂转。\n\n**4. 显卡驱动与系统更新残留**\n旧驱动没清干净、系统大版本更新后残留的旧组件，会和当前驱动冲突，表现为界面卡顿、掉帧。\n\n**5. 散热劣化导致降频**\n灰尘堵住散热口、硅脂干化，CPU/GPU 温度一高就自动降频。用了两三年的笔记本尤其明显，这属于「硬件层面」，但可以通过清灰换硅脂改善。\n\n**6. 恶意软件 / 捆绑软件**\n挖矿脚本、弹窗推广、浏览器劫持插件会偷偷占用 CPU 和网络。\n\n**实操建议（按性价比排序）：**\n- 任务管理器（Ctrl+Shift+Esc）看 CPU、内存、磁盘占用，先定位是谁在吃资源\n- 关掉不必要的开机自启（任务管理器 → 启动，或系统设置里的启动项）\n- 系统盘腾出 15% 以上空间，机械硬盘定期碎片整理（固态别整理，用 TRIM）\n- 笔记本两三年清一次灰、换硅脂\n- 实在不行重装系统，比逐项排查快\n\n如果告诉我你的机器配置（CPU、内存、是固态还是机械、装的什么系统），我可以帮你判断瓶颈更可能在哪一块。"
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "62b18b61-87a9-474d-bf9d-4b2d7c8c7a14",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我想问一下，为什么电脑用久了会越来越卡？",
+    "target": {
+      "windowHandle": "10002",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-002"
+    },
+    "state": "completed",
+    "receipts": [],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "model"
+    },
+    "transcript": "我想问一下，为什么电脑用久了会越来越卡？"
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-002）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-002\"",
+    "[task 62b18b61-87a9-474d-bf9d-4b2d7c8c7a14] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-002\"",
+    "[asr] local sense-voice-small: 20 chars",
+    "[task 62b18b61-87a9-474d-bf9d-4b2d7c8c7a14] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-002\"",
+    "[task 62b18b61-87a9-474d-bf9d-4b2d7c8c7a14] stage=llm ms=1629",
+    "[task 62b18b61-87a9-474d-bf9d-4b2d7c8c7a14] stage=routing ms=1632",
+    "[voice-entry] ask",
+    "[task 62b18b61-87a9-474d-bf9d-4b2d7c8c7a14] stage=llm ms=5213",
+    "[perf] llm round0 0ms",
+    "[perf] ask total 0ms",
+    "[task 62b18b61-87a9-474d-bf9d-4b2d7c8c7a14] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-002",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1629,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-002",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 5212,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

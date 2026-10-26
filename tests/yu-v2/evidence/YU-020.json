@@ -1,0 +1,348 @@
+{
+  "case_id": "YU-020",
+  "input": "每天晚上十一点提醒我早点睡觉。",
+  "spoken_input": "每天晚上十一点提醒我早点睡觉。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-020",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "2026/10/26 23:00 · 普通提醒 · 早点睡觉",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "7d7446e3-584c-4d95-845e-fe5f7b2e824d",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "每天晚上十一点提醒我早点睡觉。",
+          "target": {
+            "windowHandle": "10020",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-020"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 3973
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "model"
+          },
+          "transcript": "每天晚上十一点提醒我早点睡觉。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "早点睡觉",
+                  "description": "",
+                  "dueAt": 1793026800000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": {
+                    "frequency": "daily",
+                    "hour": 23,
+                    "minute": 0,
+                    "anchor": 1793026800000
+                  },
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "每天晚上十一点",
+                  "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 23:00:00",
+                  "remainingSeconds": 25200,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": [
+        {
+          "title": "早点睡觉",
+          "description": "",
+          "dueAt": 1793026800000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": {
+            "frequency": "daily",
+            "hour": 23,
+            "minute": 0,
+            "anchor": 1793026800000
+          },
+          "occurrences": 0,
+          "source": "voice",
+          "timeExpression": "每天晚上十一点",
+          "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "2026/10/26 23:00 · 普通提醒 · 早点睡觉",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "早点睡觉",
+            "description": "",
+            "dueAt": 1793026800000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "daily",
+              "hour": 23,
+              "minute": 0,
+              "anchor": 1793026800000
+            },
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "每天晚上十一点",
+            "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 23:00:00",
+            "remainingSeconds": 25200,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "7d7446e3-584c-4d95-845e-fe5f7b2e824d"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "早点睡觉",
+      "description": "",
+      "dueAt": 1793026800000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": {
+        "frequency": "daily",
+        "hour": 23,
+        "minute": 0,
+        "anchor": 1793026800000
+      },
+      "occurrences": 0,
+      "source": "voice",
+      "timeExpression": "每天晚上十一点",
+      "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "7d7446e3-584c-4d95-845e-fe5f7b2e824d",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "每天晚上十一点提醒我早点睡觉。",
+    "target": {
+      "windowHandle": "10020",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-020"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 3973
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "model"
+    },
+    "transcript": "每天晚上十一点提醒我早点睡觉。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "早点睡觉",
+            "description": "",
+            "dueAt": 1793026800000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "daily",
+              "hour": 23,
+              "minute": 0,
+              "anchor": 1793026800000
+            },
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "每天晚上十一点",
+            "id": "54ece3c9-9aff-4f8b-86a7-1347995597de",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 23:00:00",
+            "remainingSeconds": 25200,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-020）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-020\"",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-020\"",
+    "[asr] local sense-voice-small: 15 chars",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-020\"",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=llm ms=1739",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=routing ms=1740",
+    "[voice-entry] reminder",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=llm ms=2095",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=llm ms=1876",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=tool ms=3973 state=completed",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] tool=create_reminder status=completed ms=3973",
+    "[task 7d7446e3-584c-4d95-845e-fe5f7b2e824d] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-020",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1739,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-020",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2095,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-020",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1876,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

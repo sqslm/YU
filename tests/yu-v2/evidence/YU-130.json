@@ -1,0 +1,193 @@
+{
+  "case_id": "YU-130",
+  "input": "打开最近下载的那个压缩包，如果找到多个先给我选择。",
+  "spoken_input": "打开最近下载的那个压缩包，如果找到多个先给我选择。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "file_results",
+      "value": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130\\latest.7z",
+              "name": "latest.7z",
+              "bytes": 510,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "3cda81ca-44a2-43db-8f93-b8343653266f"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130\\old.zip",
+              "name": "old.zip",
+              "bytes": 110,
+              "modified": "2026-10-26T06:00:00.0000000Z",
+              "kind": "file",
+              "id": "9ee95f38-5997-444c-bbaa-7c87c0c3ed50"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "cd8b9f2e-caa1-472f-a7fc-621daa556505"
+      }
+    },
+    {
+      "label": "actual_result_pointer",
+      "value": {
+        "kind": "ordinal",
+        "index": 1,
+        "item": {
+          "id": "9ee95f38-5997-444c-bbaa-7c87c0c3ed50",
+          "title": "old.zip",
+          "fields": {
+            "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130\\old.zip",
+            "name": "old.zip",
+            "bytes": 110,
+            "modified": "2026-10-26T06:00:00.0000000Z",
+            "kind": "file",
+            "id": "9ee95f38-5997-444c-bbaa-7c87c0c3ed50"
+          }
+        }
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "downloads",
+        "type": "archive"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130\\latest.7z",
+              "name": "latest.7z",
+              "bytes": 510,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "3cda81ca-44a2-43db-8f93-b8343653266f"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130\\old.zip",
+              "name": "old.zip",
+              "bytes": 110,
+              "modified": "2026-10-26T06:00:00.0000000Z",
+              "kind": "file",
+              "id": "9ee95f38-5997-444c-bbaa-7c87c0c3ed50"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "cd8b9f2e-caa1-472f-a7fc-621daa556505"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "cd8b9f2e-caa1-472f-a7fc-621daa556505",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开最近下载的那个压缩包，如果找到多个先给我选择。",
+    "target": {
+      "windowHandle": "10130",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-130"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 344
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130\\latest.7z",
+              "name": "latest.7z",
+              "bytes": 510,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "3cda81ca-44a2-43db-8f93-b8343653266f"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130\\old.zip",
+              "name": "old.zip",
+              "bytes": 110,
+              "modified": "2026-10-26T06:00:00.0000000Z",
+              "kind": "file",
+              "id": "9ee95f38-5997-444c-bbaa-7c87c0c3ed50"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-130）",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task cd8b9f2e-caa1-472f-a7fc-621daa556505] stage=tool ms=344 state=completed",
+    "[task cd8b9f2e-caa1-472f-a7fc-621daa556505] tool=search_files status=completed ms=344"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-130",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1409,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

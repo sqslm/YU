@@ -1,0 +1,61 @@
+{
+  "case_id": "YU-137",
+  "input": "把现在这个长网页滚动截成一张图。",
+  "spoken_input": "把现在这个长网页滚动截成一张图。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-137",
+  "observations": [
+    {
+      "label": "controlled_image",
+      "value": {
+        "sha256": "234eabb13a040ffe3058a1f5c18b3d250d68d528dc6ef06b296a2f23d11b688d",
+        "bytes": 16528,
+        "source": "generated non-private test image; not a desktop screenshot"
+      }
+    },
+    {
+      "label": "real_stitch_algorithm",
+      "value": {
+        "states": [
+          "added",
+          "added",
+          "added",
+          "added",
+          "added"
+        ],
+        "width": 120,
+        "height": 248,
+        "pixelsSha256": "cf0a0b92173a9851d5f8b14239ec68f784ad2b9427c8120d799b03dfc97526ea"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "62d59f94-add0-47b5-860c-15111c6be743",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把现在这个长网页滚动截成一张图。",
+    "target": {
+      "windowHandle": "10137",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-137"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-137）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

@@ -1,0 +1,224 @@
+{
+  "case_id": "YU-093",
+  "input": "有没有同步失败的数据？",
+  "spoken_input": "有没有同步失败的数据？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-093",
+  "observations": [
+    {
+      "label": "local_before_sync",
+      "value": {
+        "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+        "pending": true
+      }
+    },
+    {
+      "label": "actual_sync_failure",
+      "value": {
+        "failures": [
+          {
+            "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+            "stage": "text-upload",
+            "error": "V2_CONTROLLED_SYNC_503",
+            "at": 1793001600000
+          }
+        ],
+        "status": {
+          "enabled": true,
+          "state": "error",
+          "pending": 1,
+          "lastSyncAt": 0,
+          "lastError": "V2_CONTROLLED_SYNC_503"
+        }
+      }
+    },
+    {
+      "label": "failure_query",
+      "value": {
+        "ok": true,
+        "summary": "查到 1 条随记同步状态",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+              "title": "YU_V2 YU-093 有没有同步失败的数据？",
+              "version": null,
+              "textSynced": false,
+              "audioSynced": null,
+              "state": "failed",
+              "failures": [
+                {
+                  "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+                  "stage": "text-upload",
+                  "error": "V2_CONTROLLED_SYNC_503",
+                  "at": 1793001600000
+                }
+              ]
+            }
+          ],
+          "failures": [
+            {
+              "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+              "stage": "text-upload",
+              "error": "V2_CONTROLLED_SYNC_503",
+              "at": 1793001600000
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "6f6ca2e4-e12c-4824-aaf8-49f831e36ac2"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "note_sync_status",
+      "args": {
+        "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+        "failed_only": true
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "查到 1 条随记同步状态",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+              "title": "YU_V2 YU-093 有没有同步失败的数据？",
+              "version": null,
+              "textSynced": false,
+              "audioSynced": null,
+              "state": "failed",
+              "failures": [
+                {
+                  "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+                  "stage": "text-upload",
+                  "error": "V2_CONTROLLED_SYNC_503",
+                  "at": 1793001600000
+                }
+              ]
+            }
+          ],
+          "failures": [
+            {
+              "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+              "stage": "text-upload",
+              "error": "V2_CONTROLLED_SYNC_503",
+              "at": 1793001600000
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "6f6ca2e4-e12c-4824-aaf8-49f831e36ac2"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "YU_V2 YU-093 有没有同步失败的数据？",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "6f6ca2e4-e12c-4824-aaf8-49f831e36ac2",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "有没有同步失败的数据？",
+    "target": {
+      "windowHandle": "10093",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-093"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "note_sync_status",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "note_sync_status",
+        "state": "completed",
+        "data": {
+          "enabled": true,
+          "signedIn": true,
+          "total": 1,
+          "items": [
+            {
+              "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+              "title": "YU_V2 YU-093 有没有同步失败的数据？",
+              "version": null,
+              "textSynced": false,
+              "audioSynced": null,
+              "state": "failed",
+              "failures": [
+                {
+                  "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+                  "stage": "text-upload",
+                  "error": "V2_CONTROLLED_SYNC_503",
+                  "at": 1793001600000
+                }
+              ]
+            }
+          ],
+          "failures": [
+            {
+              "id": "1d324958-6920-436e-9d1c-5965b6ab2a05",
+              "stage": "text-upload",
+              "error": "V2_CONTROLLED_SYNC_503",
+              "at": 1793001600000
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-093）",
+    "[sync] failed: V2_CONTROLLED_SYNC_503",
+    "[perf] tool:note_sync_status 0ms ok=true",
+    "[task 6f6ca2e4-e12c-4824-aaf8-49f831e36ac2] stage=tool ms=0 state=completed",
+    "[task 6f6ca2e4-e12c-4824-aaf8-49f831e36ac2] tool=note_sync_status status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-093",
+      "kind": "network",
+      "status": 503,
+      "duration_ms": 2,
+      "host": "127.0.0.1"
+    }
+  ],
+  "final_status": "PASS"
+}

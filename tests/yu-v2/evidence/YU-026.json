@@ -1,0 +1,324 @@
+{
+  "case_id": "YU-026",
+  "input": "刚才的强提醒改成普通提醒。",
+  "spoken_input": "刚才的强提醒改成普通提醒。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-026",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "80e26238-f630-40bf-8bcb-0bdd5d51e78b",
+        "taskState": "completed",
+        "question": "刚才的强提醒改成普通提醒。",
+        "answer": "「站起来活动」现在已经改成普通提醒，触发时间不变，仍然是今天 16:30。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 2 个事项",
+            "status": "completed",
+            "taskId": "80e26238-f630-40bf-8bcb-0bdd5d51e78b"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "事项已更新 · 站起来活动\n2026/10/26 16:30:00 → 2026/10/26 16:30:00 · 普通提醒",
+            "status": "completed",
+            "taskId": "80e26238-f630-40bf-8bcb-0bdd5d51e78b"
+          }
+        ]
+      }
+    },
+    {
+      "label": "before_after",
+      "value": {
+        "before": {
+          "title": "站起来活动",
+          "description": "",
+          "dueAt": 1793003400000,
+          "level": "strong",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "88bc379e-155e-44dc-bb84-b207beb61718",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "after": {
+          "title": "站起来活动",
+          "description": "",
+          "dueAt": 1793003400000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "88bc379e-155e-44dc-bb84-b207beb61718",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_before": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "05fae34b-795d-4851-b769-9020d8abb74f",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_after": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "05fae34b-795d-4851-b769-9020d8abb74f",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "站起来活动",
+      "description": "",
+      "dueAt": 1793003400000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "88bc379e-155e-44dc-bb84-b207beb61718",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "B 第二个提醒",
+      "description": "",
+      "dueAt": 1793004000000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "05fae34b-795d-4851-b769-9020d8abb74f",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "80e26238-f630-40bf-8bcb-0bdd5d51e78b",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "刚才的强提醒改成普通提醒。",
+    "target": {
+      "windowHandle": "10026",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-026"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 3
+      }
+    ],
+    "submittedAt": 1793001600000,
+    "recentExchange": {
+      "question": "已查询本次事项",
+      "answer": "两条测试事项"
+    },
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "站起来活动",
+              "description": "",
+              "dueAt": 1793003400000,
+              "level": "strong",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "88bc379e-155e-44dc-bb84-b207beb61718",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:30:00",
+              "remainingSeconds": 1800,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "强提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "B 第二个提醒",
+              "description": "",
+              "dueAt": 1793004000000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "05fae34b-795d-4851-b769-9020d8abb74f",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:40:00",
+              "remainingSeconds": 2400,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "88bc379e-155e-44dc-bb84-b207beb61718",
+          "action": "update",
+          "before": {
+            "title": "站起来活动",
+            "description": "",
+            "dueAt": 1793003400000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "88bc379e-155e-44dc-bb84-b207beb61718",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:30:00",
+            "remainingSeconds": 1800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "强提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "站起来活动",
+            "description": "",
+            "dueAt": 1793003400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "88bc379e-155e-44dc-bb84-b207beb61718",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:30:00",
+            "remainingSeconds": 1800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-026）",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task 80e26238-f630-40bf-8bcb-0bdd5d51e78b] stage=tool ms=0 state=completed",
+    "[task 80e26238-f630-40bf-8bcb-0bdd5d51e78b] tool=list_reminders status=completed ms=0",
+    "[task 80e26238-f630-40bf-8bcb-0bdd5d51e78b] stage=llm ms=2410",
+    "[perf] llm round0 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task 80e26238-f630-40bf-8bcb-0bdd5d51e78b] stage=tool ms=3 state=completed",
+    "[task 80e26238-f630-40bf-8bcb-0bdd5d51e78b] tool=manage_reminder status=completed ms=3",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 80e26238-f630-40bf-8bcb-0bdd5d51e78b] stage=llm ms=1557",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-026",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2410,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-026",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1557,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

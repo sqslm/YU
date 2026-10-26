@@ -1,0 +1,222 @@
+{
+  "case_id": "YU-147",
+  "input": "断网时记一条随记，联网后帮我确认是否同步完成。",
+  "spoken_input": "断网时记一条随记，联网后帮我确认是否同步完成。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-FhLpLF\\YU-147",
+  "observations": [
+    {
+      "label": "local_before_sync",
+      "value": {
+        "id": "bdde2379-fdf9-4bc9-b270-495081564e61",
+        "pending": true
+      }
+    },
+    {
+      "label": "actual_connection_reset",
+      "value": {
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v1/auth/register"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/notes/changes"
+          }
+        ],
+        "failures": [
+          {
+            "id": "bdde2379-fdf9-4bc9-b270-495081564e61",
+            "stage": "text-upload",
+            "error": "fetch failed",
+            "at": 1793001600000
+          }
+        ],
+        "local": [
+          {
+            "id": "bdde2379-fdf9-4bc9-b270-495081564e61",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "editedAt": 1793001600000,
+            "transcript": "YU_V2 YU-147 断网时记一条随记，联网后帮我确认是否同步完成。",
+            "polished": "",
+            "polishStatus": "skipped",
+            "durationMs": 0,
+            "tags": [],
+            "pending": true
+          }
+        ]
+      }
+    },
+    {
+      "label": "actual_sync_confirmation",
+      "value": {
+        "local": {
+          "id": "bdde2379-fdf9-4bc9-b270-495081564e61",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "editedAt": 1793001600000,
+          "transcript": "YU_V2 YU-147 断网时记一条随记，联网后帮我确认是否同步完成。",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "version": 1
+        },
+        "remoteRows": [
+          {
+            "id": "bdde2379-fdf9-4bc9-b270-495081564e61",
+            "version": 1,
+            "deleted": false
+          }
+        ],
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v1/auth/register"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/notes/changes"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/notes/changes"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/notes?since=0&limit=200"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/transcription_history/pull?since=0&limit=200"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/transcription_history/sync_status"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/notes?since=0"
+          }
+        ]
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "bdde2379-fdf9-4bc9-b270-495081564e61",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "YU_V2 YU-147 断网时记一条随记，联网后帮我确认是否同步完成。",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "version": 1
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "cb445f1f-3206-4c9b-b9c7-ffc91b1926cd",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "断网时记一条随记，联网后帮我确认是否同步完成。",
+    "target": {
+      "windowHandle": "10147",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-147"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-FhLpLF\\YU-147）",
+    "[sync] failed: fetch failed",
+    "[sync] done, 0 row(s) on the server",
+    "[sync] done, 0 row(s) on the server"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "error": "network_request_failed",
+      "duration_ms": 4
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 2,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 2,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-147",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    }
+  ],
+  "final_status": "PASS"
+}

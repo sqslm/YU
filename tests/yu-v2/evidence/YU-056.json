@@ -1,0 +1,55 @@
+{
+  "case_id": "YU-056",
+  "input": "在浏览器打开 GitHub 官网。",
+  "spoken_input": "在浏览器打开 GitHub 官网。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-056",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "86d3325d-51b3-47d8-bc03-f11d15d2057b",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "在浏览器打开 GitHub 官网。",
+    "target": {
+      "windowHandle": "10056",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-056"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-056）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-056",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1907,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

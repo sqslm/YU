@@ -1,0 +1,238 @@
+{
+  "case_id": "YU-032",
+  "input": "帮我记一下，今天完成了软件测试。",
+  "spoken_input": "帮我记一下，今天完成了软件测试。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-032",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "保存随记中…",
+            "showMode": true,
+            "taskLabel": "随记"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "随记已保存",
+            "feedback": {},
+            "taskLabel": "随记",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "帮我记一下，今天完成了软件测试。",
+          "target": {
+            "windowHandle": "10032",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-032"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 25
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "notes",
+            "via": "rule"
+          },
+          "transcript": "帮我记一下，今天完成了软件测试。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "59a638d3-02de-4c5a-9dc7-950612742bd1",
+                "tags": [],
+                "text": "帮我记一下，今天完成了软件测试。",
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "59a638d3-02de-4c5a-9dc7-950612742bd1",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "帮我记一下，今天完成了软件测试。",
+            "polished": "今天完成了软件测试。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/59a638d3-02de-4c5a-9dc7-950612742bd1.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_note",
+      "args": {
+        "text": "帮我记一下，今天完成了软件测试。"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "随记已保存",
+        "data": {
+          "id": "59a638d3-02de-4c5a-9dc7-950612742bd1",
+          "tags": [],
+          "text": "帮我记一下，今天完成了软件测试。",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "59a638d3-02de-4c5a-9dc7-950612742bd1",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600002,
+      "durationMs": 1200,
+      "transcript": "帮我记一下，今天完成了软件测试。",
+      "polished": "今天完成了软件测试。",
+      "polishStatus": "ok",
+      "audioPath": "notes/audio/59a638d3-02de-4c5a-9dc7-950612742bd1.wav",
+      "audioFormat": "wav",
+      "audioBytes": 38444,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我记一下，今天完成了软件测试。",
+    "target": {
+      "windowHandle": "10032",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-032"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "durationMs": 25
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "notes",
+      "via": "rule"
+    },
+    "transcript": "帮我记一下，今天完成了软件测试。",
+    "results": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "data": {
+          "id": "59a638d3-02de-4c5a-9dc7-950612742bd1",
+          "tags": [],
+          "text": "帮我记一下，今天完成了软件测试。",
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-032）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-032\"",
+    "[task acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-032\"",
+    "[asr] local sense-voice-small: 16 chars",
+    "[task acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-032\"",
+    "[task acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c] stage=routing ms=0",
+    "[voice-entry] notes",
+    "[notes] 音频压缩不可用（failed：Unrecognized option 'application'.\r\nError splitting the argument list: Option not found），保存为 WAV",
+    "[notes] 新随记 59a638d3-02de-4c5a-9dc7-950612742bd1 已保存（wav, 38 KB, 1200 ms）",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c] stage=tool ms=25 state=completed",
+    "[task acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c] tool=create_note status=completed ms=25",
+    "[task acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c] stage=total ms=0 state=completed",
+    "[task acc28d4d-03bd-42bb-ab8e-a94d8af3cc8c] stage=llm ms=1470"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-032",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1469,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

@@ -1,0 +1,168 @@
+{
+  "scope": "Supplemental parser/command probes; no real speech or GUI assertion.",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "reminder_expressions": [
+    {
+      "input": "每个月一号晚上八点",
+      "result": {
+        "dueAt": null,
+        "recurrence": null,
+        "issue": "请确认重复规则与具体日期"
+      }
+    },
+    {
+      "input": "每月1号晚上八点",
+      "result": {
+        "dueAt": 1793534400000,
+        "recurrence": {
+          "frequency": "monthly",
+          "hour": 20,
+          "minute": 0,
+          "day": 1
+        }
+      }
+    },
+    {
+      "input": "从下周二开始，每两周上午九点",
+      "result": {
+        "dueAt": null,
+        "recurrence": null,
+        "issue": "没有识别到唯一、明确的提醒时间"
+      }
+    },
+    {
+      "input": "每两周周二上午九点",
+      "result": {
+        "dueAt": 1793062800000,
+        "recurrence": {
+          "frequency": "weekly",
+          "hour": 9,
+          "minute": 0,
+          "weekdays": [
+            2
+          ],
+          "interval": 2,
+          "anchor": 1793062800000
+        }
+      }
+    },
+    {
+      "input": "每天晚上十点，一直到这个月底",
+      "result": {
+        "dueAt": null,
+        "recurrence": null,
+        "issue": "请补充明确的重复结束日期"
+      }
+    },
+    {
+      "input": "每天晚上十点，直到2026-10-31",
+      "result": {
+        "dueAt": 1793023200000,
+        "recurrence": {
+          "frequency": "daily",
+          "hour": 22,
+          "minute": 0,
+          "until": 1793462399999
+        }
+      }
+    },
+    {
+      "input": "按纽约时间明天上午九点",
+      "result": {
+        "dueAt": 1793062800000,
+        "recurrence": null
+      }
+    },
+    {
+      "input": "明天上午九点",
+      "result": {
+        "dueAt": 1793062800000,
+        "recurrence": null
+      }
+    }
+  ],
+  "screenshot_preview": [
+    {
+      "input": "先展示你打算上传的截图，我确认之后你再分析。",
+      "opensEditor": false
+    },
+    {
+      "input": "先让我确认要发给AI的图片，再分析截图。",
+      "opensEditor": false
+    },
+    {
+      "input": "分析屏幕前请让我确认图片。",
+      "opensEditor": false
+    },
+    {
+      "input": "先预览截图，再发给模型。",
+      "opensEditor": true
+    }
+  ],
+  "command_routes": [
+    {
+      "input": "打开我最近的一条随记。",
+      "result": {
+        "name": "open_application",
+        "args": {
+          "name": "我最近的一条随记"
+        }
+      }
+    },
+    {
+      "input": "打开最近保存的笔记。",
+      "result": {
+        "name": "open_application",
+        "args": {
+          "name": "最近保存的笔记"
+        }
+      }
+    },
+    {
+      "input": "帮我打开E盘的A I文件夹",
+      "result": {
+        "name": "open_folder",
+        "args": {
+          "folder": "E:\\A I"
+        }
+      }
+    },
+    {
+      "input": "帮我打开E盘的 E盘的AI文件夹",
+      "result": {
+        "name": "open_folder",
+        "args": {
+          "folder": "E:\\E盘的AI"
+        }
+      }
+    },
+    {
+      "input": "帮我打开E盘的software文件夹",
+      "result": {
+        "name": "open_folder",
+        "args": {
+          "folder": "E:\\software"
+        }
+      }
+    },
+    {
+      "input": "帮我打开E盘的softwares文件夹",
+      "result": {
+        "name": "open_folder",
+        "args": {
+          "folder": "E:\\softwares"
+        }
+      }
+    }
+  ],
+  "new_york_reference": [
+    {
+      "instant": "2026-01-27T14:00:00Z",
+      "wall_clock": "27/01/2026, 09:00"
+    },
+    {
+      "instant": "2026-07-27T13:00:00Z",
+      "wall_clock": "27/07/2026, 09:00"
+    }
+  ]
+}

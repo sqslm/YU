@@ -1,0 +1,310 @@
+{
+  "case_id": "YU-029",
+  "input": "帮我加个待办：更新服务器文档，不需要提醒。",
+  "spoken_input": "帮我加个待办：更新服务器文档，不需要提醒。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-029",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "未设置提醒时间 · 待办 · 更新服务器文档",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "e5d588b4-bfa3-4141-8cb0-7a064431e9fe",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "帮我加个待办：更新服务器文档，不需要提醒。",
+          "target": {
+            "windowHandle": "10029",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-029"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 2953
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "rule"
+          },
+          "transcript": "帮我加个待办：更新服务器文档，不需要提醒。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "更新服务器文档",
+                  "description": "",
+                  "dueAt": null,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "id": "28c8b33f-7e66-4ec8-928b-2dd8cb7b85ef",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "未设置提醒时间",
+                  "remainingSeconds": null,
+                  "overdue": false,
+                  "kind": "todo",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": [
+        {
+          "title": "更新服务器文档",
+          "description": "",
+          "dueAt": null,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "voice",
+          "id": "28c8b33f-7e66-4ec8-928b-2dd8cb7b85ef",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "未设置提醒时间 · 待办 · 更新服务器文档",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "更新服务器文档",
+            "description": "",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "id": "28c8b33f-7e66-4ec8-928b-2dd8cb7b85ef",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "未设置提醒时间",
+            "remainingSeconds": null,
+            "overdue": false,
+            "kind": "todo",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "e5d588b4-bfa3-4141-8cb0-7a064431e9fe"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "更新服务器文档",
+      "description": "",
+      "dueAt": null,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "voice",
+      "id": "28c8b33f-7e66-4ec8-928b-2dd8cb7b85ef",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "e5d588b4-bfa3-4141-8cb0-7a064431e9fe",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我加个待办：更新服务器文档，不需要提醒。",
+    "target": {
+      "windowHandle": "10029",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-029"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 2953
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "rule"
+    },
+    "transcript": "帮我加个待办：更新服务器文档，不需要提醒。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "更新服务器文档",
+            "description": "",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "id": "28c8b33f-7e66-4ec8-928b-2dd8cb7b85ef",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "未设置提醒时间",
+            "remainingSeconds": null,
+            "overdue": false,
+            "kind": "todo",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-029）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-029\"",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-029\"",
+    "[asr] local sense-voice-small: 21 chars",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-029\"",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] stage=routing ms=0",
+    "[voice-entry] reminder",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] stage=llm ms=1264",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] stage=llm ms=1687",
+    "[reminders] voice parsed: 1 item(s), intents=todo",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] stage=tool ms=2953 state=completed",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] tool=create_reminder status=completed ms=2953",
+    "[task e5d588b4-bfa3-4141-8cb0-7a064431e9fe] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-029",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1264,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-029",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1687,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

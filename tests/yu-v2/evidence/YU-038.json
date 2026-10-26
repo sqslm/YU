@@ -1,0 +1,325 @@
+{
+  "case_id": "YU-038",
+  "input": "把刚才那条随记里的待办提取出来。",
+  "spoken_input": "把刚才那条随记里的待办提取出来。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-038",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "174163f8-c5ed-4967-8a65-7b4ae664fcf7",
+        "taskState": "completed",
+        "question": "把刚才那条随记里的待办提取出来。",
+        "answer": "已从这条随记里提取出待办，并打开了复核界面；目前还没有保存任何内容。确认无误后点确认即可。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "extract_note_tasks",
+            "ok": true,
+            "summary": "已提取 2 个候选事项，请确认后保存",
+            "status": "completed",
+            "taskId": "174163f8-c5ed-4967-8a65-7b4ae664fcf7"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "已从这条随记里提取出待办，并打开了复核界面；目前还没有保存任何内容。确认无误后点确认即可。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "174163f8-c5ed-4967-8a65-7b4ae664fcf7",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "把刚才那条随记里的待办提取出来。",
+          "target": {
+            "windowHandle": "10038",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-038"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "extract_note_tasks",
+              "state": "completed",
+              "durationMs": 3403
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "把刚才那条随记里的待办提取出来。",
+          "recentExchange": {
+            "question": "保存随记",
+            "answer": "已保存测试随记"
+          },
+          "results": [
+            {
+              "tool": "extract_note_tasks",
+              "state": "completed",
+              "data": {
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_after",
+      "value": [
+        {
+          "id": "aefd4cad-17cf-46ed-be02-37f005a82a9f",
+          "createdAt": 1793001601000,
+          "updatedAt": 1793001601000,
+          "editedAt": 1793001601000,
+          "transcript": "明天整理测试报告。给项目补充单元测试。今天的天空很蓝。",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "pending": true
+        },
+        {
+          "id": "50089c60-01ed-4edb-bff5-8fd783980ade",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "editedAt": 1793001600000,
+          "transcript": "Docker old fixture",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "pending": true
+        }
+      ]
+    },
+    {
+      "label": "candidate_view",
+      "value": {
+        "drafts": [
+          {
+            "intent": "todo",
+            "title": "整理测试报告",
+            "description": "",
+            "time_expression": "明天",
+            "level": "normal",
+            "recurrence": null,
+            "needs_confirmation": true,
+            "dueAt": null,
+            "rule": null,
+            "issue": "请补充具体时刻，例如上午 10 点"
+          },
+          {
+            "intent": "todo",
+            "title": "给项目补充单元测试",
+            "description": "",
+            "time_expression": null,
+            "level": "normal",
+            "recurrence": null,
+            "needs_confirmation": true,
+            "dueAt": null,
+            "rule": null,
+            "issue": "请核对提炼后的提醒内容"
+          }
+        ],
+        "noteId": "aefd4cad-17cf-46ed-be02-37f005a82a9f"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "aefd4cad-17cf-46ed-be02-37f005a82a9f",
+      "createdAt": 1793001601000,
+      "updatedAt": 1793001601000,
+      "editedAt": 1793001601000,
+      "transcript": "明天整理测试报告。给项目补充单元测试。今天的天空很蓝。",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    },
+    {
+      "id": "50089c60-01ed-4edb-bff5-8fd783980ade",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "Docker old fixture",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "174163f8-c5ed-4967-8a65-7b4ae664fcf7",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把刚才那条随记里的待办提取出来。",
+    "target": {
+      "windowHandle": "10038",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-038"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "extract_note_tasks",
+        "state": "completed",
+        "durationMs": 3403
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "把刚才那条随记里的待办提取出来。",
+    "recentExchange": {
+      "question": "保存随记",
+      "answer": "已保存测试随记"
+    },
+    "results": [
+      {
+        "tool": "extract_note_tasks",
+        "state": "completed",
+        "data": {
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-038）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-038\"",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-038\"",
+    "[asr] local sense-voice-small: 16 chars",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-038\"",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=llm ms=1339",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=routing ms=1340",
+    "[voice-entry] assistant",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=llm ms=2067",
+    "[perf] llm round0 0ms",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=llm ms=1799",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=llm ms=1603",
+    "[perf] tool:extract_note_tasks 0ms ok=true",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=tool ms=3403 state=completed",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] tool=extract_note_tasks status=completed ms=3403",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] extract_note_tasks ok=true",
+    "[perf] enrich 0ms",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=llm ms=1282",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task 174163f8-c5ed-4967-8a65-7b4ae664fcf7] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-038",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1339,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-038",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2067,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-038",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1799,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-038",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1603,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-038",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1282,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

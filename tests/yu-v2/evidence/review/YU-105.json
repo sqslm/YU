@@ -1,0 +1,90 @@
+{
+  "case_id": "YU-105",
+  "input": "【窗口匹配两条不同规则】这段文字帮我简单润色一下。",
+  "spoken_input": "这段文字帮我简单润色一下。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-105",
+  "observations": [
+    {
+      "label": "actual_selection_prompt",
+      "value": {
+        "output": {
+          "text": "请在明天15:00提交3份测试报告。",
+          "promptName": "V2代码规则卡",
+          "promptId": "v2-code",
+          "promptKind": "ai",
+          "providerId": "llm-1",
+          "providerName": "cn:deepseek-v4.1-flash"
+        },
+        "receipt": {
+          "source": "selection",
+          "createdAt": 1793001600000,
+          "promptKind": "ai",
+          "promptId": "v2-code",
+          "promptName": "V2代码规则卡",
+          "providerId": "llm-1",
+          "providerName": "cn:deepseek-v4.1-flash"
+        },
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "正在处理选中文字…",
+            "promptName": "V2代码规则卡"
+          },
+          {
+            "phase": "idle"
+          }
+        ]
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "41314f91-88fc-4c45-bdcb-be3d6fe2dbf9",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "这段文字帮我简单润色一下。",
+    "target": {
+      "windowHandle": "10105",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-105"
+    },
+    "state": "pending",
+    "receipts": [],
+    "selection": "请在明天15:00提交3份测试报告。",
+    "prompt": {
+      "id": "v2-code",
+      "name": "V2代码规则卡",
+      "kind": "ai",
+      "applied": true
+    }
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-105）",
+    "[route] kind=ai matchedBy=rule id=first app=\"V2Editor\" title=\"V2 controlled editor YU-105\"",
+    "[task 41314f91-88fc-4c45-bdcb-be3d6fe2dbf9] stage=llm ms=1193"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-105",
+      "kind": "model",
+      "prompt_marker_in_actual_request": true,
+      "request_body_sha256": "9c3d6cecda768d46c0d1b208bfbab6096cbe99941b019ea292b139bd00968383",
+      "status": 200,
+      "duration_ms": 1193,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

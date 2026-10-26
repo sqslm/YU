@@ -1,0 +1,227 @@
+{
+  "case_id": "YU-124",
+  "input": "把所有没设提醒时间的待办列出来。",
+  "spoken_input": "把所有没设提醒时间的待办列出来。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-124",
+  "observations": [
+    {
+      "label": "expected_ids",
+      "value": [
+        "5be12996-68d8-4a0d-88fd-48c1e655c881",
+        "57da4ba2-d509-4918-9e37-37c48d885287"
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "list_reminders",
+      "args": {
+        "kind": "todo",
+        "status": "pending"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 2 个事项",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "untimed B",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "57da4ba2-d509-4918-9e37-37c48d885287",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "untimed A",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "5be12996-68d8-4a0d-88fd-48c1e655c881",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "e6db23fa-443b-4286-97da-666f6f96213a"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "timed A",
+      "description": "",
+      "dueAt": 1793005200000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "87bd3300-d458-4104-bea6-1ea657ea814b",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "untimed B",
+      "description": "",
+      "dueAt": null,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "57da4ba2-d509-4918-9e37-37c48d885287",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "untimed A",
+      "description": "",
+      "dueAt": null,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "5be12996-68d8-4a0d-88fd-48c1e655c881",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "e6db23fa-443b-4286-97da-666f6f96213a",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把所有没设提醒时间的待办列出来。",
+    "target": {
+      "windowHandle": "10124",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-124"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "untimed B",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "57da4ba2-d509-4918-9e37-37c48d885287",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "untimed A",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "5be12996-68d8-4a0d-88fd-48c1e655c881",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-124）",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task e6db23fa-443b-4286-97da-666f6f96213a] stage=tool ms=0 state=completed",
+    "[task e6db23fa-443b-4286-97da-666f6f96213a] tool=list_reminders status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "PASS"
+}

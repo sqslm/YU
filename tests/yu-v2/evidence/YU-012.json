@@ -1,0 +1,151 @@
+{
+  "case_id": "YU-012",
+  "input": "把这段内容改得正式一点。",
+  "spoken_input": "把这段内容改得正式一点。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-012",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          }
+        ],
+        "cards": [
+          {
+            "question": "把这段内容改得正式一点。",
+            "answer": "请先选中文字，或提供要处理的文本",
+            "streaming": false,
+            "taskId": "42766fc5-681d-4884-87a9-843059f1b9aa",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "42766fc5-681d-4884-87a9-843059f1b9aa",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "把这段内容改得正式一点。",
+          "target": {
+            "windowHandle": "10012",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-012"
+          },
+          "state": "completed",
+          "receipts": [],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "selection",
+            "via": "model"
+          },
+          "transcript": "把这段内容改得正式一点。"
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [],
+        "reminders": [],
+        "events": []
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "42766fc5-681d-4884-87a9-843059f1b9aa",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把这段内容改得正式一点。",
+    "target": {
+      "windowHandle": "10012",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-012"
+    },
+    "state": "completed",
+    "receipts": [],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "selection",
+      "via": "model"
+    },
+    "transcript": "把这段内容改得正式一点。"
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-012）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-012\"",
+    "[task 42766fc5-681d-4884-87a9-843059f1b9aa] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-012\"",
+    "[asr] local sense-voice-small: 12 chars",
+    "[task 42766fc5-681d-4884-87a9-843059f1b9aa] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-012\"",
+    "[task 42766fc5-681d-4884-87a9-843059f1b9aa] stage=llm ms=1846",
+    "[task 42766fc5-681d-4884-87a9-843059f1b9aa] stage=routing ms=1847",
+    "[task 42766fc5-681d-4884-87a9-843059f1b9aa] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-012",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1846,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

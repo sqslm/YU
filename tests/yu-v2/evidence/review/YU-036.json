@@ -1,0 +1,241 @@
+{
+  "case_id": "YU-036",
+  "input": "打开我最近的一条随记。",
+  "spoken_input": "打开我最近的一条随记。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-036",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "b4ec9a24-57ec-490a-850f-7d9bb3a8c13c",
+        "taskState": "failed",
+        "question": "打开我最近的一条随记。",
+        "answer": "未找到登记的应用：我最近的一条随记",
+        "sources": [],
+        "state": "error",
+        "localResults": [
+          {
+            "tool": "open_application",
+            "ok": false,
+            "summary": "未找到登记的应用：我最近的一条随记",
+            "status": "failed",
+            "taskId": "b4ec9a24-57ec-490a-850f-7d9bb3a8c13c"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "未找到登记的应用：我最近的一条随记",
+            "feedback": {
+              "failed": true
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "b4ec9a24-57ec-490a-850f-7d9bb3a8c13c",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "打开我最近的一条随记。",
+          "target": {
+            "windowHandle": "10036",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-036"
+          },
+          "state": "failed",
+          "receipts": [
+            {
+              "tool": "open_application",
+              "state": "failed",
+              "durationMs": 1059
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "rule"
+          },
+          "transcript": "打开我最近的一条随记。",
+          "results": [
+            {
+              "tool": "open_application",
+              "state": "failed",
+              "data": {
+                "ok": false,
+                "error": "未找到登记的应用：我最近的一条随记"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_after",
+      "value": [
+        {
+          "id": "67c78d0c-05bd-4022-99c1-2ffd91685f21",
+          "createdAt": 1793001601000,
+          "updatedAt": 1793001601000,
+          "editedAt": 1793001601000,
+          "transcript": "Docker 最新想法",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "pending": true
+        },
+        {
+          "id": "2776e8bf-4020-4659-8fcd-383a9651fe90",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "editedAt": 1793001600000,
+          "transcript": "Docker old fixture",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "pending": true
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "67c78d0c-05bd-4022-99c1-2ffd91685f21",
+      "createdAt": 1793001601000,
+      "updatedAt": 1793001601000,
+      "editedAt": 1793001601000,
+      "transcript": "Docker 最新想法",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    },
+    {
+      "id": "2776e8bf-4020-4659-8fcd-383a9651fe90",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "Docker old fixture",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "b4ec9a24-57ec-490a-850f-7d9bb3a8c13c",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开我最近的一条随记。",
+    "target": {
+      "windowHandle": "10036",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-036"
+    },
+    "state": "failed",
+    "receipts": [
+      {
+        "tool": "open_application",
+        "state": "failed",
+        "durationMs": 1059
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "rule"
+    },
+    "transcript": "打开我最近的一条随记。",
+    "results": [
+      {
+        "tool": "open_application",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "未找到登记的应用：我最近的一条随记"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF\\YU-036）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-036\"",
+    "[task b4ec9a24-57ec-490a-850f-7d9bb3a8c13c] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-036\"",
+    "[asr] local sense-voice-small: 11 chars",
+    "[task b4ec9a24-57ec-490a-850f-7d9bb3a8c13c] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-036\"",
+    "[task b4ec9a24-57ec-490a-850f-7d9bb3a8c13c] stage=routing ms=1",
+    "[voice-entry] assistant",
+    "[perf] tool:open_application 0ms ok=false",
+    "[task b4ec9a24-57ec-490a-850f-7d9bb3a8c13c] stage=tool ms=1059 state=failed",
+    "[task b4ec9a24-57ec-490a-850f-7d9bb3a8c13c] tool=open_application status=failed ms=1059",
+    "[assistant] request failed",
+    "[task b4ec9a24-57ec-490a-850f-7d9bb3a8c13c] stage=total ms=0 state=failed"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "FAIL"
+}

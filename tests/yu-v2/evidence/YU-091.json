@@ -1,0 +1,193 @@
+{
+  "case_id": "YU-091",
+  "input": "我现在连接的同步服务器是哪一个？",
+  "spoken_input": "我现在连接的同步服务器是哪一个？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-091",
+  "observations": [
+    {
+      "label": "local_before_sync",
+      "value": {
+        "id": "e61fa087-4334-4843-a2e1-cb89eeefd502",
+        "pending": true
+      }
+    },
+    {
+      "label": "actual_sync_confirmation",
+      "value": {
+        "local": {
+          "id": "e61fa087-4334-4843-a2e1-cb89eeefd502",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "editedAt": 1793001600000,
+          "transcript": "YU_V2 YU-091 我现在连接的同步服务器是哪一个？",
+          "polished": "",
+          "polishStatus": "skipped",
+          "durationMs": 0,
+          "tags": [],
+          "version": 1
+        },
+        "remoteRows": [
+          {
+            "id": "e61fa087-4334-4843-a2e1-cb89eeefd502",
+            "version": 1,
+            "deleted": false
+          }
+        ],
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v1/auth/register"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/notes/changes"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/notes?since=0&limit=200"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/transcription_history/pull?since=0&limit=200"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/transcription_history/sync_status"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/notes?since=0"
+          }
+        ]
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "sync_status",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "云同步已开启，上次同步：2026/10/26 16:00:00",
+        "data": {
+          "enabled": true,
+          "state": "idle",
+          "pending": 0,
+          "lastSyncAt": 1793001600000,
+          "lastError": "",
+          "signedIn": true,
+          "serverUrl": "http://127.0.0.1:55733",
+          "lastSyncText": "2026/10/26 16:00:00",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "48b65f5e-1278-4f19-8744-8cf2624defcf"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "e61fa087-4334-4843-a2e1-cb89eeefd502",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "YU_V2 YU-091 我现在连接的同步服务器是哪一个？",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "version": 1
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "48b65f5e-1278-4f19-8744-8cf2624defcf",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我现在连接的同步服务器是哪一个？",
+    "target": {
+      "windowHandle": "10091",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-091"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "sync_status",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "sync_status",
+        "state": "completed",
+        "data": {
+          "enabled": true,
+          "state": "idle",
+          "pending": 0,
+          "lastSyncAt": 1793001600000,
+          "lastError": "",
+          "signedIn": true,
+          "serverUrl": "http://127.0.0.1:55733",
+          "lastSyncText": "2026/10/26 16:00:00",
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-091）",
+    "[sync] done, 0 row(s) on the server",
+    "[perf] tool:sync_status 0ms ok=true",
+    "[task 48b65f5e-1278-4f19-8744-8cf2624defcf] stage=tool ms=0 state=completed",
+    "[task 48b65f5e-1278-4f19-8744-8cf2624defcf] tool=sync_status status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-091",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 3,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-091",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-091",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-091",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-091",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    }
+  ],
+  "final_status": "PASS"
+}

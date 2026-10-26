@@ -1,0 +1,26 @@
+{
+  "result_structure": "PASS",
+  "all_150_evidence_paths": "PASS",
+  "manual_steps_present": "PASS",
+  "no_text_simulated_e2e_pass": "PASS",
+  "credential_pattern_scan": "PASS",
+  "project_typecheck": {
+    "status": "PASS",
+    "command": "pnpm typecheck",
+    "scope": "existing tsconfig.node.json + tsconfig.web.json"
+  },
+  "source_diff_vs_tested_commit": "no src/server/package changes",
+  "status_counts": {
+    "PASS": 53,
+    "FAIL": 10,
+    "NOT_IMPLEMENTED": 2,
+    "ENV_BLOCKED": 5,
+    "MANUAL_REQUIRED": 80,
+    "NOT_RUN": 0
+  },
+  "whitespace_check": {
+    "new_driver_and_report_files": "PASS",
+    "provided_test_plan": "Original trailing spaces and trailing blank line preserved without modifying test input",
+    "pdf_assets": "Marked binary; xref record spaces are part of the file format"
+  }
+}

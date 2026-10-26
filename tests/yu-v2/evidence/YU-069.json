@@ -1,0 +1,796 @@
+{
+  "case_id": "YU-069",
+  "input": "今天 AI 圈有什么重要新闻？",
+  "spoken_input": "今天 AI 圈有什么重要新闻？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-069",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "今天 AI 圈有什么重要新闻？",
+            "answer": "今天 AI 圈最受关注的是资本市场对 AI 高估值的担忧升温，同时有多项产业和产品动态。[3]\n\n## 市场与资本\n- 亚洲股市走低，AI 板块的紧张情绪在大型科技公司财报前加深；本周微软、Alphabet、亚马逊的财报，以及美联储和日本央行的政策决定，是市场的主要变量。[3]\n- 有分析指出，AI 高估值与持仓集中可能加剧下一轮市场下行风险。[2]\n- 马斯克表示，SpaceX 已完成 400 亿美元债务融资用于采购 GPU，并警告 AI 相关借贷可能出现过紧问题。[7]\n- GPU 租赁商（neocloud）板块承压，CoreWeave 受 AI 抛售和其加密行业背景拖累。[6]\n- 英伟达宣布创纪录的 1500 亿美元股票回购。（非搜索结果，来自检索摘要中的关联标题，未取得原文细节）\n\n## 数据与训练\n- Google 被曝开价 1000 万美元收购破产的 Spirit Airlines 的内部数据，包括约 1 亿封邮件和 5 亿条 Teams 消息，用于改进 AI 模型；数据公司 micro1 计划未来 12 个月投入 10 亿美元向企业采购运营数据，一道高难度数学评测题报价可达 5000 美元。[1]\n\n## 公司与监管\n- Anthropic 被起诉，指控其使用 274 首猫王歌曲训练模型。[5]\n- Anthropic 因私下推动监管草案引发争议，草案被指设定“造成 50 人以上死伤才能叫停模型”之类门槛；达里奥回应并披露公司曾主动推迟 Mythos 级模型的广泛开放约四个月。[8]\n\n## 产品与行业\n- 月之暗面新模型发布两天即致歉，向所有会员补偿月额度的 25%。[18]\n- 国产大模型沉寂两个月后，Kimi K3.1 Pro 发布，官方称大幅缩小了与顶级闭源模型的技术代差。[20]\n- ZWAG AI 在迪拜 AI 节宣布成立“语言主权卓越中心”，聚焦大模型对小语种的覆盖问题。[4]\n- 比尔·盖茨警告，AI 转型可能引发长达约 20 年的经济与社会动荡，网络安全人才需求或随之增长。[17]\n- 企业端加速数智化转型，“AI+业务”“AI+机器人+场景”成为落地路径。[11]\n- 中国三季度 GDP 同比增长 4.5%，增速较二季度回升 0.2 个百分点；广发证券认为 AI 产业链供给因素已定价较充分。[9]\n- 台湾新北市长选战围绕“AI 科技产业廊带”政见交锋，李四川与苏巧慧互相质疑对方跟进或抄袭。[14][15][16]\n- 教育领域，生成式 AI 在学生中快速普及，呈现“爱恨交织”的使用关系。[10]\n\n## 来源\n- [Global Market Today: Asian shares slip as AI jitters deepen ahead of big tech earnings](https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms)\n- [3 AI Stocks To Own In October 2026](https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html)\n- [Musk warns of AI lending crunch after SpaceX closes $40B GPU financing](https://seekingalpha.com/news/4657008-musk-warns-of-ai-lending-crunch-after-spacex-closes-40b-gpu-financing)\n- [From Crypto Roots to AI Selloff: Why CoreWeave Is Under Pressure](https://finance.yahoo.com/technology/ai/articles/crypto-roots-ai-selloff-why-043000019.html)\n- [AI公司，狂收“天价”数据？-36氪](http://www.36kr.com/p/4042178601472896)\n- [Anthropic Sued for Allegedly Using 274 Elvis Presley Songs To Train AI Models](https://english.cw.com.tw/article/article.action?id=5086)\n- [造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应-36氪](https://www.36kr.com/p/4039323426853762)\n- [新模型发布两天就致歉，Kimi 补偿会员额度 25%](https://www.sina.cn/news/detail/5358216771011525.html)\n- [国模沉寂两个月，Kimi K3.1 Pro挽尊了吗？](https://m.sohu.com/a/1092857613_250147)\n- [ZWAG AI Announces the Launch of Center of Excellence for Linguistic Sovereignty at the Dubai AI Festival](https://markets.businessinsider.com/news/stocks/zwag-ai-announces-the-launch-of-center-of-excellence-for-linguistic-sovereignty-at-the-dubai-ai-festival-1036664447)\n- [蓋茨警告：AI轉型或引發20年動盪](https://m.cnyes.com/news/id/6637674)\n- [借势发力 企业提速数智化转型](https://wap.eastmoney.com/a/202610263907398254.html)\n- [中国季度GDP增速重回4.5%！政策效果正在集中显现](https://static.weeklyonstock.com/26/1026/zbf133405.html)\n- [AI產業政策李四川稱歡迎跟進 蘇巧慧：不一樣](https://tw.news.yahoo.com/ai%E7%94%A2%E6%A5%AD%E6%94%BF%E7%AD%96-%E6%9D%8E%E5%9B%9B%E5%B7%9D%E7%A8%B1%E6%AD%A1%E8%BF%8E%E8%B7%9F%E9%80%B2-%E8%98%87%E5%B7%A7%E6%85%A7-%E4%B8%8D-%E6%A8%A3-053155405.html)\n- [被質疑AI產業廊道抄襲李四川 蘇巧慧：完全不一樣](https://udn.com/vote2026/story/124652/9837416)\n- [新北市長選戰／李四川批跟進AI科技廊帶政見 蘇巧慧反駁](https://today.line.me/tw/v3/article/rmp2Drn)\n- [Students' Love-hate Relationship With AI](https://www.miragenews.com/students-love-hate-relationship-with-ai-1766440)",
+            "status": "",
+            "streaming": true,
+            "taskId": "fcf60311-becd-4360-af6f-5dbf43aaac01",
+            "taskState": "running"
+          },
+          {
+            "question": "今天 AI 圈有什么重要新闻？",
+            "answer": "今天 AI 圈最受关注的是资本市场对 AI 高估值的担忧升温，同时有多项产业和产品动态。[3]\n\n## 市场与资本\n- 亚洲股市走低，AI 板块的紧张情绪在大型科技公司财报前加深；本周微软、Alphabet、亚马逊的财报，以及美联储和日本央行的政策决定，是市场的主要变量。[3]\n- 有分析指出，AI 高估值与持仓集中可能加剧下一轮市场下行风险。[2]\n- 马斯克表示，SpaceX 已完成 400 亿美元债务融资用于采购 GPU，并警告 AI 相关借贷可能出现过紧问题。[7]\n- GPU 租赁商（neocloud）板块承压，CoreWeave 受 AI 抛售和其加密行业背景拖累。[6]\n- 英伟达宣布创纪录的 1500 亿美元股票回购。（非搜索结果，来自检索摘要中的关联标题，未取得原文细节）\n\n## 数据与训练\n- Google 被曝开价 1000 万美元收购破产的 Spirit Airlines 的内部数据，包括约 1 亿封邮件和 5 亿条 Teams 消息，用于改进 AI 模型；数据公司 micro1 计划未来 12 个月投入 10 亿美元向企业采购运营数据，一道高难度数学评测题报价可达 5000 美元。[1]\n\n## 公司与监管\n- Anthropic 被起诉，指控其使用 274 首猫王歌曲训练模型。[5]\n- Anthropic 因私下推动监管草案引发争议，草案被指设定“造成 50 人以上死伤才能叫停模型”之类门槛；达里奥回应并披露公司曾主动推迟 Mythos 级模型的广泛开放约四个月。[8]\n\n## 产品与行业\n- 月之暗面新模型发布两天即致歉，向所有会员补偿月额度的 25%。[18]\n- 国产大模型沉寂两个月后，Kimi K3.1 Pro 发布，官方称大幅缩小了与顶级闭源模型的技术代差。[20]\n- ZWAG AI 在迪拜 AI 节宣布成立“语言主权卓越中心”，聚焦大模型对小语种的覆盖问题。[4]\n- 比尔·盖茨警告，AI 转型可能引发长达约 20 年的经济与社会动荡，网络安全人才需求或随之增长。[17]\n- 企业端加速数智化转型，“AI+业务”“AI+机器人+场景”成为落地路径。[11]\n- 中国三季度 GDP 同比增长 4.5%，增速较二季度回升 0.2 个百分点；广发证券认为 AI 产业链供给因素已定价较充分。[9]\n- 台湾新北市长选战围绕“AI 科技产业廊带”政见交锋，李四川与苏巧慧互相质疑对方跟进或抄袭。[14][15][16]\n- 教育领域，生成式 AI 在学生中快速普及，呈现“爱恨交织”的使用关系。[10]",
+            "sources": [
+              {
+                "title": "AI公司，狂收“天价”数据？-36氪",
+                "url": "http://www.36kr.com/p/4042178601472896",
+                "snippet": "很久以前，流传着一个“数据撞墙”说法，高质量的互联网数据已经不够用了，因此AI遇到了数据的瓶颈，阻碍了模型能力的发展。 今天回看，“数据”已经开始发展成为一条成熟的产业链，只要人类的活动存在，那么这条产业链，就像链接人类与人工智能的一条脐带，生生不息、茁壮成长。 本文来自微信公众号“腾讯科技”，作者：晓静，编辑：徐青阳，36氪经授权发布。 该文观点仅代表作者本人，36氪平台仅提供信息存储空间服务。 +1 3 好文章，需要你的鼓励 36氪的朋友们特邀作者 0收 藏+10评 论 打开微信“扫一扫”，打开网页后点击屏幕右上角分享按钮微 博 沉浸阅读返回顶部 举报 参与评论 评论千万条，友善第一条 登录后参与讨论 提交评论0/1000 你可能也喜欢这些文章 意外，79%企业GPU利用率竟不足一半 一位开发者让电视服用了 Claude，这是它系统发生的变化 比GPT-6 Luna快8倍，扩散LLM跑",
+                "publishedAt": "Mon, 26 Oct 2026 06:10:31 GMT"
+              },
+              {
+                "title": "3 AI Stocks To Own In October 2026",
+                "url": "https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html",
+                "snippet": "-0.99% AI risk is suddenly front-page news. Financiers are warning that high valuations and concentrated exposure in artificial intelligence could feed the next market downturn, yet the same technology is quietly reshaping how smaller specialists build tools in automation, data and machine learning. That disconnect is where opportunity often hides. This article highlights three under-the-radar AI-",
+                "publishedAt": "Sun, 25 Oct 2026 20:00:00 GMT"
+              },
+              {
+                "title": "Global Market Today: Asian shares slip as AI jitters deepen ahead of big tech earnings - The Economic Times",
+                "url": "https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms",
+                "snippet": "Investors face another pivotal week after a volatile stretch for the AI trade, with earnings from Microsoft Corp., Alphabet Inc. and Amazon.com Inc. set to test confidence in the sector. Federal Reserve and Bank of Japan policy decisions will add to the week’s major catalysts as officials contend with stubborn inflation, higher energy costs and elevated bond yields globally. [...] It’s also Asia’s",
+                "publishedAt": "Mon, 26 Oct 2026 01:00:00 GMT"
+              },
+              {
+                "title": "ZWAG AI Announces the Launch of Center of Excellence for Linguistic Sovereignty at the Dubai AI Festival | Markets Insider",
+                "url": "https://markets.businessinsider.com/news/stocks/zwag-ai-announces-the-launch-of-center-of-excellence-for-linguistic-sovereignty-at-the-dubai-ai-festival-1036664447",
+                "snippet": "DUBAI, UAE, Oct. 26, 2026 (GLOBE NEWSWIRE) -- ZWAG AI today officially announced the launch of the Center of Excellence for Linguistic Sovereignty (CoE-LS) at the Dubai AI Festival. [...] Preserving Linguistic Integrity in Artificial Intelligence While today's Large Language Models (LLMs) often appear fluent in widely spoken and regional languages—such as Thai, Tamil, Arabic, or Swahili—they routi",
+                "publishedAt": "Mon, 26 Oct 2026 07:11:36 GMT"
+              },
+              {
+                "title": "Anthropic Sued for Allegedly Using 274 Elvis Presley Songs To Train AI Models｜Daily News Digest｜2026-10-26｜web only",
+                "url": "https://english.cw.com.tw/article/article.action?id=5086",
+                "snippet": "subscribe ## Keywords： Anthropic AI ElvisPresley US Military ElonMusk SpaceX TrackingData Microsoft Windows 好友人數 Next Nvidia Boosts Share Buyback by Record $150B ### Additional Reading US Rejects China’s Trespassing Claim After Warship Transits Disputed Reef Nvidia CEO Jensen Huang Wants Every Country To Build Its Own AI, Unveils DSX Pod AI Factory Elon Musk Pledges SpaceX Shares to Every American",
+                "publishedAt": "Mon, 26 Oct 2026 03:00:00 GMT"
+              },
+              {
+                "title": "From Crypto Roots to AI Selloff: Why CoreWeave Is Under Pressure",
+                "url": "https://finance.yahoo.com/technology/ai/articles/crypto-roots-ai-selloff-why-043000019.html",
+                "snippet": "The crypto links also persist. CoreWeave has leased space from Core Scientific (CORZ), a bitcoin miner shifting toward AI hosting, whose shareholders blocked a $9 billion CoreWeave takeover in October 2025. Neoclouds, the GPU-rental providers built around Nvidia chips, are under strain as a group. Nebius and IREN have each fallen at least 30% this month, alongside CoreWeave, per CNBC. [...] Meanwh",
+                "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+              },
+              {
+                "title": "Musk warns of AI lending crunch after SpaceX closes $40B GPU financing (SPCX:NASDAQ) | Seeking Alpha",
+                "url": "https://seekingalpha.com/news/4657008-musk-warns-of-ai-lending-crunch-after-spacex-closes-40b-gpu-financing",
+                "snippet": "## Investing Groups ## Portfolios ## Find & Compare # Musk warns of AI lending crunch after SpaceX closes $40B GPU financing President Trump Speaks At Golden Age Of American Innovation Summit Elon Musk said SpaceX (SPCX) has closed $40 billion in debt financing to purchase graphics processing units, or GPUs, warning that tightening credit markets could trigger widespread failures and consolidation",
+                "publishedAt": "Sun, 25 Oct 2026 21:04:17 GMT"
+              },
+              {
+                "title": "造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应-36氪",
+                "url": "https://www.36kr.com/p/4039323426853762",
+                "snippet": "其中包括推动加州 SB 53 立法、坚持严格的生物安全防护、支持政府获得阻止危险模型发布的权力、限制向中国相关受控实体提供服务，以及承诺将公司 5%的股份用于公共利益基金。 而最引人关注的一项，是他披露 Anthropic 曾主动推迟强大模型 Mythos 的广泛开放。 按照达里奥的说法，公司在今年 2 月就已经拥有 Mythos 级别模型，但由于担心其网络攻击能力被滥用，决定先向少量从事网络防御的合作伙伴开放，直到 6 月更强的网络安全防护措施准备就绪，才扩大访问范围。 这相当于将相关模型的广泛开放推迟了约四个月。 达里奥认为，这一决定很可能让Anthropic 损失了数月技术领先优势中的相当一部分。作为交换，外部机构获得了更多时间，在具备强大网络攻击能力的 AI 模型普及之前加固系统。 这也是整篇回应中最有分量的新信息之一。 对于一家竞争激烈、模型领先优势可能以月计的 AI 公司来说，",
+                "publishedAt": "Mon, 26 Oct 2026 05:22:57 GMT"
+              },
+              {
+                "title": "中国季度GDP增速重回4.5%！政策效果正在集中显现-周刊原创-证券市场周刊",
+                "url": "https://static.weeklyonstock.com/26/1026/zbf133405.html",
+                "snippet": "从资本市场的角度看，三季度经济的这一系列积极变化对主要资产有什么影响呢？最悲观的时候或已过去，广发证券认为，AI产业链供给因素已定价较为充分，需求端叙事尚未跟上，全球相关资产同步调整。增长的边际企稳，使得内需相关资产渡过了压力最大的阶段，顺周期资产的逻辑有所强化。两者结合，资产应告别单线索，提升广谱性，市场在赔率空间上已呈现一定的吸引力。 边际动能改善 三季度GDP实际增长4.5%，增速比二季度上升0.2个百分点，好于市场预期，经济动能边际改善。 瑞银证券认为，三季度经济增长走强主要受到政策支持力度加大的推动，而市场对这方面的重视不足。一季度经济增速超出预期后，二季度政策层面要求避免过度投资和过度举债。三季度有所调整。服务业出现了一定程度的放松，例如允许医院设立按照市场价格收费的国际部。政策适当的调整与放松可能与新增刺激同样重要。 而且三季度名义GDP同比增长6.0%，好于一、二季度的4.",
+                "publishedAt": "Mon, 26 Oct 2026 05:00:00 GMT"
+              },
+              {
+                "title": "Students' Love-hate Relationship With AI",
+                "url": "https://www.miragenews.com/students-love-hate-relationship-with-ai-1766440",
+                "snippet": "Within two years, generative AI had spread like wildfire among students. EPFL/Adrien Buttier CC-BY-SA 4.0 ChatGPT hit like a meteorite in late 2022.",
+                "publishedAt": "Mon, 26 Oct 2026 07:00:00 GMT"
+              },
+              {
+                "title": "借势发力 企业提速数智化转型 _ 东方财富网",
+                "url": "https://wap.eastmoney.com/a/202610263907398254.html",
+                "snippet": "面对顾虑，不同企业有不同的考量。 “AI正在改变千行百业的运行方式，率先把AI嵌入业务流程的企业，将改变成本结构、交付效率和市场竞争力。”应华江说，AI浪潮之下，当前多数岗位不会简单消失，而是转向人机共同完成，企业应主动拥抱技术，从真实业务环节切入，用AI提高效率、降低成本。一方面要建立数据思维，用数据记录、分析并支持经营决策；另一方面要重构生产流程，让AI融入识别、审核、分析、检测等各个环节，形成“AI+业务”模式。 浙江大丰实业股份有限公司董事长、总裁丰华表示，面对AI时代的行业巨变，公司正加速推动“AI+机器人+场景”融合平台落地，在文化、体育、旅游等领域推动AI加速商业化。 记者了解到，部分企业已着手训练数字员工。据介绍，数字员工跟随公司员工在真实工作场景下工作3个月，便可模拟真实员工完成工作内容，将有助于降低企业人力成本，提升工作效率和准确性。 “风口会停，价值不会停，要用新技术",
+                "publishedAt": "Sun, 25 Oct 2026 22:00:00 GMT"
+              },
+              {
+                "title": "Dr. Radhika Rampat: AI in practice today",
+                "url": "https://www.ophthalmologytimes.com/shorts/dr-radhika-rampat-ai-in-practice-today",
+                "snippet": "Dr. Radhika Rampat describes how AI is already embedded in her daily ophthalmic practice. For intraocular lens selection, she relies on the ESCRS online",
+                "publishedAt": "Mon, 26 Oct 2026 01:00:00 GMT"
+              },
+              {
+                "title": "大陸天才AI少女之三／從江西走向矽谷 盛穎「自學程式創業」獲億元融資",
+                "url": "https://turnnewsapp.com/livenews/chinav3/20261026000012-260409",
+                "snippet": "「要相信美好事物的存在，然後和你一樣相信的人會和你相遇。」來自大陸江西九江的年輕女孩盛穎，憑藉AI基礎設施技術，在矽谷創業圈引起關注。她在訪談節目《硅谷101》",
+                "publishedAt": "Mon, 26 Oct 2026 03:00:00 GMT"
+              },
+              {
+                "title": "AI產業政策李四川稱歡迎跟進蘇巧慧：不一樣",
+                "url": "https://tw.news.yahoo.com/ai%E7%94%A2%E6%A5%AD%E6%94%BF%E7%AD%96-%E6%9D%8E%E5%9B%9B%E5%B7%9D%E7%A8%B1%E6%AD%A1%E8%BF%8E%E8%B7%9F%E9%80%B2-%E8%98%87%E5%B7%A7%E6%85%A7-%E4%B8%8D-%E6%A8%A3-053155405.html",
+                "snippet": "（中央社記者王鴻國新北26日電）藍綠紛訴求打造AI科技產業廊帶，李四川表示，好的政策不分藍綠，歡迎跟進；蘇巧慧表示，藍營提出的政見是要剷掉松山機場來變成雙北的AI產業",
+                "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+              },
+              {
+                "title": "被質疑AI產業廊道抄襲李四川蘇巧慧：完全不一樣",
+                "url": "https://udn.com/vote2026/story/124652/9837416",
+                "snippet": "國民黨新北市長參選人李四川競辦質疑對手民進黨新北市長參選人蘇巧慧的AI科技產業廊帶政策是照抄李四川政見，還打臉民進黨台北市長參選人沈伯洋。蘇巧慧今天出席議員",
+                "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+              },
+              {
+                "title": "新北市長選戰／李四川批跟進AI科技廊帶政見蘇巧慧反駁",
+                "url": "https://today.line.me/tw/v3/article/rmp2Drn",
+                "snippet": "新北市長選戰白熱化，國民黨候選人李四川與民進黨候選人蘇巧慧今天(26日)持續針對AI科技產業廊帶議題交鋒。李四川陣營質疑蘇巧慧提出的「AI產業廊帶」政見是跟進他的",
+                "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+              },
+              {
+                "title": "蓋茨警告：AI轉型或引發20年動盪網路安全人才需求或隨之增長",
+                "url": "https://m.cnyes.com/news/id/6637674",
+                "snippet": "AI可能重塑就業與社會結構 ... 微軟聯合創始人比爾·蓋茨警告，即使人工智慧最終能夠為社會帶來廣泛益處，其發展過程仍可能引髮長達約20年的經濟與社會動盪。 ... 蓋茨在播客",
+                "publishedAt": "Mon, 26 Oct 2026 05:00:00 GMT"
+              },
+              {
+                "title": "新模型发布两天就致歉，Kimi 补偿会员额度 25%|月之暗面|Kimi|补偿方案_新浪新闻",
+                "url": "https://www.sina.cn/news/detail/5358216771011525.html",
+                "snippet": "汽车 本地生活 旅游 数码 娱乐 影视 26-10-26 10:31 微博认证：电商派官方微博 #Kimi致歉并宣布补偿方案# 新模型发布才两天，月之暗面就向付费用户道歉了，所有会员将获月额度的25％作为补偿。 ​",
+                "publishedAt": "Mon, 26 Oct 2026 02:00:00 GMT"
+              },
+              {
+                "title": "第一批不写代码的程序员，已出现",
+                "url": "https://www.thepaper.cn/newsDetail_forward_34325433",
+                "snippet": "现在已经很少有程序员手写代码了。” 只要在AI编程软件里输入指令，就能够生成一连串代码。可程序员并没有因此闲下来。AI写的代码要人审、要人兜底。AI可以替人写.",
+                "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+              },
+              {
+                "title": "国模沉寂两个月，Kimi K3.1 Pro挽尊了吗？",
+                "url": "https://m.sohu.com/a/1092857613_250147?scm=10001.325_13-325_13.0.0-0-0-0-0.5_1334",
+                "snippet": "在国产大模型沉寂两个多月引发“国模已经不行了吗”质疑声四起的背景下，Kimi出来放招了。 在Kimi K3将顶尖开源模式跟顶级闭源模型的技术代差大幅抹平，把“时间差”从1年",
+                "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+              },
+              {
+                "title": "太狠了！蘇巧慧跟進AI產業廊帶李競辦酸",
+                "url": "https://www.youtube.com/watch?v=SxEU-OkTHzY",
+                "snippet": "蘇巧慧提出串聯北士科、內科及南港軟體園區的AI科技廊帶構想,被李四川競辦指稱與其政見雷同。"
+              }
+            ],
+            "retrieval": {
+              "searched": true,
+              "failed": false,
+              "queries": [
+                "今天 AI 圈有什么重要新闻？",
+                "AI news today",
+                "今天 AI 圈有什么重要新闻？ 模型发布",
+                "今天 AI 圈有什么重要新闻？ 产品与应用",
+                "今天 AI 圈有什么重要新闻？ 开源与研究",
+                "今天 AI 圈有什么重要新闻？ 产业与政策"
+              ],
+              "pagesRead": 1,
+              "digest": true,
+              "partial": true
+            },
+            "tools": [
+              "web_search"
+            ],
+            "taskId": "fcf60311-becd-4360-af6f-5dbf43aaac01",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "fcf60311-becd-4360-af6f-5dbf43aaac01",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "今天 AI 圈有什么重要新闻？",
+          "target": {
+            "windowHandle": "10069",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-069"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "durationMs": 13369
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "durationMs": 1
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "durationMs": 2
+            },
+            {
+              "tool": "read_webpage",
+              "state": "completed",
+              "durationMs": 351
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "model"
+          },
+          "transcript": "今天 AI 圈有什么重要新闻？",
+          "results": [
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "query": "今天 AI 圈有什么重要新闻？",
+                "queries": [
+                  "今天 AI 圈有什么重要新闻？",
+                  "AI news today",
+                  "今天 AI 圈有什么重要新闻？ 模型发布",
+                  "今天 AI 圈有什么重要新闻？ 产品与应用",
+                  "今天 AI 圈有什么重要新闻？ 开源与研究",
+                  "今天 AI 圈有什么重要新闻？ 产业与政策"
+                ],
+                "kind": "news",
+                "digest": true,
+                "failedQueries": 1,
+                "freshness": "day",
+                "recencyDays": 1,
+                "retried": false,
+                "todayCount": 20,
+                "timeScope": "today",
+                "timeNote": "Local date at the start of this search: 2026-10-26. Verified reports dated today: 20. Separate undated leads from verified news.",
+                "count": 21,
+                "results": [
+                  {
+                    "title": "AI公司，狂收“天价”数据？-36氪",
+                    "url": "http://www.36kr.com/p/4042178601472896",
+                    "snippet": "很久以前，流传着一个“数据撞墙”说法，高质量的互联网数据已经不够用了，因此AI遇到了数据的瓶颈，阻碍了模型能力的发展。 今天回看，“数据”已经开始发展成为一条成熟的产业链，只要人类的活动存在，那么这条产业链，就像链接人类与人工智能的一条脐带，生生不息、茁壮成长。 本文来自微信公众号“腾讯科技”，作者：晓静，编辑：徐青阳，36氪经授权发布。 该文观点仅代表作者本人，36氪平台仅提供信息存储空间服务。 +1 3 好文章，需要你的鼓励 36氪的朋友们特邀作者 0收 藏+10评 论 打开微信“扫一扫”，打开网页后点击屏幕右上角分享按钮微 博 沉浸阅读返回顶部 举报 参与评论 评论千万条，友善第一条 登录后参与讨论 提交评论0/1000 你可能也喜欢这些文章 意外，79%企业GPU利用率竟不足一半 一位开发者让电视服用了 Claude，这是它系统发生的变化 比GPT-6 Luna快8倍，扩散LLM跑",
+                    "publishedAt": "Mon, 26 Oct 2026 06:10:31 GMT"
+                  },
+                  {
+                    "title": "3 AI Stocks To Own In October 2026",
+                    "url": "https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html",
+                    "snippet": "-0.99% AI risk is suddenly front-page news. Financiers are warning that high valuations and concentrated exposure in artificial intelligence could feed the next market downturn, yet the same technology is quietly reshaping how smaller specialists build tools in automation, data and machine learning. That disconnect is where opportunity often hides. This article highlights three under-the-radar AI-",
+                    "publishedAt": "Sun, 25 Oct 2026 20:00:00 GMT"
+                  },
+                  {
+                    "title": "Global Market Today: Asian shares slip as AI jitters deepen ahead of big tech earnings - The Economic Times",
+                    "url": "https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms",
+                    "snippet": "Investors face another pivotal week after a volatile stretch for the AI trade, with earnings from Microsoft Corp., Alphabet Inc. and Amazon.com Inc. set to test confidence in the sector. Federal Reserve and Bank of Japan policy decisions will add to the week’s major catalysts as officials contend with stubborn inflation, higher energy costs and elevated bond yields globally. [...] It’s also Asia’s",
+                    "publishedAt": "Mon, 26 Oct 2026 01:00:00 GMT"
+                  },
+                  {
+                    "title": "ZWAG AI Announces the Launch of Center of Excellence for Linguistic Sovereignty at the Dubai AI Festival | Markets Insider",
+                    "url": "https://markets.businessinsider.com/news/stocks/zwag-ai-announces-the-launch-of-center-of-excellence-for-linguistic-sovereignty-at-the-dubai-ai-festival-1036664447",
+                    "snippet": "DUBAI, UAE, Oct. 26, 2026 (GLOBE NEWSWIRE) -- ZWAG AI today officially announced the launch of the Center of Excellence for Linguistic Sovereignty (CoE-LS) at the Dubai AI Festival. [...] Preserving Linguistic Integrity in Artificial Intelligence While today's Large Language Models (LLMs) often appear fluent in widely spoken and regional languages—such as Thai, Tamil, Arabic, or Swahili—they routi",
+                    "publishedAt": "Mon, 26 Oct 2026 07:11:36 GMT"
+                  },
+                  {
+                    "title": "Anthropic Sued for Allegedly Using 274 Elvis Presley Songs To Train AI Models｜Daily News Digest｜2026-10-26｜web only",
+                    "url": "https://english.cw.com.tw/article/article.action?id=5086",
+                    "snippet": "subscribe ## Keywords： Anthropic AI ElvisPresley US Military ElonMusk SpaceX TrackingData Microsoft Windows 好友人數 Next Nvidia Boosts Share Buyback by Record $150B ### Additional Reading US Rejects China’s Trespassing Claim After Warship Transits Disputed Reef Nvidia CEO Jensen Huang Wants Every Country To Build Its Own AI, Unveils DSX Pod AI Factory Elon Musk Pledges SpaceX Shares to Every American",
+                    "publishedAt": "Mon, 26 Oct 2026 03:00:00 GMT"
+                  },
+                  {
+                    "title": "From Crypto Roots to AI Selloff: Why CoreWeave Is Under Pressure",
+                    "url": "https://finance.yahoo.com/technology/ai/articles/crypto-roots-ai-selloff-why-043000019.html",
+                    "snippet": "The crypto links also persist. CoreWeave has leased space from Core Scientific (CORZ), a bitcoin miner shifting toward AI hosting, whose shareholders blocked a $9 billion CoreWeave takeover in October 2025. Neoclouds, the GPU-rental providers built around Nvidia chips, are under strain as a group. Nebius and IREN have each fallen at least 30% this month, alongside CoreWeave, per CNBC. [...] Meanwh",
+                    "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+                  },
+                  {
+                    "title": "Musk warns of AI lending crunch after SpaceX closes $40B GPU financing (SPCX:NASDAQ) | Seeking Alpha",
+                    "url": "https://seekingalpha.com/news/4657008-musk-warns-of-ai-lending-crunch-after-spacex-closes-40b-gpu-financing",
+                    "snippet": "## Investing Groups ## Portfolios ## Find & Compare # Musk warns of AI lending crunch after SpaceX closes $40B GPU financing President Trump Speaks At Golden Age Of American Innovation Summit Elon Musk said SpaceX (SPCX) has closed $40 billion in debt financing to purchase graphics processing units, or GPUs, warning that tightening credit markets could trigger widespread failures and consolidation",
+                    "publishedAt": "Sun, 25 Oct 2026 21:04:17 GMT"
+                  },
+                  {
+                    "title": "造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应-36氪",
+                    "url": "https://www.36kr.com/p/4039323426853762",
+                    "snippet": "其中包括推动加州 SB 53 立法、坚持严格的生物安全防护、支持政府获得阻止危险模型发布的权力、限制向中国相关受控实体提供服务，以及承诺将公司 5%的股份用于公共利益基金。 而最引人关注的一项，是他披露 Anthropic 曾主动推迟强大模型 Mythos 的广泛开放。 按照达里奥的说法，公司在今年 2 月就已经拥有 Mythos 级别模型，但由于担心其网络攻击能力被滥用，决定先向少量从事网络防御的合作伙伴开放，直到 6 月更强的网络安全防护措施准备就绪，才扩大访问范围。 这相当于将相关模型的广泛开放推迟了约四个月。 达里奥认为，这一决定很可能让Anthropic 损失了数月技术领先优势中的相当一部分。作为交换，外部机构获得了更多时间，在具备强大网络攻击能力的 AI 模型普及之前加固系统。 这也是整篇回应中最有分量的新信息之一。 对于一家竞争激烈、模型领先优势可能以月计的 AI 公司来说，",
+                    "publishedAt": "Mon, 26 Oct 2026 05:22:57 GMT"
+                  },
+                  {
+                    "title": "中国季度GDP增速重回4.5%！政策效果正在集中显现-周刊原创-证券市场周刊",
+                    "url": "https://static.weeklyonstock.com/26/1026/zbf133405.html",
+                    "snippet": "从资本市场的角度看，三季度经济的这一系列积极变化对主要资产有什么影响呢？最悲观的时候或已过去，广发证券认为，AI产业链供给因素已定价较为充分，需求端叙事尚未跟上，全球相关资产同步调整。增长的边际企稳，使得内需相关资产渡过了压力最大的阶段，顺周期资产的逻辑有所强化。两者结合，资产应告别单线索，提升广谱性，市场在赔率空间上已呈现一定的吸引力。 边际动能改善 三季度GDP实际增长4.5%，增速比二季度上升0.2个百分点，好于市场预期，经济动能边际改善。 瑞银证券认为，三季度经济增长走强主要受到政策支持力度加大的推动，而市场对这方面的重视不足。一季度经济增速超出预期后，二季度政策层面要求避免过度投资和过度举债。三季度有所调整。服务业出现了一定程度的放松，例如允许医院设立按照市场价格收费的国际部。政策适当的调整与放松可能与新增刺激同样重要。 而且三季度名义GDP同比增长6.0%，好于一、二季度的4.",
+                    "publishedAt": "Mon, 26 Oct 2026 05:00:00 GMT"
+                  },
+                  {
+                    "title": "Students' Love-hate Relationship With AI",
+                    "url": "https://www.miragenews.com/students-love-hate-relationship-with-ai-1766440",
+                    "snippet": "Within two years, generative AI had spread like wildfire among students. EPFL/Adrien Buttier CC-BY-SA 4.0 ChatGPT hit like a meteorite in late 2022.",
+                    "publishedAt": "Mon, 26 Oct 2026 07:00:00 GMT"
+                  },
+                  {
+                    "title": "借势发力 企业提速数智化转型 _ 东方财富网",
+                    "url": "https://wap.eastmoney.com/a/202610263907398254.html",
+                    "snippet": "面对顾虑，不同企业有不同的考量。 “AI正在改变千行百业的运行方式，率先把AI嵌入业务流程的企业，将改变成本结构、交付效率和市场竞争力。”应华江说，AI浪潮之下，当前多数岗位不会简单消失，而是转向人机共同完成，企业应主动拥抱技术，从真实业务环节切入，用AI提高效率、降低成本。一方面要建立数据思维，用数据记录、分析并支持经营决策；另一方面要重构生产流程，让AI融入识别、审核、分析、检测等各个环节，形成“AI+业务”模式。 浙江大丰实业股份有限公司董事长、总裁丰华表示，面对AI时代的行业巨变，公司正加速推动“AI+机器人+场景”融合平台落地，在文化、体育、旅游等领域推动AI加速商业化。 记者了解到，部分企业已着手训练数字员工。据介绍，数字员工跟随公司员工在真实工作场景下工作3个月，便可模拟真实员工完成工作内容，将有助于降低企业人力成本，提升工作效率和准确性。 “风口会停，价值不会停，要用新技术",
+                    "publishedAt": "Sun, 25 Oct 2026 22:00:00 GMT"
+                  },
+                  {
+                    "title": "Dr. Radhika Rampat: AI in practice today",
+                    "url": "https://www.ophthalmologytimes.com/shorts/dr-radhika-rampat-ai-in-practice-today",
+                    "snippet": "Dr. Radhika Rampat describes how AI is already embedded in her daily ophthalmic practice. For intraocular lens selection, she relies on the ESCRS online",
+                    "publishedAt": "Mon, 26 Oct 2026 01:00:00 GMT"
+                  },
+                  {
+                    "title": "大陸天才AI少女之三／從江西走向矽谷 盛穎「自學程式創業」獲億元融資",
+                    "url": "https://turnnewsapp.com/livenews/chinav3/20261026000012-260409",
+                    "snippet": "「要相信美好事物的存在，然後和你一樣相信的人會和你相遇。」來自大陸江西九江的年輕女孩盛穎，憑藉AI基礎設施技術，在矽谷創業圈引起關注。她在訪談節目《硅谷101》",
+                    "publishedAt": "Mon, 26 Oct 2026 03:00:00 GMT"
+                  },
+                  {
+                    "title": "AI產業政策李四川稱歡迎跟進蘇巧慧：不一樣",
+                    "url": "https://tw.news.yahoo.com/ai%E7%94%A2%E6%A5%AD%E6%94%BF%E7%AD%96-%E6%9D%8E%E5%9B%9B%E5%B7%9D%E7%A8%B1%E6%AD%A1%E8%BF%8E%E8%B7%9F%E9%80%B2-%E8%98%87%E5%B7%A7%E6%85%A7-%E4%B8%8D-%E6%A8%A3-053155405.html",
+                    "snippet": "（中央社記者王鴻國新北26日電）藍綠紛訴求打造AI科技產業廊帶，李四川表示，好的政策不分藍綠，歡迎跟進；蘇巧慧表示，藍營提出的政見是要剷掉松山機場來變成雙北的AI產業",
+                    "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+                  },
+                  {
+                    "title": "被質疑AI產業廊道抄襲李四川蘇巧慧：完全不一樣",
+                    "url": "https://udn.com/vote2026/story/124652/9837416",
+                    "snippet": "國民黨新北市長參選人李四川競辦質疑對手民進黨新北市長參選人蘇巧慧的AI科技產業廊帶政策是照抄李四川政見，還打臉民進黨台北市長參選人沈伯洋。蘇巧慧今天出席議員",
+                    "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+                  },
+                  {
+                    "title": "新北市長選戰／李四川批跟進AI科技廊帶政見蘇巧慧反駁",
+                    "url": "https://today.line.me/tw/v3/article/rmp2Drn",
+                    "snippet": "新北市長選戰白熱化，國民黨候選人李四川與民進黨候選人蘇巧慧今天(26日)持續針對AI科技產業廊帶議題交鋒。李四川陣營質疑蘇巧慧提出的「AI產業廊帶」政見是跟進他的",
+                    "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+                  },
+                  {
+                    "title": "蓋茨警告：AI轉型或引發20年動盪網路安全人才需求或隨之增長",
+                    "url": "https://m.cnyes.com/news/id/6637674",
+                    "snippet": "AI可能重塑就業與社會結構 ... 微軟聯合創始人比爾·蓋茨警告，即使人工智慧最終能夠為社會帶來廣泛益處，其發展過程仍可能引髮長達約20年的經濟與社會動盪。 ... 蓋茨在播客",
+                    "publishedAt": "Mon, 26 Oct 2026 05:00:00 GMT"
+                  },
+                  {
+                    "title": "新模型发布两天就致歉，Kimi 补偿会员额度 25%|月之暗面|Kimi|补偿方案_新浪新闻",
+                    "url": "https://www.sina.cn/news/detail/5358216771011525.html",
+                    "snippet": "汽车 本地生活 旅游 数码 娱乐 影视 26-10-26 10:31 微博认证：电商派官方微博 #Kimi致歉并宣布补偿方案# 新模型发布才两天，月之暗面就向付费用户道歉了，所有会员将获月额度的25％作为补偿。 ​",
+                    "publishedAt": "Mon, 26 Oct 2026 02:00:00 GMT"
+                  },
+                  {
+                    "title": "第一批不写代码的程序员，已出现",
+                    "url": "https://www.thepaper.cn/newsDetail_forward_34325433",
+                    "snippet": "现在已经很少有程序员手写代码了。” 只要在AI编程软件里输入指令，就能够生成一连串代码。可程序员并没有因此闲下来。AI写的代码要人审、要人兜底。AI可以替人写.",
+                    "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+                  },
+                  {
+                    "title": "国模沉寂两个月，Kimi K3.1 Pro挽尊了吗？",
+                    "url": "https://m.sohu.com/a/1092857613_250147?scm=10001.325_13-325_13.0.0-0-0-0-0.5_1334",
+                    "snippet": "在国产大模型沉寂两个多月引发“国模已经不行了吗”质疑声四起的背景下，Kimi出来放招了。 在Kimi K3将顶尖开源模式跟顶级闭源模型的技术代差大幅抹平，把“时间差”从1年",
+                    "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+                  },
+                  {
+                    "title": "太狠了！蘇巧慧跟進AI產業廊帶李競辦酸",
+                    "url": "https://www.youtube.com/watch?v=SxEU-OkTHzY",
+                    "snippet": "蘇巧慧提出串聯北士科、內科及南港軟體園區的AI科技廊帶構想,被李四川競辦指稱與其政見雷同。",
+                    "publishedAt": ""
+                  }
+                ],
+                "text": "[1] AI公司，狂收“天价”数据？-36氪 — http://www.36kr.com/p/4042178601472896（页面发布于：2026-10-26）\n[2] 3 AI Stocks To Own In October 2026 — https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html（页面发布于：2026-10-26）\n[3] Global Market Today: Asian shares slip as AI jitters deepen ahead of big tech earnings - The Economic Times — https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms（页面发布于：2026-10-26）\n[4] ZWAG AI Announces the Launch of Center of Excellence for Linguistic Sovereignty at the Dubai AI Festival | Markets Insider — https://markets.businessinsider.com/news/stocks/zwag-ai-announces-the-launch-of-center-of-excellence-for-linguistic-sovereignty-at-the-dubai-ai-festival-1036664447（事件日期：2026-10-26）\n[5] Anthropic Sued for Allegedly Using 274 Elvis Presley Songs To Train AI Models｜Daily News Digest｜2026-10-26｜web only — https://english.cw.com.tw/article/article.action?id=5086（事件日期：2026-10-26）\n[6] From Crypto Roots to AI Selloff: Why CoreWeave Is Under Pressure — https://finance.yahoo.com/technology/ai/articles/crypto-roots-ai-selloff-why-043000019.html（页面发布于：2026-10-26）\n[7] Musk warns of AI lending crunch after SpaceX closes $40B GPU financing (SPCX:NASDAQ) | Seeking Alpha — https://seekingalpha.com/news/4657008-musk-warns-of-ai-lending-crunch-after-spacex-closes-40b-gpu-financing（页面发布于：2026-10-26）\n[8] 造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应-36氪 — https://www.36kr.com/p/4039323426853762（页面发布于：2026-10-26）\n[9] 中国季度GDP增速重回4.5%！政策效果正在集中显现-周刊原创-证券市场周刊 — https://static.weeklyonstock.com/26/1026/zbf133405.html（页面发布于：2026-10-26）\n[10] Students' Love-hate Relationship With AI — https://www.miragenews.com/students-love-hate-relationship-with-ai-1766440（页面发布于：2026-10-26）\n[11] 借势发力 企业提速数智化转型 _ 东方财富网 — https://wap.eastmoney.com/a/202610263907398254.html（页面发布于：2026-10-26）\n[12] Dr. Radhika Rampat: AI in practice today — https://www.ophthalmologytimes.com/shorts/dr-radhika-rampat-ai-in-practice-today（页面发布于：2026-10-26）\n[13] 大陸天才AI少女之三／從江西走向矽谷 盛穎「自學程式創業」獲億元融資 — https://turnnewsapp.com/livenews/chinav3/20261026000012-260409（页面发布于：2026-10-26）\n[14] AI產業政策李四川稱歡迎跟進蘇巧慧：不一樣 — https://tw.news.yahoo.com/ai%E7%94%A2%E6%A5%AD%E6%94%BF%E7%AD%96-%E6%9D%8E%E5%9B%9B%E5%B7%9D%E7%A8%B1%E6%AD%A1%E8%BF%8E%E8%B7%9F%E9%80%B2-%E8%98%87%E5%B7%A7%E6%85%A7-%E4%B8%8D-%E6%A8%A3-053155405.html（页面发布于：2026-10-26）\n[15] 被質疑AI產業廊道抄襲李四川蘇巧慧：完全不一樣 — https://udn.com/vote2026/story/124652/9837416（页面发布于：2026-10-26）\n[16] 新北市長選戰／李四川批跟進AI科技廊帶政見蘇巧慧反駁 — https://today.line.me/tw/v3/article/rmp2Drn（页面发布于：2026-10-26）\n[17] 蓋茨警告：AI轉型或引發20年動盪網路安全人才需求或隨之增長 — https://m.cnyes.com/news/id/6637674（页面发布于：2026-10-26）\n[18] 新模型发布两天就致歉，Kimi 补偿会员额度 25%|月之暗面|Kimi|补偿方案_新浪新闻 — https://www.sina.cn/news/detail/5358216771011525.html（页面发布于：2026-10-26）\n[19] 第一批不写代码的程序员，已出现 — https://www.thepaper.cn/newsDetail_forward_34325433（页面发布于：2026-10-26）\n[20] 国模沉寂两个月，Kimi K3.1 Pro挽尊了吗？ — https://m.sohu.com/a/1092857613_250147?scm=10001.325_13-325_13.0.0-0-0-0-0.5_1334（页面发布于：2026-10-26）\n[21] 太狠了！蘇巧慧跟進AI產業廊帶李競辦酸 — https://www.youtube.com/watch?v=SxEU-OkTHzY"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "data": {
+                "url": "https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html",
+                "ok": false,
+                "error": "拒绝访问内网地址"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "data": {
+                "url": "https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms",
+                "ok": false,
+                "error": "拒绝访问内网地址"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "url": "https://www.36kr.com/p/4042178601472896",
+                "title": "AI公司，狂收“天价”数据？-36氪",
+                "text": "账号设置 我的关注 我的收藏 申请的项目 退出登录 登录 搜索 36氪Auto 数字时氪 未来消费 智能涌现 未来城市 启动Power on 36氪出海 36氪研究院 潮生TIDE 36氪企服点评 36氪财经 职场bonus 36碳 后浪研究所 暗涌Waves 硬氪 氪睿研究院 媒体品牌 企业号 企服点评 36Kr研究院 36Kr创新咨询 企业服务 核心服务 城市之窗 政府服务 创投发布 LP源计划 VClub VClub投资机构库 投资机构职位推介 投资人认证 投资人服务 项目推荐 36氪Pro 创投氪堂 企业入驻 创业者服务 创投平台 AI测评网 首页 快讯 资讯 推荐 财经 AI 项目推荐 安徽 最新 创投 汽车 科技 专精特新 直播 视频 专题 活动 搜索 项目推荐 我要入驻 城市合作 AI公司，狂收“天价”数据？ 36氪的朋友们 · 2026年10月26日 12:50 一道数学评测题可值 5000 美元 一家破产航空公司留下的数据，被Google开价1000万美元购买。 这笔交易涉及美国廉价航空公司Spirit Airlines长期积累的内部记录，包括约1亿封电子邮件、5亿条Microsoft Teams消息，以及大量电子表格、日历和其他业务资料。Google希望利用这些数据改进AI模型。 一家已经停止运营的航空公司，多年来积累的工作记录，为什么还能卖出千万美元？ 同时，另一家AI数据公司micro1宣布，计划在未来12个月投入10亿美元，向真实企业采购或取得运营数据授权，用来构建强化学习环境，让AI学习完成复杂的商业任务。 过去几年，AI公司花费巨资购买GPU、建设数据中心，训练模型需要的数据却很少有明确价格。当下，越来越多报价浮出水面。 一道高难度数学评测题可能值5000美元，一家企业的内部数据可以收到1000万美元的报价，头部模型公司一年向一家数据供应商采购的服务就可能达到数亿美元。 AI究竟需要什么数据？这些数据为什么能卖出如此悬殊的价格？一家公司又该如何决定在数据上花多少钱？ AI公司，正在向谁购买数据？ 过去，大模型获取数据的重要途径是互联网。 新闻报道、书籍、百科、论坛、开源代码和专业网站，构成了早期模型训练的重要语料。有行业人士对腾讯科技透露，在行业发展的早期，为了获得高质量的数据，甚至有人大量购买旧的书籍，“拆书扫描”。 随着行业的发展，版权问题越来越受到重视。头部模型公司会通过公开网络获取大量内容，也向出版商和专业数据库购买授权，再对数据进行清洗、去重、筛选。 这一市场一直存在。OpenAI与新闻集团News Corp达成多年内容合作。据《华尔街日报》当时报道，这项协议在五年内的价值可能超过2.5亿美元。OpenAI可以使用《华尔街日报》《纽约邮报》等媒体的当前和历史内容，既用于改进产品，也涉及在ChatGPT中展示授权内容。 不过，随着模型能力提高，数据采购的对象开始发生变化。 目前，模型公司的外部数据来源大致可以分成三类。 第一类，是专门生产AI训练数据的公司。 Scale AI、Surge AI、Mercor、micro1等公司都属于这个市场。它们帮助模型公司组织标注人员和专业人才，将原始数据加工成可用于训练的材料，生产模型需要的高质量答案、评测题目和复杂任务。 这门生意已经发展到相当大的规模。 2026年7月，《The Information》取得的财务文件显示，Mercor上半年实现6.14亿美元总收入，其中约91%来自基础模型公司，包括OpenAI、Anthropic、Google DeepMind等。 这些数据公司的收入，已经可以达到数亿美元的量级。它们也在随着模型训练需求的变化，逐渐从提供大规模标注劳动力，向组织数学家、程序员、医生等专业人才生产高质量数据延伸。 第二类，是拥有专业知识的人。 2026年2月，外媒报道，一些数学家受邀为AI提供高难度评测问题，每题报酬约5000美元。 这类题目并不是普通奥数题。它们需要足以检验前沿模型的能力，还要有可靠的答案和验证方法。对于越来越擅长数学推理的AI来说，提出一道它尚不能轻易解决的问题，本身也需要很高的专业能力。 此外，模型公司还需要工程师设计复杂编程任务，让医生评估诊断推理，让法律专家判断专业答案是否可靠。 相比普通文本标注，这类数据的生产成本更高，对人员的要求也更加严格。 第三类，也是最近出现明显新动向的，是掌握真实业务数据的行业公司。 Spirit Airlines就是一个典型案例。在破产前，这家航空公司并不是为AI提供数据的企业。它的邮件、会议记录、电子表格和业务资料，只是多年经营活动自然形成的记录。 但对于希望训练AI完成真实工作的模型公司，这些资料可能提供另一种价值。比如，一家企业如何处理供应商延期交货？一次客户投诉如何在不同部门之间流转？员工怎样根据新的情况调整工作计划？这些过程可能散落在邮件、合同、会议记录和业务系统中。 互联网上有大量介绍企业管理、供应链和客户服务的文章，但很难完整还原一家公司真正处理过的问题。 micro1的最新采购计划，也是冲着这类数据而来。 10月9日，micro1宣布启动Company Data Partnerships计划，向企业购买或取得运营数据授权，并将它们转化为强化学习环境。模型可以在其中学习如何处理不完整的信息、相互冲突的目标，以及真实业务中的各种意外情况。 这种需求与过去的大规模网页数据采购有明显区别。企业的工作记录因此有了新的潜在买家。 但这类数据同样存在障碍。企业拥有内部记录，不代表可以自由出售涉及员工、客户及合作伙伴的信息；原始记录也不等于能够直接使用的训练数据。买方还需要完成 授权审查、隐私处理、任务提取和结果验证。 从互联网内容、专业数据公司，到真正掌握业务记录的行业企业，AI公司寻找数据的范围正在扩大。 训练一个顶级AI，数据究竟要花多少钱？ 模型公司究竟为数据投入多少预算，至今仍然是一个很不透明的问题。 AI公司经常披露训练使用的算力和基础设施投入，但很少完整公布数据账本。即使是OpenAI、Anthropic这样的头部公司，目前公开可见的财务资料，也没有将预训练语料、专家后训练、强化学习任务和评测数据的支出逐项列明。 这首先与数据成本的构成有关。 一家模型公司的数据投入， 既包括购买原始语料和版权授权，也包括数据清洗、去重、质量审核和隐私处理。进入后训练阶段，还需要向专家购买示范答案、偏好判断和复杂任务；训练Agent时，还可能需要开发可执行的环境和自动验证工具。 此外，模型公司自己也在生产数据。内部研究人员、标注团队、合成数据生成系统和评测基础设施，都可能产生相关成本。 从已经上市的大模型公司来看，2026年上半年，智谱研发费用达到21.31亿元人民币，同比增长33.6%；MiniMax研发费用约2.97亿美元，同比增长138.8%，MiniMax明确表示，增长主要来自模型迭代带来的训练相关云服务费用增加。但是数据采购在财报中却很难找到单独对应的数字。 MiniMax在2025年底发布的招股书中曾披露，计划2026年至2030年每年投入约6490万港元，用于文本、视觉、音频及多模态模型的数据采购、标注和合规，五年合计约3.25亿港元。 智谱的招股书显示，2025年上半年，研发技术服务及咨询费用约5221万元人民币，涉及数据清洗、模型评估及其他研发外包工作。由于多个项目合并披露，无法确认其中有多少直接用于数据相关服务，也无法判断是否包含原始数据采购。 模型公司的算力和整体研发开支已经越来越透明，但究竟花多少钱购买原始语料、专家生产的训练数据、强化学习任务和评测材料，仍然缺少统一的财务口径。外部采购、内部数据生产和相关计算成本又分散在不同科目中，使得不同模型公司的数据投入难以直接比较。 但是，海外模型公司的单笔外部采购已经出现了很高的金额。Google曾计划一年向Scale AI支付约2亿美元，Mercor在2026年上半年获得的数亿美元收入，也说明头部模型公司正在持续购买外部数据生产服务。 另据业内人士透露，GPT-6 Astra的数据投入成本高达几十亿美元，但这仅为行业传言。 更值得研究的是，模型公司到底怎样决定数据预算。 在传统理解中，模型需要更多数据，就继续扩大采购规模。但这种方式可能造成浪费：同一种数据已经积累了很多，继续增加未必能带来明显改善；真正限制模型能力的，可能是另一类稀缺数据。 2026年3月发表于EACL Findings的《Rethinking Data Mixture for Large Language Models》，系统梳理了大模型训练中的数据配比优化方法。 它讨论的是“有限的训练资源应该用在哪些数据上”。 例如，同一代模型需要同时提高数学、编程、语言理解和工具使用能力，但增加不同领域的数据，对最终表现的影响并不一样。研究总结了如何在固定计算预算下调整各类数据比例，以改善模型表现。 放到实际商业采购中，模型公司还需要回答第三个问题：这些数据究竟应该购买，还是自己生产？ 假设一家模型公司希望提高复杂编程任务的成功率。如果普通代码已经不能明显改善模型表现，继续扩大采购就可能缺乏意义；如果合成任务的质量足够高，外部采购的必要性也可能下降。 反过来，当某些数据只有专业人员或真实企业能够提供，而且确实可以改善模型表现时，即使采购单价很高，也可能值得购买。 因此，数据预算不只是一个固定的研发成本比例。 它与下一代模型准备提升什么能力、现有模型缺少什么数据，以及不同数据能够带来多少额外收益有关。 这一变化，也直接影响着AI数据市场的价格。 什么数据越来越贵？ AI数据的价格，正在出现明显分化。 在Mercor的招聘页面上，普通专业人员的平均合同费率约为每小时107美元，但部分肿瘤学专家的报价达到350至450美元，机器学习专家为150至200美元。与之相比，简单图片分类、文本标注等基础任务，成本可能低至几美分一项。 这种价格差异可以说明，当下， 模型公司愿意为特定领域的专业判断支付更高费用。 除了文章开头提到的，每道数学题报酬约5000美元。医学领域的报价也很能说明问题。Mercor目前公开招聘的放射科医生，合同费率达到每小时200至400美元，任务包括医学影像判读、撰写参考诊断报告和评估模型表现；部分肿瘤学专家职位的时薪达到450美元。这些属于专家报酬，并非模型公司最终支付的数据单价，但已经反映出 复杂专业数据的生产成本。 专家时间昂贵而有限，所以数据公司需要从每小时劳动中获得更多有效训练信号。专家可能负责创建任务、定义合格交付标准，或处理模型与自动评分器意见不一致的情况。数据公司还有一个任务，测量数据集是否真正提高了模型表现。 另一笔正在增长的需求，是强化学习任务和可执行环境。模型公司需要让Agent在环境中完成多步骤操作，并通过真实结果或验证程序判断执行是否成功。 这类数据的成本不只来自编写任务，还包括环境开发、规则设置、自动验证和反复测试。micro1宣布的10亿美元企业数据采购计划，就是为了从真实运营记录中提取这类训练材料。 机器人领域也出现了值得关注的价格反差。10月16日，外媒报道，Human Archive等数据采集项目在30多个国家招募人员，佩戴设备记录日常劳动，支付每小时1至30美元。 报道还指出，相关真实世界数据需求在一年内增长了约十倍。与此同时，10月15日外媒报道，国内机器人企业DexForce正利用虚拟仿真数据降低训练成本。两条路线同时发展，意味着真实操作数据的需求在扩大，但仿真技术也可能逐渐压低部分数据的采集成本。 更深刻的变化是，模型本身也正在成为数据生产者。 对于答案可以自动验证的数学、编程任务，模型能够批量生成问题、尝试求解，再利用代码执行器或其他验证工具筛选结果。这会减少部分人工制作任务的需求，同时把采购预算推向更难生成、缺乏可靠验证器或需要人类专业经验的材料。 当然，其中也存在一个疑问：今天需要昂贵专家才能生产的数据，下一代模型能否以更低成本自行生成？如果可以，当前高价就未必能长期维持。 最终决定数据价格的，是它能否在现有模型和数据来源之外，提供可验证的能力增量，以及生产同等质量数据需要付出多大代价。 很久以前，流传着一个“数据撞墙”说法，高质量的互联网数据已经不够用了，因此AI遇到了数据的瓶颈，阻碍了模型能力的发展。 今天回看，“数据”已经开始发展成为一条成熟的产业链，只要人类的活动存在，那么这条产业链，就像链接人类与人工智能的一条脐带，生生不息、茁壮成长。 本文来自微信公众号 “腾讯科技” ，作者：晓静，编辑：徐青阳，36氪经授权发布。 该文观点仅代表作者本人，36氪平台仅提供信息存储空间服务。 +1 3 好文章，需要你的鼓励 36氪的朋友们 特邀作者 0 收  藏 +1 0 评  论 打开微信“扫一扫”，打开网页后点击屏幕右上角分享按钮 微  博 沉浸阅读 返回顶部 举报 参与评论 评论千万条，友善第一条 登录 后参与讨论 提交评论 0/1000 你可能也喜欢这些文章 意外，79%企业GPU利用率竟不足一半 一位开发者让电视服用了 Claude，这是它系统发生的变化 比GPT-6 Luna快8倍，扩散LLM跑分也反超了 千亿All in，AI回报却为零 Kimi认错，杨植麟还是得学梁文锋 堪比Transformer奠基论文？这篇研究让AI圈吵起来了 谷歌宁愿少卖云算力，也要先把算力留给 Gemini：皮查伊罕见长访谈，披露 AI 自我改进与算力争夺内幕 造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应 AI助理争夺战：解析Muse、Grok Bot与Instinct背后的产品布局、入口生意与盈利难题 36氪的朋友们 特邀作者 TA没有写简介，但内敛也是一种表达 发表文章 51107 篇 最近内容 AI公司，狂收“天价”数据？ 2小时前 “匈牙利的莎士比亚”，生于这座罗马尼亚小城 4小时前 100家央企总部，分布在哪些城市？ 4小时前 阅读更多内容，狠戳这里 查看AI测评 MiniMax 选靠谱AI，看真实评测 查看 36氪AI测评官方交流社区 加入 咨询项目审核和入驻 联系 36氪项目推荐订阅号 关注 下一篇 2026年最不该增长的企业增长了，可口可乐这一刀切向经销商和业务 精细化管理始于可口可乐，也许将终于可口可乐 2小时前 关于36氪 城市合作 项目推荐 我要入驻 投资者关系 商务合作 关于我们 联系我",
+                "truncated": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "live_answer",
+      "value": "今天 AI 圈最受关注的是资本市场对 AI 高估值的担忧升温，同时有多项产业和产品动态。[3]\n\n## 市场与资本\n- 亚洲股市走低，AI 板块的紧张情绪在大型科技公司财报前加深；本周微软、Alphabet、亚马逊的财报，以及美联储和日本央行的政策决定，是市场的主要变量。[3]\n- 有分析指出，AI 高估值与持仓集中可能加剧下一轮市场下行风险。[2]\n- 马斯克表示，SpaceX 已完成 400 亿美元债务融资用于采购 GPU，并警告 AI 相关借贷可能出现过紧问题。[7]\n- GPU 租赁商（neocloud）板块承压，CoreWeave 受 AI 抛售和其加密行业背景拖累。[6]\n- 英伟达宣布创纪录的 1500 亿美元股票回购。（非搜索结果，来自检索摘要中的关联标题，未取得原文细节）\n\n## 数据与训练\n- Google 被曝开价 1000 万美元收购破产的 Spirit Airlines 的内部数据，包括约 1 亿封邮件和 5 亿条 Teams 消息，用于改进 AI 模型；数据公司 micro1 计划未来 12 个月投入 10 亿美元向企业采购运营数据，一道高难度数学评测题报价可达 5000 美元。[1]\n\n## 公司与监管\n- Anthropic 被起诉，指控其使用 274 首猫王歌曲训练模型。[5]\n- Anthropic 因私下推动监管草案引发争议，草案被指设定“造成 50 人以上死伤才能叫停模型”之类门槛；达里奥回应并披露公司曾主动推迟 Mythos 级模型的广泛开放约四个月。[8]\n\n## 产品与行业\n- 月之暗面新模型发布两天即致歉，向所有会员补偿月额度的 25%。[18]\n- 国产大模型沉寂两个月后，Kimi K3.1 Pro 发布，官方称大幅缩小了与顶级闭源模型的技术代差。[20]\n- ZWAG AI 在迪拜 AI 节宣布成立“语言主权卓越中心”，聚焦大模型对小语种的覆盖问题。[4]\n- 比尔·盖茨警告，AI 转型可能引发长达约 20 年的经济与社会动荡，网络安全人才需求或随之增长。[17]\n- 企业端加速数智化转型，“AI+业务”“AI+机器人+场景”成为落地路径。[11]\n- 中国三季度 GDP 同比增长 4.5%，增速较二季度回升 0.2 个百分点；广发证券认为 AI 产业链供给因素已定价较充分。[9]\n- 台湾新北市长选战围绕“AI 科技产业廊带”政见交锋，李四川与苏巧慧互相质疑对方跟进或抄袭。[14][15][16]\n- 教育领域，生成式 AI 在学生中快速普及，呈现“爱恨交织”的使用关系。[10]"
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "fcf60311-becd-4360-af6f-5dbf43aaac01",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "今天 AI 圈有什么重要新闻？",
+    "target": {
+      "windowHandle": "10069",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-069"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "durationMs": 13369
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "durationMs": 1
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "durationMs": 2
+      },
+      {
+        "tool": "read_webpage",
+        "state": "completed",
+        "durationMs": 351
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "model"
+    },
+    "transcript": "今天 AI 圈有什么重要新闻？",
+    "results": [
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "query": "今天 AI 圈有什么重要新闻？",
+          "queries": [
+            "今天 AI 圈有什么重要新闻？",
+            "AI news today",
+            "今天 AI 圈有什么重要新闻？ 模型发布",
+            "今天 AI 圈有什么重要新闻？ 产品与应用",
+            "今天 AI 圈有什么重要新闻？ 开源与研究",
+            "今天 AI 圈有什么重要新闻？ 产业与政策"
+          ],
+          "kind": "news",
+          "digest": true,
+          "failedQueries": 1,
+          "freshness": "day",
+          "recencyDays": 1,
+          "retried": false,
+          "todayCount": 20,
+          "timeScope": "today",
+          "timeNote": "Local date at the start of this search: 2026-10-26. Verified reports dated today: 20. Separate undated leads from verified news.",
+          "count": 21,
+          "results": [
+            {
+              "title": "AI公司，狂收“天价”数据？-36氪",
+              "url": "http://www.36kr.com/p/4042178601472896",
+              "snippet": "很久以前，流传着一个“数据撞墙”说法，高质量的互联网数据已经不够用了，因此AI遇到了数据的瓶颈，阻碍了模型能力的发展。 今天回看，“数据”已经开始发展成为一条成熟的产业链，只要人类的活动存在，那么这条产业链，就像链接人类与人工智能的一条脐带，生生不息、茁壮成长。 本文来自微信公众号“腾讯科技”，作者：晓静，编辑：徐青阳，36氪经授权发布。 该文观点仅代表作者本人，36氪平台仅提供信息存储空间服务。 +1 3 好文章，需要你的鼓励 36氪的朋友们特邀作者 0收 藏+10评 论 打开微信“扫一扫”，打开网页后点击屏幕右上角分享按钮微 博 沉浸阅读返回顶部 举报 参与评论 评论千万条，友善第一条 登录后参与讨论 提交评论0/1000 你可能也喜欢这些文章 意外，79%企业GPU利用率竟不足一半 一位开发者让电视服用了 Claude，这是它系统发生的变化 比GPT-6 Luna快8倍，扩散LLM跑",
+              "publishedAt": "Mon, 26 Oct 2026 06:10:31 GMT"
+            },
+            {
+              "title": "3 AI Stocks To Own In October 2026",
+              "url": "https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html",
+              "snippet": "-0.99% AI risk is suddenly front-page news. Financiers are warning that high valuations and concentrated exposure in artificial intelligence could feed the next market downturn, yet the same technology is quietly reshaping how smaller specialists build tools in automation, data and machine learning. That disconnect is where opportunity often hides. This article highlights three under-the-radar AI-",
+              "publishedAt": "Sun, 25 Oct 2026 20:00:00 GMT"
+            },
+            {
+              "title": "Global Market Today: Asian shares slip as AI jitters deepen ahead of big tech earnings - The Economic Times",
+              "url": "https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms",
+              "snippet": "Investors face another pivotal week after a volatile stretch for the AI trade, with earnings from Microsoft Corp., Alphabet Inc. and Amazon.com Inc. set to test confidence in the sector. Federal Reserve and Bank of Japan policy decisions will add to the week’s major catalysts as officials contend with stubborn inflation, higher energy costs and elevated bond yields globally. [...] It’s also Asia’s",
+              "publishedAt": "Mon, 26 Oct 2026 01:00:00 GMT"
+            },
+            {
+              "title": "ZWAG AI Announces the Launch of Center of Excellence for Linguistic Sovereignty at the Dubai AI Festival | Markets Insider",
+              "url": "https://markets.businessinsider.com/news/stocks/zwag-ai-announces-the-launch-of-center-of-excellence-for-linguistic-sovereignty-at-the-dubai-ai-festival-1036664447",
+              "snippet": "DUBAI, UAE, Oct. 26, 2026 (GLOBE NEWSWIRE) -- ZWAG AI today officially announced the launch of the Center of Excellence for Linguistic Sovereignty (CoE-LS) at the Dubai AI Festival. [...] Preserving Linguistic Integrity in Artificial Intelligence While today's Large Language Models (LLMs) often appear fluent in widely spoken and regional languages—such as Thai, Tamil, Arabic, or Swahili—they routi",
+              "publishedAt": "Mon, 26 Oct 2026 07:11:36 GMT"
+            },
+            {
+              "title": "Anthropic Sued for Allegedly Using 274 Elvis Presley Songs To Train AI Models｜Daily News Digest｜2026-10-26｜web only",
+              "url": "https://english.cw.com.tw/article/article.action?id=5086",
+              "snippet": "subscribe ## Keywords： Anthropic AI ElvisPresley US Military ElonMusk SpaceX TrackingData Microsoft Windows 好友人數 Next Nvidia Boosts Share Buyback by Record $150B ### Additional Reading US Rejects China’s Trespassing Claim After Warship Transits Disputed Reef Nvidia CEO Jensen Huang Wants Every Country To Build Its Own AI, Unveils DSX Pod AI Factory Elon Musk Pledges SpaceX Shares to Every American",
+              "publishedAt": "Mon, 26 Oct 2026 03:00:00 GMT"
+            },
+            {
+              "title": "From Crypto Roots to AI Selloff: Why CoreWeave Is Under Pressure",
+              "url": "https://finance.yahoo.com/technology/ai/articles/crypto-roots-ai-selloff-why-043000019.html",
+              "snippet": "The crypto links also persist. CoreWeave has leased space from Core Scientific (CORZ), a bitcoin miner shifting toward AI hosting, whose shareholders blocked a $9 billion CoreWeave takeover in October 2025. Neoclouds, the GPU-rental providers built around Nvidia chips, are under strain as a group. Nebius and IREN have each fallen at least 30% this month, alongside CoreWeave, per CNBC. [...] Meanwh",
+              "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+            },
+            {
+              "title": "Musk warns of AI lending crunch after SpaceX closes $40B GPU financing (SPCX:NASDAQ) | Seeking Alpha",
+              "url": "https://seekingalpha.com/news/4657008-musk-warns-of-ai-lending-crunch-after-spacex-closes-40b-gpu-financing",
+              "snippet": "## Investing Groups ## Portfolios ## Find & Compare # Musk warns of AI lending crunch after SpaceX closes $40B GPU financing President Trump Speaks At Golden Age Of American Innovation Summit Elon Musk said SpaceX (SPCX) has closed $40 billion in debt financing to purchase graphics processing units, or GPUs, warning that tightening credit markets could trigger widespread failures and consolidation",
+              "publishedAt": "Sun, 25 Oct 2026 21:04:17 GMT"
+            },
+            {
+              "title": "造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应-36氪",
+              "url": "https://www.36kr.com/p/4039323426853762",
+              "snippet": "其中包括推动加州 SB 53 立法、坚持严格的生物安全防护、支持政府获得阻止危险模型发布的权力、限制向中国相关受控实体提供服务，以及承诺将公司 5%的股份用于公共利益基金。 而最引人关注的一项，是他披露 Anthropic 曾主动推迟强大模型 Mythos 的广泛开放。 按照达里奥的说法，公司在今年 2 月就已经拥有 Mythos 级别模型，但由于担心其网络攻击能力被滥用，决定先向少量从事网络防御的合作伙伴开放，直到 6 月更强的网络安全防护措施准备就绪，才扩大访问范围。 这相当于将相关模型的广泛开放推迟了约四个月。 达里奥认为，这一决定很可能让Anthropic 损失了数月技术领先优势中的相当一部分。作为交换，外部机构获得了更多时间，在具备强大网络攻击能力的 AI 模型普及之前加固系统。 这也是整篇回应中最有分量的新信息之一。 对于一家竞争激烈、模型领先优势可能以月计的 AI 公司来说，",
+              "publishedAt": "Mon, 26 Oct 2026 05:22:57 GMT"
+            },
+            {
+              "title": "中国季度GDP增速重回4.5%！政策效果正在集中显现-周刊原创-证券市场周刊",
+              "url": "https://static.weeklyonstock.com/26/1026/zbf133405.html",
+              "snippet": "从资本市场的角度看，三季度经济的这一系列积极变化对主要资产有什么影响呢？最悲观的时候或已过去，广发证券认为，AI产业链供给因素已定价较为充分，需求端叙事尚未跟上，全球相关资产同步调整。增长的边际企稳，使得内需相关资产渡过了压力最大的阶段，顺周期资产的逻辑有所强化。两者结合，资产应告别单线索，提升广谱性，市场在赔率空间上已呈现一定的吸引力。 边际动能改善 三季度GDP实际增长4.5%，增速比二季度上升0.2个百分点，好于市场预期，经济动能边际改善。 瑞银证券认为，三季度经济增长走强主要受到政策支持力度加大的推动，而市场对这方面的重视不足。一季度经济增速超出预期后，二季度政策层面要求避免过度投资和过度举债。三季度有所调整。服务业出现了一定程度的放松，例如允许医院设立按照市场价格收费的国际部。政策适当的调整与放松可能与新增刺激同样重要。 而且三季度名义GDP同比增长6.0%，好于一、二季度的4.",
+              "publishedAt": "Mon, 26 Oct 2026 05:00:00 GMT"
+            },
+            {
+              "title": "Students' Love-hate Relationship With AI",
+              "url": "https://www.miragenews.com/students-love-hate-relationship-with-ai-1766440",
+              "snippet": "Within two years, generative AI had spread like wildfire among students. EPFL/Adrien Buttier CC-BY-SA 4.0 ChatGPT hit like a meteorite in late 2022.",
+              "publishedAt": "Mon, 26 Oct 2026 07:00:00 GMT"
+            },
+            {
+              "title": "借势发力 企业提速数智化转型 _ 东方财富网",
+              "url": "https://wap.eastmoney.com/a/202610263907398254.html",
+              "snippet": "面对顾虑，不同企业有不同的考量。 “AI正在改变千行百业的运行方式，率先把AI嵌入业务流程的企业，将改变成本结构、交付效率和市场竞争力。”应华江说，AI浪潮之下，当前多数岗位不会简单消失，而是转向人机共同完成，企业应主动拥抱技术，从真实业务环节切入，用AI提高效率、降低成本。一方面要建立数据思维，用数据记录、分析并支持经营决策；另一方面要重构生产流程，让AI融入识别、审核、分析、检测等各个环节，形成“AI+业务”模式。 浙江大丰实业股份有限公司董事长、总裁丰华表示，面对AI时代的行业巨变，公司正加速推动“AI+机器人+场景”融合平台落地，在文化、体育、旅游等领域推动AI加速商业化。 记者了解到，部分企业已着手训练数字员工。据介绍，数字员工跟随公司员工在真实工作场景下工作3个月，便可模拟真实员工完成工作内容，将有助于降低企业人力成本，提升工作效率和准确性。 “风口会停，价值不会停，要用新技术",
+              "publishedAt": "Sun, 25 Oct 2026 22:00:00 GMT"
+            },
+            {
+              "title": "Dr. Radhika Rampat: AI in practice today",
+              "url": "https://www.ophthalmologytimes.com/shorts/dr-radhika-rampat-ai-in-practice-today",
+              "snippet": "Dr. Radhika Rampat describes how AI is already embedded in her daily ophthalmic practice. For intraocular lens selection, she relies on the ESCRS online",
+              "publishedAt": "Mon, 26 Oct 2026 01:00:00 GMT"
+            },
+            {
+              "title": "大陸天才AI少女之三／從江西走向矽谷 盛穎「自學程式創業」獲億元融資",
+              "url": "https://turnnewsapp.com/livenews/chinav3/20261026000012-260409",
+              "snippet": "「要相信美好事物的存在，然後和你一樣相信的人會和你相遇。」來自大陸江西九江的年輕女孩盛穎，憑藉AI基礎設施技術，在矽谷創業圈引起關注。她在訪談節目《硅谷101》",
+              "publishedAt": "Mon, 26 Oct 2026 03:00:00 GMT"
+            },
+            {
+              "title": "AI產業政策李四川稱歡迎跟進蘇巧慧：不一樣",
+              "url": "https://tw.news.yahoo.com/ai%E7%94%A2%E6%A5%AD%E6%94%BF%E7%AD%96-%E6%9D%8E%E5%9B%9B%E5%B7%9D%E7%A8%B1%E6%AD%A1%E8%BF%8E%E8%B7%9F%E9%80%B2-%E8%98%87%E5%B7%A7%E6%85%A7-%E4%B8%8D-%E6%A8%A3-053155405.html",
+              "snippet": "（中央社記者王鴻國新北26日電）藍綠紛訴求打造AI科技產業廊帶，李四川表示，好的政策不分藍綠，歡迎跟進；蘇巧慧表示，藍營提出的政見是要剷掉松山機場來變成雙北的AI產業",
+              "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+            },
+            {
+              "title": "被質疑AI產業廊道抄襲李四川蘇巧慧：完全不一樣",
+              "url": "https://udn.com/vote2026/story/124652/9837416",
+              "snippet": "國民黨新北市長參選人李四川競辦質疑對手民進黨新北市長參選人蘇巧慧的AI科技產業廊帶政策是照抄李四川政見，還打臉民進黨台北市長參選人沈伯洋。蘇巧慧今天出席議員",
+              "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+            },
+            {
+              "title": "新北市長選戰／李四川批跟進AI科技廊帶政見蘇巧慧反駁",
+              "url": "https://today.line.me/tw/v3/article/rmp2Drn",
+              "snippet": "新北市長選戰白熱化，國民黨候選人李四川與民進黨候選人蘇巧慧今天(26日)持續針對AI科技產業廊帶議題交鋒。李四川陣營質疑蘇巧慧提出的「AI產業廊帶」政見是跟進他的",
+              "publishedAt": "Mon, 26 Oct 2026 04:00:00 GMT"
+            },
+            {
+              "title": "蓋茨警告：AI轉型或引發20年動盪網路安全人才需求或隨之增長",
+              "url": "https://m.cnyes.com/news/id/6637674",
+              "snippet": "AI可能重塑就業與社會結構 ... 微軟聯合創始人比爾·蓋茨警告，即使人工智慧最終能夠為社會帶來廣泛益處，其發展過程仍可能引髮長達約20年的經濟與社會動盪。 ... 蓋茨在播客",
+              "publishedAt": "Mon, 26 Oct 2026 05:00:00 GMT"
+            },
+            {
+              "title": "新模型发布两天就致歉，Kimi 补偿会员额度 25%|月之暗面|Kimi|补偿方案_新浪新闻",
+              "url": "https://www.sina.cn/news/detail/5358216771011525.html",
+              "snippet": "汽车 本地生活 旅游 数码 娱乐 影视 26-10-26 10:31 微博认证：电商派官方微博 #Kimi致歉并宣布补偿方案# 新模型发布才两天，月之暗面就向付费用户道歉了，所有会员将获月额度的25％作为补偿。 ​",
+              "publishedAt": "Mon, 26 Oct 2026 02:00:00 GMT"
+            },
+            {
+              "title": "第一批不写代码的程序员，已出现",
+              "url": "https://www.thepaper.cn/newsDetail_forward_34325433",
+              "snippet": "现在已经很少有程序员手写代码了。” 只要在AI编程软件里输入指令，就能够生成一连串代码。可程序员并没有因此闲下来。AI写的代码要人审、要人兜底。AI可以替人写.",
+              "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+            },
+            {
+              "title": "国模沉寂两个月，Kimi K3.1 Pro挽尊了吗？",
+              "url": "https://m.sohu.com/a/1092857613_250147?scm=10001.325_13-325_13.0.0-0-0-0-0.5_1334",
+              "snippet": "在国产大模型沉寂两个多月引发“国模已经不行了吗”质疑声四起的背景下，Kimi出来放招了。 在Kimi K3将顶尖开源模式跟顶级闭源模型的技术代差大幅抹平，把“时间差”从1年",
+              "publishedAt": "Mon, 26 Oct 2026 06:00:00 GMT"
+            },
+            {
+              "title": "太狠了！蘇巧慧跟進AI產業廊帶李競辦酸",
+              "url": "https://www.youtube.com/watch?v=SxEU-OkTHzY",
+              "snippet": "蘇巧慧提出串聯北士科、內科及南港軟體園區的AI科技廊帶構想,被李四川競辦指稱與其政見雷同。",
+              "publishedAt": ""
+            }
+          ],
+          "text": "[1] AI公司，狂收“天价”数据？-36氪 — http://www.36kr.com/p/4042178601472896（页面发布于：2026-10-26）\n[2] 3 AI Stocks To Own In October 2026 — https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html（页面发布于：2026-10-26）\n[3] Global Market Today: Asian shares slip as AI jitters deepen ahead of big tech earnings - The Economic Times — https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms（页面发布于：2026-10-26）\n[4] ZWAG AI Announces the Launch of Center of Excellence for Linguistic Sovereignty at the Dubai AI Festival | Markets Insider — https://markets.businessinsider.com/news/stocks/zwag-ai-announces-the-launch-of-center-of-excellence-for-linguistic-sovereignty-at-the-dubai-ai-festival-1036664447（事件日期：2026-10-26）\n[5] Anthropic Sued for Allegedly Using 274 Elvis Presley Songs To Train AI Models｜Daily News Digest｜2026-10-26｜web only — https://english.cw.com.tw/article/article.action?id=5086（事件日期：2026-10-26）\n[6] From Crypto Roots to AI Selloff: Why CoreWeave Is Under Pressure — https://finance.yahoo.com/technology/ai/articles/crypto-roots-ai-selloff-why-043000019.html（页面发布于：2026-10-26）\n[7] Musk warns of AI lending crunch after SpaceX closes $40B GPU financing (SPCX:NASDAQ) | Seeking Alpha — https://seekingalpha.com/news/4657008-musk-warns-of-ai-lending-crunch-after-spacex-closes-40b-gpu-financing（页面发布于：2026-10-26）\n[8] 造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应-36氪 — https://www.36kr.com/p/4039323426853762（页面发布于：2026-10-26）\n[9] 中国季度GDP增速重回4.5%！政策效果正在集中显现-周刊原创-证券市场周刊 — https://static.weeklyonstock.com/26/1026/zbf133405.html（页面发布于：2026-10-26）\n[10] Students' Love-hate Relationship With AI — https://www.miragenews.com/students-love-hate-relationship-with-ai-1766440（页面发布于：2026-10-26）\n[11] 借势发力 企业提速数智化转型 _ 东方财富网 — https://wap.eastmoney.com/a/202610263907398254.html（页面发布于：2026-10-26）\n[12] Dr. Radhika Rampat: AI in practice today — https://www.ophthalmologytimes.com/shorts/dr-radhika-rampat-ai-in-practice-today（页面发布于：2026-10-26）\n[13] 大陸天才AI少女之三／從江西走向矽谷 盛穎「自學程式創業」獲億元融資 — https://turnnewsapp.com/livenews/chinav3/20261026000012-260409（页面发布于：2026-10-26）\n[14] AI產業政策李四川稱歡迎跟進蘇巧慧：不一樣 — https://tw.news.yahoo.com/ai%E7%94%A2%E6%A5%AD%E6%94%BF%E7%AD%96-%E6%9D%8E%E5%9B%9B%E5%B7%9D%E7%A8%B1%E6%AD%A1%E8%BF%8E%E8%B7%9F%E9%80%B2-%E8%98%87%E5%B7%A7%E6%85%A7-%E4%B8%8D-%E6%A8%A3-053155405.html（页面发布于：2026-10-26）\n[15] 被質疑AI產業廊道抄襲李四川蘇巧慧：完全不一樣 — https://udn.com/vote2026/story/124652/9837416（页面发布于：2026-10-26）\n[16] 新北市長選戰／李四川批跟進AI科技廊帶政見蘇巧慧反駁 — https://today.line.me/tw/v3/article/rmp2Drn（页面发布于：2026-10-26）\n[17] 蓋茨警告：AI轉型或引發20年動盪網路安全人才需求或隨之增長 — https://m.cnyes.com/news/id/6637674（页面发布于：2026-10-26）\n[18] 新模型发布两天就致歉，Kimi 补偿会员额度 25%|月之暗面|Kimi|补偿方案_新浪新闻 — https://www.sina.cn/news/detail/5358216771011525.html（页面发布于：2026-10-26）\n[19] 第一批不写代码的程序员，已出现 — https://www.thepaper.cn/newsDetail_forward_34325433（页面发布于：2026-10-26）\n[20] 国模沉寂两个月，Kimi K3.1 Pro挽尊了吗？ — https://m.sohu.com/a/1092857613_250147?scm=10001.325_13-325_13.0.0-0-0-0-0.5_1334（页面发布于：2026-10-26）\n[21] 太狠了！蘇巧慧跟進AI產業廊帶李競辦酸 — https://www.youtube.com/watch?v=SxEU-OkTHzY"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "data": {
+          "url": "https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html",
+          "ok": false,
+          "error": "拒绝访问内网地址"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "data": {
+          "url": "https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms",
+          "ok": false,
+          "error": "拒绝访问内网地址"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "url": "https://www.36kr.com/p/4042178601472896",
+          "title": "AI公司，狂收“天价”数据？-36氪",
+          "text": "账号设置 我的关注 我的收藏 申请的项目 退出登录 登录 搜索 36氪Auto 数字时氪 未来消费 智能涌现 未来城市 启动Power on 36氪出海 36氪研究院 潮生TIDE 36氪企服点评 36氪财经 职场bonus 36碳 后浪研究所 暗涌Waves 硬氪 氪睿研究院 媒体品牌 企业号 企服点评 36Kr研究院 36Kr创新咨询 企业服务 核心服务 城市之窗 政府服务 创投发布 LP源计划 VClub VClub投资机构库 投资机构职位推介 投资人认证 投资人服务 项目推荐 36氪Pro 创投氪堂 企业入驻 创业者服务 创投平台 AI测评网 首页 快讯 资讯 推荐 财经 AI 项目推荐 安徽 最新 创投 汽车 科技 专精特新 直播 视频 专题 活动 搜索 项目推荐 我要入驻 城市合作 AI公司，狂收“天价”数据？ 36氪的朋友们 · 2026年10月26日 12:50 一道数学评测题可值 5000 美元 一家破产航空公司留下的数据，被Google开价1000万美元购买。 这笔交易涉及美国廉价航空公司Spirit Airlines长期积累的内部记录，包括约1亿封电子邮件、5亿条Microsoft Teams消息，以及大量电子表格、日历和其他业务资料。Google希望利用这些数据改进AI模型。 一家已经停止运营的航空公司，多年来积累的工作记录，为什么还能卖出千万美元？ 同时，另一家AI数据公司micro1宣布，计划在未来12个月投入10亿美元，向真实企业采购或取得运营数据授权，用来构建强化学习环境，让AI学习完成复杂的商业任务。 过去几年，AI公司花费巨资购买GPU、建设数据中心，训练模型需要的数据却很少有明确价格。当下，越来越多报价浮出水面。 一道高难度数学评测题可能值5000美元，一家企业的内部数据可以收到1000万美元的报价，头部模型公司一年向一家数据供应商采购的服务就可能达到数亿美元。 AI究竟需要什么数据？这些数据为什么能卖出如此悬殊的价格？一家公司又该如何决定在数据上花多少钱？ AI公司，正在向谁购买数据？ 过去，大模型获取数据的重要途径是互联网。 新闻报道、书籍、百科、论坛、开源代码和专业网站，构成了早期模型训练的重要语料。有行业人士对腾讯科技透露，在行业发展的早期，为了获得高质量的数据，甚至有人大量购买旧的书籍，“拆书扫描”。 随着行业的发展，版权问题越来越受到重视。头部模型公司会通过公开网络获取大量内容，也向出版商和专业数据库购买授权，再对数据进行清洗、去重、筛选。 这一市场一直存在。OpenAI与新闻集团News Corp达成多年内容合作。据《华尔街日报》当时报道，这项协议在五年内的价值可能超过2.5亿美元。OpenAI可以使用《华尔街日报》《纽约邮报》等媒体的当前和历史内容，既用于改进产品，也涉及在ChatGPT中展示授权内容。 不过，随着模型能力提高，数据采购的对象开始发生变化。 目前，模型公司的外部数据来源大致可以分成三类。 第一类，是专门生产AI训练数据的公司。 Scale AI、Surge AI、Mercor、micro1等公司都属于这个市场。它们帮助模型公司组织标注人员和专业人才，将原始数据加工成可用于训练的材料，生产模型需要的高质量答案、评测题目和复杂任务。 这门生意已经发展到相当大的规模。 2026年7月，《The Information》取得的财务文件显示，Mercor上半年实现6.14亿美元总收入，其中约91%来自基础模型公司，包括OpenAI、Anthropic、Google DeepMind等。 这些数据公司的收入，已经可以达到数亿美元的量级。它们也在随着模型训练需求的变化，逐渐从提供大规模标注劳动力，向组织数学家、程序员、医生等专业人才生产高质量数据延伸。 第二类，是拥有专业知识的人。 2026年2月，外媒报道，一些数学家受邀为AI提供高难度评测问题，每题报酬约5000美元。 这类题目并不是普通奥数题。它们需要足以检验前沿模型的能力，还要有可靠的答案和验证方法。对于越来越擅长数学推理的AI来说，提出一道它尚不能轻易解决的问题，本身也需要很高的专业能力。 此外，模型公司还需要工程师设计复杂编程任务，让医生评估诊断推理，让法律专家判断专业答案是否可靠。 相比普通文本标注，这类数据的生产成本更高，对人员的要求也更加严格。 第三类，也是最近出现明显新动向的，是掌握真实业务数据的行业公司。 Spirit Airlines就是一个典型案例。在破产前，这家航空公司并不是为AI提供数据的企业。它的邮件、会议记录、电子表格和业务资料，只是多年经营活动自然形成的记录。 但对于希望训练AI完成真实工作的模型公司，这些资料可能提供另一种价值。比如，一家企业如何处理供应商延期交货？一次客户投诉如何在不同部门之间流转？员工怎样根据新的情况调整工作计划？这些过程可能散落在邮件、合同、会议记录和业务系统中。 互联网上有大量介绍企业管理、供应链和客户服务的文章，但很难完整还原一家公司真正处理过的问题。 micro1的最新采购计划，也是冲着这类数据而来。 10月9日，micro1宣布启动Company Data Partnerships计划，向企业购买或取得运营数据授权，并将它们转化为强化学习环境。模型可以在其中学习如何处理不完整的信息、相互冲突的目标，以及真实业务中的各种意外情况。 这种需求与过去的大规模网页数据采购有明显区别。企业的工作记录因此有了新的潜在买家。 但这类数据同样存在障碍。企业拥有内部记录，不代表可以自由出售涉及员工、客户及合作伙伴的信息；原始记录也不等于能够直接使用的训练数据。买方还需要完成 授权审查、隐私处理、任务提取和结果验证。 从互联网内容、专业数据公司，到真正掌握业务记录的行业企业，AI公司寻找数据的范围正在扩大。 训练一个顶级AI，数据究竟要花多少钱？ 模型公司究竟为数据投入多少预算，至今仍然是一个很不透明的问题。 AI公司经常披露训练使用的算力和基础设施投入，但很少完整公布数据账本。即使是OpenAI、Anthropic这样的头部公司，目前公开可见的财务资料，也没有将预训练语料、专家后训练、强化学习任务和评测数据的支出逐项列明。 这首先与数据成本的构成有关。 一家模型公司的数据投入， 既包括购买原始语料和版权授权，也包括数据清洗、去重、质量审核和隐私处理。进入后训练阶段，还需要向专家购买示范答案、偏好判断和复杂任务；训练Agent时，还可能需要开发可执行的环境和自动验证工具。 此外，模型公司自己也在生产数据。内部研究人员、标注团队、合成数据生成系统和评测基础设施，都可能产生相关成本。 从已经上市的大模型公司来看，2026年上半年，智谱研发费用达到21.31亿元人民币，同比增长33.6%；MiniMax研发费用约2.97亿美元，同比增长138.8%，MiniMax明确表示，增长主要来自模型迭代带来的训练相关云服务费用增加。但是数据采购在财报中却很难找到单独对应的数字。 MiniMax在2025年底发布的招股书中曾披露，计划2026年至2030年每年投入约6490万港元，用于文本、视觉、音频及多模态模型的数据采购、标注和合规，五年合计约3.25亿港元。 智谱的招股书显示，2025年上半年，研发技术服务及咨询费用约5221万元人民币，涉及数据清洗、模型评估及其他研发外包工作。由于多个项目合并披露，无法确认其中有多少直接用于数据相关服务，也无法判断是否包含原始数据采购。 模型公司的算力和整体研发开支已经越来越透明，但究竟花多少钱购买原始语料、专家生产的训练数据、强化学习任务和评测材料，仍然缺少统一的财务口径。外部采购、内部数据生产和相关计算成本又分散在不同科目中，使得不同模型公司的数据投入难以直接比较。 但是，海外模型公司的单笔外部采购已经出现了很高的金额。Google曾计划一年向Scale AI支付约2亿美元，Mercor在2026年上半年获得的数亿美元收入，也说明头部模型公司正在持续购买外部数据生产服务。 另据业内人士透露，GPT-6 Astra的数据投入成本高达几十亿美元，但这仅为行业传言。 更值得研究的是，模型公司到底怎样决定数据预算。 在传统理解中，模型需要更多数据，就继续扩大采购规模。但这种方式可能造成浪费：同一种数据已经积累了很多，继续增加未必能带来明显改善；真正限制模型能力的，可能是另一类稀缺数据。 2026年3月发表于EACL Findings的《Rethinking Data Mixture for Large Language Models》，系统梳理了大模型训练中的数据配比优化方法。 它讨论的是“有限的训练资源应该用在哪些数据上”。 例如，同一代模型需要同时提高数学、编程、语言理解和工具使用能力，但增加不同领域的数据，对最终表现的影响并不一样。研究总结了如何在固定计算预算下调整各类数据比例，以改善模型表现。 放到实际商业采购中，模型公司还需要回答第三个问题：这些数据究竟应该购买，还是自己生产？ 假设一家模型公司希望提高复杂编程任务的成功率。如果普通代码已经不能明显改善模型表现，继续扩大采购就可能缺乏意义；如果合成任务的质量足够高，外部采购的必要性也可能下降。 反过来，当某些数据只有专业人员或真实企业能够提供，而且确实可以改善模型表现时，即使采购单价很高，也可能值得购买。 因此，数据预算不只是一个固定的研发成本比例。 它与下一代模型准备提升什么能力、现有模型缺少什么数据，以及不同数据能够带来多少额外收益有关。 这一变化，也直接影响着AI数据市场的价格。 什么数据越来越贵？ AI数据的价格，正在出现明显分化。 在Mercor的招聘页面上，普通专业人员的平均合同费率约为每小时107美元，但部分肿瘤学专家的报价达到350至450美元，机器学习专家为150至200美元。与之相比，简单图片分类、文本标注等基础任务，成本可能低至几美分一项。 这种价格差异可以说明，当下， 模型公司愿意为特定领域的专业判断支付更高费用。 除了文章开头提到的，每道数学题报酬约5000美元。医学领域的报价也很能说明问题。Mercor目前公开招聘的放射科医生，合同费率达到每小时200至400美元，任务包括医学影像判读、撰写参考诊断报告和评估模型表现；部分肿瘤学专家职位的时薪达到450美元。这些属于专家报酬，并非模型公司最终支付的数据单价，但已经反映出 复杂专业数据的生产成本。 专家时间昂贵而有限，所以数据公司需要从每小时劳动中获得更多有效训练信号。专家可能负责创建任务、定义合格交付标准，或处理模型与自动评分器意见不一致的情况。数据公司还有一个任务，测量数据集是否真正提高了模型表现。 另一笔正在增长的需求，是强化学习任务和可执行环境。模型公司需要让Agent在环境中完成多步骤操作，并通过真实结果或验证程序判断执行是否成功。 这类数据的成本不只来自编写任务，还包括环境开发、规则设置、自动验证和反复测试。micro1宣布的10亿美元企业数据采购计划，就是为了从真实运营记录中提取这类训练材料。 机器人领域也出现了值得关注的价格反差。10月16日，外媒报道，Human Archive等数据采集项目在30多个国家招募人员，佩戴设备记录日常劳动，支付每小时1至30美元。 报道还指出，相关真实世界数据需求在一年内增长了约十倍。与此同时，10月15日外媒报道，国内机器人企业DexForce正利用虚拟仿真数据降低训练成本。两条路线同时发展，意味着真实操作数据的需求在扩大，但仿真技术也可能逐渐压低部分数据的采集成本。 更深刻的变化是，模型本身也正在成为数据生产者。 对于答案可以自动验证的数学、编程任务，模型能够批量生成问题、尝试求解，再利用代码执行器或其他验证工具筛选结果。这会减少部分人工制作任务的需求，同时把采购预算推向更难生成、缺乏可靠验证器或需要人类专业经验的材料。 当然，其中也存在一个疑问：今天需要昂贵专家才能生产的数据，下一代模型能否以更低成本自行生成？如果可以，当前高价就未必能长期维持。 最终决定数据价格的，是它能否在现有模型和数据来源之外，提供可验证的能力增量，以及生产同等质量数据需要付出多大代价。 很久以前，流传着一个“数据撞墙”说法，高质量的互联网数据已经不够用了，因此AI遇到了数据的瓶颈，阻碍了模型能力的发展。 今天回看，“数据”已经开始发展成为一条成熟的产业链，只要人类的活动存在，那么这条产业链，就像链接人类与人工智能的一条脐带，生生不息、茁壮成长。 本文来自微信公众号 “腾讯科技” ，作者：晓静，编辑：徐青阳，36氪经授权发布。 该文观点仅代表作者本人，36氪平台仅提供信息存储空间服务。 +1 3 好文章，需要你的鼓励 36氪的朋友们 特邀作者 0 收  藏 +1 0 评  论 打开微信“扫一扫”，打开网页后点击屏幕右上角分享按钮 微  博 沉浸阅读 返回顶部 举报 参与评论 评论千万条，友善第一条 登录 后参与讨论 提交评论 0/1000 你可能也喜欢这些文章 意外，79%企业GPU利用率竟不足一半 一位开发者让电视服用了 Claude，这是它系统发生的变化 比GPT-6 Luna快8倍，扩散LLM跑分也反超了 千亿All in，AI回报却为零 Kimi认错，杨植麟还是得学梁文锋 堪比Transformer奠基论文？这篇研究让AI圈吵起来了 谷歌宁愿少卖云算力，也要先把算力留给 Gemini：皮查伊罕见长访谈，披露 AI 自我改进与算力争夺内幕 造成50人以上死伤才能叫停AI模型？Anthropic私下推动监管草案惹众怒，达里奥亲自回应 AI助理争夺战：解析Muse、Grok Bot与Instinct背后的产品布局、入口生意与盈利难题 36氪的朋友们 特邀作者 TA没有写简介，但内敛也是一种表达 发表文章 51107 篇 最近内容 AI公司，狂收“天价”数据？ 2小时前 “匈牙利的莎士比亚”，生于这座罗马尼亚小城 4小时前 100家央企总部，分布在哪些城市？ 4小时前 阅读更多内容，狠戳这里 查看AI测评 MiniMax 选靠谱AI，看真实评测 查看 36氪AI测评官方交流社区 加入 咨询项目审核和入驻 联系 36氪项目推荐订阅号 关注 下一篇 2026年最不该增长的企业增长了，可口可乐这一刀切向经销商和业务 精细化管理始于可口可乐，也许将终于可口可乐 2小时前 关于36氪 城市合作 项目推荐 我要入驻 投资者关系 商务合作 关于我们 联系我",
+          "truncated": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-069）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-069\"",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-069\"",
+    "[asr] local sense-voice-small: 15 chars",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-069\"",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=llm ms=1879",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=routing ms=1879",
+    "[voice-entry] ask",
+    "[perf] search 0ms tavily/news hits=9 \"AI news today\"",
+    "[perf] search 0ms tavily/news timeout \"今天 AI 圈有什么重要新闻？\"",
+    "[perf] search 0ms tavily/news hits=1 \"今天 AI 圈有什么重要新闻？ 产品与应用\"",
+    "[perf] search 0ms tavily/news hits=3 \"今天 AI 圈有什么重要新闻？ 模型发布\"",
+    "[perf] search 0ms tavily/news hits=3 \"今天 AI 圈有什么重要新闻？ 开源与研究\"",
+    "[perf] search 0ms tavily/news hits=8 \"今天 AI 圈有什么重要新闻？ 产业与政策\"",
+    "[search] 21 result(s) for \"今天 AI 圈有什么重要新闻？\" via 今天 AI 圈有什么重要新闻？ | AI news today | 今天 AI 圈有什么重要新闻？ 模型发布 | 今天 AI 圈有什么重要新闻？ 产品与应用 | 今天 AI 圈有什么重要新闻？ 开源与研究 | 今天 AI 圈有什么重要新闻？ 产业与政策",
+    "[perf] tool:web_search 0ms ok=true",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=tool ms=13369 state=completed",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] tool=web_search status=completed ms=13369",
+    "[perf] tool:read_webpage 0ms ok=false",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=tool ms=1 state=failed",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] tool=read_webpage status=failed ms=1",
+    "[read] https://finance.yahoo.com/technology/ai/articles/3-ai-stocks-own-october-201010355.html failed: 拒绝访问内网地址",
+    "[perf] tool:read_webpage 0ms ok=false",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=tool ms=2 state=failed",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] tool=read_webpage status=failed ms=2",
+    "[read] https://m.economictimes.com/markets/us-stocks/news/global-market-today-asian-shares-slip-as-ai-jitters-deepen-ahead-of-big-tech-earnings/articleshow/135200167.cms failed: 拒绝访问内网地址",
+    "[perf] tool:read_webpage 0ms ok=true",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=tool ms=351 state=completed",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] tool=read_webpage status=completed ms=351",
+    "[read] http://www.36kr.com/p/4042178601472896 6000ch quality=0.65",
+    "[perf] read 3 page(s) 0ms ok=1",
+    "[perf] llm answer 0ms streamed=true",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=llm ms=9258",
+    "[perf] ask total 0ms",
+    "[task fcf60311-becd-4360-af6f-5dbf43aaac01] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-069",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1878,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 7732,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "error": "network_request_failed",
+      "duration_ms": 8015
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1197,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 2404,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1347,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 3178,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "status": 301,
+      "duration_ms": 119,
+      "host": "www.36kr.com"
+    },
+    {
+      "case": "YU-069",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 168,
+      "host": "www.36kr.com"
+    },
+    {
+      "case": "YU-069",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1812,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

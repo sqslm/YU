@@ -1,0 +1,253 @@
+{
+  "case_id": "YU-123",
+  "input": "我刚才建了两个提醒，只把第一个改成强提醒。",
+  "spoken_input": "我刚才建了两个提醒，只把第一个改成强提醒。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-123",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "04d5952a-e49d-4863-aea9-7a97ba564097",
+        "taskState": "completed",
+        "question": "我刚才建了两个提醒，只把第一个改成强提醒。",
+        "answer": "已改好：**A 第一个提醒** 现在是强提醒，触发时间还是今天 16:30，也就是还有 30 分钟。B 第二个提醒保持普通，没有改动。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "事项已更新 · A 第一个提醒\n2026/10/26 16:30:00 → 2026/10/26 16:30:00 · 强提醒",
+            "status": "completed",
+            "taskId": "04d5952a-e49d-4863-aea9-7a97ba564097"
+          }
+        ]
+      }
+    },
+    {
+      "label": "before_after",
+      "value": {
+        "before": {
+          "title": "A 第一个提醒",
+          "description": "",
+          "dueAt": 1793003400000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "80289305-3325-410d-9148-da8178987873",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "after": {
+          "title": "A 第一个提醒",
+          "description": "",
+          "dueAt": 1793003400000,
+          "level": "strong",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "80289305-3325-410d-9148-da8178987873",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_before": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "abaab0b4-00ae-45a9-86bc-0effb6e0bbda",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_after": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "abaab0b4-00ae-45a9-86bc-0effb6e0bbda",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "A 第一个提醒",
+      "description": "",
+      "dueAt": 1793003400000,
+      "level": "strong",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "80289305-3325-410d-9148-da8178987873",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "B 第二个提醒",
+      "description": "",
+      "dueAt": 1793004000000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "abaab0b4-00ae-45a9-86bc-0effb6e0bbda",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "04d5952a-e49d-4863-aea9-7a97ba564097",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我刚才建了两个提醒，只把第一个改成强提醒。",
+    "target": {
+      "windowHandle": "10123",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-123"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 2
+      }
+    ],
+    "submittedAt": 1793001600000,
+    "recentExchange": {
+      "question": "已查询本次事项",
+      "answer": "两条测试事项"
+    },
+    "results": [
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "80289305-3325-410d-9148-da8178987873",
+          "action": "update",
+          "before": {
+            "title": "A 第一个提醒",
+            "description": "",
+            "dueAt": 1793003400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "80289305-3325-410d-9148-da8178987873",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:30:00",
+            "remainingSeconds": 1800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "A 第一个提醒",
+            "description": "",
+            "dueAt": 1793003400000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "80289305-3325-410d-9148-da8178987873",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:30:00",
+            "remainingSeconds": 1800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "强提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-123）",
+    "[task 04d5952a-e49d-4863-aea9-7a97ba564097] stage=llm ms=1886",
+    "[perf] llm round0 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task 04d5952a-e49d-4863-aea9-7a97ba564097] stage=tool ms=2 state=completed",
+    "[task 04d5952a-e49d-4863-aea9-7a97ba564097] tool=manage_reminder status=completed ms=2",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 04d5952a-e49d-4863-aea9-7a97ba564097] stage=llm ms=1238",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-123",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1885,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-123",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1237,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

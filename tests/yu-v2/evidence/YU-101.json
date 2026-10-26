@@ -1,0 +1,86 @@
+{
+  "case_id": "YU-101",
+  "input": "【在 VS Code 中触发右 Alt】我现在是在哪个软件里？",
+  "spoken_input": "我现在是在哪个软件里？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-101",
+  "observations": [
+    {
+      "label": "window_snapshot",
+      "value": {
+        "original": {
+          "windowHandle": "10001",
+          "processId": 1001,
+          "appName": "Editor",
+          "windowTitle": "Original document"
+        },
+        "after": {
+          "windowHandle": "10001",
+          "processId": 1001,
+          "windowTitle": "Original document",
+          "appName": "Editor",
+          "task": {
+            "id": "04e5784e-9dcf-4722-b310-6f0205b0d90c",
+            "source": "voice",
+            "triggeredAt": 1793001600000,
+            "originalInput": "我现在是在哪个软件里？",
+            "target": {
+              "windowHandle": "10001",
+              "processId": 1001,
+              "appName": "Editor",
+              "windowTitle": "Original document"
+            },
+            "state": "pending",
+            "receipts": []
+          }
+        },
+        "matchesOther": false
+      }
+    },
+    {
+      "label": "routing",
+      "value": {
+        "kind": "ask",
+        "via": "live_model",
+        "raw": "{\"kind\":\"ask\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "adf63cb3-6565-40d6-9192-6302a39935ea",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我现在是在哪个软件里？",
+    "target": {
+      "windowHandle": "10101",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-101"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-101）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-101",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1291,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

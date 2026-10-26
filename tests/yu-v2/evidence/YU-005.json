@@ -1,0 +1,274 @@
+{
+  "case_id": "YU-005",
+  "input": "明天下午三点到四点有个项目讨论。",
+  "spoken_input": "明天下午三点到四点有个项目讨论。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-005",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "bb10b280-030c-4ae8-84b4-3dfac9ea3949",
+        "taskState": "completed",
+        "question": "明天下午三点到四点有个项目讨论。",
+        "answer": "已经记到日程里了：明天（10 月 27 日，周二）下午 15:00 到 16:00，项目讨论。如果需要提前提醒，跟我说一声，我再加。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "create_event",
+            "ok": true,
+            "summary": "项目讨论 · 15:00–16:00",
+            "status": "completed",
+            "taskId": "bb10b280-030c-4ae8-84b4-3dfac9ea3949"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "已经记到日程里了：明天（10 月 27 日，周二）下午 15:00 到 16:00，项目讨论。如果需要提前提醒，跟我说一声，我再加。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "bb10b280-030c-4ae8-84b4-3dfac9ea3949",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "明天下午三点到四点有个项目讨论。",
+          "target": {
+            "windowHandle": "10005",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-005"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_event",
+              "state": "completed",
+              "durationMs": 3
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "rule"
+          },
+          "transcript": "明天下午三点到四点有个项目讨论。",
+          "results": [
+            {
+              "tool": "create_event",
+              "state": "completed",
+              "data": {
+                "item": {
+                  "id": "6cf61382-4fb4-46e2-9467-fd34cedad942",
+                  "title": "项目讨论",
+                  "start": 1793084400000,
+                  "end": 1793088000000,
+                  "allDay": false,
+                  "source": "voice",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "confirmed",
+                  "when": "15:00–16:00",
+                  "day": "2026-10-27",
+                  "cancelled": false
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [],
+        "reminders": [],
+        "events": [
+          {
+            "id": "6cf61382-4fb4-46e2-9467-fd34cedad942",
+            "title": "项目讨论",
+            "start": 1793084400000,
+            "end": 1793088000000,
+            "allDay": false,
+            "source": "voice",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "confirmed"
+          }
+        ]
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [
+    {
+      "id": "6cf61382-4fb4-46e2-9467-fd34cedad942",
+      "title": "项目讨论",
+      "start": 1793084400000,
+      "end": 1793088000000,
+      "allDay": false,
+      "source": "voice",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "confirmed"
+    }
+  ],
+  "task": {
+    "id": "bb10b280-030c-4ae8-84b4-3dfac9ea3949",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "明天下午三点到四点有个项目讨论。",
+    "target": {
+      "windowHandle": "10005",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-005"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_event",
+        "state": "completed",
+        "durationMs": 3
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "rule"
+    },
+    "transcript": "明天下午三点到四点有个项目讨论。",
+    "results": [
+      {
+        "tool": "create_event",
+        "state": "completed",
+        "data": {
+          "item": {
+            "id": "6cf61382-4fb4-46e2-9467-fd34cedad942",
+            "title": "项目讨论",
+            "start": 1793084400000,
+            "end": 1793088000000,
+            "allDay": false,
+            "source": "voice",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "confirmed",
+            "when": "15:00–16:00",
+            "day": "2026-10-27",
+            "cancelled": false
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-005）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-005\"",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-005\"",
+    "[asr] local sense-voice-small: 16 chars",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-005\"",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] stage=routing ms=0",
+    "[voice-entry] assistant",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] stage=llm ms=1667",
+    "[perf] llm round0 0ms",
+    "[perf] tool:create_event 0ms ok=true",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] stage=tool ms=3 state=completed",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] tool=create_event status=completed ms=3",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] create_event ok=true",
+    "[perf] enrich 0ms",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] stage=llm ms=1386",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task bb10b280-030c-4ae8-84b4-3dfac9ea3949] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-005",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1667,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-005",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1385,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

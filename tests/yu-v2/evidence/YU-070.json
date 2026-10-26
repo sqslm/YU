@@ -1,0 +1,803 @@
+{
+  "case_id": "YU-070",
+  "input": "帮我查一下 Python 官方最新稳定版是多少。",
+  "spoken_input": "帮我查一下 Python 官方最新稳定版是多少。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-070",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "帮我查一下 Python 官方最新稳定版是多少。",
+            "answer": "Python 官方最新的稳定版是 **3.15.1**，于 2026 年 10 月 21 日发布[1]。\n\n- **3.15 系列**：10 月 9 日发布 3.15.0 稳定版[2]，10 月 21 日发布 3.15.1 维护更新。3.15 主要特性包括默认使用 UTF-8 编码、内置性能分析器（profiler）、实验性 JIT 编译器、Lazy Import 延迟导入等[2]。\n- **同期维护版本**：3.14.9、3.13.17 也在 10 月 21 日一并发布，均打包了 pip 26.2.2[1]。\n- **下一版**：3.16.0a1 的开发已经在进行中[1]。\n\n如果是我自己的项目，我会直接选择 3.15.1；如果依赖库还没有适配 3.15，就用 3.14.9 作为过渡",
+            "status": "",
+            "streaming": true,
+            "taskId": "e1507101-fc2c-49c9-ad97-6d090ca7f62d",
+            "taskState": "running"
+          },
+          {
+            "question": "帮我查一下 Python 官方最新稳定版是多少。",
+            "answer": "Python 官方最新的稳定版是 **3.15.1**，于 2026 年 10 月 21 日发布[1]。\n\n- **3.15 系列**：10 月 9 日发布 3.15.0 稳定版[2]，10 月 21 日发布 3.15.1 维护更新。3.15 主要特性包括默认使用 UTF-8 编码、内置性能分析器（profiler）、实验性 JIT 编译器、Lazy Import 延迟导入等[2]。\n- **同期维护版本**：3.14.9、3.13.17 也在 10 月 21 日一并发布，均打包了 pip 26.2.2[1]。\n- **下一版**：3.16.0a1 的开发已经在进行中[1]。\n\n如果是我自己的项目，我会直接选择 3.15.1；如果依赖库还没有适配 3.15，就用 3.14.9 作为过渡。",
+            "sources": [
+              {
+                "title": "'Monty Python' Legend Eric Idle Cancels Australia and New Zealand Tour",
+                "url": "https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659",
+                "snippet": "The live shows were also intended to celebrate the release of his latest memoir, Idle in Provence: A Brief History of Thyme, which reflects on his life and experiences in the south of France. No further details about the health concerns behind the cancellation have been disclosed, and replacement dates have not been announced. Ticket holders will receive refunds, which are being automatically proc",
+                "publishedAt": "Sun, 25 Oct 2026 22:58:01 GMT"
+              },
+              {
+                "title": "PHP2Shell: Find, Mitigate, and Patch Now | Qualys | Qualys",
+                "url": "https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities",
+                "snippet": "| Step | Action | --- | | Install (requires Python 3.11 or later) | pip install qualys-cli-mcp | | Configure your credentials | qualys-cli configure It asks for your Qualys username and password, automatically detects your platform, and securely stores the credentials in your OS keyring. Your credentials never go into the AI client’s config file. | [...] | 6567433 | Alpine Linux 3.24 Security Upda",
+                "publishedAt": "Wed, 21 Oct 2026 02:59:03 GMT"
+              },
+              {
+                "title": "The Python on Microcontrollers Newsletter: subscribe for free",
+                "url": "https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2",
+                "snippet": "The Python for Microcontrollers Newsletter is the place for the latest news involving Python on hardware (microcontrollers AND single board computers like",
+                "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+              },
+              {
+                "title": "CircuitPython 11.0.0-alpha.2 Released!",
+                "url": "https://blog.adafruit.com/2026/10/21/circuitpython-11-0-0-alpha-2-released",
+                "snippet": "This is CircuitPython 11.0.0-alpha.2, an alpha release for 11.0.0. Further features, changes, and bug fixes will be added before the final release of 11.0.0",
+                "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+              },
+              {
+                "title": "Python vs Go 2026: 3.15 vs 1.27, 57.9% vs 17.4%",
+                "url": "https://tech-insider.org/python-vs-go-2026",
+                "snippet": "| Attribute | Python | Go | --- | Newest stable release (Oct. 24, 2026) | Python 3.15.1 (Oct. 21, 2026) | Go 1.27 (Aug. 19, 2026) | | Previous feature release | 3.14 line, 3.14.9 security release on Oct. 21 | Go 1.26 (Feb. 2026) | | Next release in progress | 3.16.0a1 alpha, final planned Oct. 5, 2027 | Go 1.28, unreleased | | Release rhythm | One feature release a year, in October | A feature rel",
+                "publishedAt": "Sat, 24 Oct 2026 14:48:57 GMT"
+              },
+              {
+                "title": "eMudhra / emSign CA Compromise: What Python, pip, and CI/CD Users Need to Update - StepSecurity",
+                "url": "https://www.stepsecurity.io/blog/emudhra-emsign-ca-compromise-python-pip-ci-cd-update",
+                "snippet": "On October 21, Python released 3.15.1, 3.14.9, and 3.13.17, each bundling pip 26.2.2 and its updated certifi. Update the appropriate interpreter distribution and handle existing virtual environments separately. Until that is complete, make the corrected pip bootstrap an explicit step before new environments download application dependencies. Python emergency release announcement ### Rebuild contai",
+                "publishedAt": "Tue, 20 Oct 2026 07:00:00 GMT"
+              },
+              {
+                "title": "LiteLLM 1.107.0 Compromised: Python Startup Hooks Steal Cloud, AI, and Proxy Credentials | Endor Labs",
+                "url": "https://www.endorlabs.com/learn/litellm-1-107-0-compromised-python-startup-hooks-steal-cloud-ai-and-proxy-credentials",
+                "snippet": "A deployment that pulls latest or main-stable could have received the malicious image without anyone selecting version 1.107.0. ## Timeline All times UTC, October 21, 2026. [...] | Artifact | Status | --- | | `litellm==1.107.0` wheels (7: macOS x86\\_64 and arm64, manylinux and musllinux x86\\_64 and aarch64, Windows amd64) | Malicious, carry the payload | | `litellm==1.107.0` source distribution | ",
+                "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+              },
+              {
+                "title": "Monty Python’s Eric Idle talks home in southern France, new book",
+                "url": "https://dailynorthwestern.com/2026/10/05/lateststories/monty-pythons-eric-idle-talks-home-in-southern-france-new-book-for-chicago-humanities-festival",
+                "snippet": "In 2019, Idle was diagnosed with early-stage pancreatic cancer — an experience he again found humor in. A decade earlier, he had asked the same doctor to share the quickest way to die for a play he was writing called “Death The Musical,” to which the doctor had responded, “pancreatic cancer.” While at his home in France, Idle has hosted a revolving door of creative minds, from Robin Williams to Ge",
+                "publishedAt": "Mon, 05 Oct 2026 09:38:40 GMT"
+              },
+              {
+                "title": "Three Critical Pillow CVEs: RCE and Heap Overflows in Python’s Imaging Library - CVE-2026-112900 CVE-2026-112393 CVE-2026-112403 | OX Security",
+                "url": "https://www.ox.security/blog/three-critical-pillow-cves-rce-and-heap-overflows-in-pythons-imaging-library-cve-2026-112900-cve-2026-112393-cve-2026-112403",
+                "snippet": "## Overview Three critical Pillow vulnerabilities (CVSS 9.2, disclosed 2026-10-19) let a crafted EPS, TIFF or JPEG file trigger command execution or heap corruption in any Python service that processes user-supplied images. All are fixed in Pillow 13.0.0. The excerpts below are from the vulnerable source. Pillow is one of the most popular Python packages, and the most popular image processing libr",
+                "publishedAt": "Thu, 22 Oct 2026 12:27:40 GMT"
+              },
+              {
+                "title": "LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release",
+                "url": "https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html",
+                "snippet": "LiteLLM v1.107.0 (PyPI) v1.107.0, latest, main-latest, and main-stable (Docker) v1.107.0, latest, main-latest, and main-stable (GHCR) Users who downloaded an unpinned version of LiteLLM between 11:39 a.m. and 1:23 p.m. UTC via pip or used the Docker image v1.107.0, latest, main-latest, or main-stable between 11:46 a.m. and 2:20 p.m. UTC are impacted. [...] The Hacker News OpenAI Employee Arrested ",
+                "publishedAt": "Thu, 22 Oct 2026 08:28:00 GMT"
+              },
+              {
+                "title": "Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog",
+                "url": "https://opensource.googleblog.com/2026/10/adopting-pyrefly-as-the-python-type-checker-at-google.html",
+                "snippet": "1 Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog # opensource.google.com Menu ## Google Open Source Blog The latest news from Google on open source releases, major projects, events, and outreach programs for early career developers. ### Adopting Pyrefly as the Python type checker at Google #### Tuesday, October 6, 2026 by Amer Elsheikh, Python Team [...] As detaile",
+                "publishedAt": "Mon, 05 Oct 2026 07:00:00 GMT"
+              },
+              {
+                "title": "Python 3.15 delivers a native-by-default experience on Windows on Arm - Windows Developer Blog",
+                "url": "https://blogs.windows.com/windowsdeveloper/2026/10/14/python-3-15-delivers-native-by-default-experience-on-windows-arm",
+                "snippet": "“Arm is working with industry partners including Microsoft and community organizers to expand access to native Arm infrastructure and improve upstream support,” said Grant Likely, Fellow at CoreCollective and Senior Director at Arm. “Our goal is to make Arm a standard part of how developers build, test and ship software. With the latest Python release, developers can build and run Python natively ",
+                "publishedAt": "Wed, 14 Oct 2026 17:00:05 GMT"
+              },
+              {
+                "title": "Python 3.15 goes global with UTF-8 support",
+                "url": "https://www.theregister.com/devops/2026/10/14/python-315-goes-global-with-utf-8-support/5302966",
+                "snippet": "After a week’s delay, the new version of Python, v3.15, has been released. With it comes a proper profiler, an experimental just-in-time compiler, and a tightening of dictionary structures. It also offers a time-saving Lazy Import option for programs to not load modules until needed, the implementation of which ironically halted this release until a few last-minute regressions were sorted. [...] d",
+                "publishedAt": "Wed, 14 Oct 2026 12:00:00 GMT"
+              },
+              {
+                "title": "Ubuntu 26.10 Ships Python 3.14, Rust 1.97, Go 1.27",
+                "url": "https://shattered.io/ubuntu-26-10-stonking-stingray-dev-toolchain-2026",
+                "snippet": "Cloud providers and CI vendors will publish Ubuntu 26.10-based images within the release’s first few weeks, and any team relying on a floating “latest” tag should expect Python, Rust, and Go version bumps to show up in builds without an explicit upgrade decision on their part. [...] package versions continuously, which appeals to developers who want the newest Rust or Go point release the same wee",
+                "publishedAt": "Tue, 20 Oct 2026 17:51:03 GMT"
+              },
+              {
+                "title": "LiteLLM compromised: infostealer and RAT in PyPI 1.107.0",
+                "url": "https://www.aikido.dev/blog/litellm-compromised-infostealer-rat",
+                "snippet": "Oct 21, 2026 On October 21, 2026, version 1.107.0 of LiteLLM (a popular open source proxy that lets developers route requests across dozens of LLM providers) was found to be compromised by an attacker who injected malicious code into its published Python wheels on PyPI. The official Docker image for the same version is also compromised. [...] Developer tool credentials and configuration files for ",
+                "publishedAt": "Wed, 21 Oct 2026 13:00:00 GMT"
+              },
+              {
+                "title": "LiteLLM Compromised, Steals Credentials | Wiz Blog",
+                "url": "https://www.wiz.io/blog/litellm-compromised-steals-credentials",
+                "snippet": "At 11:39 UTC on October 21, a malicious version (1.107.0) of the LiteLLM package was uploaded to PyPI. This version was quarantined on PyPI as of 1:20 UTC. LiteLLM Docker containers on GHCR and Docker hub also included the trojanized version of LiteLLM. These included the `v1.107.0` , `latest`, `main-latest` and `main-stable` tags. These were removed ~13:53 UTC. The most recent safe version is v1.",
+                "publishedAt": "Wed, 21 Oct 2026 13:44:12 GMT"
+              },
+              {
+                "title": "litellm 1.107.0 Compromised on PyPI: Backdoored Wheels Drop a Credential Stealer and an Hourly Remote Code Loader - StepSecurity",
+                "url": "https://www.stepsecurity.io/blog/litellm-1-107-0-compromised-pypi-backdoored-wheels-credential-stealer",
+                "snippet": "the stealer runs again on every Python start. [...] ### Threat Center StepSecurity Enterprise customers can see this incident in the Threat Center, with the full IOC set, affected versions, and remediation steps, and receive alerts through their existing SIEM, Slack, and email integrations. ## References litellm on PyPI litellm v1.107.0 GitHub release Commit 66c8f5b1a9 at the v1.107.0 tag StepSecu",
+                "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+              },
+              {
+                "title": "Python 3.15稳定版发布，默认采用UTF-8编码_性能_Type_支持",
+                "url": "https://www.sohu.com/a/1085904570_114760",
+                "snippet": "汽车 房产 旅游 教育 时尚 科技 财经 娱乐 # Python 3.15稳定版发布，默认采用UTF-8编码 2026-10-10 12:05 来源: IT之家 发布于：山东省 IT之家 10 月 10 日消息，当地时间 10 月 9 日，Python 3.15.0 稳定版正式发布，相较于 Python 3.14，该版本带来了大量新特性与性能优化，汇聚了来自 1,012 位贡献者完成的 5,643 次代码提交。 相比 3.14，Python 3.15 的主要新特性包括： 解释器层面的改进 [...] C API 接口改进 PEP 782：新增用于创建 Python 字节对象的 PyBytesWriter C API PEP 788：在 C API 中增加防止对象过早终结化 (Finalization) 的保护机制 PEP 803、820、793：为无全局解释器锁的自由线程构建 (Free-",
+                "publishedAt": "Sat, 10 Oct 2026 12:05:00 GMT"
+              },
+              {
+                "title": "Python 3.15 Release: 3.10 End of Life Explained [2026]",
+                "url": "https://tech-insider.org/ie/python-3-15-release-3-10-end-of-life-2026",
+                "snippet": "The language used in Python’s own release communications is worth reading closely, because it is unusually direct for a project announcement. On the headline release itself, the core development team framed the scale of the work plainly: “Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,6",
+                "publishedAt": "Mon, 12 Oct 2026 17:19:36 GMT"
+              }
+            ],
+            "retrieval": {
+              "searched": true,
+              "failed": false,
+              "queries": [
+                "Python latest stable release download",
+                "Python latest",
+                "Python 最新稳定版本 发布",
+                "Python release version latest"
+              ],
+              "pagesRead": 0,
+              "digest": false,
+              "partial": false
+            },
+            "tools": [
+              "web_search"
+            ],
+            "taskId": "e1507101-fc2c-49c9-ad97-6d090ca7f62d",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "e1507101-fc2c-49c9-ad97-6d090ca7f62d",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "帮我查一下 Python 官方最新稳定版是多少。",
+          "target": {
+            "windowHandle": "10070",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-070"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "durationMs": 3198
+            },
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "durationMs": 3734
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "durationMs": 1
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "durationMs": 1
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "durationMs": 2
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "model"
+          },
+          "transcript": "帮我查一下 Python 官方最新稳定版是多少。",
+          "results": [
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "query": "Python latest stable release download",
+                "queries": [
+                  "Python latest stable release download",
+                  "Python latest"
+                ],
+                "kind": "news",
+                "digest": false,
+                "failedQueries": 0,
+                "freshness": "month",
+                "recencyDays": 30,
+                "retried": false,
+                "count": 10,
+                "results": [
+                  {
+                    "title": "'Monty Python' Legend Eric Idle Cancels Australia and New Zealand Tour",
+                    "url": "https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659",
+                    "snippet": "The live shows were also intended to celebrate the release of his latest memoir, Idle in Provence: A Brief History of Thyme, which reflects on his life and experiences in the south of France. No further details about the health concerns behind the cancellation have been disclosed, and replacement dates have not been announced. Ticket holders will receive refunds, which are being automatically proc",
+                    "publishedAt": "Sun, 25 Oct 2026 22:58:01 GMT"
+                  },
+                  {
+                    "title": "PHP2Shell: Find, Mitigate, and Patch Now | Qualys | Qualys",
+                    "url": "https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities",
+                    "snippet": "| Step | Action | --- | | Install (requires Python 3.11 or later) | pip install qualys-cli-mcp | | Configure your credentials | qualys-cli configure It asks for your Qualys username and password, automatically detects your platform, and securely stores the credentials in your OS keyring. Your credentials never go into the AI client’s config file. | [...] | 6567433 | Alpine Linux 3.24 Security Upda",
+                    "publishedAt": "Wed, 21 Oct 2026 02:59:03 GMT"
+                  },
+                  {
+                    "title": "The Python on Microcontrollers Newsletter: subscribe for free",
+                    "url": "https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2",
+                    "snippet": "The Python for Microcontrollers Newsletter is the place for the latest news involving Python on hardware (microcontrollers AND single board computers like",
+                    "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+                  },
+                  {
+                    "title": "CircuitPython 11.0.0-alpha.2 Released!",
+                    "url": "https://blog.adafruit.com/2026/10/21/circuitpython-11-0-0-alpha-2-released",
+                    "snippet": "This is CircuitPython 11.0.0-alpha.2, an alpha release for 11.0.0. Further features, changes, and bug fixes will be added before the final release of 11.0.0",
+                    "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+                  },
+                  {
+                    "title": "Python vs Go 2026: 3.15 vs 1.27, 57.9% vs 17.4%",
+                    "url": "https://tech-insider.org/python-vs-go-2026",
+                    "snippet": "| Attribute | Python | Go | --- | Newest stable release (Oct. 24, 2026) | Python 3.15.1 (Oct. 21, 2026) | Go 1.27 (Aug. 19, 2026) | | Previous feature release | 3.14 line, 3.14.9 security release on Oct. 21 | Go 1.26 (Feb. 2026) | | Next release in progress | 3.16.0a1 alpha, final planned Oct. 5, 2027 | Go 1.28, unreleased | | Release rhythm | One feature release a year, in October | A feature rel",
+                    "publishedAt": "Sat, 24 Oct 2026 14:48:57 GMT"
+                  },
+                  {
+                    "title": "eMudhra / emSign CA Compromise: What Python, pip, and CI/CD Users Need to Update - StepSecurity",
+                    "url": "https://www.stepsecurity.io/blog/emudhra-emsign-ca-compromise-python-pip-ci-cd-update",
+                    "snippet": "On October 21, Python released 3.15.1, 3.14.9, and 3.13.17, each bundling pip 26.2.2 and its updated certifi. Update the appropriate interpreter distribution and handle existing virtual environments separately. Until that is complete, make the corrected pip bootstrap an explicit step before new environments download application dependencies. Python emergency release announcement ### Rebuild contai",
+                    "publishedAt": "Tue, 20 Oct 2026 07:00:00 GMT"
+                  },
+                  {
+                    "title": "LiteLLM 1.107.0 Compromised: Python Startup Hooks Steal Cloud, AI, and Proxy Credentials | Endor Labs",
+                    "url": "https://www.endorlabs.com/learn/litellm-1-107-0-compromised-python-startup-hooks-steal-cloud-ai-and-proxy-credentials",
+                    "snippet": "A deployment that pulls latest or main-stable could have received the malicious image without anyone selecting version 1.107.0. ## Timeline All times UTC, October 21, 2026. [...] | Artifact | Status | --- | | `litellm==1.107.0` wheels (7: macOS x86\\_64 and arm64, manylinux and musllinux x86\\_64 and aarch64, Windows amd64) | Malicious, carry the payload | | `litellm==1.107.0` source distribution | ",
+                    "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+                  },
+                  {
+                    "title": "Monty Python’s Eric Idle talks home in southern France, new book",
+                    "url": "https://dailynorthwestern.com/2026/10/05/lateststories/monty-pythons-eric-idle-talks-home-in-southern-france-new-book-for-chicago-humanities-festival",
+                    "snippet": "In 2019, Idle was diagnosed with early-stage pancreatic cancer — an experience he again found humor in. A decade earlier, he had asked the same doctor to share the quickest way to die for a play he was writing called “Death The Musical,” to which the doctor had responded, “pancreatic cancer.” While at his home in France, Idle has hosted a revolving door of creative minds, from Robin Williams to Ge",
+                    "publishedAt": "Mon, 05 Oct 2026 09:38:40 GMT"
+                  },
+                  {
+                    "title": "Three Critical Pillow CVEs: RCE and Heap Overflows in Python’s Imaging Library - CVE-2026-112900 CVE-2026-112393 CVE-2026-112403 | OX Security",
+                    "url": "https://www.ox.security/blog/three-critical-pillow-cves-rce-and-heap-overflows-in-pythons-imaging-library-cve-2026-112900-cve-2026-112393-cve-2026-112403",
+                    "snippet": "## Overview Three critical Pillow vulnerabilities (CVSS 9.2, disclosed 2026-10-19) let a crafted EPS, TIFF or JPEG file trigger command execution or heap corruption in any Python service that processes user-supplied images. All are fixed in Pillow 13.0.0. The excerpts below are from the vulnerable source. Pillow is one of the most popular Python packages, and the most popular image processing libr",
+                    "publishedAt": "Thu, 22 Oct 2026 12:27:40 GMT"
+                  },
+                  {
+                    "title": "LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release",
+                    "url": "https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html",
+                    "snippet": "LiteLLM v1.107.0 (PyPI) v1.107.0, latest, main-latest, and main-stable (Docker) v1.107.0, latest, main-latest, and main-stable (GHCR) Users who downloaded an unpinned version of LiteLLM between 11:39 a.m. and 1:23 p.m. UTC via pip or used the Docker image v1.107.0, latest, main-latest, or main-stable between 11:46 a.m. and 2:20 p.m. UTC are impacted. [...] The Hacker News OpenAI Employee Arrested ",
+                    "publishedAt": "Thu, 22 Oct 2026 08:28:00 GMT"
+                  }
+                ],
+                "text": "[1] 'Monty Python' Legend Eric Idle Cancels Australia and New Zealand Tour — https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659（页面发布于：2026-10-26）\n[2] PHP2Shell: Find, Mitigate, and Patch Now | Qualys | Qualys — https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities（事件日期：2026-10-20；页面发布于：2026-10-21）\n[3] The Python on Microcontrollers Newsletter: subscribe for free — https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2（事件日期：2026-10-21；页面发布于：2026-10-22）\n[4] CircuitPython 11.0.0-alpha.2 Released! — https://blog.adafruit.com/2026/10/21/circuitpython-11-0-0-alpha-2-released（事件日期：2026-10-21；页面发布于：2026-10-22）\n[5] Python vs Go 2026: 3.15 vs 1.27, 57.9% vs 17.4% — https://tech-insider.org/python-vs-go-2026（事件日期：2026-10-24）\n[6] eMudhra / emSign CA Compromise: What Python, pip, and CI/CD Users Need to Update - StepSecurity — https://www.stepsecurity.io/blog/emudhra-emsign-ca-compromise-python-pip-ci-cd-update（页面发布于：2026-10-20）\n[7] LiteLLM 1.107.0 Compromised: Python Startup Hooks Steal Cloud, AI, and Proxy Credentials | Endor Labs — https://www.endorlabs.com/learn/litellm-1-107-0-compromised-python-startup-hooks-steal-cloud-ai-and-proxy-credentials（事件日期：2026-10-21；页面发布于：2026-10-22）\n[8] Monty Python’s Eric Idle talks home in southern France, new book — https://dailynorthwestern.com/2026/10/05/lateststories/monty-pythons-eric-idle-talks-home-in-southern-france-new-book-for-chicago-humanities-festival（事件日期：2026-10-05）\n[9] Three Critical Pillow CVEs: RCE and Heap Overflows in Python’s Imaging Library - CVE-2026-112900 CVE-2026-112393 CVE-2026-112403 | OX Security — https://www.ox.security/blog/three-critical-pillow-cves-rce-and-heap-overflows-in-pythons-imaging-library-cve-2026-112900-cve-2026-112393-cve-2026-112403（事件日期：2026-10-19；页面发布于：2026-10-22）\n[10] LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release — https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html（页面发布于：2026-10-22）"
+              }
+            },
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "query": "Python 最新稳定版本 发布",
+                "queries": [
+                  "Python 最新稳定版本 发布",
+                  "Python release version latest"
+                ],
+                "kind": "news",
+                "digest": false,
+                "failedQueries": 0,
+                "freshness": "month",
+                "recencyDays": 30,
+                "retried": false,
+                "count": 10,
+                "results": [
+                  {
+                    "title": "Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog",
+                    "url": "https://opensource.googleblog.com/2026/10/adopting-pyrefly-as-the-python-type-checker-at-google.html",
+                    "snippet": "1 Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog # opensource.google.com Menu ## Google Open Source Blog The latest news from Google on open source releases, major projects, events, and outreach programs for early career developers. ### Adopting Pyrefly as the Python type checker at Google #### Tuesday, October 6, 2026 by Amer Elsheikh, Python Team [...] As detaile",
+                    "publishedAt": "Mon, 05 Oct 2026 07:00:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15 delivers a native-by-default experience on Windows on Arm - Windows Developer Blog",
+                    "url": "https://blogs.windows.com/windowsdeveloper/2026/10/14/python-3-15-delivers-native-by-default-experience-on-windows-arm",
+                    "snippet": "“Arm is working with industry partners including Microsoft and community organizers to expand access to native Arm infrastructure and improve upstream support,” said Grant Likely, Fellow at CoreCollective and Senior Director at Arm. “Our goal is to make Arm a standard part of how developers build, test and ship software. With the latest Python release, developers can build and run Python natively ",
+                    "publishedAt": "Wed, 14 Oct 2026 17:00:05 GMT"
+                  },
+                  {
+                    "title": "Python 3.15 goes global with UTF-8 support",
+                    "url": "https://www.theregister.com/devops/2026/10/14/python-315-goes-global-with-utf-8-support/5302966",
+                    "snippet": "After a week’s delay, the new version of Python, v3.15, has been released. With it comes a proper profiler, an experimental just-in-time compiler, and a tightening of dictionary structures. It also offers a time-saving Lazy Import option for programs to not load modules until needed, the implementation of which ironically halted this release until a few last-minute regressions were sorted. [...] d",
+                    "publishedAt": "Wed, 14 Oct 2026 12:00:00 GMT"
+                  },
+                  {
+                    "title": "Ubuntu 26.10 Ships Python 3.14, Rust 1.97, Go 1.27",
+                    "url": "https://shattered.io/ubuntu-26-10-stonking-stingray-dev-toolchain-2026",
+                    "snippet": "Cloud providers and CI vendors will publish Ubuntu 26.10-based images within the release’s first few weeks, and any team relying on a floating “latest” tag should expect Python, Rust, and Go version bumps to show up in builds without an explicit upgrade decision on their part. [...] package versions continuously, which appeals to developers who want the newest Rust or Go point release the same wee",
+                    "publishedAt": "Tue, 20 Oct 2026 17:51:03 GMT"
+                  },
+                  {
+                    "title": "LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release",
+                    "url": "https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html",
+                    "snippet": "LiteLLM v1.107.0 (PyPI) v1.107.0, latest, main-latest, and main-stable (Docker) v1.107.0, latest, main-latest, and main-stable (GHCR) Users who downloaded an unpinned version of LiteLLM between 11:39 a.m. and 1:23 p.m. UTC via pip or used the Docker image v1.107.0, latest, main-latest, or main-stable between 11:46 a.m. and 2:20 p.m. UTC are impacted. [...] The Hacker News OpenAI Employee Arrested ",
+                    "publishedAt": "Thu, 22 Oct 2026 08:28:00 GMT"
+                  },
+                  {
+                    "title": "LiteLLM compromised: infostealer and RAT in PyPI 1.107.0",
+                    "url": "https://www.aikido.dev/blog/litellm-compromised-infostealer-rat",
+                    "snippet": "Oct 21, 2026 On October 21, 2026, version 1.107.0 of LiteLLM (a popular open source proxy that lets developers route requests across dozens of LLM providers) was found to be compromised by an attacker who injected malicious code into its published Python wheels on PyPI. The official Docker image for the same version is also compromised. [...] Developer tool credentials and configuration files for ",
+                    "publishedAt": "Wed, 21 Oct 2026 13:00:00 GMT"
+                  },
+                  {
+                    "title": "LiteLLM Compromised, Steals Credentials | Wiz Blog",
+                    "url": "https://www.wiz.io/blog/litellm-compromised-steals-credentials",
+                    "snippet": "At 11:39 UTC on October 21, a malicious version (1.107.0) of the LiteLLM package was uploaded to PyPI. This version was quarantined on PyPI as of 1:20 UTC. LiteLLM Docker containers on GHCR and Docker hub also included the trojanized version of LiteLLM. These included the `v1.107.0` , `latest`, `main-latest` and `main-stable` tags. These were removed ~13:53 UTC. The most recent safe version is v1.",
+                    "publishedAt": "Wed, 21 Oct 2026 13:44:12 GMT"
+                  },
+                  {
+                    "title": "litellm 1.107.0 Compromised on PyPI: Backdoored Wheels Drop a Credential Stealer and an Hourly Remote Code Loader - StepSecurity",
+                    "url": "https://www.stepsecurity.io/blog/litellm-1-107-0-compromised-pypi-backdoored-wheels-credential-stealer",
+                    "snippet": "the stealer runs again on every Python start. [...] ### Threat Center StepSecurity Enterprise customers can see this incident in the Threat Center, with the full IOC set, affected versions, and remediation steps, and receive alerts through their existing SIEM, Slack, and email integrations. ## References litellm on PyPI litellm v1.107.0 GitHub release Commit 66c8f5b1a9 at the v1.107.0 tag StepSecu",
+                    "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15稳定版发布，默认采用UTF-8编码_性能_Type_支持",
+                    "url": "https://www.sohu.com/a/1085904570_114760",
+                    "snippet": "汽车 房产 旅游 教育 时尚 科技 财经 娱乐 # Python 3.15稳定版发布，默认采用UTF-8编码 2026-10-10 12:05 来源: IT之家 发布于：山东省 IT之家 10 月 10 日消息，当地时间 10 月 9 日，Python 3.15.0 稳定版正式发布，相较于 Python 3.14，该版本带来了大量新特性与性能优化，汇聚了来自 1,012 位贡献者完成的 5,643 次代码提交。 相比 3.14，Python 3.15 的主要新特性包括： 解释器层面的改进 [...] C API 接口改进 PEP 782：新增用于创建 Python 字节对象的 PyBytesWriter C API PEP 788：在 C API 中增加防止对象过早终结化 (Finalization) 的保护机制 PEP 803、820、793：为无全局解释器锁的自由线程构建 (Free-",
+                    "publishedAt": "Sat, 10 Oct 2026 12:05:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15 Release: 3.10 End of Life Explained [2026]",
+                    "url": "https://tech-insider.org/ie/python-3-15-release-3-10-end-of-life-2026",
+                    "snippet": "The language used in Python’s own release communications is worth reading closely, because it is unusually direct for a project announcement. On the headline release itself, the core development team framed the scale of the work plainly: “Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,6",
+                    "publishedAt": "Mon, 12 Oct 2026 17:19:36 GMT"
+                  }
+                ],
+                "text": "[1] Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog — https://opensource.googleblog.com/2026/10/adopting-pyrefly-as-the-python-type-checker-at-google.html（事件日期：2026-10-06；页面发布于：2026-10-05）\n[2] Python 3.15 delivers a native-by-default experience on Windows on Arm - Windows Developer Blog — https://blogs.windows.com/windowsdeveloper/2026/10/14/python-3-15-delivers-native-by-default-experience-on-windows-arm（事件日期：2026-10-14；页面发布于：2026-10-15）\n[3] Python 3.15 goes global with UTF-8 support — https://www.theregister.com/devops/2026/10/14/python-315-goes-global-with-utf-8-support/5302966（事件日期：2026-10-14）\n[4] Ubuntu 26.10 Ships Python 3.14, Rust 1.97, Go 1.27 — https://shattered.io/ubuntu-26-10-stonking-stingray-dev-toolchain-2026（页面发布于：2026-10-21）\n[5] LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release — https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html（页面发布于：2026-10-22）\n[6] LiteLLM compromised: infostealer and RAT in PyPI 1.107.0 — https://www.aikido.dev/blog/litellm-compromised-infostealer-rat（事件日期：2026-10-21）\n[7] LiteLLM Compromised, Steals Credentials | Wiz Blog — https://www.wiz.io/blog/litellm-compromised-steals-credentials（页面发布于：2026-10-21）\n[8] litellm 1.107.0 Compromised on PyPI: Backdoored Wheels Drop a Credential Stealer and an Hourly Remote Code Loader - StepSecurity — https://www.stepsecurity.io/blog/litellm-1-107-0-compromised-pypi-backdoored-wheels-credential-stealer（页面发布于：2026-10-22）\n[9] Python 3.15稳定版发布，默认采用UTF-8编码_性能_Type_支持 — https://www.sohu.com/a/1085904570_114760（事件日期：2026-10-10）\n[10] Python 3.15 Release: 3.10 End of Life Explained [2026] — https://tech-insider.org/ie/python-3-15-release-3-10-end-of-life-2026（页面发布于：2026-10-13）"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "data": {
+                "url": "https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities",
+                "ok": false,
+                "error": "拒绝访问内网地址"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "data": {
+                "url": "https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659",
+                "ok": false,
+                "error": "拒绝访问内网地址"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "data": {
+                "url": "https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2",
+                "ok": false,
+                "error": "拒绝访问内网地址"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "live_answer",
+      "value": "Python 官方最新的稳定版是 **3.15.1**，于 2026 年 10 月 21 日发布[1]。\n\n- **3.15 系列**：10 月 9 日发布 3.15.0 稳定版[2]，10 月 21 日发布 3.15.1 维护更新。3.15 主要特性包括默认使用 UTF-8 编码、内置性能分析器（profiler）、实验性 JIT 编译器、Lazy Import 延迟导入等[2]。\n- **同期维护版本**：3.14.9、3.13.17 也在 10 月 21 日一并发布，均打包了 pip 26.2.2[1]。\n- **下一版**：3.16.0a1 的开发已经在进行中[1]。\n\n如果是我自己的项目，我会直接选择 3.15.1；如果依赖库还没有适配 3.15，就用 3.14.9 作为过渡。"
+    },
+    {
+      "label": "official_python_comparison",
+      "value": {
+        "status": 200,
+        "pageSha256": "30fbfeb0a883c0b7c4c260c7660ba7502f80d5109317a950f0b04dab612310c4",
+        "observedLatest": "3.15.2"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "e1507101-fc2c-49c9-ad97-6d090ca7f62d",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我查一下 Python 官方最新稳定版是多少。",
+    "target": {
+      "windowHandle": "10070",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-070"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "durationMs": 3198
+      },
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "durationMs": 3734
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "durationMs": 1
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "durationMs": 1
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "durationMs": 2
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "model"
+    },
+    "transcript": "帮我查一下 Python 官方最新稳定版是多少。",
+    "results": [
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "query": "Python latest stable release download",
+          "queries": [
+            "Python latest stable release download",
+            "Python latest"
+          ],
+          "kind": "news",
+          "digest": false,
+          "failedQueries": 0,
+          "freshness": "month",
+          "recencyDays": 30,
+          "retried": false,
+          "count": 10,
+          "results": [
+            {
+              "title": "'Monty Python' Legend Eric Idle Cancels Australia and New Zealand Tour",
+              "url": "https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659",
+              "snippet": "The live shows were also intended to celebrate the release of his latest memoir, Idle in Provence: A Brief History of Thyme, which reflects on his life and experiences in the south of France. No further details about the health concerns behind the cancellation have been disclosed, and replacement dates have not been announced. Ticket holders will receive refunds, which are being automatically proc",
+              "publishedAt": "Sun, 25 Oct 2026 22:58:01 GMT"
+            },
+            {
+              "title": "PHP2Shell: Find, Mitigate, and Patch Now | Qualys | Qualys",
+              "url": "https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities",
+              "snippet": "| Step | Action | --- | | Install (requires Python 3.11 or later) | pip install qualys-cli-mcp | | Configure your credentials | qualys-cli configure It asks for your Qualys username and password, automatically detects your platform, and securely stores the credentials in your OS keyring. Your credentials never go into the AI client’s config file. | [...] | 6567433 | Alpine Linux 3.24 Security Upda",
+              "publishedAt": "Wed, 21 Oct 2026 02:59:03 GMT"
+            },
+            {
+              "title": "The Python on Microcontrollers Newsletter: subscribe for free",
+              "url": "https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2",
+              "snippet": "The Python for Microcontrollers Newsletter is the place for the latest news involving Python on hardware (microcontrollers AND single board computers like",
+              "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+            },
+            {
+              "title": "CircuitPython 11.0.0-alpha.2 Released!",
+              "url": "https://blog.adafruit.com/2026/10/21/circuitpython-11-0-0-alpha-2-released",
+              "snippet": "This is CircuitPython 11.0.0-alpha.2, an alpha release for 11.0.0. Further features, changes, and bug fixes will be added before the final release of 11.0.0",
+              "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+            },
+            {
+              "title": "Python vs Go 2026: 3.15 vs 1.27, 57.9% vs 17.4%",
+              "url": "https://tech-insider.org/python-vs-go-2026",
+              "snippet": "| Attribute | Python | Go | --- | Newest stable release (Oct. 24, 2026) | Python 3.15.1 (Oct. 21, 2026) | Go 1.27 (Aug. 19, 2026) | | Previous feature release | 3.14 line, 3.14.9 security release on Oct. 21 | Go 1.26 (Feb. 2026) | | Next release in progress | 3.16.0a1 alpha, final planned Oct. 5, 2027 | Go 1.28, unreleased | | Release rhythm | One feature release a year, in October | A feature rel",
+              "publishedAt": "Sat, 24 Oct 2026 14:48:57 GMT"
+            },
+            {
+              "title": "eMudhra / emSign CA Compromise: What Python, pip, and CI/CD Users Need to Update - StepSecurity",
+              "url": "https://www.stepsecurity.io/blog/emudhra-emsign-ca-compromise-python-pip-ci-cd-update",
+              "snippet": "On October 21, Python released 3.15.1, 3.14.9, and 3.13.17, each bundling pip 26.2.2 and its updated certifi. Update the appropriate interpreter distribution and handle existing virtual environments separately. Until that is complete, make the corrected pip bootstrap an explicit step before new environments download application dependencies. Python emergency release announcement ### Rebuild contai",
+              "publishedAt": "Tue, 20 Oct 2026 07:00:00 GMT"
+            },
+            {
+              "title": "LiteLLM 1.107.0 Compromised: Python Startup Hooks Steal Cloud, AI, and Proxy Credentials | Endor Labs",
+              "url": "https://www.endorlabs.com/learn/litellm-1-107-0-compromised-python-startup-hooks-steal-cloud-ai-and-proxy-credentials",
+              "snippet": "A deployment that pulls latest or main-stable could have received the malicious image without anyone selecting version 1.107.0. ## Timeline All times UTC, October 21, 2026. [...] | Artifact | Status | --- | | `litellm==1.107.0` wheels (7: macOS x86\\_64 and arm64, manylinux and musllinux x86\\_64 and aarch64, Windows amd64) | Malicious, carry the payload | | `litellm==1.107.0` source distribution | ",
+              "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+            },
+            {
+              "title": "Monty Python’s Eric Idle talks home in southern France, new book",
+              "url": "https://dailynorthwestern.com/2026/10/05/lateststories/monty-pythons-eric-idle-talks-home-in-southern-france-new-book-for-chicago-humanities-festival",
+              "snippet": "In 2019, Idle was diagnosed with early-stage pancreatic cancer — an experience he again found humor in. A decade earlier, he had asked the same doctor to share the quickest way to die for a play he was writing called “Death The Musical,” to which the doctor had responded, “pancreatic cancer.” While at his home in France, Idle has hosted a revolving door of creative minds, from Robin Williams to Ge",
+              "publishedAt": "Mon, 05 Oct 2026 09:38:40 GMT"
+            },
+            {
+              "title": "Three Critical Pillow CVEs: RCE and Heap Overflows in Python’s Imaging Library - CVE-2026-112900 CVE-2026-112393 CVE-2026-112403 | OX Security",
+              "url": "https://www.ox.security/blog/three-critical-pillow-cves-rce-and-heap-overflows-in-pythons-imaging-library-cve-2026-112900-cve-2026-112393-cve-2026-112403",
+              "snippet": "## Overview Three critical Pillow vulnerabilities (CVSS 9.2, disclosed 2026-10-19) let a crafted EPS, TIFF or JPEG file trigger command execution or heap corruption in any Python service that processes user-supplied images. All are fixed in Pillow 13.0.0. The excerpts below are from the vulnerable source. Pillow is one of the most popular Python packages, and the most popular image processing libr",
+              "publishedAt": "Thu, 22 Oct 2026 12:27:40 GMT"
+            },
+            {
+              "title": "LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release",
+              "url": "https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html",
+              "snippet": "LiteLLM v1.107.0 (PyPI) v1.107.0, latest, main-latest, and main-stable (Docker) v1.107.0, latest, main-latest, and main-stable (GHCR) Users who downloaded an unpinned version of LiteLLM between 11:39 a.m. and 1:23 p.m. UTC via pip or used the Docker image v1.107.0, latest, main-latest, or main-stable between 11:46 a.m. and 2:20 p.m. UTC are impacted. [...] The Hacker News OpenAI Employee Arrested ",
+              "publishedAt": "Thu, 22 Oct 2026 08:28:00 GMT"
+            }
+          ],
+          "text": "[1] 'Monty Python' Legend Eric Idle Cancels Australia and New Zealand Tour — https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659（页面发布于：2026-10-26）\n[2] PHP2Shell: Find, Mitigate, and Patch Now | Qualys | Qualys — https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities（事件日期：2026-10-20；页面发布于：2026-10-21）\n[3] The Python on Microcontrollers Newsletter: subscribe for free — https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2（事件日期：2026-10-21；页面发布于：2026-10-22）\n[4] CircuitPython 11.0.0-alpha.2 Released! — https://blog.adafruit.com/2026/10/21/circuitpython-11-0-0-alpha-2-released（事件日期：2026-10-21；页面发布于：2026-10-22）\n[5] Python vs Go 2026: 3.15 vs 1.27, 57.9% vs 17.4% — https://tech-insider.org/python-vs-go-2026（事件日期：2026-10-24）\n[6] eMudhra / emSign CA Compromise: What Python, pip, and CI/CD Users Need to Update - StepSecurity — https://www.stepsecurity.io/blog/emudhra-emsign-ca-compromise-python-pip-ci-cd-update（页面发布于：2026-10-20）\n[7] LiteLLM 1.107.0 Compromised: Python Startup Hooks Steal Cloud, AI, and Proxy Credentials | Endor Labs — https://www.endorlabs.com/learn/litellm-1-107-0-compromised-python-startup-hooks-steal-cloud-ai-and-proxy-credentials（事件日期：2026-10-21；页面发布于：2026-10-22）\n[8] Monty Python’s Eric Idle talks home in southern France, new book — https://dailynorthwestern.com/2026/10/05/lateststories/monty-pythons-eric-idle-talks-home-in-southern-france-new-book-for-chicago-humanities-festival（事件日期：2026-10-05）\n[9] Three Critical Pillow CVEs: RCE and Heap Overflows in Python’s Imaging Library - CVE-2026-112900 CVE-2026-112393 CVE-2026-112403 | OX Security — https://www.ox.security/blog/three-critical-pillow-cves-rce-and-heap-overflows-in-pythons-imaging-library-cve-2026-112900-cve-2026-112393-cve-2026-112403（事件日期：2026-10-19；页面发布于：2026-10-22）\n[10] LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release — https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html（页面发布于：2026-10-22）"
+        }
+      },
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "query": "Python 最新稳定版本 发布",
+          "queries": [
+            "Python 最新稳定版本 发布",
+            "Python release version latest"
+          ],
+          "kind": "news",
+          "digest": false,
+          "failedQueries": 0,
+          "freshness": "month",
+          "recencyDays": 30,
+          "retried": false,
+          "count": 10,
+          "results": [
+            {
+              "title": "Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog",
+              "url": "https://opensource.googleblog.com/2026/10/adopting-pyrefly-as-the-python-type-checker-at-google.html",
+              "snippet": "1 Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog # opensource.google.com Menu ## Google Open Source Blog The latest news from Google on open source releases, major projects, events, and outreach programs for early career developers. ### Adopting Pyrefly as the Python type checker at Google #### Tuesday, October 6, 2026 by Amer Elsheikh, Python Team [...] As detaile",
+              "publishedAt": "Mon, 05 Oct 2026 07:00:00 GMT"
+            },
+            {
+              "title": "Python 3.15 delivers a native-by-default experience on Windows on Arm - Windows Developer Blog",
+              "url": "https://blogs.windows.com/windowsdeveloper/2026/10/14/python-3-15-delivers-native-by-default-experience-on-windows-arm",
+              "snippet": "“Arm is working with industry partners including Microsoft and community organizers to expand access to native Arm infrastructure and improve upstream support,” said Grant Likely, Fellow at CoreCollective and Senior Director at Arm. “Our goal is to make Arm a standard part of how developers build, test and ship software. With the latest Python release, developers can build and run Python natively ",
+              "publishedAt": "Wed, 14 Oct 2026 17:00:05 GMT"
+            },
+            {
+              "title": "Python 3.15 goes global with UTF-8 support",
+              "url": "https://www.theregister.com/devops/2026/10/14/python-315-goes-global-with-utf-8-support/5302966",
+              "snippet": "After a week’s delay, the new version of Python, v3.15, has been released. With it comes a proper profiler, an experimental just-in-time compiler, and a tightening of dictionary structures. It also offers a time-saving Lazy Import option for programs to not load modules until needed, the implementation of which ironically halted this release until a few last-minute regressions were sorted. [...] d",
+              "publishedAt": "Wed, 14 Oct 2026 12:00:00 GMT"
+            },
+            {
+              "title": "Ubuntu 26.10 Ships Python 3.14, Rust 1.97, Go 1.27",
+              "url": "https://shattered.io/ubuntu-26-10-stonking-stingray-dev-toolchain-2026",
+              "snippet": "Cloud providers and CI vendors will publish Ubuntu 26.10-based images within the release’s first few weeks, and any team relying on a floating “latest” tag should expect Python, Rust, and Go version bumps to show up in builds without an explicit upgrade decision on their part. [...] package versions continuously, which appeals to developers who want the newest Rust or Go point release the same wee",
+              "publishedAt": "Tue, 20 Oct 2026 17:51:03 GMT"
+            },
+            {
+              "title": "LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release",
+              "url": "https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html",
+              "snippet": "LiteLLM v1.107.0 (PyPI) v1.107.0, latest, main-latest, and main-stable (Docker) v1.107.0, latest, main-latest, and main-stable (GHCR) Users who downloaded an unpinned version of LiteLLM between 11:39 a.m. and 1:23 p.m. UTC via pip or used the Docker image v1.107.0, latest, main-latest, or main-stable between 11:46 a.m. and 2:20 p.m. UTC are impacted. [...] The Hacker News OpenAI Employee Arrested ",
+              "publishedAt": "Thu, 22 Oct 2026 08:28:00 GMT"
+            },
+            {
+              "title": "LiteLLM compromised: infostealer and RAT in PyPI 1.107.0",
+              "url": "https://www.aikido.dev/blog/litellm-compromised-infostealer-rat",
+              "snippet": "Oct 21, 2026 On October 21, 2026, version 1.107.0 of LiteLLM (a popular open source proxy that lets developers route requests across dozens of LLM providers) was found to be compromised by an attacker who injected malicious code into its published Python wheels on PyPI. The official Docker image for the same version is also compromised. [...] Developer tool credentials and configuration files for ",
+              "publishedAt": "Wed, 21 Oct 2026 13:00:00 GMT"
+            },
+            {
+              "title": "LiteLLM Compromised, Steals Credentials | Wiz Blog",
+              "url": "https://www.wiz.io/blog/litellm-compromised-steals-credentials",
+              "snippet": "At 11:39 UTC on October 21, a malicious version (1.107.0) of the LiteLLM package was uploaded to PyPI. This version was quarantined on PyPI as of 1:20 UTC. LiteLLM Docker containers on GHCR and Docker hub also included the trojanized version of LiteLLM. These included the `v1.107.0` , `latest`, `main-latest` and `main-stable` tags. These were removed ~13:53 UTC. The most recent safe version is v1.",
+              "publishedAt": "Wed, 21 Oct 2026 13:44:12 GMT"
+            },
+            {
+              "title": "litellm 1.107.0 Compromised on PyPI: Backdoored Wheels Drop a Credential Stealer and an Hourly Remote Code Loader - StepSecurity",
+              "url": "https://www.stepsecurity.io/blog/litellm-1-107-0-compromised-pypi-backdoored-wheels-credential-stealer",
+              "snippet": "the stealer runs again on every Python start. [...] ### Threat Center StepSecurity Enterprise customers can see this incident in the Threat Center, with the full IOC set, affected versions, and remediation steps, and receive alerts through their existing SIEM, Slack, and email integrations. ## References litellm on PyPI litellm v1.107.0 GitHub release Commit 66c8f5b1a9 at the v1.107.0 tag StepSecu",
+              "publishedAt": "Thu, 22 Oct 2026 07:00:00 GMT"
+            },
+            {
+              "title": "Python 3.15稳定版发布，默认采用UTF-8编码_性能_Type_支持",
+              "url": "https://www.sohu.com/a/1085904570_114760",
+              "snippet": "汽车 房产 旅游 教育 时尚 科技 财经 娱乐 # Python 3.15稳定版发布，默认采用UTF-8编码 2026-10-10 12:05 来源: IT之家 发布于：山东省 IT之家 10 月 10 日消息，当地时间 10 月 9 日，Python 3.15.0 稳定版正式发布，相较于 Python 3.14，该版本带来了大量新特性与性能优化，汇聚了来自 1,012 位贡献者完成的 5,643 次代码提交。 相比 3.14，Python 3.15 的主要新特性包括： 解释器层面的改进 [...] C API 接口改进 PEP 782：新增用于创建 Python 字节对象的 PyBytesWriter C API PEP 788：在 C API 中增加防止对象过早终结化 (Finalization) 的保护机制 PEP 803、820、793：为无全局解释器锁的自由线程构建 (Free-",
+              "publishedAt": "Sat, 10 Oct 2026 12:05:00 GMT"
+            },
+            {
+              "title": "Python 3.15 Release: 3.10 End of Life Explained [2026]",
+              "url": "https://tech-insider.org/ie/python-3-15-release-3-10-end-of-life-2026",
+              "snippet": "The language used in Python’s own release communications is worth reading closely, because it is unusually direct for a project announcement. On the headline release itself, the core development team framed the scale of the work plainly: “Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,6",
+              "publishedAt": "Mon, 12 Oct 2026 17:19:36 GMT"
+            }
+          ],
+          "text": "[1] Adopting Pyrefly as the Python type checker at Google | Google Open Source Blog — https://opensource.googleblog.com/2026/10/adopting-pyrefly-as-the-python-type-checker-at-google.html（事件日期：2026-10-06；页面发布于：2026-10-05）\n[2] Python 3.15 delivers a native-by-default experience on Windows on Arm - Windows Developer Blog — https://blogs.windows.com/windowsdeveloper/2026/10/14/python-3-15-delivers-native-by-default-experience-on-windows-arm（事件日期：2026-10-14；页面发布于：2026-10-15）\n[3] Python 3.15 goes global with UTF-8 support — https://www.theregister.com/devops/2026/10/14/python-315-goes-global-with-utf-8-support/5302966（事件日期：2026-10-14）\n[4] Ubuntu 26.10 Ships Python 3.14, Rust 1.97, Go 1.27 — https://shattered.io/ubuntu-26-10-stonking-stingray-dev-toolchain-2026（页面发布于：2026-10-21）\n[5] LiteLLM Suspects GitHub Token Leak in AI Gateway Logs Behind Malicious Package Release — https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html（页面发布于：2026-10-22）\n[6] LiteLLM compromised: infostealer and RAT in PyPI 1.107.0 — https://www.aikido.dev/blog/litellm-compromised-infostealer-rat（事件日期：2026-10-21）\n[7] LiteLLM Compromised, Steals Credentials | Wiz Blog — https://www.wiz.io/blog/litellm-compromised-steals-credentials（页面发布于：2026-10-21）\n[8] litellm 1.107.0 Compromised on PyPI: Backdoored Wheels Drop a Credential Stealer and an Hourly Remote Code Loader - StepSecurity — https://www.stepsecurity.io/blog/litellm-1-107-0-compromised-pypi-backdoored-wheels-credential-stealer（页面发布于：2026-10-22）\n[9] Python 3.15稳定版发布，默认采用UTF-8编码_性能_Type_支持 — https://www.sohu.com/a/1085904570_114760（事件日期：2026-10-10）\n[10] Python 3.15 Release: 3.10 End of Life Explained [2026] — https://tech-insider.org/ie/python-3-15-release-3-10-end-of-life-2026（页面发布于：2026-10-13）"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "data": {
+          "url": "https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities",
+          "ok": false,
+          "error": "拒绝访问内网地址"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "data": {
+          "url": "https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659",
+          "ok": false,
+          "error": "拒绝访问内网地址"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "data": {
+          "url": "https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2",
+          "ok": false,
+          "error": "拒绝访问内网地址"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-070）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-070\"",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-070\"",
+    "[asr] local sense-voice-small: 24 chars",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-070\"",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=llm ms=1668",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=routing ms=1668",
+    "[voice-entry] ask",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=llm ms=1859",
+    "[perf] llm round0 0ms",
+    "[perf] search 0ms tavily/news hits=10 \"Python latest\"",
+    "[perf] search 0ms tavily/news hits=9 \"Python latest stable release download\"",
+    "[search] 10 result(s) for \"Python latest stable release download\" via Python latest stable release download | Python latest",
+    "[perf] tool:web_search 0ms ok=true",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=tool ms=3198 state=completed",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] tool=web_search status=completed ms=3198",
+    "[perf] search 0ms tavily/news hits=2 \"Python 最新稳定版本 发布\"",
+    "[perf] search 0ms tavily/news hits=10 \"Python release version latest\"",
+    "[search] 10 result(s) for \"Python 最新稳定版本 发布\" via Python 最新稳定版本 发布 | Python release version latest",
+    "[perf] tool:web_search 0ms ok=true",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=tool ms=3734 state=completed",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] tool=web_search status=completed ms=3734",
+    "[perf] tools round0 0ms (2 calls)",
+    "[tool] web_search ok=true 检索到 10 条结果（Python latest stable release download）",
+    "[tool] web_search ok=true 检索到 10 条结果（Python 最新稳定版本 发布）",
+    "[perf] tool:read_webpage 0ms ok=false",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=tool ms=1 state=failed",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] tool=read_webpage status=failed ms=1",
+    "[read] https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities failed: 拒绝访问内网地址",
+    "[perf] tool:read_webpage 0ms ok=false",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=tool ms=1 state=failed",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] tool=read_webpage status=failed ms=1",
+    "[read] https://au.rollingstone.com/culture/culture-news/monty-python-eric-idle-cancels-australia-new-zealand-tour-102659 failed: 拒绝访问内网地址",
+    "[perf] tool:read_webpage 0ms ok=false",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=tool ms=2 state=failed",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] tool=read_webpage status=failed ms=2",
+    "[read] https://blog.adafruit.com/2026/10/21/the-python-on-microcontrollers-newsletter-subscribe-for-free-10-21-2 failed: 拒绝访问内网地址",
+    "[perf] read 3 page(s) 0ms ok=0",
+    "[perf] enrich 0ms",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=llm ms=2314",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task e1507101-fc2c-49c9-ad97-6d090ca7f62d] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-070",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1668,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-070",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1859,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 2450,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 3129,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1420,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 3664,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-070",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1051,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "FAIL"
+}

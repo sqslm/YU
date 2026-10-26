@@ -1,0 +1,60 @@
+{
+  "scope": "Explicitly identified directories created by this test task; read-only size inspection",
+  "cleanup_status": "AUTO_APPROVAL_REJECTED",
+  "reason": "Tool returned blocked by policy; no more specific reason supplied",
+  "reclaimed_bytes": 0,
+  "retained_fixture_bytes": 15550527,
+  "directories": [
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-0V3U6F",
+      "bytes": 188416,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-1KKyXd",
+      "bytes": 76561,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-5VB2Ck",
+      "bytes": 2124960,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-FhLpLF",
+      "bytes": 250669,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-Fl1MTY",
+      "bytes": 75814,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF",
+      "bytes": 777589,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-JpdvcL",
+      "bytes": 204118,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-mIagAD",
+      "bytes": 1379595,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-PIs7Oc",
+      "bytes": 433786,
+      "removed": false
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe",
+      "bytes": 10039019,
+      "removed": false
+    }
+  ],
+  "note": "No alternative deletion method attempted. Source data, historical release directories, account settings and encrypted bridge leftovers not enumerated for deletion."
+}

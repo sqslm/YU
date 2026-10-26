@@ -1,0 +1,158 @@
+{
+  "case_id": "YU-057",
+  "input": "解释一下我选中的这段代码。",
+  "spoken_input": "解释一下我选中的这段代码。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-057",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "解释一下我选中的这段代码。",
+            "answer": "",
+            "status": "正在思考…",
+            "streaming": true,
+            "taskId": "aae93fb5-ace2-4802-9d9c-f445127c4fc5",
+            "taskState": "running"
+          },
+          {
+            "question": "解释一下我选中的这段代码。",
+            "answer": "选中的是一段 TypeScript 函数，作用是求两个数的和：\n\n```ts\nfunction sum(a: number, b: number) { return a + b; }\n```\n\n- `function sum`：声明了一个名为 `sum` 的函数。\n- `a: number, b: number`：两个参数，类型都标注为 `number`，所以传字符串或其它类型在编译期就会报错。\n- `return a + b`：返回两数相加的结果。因为参数都限定为数字，这里的 `+` 是算术加法，不会出现 JS 里字符串拼接那种坑。\n- 返回类型没有显式写，TypeScript 会自动推断为 `number`。\n\n唯一一个小问题：参数类型之外，返回值最好也显式写上 `: number`，再加个空格写成 `a: number, b: number`（你原文 `a: number,b: number` 逗号后少个空格）。需要我帮你改成带返回类型的版本吗？",
+            "taskId": "aae93fb5-ace2-4802-9d9c-f445127c4fc5",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "aae93fb5-ace2-4802-9d9c-f445127c4fc5",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "解释一下我选中的这段代码。",
+          "target": {
+            "windowHandle": "10057",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-057"
+          },
+          "state": "completed",
+          "receipts": [],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "rule"
+          },
+          "transcript": "解释一下我选中的这段代码。",
+          "selection": "function sum(a: number,b: number) { return a+b; }"
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "selection_result",
+      "value": {
+        "original": "function sum(a: number,b: number) { return a+b; }",
+        "actual": "function sum(a: number,b: number) { return a+b; }",
+        "applied": null,
+        "answer": "选中的是一段 TypeScript 函数，作用是求两个数的和：\n\n```ts\nfunction sum(a: number, b: number) { return a + b; }\n```\n\n- `function sum`：声明了一个名为 `sum` 的函数。\n- `a: number, b: number`：两个参数，类型都标注为 `number`，所以传字符串或其它类型在编译期就会报错。\n- `return a + b`：返回两数相加的结果。因为参数都限定为数字，这里的 `+` 是算术加法，不会出现 JS 里字符串拼接那种坑。\n- 返回类型没有显式写，TypeScript 会自动推断为 `number`。\n\n唯一一个小问题：参数类型之外，返回值最好也显式写上 `: number`，再加个空格写成 `a: number, b: number`（你原文 `a: number,b: number` 逗号后少个空格）。需要我帮你改成带返回类型的版本吗？"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "aae93fb5-ace2-4802-9d9c-f445127c4fc5",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "解释一下我选中的这段代码。",
+    "target": {
+      "windowHandle": "10057",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-057"
+    },
+    "state": "completed",
+    "receipts": [],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "rule"
+    },
+    "transcript": "解释一下我选中的这段代码。",
+    "selection": "function sum(a: number,b: number) { return a+b; }"
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-057）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-057\"",
+    "[task aae93fb5-ace2-4802-9d9c-f445127c4fc5] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-057\"",
+    "[asr] local sense-voice-small: 13 chars",
+    "[task aae93fb5-ace2-4802-9d9c-f445127c4fc5] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-057\"",
+    "[task aae93fb5-ace2-4802-9d9c-f445127c4fc5] stage=routing ms=0",
+    "[voice-entry] ask",
+    "[task aae93fb5-ace2-4802-9d9c-f445127c4fc5] stage=llm ms=3015",
+    "[perf] llm round0 0ms",
+    "[perf] ask total 0ms",
+    "[task aae93fb5-ace2-4802-9d9c-f445127c4fc5] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-057",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 3015,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

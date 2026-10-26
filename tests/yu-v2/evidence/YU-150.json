@@ -1,0 +1,174 @@
+{
+  "case_id": "YU-150",
+  "input": "运行一次统一入口诊断，看看这条简单指令耗时在哪里。",
+  "spoken_input": "运行一次统一入口诊断，看看这条简单指令耗时在哪里。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-150",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "dictation",
+        "via": "live_model",
+        "raw": "{\"kind\":\"dictation\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "diagnostics",
+      "value": {
+        "metrics": {
+          "sampleLimit": 512,
+          "samples": 512,
+          "stages": {
+            "capture": {
+              "count": 57,
+              "p50": 0,
+              "p95": 0
+            },
+            "asr": {
+              "count": 58,
+              "p50": 0.02,
+              "p95": 0.05
+            },
+            "routing": {
+              "count": 57,
+              "p50": 1057.07,
+              "p95": 1846.99
+            },
+            "llm": {
+              "count": 149,
+              "p50": 1647.63,
+              "p95": 2445.76
+            },
+            "tool": {
+              "count": 132,
+              "p50": 2,
+              "p95": 3734
+            },
+            "total": {
+              "count": 59,
+              "p50": 0,
+              "p95": 0
+            }
+          },
+          "tools": {
+            "completed": 103,
+            "awaiting_confirmation": 5,
+            "failed": 18,
+            "unsupported": 5,
+            "timeout": 1
+          },
+          "toolCompletionRate": 0.7803030303030303,
+          "tasks": {
+            "completed": 52,
+            "awaiting_confirmation": 5,
+            "failed": 2
+          },
+          "failures": {
+            "tool:failed": 18,
+            "total:failed": 2,
+            "tool:unsupported": 5,
+            "tool:timeout": 1
+          },
+          "routingAccuracy": "Requires labelled regression cases; not inferred from production conversations."
+        },
+        "lines": [
+          "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] stage=asr ms=0",
+          "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] stage=tool ms=1 state=completed",
+          "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] tool=get_datetime status=completed ms=1",
+          "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] stage=total ms=0 state=completed"
+        ]
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "get_datetime",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "data": {
+          "ok": true,
+          "now": "2026-10-26 16:00:00",
+          "iso": "2026-10-26T08:00:00.000Z",
+          "timezone": "Asia/Singapore",
+          "weekday": "星期一",
+          "date": "2026-10-26",
+          "today": "2026-10-26",
+          "tomorrow": "2026-10-27",
+          "dayAfterTomorrow": "2026-10-28",
+          "offsetDays": 0
+        },
+        "summary": "2026-10-26 16:00:00（星期一）",
+        "status": "completed",
+        "taskId": "906c1c5a-9b93-499a-ad66-fd76665e3079"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "906c1c5a-9b93-499a-ad66-fd76665e3079",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "运行一次统一入口诊断，看看这条简单指令耗时在哪里。",
+    "target": {
+      "windowHandle": "10150",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-150"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "get_datetime",
+        "state": "completed",
+        "durationMs": 1
+      }
+    ],
+    "results": [
+      {
+        "tool": "get_datetime",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "now": "2026-10-26 16:00:00",
+          "iso": "2026-10-26T08:00:00.000Z",
+          "timezone": "Asia/Singapore",
+          "weekday": "星期一",
+          "date": "2026-10-26",
+          "today": "2026-10-26",
+          "tomorrow": "2026-10-27",
+          "dayAfterTomorrow": "2026-10-28",
+          "offsetDays": 0
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-150）",
+    "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] stage=asr ms=0",
+    "[datetime] 2026-10-26 16:00:00 Asia/Singapore 星期一",
+    "[perf] tool:get_datetime 0ms ok=true",
+    "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] stage=tool ms=1 state=completed",
+    "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] tool=get_datetime status=completed ms=1",
+    "[task 906c1c5a-9b93-499a-ad66-fd76665e3079] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-150",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1171,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

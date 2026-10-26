@@ -1,0 +1,87 @@
+{
+  "case_id": "YU-107",
+  "input": "【在两个相同进程的文档窗口中切换后触发】帮我处理现在这个窗口里的文字。",
+  "spoken_input": "帮我处理现在这个窗口里的文字。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-107",
+  "observations": [
+    {
+      "label": "window_snapshot",
+      "value": {
+        "original": {
+          "windowHandle": "10001",
+          "processId": 1001,
+          "appName": "Editor",
+          "windowTitle": "Original document"
+        },
+        "after": {
+          "windowHandle": "10001",
+          "processId": 1001,
+          "windowTitle": "Original document",
+          "appName": "Editor",
+          "task": {
+            "id": "30163099-7c9a-4567-b6ee-dc017af0b5a9",
+            "source": "voice",
+            "triggeredAt": 1793001600000,
+            "originalInput": "帮我处理现在这个窗口里的文字。",
+            "target": {
+              "windowHandle": "10001",
+              "processId": 1001,
+              "appName": "Editor",
+              "windowTitle": "Original document"
+            },
+            "state": "pending",
+            "receipts": []
+          }
+        },
+        "matchesOther": false
+      }
+    },
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "7202f8ad-8e9d-4e11-8284-c3564c6831ad",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我处理现在这个窗口里的文字。",
+    "target": {
+      "windowHandle": "10107",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-107"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-107）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-107",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1422,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

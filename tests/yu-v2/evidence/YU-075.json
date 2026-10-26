@@ -1,0 +1,55 @@
+{
+  "case_id": "YU-075",
+  "input": "刚才 AI 新闻里的第二条，详细解释一下。",
+  "spoken_input": "刚才 AI 新闻里的第二条，详细解释一下。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-075",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": true,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":true}"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "bcafe47b-8b05-4c74-9dbe-2504ae9fb639",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "刚才 AI 新闻里的第二条，详细解释一下。",
+    "target": {
+      "windowHandle": "10075",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-075"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-075）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-075",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1435,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "ENV_BLOCKED"
+}

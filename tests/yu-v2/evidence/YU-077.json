@@ -1,0 +1,126 @@
+{
+  "case_id": "YU-077",
+  "input": "把我选中的英文翻译成中文，保留代码标识符。",
+  "spoken_input": "把我选中的英文翻译成中文，保留代码标识符。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-077",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "translate",
+            "hint": "正在处理选中文字…",
+            "showMode": true,
+            "promptName": "内置翻译提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "translate",
+            "text": "用 get_active_window 来检查原始窗口。",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "890a4c20-2058-4ad0-9719-d0bea88e10da",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "把我选中的英文翻译成中文，保留代码标识符。",
+          "target": {
+            "windowHandle": "10077",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "windowTitle": "V2 controlled editor YU-077"
+          },
+          "state": "pending",
+          "receipts": []
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "selection_result",
+      "value": {
+        "original": "Use get_active_window to inspect the original window.",
+        "actual": "用 get_active_window 来检查原始窗口。",
+        "applied": "用 get_active_window 来检查原始窗口。",
+        "answer": "用 get_active_window 来检查原始窗口。"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "890a4c20-2058-4ad0-9719-d0bea88e10da",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把我选中的英文翻译成中文，保留代码标识符。",
+    "target": {
+      "windowHandle": "10077",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-077"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe\\YU-077）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-077\"",
+    "[task 89c57c80-3835-4c9f-857f-959d49581450] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-077\"",
+    "[asr] local sense-voice-small: 21 chars",
+    "[task 89c57c80-3835-4c9f-857f-959d49581450] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-077\"",
+    "[task 89c57c80-3835-4c9f-857f-959d49581450] stage=llm ms=1214",
+    "[task 89c57c80-3835-4c9f-857f-959d49581450] stage=routing ms=1214",
+    "[route] kind=translate matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-077\"",
+    "[translate] targets=zh multi=false",
+    "[task 89c57c80-3835-4c9f-857f-959d49581450] stage=llm ms=1585",
+    "[task 89c57c80-3835-4c9f-857f-959d49581450] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-077",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1213,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-077",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1585,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}
