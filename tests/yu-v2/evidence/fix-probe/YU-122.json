@@ -1,0 +1,201 @@
+{
+  "case_id": "YU-122",
+  "input": "按纽约时间明天上午九点提醒我参加会议。",
+  "spoken_input": "按纽约时间明天上午九点提醒我参加会议。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-122",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "暂不支持指定时区，请换算为本地日期和时间",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "15ca2d9e-a778-415f-8fc7-708547d99910",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "按纽约时间明天上午九点提醒我参加会议。",
+          "target": {
+            "windowHandle": "10122",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-122"
+          },
+          "state": "awaiting_confirmation",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "awaiting_confirmation",
+              "durationMs": 0
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "model"
+          },
+          "transcript": "按纽约时间明天上午九点提醒我参加会议。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "awaiting_confirmation",
+              "data": {
+                "ok": false,
+                "saved": 0,
+                "needsClarification": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": false,
+        "summary": "暂不支持指定时区，请换算为本地日期和时间",
+        "data": {
+          "ok": false,
+          "saved": 0,
+          "needsClarification": true
+        },
+        "status": "awaiting_confirmation",
+        "taskId": "15ca2d9e-a778-415f-8fc7-708547d99910"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "15ca2d9e-a778-415f-8fc7-708547d99910",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "按纽约时间明天上午九点提醒我参加会议。",
+    "target": {
+      "windowHandle": "10122",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-122"
+    },
+    "state": "awaiting_confirmation",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "awaiting_confirmation",
+        "durationMs": 0
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "model"
+    },
+    "transcript": "按纽约时间明天上午九点提醒我参加会议。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "awaiting_confirmation",
+        "data": {
+          "ok": false,
+          "saved": 0,
+          "needsClarification": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-122）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-122\"",
+    "[task 15ca2d9e-a778-415f-8fc7-708547d99910] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-122\"",
+    "[asr] local sense-voice-small: 19 chars",
+    "[task 15ca2d9e-a778-415f-8fc7-708547d99910] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-122\"",
+    "[task 15ca2d9e-a778-415f-8fc7-708547d99910] stage=llm ms=1506",
+    "[task 15ca2d9e-a778-415f-8fc7-708547d99910] stage=routing ms=1506",
+    "[voice-entry] reminder",
+    "[perf] tool:create_reminder 0ms ok=false",
+    "[task 15ca2d9e-a778-415f-8fc7-708547d99910] stage=tool ms=0 state=awaiting_confirmation",
+    "[task 15ca2d9e-a778-415f-8fc7-708547d99910] tool=create_reminder status=awaiting_confirmation ms=0",
+    "[task 15ca2d9e-a778-415f-8fc7-708547d99910] stage=total ms=0 state=awaiting_confirmation"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-122",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1505,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "NOT_IMPLEMENTED"
+}

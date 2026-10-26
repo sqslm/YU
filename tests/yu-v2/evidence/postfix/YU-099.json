@@ -1,0 +1,744 @@
+{
+  "case_id": "YU-099",
+  "input": "① 记一下我想开发文件整理功能。② 给刚才的随记加“开发”标签。③ 再建个没有时间的待办：研究实现方案。",
+  "spoken_input": "再建个没有时间的待办：研究实现方案。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-099",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "保存随记中…",
+            "showMode": true,
+            "taskLabel": "随记"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "随记已保存",
+            "feedback": {},
+            "taskLabel": "随记",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "1dc4a8ed-7296-4ab5-bcf4-50f150209767",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "记一下我想开发文件整理功能。",
+          "target": {
+            "windowHandle": "10099",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-099"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 25
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "notes",
+            "via": "rule"
+          },
+          "transcript": "记一下我想开发文件整理功能。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+                "tags": [],
+                "text": "记一下我想开发文件整理功能。",
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "记一下我想开发文件整理功能。",
+            "polished": "记一下，我想开发文件整理功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/49ff66bd-19ba-4f41-b696-857d8aaad29d.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "1eb4ac9f-06f6-4d29-99ee-65ac64701c53",
+        "taskState": "completed",
+        "question": "给刚才的随记加“开发”标签。",
+        "answer": "已给最新一条随记「记一下，我想开发文件整理功能。」加上「开发」标签，现在它的标签只有这一个。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "search_notes",
+            "ok": true,
+            "summary": "找到 1 条随记",
+            "status": "completed",
+            "taskId": "1eb4ac9f-06f6-4d29-99ee-65ac64701c53"
+          },
+          {
+            "tool": "update_note_tags",
+            "ok": true,
+            "summary": "随记标签已更新",
+            "status": "completed",
+            "taskId": "1eb4ac9f-06f6-4d29-99ee-65ac64701c53"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "已给最新一条随记「记一下，我想开发文件整理功能。」加上「开发」标签，现在它的标签只有这一个。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "1eb4ac9f-06f6-4d29-99ee-65ac64701c53",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "给刚才的随记加“开发”标签。",
+          "target": {
+            "windowHandle": "10099",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-099"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "search_notes",
+              "state": "completed",
+              "durationMs": 0
+            },
+            {
+              "tool": "update_note_tags",
+              "state": "completed",
+              "durationMs": 1
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "给刚才的随记加“开发”标签。",
+          "results": [
+            {
+              "tool": "search_notes",
+              "state": "completed",
+              "data": {
+                "total": 1,
+                "categories": [],
+                "items": [
+                  {
+                    "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+                    "text": "记一下，我想开发文件整理功能。",
+                    "tags": [],
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600002
+                  }
+                ],
+                "truncated": false,
+                "ok": true
+              }
+            },
+            {
+              "tool": "update_note_tags",
+              "state": "completed",
+              "data": {
+                "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+                "tags": [
+                  "开发"
+                ],
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600003,
+            "durationMs": 1200,
+            "transcript": "记一下我想开发文件整理功能。",
+            "polished": "记一下，我想开发文件整理功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/49ff66bd-19ba-4f41-b696-857d8aaad29d.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [
+              "开发"
+            ],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "未设置提醒时间 · 待办 · 研究实现方案",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "5a8bba20-6c92-4891-bb60-73b9defd047a",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "再建个没有时间的待办：研究实现方案。",
+          "target": {
+            "windowHandle": "10099",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-099"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 3412
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "model"
+          },
+          "transcript": "再建个没有时间的待办：研究实现方案。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "研究实现方案",
+                  "description": "",
+                  "dueAt": null,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "id": "14ba2037-5997-421a-8419-2f3b25fff62d",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "未设置提醒时间",
+                  "remainingSeconds": null,
+                  "overdue": false,
+                  "kind": "todo",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600003,
+            "durationMs": 1200,
+            "transcript": "记一下我想开发文件整理功能。",
+            "polished": "记一下，我想开发文件整理功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/49ff66bd-19ba-4f41-b696-857d8aaad29d.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [
+              "开发"
+            ],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "sequence_final",
+      "value": {
+        "records": [
+          {
+            "title": "研究实现方案",
+            "description": "",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "id": "14ba2037-5997-421a-8419-2f3b25fff62d",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null
+          }
+        ],
+        "notes": [
+          {
+            "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600003,
+            "durationMs": 1200,
+            "transcript": "记一下我想开发文件整理功能。",
+            "polished": "记一下，我想开发文件整理功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/49ff66bd-19ba-4f41-b696-857d8aaad29d.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [
+              "开发"
+            ],
+            "pending": true
+          }
+        ]
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_note",
+      "args": {
+        "text": "记一下我想开发文件整理功能。"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "随记已保存",
+        "data": {
+          "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+          "tags": [],
+          "text": "记一下我想开发文件整理功能。",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "1dc4a8ed-7296-4ab5-bcf4-50f150209767"
+      }
+    },
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "未设置提醒时间 · 待办 · 研究实现方案",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "研究实现方案",
+            "description": "",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "id": "14ba2037-5997-421a-8419-2f3b25fff62d",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "未设置提醒时间",
+            "remainingSeconds": null,
+            "overdue": false,
+            "kind": "todo",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "5a8bba20-6c92-4891-bb60-73b9defd047a"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "研究实现方案",
+      "description": "",
+      "dueAt": null,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "voice",
+      "id": "14ba2037-5997-421a-8419-2f3b25fff62d",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [
+    {
+      "id": "49ff66bd-19ba-4f41-b696-857d8aaad29d",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600003,
+      "durationMs": 1200,
+      "transcript": "记一下我想开发文件整理功能。",
+      "polished": "记一下，我想开发文件整理功能。",
+      "polishStatus": "ok",
+      "audioPath": "notes/audio/49ff66bd-19ba-4f41-b696-857d8aaad29d.wav",
+      "audioFormat": "wav",
+      "audioBytes": 38444,
+      "tags": [
+        "开发"
+      ],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "5a8bba20-6c92-4891-bb60-73b9defd047a",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "再建个没有时间的待办：研究实现方案。",
+    "target": {
+      "windowHandle": "10099",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-099"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 3412
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "model"
+    },
+    "transcript": "再建个没有时间的待办：研究实现方案。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "研究实现方案",
+            "description": "",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "id": "14ba2037-5997-421a-8419-2f3b25fff62d",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "未设置提醒时间",
+            "remainingSeconds": null,
+            "overdue": false,
+            "kind": "todo",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-099）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[task 1dc4a8ed-7296-4ab5-bcf4-50f150209767] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[asr] local sense-voice-small: 14 chars",
+    "[task 1dc4a8ed-7296-4ab5-bcf4-50f150209767] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[task 1dc4a8ed-7296-4ab5-bcf4-50f150209767] stage=routing ms=0",
+    "[voice-entry] notes",
+    "[notes] 音频压缩不可用（failed：Unrecognized option 'application'.\r\nError splitting the argument list: Option not found），保存为 WAV",
+    "[notes] 新随记 49ff66bd-19ba-4f41-b696-857d8aaad29d 已保存（wav, 38 KB, 1200 ms）",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task 1dc4a8ed-7296-4ab5-bcf4-50f150209767] stage=tool ms=25 state=completed",
+    "[task 1dc4a8ed-7296-4ab5-bcf4-50f150209767] tool=create_note status=completed ms=25",
+    "[task 1dc4a8ed-7296-4ab5-bcf4-50f150209767] stage=total ms=0 state=completed",
+    "[task 1dc4a8ed-7296-4ab5-bcf4-50f150209767] stage=llm ms=1587",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[asr] local sense-voice-small: 14 chars",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=llm ms=1508",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=routing ms=1508",
+    "[voice-entry] assistant",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=llm ms=1852",
+    "[perf] llm round0 0ms",
+    "[perf] tool:search_notes 0ms ok=true",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=tool ms=0 state=completed",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] tool=search_notes status=completed ms=0",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] search_notes ok=true",
+    "[perf] enrich 0ms",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=llm ms=1551",
+    "[perf] llm round1 0ms",
+    "[perf] tool:update_note_tags 0ms ok=true",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=tool ms=1 state=completed",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] tool=update_note_tags status=completed ms=1",
+    "[perf] tools round1 0ms (1 calls)",
+    "[tool] update_note_tags ok=true",
+    "[perf] enrich 0ms",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=llm ms=1348",
+    "[perf] llm round2 0ms",
+    "[perf] ask total 0ms",
+    "[task 1eb4ac9f-06f6-4d29-99ee-65ac64701c53] stage=total ms=0 state=completed",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[asr] local sense-voice-small: 18 chars",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-099\"",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=llm ms=1717",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=routing ms=1717",
+    "[voice-entry] reminder",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=llm ms=1717",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=llm ms=1691",
+    "[reminders] voice parsed: 1 item(s), intents=todo",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=tool ms=3412 state=completed",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] tool=create_reminder status=completed ms=3412",
+    "[task 5a8bba20-6c92-4891-bb60-73b9defd047a] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1587,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1508,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1852,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1550,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1348,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1717,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1717,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-099",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1691,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

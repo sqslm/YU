@@ -121,7 +121,7 @@ export interface NotesPageProps {
    * "toggle the recorder"; 0 means no press has happened yet.
    */
   recordTicket?: number
-  initialNoteId?: string
+  openNote?: { id: string }
 }
 
 /**
@@ -141,7 +141,7 @@ export interface NotesPageProps {
  */
 let lastRecordTicket = 0
 
-export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: NotesPageProps): JSX.Element {
+export function NotesPage({ settings, patch, recordTicket = 0, openNote }: NotesPageProps): JSX.Element {
   const { t } = useTranslation()
 
   const [notes, setNotes] = useState<NoteEntry[]>([])
@@ -151,7 +151,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
   const [notice, setNotice] = useState('')
   const [extractingReminders, setExtractingReminders] = useState(false)
 
-  const [selectedId, setSelectedId] = useState<string | null>(initialNoteId ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(openNote?.id ?? null)
   const [queryInput, setQueryInput] = useState('')
   const [query, setQuery] = useState('')
   const [categoryId, setCategoryId] = useState(ALL_CATEGORIES)
@@ -295,9 +295,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     if (selectedId && notes.some((note) => note.id === selectedId)) return
     setSelectedId(ordered[0]?.id ?? null)
   }, [notes, ordered, selectedId])
-  useEffect(() => {
-    if (!loading && initialNoteId && notesRef.current.some(note => note.id === initialNoteId)) setSelectedId(initialNoteId)
-  }, [loading, initialNoteId])
 
   // A new selection gets fresh drafts; the previous note was flushed by the
   // click handler before this ran.
@@ -520,6 +517,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, initialNoteId }: 
     },
     [flushNow, selectedId, t]
   )
+  const consumedOpenNote = useRef<typeof openNote>(undefined)
+  useEffect(() => {
+    if (loading || !openNote || consumedOpenNote.current === openNote || !notesRef.current.some(note => note.id === openNote.id)) return
+    consumedOpenNote.current = openNote
+    // Use the same save-before-switch behavior as a click. A new request object
+    // also allows reopening the same ID after a manual selection change.
+    selectNote(openNote.id)
+  }, [loading, openNote, selectNote])
 
   // ---- microphone -------------------------------------------------------
 

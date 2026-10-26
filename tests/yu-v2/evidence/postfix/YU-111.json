@@ -1,0 +1,109 @@
+{
+  "case_id": "YU-111",
+  "input": "用无效的时间参数给我设一个提醒。",
+  "spoken_input": "用无效的时间参数给我设一个提醒。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-111",
+  "observations": [],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {
+        "text": 3
+      },
+      "outcome": {
+        "ok": false,
+        "data": {
+          "ok": false,
+          "error": "工具参数无效：args.text"
+        },
+        "summary": "工具参数无效：args.text",
+        "error": "工具参数无效：args.text",
+        "status": "failed",
+        "taskId": "d9cfcb86-babd-4f8a-862b-a509faeeddf1"
+      }
+    },
+    {
+      "name": "manage_reminder",
+      "args": {
+        "id": "missing",
+        "action": "update",
+        "time_expression": "not-an-ISO-time"
+      },
+      "outcome": {
+        "ok": false,
+        "data": {
+          "ok": false,
+          "error": "manage_reminder 执行失败：提醒不存在"
+        },
+        "summary": "manage_reminder 执行失败：提醒不存在",
+        "error": "manage_reminder 执行失败：提醒不存在",
+        "status": "failed",
+        "taskId": "d9cfcb86-babd-4f8a-862b-a509faeeddf1"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "d9cfcb86-babd-4f8a-862b-a509faeeddf1",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "用无效的时间参数给我设一个提醒。",
+    "target": {
+      "windowHandle": "10111",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-111"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "durationMs": 0
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "failed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "工具参数无效：args.text"
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "manage_reminder 执行失败：提醒不存在"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-111）",
+    "[task d9cfcb86-babd-4f8a-862b-a509faeeddf1] stage=tool ms=0 state=failed",
+    "[task d9cfcb86-babd-4f8a-862b-a509faeeddf1] tool=create_reminder status=failed ms=0",
+    "[tool] manage_reminder threw: 提醒不存在 | args=id:string(7), action:string(6), time_expression:string(15)",
+    "[perf] tool:manage_reminder 0ms ok=false",
+    "[task d9cfcb86-babd-4f8a-862b-a509faeeddf1] stage=tool ms=0 state=failed",
+    "[task d9cfcb86-babd-4f8a-862b-a509faeeddf1] tool=manage_reminder status=failed ms=0"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "PASS"
+}

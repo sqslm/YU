@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "all_150_and_evidence": "PASS",
+  "no_business_FAIL_in_latest_corrected_run": "PASS",
+  "no_physical_e2e_claim": "PASS",
+  "credential_scan": "PASS",
+  "original_audit_preserved": "09c6ca331977f446f7d0334a3d40f0f793a4a9728bd81a9f9903191702449ab1",
+  "typecheck": "PASS",
+  "build": "PASS",
+  "counts": {
+    "MANUAL_REQUIRED": 83,
+    "PASS": 58,
+    "ENV_BLOCKED": 6,
+    "NOT_IMPLEMENTED": 3
+  }
+}

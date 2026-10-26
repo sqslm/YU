@@ -1,0 +1,91 @@
+{
+  "case_id": "YU-104",
+  "input": "【手动选择翻译模式，同时当前窗口命中代码提示词卡片】把这段话译成英语。",
+  "spoken_input": "把这段话译成英语。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-104",
+  "observations": [
+    {
+      "label": "actual_selection_prompt",
+      "value": {
+        "output": {
+          "text": "Please submit 3 test reports by 15:00 tomorrow.",
+          "promptName": "V2手动翻译卡",
+          "promptId": "v2-tr",
+          "promptKind": "translate",
+          "providerId": "llm-1",
+          "providerName": "cn:deepseek-v4.1-flash"
+        },
+        "receipt": {
+          "source": "selection",
+          "createdAt": 1793001600000,
+          "promptKind": "translate",
+          "promptId": "v2-tr",
+          "promptName": "V2手动翻译卡",
+          "providerId": "llm-1",
+          "providerName": "cn:deepseek-v4.1-flash"
+        },
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "translate",
+            "hint": "正在处理选中文字…",
+            "promptName": "V2手动翻译卡"
+          },
+          {
+            "phase": "idle"
+          }
+        ]
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "e628c9ed-48bc-44e2-b0b1-48b57c68186b",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把这段话译成英语。",
+    "target": {
+      "windowHandle": "10104",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-104"
+    },
+    "state": "pending",
+    "receipts": [],
+    "selection": "请在明天15:00提交3份测试报告。",
+    "prompt": {
+      "id": "v2-tr",
+      "name": "V2手动翻译卡",
+      "kind": "translate",
+      "applied": true
+    }
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-104）",
+    "[route] kind=translate matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-104\"",
+    "[translate] targets=en multi=false",
+    "[task e628c9ed-48bc-44e2-b0b1-48b57c68186b] stage=llm ms=1270"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-104",
+      "kind": "model",
+      "prompt_marker_in_actual_request": true,
+      "request_body_sha256": "8d60920ec4ef2e7b57462ab11abbbf82a33bb470f400d1999f27ed2a2d30558b",
+      "status": 200,
+      "duration_ms": 1270,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

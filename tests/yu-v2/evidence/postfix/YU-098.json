@@ -1,0 +1,193 @@
+{
+  "case_id": "YU-098",
+  "input": "① 找到昨天下载的 PDF。② 打开第二个。③ 打开它所在的文件夹。",
+  "spoken_input": "① 找到昨天下载的 PDF。② 打开第二个。③ 打开它所在的文件夹。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "file_results",
+      "value": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "04f7428b-6e12-46e1-983e-9f1e765fabbb"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "a134e802-3f10-46b6-82b9-6483aefccfff"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "d6705dfe-2bd3-4897-a5f7-f15d2ba9e923"
+      }
+    },
+    {
+      "label": "actual_result_pointer",
+      "value": {
+        "kind": "ordinal",
+        "index": 1,
+        "item": {
+          "id": "a134e802-3f10-46b6-82b9-6483aefccfff",
+          "title": "two.pdf",
+          "fields": {
+            "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098\\two.pdf",
+            "name": "two.pdf",
+            "bytes": 410,
+            "modified": "2026-10-25T08:00:00.0000000Z",
+            "kind": "file",
+            "id": "a134e802-3f10-46b6-82b9-6483aefccfff"
+          }
+        }
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "downloads",
+        "type": "pdf"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "04f7428b-6e12-46e1-983e-9f1e765fabbb"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "a134e802-3f10-46b6-82b9-6483aefccfff"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "d6705dfe-2bd3-4897-a5f7-f15d2ba9e923"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "d6705dfe-2bd3-4897-a5f7-f15d2ba9e923",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "① 找到昨天下载的 PDF。② 打开第二个。③ 打开它所在的文件夹。",
+    "target": {
+      "windowHandle": "10098",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-098"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 337
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "04f7428b-6e12-46e1-983e-9f1e765fabbb"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "a134e802-3f10-46b6-82b9-6483aefccfff"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-098）",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task d6705dfe-2bd3-4897-a5f7-f15d2ba9e923] stage=tool ms=337 state=completed",
+    "[task d6705dfe-2bd3-4897-a5f7-f15d2ba9e923] tool=search_files status=completed ms=337"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-098",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1545,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

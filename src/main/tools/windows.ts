@@ -57,6 +57,10 @@ export class WindowsTools {
 
   clear(): void { this.items.clear(); this.recent = []; this.permitted.clear() }
   beginTask(): void { this.permitted = new Set(this.items.keys()) }
+  /** A saved typed result reference is an explicit selection, not a guessed ID. */
+  permitWorkflowFile(id: string): void {
+    if (this.items.get(id)?.kind === 'file') this.permitted.add(id)
+  }
   operation(id: string): { name: string; args: Record<string, unknown>; title: string } {
     const item = this.items.get(id)
     if (!item) throw new Error(mt('请先查找并选择真实结果'))
@@ -98,7 +102,7 @@ export class WindowsTools {
       return { name: item?.kind === 'application' ? 'open_application' : 'open_file', args: { id: item?.id ?? '' } }
     }
     const app = /^(?:请|帮我)?打开\s*([^。！？\n]{1,80})[。！!]?$/i.exec(input) || /^open (?:the )?([\w .+()-]{1,80})[.!]?$/i.exec(input)
-    if (app && !/[\\/:]|文件夹|目录|[a-z]\s*盘|\bfolder\b|然后|再|并且|官网|网站|网页|website|webpage|homepage|official|\.(?:com|org|net)\b|and |then /i.test(app[1])) return { name: 'open_application', args: { name: app[1] } }
+    if (app && !/[\\/:]|文件夹|目录|随记|笔记|历史|提醒|待办|日程|日历|简报|[a-z]\s*盘|\bfolder\b|然后|再|并且|官网|网站|网页|website|webpage|homepage|official|\.(?:com|org|net)\b|and |then /i.test(app[1])) return { name: 'open_application', args: { name: app[1] } }
     return null
   }
   async run(name: string, args: Record<string, unknown>, signal?: AbortSignal, context?: PromptContext): Promise<ToolOutcome> {

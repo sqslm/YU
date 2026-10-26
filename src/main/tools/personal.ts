@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { Reminder, ReminderAction, ReminderInput, TodoPriority } from '@shared/reminders'
 import { isOverdue, normalizePriority, PRIORITY_LABELS, sortTodos, TODO_PRIORITIES } from '@shared/reminders'
 import { mainLanguage, mt } from '@shared/mainI18n'
-import { nextOccurrence, resolveDeadline, resolveReminderTime } from '../reminder-time'
+import { nextOccurrence, resolveDeadline, resolveReminderTime, unsupportedReminderZone } from '../reminder-time'
 import { directVoiceIntent } from '../voice-intent'
 import type { ToolDefinition, ToolOutcome } from './registry'
 import type { PromptContext } from '@shared/prompts'
@@ -12,6 +12,7 @@ export const PERSONAL_TOOLS = ['create_reminder', 'list_reminders', 'manage_remi
 export const HUB_PAGES = ['overview', 'history', 'notes', 'reminders', 'calendar', 'briefing', 'corrections', 'settings'] as const
 export type HubPage = typeof HUB_PAGES[number]
 export function personalCommand(text: string): { name: string; args: Record<string, unknown> } | null {
+  if (/^(?:请|帮我)?(?:打开|查看)(?:我(?:的)?)?(?:最近|最新|刚刚|刚才)(?:保存的|记的|的)?(?:一条|那条)?(?:随记|笔记)[。！!]?$/u.test(text.trim()) || /^open (?:my |the )?(?:latest|most recent) note[.!]?$/iu.test(text.trim())) return { name: 'open_page', args: { page: 'notes', position: 'latest' } }
   if(/^(?:(?:请|帮我)?(?:查|查看|告诉我))?(?:刚才|这次|上一条|本次).{0,10}(?:用了|使用|用的|实际使用).{0,8}(?:提示词|卡片).{0,8}[？?。！!]?$/u.test(text.trim()))return {name:'get_prompt_info',args:{}}
   const audio=/^(?:请|帮我)?(暂停|继续|停止)(?:播放)?(?:随记)?录音[。！!]?$/u.exec(text.trim())
   if(audio)return {name:'control_note_audio',args:{action:({暂停:'pause',继续:'resume',停止:'stop'} as Record<string,string>)[audio[1]]}}
@@ -44,7 +45,7 @@ export interface PersonalTools {
   history(query: string, range?: { from: number; until: number }): HistoryEntry[]
   copy(text: string): void
   readClipboard(): string
-  open(page: HubPage): void
+  open(page: HubPage, noteId?: string): void
   controlNoteAudio?(action: 'play'|'pause'|'resume'|'stop'|'status', id?: string): Promise<Record<string,unknown>>
   syncInfo?(): { enabled: boolean; signedIn: boolean; failures: Array<{ id: string; stage: string; error: string; at: number }> }
 }
@@ -144,11 +145,25 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     return ok(mt('查到 {{count}} 条随记同步状态', { count: items.length }), { enabled: state.enabled, signedIn: state.signedIn, total: items.length, items: items.slice(0,30), failures: state.failures.filter(row=>!id||row.id===id), truncated: items.length>30 })
   }
   if (name === 'create_reminder') {
+    if (unsupportedReminderZone(question.split(/(?:提醒|通知)我|\bremind me to\b/iu)[0])) {
+      return { ok: false, summary: mt('暂不支持指定时区，请换算为本地日期和时间'), data: { ok: false, saved: 0, needsClarification: true } }
+    }
     // The established full-template refinement / time parser is authoritative.
     // Never accept a model-invented timestamp or silently drop a correction.
     const originalIntent = directVoiceIntent(question)
     const explicitReminder = context?.task?.route?.kind === 'reminder' && context.task.route.via === 'explicit'
     let request = args.text === undefined ? question : string(args.text)
+    if (request && !question.includes(request)) {
+      // Recover an exact original span, tolerating punctuation/spacing only.
+      // Numbers, negations, corrections and every other word must still match.
+      const words = request.replace(/[\p{P}\s]/gu, '')
+      if (words && words === question.replace(/[\p{P}\s]/gu, '')) request = question
+      else if (words) {
+        const pattern = [...words].map(char => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\p{P}\\s]*')
+        const original = new RegExp(pattern, 'u').exec(question)
+        if (original) request = original[0]
+      }
+    }
     if (!request || !question.includes(request)) throw new Error(mt('提醒内容必须来自原始请求'))
     const clauseStart=question.indexOf(request)
     const separateCreation=args.text!==undefined&&clauseStart>0&&/^(?:再)?(?:提醒我|(?:加个|创建|新建|添加).{0,6}(?:提醒|待办))/u.test(request)&&/(?:然后|另外|并且|同时|以及|再|[，,;；。])\s*(?:再|并)?\s*$/u.test(question.slice(0,clauseStart))
@@ -348,6 +363,14 @@ async function run(name: string, args: Record<string, unknown>, api: PersonalToo
     return ok(mt('已复制到剪贴板'))
   }
   const page = args.page as HubPage
+  if (args.note_id !== undefined || args.position !== undefined) {
+    if (page !== 'notes' || args.note_id !== undefined && args.position !== undefined) throw new Error(mt('请指定唯一的随记目标'))
+    const notes = api.notes().slice().sort((a, b) => b.createdAt - a.createdAt)
+    const note = args.note_id !== undefined ? notes.find(row => row.id === args.note_id) : notes[args.position === 'previous' ? 1 : 0]
+    if (!note) throw new Error(mt('随记不存在'))
+    api.open(page, note.id)
+    return ok(mt('已打开随记：{{title}}', { title: note.title || (note.polished || note.transcript).slice(0, 40) }), { page, noteId: note.id, item: { id: note.id, title: note.title, createdAt: note.createdAt } })
+  }
   api.open(page)
   return ok(mt('已打开功能页面'), { page })
 }
@@ -369,7 +392,7 @@ const schemas: Record<typeof PERSONAL_TOOLS[number], { description: string; prop
   search_history: { description: 'Read actual completed recognition/Ask history, newest first. Set day=today/yesterday/YYYY-MM-DD for local calendar date filtering BEFORE limiting results. query is a content keyword, never put the date phrase there. Executes the user request directly.', properties: { query: { type: 'string' }, day: { type: 'string' } } },
   copy_to_clipboard: { description: 'Copy explicitly requested text or a previous answer to the clipboard. Does not read clipboard contents or paste into another application.', properties: { text: { type: 'string' } }, required: ['text'] },
   read_clipboard: { description: 'Read ONLY current clipboard text only when the user requested clipboard content. No monitoring or clipboard history. Prefer the actual previous answer for references; use get_selection for explicitly selected text.', properties: {} },
-  open_page: { description: 'Open existing overview, history, notes, reminders/todos, calendar, corrections or settings pages. Use settings for existing configuration (models, prompts, hotkeys, sync, etc). Does not modify any setting.', properties: { page: { type: 'string', enum: HUB_PAGES } }, required: ['page'] }
+  open_page: { description: 'Open existing overview, history, notes, reminders/todos, calendar, briefing, corrections or settings pages. To select an actual note, use page=notes with either a real note_id or position=latest/previous. Does not modify any setting or note.', properties: { page: { type: 'string', enum: HUB_PAGES }, note_id: { type: 'string' }, position: { type: 'string', enum: ['latest', 'previous'] } }, required: ['page'] }
 }
 
 const optionalMethods: Partial<Record<typeof PERSONAL_TOOLS[number], keyof PersonalTools>> = {

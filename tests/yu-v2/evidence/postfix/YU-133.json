@@ -1,0 +1,235 @@
+{
+  "case_id": "YU-133",
+  "input": "告诉我 CPU 型号、总内存以及 C 盘剩余空间。",
+  "spoken_input": "告诉我 CPU 型号、总内存以及 C 盘剩余空间。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-133",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "os_comparison",
+      "value": {
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "totalMemoryBytes": 33346146304
+      }
+    },
+    {
+      "label": "live_disks",
+      "value": [
+        {
+          "label": "系统",
+          "usedBytes": 127330148352,
+          "name": "C:\\",
+          "totalBytes": 214749409280,
+          "freeBytes": 87419260928
+        },
+        {
+          "label": "数据",
+          "usedBytes": 890028752896,
+          "name": "D:\\",
+          "totalBytes": 4000454610944,
+          "freeBytes": 3110425858048
+        },
+        {
+          "label": "软件",
+          "usedBytes": 304699256832,
+          "name": "E:\\",
+          "totalBytes": 809127710720,
+          "freeBytes": 504428453888
+        },
+        {
+          "label": "游戏",
+          "usedBytes": 744042614784,
+          "name": "F:\\",
+          "totalBytes": 1023877124096,
+          "freeBytes": 279834509312
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "get_system_info",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "CPU：AMD Ryzen 7 9700X 8-Core Processor             ；内存 31.1 GiB，可用 15.5 GiB",
+        "data": {
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalProcessors": 16,
+          "totalMemoryBytes": 33346146304,
+          "freeMemoryBytes": 16617406464,
+          "platform": "win32",
+          "arch": "x64",
+          "ok": true,
+          "summary": "CPU：AMD Ryzen 7 9700X 8-Core Processor             ；内存 31.1 GiB，可用 15.5 GiB"
+        },
+        "status": "completed",
+        "taskId": "5a4d7f7d-26c8-45cf-bfb3-e49c0a19ea68"
+      }
+    },
+    {
+      "name": "get_disk_space",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "已读取磁盘容量",
+        "data": {
+          "drives": [
+            {
+              "label": "系统",
+              "usedBytes": 127330148352,
+              "name": "C:\\",
+              "totalBytes": 214749409280,
+              "freeBytes": 87419260928
+            },
+            {
+              "label": "数据",
+              "usedBytes": 890028752896,
+              "name": "D:\\",
+              "totalBytes": 4000454610944,
+              "freeBytes": 3110425858048
+            },
+            {
+              "label": "软件",
+              "usedBytes": 304699256832,
+              "name": "E:\\",
+              "totalBytes": 809127710720,
+              "freeBytes": 504428453888
+            },
+            {
+              "label": "游戏",
+              "usedBytes": 744042614784,
+              "name": "F:\\",
+              "totalBytes": 1023877124096,
+              "freeBytes": 279834509312
+            }
+          ],
+          "asOf": 1793001600000,
+          "unit": "bytes",
+          "ok": true,
+          "summary": "已读取磁盘容量"
+        },
+        "status": "completed",
+        "taskId": "5a4d7f7d-26c8-45cf-bfb3-e49c0a19ea68"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "5a4d7f7d-26c8-45cf-bfb3-e49c0a19ea68",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "告诉我 CPU 型号、总内存以及 C 盘剩余空间。",
+    "target": {
+      "windowHandle": "10133",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-133"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "get_system_info",
+        "state": "completed",
+        "durationMs": 0
+      },
+      {
+        "tool": "get_disk_space",
+        "state": "completed",
+        "durationMs": 256
+      }
+    ],
+    "results": [
+      {
+        "tool": "get_system_info",
+        "state": "completed",
+        "data": {
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalProcessors": 16,
+          "totalMemoryBytes": 33346146304,
+          "freeMemoryBytes": 16617406464,
+          "platform": "win32",
+          "arch": "x64",
+          "ok": true,
+          "summary": "CPU：AMD Ryzen 7 9700X 8-Core Processor             ；内存 31.1 GiB，可用 15.5 GiB"
+        }
+      },
+      {
+        "tool": "get_disk_space",
+        "state": "completed",
+        "data": {
+          "drives": [
+            {
+              "label": "系统",
+              "usedBytes": 127330148352,
+              "name": "C:\\",
+              "totalBytes": 214749409280,
+              "freeBytes": 87419260928
+            },
+            {
+              "label": "数据",
+              "usedBytes": 890028752896,
+              "name": "D:\\",
+              "totalBytes": 4000454610944,
+              "freeBytes": 3110425858048
+            },
+            {
+              "label": "软件",
+              "usedBytes": 304699256832,
+              "name": "E:\\",
+              "totalBytes": 809127710720,
+              "freeBytes": 504428453888
+            },
+            {
+              "label": "游戏",
+              "usedBytes": 744042614784,
+              "name": "F:\\",
+              "totalBytes": 1023877124096,
+              "freeBytes": 279834509312
+            }
+          ],
+          "asOf": 1793001600000,
+          "unit": "bytes",
+          "ok": true,
+          "summary": "已读取磁盘容量"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-133）",
+    "[perf] tool:get_system_info 0ms ok=true",
+    "[task 5a4d7f7d-26c8-45cf-bfb3-e49c0a19ea68] stage=tool ms=0 state=completed",
+    "[task 5a4d7f7d-26c8-45cf-bfb3-e49c0a19ea68] tool=get_system_info status=completed ms=0",
+    "[perf] tool:get_disk_space 0ms ok=true",
+    "[task 5a4d7f7d-26c8-45cf-bfb3-e49c0a19ea68] stage=tool ms=256 state=completed",
+    "[task 5a4d7f7d-26c8-45cf-bfb3-e49c0a19ea68] tool=get_disk_space status=completed ms=256"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-133",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1073,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

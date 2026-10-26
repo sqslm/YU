@@ -145,7 +145,7 @@ let hubRetireTimer: NodeJS.Timeout | null = null
 let quitting = false
 let assistantCardActive = false
 let tray: ReturnType<typeof createTray> | null = null
-let hubView: import('./tools/personal').HubPage | null = null
+let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active); refreshWakeWord(active) }, line => log(line))
 const noteAudio=new NoteAudioPlayer(()=>barWindow,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null)
@@ -237,7 +237,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     history: (query, range) => history.list(query, 40, range),
     copy: text => clipboard.writeText(text),
     readClipboard: () => clipboard.readText(),
-    open: page => navigateHub(page),
+    open: (page, noteId) => navigateHub(page, noteId),
     controlNoteAudio:(action,id)=>noteAudio.control(action,id).then(value=>({...value})),
     syncInfo:()=>({enabled:store.get().syncEnabled,signedIn:Boolean(accounts.get()),failures:sync?.noteFailures()??[]})
   },
@@ -837,8 +837,8 @@ function ensureSettingsWindow(): BrowserWindow {
   return settingsWindow
 }
 
-function navigateHub(page: import('./tools/personal').HubPage): void {
-  hubView = page
+function navigateHub(page: import('./tools/personal').HubPage, noteId?: string): void {
+  hubView = { page, ...(noteId ? { noteId } : {}) }
   const win = ensureSettingsWindow()
   win.webContents.send('assistant:navigate')
 }

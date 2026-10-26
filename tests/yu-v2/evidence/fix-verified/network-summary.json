@@ -1,0 +1,86 @@
+[
+  {
+    "case": "YU-011",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1691,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-011",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1685,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-011",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 2250,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-011",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1695,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-011",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1562,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-087",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1623,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 2333,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1649,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1500,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 2165,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1365,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1280,
+    "host": "api.huyangmq.icu"
+  }
+]

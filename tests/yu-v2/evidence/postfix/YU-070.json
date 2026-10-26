@@ -1,0 +1,750 @@
+{
+  "case_id": "YU-070",
+  "input": "帮我查一下 Python 官方最新稳定版是多少。",
+  "spoken_input": "帮我查一下 Python 官方最新稳定版是多少。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-070",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "帮我查一下 Python 官方最新稳定版是多少。",
+            "answer": "",
+            "status": "正在读取网页…",
+            "streaming": true,
+            "taskId": "904c5077-dc4d-4c5a-8b11-33fef224c000",
+            "taskState": "running"
+          },
+          {
+            "question": "帮我查一下 Python 官方最新稳定版是多少。",
+            "answer": "暂时无法读取官方发布信息，不能确认当前最新稳定版。请检查网络或代理设置后重试。",
+            "sources": [
+              {
+                "title": "Python Release Python 3.15.0 | Python.org",
+                "url": "https://www.python.org/downloads/latest",
+                "snippet": "Notice: This page displays a fallback because interactive scripts did not run. Possible causes include disabled JavaScript or failure to load scripts or stylesheets. python™ Donate ≡ Menu A A + Smaller + Larger + Reset Socialize + LinkedIn + Mastodon + Chat on IRC + Twitter # Python 3.15.0 Release date: Oct. 9, 2026 ## This is the stable release of Python 3.15.0 [...] Python 3.15.0 is the newest m",
+                "publishedAt": "Fri, 09 Oct 2026 05:00:00 GMT"
+              },
+              {
+                "title": "Python 3.15.0 (final) is here! | Python Insider",
+                "url": "https://blog.python.org/2026/10/python-3150-final-is-here",
+                "snippet": "# Python 3.15.0 (final) is here! Hugo van Kemenade/ ## Python 3.15.0 is now available ## This is the stable release of Python 3.15.0 Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,643 commits from 1,012 contributors. ## Major new features of the 3.15 series, compared to 3.14 Some of the",
+                "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+              },
+              {
+                "title": "How to Install Python on Your System: A Guide – Real Python",
+                "url": "https://realpython.com/installing-python",
+                "snippet": "1. Open your browser and navigate to the downloads page for Windows on Python.org. 2. Under the Python Releases for Windows heading, click the link for the Latest Python 3 Release - Python 3.x.z. 3. Scroll to the bottom and select Windows installer (64-bit), Windows installer (32-bit), or Windows installer (ARM64) according to your system architecture. [...] If you have a rolling release Linux dis",
+                "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+              },
+              {
+                "title": "Python 3.15: Cool New Features for You to Try – Real Python",
+                "url": "https://realpython.com/python315-new-features",
+                "snippet": "Remove ads Recommended Course What's New in Python 3.15 (1h 10m) Python 3.15 was released on October 9, 2026, so now is a good time to see what the new version has in store for you. [...] Last year’s roundup of new features in Python 3.14 told you about a new incremental garbage collector, which promised shorter pauses on large heaps. It didn’t survive contact with production. After reports of sig",
+                "publishedAt": "Wed, 30 Sep 2026 00:00:00 GMT"
+              },
+              {
+                "title": "Summary of Major Changes Between Python Versions ...",
+                "url": "https://www.reddit.com/r/Python/comments/1xak07n/summary_of_major_changes_between_python_versions",
+                "snippet": "3.14 Latest stable version of Python. Latest Python upgrade (3.13 -> 3.14) on Jan, 3 2026. New Python releases are out, 3.10.x reaches EOL, (and 3.15.0 is",
+                "publishedAt": "Tue, 20 Oct 2026 08:00:00 GMT"
+              },
+              {
+                "title": "What's New in Python 3.15?",
+                "url": "https://www.jumpingrivers.com/blog/whats-new-py315",
+                "snippet": "See all results items # What's New in Python 3.15? Author: Russ Hyde Published: October 1, 2026 tags: python, development, language-release The Python Logo It’s October, so that means a new stable release of Python has arrived. Here we will review some of the changes introduced in Python 3.15. Prominent changes in Python 3.15 that we will cover: profiling & statistical sampling lazy imports unpack",
+                "publishedAt": "Wed, 30 Sep 2026 23:00:00 GMT"
+              },
+              {
+                "title": "The latest stable version of Python is Python 3.15.0, released on October 9, 2026.\n\nHere are two more Features of Python 3.16:\n\n5. Upgraded JIT Compiler: Delive",
+                "url": "https://www.facebook.com/100094595401178/posts/the-latest-stable-version-of-python-is-python-3150-released-on-october-9-2026her/973682295794942",
+                "snippet": "then VERIFY 🔁 Save + Follow @CodingDidi 💙 [...] 0:00 / 0:00 The latest stable version of Python is Python 3.15.0, released on October 9, 2026. Here are two more Features of Python 3.16: 5. Upgraded JIT Compiler: Delivers a 7% to 12% speedup with an improved tracing front-end. 6. Tachyon Profiler: New low-overhead periodic stack trace capture in the profiling package (PEP 799) #Programming #Trend",
+                "publishedAt": "Fri, 23 Oct 2026 13:00:00 GMT"
+              },
+              {
+                "title": "CPython roadmap - Python 3.12+ - Runtime - pyRevit Forums",
+                "url": "https://discourse.pyrevitlabs.io/t/cpython-roadmap-python-3-12/10574",
+                "snippet": "`3.12.3` I understand that managing and embedding Python runtimes alongside IronPython and .NET interop is a massive balancing act. I wanted to ask: Roadmap / Feasibility: Is there a planned roadmap or timeline for bumping the bundled CPython runtime to the latest stable release (e.g., Python 3.14+)? [...] List of known security vulnerabilities in Python 3.12.3, including CVE and CWE identifiers, ",
+                "publishedAt": "Tue, 29 Sep 2026 13:03:26 GMT"
+              },
+              {
+                "title": "Python - Debian Wiki",
+                "url": "https://wiki.debian.org/Python",
+                "snippet": "Python is a high-level, interactive, object-oriented language. Debian packages the latest stable Python 3. Debian 11 (Bullseye) was the last release to include",
+                "publishedAt": "Thu, 15 Oct 2026 00:00:00 GMT"
+              },
+              {
+                "title": "How to Install Python 3.14.8 on Windows 11/10 (2026)",
+                "url": "https://www.youtube.com/watch?v=Xg2dpRjB4gs",
+                "snippet": "### Transcript [0:00] We are going to install the latest version of Python on 2nd of October 2026. That is the Python version 3.14.8 and write a simple hello world program [0:08] using this. So let's get started. So first thing is you need to go to this URL. I'll have this link in the description below. Hover over downloads and you will see bunch of options [...] [1:20] print hello world and hello",
+                "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+              },
+              {
+                "title": "Python 3.15 有什么新变化 — Python 3.15.1 文档",
+                "url": "https://docs.python.org/zh-cn/3.15/whatsnew/3.15.html",
+                "snippet": "#### 上一主题 Python 的新变化 #### 下一主题 Python 3.14 有什么新变化 ### 当前页 报告代码错误 改进本页面 显示源码 显示翻译源 ### 导航 索引 模块 | 下一页 | 上一页 | Python » 3.15.1 Documentation » Python 的新变化 » Python 3.15 有什么新变化 | | © 版权 2001 Python Software Foundation. 本页面采用 Python 软件基金会许可证第 2 版授权。 文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。 更多信息请参阅《 历史与许可 》。 Python 软件基金会是一家非营利性公司。 请进行捐赠。 最后更新于10月 25, 2026 (10:58 UTC) 。 发现了错误？ 使用Sphinx 8.2.3 创建。 [...] 大型 P",
+                "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+              },
+              {
+                "title": "Python Release Python 3.13.17 | Python.org",
+                "url": "https://www.python.org/downloads/release/python-31317",
+                "snippet": "Note: The release you're looking at is Python 3.13.17, a security bugfix release for the legacy 3.13 series. Python 3.15 is now the latest feature release series of Python 3. Get the latest release of 3.15.x here. ## Security content in this release [...] For all existing virtual environments on your system, please upgrade pip and uv to the latest versions. To upgrade pip securely within a virtual",
+                "publishedAt": "Wed, 21 Oct 2026 09:00:00 GMT"
+              },
+              {
+                "title": "管理 Python 软件包  |  Artifact Registry  |  Google Cloud Documentation",
+                "url": "https://docs.cloud.google.com/artifact-registry/docs/python/manage-packages?hl=zh-cn",
+                "snippet": "您也可以通过自定义角色或其他预定义角色来获取所需的权限。 ## 添加软件包 代码库模式：标准 构建 Python 项目时，分发文件会保存在项目的 `dist` 子目录中。然后，您可以使用 Twine 将软件包上传到标准代码库。 我们建议您在创建套餐时遵循以下最佳实践： 为您的私有软件包使用唯一名称，以免它们与 pypi.org 上的软件包名称相匹配，尤其是在您的 pip 配置包含多个软件包索引的情况下。 为软件包版本号使用 PEP 440 中的版本标识符规范。默认情况下，pip 仅安装稳定版。它使用版本标识符规范来区分稳定版和预发布版，并解析要安装的版本的任何要求。 如需添加软件包，请执行以下操作： 1. 安装 Twine。 ``` ``` 2. 切换到您的 Python 项目目录。 3. 将分发文件从项目 `dist` 子目录上传到代码库。运行以下命令： ``` ``` 您可以使用 `-",
+                "publishedAt": "Fri, 23 Oct 2026 03:00:00 GMT"
+              },
+              {
+                "title": "Python 3.15.0 (64-bit)app-官方正版软件2026最新版本免费下载-应用宝官网",
+                "url": "https://sj.qq.com/appdetail/com.pythonsof.pcapp.python314564bit",
+                "snippet": "应用宝手机版 应用宝电脑版 Mac版(Apple芯片) Python 3.15.0 (64-bit) # Python 3.15.0 (64-bit) 0.0 658下载 Python Software Foundation 需先安装腾讯应用宝，提供无病毒、免广告的下载能力 # Python 3.15.0 (64-bit) 4.7 658下载 Python Software Foundation ## 预览 ### Python 3.15.0 (64-bit) 开发者： Python Software Foundation V3.15.150 运营者： Python Software Foundation 2026.10.22更新 简介 ### 应用宝 开发者： 深圳市腾讯计算机系统有限公司 V9.2.9 运营者： 深圳市腾讯计算机系统有限公司 2026.10.20更新应用权限隐私政策 简",
+                "publishedAt": "Wed, 21 Oct 2026 17:00:00 GMT"
+              },
+              {
+                "title": "GitHub Actions中Python预发布版本的CI/CD治理实践",
+                "url": "https://bbs.csdn.net/weixin_31822733/article/details/100573242",
+                "snippet": "这背后牵涉三个关键事实：第一，Python 核心开发团队与 GitHub Actions 团队存在深度协同机制，版本发布节奏、二进制构建策略、签名验证流程均提前对齐；第二，`actions/python-versions` 的更新逻辑并非“等官方发布再同步”，而是采用“预注册+灰度验证+自动回滚”三段式策略；第三，该操作直接影响所有使用 `setup-python` 的开源项目、企业私有仓库及教育类实训环境——哪怕你今天写的代码只用 3.9，你的 CI 流程已悄然被纳入 Python 3.15 的兼容性验证网络。 [...] 你刷到这个标题时，第一反应可能是：“Python 3.15.0？等等，官方还没发布这个版本啊。” 没错——截至2024年中，CPython 官方最新稳定版是 3.13.0（2024年10月发布），3.14.0 尚在开发中，3.15.0 连 alpha 都未进入。那为什",
+                "publishedAt": "Tue, 13 Oct 2026 00:00:00 GMT"
+              },
+              {
+                "title": "Python 3.15稳定版发布，默认采用UTF-8编码_凤凰网",
+                "url": "https://tech.ifeng.com/c/8x6h6lcyO5N",
+                "snippet": "Python 3.15稳定版发布，默认采用UTF-8编码 # Python 3.15稳定版发布，默认采用UTF-8编码 PEP 686：Python 现已默认采用 UTF-8 编码 PEP 798：推导式 (Comprehensions) 支持解包操作 PEP 810：支持显式延迟导入 (Lazy Imports)，缩短启动耗时 PEP 814：新增不可变字典内置类型 (frozendict) PEP 829：支持包级别的启动配置文件 实验性即时编译器 (JIT Compiler) 迎来重大升级：在 x86-64 Linux 平台上，相比标准解释器，几何平均性能提升了 7% 至 8%；在 AArch64 macOS 平台上，相比尾调用解释器 (Tail-calling Interpreter)，运行速度加快了 11% 至 12% 优化了错误提示信息 (Error Messages) 标准库",
+                "publishedAt": "Sat, 10 Oct 2026 04:24:52 GMT"
+              },
+              {
+                "title": "How to Check Python Version in CMD, Mac and Linux",
+                "url": "https://4geeks.com/en/how-to/how-to-check-python-version",
+                "snippet": "Get the latest version of Python with this easy guide! Learn how to check your current version and upgrade to the newest version with just a few clicks. #Python #VersionCheck #Upgrade 4 min read·Last updated cmd ``` python --version python -- version#Output: Python 3.11.0#Output: Python 3.11.0 ``` ## Checking the python version [...] ### For MacOS users: Go to Finder Click on Applications Select U",
+                "publishedAt": "Wed, 30 Sep 2026 00:00:00 GMT"
+              }
+            ],
+            "retrieval": {
+              "searched": true,
+              "failed": false,
+              "queries": [
+                "Python latest stable release version",
+                "Python latest",
+                "Python 官方 最新稳定版 版本",
+                "Python version latest"
+              ],
+              "pagesRead": 0,
+              "digest": false,
+              "partial": false
+            },
+            "tools": [
+              "web_search"
+            ],
+            "taskId": "904c5077-dc4d-4c5a-8b11-33fef224c000",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "904c5077-dc4d-4c5a-8b11-33fef224c000",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "帮我查一下 Python 官方最新稳定版是多少。",
+          "target": {
+            "windowHandle": "10070",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-070"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "durationMs": 3349
+            },
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "durationMs": 2467
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "durationMs": 1
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "durationMs": 1
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "model"
+          },
+          "transcript": "帮我查一下 Python 官方最新稳定版是多少。",
+          "results": [
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "query": "Python latest stable release version",
+                "queries": [
+                  "Python latest stable release version",
+                  "Python latest"
+                ],
+                "kind": "technical",
+                "digest": false,
+                "failedQueries": 0,
+                "freshness": "month",
+                "recencyDays": 30,
+                "retried": false,
+                "count": 10,
+                "results": [
+                  {
+                    "title": "Python Release Python 3.15.0 | Python.org",
+                    "url": "https://www.python.org/downloads/latest",
+                    "snippet": "Notice: This page displays a fallback because interactive scripts did not run. Possible causes include disabled JavaScript or failure to load scripts or stylesheets. python™ Donate ≡ Menu A A + Smaller + Larger + Reset Socialize + LinkedIn + Mastodon + Chat on IRC + Twitter # Python 3.15.0 Release date: Oct. 9, 2026 ## This is the stable release of Python 3.15.0 [...] Python 3.15.0 is the newest m",
+                    "publishedAt": "Fri, 09 Oct 2026 05:00:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15.0 (final) is here! | Python Insider",
+                    "url": "https://blog.python.org/2026/10/python-3150-final-is-here",
+                    "snippet": "# Python 3.15.0 (final) is here! Hugo van Kemenade/ ## Python 3.15.0 is now available ## This is the stable release of Python 3.15.0 Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,643 commits from 1,012 contributors. ## Major new features of the 3.15 series, compared to 3.14 Some of the",
+                    "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "How to Install Python on Your System: A Guide – Real Python",
+                    "url": "https://realpython.com/installing-python",
+                    "snippet": "1. Open your browser and navigate to the downloads page for Windows on Python.org. 2. Under the Python Releases for Windows heading, click the link for the Latest Python 3 Release - Python 3.x.z. 3. Scroll to the bottom and select Windows installer (64-bit), Windows installer (32-bit), or Windows installer (ARM64) according to your system architecture. [...] If you have a rolling release Linux dis",
+                    "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15: Cool New Features for You to Try – Real Python",
+                    "url": "https://realpython.com/python315-new-features",
+                    "snippet": "Remove ads Recommended Course What's New in Python 3.15 (1h 10m) Python 3.15 was released on October 9, 2026, so now is a good time to see what the new version has in store for you. [...] Last year’s roundup of new features in Python 3.14 told you about a new incremental garbage collector, which promised shorter pauses on large heaps. It didn’t survive contact with production. After reports of sig",
+                    "publishedAt": "Wed, 30 Sep 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "Summary of Major Changes Between Python Versions ...",
+                    "url": "https://www.reddit.com/r/Python/comments/1xak07n/summary_of_major_changes_between_python_versions",
+                    "snippet": "3.14 Latest stable version of Python. Latest Python upgrade (3.13 -> 3.14) on Jan, 3 2026. New Python releases are out, 3.10.x reaches EOL, (and 3.15.0 is",
+                    "publishedAt": "Tue, 20 Oct 2026 08:00:00 GMT"
+                  },
+                  {
+                    "title": "What's New in Python 3.15?",
+                    "url": "https://www.jumpingrivers.com/blog/whats-new-py315",
+                    "snippet": "See all results items # What's New in Python 3.15? Author: Russ Hyde Published: October 1, 2026 tags: python, development, language-release The Python Logo It’s October, so that means a new stable release of Python has arrived. Here we will review some of the changes introduced in Python 3.15. Prominent changes in Python 3.15 that we will cover: profiling & statistical sampling lazy imports unpack",
+                    "publishedAt": "Wed, 30 Sep 2026 23:00:00 GMT"
+                  },
+                  {
+                    "title": "The latest stable version of Python is Python 3.15.0, released on October 9, 2026.\n\nHere are two more Features of Python 3.16:\n\n5. Upgraded JIT Compiler: Delive",
+                    "url": "https://www.facebook.com/100094595401178/posts/the-latest-stable-version-of-python-is-python-3150-released-on-october-9-2026her/973682295794942",
+                    "snippet": "then VERIFY 🔁 Save + Follow @CodingDidi 💙 [...] 0:00 / 0:00 The latest stable version of Python is Python 3.15.0, released on October 9, 2026. Here are two more Features of Python 3.16: 5. Upgraded JIT Compiler: Delivers a 7% to 12% speedup with an improved tracing front-end. 6. Tachyon Profiler: New low-overhead periodic stack trace capture in the profiling package (PEP 799) #Programming #Trend",
+                    "publishedAt": "Fri, 23 Oct 2026 13:00:00 GMT"
+                  },
+                  {
+                    "title": "CPython roadmap - Python 3.12+ - Runtime - pyRevit Forums",
+                    "url": "https://discourse.pyrevitlabs.io/t/cpython-roadmap-python-3-12/10574",
+                    "snippet": "`3.12.3` I understand that managing and embedding Python runtimes alongside IronPython and .NET interop is a massive balancing act. I wanted to ask: Roadmap / Feasibility: Is there a planned roadmap or timeline for bumping the bundled CPython runtime to the latest stable release (e.g., Python 3.14+)? [...] List of known security vulnerabilities in Python 3.12.3, including CVE and CWE identifiers, ",
+                    "publishedAt": "Tue, 29 Sep 2026 13:03:26 GMT"
+                  },
+                  {
+                    "title": "Python - Debian Wiki",
+                    "url": "https://wiki.debian.org/Python",
+                    "snippet": "Python is a high-level, interactive, object-oriented language. Debian packages the latest stable Python 3. Debian 11 (Bullseye) was the last release to include",
+                    "publishedAt": "Thu, 15 Oct 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "How to Install Python 3.14.8 on Windows 11/10 (2026)",
+                    "url": "https://www.youtube.com/watch?v=Xg2dpRjB4gs",
+                    "snippet": "### Transcript [0:00] We are going to install the latest version of Python on 2nd of October 2026. That is the Python version 3.14.8 and write a simple hello world program [0:08] using this. So let's get started. So first thing is you need to go to this URL. I'll have this link in the description below. Hover over downloads and you will see bunch of options [...] [1:20] print hello world and hello",
+                    "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+                  }
+                ],
+                "text": "[1] Python Release Python 3.15.0 | Python.org — https://www.python.org/downloads/latest（事件日期：2026-10-09）\n[2] Python 3.15.0 (final) is here! | Python Insider — https://blog.python.org/2026/10/python-3150-final-is-here（页面发布于：2026-10-09）\n[3] How to Install Python on Your System: A Guide – Real Python — https://realpython.com/installing-python（页面发布于：2026-10-04）\n[4] Python 3.15: Cool New Features for You to Try – Real Python — https://realpython.com/python315-new-features（事件日期：2026-10-09；页面发布于：2026-09-30）\n[5] Summary of Major Changes Between Python Versions ... — https://www.reddit.com/r/Python/comments/1xak07n/summary_of_major_changes_between_python_versions（页面发布于：2026-10-20）\n[6] What's New in Python 3.15? — https://www.jumpingrivers.com/blog/whats-new-py315（事件日期：2026-10-01）\n[7] The latest stable version of Python is Python 3.15.0, released on October 9, 2026.\n\nHere are two more Features of Python 3.16:\n\n5. Upgraded JIT Compiler: Delive — https://www.facebook.com/100094595401178/posts/the-latest-stable-version-of-python-is-python-3150-released-on-october-9-2026her/973682295794942（事件日期：2026-10-09；页面发布于：2026-10-23）\n[8] CPython roadmap - Python 3.12+ - Runtime - pyRevit Forums — https://discourse.pyrevitlabs.io/t/cpython-roadmap-python-3-12/10574（页面发布于：2026-09-29）\n[9] Python - Debian Wiki — https://wiki.debian.org/Python（页面发布于：2026-10-15）\n[10] How to Install Python 3.14.8 on Windows 11/10 (2026) — https://www.youtube.com/watch?v=Xg2dpRjB4gs（页面发布于：2026-10-04）"
+              }
+            },
+            {
+              "tool": "web_search",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "query": "Python 官方 最新稳定版 版本",
+                "queries": [
+                  "Python 官方 最新稳定版 版本",
+                  "Python version latest"
+                ],
+                "kind": "technical",
+                "digest": false,
+                "failedQueries": 0,
+                "freshness": "month",
+                "recencyDays": 30,
+                "retried": false,
+                "count": 10,
+                "results": [
+                  {
+                    "title": "Python 3.15 有什么新变化 — Python 3.15.1 文档",
+                    "url": "https://docs.python.org/zh-cn/3.15/whatsnew/3.15.html",
+                    "snippet": "#### 上一主题 Python 的新变化 #### 下一主题 Python 3.14 有什么新变化 ### 当前页 报告代码错误 改进本页面 显示源码 显示翻译源 ### 导航 索引 模块 | 下一页 | 上一页 | Python » 3.15.1 Documentation » Python 的新变化 » Python 3.15 有什么新变化 | | © 版权 2001 Python Software Foundation. 本页面采用 Python 软件基金会许可证第 2 版授权。 文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。 更多信息请参阅《 历史与许可 》。 Python 软件基金会是一家非营利性公司。 请进行捐赠。 最后更新于10月 25, 2026 (10:58 UTC) 。 发现了错误？ 使用Sphinx 8.2.3 创建。 [...] 大型 P",
+                    "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "Python Release Python 3.13.17 | Python.org",
+                    "url": "https://www.python.org/downloads/release/python-31317",
+                    "snippet": "Note: The release you're looking at is Python 3.13.17, a security bugfix release for the legacy 3.13 series. Python 3.15 is now the latest feature release series of Python 3. Get the latest release of 3.15.x here. ## Security content in this release [...] For all existing virtual environments on your system, please upgrade pip and uv to the latest versions. To upgrade pip securely within a virtual",
+                    "publishedAt": "Wed, 21 Oct 2026 09:00:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15.0 (final) is here! | Python Insider",
+                    "url": "https://blog.python.org/2026/10/python-3150-final-is-here",
+                    "snippet": "# Python 3.15.0 (final) is here! Hugo van Kemenade/ ## Python 3.15.0 is now available ## This is the stable release of Python 3.15.0 Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,643 commits from 1,012 contributors. ## Major new features of the 3.15 series, compared to 3.14 Some of the",
+                    "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "How to Install Python on Your System: A Guide – Real Python",
+                    "url": "https://realpython.com/installing-python",
+                    "snippet": "1. Open your browser and navigate to the downloads page for Windows on Python.org. 2. Under the Python Releases for Windows heading, click the link for the Latest Python 3 Release - Python 3.x.z. 3. Scroll to the bottom and select Windows installer (64-bit), Windows installer (32-bit), or Windows installer (ARM64) according to your system architecture. [...] Note: If you want the `python` command ",
+                    "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "管理 Python 软件包  |  Artifact Registry  |  Google Cloud Documentation",
+                    "url": "https://docs.cloud.google.com/artifact-registry/docs/python/manage-packages?hl=zh-cn",
+                    "snippet": "您也可以通过自定义角色或其他预定义角色来获取所需的权限。 ## 添加软件包 代码库模式：标准 构建 Python 项目时，分发文件会保存在项目的 `dist` 子目录中。然后，您可以使用 Twine 将软件包上传到标准代码库。 我们建议您在创建套餐时遵循以下最佳实践： 为您的私有软件包使用唯一名称，以免它们与 pypi.org 上的软件包名称相匹配，尤其是在您的 pip 配置包含多个软件包索引的情况下。 为软件包版本号使用 PEP 440 中的版本标识符规范。默认情况下，pip 仅安装稳定版。它使用版本标识符规范来区分稳定版和预发布版，并解析要安装的版本的任何要求。 如需添加软件包，请执行以下操作： 1. 安装 Twine。 ``` ``` 2. 切换到您的 Python 项目目录。 3. 将分发文件从项目 `dist` 子目录上传到代码库。运行以下命令： ``` ``` 您可以使用 `-",
+                    "publishedAt": "Fri, 23 Oct 2026 03:00:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15.0 (64-bit)app-官方正版软件2026最新版本免费下载-应用宝官网",
+                    "url": "https://sj.qq.com/appdetail/com.pythonsof.pcapp.python314564bit",
+                    "snippet": "应用宝手机版 应用宝电脑版 Mac版(Apple芯片) Python 3.15.0 (64-bit) # Python 3.15.0 (64-bit) 0.0 658下载 Python Software Foundation 需先安装腾讯应用宝，提供无病毒、免广告的下载能力 # Python 3.15.0 (64-bit) 4.7 658下载 Python Software Foundation ## 预览 ### Python 3.15.0 (64-bit) 开发者： Python Software Foundation V3.15.150 运营者： Python Software Foundation 2026.10.22更新 简介 ### 应用宝 开发者： 深圳市腾讯计算机系统有限公司 V9.2.9 运营者： 深圳市腾讯计算机系统有限公司 2026.10.20更新应用权限隐私政策 简",
+                    "publishedAt": "Wed, 21 Oct 2026 17:00:00 GMT"
+                  },
+                  {
+                    "title": "GitHub Actions中Python预发布版本的CI/CD治理实践",
+                    "url": "https://bbs.csdn.net/weixin_31822733/article/details/100573242",
+                    "snippet": "这背后牵涉三个关键事实：第一，Python 核心开发团队与 GitHub Actions 团队存在深度协同机制，版本发布节奏、二进制构建策略、签名验证流程均提前对齐；第二，`actions/python-versions` 的更新逻辑并非“等官方发布再同步”，而是采用“预注册+灰度验证+自动回滚”三段式策略；第三，该操作直接影响所有使用 `setup-python` 的开源项目、企业私有仓库及教育类实训环境——哪怕你今天写的代码只用 3.9，你的 CI 流程已悄然被纳入 Python 3.15 的兼容性验证网络。 [...] 你刷到这个标题时，第一反应可能是：“Python 3.15.0？等等，官方还没发布这个版本啊。” 没错——截至2024年中，CPython 官方最新稳定版是 3.13.0（2024年10月发布），3.14.0 尚在开发中，3.15.0 连 alpha 都未进入。那为什",
+                    "publishedAt": "Tue, 13 Oct 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "Python 3.15稳定版发布，默认采用UTF-8编码_凤凰网",
+                    "url": "https://tech.ifeng.com/c/8x6h6lcyO5N",
+                    "snippet": "Python 3.15稳定版发布，默认采用UTF-8编码 # Python 3.15稳定版发布，默认采用UTF-8编码 PEP 686：Python 现已默认采用 UTF-8 编码 PEP 798：推导式 (Comprehensions) 支持解包操作 PEP 810：支持显式延迟导入 (Lazy Imports)，缩短启动耗时 PEP 814：新增不可变字典内置类型 (frozendict) PEP 829：支持包级别的启动配置文件 实验性即时编译器 (JIT Compiler) 迎来重大升级：在 x86-64 Linux 平台上，相比标准解释器，几何平均性能提升了 7% 至 8%；在 AArch64 macOS 平台上，相比尾调用解释器 (Tail-calling Interpreter)，运行速度加快了 11% 至 12% 优化了错误提示信息 (Error Messages) 标准库",
+                    "publishedAt": "Sat, 10 Oct 2026 04:24:52 GMT"
+                  },
+                  {
+                    "title": "How to Check Python Version in CMD, Mac and Linux",
+                    "url": "https://4geeks.com/en/how-to/how-to-check-python-version",
+                    "snippet": "Get the latest version of Python with this easy guide! Learn how to check your current version and upgrade to the newest version with just a few clicks. #Python #VersionCheck #Upgrade 4 min read·Last updated cmd ``` python --version python -- version#Output: Python 3.11.0#Output: Python 3.11.0 ``` ## Checking the python version [...] ### For MacOS users: Go to Finder Click on Applications Select U",
+                    "publishedAt": "Wed, 30 Sep 2026 00:00:00 GMT"
+                  },
+                  {
+                    "title": "How to Install Python 3.14.8 on Windows 11/10 (2026)",
+                    "url": "https://www.youtube.com/watch?v=Xg2dpRjB4gs",
+                    "snippet": "### Transcript [0:00] We are going to install the latest version of Python on 2nd of October 2026. That is the Python version 3.14.8 and write a simple hello world program [0:08] using this. So let's get started. So first thing is you need to go to this URL. I'll have this link in the description below. Hover over downloads and you will see bunch of options [...] [1:20] print hello world and hello",
+                    "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+                  }
+                ],
+                "text": "[1] Python 3.15 有什么新变化 — Python 3.15.1 文档 — https://docs.python.org/zh-cn/3.15/whatsnew/3.15.html（页面发布于：2026-10-09）\n[2] Python Release Python 3.13.17 | Python.org — https://www.python.org/downloads/release/python-31317（页面发布于：2026-10-21）\n[3] Python 3.15.0 (final) is here! | Python Insider — https://blog.python.org/2026/10/python-3150-final-is-here（页面发布于：2026-10-09）\n[4] How to Install Python on Your System: A Guide – Real Python — https://realpython.com/installing-python（页面发布于：2026-10-04）\n[5] 管理 Python 软件包  |  Artifact Registry  |  Google Cloud Documentation — https://docs.cloud.google.com/artifact-registry/docs/python/manage-packages?hl=zh-cn（页面发布于：2026-10-23）\n[6] Python 3.15.0 (64-bit)app-官方正版软件2026最新版本免费下载-应用宝官网 — https://sj.qq.com/appdetail/com.pythonsof.pcapp.python314564bit（事件日期：2026-10-22）\n[7] GitHub Actions中Python预发布版本的CI/CD治理实践 — https://bbs.csdn.net/weixin_31822733/article/details/100573242（页面发布于：2026-10-13）\n[8] Python 3.15稳定版发布，默认采用UTF-8编码_凤凰网 — https://tech.ifeng.com/c/8x6h6lcyO5N（页面发布于：2026-10-10）\n[9] How to Check Python Version in CMD, Mac and Linux — https://4geeks.com/en/how-to/how-to-check-python-version（页面发布于：2026-09-30）\n[10] How to Install Python 3.14.8 on Windows 11/10 (2026) — https://www.youtube.com/watch?v=Xg2dpRjB4gs（页面发布于：2026-10-04）"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "data": {
+                "url": "https://www.python.org/downloads/latest",
+                "ok": false,
+                "error": "拒绝访问内网地址"
+              }
+            },
+            {
+              "tool": "read_webpage",
+              "state": "failed",
+              "data": {
+                "url": "https://realpython.com/installing-python",
+                "ok": false,
+                "error": "拒绝访问内网地址"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "live_answer",
+      "value": "暂时无法读取官方发布信息，不能确认当前最新稳定版。请检查网络或代理设置后重试。"
+    },
+    {
+      "label": "official_python_comparison",
+      "value": {
+        "status": 200,
+        "pageSha256": "30fbfeb0a883c0b7c4c260c7660ba7502f80d5109317a950f0b04dab612310c4",
+        "observedLatest": "3.15.2"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "904c5077-dc4d-4c5a-8b11-33fef224c000",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我查一下 Python 官方最新稳定版是多少。",
+    "target": {
+      "windowHandle": "10070",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-070"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "durationMs": 3349
+      },
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "durationMs": 2467
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "durationMs": 1
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "durationMs": 1
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "model"
+    },
+    "transcript": "帮我查一下 Python 官方最新稳定版是多少。",
+    "results": [
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "query": "Python latest stable release version",
+          "queries": [
+            "Python latest stable release version",
+            "Python latest"
+          ],
+          "kind": "technical",
+          "digest": false,
+          "failedQueries": 0,
+          "freshness": "month",
+          "recencyDays": 30,
+          "retried": false,
+          "count": 10,
+          "results": [
+            {
+              "title": "Python Release Python 3.15.0 | Python.org",
+              "url": "https://www.python.org/downloads/latest",
+              "snippet": "Notice: This page displays a fallback because interactive scripts did not run. Possible causes include disabled JavaScript or failure to load scripts or stylesheets. python™ Donate ≡ Menu A A + Smaller + Larger + Reset Socialize + LinkedIn + Mastodon + Chat on IRC + Twitter # Python 3.15.0 Release date: Oct. 9, 2026 ## This is the stable release of Python 3.15.0 [...] Python 3.15.0 is the newest m",
+              "publishedAt": "Fri, 09 Oct 2026 05:00:00 GMT"
+            },
+            {
+              "title": "Python 3.15.0 (final) is here! | Python Insider",
+              "url": "https://blog.python.org/2026/10/python-3150-final-is-here",
+              "snippet": "# Python 3.15.0 (final) is here! Hugo van Kemenade/ ## Python 3.15.0 is now available ## This is the stable release of Python 3.15.0 Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,643 commits from 1,012 contributors. ## Major new features of the 3.15 series, compared to 3.14 Some of the",
+              "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+            },
+            {
+              "title": "How to Install Python on Your System: A Guide – Real Python",
+              "url": "https://realpython.com/installing-python",
+              "snippet": "1. Open your browser and navigate to the downloads page for Windows on Python.org. 2. Under the Python Releases for Windows heading, click the link for the Latest Python 3 Release - Python 3.x.z. 3. Scroll to the bottom and select Windows installer (64-bit), Windows installer (32-bit), or Windows installer (ARM64) according to your system architecture. [...] If you have a rolling release Linux dis",
+              "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+            },
+            {
+              "title": "Python 3.15: Cool New Features for You to Try – Real Python",
+              "url": "https://realpython.com/python315-new-features",
+              "snippet": "Remove ads Recommended Course What's New in Python 3.15 (1h 10m) Python 3.15 was released on October 9, 2026, so now is a good time to see what the new version has in store for you. [...] Last year’s roundup of new features in Python 3.14 told you about a new incremental garbage collector, which promised shorter pauses on large heaps. It didn’t survive contact with production. After reports of sig",
+              "publishedAt": "Wed, 30 Sep 2026 00:00:00 GMT"
+            },
+            {
+              "title": "Summary of Major Changes Between Python Versions ...",
+              "url": "https://www.reddit.com/r/Python/comments/1xak07n/summary_of_major_changes_between_python_versions",
+              "snippet": "3.14 Latest stable version of Python. Latest Python upgrade (3.13 -> 3.14) on Jan, 3 2026. New Python releases are out, 3.10.x reaches EOL, (and 3.15.0 is",
+              "publishedAt": "Tue, 20 Oct 2026 08:00:00 GMT"
+            },
+            {
+              "title": "What's New in Python 3.15?",
+              "url": "https://www.jumpingrivers.com/blog/whats-new-py315",
+              "snippet": "See all results items # What's New in Python 3.15? Author: Russ Hyde Published: October 1, 2026 tags: python, development, language-release The Python Logo It’s October, so that means a new stable release of Python has arrived. Here we will review some of the changes introduced in Python 3.15. Prominent changes in Python 3.15 that we will cover: profiling & statistical sampling lazy imports unpack",
+              "publishedAt": "Wed, 30 Sep 2026 23:00:00 GMT"
+            },
+            {
+              "title": "The latest stable version of Python is Python 3.15.0, released on October 9, 2026.\n\nHere are two more Features of Python 3.16:\n\n5. Upgraded JIT Compiler: Delive",
+              "url": "https://www.facebook.com/100094595401178/posts/the-latest-stable-version-of-python-is-python-3150-released-on-october-9-2026her/973682295794942",
+              "snippet": "then VERIFY 🔁 Save + Follow @CodingDidi 💙 [...] 0:00 / 0:00 The latest stable version of Python is Python 3.15.0, released on October 9, 2026. Here are two more Features of Python 3.16: 5. Upgraded JIT Compiler: Delivers a 7% to 12% speedup with an improved tracing front-end. 6. Tachyon Profiler: New low-overhead periodic stack trace capture in the profiling package (PEP 799) #Programming #Trend",
+              "publishedAt": "Fri, 23 Oct 2026 13:00:00 GMT"
+            },
+            {
+              "title": "CPython roadmap - Python 3.12+ - Runtime - pyRevit Forums",
+              "url": "https://discourse.pyrevitlabs.io/t/cpython-roadmap-python-3-12/10574",
+              "snippet": "`3.12.3` I understand that managing and embedding Python runtimes alongside IronPython and .NET interop is a massive balancing act. I wanted to ask: Roadmap / Feasibility: Is there a planned roadmap or timeline for bumping the bundled CPython runtime to the latest stable release (e.g., Python 3.14+)? [...] List of known security vulnerabilities in Python 3.12.3, including CVE and CWE identifiers, ",
+              "publishedAt": "Tue, 29 Sep 2026 13:03:26 GMT"
+            },
+            {
+              "title": "Python - Debian Wiki",
+              "url": "https://wiki.debian.org/Python",
+              "snippet": "Python is a high-level, interactive, object-oriented language. Debian packages the latest stable Python 3. Debian 11 (Bullseye) was the last release to include",
+              "publishedAt": "Thu, 15 Oct 2026 00:00:00 GMT"
+            },
+            {
+              "title": "How to Install Python 3.14.8 on Windows 11/10 (2026)",
+              "url": "https://www.youtube.com/watch?v=Xg2dpRjB4gs",
+              "snippet": "### Transcript [0:00] We are going to install the latest version of Python on 2nd of October 2026. That is the Python version 3.14.8 and write a simple hello world program [0:08] using this. So let's get started. So first thing is you need to go to this URL. I'll have this link in the description below. Hover over downloads and you will see bunch of options [...] [1:20] print hello world and hello",
+              "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+            }
+          ],
+          "text": "[1] Python Release Python 3.15.0 | Python.org — https://www.python.org/downloads/latest（事件日期：2026-10-09）\n[2] Python 3.15.0 (final) is here! | Python Insider — https://blog.python.org/2026/10/python-3150-final-is-here（页面发布于：2026-10-09）\n[3] How to Install Python on Your System: A Guide – Real Python — https://realpython.com/installing-python（页面发布于：2026-10-04）\n[4] Python 3.15: Cool New Features for You to Try – Real Python — https://realpython.com/python315-new-features（事件日期：2026-10-09；页面发布于：2026-09-30）\n[5] Summary of Major Changes Between Python Versions ... — https://www.reddit.com/r/Python/comments/1xak07n/summary_of_major_changes_between_python_versions（页面发布于：2026-10-20）\n[6] What's New in Python 3.15? — https://www.jumpingrivers.com/blog/whats-new-py315（事件日期：2026-10-01）\n[7] The latest stable version of Python is Python 3.15.0, released on October 9, 2026.\n\nHere are two more Features of Python 3.16:\n\n5. Upgraded JIT Compiler: Delive — https://www.facebook.com/100094595401178/posts/the-latest-stable-version-of-python-is-python-3150-released-on-october-9-2026her/973682295794942（事件日期：2026-10-09；页面发布于：2026-10-23）\n[8] CPython roadmap - Python 3.12+ - Runtime - pyRevit Forums — https://discourse.pyrevitlabs.io/t/cpython-roadmap-python-3-12/10574（页面发布于：2026-09-29）\n[9] Python - Debian Wiki — https://wiki.debian.org/Python（页面发布于：2026-10-15）\n[10] How to Install Python 3.14.8 on Windows 11/10 (2026) — https://www.youtube.com/watch?v=Xg2dpRjB4gs（页面发布于：2026-10-04）"
+        }
+      },
+      {
+        "tool": "web_search",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "query": "Python 官方 最新稳定版 版本",
+          "queries": [
+            "Python 官方 最新稳定版 版本",
+            "Python version latest"
+          ],
+          "kind": "technical",
+          "digest": false,
+          "failedQueries": 0,
+          "freshness": "month",
+          "recencyDays": 30,
+          "retried": false,
+          "count": 10,
+          "results": [
+            {
+              "title": "Python 3.15 有什么新变化 — Python 3.15.1 文档",
+              "url": "https://docs.python.org/zh-cn/3.15/whatsnew/3.15.html",
+              "snippet": "#### 上一主题 Python 的新变化 #### 下一主题 Python 3.14 有什么新变化 ### 当前页 报告代码错误 改进本页面 显示源码 显示翻译源 ### 导航 索引 模块 | 下一页 | 上一页 | Python » 3.15.1 Documentation » Python 的新变化 » Python 3.15 有什么新变化 | | © 版权 2001 Python Software Foundation. 本页面采用 Python 软件基金会许可证第 2 版授权。 文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。 更多信息请参阅《 历史与许可 》。 Python 软件基金会是一家非营利性公司。 请进行捐赠。 最后更新于10月 25, 2026 (10:58 UTC) 。 发现了错误？ 使用Sphinx 8.2.3 创建。 [...] 大型 P",
+              "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+            },
+            {
+              "title": "Python Release Python 3.13.17 | Python.org",
+              "url": "https://www.python.org/downloads/release/python-31317",
+              "snippet": "Note: The release you're looking at is Python 3.13.17, a security bugfix release for the legacy 3.13 series. Python 3.15 is now the latest feature release series of Python 3. Get the latest release of 3.15.x here. ## Security content in this release [...] For all existing virtual environments on your system, please upgrade pip and uv to the latest versions. To upgrade pip securely within a virtual",
+              "publishedAt": "Wed, 21 Oct 2026 09:00:00 GMT"
+            },
+            {
+              "title": "Python 3.15.0 (final) is here! | Python Insider",
+              "url": "https://blog.python.org/2026/10/python-3150-final-is-here",
+              "snippet": "# Python 3.15.0 (final) is here! Hugo van Kemenade/ ## Python 3.15.0 is now available ## This is the stable release of Python 3.15.0 Python 3.15.0 is the newest major release of the Python programming language, and it contains many new features and optimisations compared to Python 3.14, in 5,643 commits from 1,012 contributors. ## Major new features of the 3.15 series, compared to 3.14 Some of the",
+              "publishedAt": "Fri, 09 Oct 2026 00:00:00 GMT"
+            },
+            {
+              "title": "How to Install Python on Your System: A Guide – Real Python",
+              "url": "https://realpython.com/installing-python",
+              "snippet": "1. Open your browser and navigate to the downloads page for Windows on Python.org. 2. Under the Python Releases for Windows heading, click the link for the Latest Python 3 Release - Python 3.x.z. 3. Scroll to the bottom and select Windows installer (64-bit), Windows installer (32-bit), or Windows installer (ARM64) according to your system architecture. [...] Note: If you want the `python` command ",
+              "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+            },
+            {
+              "title": "管理 Python 软件包  |  Artifact Registry  |  Google Cloud Documentation",
+              "url": "https://docs.cloud.google.com/artifact-registry/docs/python/manage-packages?hl=zh-cn",
+              "snippet": "您也可以通过自定义角色或其他预定义角色来获取所需的权限。 ## 添加软件包 代码库模式：标准 构建 Python 项目时，分发文件会保存在项目的 `dist` 子目录中。然后，您可以使用 Twine 将软件包上传到标准代码库。 我们建议您在创建套餐时遵循以下最佳实践： 为您的私有软件包使用唯一名称，以免它们与 pypi.org 上的软件包名称相匹配，尤其是在您的 pip 配置包含多个软件包索引的情况下。 为软件包版本号使用 PEP 440 中的版本标识符规范。默认情况下，pip 仅安装稳定版。它使用版本标识符规范来区分稳定版和预发布版，并解析要安装的版本的任何要求。 如需添加软件包，请执行以下操作： 1. 安装 Twine。 ``` ``` 2. 切换到您的 Python 项目目录。 3. 将分发文件从项目 `dist` 子目录上传到代码库。运行以下命令： ``` ``` 您可以使用 `-",
+              "publishedAt": "Fri, 23 Oct 2026 03:00:00 GMT"
+            },
+            {
+              "title": "Python 3.15.0 (64-bit)app-官方正版软件2026最新版本免费下载-应用宝官网",
+              "url": "https://sj.qq.com/appdetail/com.pythonsof.pcapp.python314564bit",
+              "snippet": "应用宝手机版 应用宝电脑版 Mac版(Apple芯片) Python 3.15.0 (64-bit) # Python 3.15.0 (64-bit) 0.0 658下载 Python Software Foundation 需先安装腾讯应用宝，提供无病毒、免广告的下载能力 # Python 3.15.0 (64-bit) 4.7 658下载 Python Software Foundation ## 预览 ### Python 3.15.0 (64-bit) 开发者： Python Software Foundation V3.15.150 运营者： Python Software Foundation 2026.10.22更新 简介 ### 应用宝 开发者： 深圳市腾讯计算机系统有限公司 V9.2.9 运营者： 深圳市腾讯计算机系统有限公司 2026.10.20更新应用权限隐私政策 简",
+              "publishedAt": "Wed, 21 Oct 2026 17:00:00 GMT"
+            },
+            {
+              "title": "GitHub Actions中Python预发布版本的CI/CD治理实践",
+              "url": "https://bbs.csdn.net/weixin_31822733/article/details/100573242",
+              "snippet": "这背后牵涉三个关键事实：第一，Python 核心开发团队与 GitHub Actions 团队存在深度协同机制，版本发布节奏、二进制构建策略、签名验证流程均提前对齐；第二，`actions/python-versions` 的更新逻辑并非“等官方发布再同步”，而是采用“预注册+灰度验证+自动回滚”三段式策略；第三，该操作直接影响所有使用 `setup-python` 的开源项目、企业私有仓库及教育类实训环境——哪怕你今天写的代码只用 3.9，你的 CI 流程已悄然被纳入 Python 3.15 的兼容性验证网络。 [...] 你刷到这个标题时，第一反应可能是：“Python 3.15.0？等等，官方还没发布这个版本啊。” 没错——截至2024年中，CPython 官方最新稳定版是 3.13.0（2024年10月发布），3.14.0 尚在开发中，3.15.0 连 alpha 都未进入。那为什",
+              "publishedAt": "Tue, 13 Oct 2026 00:00:00 GMT"
+            },
+            {
+              "title": "Python 3.15稳定版发布，默认采用UTF-8编码_凤凰网",
+              "url": "https://tech.ifeng.com/c/8x6h6lcyO5N",
+              "snippet": "Python 3.15稳定版发布，默认采用UTF-8编码 # Python 3.15稳定版发布，默认采用UTF-8编码 PEP 686：Python 现已默认采用 UTF-8 编码 PEP 798：推导式 (Comprehensions) 支持解包操作 PEP 810：支持显式延迟导入 (Lazy Imports)，缩短启动耗时 PEP 814：新增不可变字典内置类型 (frozendict) PEP 829：支持包级别的启动配置文件 实验性即时编译器 (JIT Compiler) 迎来重大升级：在 x86-64 Linux 平台上，相比标准解释器，几何平均性能提升了 7% 至 8%；在 AArch64 macOS 平台上，相比尾调用解释器 (Tail-calling Interpreter)，运行速度加快了 11% 至 12% 优化了错误提示信息 (Error Messages) 标准库",
+              "publishedAt": "Sat, 10 Oct 2026 04:24:52 GMT"
+            },
+            {
+              "title": "How to Check Python Version in CMD, Mac and Linux",
+              "url": "https://4geeks.com/en/how-to/how-to-check-python-version",
+              "snippet": "Get the latest version of Python with this easy guide! Learn how to check your current version and upgrade to the newest version with just a few clicks. #Python #VersionCheck #Upgrade 4 min read·Last updated cmd ``` python --version python -- version#Output: Python 3.11.0#Output: Python 3.11.0 ``` ## Checking the python version [...] ### For MacOS users: Go to Finder Click on Applications Select U",
+              "publishedAt": "Wed, 30 Sep 2026 00:00:00 GMT"
+            },
+            {
+              "title": "How to Install Python 3.14.8 on Windows 11/10 (2026)",
+              "url": "https://www.youtube.com/watch?v=Xg2dpRjB4gs",
+              "snippet": "### Transcript [0:00] We are going to install the latest version of Python on 2nd of October 2026. That is the Python version 3.14.8 and write a simple hello world program [0:08] using this. So let's get started. So first thing is you need to go to this URL. I'll have this link in the description below. Hover over downloads and you will see bunch of options [...] [1:20] print hello world and hello",
+              "publishedAt": "Sun, 04 Oct 2026 00:00:00 GMT"
+            }
+          ],
+          "text": "[1] Python 3.15 有什么新变化 — Python 3.15.1 文档 — https://docs.python.org/zh-cn/3.15/whatsnew/3.15.html（页面发布于：2026-10-09）\n[2] Python Release Python 3.13.17 | Python.org — https://www.python.org/downloads/release/python-31317（页面发布于：2026-10-21）\n[3] Python 3.15.0 (final) is here! | Python Insider — https://blog.python.org/2026/10/python-3150-final-is-here（页面发布于：2026-10-09）\n[4] How to Install Python on Your System: A Guide – Real Python — https://realpython.com/installing-python（页面发布于：2026-10-04）\n[5] 管理 Python 软件包  |  Artifact Registry  |  Google Cloud Documentation — https://docs.cloud.google.com/artifact-registry/docs/python/manage-packages?hl=zh-cn（页面发布于：2026-10-23）\n[6] Python 3.15.0 (64-bit)app-官方正版软件2026最新版本免费下载-应用宝官网 — https://sj.qq.com/appdetail/com.pythonsof.pcapp.python314564bit（事件日期：2026-10-22）\n[7] GitHub Actions中Python预发布版本的CI/CD治理实践 — https://bbs.csdn.net/weixin_31822733/article/details/100573242（页面发布于：2026-10-13）\n[8] Python 3.15稳定版发布，默认采用UTF-8编码_凤凰网 — https://tech.ifeng.com/c/8x6h6lcyO5N（页面发布于：2026-10-10）\n[9] How to Check Python Version in CMD, Mac and Linux — https://4geeks.com/en/how-to/how-to-check-python-version（页面发布于：2026-09-30）\n[10] How to Install Python 3.14.8 on Windows 11/10 (2026) — https://www.youtube.com/watch?v=Xg2dpRjB4gs（页面发布于：2026-10-04）"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "data": {
+          "url": "https://www.python.org/downloads/latest",
+          "ok": false,
+          "error": "拒绝访问内网地址"
+        }
+      },
+      {
+        "tool": "read_webpage",
+        "state": "failed",
+        "data": {
+          "url": "https://realpython.com/installing-python",
+          "ok": false,
+          "error": "拒绝访问内网地址"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-070）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-070\"",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-070\"",
+    "[asr] local sense-voice-small: 24 chars",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-070\"",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=llm ms=1755",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=routing ms=1755",
+    "[voice-entry] ask",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=llm ms=1571",
+    "[perf] llm round0 0ms",
+    "[perf] search 0ms tavily/web hits=10 \"Python latest stable release version\"",
+    "[perf] search 0ms tavily/web hits=8 \"Python latest\"",
+    "[search] 10 result(s) for \"Python latest stable release version\" via Python latest stable release version | Python latest",
+    "[perf] tool:web_search 0ms ok=true",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=tool ms=3349 state=completed",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] tool=web_search status=completed ms=3349",
+    "[perf] search 0ms tavily/web hits=7 \"Python 官方 最新稳定版 版本\"",
+    "[perf] search 0ms tavily/web hits=7 \"Python version latest\"",
+    "[search] 10 result(s) for \"Python 官方 最新稳定版 版本\" via Python 官方 最新稳定版 版本 | Python version latest",
+    "[perf] tool:web_search 0ms ok=true",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=tool ms=2467 state=completed",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] tool=web_search status=completed ms=2467",
+    "[perf] tools round0 0ms (2 calls)",
+    "[tool] web_search ok=true 检索到 10 条结果（Python latest stable release version）",
+    "[tool] web_search ok=true 检索到 10 条结果（Python 官方 最新稳定版 版本）",
+    "[perf] tool:read_webpage 0ms ok=false",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=tool ms=1 state=failed",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] tool=read_webpage status=failed ms=1",
+    "[read] https://www.python.org/downloads/latest failed: 拒绝访问内网地址",
+    "[perf] tool:read_webpage 0ms ok=false",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=tool ms=1 state=failed",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] tool=read_webpage status=failed ms=1",
+    "[read] https://realpython.com/installing-python failed: 拒绝访问内网地址",
+    "[perf] read 2 page(s) 0ms ok=0",
+    "[perf] enrich 0ms",
+    "[perf] ask total 0ms",
+    "[task 904c5077-dc4d-4c5a-8b11-33fef224c000] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-070",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1755,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-070",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1570,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1474,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 3338,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 2267,
+      "host": "api.tavily.com"
+    },
+    {
+      "case": "YU-070",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 2461,
+      "host": "api.tavily.com"
+    }
+  ],
+  "final_status": "ENV_BLOCKED"
+}

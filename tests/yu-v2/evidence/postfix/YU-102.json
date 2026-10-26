@@ -1,0 +1,87 @@
+{
+  "case_id": "YU-102",
+  "input": "【在浏览器里按右 Alt，录音过程中切换到资源管理器】总结我刚才打开的那个网页。",
+  "spoken_input": "总结我刚才打开的那个网页。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-102",
+  "observations": [
+    {
+      "label": "window_snapshot",
+      "value": {
+        "original": {
+          "windowHandle": "10001",
+          "processId": 1001,
+          "appName": "Editor",
+          "windowTitle": "Original document"
+        },
+        "after": {
+          "windowHandle": "10001",
+          "processId": 1001,
+          "windowTitle": "Original document",
+          "appName": "Editor",
+          "task": {
+            "id": "1b11ddd5-5821-40e4-8df9-14346b856b20",
+            "source": "voice",
+            "triggeredAt": 1793001600000,
+            "originalInput": "总结我刚才打开的那个网页。",
+            "target": {
+              "windowHandle": "10001",
+              "processId": 1001,
+              "appName": "Editor",
+              "windowTitle": "Original document"
+            },
+            "state": "pending",
+            "receipts": []
+          }
+        },
+        "matchesOther": false
+      }
+    },
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "44ff969d-4bb6-46e9-9672-2433adbefbff",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "总结我刚才打开的那个网页。",
+    "target": {
+      "windowHandle": "10102",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-102"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-102）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-102",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1537,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

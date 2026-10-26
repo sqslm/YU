@@ -10,6 +10,7 @@ const portArg = process.argv.indexOf('--port')
 const PORT = portArg > 0 ? Number(process.argv[portArg + 1]) : 8787
 const TRANSCRIPT =
   process.env.MOCK_TRANSCRIPT ?? '嗯 那个 我们今天 下午三点 开个会 讨论一下 复刻的事情 啊'
+const SCENARIO_DATE = process.env.MOCK_SCENARIO_DATE ?? new Date().toISOString().slice(0, 10)
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -239,12 +240,12 @@ const SCENARIOS = {
     ]
   },
   G: {
-    answer: '这条消息本身是 2026-10-18 发布的；2023 年那篇是同名旧文。',
+    answer: `这条消息本身是 ${SCENARIO_DATE} 发布的；2023 年那篇是同名旧文。`,
     results: [
       {
         title: 'Nvidia announces next-gen Rubin GPUs',
         url: 'https://nvidianews.nvidia.com/news/rubin-gpus',
-        content: 'Official announcement, 2026-10-18.'
+        content: `Official announcement, ${SCENARIO_DATE}.`
       },
       {
         title: 'Nvidia announces next-gen Rubin GPUs',

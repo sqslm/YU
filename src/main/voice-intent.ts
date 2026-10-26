@@ -43,7 +43,7 @@ export function stopSpeakingRequest(text: string): { text_only: boolean } | null
 
 /** A selected region or a requested upload preview needs the local editor first. */
 export function screenshotNeedsEditor(text: string): boolean {
-  return !isDictatedContent(text) && /跨屏|多屏|all screens|multi.?monitor|框选|选区|准备发送|先.{0,8}(?:看|预览)|\b(?:preview|selected (?:area|region))\b/iu.test(text) &&
+  return !isDictatedContent(text) && /跨屏|多屏|all screens|multi.?monitor|框选|选区|准备发送|先.{0,12}(?:看|预览|展示|确认)|(?:展示|确认).{0,12}(?:上传|发送|发给)|确认.{0,8}(?:之后|以后|后|再分析)|(?:分析|上传|发送).{0,10}前.{0,10}确认|\b(?:preview|confirm.{0,30}(?:upload|send|before)|(?:upload|send).{0,30}confirm|selected (?:area|region))\b/iu.test(text) &&
     /截图|屏幕|框选区域|\b(?:screenshot|screen|region)\b/iu.test(text)
 }
 
@@ -57,7 +57,7 @@ export function speechPlaybackRequest(text:string):{name:string;args:Record<stri
 }
 
 /** Unambiguous whole-utterance commands avoid a second model round trip. */
-const REMIND_ME_PREFIX = /^(?:(?:请|帮我|请帮我)\s*)?提醒我|^(?:今天|明天|后天|[零〇一二两三四五六七八九十百\d]+\s*(?:分钟|小时)后|半小时后).{0,8}提醒我|^(?:please\s+)?remind me\b/iu
+const REMIND_ME_PREFIX = /^(?:(?:请|帮我|请帮我)\s*)?提醒我|^(?:今天|明天|后天|[零〇一二两三四五六七八九十百\d]+\s*(?:分钟|小时)后|半小时后).{0,8}提醒我|^(?:从.{1,24}开始[，,\s]*)?每.{1,40}提醒我|^(?:please\s+)?remind me\b/iu
 export function isReminderCreationRequest(value: string): boolean {
   if (/提醒我.{0,12}(?:这件事|这项任务|刚才那)|\bremind me\b.{0,35}\b(?:about (?:it|that)|this task|that task)\b/iu.test(value)) return false
   return REMIND_ME_PREFIX.test(value) || /^(?:(?:请|帮我|请帮我)\s*)?(?:设置.{0,8}提醒|创建.{0,8}(?:提醒|待办)|添加.{0,8}待办)|^(?:please\s+)?(?:set|create|add)\b.{0,20}\b(?:reminder|to-?do)\b/iu.test(value)

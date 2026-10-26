@@ -47,6 +47,21 @@ export function validRecurrence(value: unknown): value is ReminderRecurrence {
     (r.frequency !== 'weekly' || Array.isArray(r.weekdays) && r.weekdays.length > 0 && r.weekdays.length <= 7 && r.weekdays.every(d => integer(d, 0, 6)))
 }
 
+export function unsupportedReminderZone(text: string): boolean {
+  return /\b(?:Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/[a-z_+-]+(?:\/[a-z_+-]+)?\b|\b(?:UTC|GMT|CST|IST|EST|EDT|PST|PDT|CET|CEST|JST|KST|AEST)\b|\b(?:Pacific|Eastern|Central|Mountain|Atlantic)(?:\s+(?:standard|daylight))?\s+time\b|(?:按|按照|以)\s*(?!本地|当地|當地)[^，,。;\s]{1,12}(?:时间|時間|时区|時區)|^(?!本地|当地|當地)[\p{Script=Han}]{1,6}(?:时间|時間)(?=今天|明天|后天|上午|下午|早|晚|\d)|(?:时区|時區|time\s*zone)/iu.test(text)
+}
+
+function quantity(text: string): number {
+  if (/^\d+$/.test(text)) return Number(text)
+  const map: Record<string, number> = { 一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10 }
+  if (map[text.toLowerCase()] !== undefined) return map[text.toLowerCase()]
+  if (/^[一二三四五六七八九]?十[一二三四五六七八九]?$/.test(text)) {
+    const [head, tail] = text.split('十')
+    return (head ? map[head] : 1) * 10 + (tail ? map[tail] : 0)
+  }
+  return NaN
+}
+
 /** Normalize spoken quantities before Chrono resolves the local date/time. */
 function normalizeTimeExpression(text: string): string {
   text = text.replace(/\b(\d{1,2})([ap]m)\b/gi, '$1 $2')
@@ -109,6 +124,7 @@ function weeklyDays(text: string): { text: string; days?: number[] } {
  */
 export function resolveDeadline(expression: string | null, now: number): number | null {
   if (!expression?.trim()) return null
+  if (unsupportedReminderZone(expression)) return null
   const strict = resolveReminderTime(expression, now)
   if (!strict.issue && strict.dueAt !== null) return strict.dueAt
   const text = normalizeTimeExpression(expression.trim())
@@ -130,25 +146,41 @@ export function resolveReminderTime(expression: string | null, now: number): {
 } {
   const uncertain = (issue: string): ReturnType<typeof resolveReminderTime> => ({ dueAt: null, recurrence: null, issue: mt(issue) })
   if (!expression?.trim()) return uncertain('请补充具体提醒时间')
+  if (unsupportedReminderZone(expression)) return uncertain('暂不支持指定时区，请换算为本地日期和时间')
   let source = normalizeTimeExpression(expression.trim())
+  source = source.replace(/每(?:个|個)?月\s*([一二两三四五六七八九十]+)\s*[日号號]/gu, (_all, day: string) => `每月${quantity(day)}日`)
   source=source.replace(/每(?:个|個)?月(?:的)?(?:最后一天|最後一天|月底)/gu,'每月31日').replace(/\b(?:every month|monthly) (?:on )?(?:the )?last day\b/giu,'every month on the 31st')
   const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December']
   source=source.replace(new RegExp(`\\b(every year|yearly|annually)\\s+(?:on\\s+)?(${monthNames.map(name=>name+'|'+name.slice(0,3)).join('|')})\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`,'giu'),(_all,_unit:string,month:string,day:string)=>`every year on ${monthNames.findIndex(name=>name.toLowerCase().startsWith(month.toLowerCase()))+1}-${day}`)
   let count: number | undefined, until: number | undefined, interval = 1
-  const quantity = (text:string):number => {
-    if(/^\d+$/.test(text))return Number(text)
-    const map:Record<string,number>={一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10}
-    if(map[text.toLowerCase()]!==undefined)return map[text.toLowerCase()]
-    if(/^[一二三四五六七八九]?十[一二三四五六七八九]?$/.test(text)){const [head,tail]=text.split('十');return (head?map[head]:1)*10+(tail?map[tail]:0)}
-    return NaN
+  let starting: Date | undefined
+  const begins = /^从(.+?)开始[，,\s]*/u.exec(source)
+  if (begins && /每/u.test(source)) {
+    const parsed = zh.hans.parse(begins[1], new Date(now), { forwardDate: true })
+    if (parsed.length !== 1 || parsed[0].end || !parsed[0].start.isCertain('day') && !parsed[0].start.isCertain('weekday')) return uncertain('请补充明确的重复开始日期')
+    starting = parsed[0].start.date()
+    source = source.slice(begins[0].length)
   }
   source = source.replace(/(?:总共|總共|共|重复|重複)\s*(\d+|[零〇一二两三四五六七八九十百千]+)\s*次|\b(?:for|repeat)\s+(\w+)\s+times?\b/iu, (_all,a:string,b:string)=>{count=quantity(a||b);return ''})
   source = source.replace(/(?:持续|持續)\s*(\d+|[一二两三四五六七八九十百千]+)\s*天|\bfor\s+(\w+)\s+days?\b/iu, (_all,a:string,b:string)=>{const days=quantity(a||b),d=new Date(now);d.setDate(d.getDate()+days-1);d.setHours(23,59,59,999);until=+d;return ''})
-  const end = /(?:直到|截止|截至)|\buntil\b/iu.exec(source)
-  if(end){const date=source.slice(end.index+end[0].length).replace(/[。.!，,\s]+$/u,'').trim();const parser=/[\u4e00-\u9fff]/.test(date)?zh.hans:en;const rows=parser.parse(date,new Date(now),{forwardDate:true});if(rows.length!==1||!rows[0].start.isCertain('day'))return uncertain('请补充明确的重复结束日期');const d=rows[0].start.date();d.setHours(23,59,59,999);until=+d;source=source.slice(0,end.index)}
+  const end = /(?:一直到|直到|截止|截至)|\buntil\b/iu.exec(source)
+  if (end) {
+    const date = source.slice(end.index + end[0].length).replace(/[。.!，,\s]+$/u, '').trim()
+    if (/^(?:这个|這個|这|這|本)?月底$/u.test(date)) {
+      const d = new Date(now)
+      until = +new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
+    } else {
+      const parser = /[\u4e00-\u9fff]/.test(date) ? zh.hans : en
+      const rows = parser.parse(date, new Date(now), { forwardDate: true })
+      if (rows.length !== 1 || !rows[0].start.isCertain('day')) return uncertain('请补充明确的重复结束日期')
+      const d = rows[0].start.date(); d.setHours(23,59,59,999); until = +d
+    }
+    source = source.slice(0, end.index)
+  }
   if(/总共|總共|持续|持續|直到|截止|截至|限定|\b(?:until|for|times)\b/iu.test(source))return uncertain('暂不支持此重复规则，请手动确认')
   source=source.replace(/每\s*(\d+|[一二两三四五六七八九十百千]+)\s*(?:个|個)?(天|日|周|星期|月|年)|\bevery\s+(\w+)\s+(days?|weeks?|months?|years?)\b/iu,(_all,a:string,unit:string,b:string,enUnit:string)=>{interval=quantity(a||b);return a?`每${unit}`:`every ${enUnit.replace(/s$/,'')}`})
   source=source.replace(/每周(?:周|星期)([一二三四五六日天])/u,'每周$1')
+  if (starting && /每(?:周|星期)(?!\s*[一二三四五六日天1-7])/u.test(source)) source = source.replace(/每(?:周|星期)/u, `每周${'日一二三四五六'[starting.getDay()]}`)
   const monthly = /每(?:个|個)?月\s*(\d{1,2})\s*[日号號]|\b(?:every\s+month\s+(?:on\s+)?(?:the\s+)?|monthly\s+(?:on\s+)?)(\d{1,2})(?:st|nd|rd|th)?/iu.exec(source)
   const yearly = /每年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号號]|\b(?:every\s+year|yearly)\s+(?:on\s+)?(\d{1,2})-(\d{1,2})\b/iu.exec(source)
   const periodic = monthly || yearly
@@ -182,7 +214,12 @@ export function resolveReminderTime(expression: string | null, now: number): {
       ...(monthly?{day:Number(monthly[1]||monthly[2])}:{}), ...(yearly?{month:Number(yearly[1]||yearly[3]),day:Number(yearly[2]||yearly[4])}:{}),
       ...(interval!==1?{interval,anchor:now}:{}),...(count!==undefined?{count}:{}),...(until!==undefined?{until}:{}) }
     if(!validRecurrence(recurrence))return uncertain('重复规则无效')
-    if(interval!==1){const first=nextOccurrence({...recurrence,interval:1,anchor:undefined},now);if(first===null)return uncertain('结束日期之前没有可执行的提醒');recurrence.anchor=first}
+    if (interval !== 1 || starting) {
+      const after = starting ? Math.max(now, +new Date(starting.getFullYear(), starting.getMonth(), starting.getDate()) - 1) : now
+      const first = nextOccurrence({ ...recurrence, interval: 1, anchor: undefined }, after)
+      if (first === null) return uncertain('结束日期之前没有可执行的提醒')
+      recurrence.anchor = first
+    }
     const dueAt=nextOccurrence(recurrence, now)
     return dueAt===null?uncertain('结束日期之前没有可执行的提醒'): { dueAt, recurrence }
   }

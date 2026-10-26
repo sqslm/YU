@@ -1,0 +1,132 @@
+{
+  "case_id": "YU-096",
+  "input": "我重启软件后，刚才的强提醒还在吗？",
+  "spoken_input": "我重启软件后，刚才的强提醒还在吗？",
+  "fixed_clock": "2026-10-26T08:02:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-096",
+  "observations": [
+    {
+      "label": "after_store_restart",
+      "value": {
+        "records": [
+          {
+            "title": "V2 pending strong",
+            "description": "",
+            "dueAt": 1793001660000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "4d14c7da-1200-4a37-8050-d8a62c526c54",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001720000,
+            "status": "due",
+            "deliveredAt": 1793001720000,
+            "missedAt": 1793001660000
+          },
+          {
+            "title": "V2 cancelled strong",
+            "description": "",
+            "dueAt": 1793001660000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "b2cf55ba-46db-4b41-836e-489213cc4379",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "cancelled",
+            "deliveredAt": null
+          }
+        ],
+        "missed": [
+          {
+            "title": "V2 pending strong",
+            "description": "",
+            "dueAt": 1793001660000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "4d14c7da-1200-4a37-8050-d8a62c526c54",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001720000,
+            "status": "due",
+            "deliveredAt": 1793001720000,
+            "missedAt": 1793001660000
+          }
+        ],
+        "nativeWindowCalls": 0
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "V2 pending strong",
+      "description": "",
+      "dueAt": 1793001660000,
+      "level": "strong",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "4d14c7da-1200-4a37-8050-d8a62c526c54",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001720000,
+      "status": "due",
+      "deliveredAt": 1793001720000,
+      "missedAt": 1793001660000
+    },
+    {
+      "title": "V2 cancelled strong",
+      "description": "",
+      "dueAt": 1793001660000,
+      "level": "strong",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "b2cf55ba-46db-4b41-836e-489213cc4379",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "cancelled",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "6d5452ae-be45-45c7-9155-1b8db475dfd1",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我重启软件后，刚才的强提醒还在吗？",
+    "target": {
+      "windowHandle": "10096",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-096"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-096）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

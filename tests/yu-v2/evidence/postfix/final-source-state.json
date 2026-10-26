@@ -1,0 +1,33 @@
+{
+  "tested_worktree_base": "6d05dbd2af2b1239412a84781b12f5931ba940f3",
+  "source_dirty_during_tests": true,
+  "tested_run_id": "v2-2026-10-26T08-43-10-007Z",
+  "hash_basis": "SHA256 of working-tree file bytes at final verification",
+  "source_files": {
+    "ASSISTANT_ROADMAP.md": "a601026270532a078650ff34f3241aef066820ef5aef2ae886922c1e165635e6",
+    "README.md": "5a5d82ce72623de25c3132675aa60e792f665f66293f2877ffaab26d783b8cfb",
+    "scripts/mock-openai.mjs": "7658c72d5a9f730a2c81180801cfa217225a4e1697edcc62b3f36e4cc7ba2034",
+    "src/main/agent.test.ts": "d341276c7575ad3b8e8b25194a29552e0d2f0f7e76255756238b69e293024225",
+    "src/main/agent.ts": "db0eb683031a1efbcb4a1a8faa75300abbd60f428486214cae244d5490107de5",
+    "src/main/ask-acceptance.test.ts": "01ad86d4e59b4e5f0166ae125b68e87b300ca65f08cfabd389e83079ad92c4c9",
+    "src/main/assistant.ts": "5a58312611cad5b3989ccc45848191eeb76eb2cddc0886d10b9d9d332c1abd5d",
+    "src/main/index.ts": "34ceab201bc70134662d4b7736a0751e82d0dd6aa4499bf8a0dc41fe33fcfdf4",
+    "src/main/providers/search.ts": "1cff9c6ee4a118ededaf046820e723497ee78be32582502800d507be580ee332",
+    "src/main/reminder-parser.test.ts": "7ff3801c7dc69311cad834ed0575bd95a0be19d07cd39ba573a22bc3fe994b7c",
+    "src/main/reminder-parser.ts": "deba5177c85967215b4cc3e702053d7b106a96299a96149285f166f436c7aecc",
+    "src/main/reminder-service.test.ts": "76e1614dac9c8bd9d8b2b72498499e13ca677a6df1d58c719f0b2373fe60ddd7",
+    "src/main/reminder-service.ts": "5954850259c133a0da82699248b817ee71903f323043d4bd98a07e9a2f569dda",
+    "src/main/reminder-time.ts": "28ef50b0f49dcd91d7f214fdc7067488cd048092b0a0b4d074c3a17ee8eb4d7e",
+    "src/main/tools/personal.test.ts": "64d58a3931a22be96645a369eef81b2e09576ab6307aa3667531a40ea9295229",
+    "src/main/tools/personal.ts": "00df6c7a0e8c75680e55f708f6fbcd7e35336cf6f78677d1addd2e35fe8f3c0f",
+    "src/main/tools/windows.ts": "24eecca3556f098bae267f0019962bea62d3ebca0ca18400b6d5f28b8affefd2",
+    "src/main/tools/workflow.test.ts": "7771302579d96eaf8d0e5ebca6856f7bb27b83a16eeb84463b005cd78ccb9256",
+    "src/main/tools/workflow.ts": "d9a9ed5bf8794c91b7af1b3e916ea21e0795f3b6e144287f52541fb96de2f733",
+    "src/main/voice-intent.ts": "1efe8b70acca6fc3244001e7606fc974b383cc1bc14b73dcee5d1039cfda1307",
+    "src/main/workflows.ts": "1c848496351840b94ee46d8dfc52fec9c6ae2cffcc3e33694e909c723a7d1e41",
+    "src/renderer/src/settings/App.tsx": "4f79b31077f420a851f6a57b439655ba86326857c668d8577a7cf20fe6b7199b",
+    "src/renderer/src/settings/pages/NotesPage.tsx": "8e7039913659a1dee962e1a061995af684a025a080854a2bd0fd6d5a0696f572",
+    "src/shared/api.ts": "d7ade59dea36c55dec761f06ff32d758292ea36dabacbfa1193333ad8ae232aa",
+    "src/main/v2-regressions.test.ts": "7edc5720d7b53718b9e455c2032e0ecf78e5e8b280f118154051648ea60fad27"
+  }
+}

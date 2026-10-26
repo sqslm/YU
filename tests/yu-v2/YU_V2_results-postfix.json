@@ -1,0 +1,2271 @@
+{
+  "suite": "YU V2 150",
+  "version": "2.0",
+  "run_id": "v2-2026-10-26T08-21-06-989Z",
+  "environment": {
+    "os": "win32 10.0.26300",
+    "app_commit": "6d05dbd2af2b1239412a84781b12f5931ba940f3",
+    "version": "1.1.0-rc.1",
+    "tester": "Codex",
+    "timezone": "Asia/Singapore",
+    "started_at": "2026-10-26T08:21:06.989Z",
+    "notes": "Real product modules and isolated data; ASR input and native GUI boundary are controlled fixtures. No real speech/desktop E2E claim. Provider credentials are read-only, decrypted in an isolated Electron process and kept in memory only.",
+    "live_model": "cn:deepseek-v4.1-flash",
+    "network_requests": 221,
+    "model_requests": 181,
+    "elapsed_ms": 364148,
+    "fixture_root": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF"
+  },
+  "cases": [
+    {
+      "id": "YU-001",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际模型润色及原始/润色双字段、录音文件落盘已验证；没有真实麦克风与口头禅听感验收。",
+      "evidence": [
+        "evidence/postfix/YU-001.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "随记模块可用；使用隔离测试账户。；用真实语音重跑并对照原音、转写和润色结果。",
+      "duration_ms": 1622,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-002",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已取得实际模型回答且无业务写入；解释质量需人工阅读确认。",
+      "evidence": [
+        "evidence/postfix/YU-002.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "核对证据中的实际答复回答原问题且没有工具越权。",
+      "duration_ms": 7015,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-003",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-003.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3410,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-004",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-004.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3537,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-005",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"rule\"}；提醒/待办=0，随记=0，日程=1；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-005.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3429,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-006",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际 Windows 应用发现找到候选，未启动或复用用户正在工作的应用窗口。",
+      "evidence": [
+        "evidence/postfix/YU-006.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离桌面执行原题；核对新进程/窗口及应用ID，关闭仅本题新建的窗口。",
+      "duration_ms": 1170,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-007",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际Pipeline读取受控选区、调用模型并记录实际编辑结果；目标编辑器/系统选区未实测，语义与替换授权仍需人工核对。",
+      "evidence": [
+        "evidence/postfix/YU-007.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "先在测试编辑器选中可读取的文本，再复测空选区。；比较证据中的原文/结果，核对未授权替换、保留原意及目标窗口。",
+      "duration_ms": 2830,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-008",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"ask\",\"via\":\"model\"}；提醒/待办=0，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-008.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 2952,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-009",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"notes\",\"via\":\"rule\"}；提醒/待办=0，随记=1，日程=0；工具回执=create_note:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-009.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1595,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-010",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已取得实际模型回答且无业务写入；解释质量需人工阅读确认。",
+      "evidence": [
+        "evidence/postfix/YU-010.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "核对证据中的实际答复回答原问题且没有工具越权。",
+      "duration_ms": 4324,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-011",
+      "status": "FAIL",
+      "actual_behavior": "Compound note + untimed todo must create both, without invented alert time",
+      "evidence": [
+        "evidence/postfix/YU-011.json"
+      ],
+      "root_cause_hypothesis": "隔离集成断言失败；需结合证据区分路由、模型参数提取和业务执行，尚未独立确认根因。",
+      "manual_steps": "",
+      "duration_ms": 5279,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-012",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"selection\",\"via\":\"model\"}；提醒/待办=0，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-012.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1118,
+      "module": "A",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-013",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际模型创建+真实SQLite+真实调度器已验证一分钟到期只投递一次；系统通知可见性/置顶与快捷键未实测。",
+      "evidence": [
+        "evidence/postfix/YU-013.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "冻结时间并加速调度，或在隔离实例真实等待一分钟。；核对通知/强提醒可确认、稍后提醒，Alt+Tab和Esc正常。",
+      "duration_ms": 3566,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-014",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际模型创建+真实SQLite+真实调度器已验证一分钟到期只投递一次；系统通知可见性/置顶与快捷键未实测。",
+      "evidence": [
+        "evidence/postfix/YU-014.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "隔离测试实例；安全检查强提醒窗口。；核对通知/强提醒可确认、稍后提醒，Alt+Tab和Esc正常。",
+      "duration_ms": 2835,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-015",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-015.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3162,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-016",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-016.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 2761,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-017",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"model\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-017.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 5159,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-018",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-018.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3481,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-019",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-019.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3579,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-020",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-020.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4126,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-021",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-021.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3823,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-022",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=0，随记=0，日程=0；工具回执=create_reminder:awaiting_confirmation。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-022.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3044,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-023",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=0，随记=0，日程=0；工具回执=create_reminder:awaiting_confirmation。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-023.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3595,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-024",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-024.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3292,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-025",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-025.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3154,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-026",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-026.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4088,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-027",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-027.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3538,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-028",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-028.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3037,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-029",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-029.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3263,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-030",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"model\"}；提醒/待办=3，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-030.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4408,
+      "module": "B",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-031",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际模型润色及原始/润色双字段、录音文件落盘已验证；没有真实麦克风与口头禅听感验收。",
+      "evidence": [
+        "evidence/postfix/YU-031.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "随记ASR+润色链路已配置。；用真实语音重跑并对照原音、转写和润色结果。",
+      "duration_ms": 1152,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-032",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"notes\",\"via\":\"rule\"}；提醒/待办=0，随记=1，日程=0；工具回执=create_note:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-032.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1483,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-033",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际模型润色及原始/润色双字段、录音文件落盘已验证；没有真实麦克风与口头禅听感验收。",
+      "evidence": [
+        "evidence/postfix/YU-033.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "测试ASR容易混淆的同音词；品牌热词如存在则启用。；用真实语音重跑并对照原音、转写和润色结果。",
+      "duration_ms": 1366,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-034",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"model\"}；提醒/待办=0，随记=2，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-034.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 6507,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-035",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"rule\"}；提醒/待办=0，随记=2，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-035.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4339,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-036",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已核对真实最近记录ID与导航请求一致；Electron实际渲染和选中仍需人工验收。",
+      "evidence": [
+        "evidence/postfix/YU-036.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "点击或语音打开后核对随记页面实际选中ID，不要只看列表答复。",
+      "duration_ms": 37,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-037",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"model\"}；提醒/待办=0，随记=2，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-037.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4895,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-038",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"model\"}；提醒/待办=0，随记=2，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-038.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 8801,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-039",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"model\"}；提醒/待办=0，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-039.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3692,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-040",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-040.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "预置有有效音频的随记；音频设备可用。；播放正确音频、能正常结束；不写出无谓解压临时文件。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 34,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-041",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-041.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "正在播放上一条测试录音。；播放位置停住；下次继续可从当前进度播放。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 33,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-042",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "原题经Pipeline实际查询了全状态记录；实际答复明确把Finished排除在未完成之外。独立pending查询也返回准确两条。此前仅检查原始工具响应的断言过严，已纠正；最终文字语义需人工复核。",
+      "evidence": [
+        "evidence/postfix/YU-042.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "核对实际答复表格只列Future reminder和Untimed task，Finished仅在已完成说明出现，不能被计入未完成数量。",
+      "duration_ms": 5419,
+      "module": "C",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-043",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际 Windows 应用发现找到候选，未启动或复用用户正在工作的应用窗口。",
+      "evidence": [
+        "evidence/postfix/YU-043.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离桌面执行原题；核对新进程/窗口及应用ID，关闭仅本题新建的窗口。",
+      "duration_ms": 1078,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-044",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际 Windows 应用发现找到候选，未启动或复用用户正在工作的应用窗口。",
+      "evidence": [
+        "evidence/postfix/YU-044.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离桌面执行原题；核对新进程/窗口及应用ID，关闭仅本题新建的窗口。",
+      "duration_ms": 1100,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-045",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际 Windows 应用发现找到候选，未启动或复用用户正在工作的应用窗口。",
+      "evidence": [
+        "evidence/postfix/YU-045.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离桌面执行原题；核对新进程/窗口及应用ID，关闭仅本题新建的窗口。",
+      "duration_ms": 1060,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-046",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-046.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "把Windows下载位置或应用设置指定到测试非默认目录。；打开正确目录；不返回虚假默认路径。；仅使用沙箱目录。",
+      "duration_ms": 384,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-047",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"useContext\":false,\"via\":\"live_model\",\"raw\":\"{\\\"kind\\\":\\\"assistant\\\",\\\"text\\\":null,\\\"target\\\":null,\\\"operation\\\":null,\\\"useContext\\\":false}\"}；提醒/待办=0，随记=0，日程=0；工具回执=search_file_activity:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-047.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1831,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-048",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"useContext\":false,\"via\":\"live_model\",\"raw\":\"{\\\"kind\\\":\\\"assistant\\\",\\\"text\\\":null,\\\"target\\\":null,\\\"operation\\\":null,\\\"useContext\\\":false}\"}；提醒/待办=0，随记=0，日程=0；工具回执=search_files:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-048.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1999,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-049",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-049.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "资源管理器当前打开 D:\\photo；文件夹存在且有文件。；路径=D:\\photo；返回最大文件真实名称及大小。；仅使用沙箱目录。",
+      "duration_ms": 1697,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-050",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-050.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "当前文件夹下有一层以上子目录，带 PNG 样本。；包含子目录结果；范围未越出目标目录；无全盘扫描。；仅使用沙箱目录。",
+      "duration_ms": 1724,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-051",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-051.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "上一轮已返回至少2个PDF结果。；打开结果数组中第二条对应绝对路径，不重新猜路径。；仅使用沙箱目录。",
+      "duration_ms": 374,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-052",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-052.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "上一条测试已经成功打开一个PDF。；打开正确父目录，非默认Downloads。；仅使用沙箱目录。",
+      "duration_ms": 1781,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-053",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"useContext\":false,\"via\":\"live_model\",\"raw\":\"{\\\"kind\\\":\\\"assistant\\\",\\\"text\\\":null,\\\"target\\\":null,\\\"operation\\\":null,\\\"useContext\\\":false}\"}；提醒/待办=0，随记=0，日程=0；工具回执=get_system_info:completed,get_disk_space:completed。完整实际字段、输出和文件证据见逐题JSON。 已验证业务/系统读取层，未完成真实右Alt语音和GUI端到端。",
+      "evidence": [
+        "evidence/postfix/YU-053.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "测试机器存在 D 盘，否则 ENV_BLOCKED。；数值与系统API一致，单位换算正确；不建议用户自己去看代替执行。",
+      "duration_ms": 1982,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-054",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"rule\",\"text\":\"看一下我电脑现在有多少内存和是什么 CPU。\"}；提醒/待办=0，随记=0，日程=0；工具回执=get_system_info:completed。完整实际字段、输出和文件证据见逐题JSON。 已验证业务/系统读取层，未完成真实右Alt语音和GUI端到端。",
+      "evidence": [
+        "evidence/postfix/YU-054.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "Windows 系统信息 API 可用。；值与系统查询结果一致。",
+      "duration_ms": 36,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-055",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已查询真实系统音量；未更改用户正在使用的音频端点。",
+      "evidence": [
+        "evidence/postfix/YU-055.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在允许改变音量的测试桌面记录原值，执行30%/静音/取消静音，读回并恢复原值。",
+      "duration_ms": 379,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-056",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "原题路由已执行；真实浏览器打开行为留待人工。",
+      "evidence": [
+        "evidence/postfix/YU-056.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "执行原题并确认地址精确为 https://github.com，不执行模型生成的Shell。",
+      "duration_ms": 1568,
+      "module": "D",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-057",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际Pipeline读取受控选区、调用模型并记录实际编辑结果；目标编辑器/系统选区未实测，语义与替换授权仍需人工核对。",
+      "evidence": [
+        "evidence/postfix/YU-057.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "VS Code 中选中已知测试代码。；比较证据中的原文/结果，核对未授权替换、保留原意及目标窗口。",
+      "duration_ms": 2631,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-058",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际Pipeline读取受控选区、调用模型并记录实际编辑结果；目标编辑器/系统选区未实测，语义与替换授权仍需人工核对。",
+      "evidence": [
+        "evidence/postfix/YU-058.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "VS Code 选中含“## ”前缀的注释。；比较证据中的原文/结果，核对未授权替换、保留原意及目标窗口。",
+      "duration_ms": 3029,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-059",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际Pipeline读取受控选区、调用模型并记录实际编辑结果；目标编辑器/系统选区未实测，语义与替换授权仍需人工核对。",
+      "evidence": [
+        "evidence/postfix/YU-059.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "文档编辑器里有选中文字。；比较证据中的原文/结果，核对未授权替换、保留原意及目标窗口。",
+      "duration_ms": 2685,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-060",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-060.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "上一轮润色有确定结果；测试编辑器可编辑。；仅目标选区变化；未修改其余内容；确认机制按产品要求执行。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 32,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-061",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际窗口工具返回冻结的受控原窗口快照；尚未验证右Alt前Win32真实窗口。",
+      "evidence": [
+        "evidence/postfix/YU-061.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "先聚焦 VS Code，再按右 Alt。；对比真实HWND、PID和标题，不能显示YU自身窗口。",
+      "duration_ms": 33,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-062",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际窗口工具返回冻结的受控原窗口快照；尚未验证右Alt前Win32真实窗口。",
+      "evidence": [
+        "evidence/postfix/YU-062.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "聚焦一个标题已知的测试窗口。；对比真实HWND、PID和标题，不能显示YU自身窗口。",
+      "duration_ms": 34,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-063",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-063.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "资源管理器已打开 D:\\photo。；真实目录为 D:\\photo，而非猜测窗口标题。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 1780,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-064",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际统一入口/模型与内存剪贴板适配器已执行；没有读取或覆盖系统剪贴板。",
+      "evidence": [
+        "evidence/postfix/YU-064.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在剪贴板准备无敏感测试文本。；在隔离桌面核对实际剪贴板内容等于目标文本，完成后恢复原值。",
+      "duration_ms": 3015,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-065",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际统一入口/模型与内存剪贴板适配器已执行；没有读取或覆盖系统剪贴板。",
+      "evidence": [
+        "evidence/postfix/YU-065.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "上一轮已生成可用总结。；在隔离桌面核对实际剪贴板内容等于目标文本，完成后恢复原值。",
+      "duration_ms": 2528,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-066",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=0，日程=0；工具回执=get_active_window:failed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-066.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 35,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-067",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-067.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "设置窗口匹配规则并在语音录制期间切换窗口。；显示卡片ID与真实LLM请求来源一致；不被后来窗口改变。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 32,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-068",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题路由与安全边界代码检查；本题要求的原生界面/截图/提示词链仍需专门验证。",
+      "evidence": [
+        "evidence/postfix/YU-068.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "打开可编辑的测试文档。；文件哈希/编辑状态不变；提供建议文本。",
+      "duration_ms": 34,
+      "module": "E",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-069",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已实际联网检索并取得带来源回答；事件日期与逐条引证语义需人工阅读验证。",
+      "evidence": [
+        "evidence/postfix/YU-069.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "打开证据中的来源，区分事件发生日期和发布/抓取日期，核对每条陈述。",
+      "duration_ms": 23900,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-070",
+      "status": "ENV_BLOCKED",
+      "actual_behavior": "官方原文读取被当前网络/代理的地址校验或访问错误阻断；助手已明确不能核实最新版本，没有把摘要旧版本称为最新版。",
+      "evidence": [
+        "evidence/postfix/YU-070.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在能解析到公网地址的专用网络下重试，核对官方页面真实版本与最终答复一致。",
+      "duration_ms": 10423,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "environment_probe",
+      "subchecks": []
+    },
+    {
+      "id": "YU-071",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-071.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "浏览器聚焦已知可公开访问测试页。；使用真实URL与正文；未从无关页面得出摘要。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 34,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-072",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-072.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "仍聚焦同一公开测试网页。；摘要对应当前文章；缺权限时合理说明。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 34,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-073",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-073.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "上一轮已读取真实网页。；浏览器打开精确来源URL。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 33,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-074",
+      "status": "ENV_BLOCKED",
+      "actual_behavior": "本轮未配置带可信登录墙的公开测试页或此前新闻结果上下文，未用假正文代替真实网页。",
+      "evidence": [
+        "evidence/postfix/YU-074.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "使用测试登录墙网页；不提供Cookie。；无虚构全文；没有绕过登录或抓取Cookie。",
+      "duration_ms": 1658,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "environment_probe",
+      "subchecks": []
+    },
+    {
+      "id": "YU-075",
+      "status": "ENV_BLOCKED",
+      "actual_behavior": "本轮未配置带可信登录墙的公开测试页或此前新闻结果上下文，未用假正文代替真实网页。",
+      "evidence": [
+        "evidence/postfix/YU-075.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "上一轮搜索返回至少两条并保留结果ID。；指向正确第二条；无列表索引错乱。",
+      "duration_ms": 1188,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "environment_probe",
+      "subchecks": []
+    },
+    {
+      "id": "YU-076",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-076.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "承接上一测试。；打开正确URL，非搜索首页或无关站点。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 1387,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-077",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际Pipeline读取受控选区、调用模型并记录实际编辑结果；目标编辑器/系统选区未实测，语义与替换授权仍需人工核对。",
+      "evidence": [
+        "evidence/postfix/YU-077.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "选中含英文句子及 `get_active_window` 的测试文本。；比较证据中的原文/结果，核对未授权替换、保留原意及目标窗口。",
+      "duration_ms": 2850,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-078",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"ask\",\"via\":\"model\"}；提醒/待办=0，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-078.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 7083,
+      "module": "F",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-079",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-079.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "测试窗口显示固定错误提示；视觉Provider已配置。；截图对象正确；分析引用图像中真实错误。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 1713,
+      "module": "G",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-080",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-080.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "准备含可识别文本的测试屏幕。；识别文字与截图内容一致；不对整个屏幕偷截。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 35,
+      "module": "G",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-081",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-081.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "当前有测试图表截图并允许发送到Provider。；结论基于实际图表；不杜撰坐标数字。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 1509,
+      "module": "G",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-082",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-082.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 33,
+      "module": "G",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-083",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实预览路由保护已检查，未发送截图；确认/取消和图像哈希一致性需在截图编辑器实测。",
+      "evidence": [
+        "evidence/postfix/YU-083.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "开启截图上下文上传确认。；未确认/取消时网络请求数必须为0，确认后发送图像哈希等于预览。",
+      "duration_ms": 34,
+      "module": "G",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-084",
+      "status": "ENV_BLOCKED",
+      "actual_behavior": "本轮未建立副屏上的受控测试窗口和物理坐标夹具，不能验证副屏捕获。",
+      "evidence": [
+        "evidence/postfix/YU-084.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "连接并记录双屏边界与缩放率，在第二屏展示专用测试图并完成原题。",
+      "duration_ms": 34,
+      "module": "G",
+      "automated_executed": true,
+      "verification_level": "environment_probe",
+      "subchecks": []
+    },
+    {
+      "id": "YU-085",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"rule\"}；提醒/待办=0，随记=0，日程=1；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-085.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3655,
+      "module": "H",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-086",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"rule\"}；提醒/待办=0，随记=0，日程=2；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-086.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3248,
+      "module": "H",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-087",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"model\"}；提醒/待办=0，随记=0，日程=2；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-087.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1377,
+      "module": "H",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-088",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "统一入口已调用真实简报工具，内存设置为单一08:00计划且没有创建提醒；配置持久化、实际调度及关闭后的停发尚未验证。",
+      "evidence": [
+        "evidence/postfix/YU-088.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离实例保存08:00设置并重启，核对仅生成一份简报；关闭后推进时钟确认不再生成。",
+      "duration_ms": 3676,
+      "module": "H",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-089",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "停止/文字设置或路由已测试；本轮没有向用户扬声器播放声音，不能证明实际播放、暂停和继续。",
+      "evidence": [
+        "evidence/postfix/YU-089.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "TTS已配置，至少两项未完成任务。；人工听辨内容，观察暂停位置与恢复位置，结束后恢复设置。",
+      "duration_ms": 31,
+      "module": "H",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-090",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "停止/文字设置或路由已测试；本轮没有向用户扬声器播放声音，不能证明实际播放、暂停和继续。",
+      "evidence": [
+        "evidence/postfix/YU-090.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "TTS正在播放。；人工听辨内容，观察暂停位置与恢复位置，结束后恢复设置。",
+      "duration_ms": 34,
+      "module": "H",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-091",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=1，日程=0；工具回执=sync_status:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-091.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 321,
+      "module": "I",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-092",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=1，日程=0；工具回执=note_sync_status:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-092.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 84,
+      "module": "I",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-093",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=1，日程=0；工具回执=note_sync_status:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-093.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 79,
+      "module": "I",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-094",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已通过真实本地服务端及运行时暂停同步，提醒记录不变；真实通知到时显示需人工确认。",
+      "evidence": [
+        "evidence/postfix/YU-094.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离实例暂停同步后等待一分钟，确认本地通知可见且没有新的同步请求。",
+      "duration_ms": 83,
+      "module": "I",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-095",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行转写边界后的本地保存；未断开真实网络和麦克风。",
+      "evidence": [
+        "evidence/postfix/YU-095.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "使用隔离实例断网，通过真实麦克风输入，确认原始录音与文字落盘，恢复后检查同步。",
+      "duration_ms": 1372,
+      "module": "I",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-096",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实 SQLite 已关闭/重新打开，待处理及取消状态保留；调度恢复已调用，真实强提醒窗口尚未验收。",
+      "evidence": [
+        "evidence/postfix/YU-096.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "用隔离 Electron 实例重启两次，核对待处理队列/确认策略和窗口没有重复弹出。",
+      "duration_ms": 50,
+      "module": "I",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-097",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "连续原题文本经过真实 Pipeline、模型及业务存储，最终数据断言已验证；尚未用麦克风和桌面完成整条链。",
+      "evidence": [
+        "evidence/postfix/YU-097.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "开启一次新会话；隔离提醒库。；按原题顺序发出语音，核对页面ID和条数。",
+      "duration_ms": 15631,
+      "module": "J",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-098",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-098.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "预置至少2个匹配PDF，配置真实下载目录。；第二项索引正确；文件与父目录一致。；仅使用沙箱目录。",
+      "duration_ms": 1917,
+      "module": "J",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-099",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "连续原题文本经过真实 Pipeline、模型及业务存储，最终数据断言已验证；尚未用麦克风和桌面完成整条链。",
+      "evidence": [
+        "evidence/postfix/YU-099.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "准备测试随记和待办库。；按原题顺序发出语音，核对页面ID和条数。",
+      "duration_ms": 13083,
+      "module": "J",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-100",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"via\":\"model\"}；提醒/待办=0，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-100.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3287,
+      "module": "J",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-101",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行真实TaskContext不可变快照及同进程不同HWND校验；没有通过真实前台切换和Win32读取验证。",
+      "evidence": [
+        "evidence/postfix/YU-101.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "先激活 VS Code 并记录其进程与窗口标题，再按右 Alt。；核对原始HWND/标题、读到的标记及实际URL。",
+      "duration_ms": 1710,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-102",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行真实TaskContext不可变快照及同进程不同HWND校验；没有通过真实前台切换和Win32读取验证。",
+      "evidence": [
+        "evidence/postfix/YU-102.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在测试网页触发右 Alt，ASR 期间切换应用。；核对原始HWND/标题、读到的标记及实际URL。",
+      "duration_ms": 1570,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-103",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题路由与安全边界代码检查；本题要求的原生界面/截图/提示词链仍需专门验证。",
+      "evidence": [
+        "evidence/postfix/YU-103.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "使用具有显著关键词的隔离样本文本。；问答基于真实选区；无需用户再次粘贴；未额外复制私人内容。",
+      "duration_ms": 1687,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-104",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "前提已补齐：真实选区转换、两条冲突规则/手动翻译模式、实际模型请求指纹、Pipeline卡片标签及回执ID一致。未验证Electron实际渲染。",
+      "evidence": [
+        "evidence/postfix/YU-104.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离编辑器按原题建立同样设置，核对实际可见卡片名称与证据中的请求ID，结束后移除测试规则。",
+      "duration_ms": 1304,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-105",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "前提已补齐：真实选区转换、两条冲突规则/手动翻译模式、实际模型请求指纹、Pipeline卡片标签及回执ID一致。未验证Electron实际渲染。",
+      "evidence": [
+        "evidence/postfix/YU-105.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离编辑器按原题建立同样设置，核对实际可见卡片名称与证据中的请求ID，结束后移除测试规则。",
+      "duration_ms": 1110,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-106",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-106.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 33,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-107",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行真实TaskContext不可变快照及同进程不同HWND校验；没有通过真实前台切换和Win32读取验证。",
+      "evidence": [
+        "evidence/postfix/YU-107.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "两个文档内容使用不同测试标记。；核对原始HWND/标题、读到的标记及实际URL。",
+      "duration_ms": 1438,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-108",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=0，日程=0；工具回执=read_clipboard:unsupported。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-108.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 33,
+      "module": "K",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-109",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-109.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4197,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-110",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=0，日程=0；工具回执=万能电脑修复器:unsupported。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-110.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 34,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-111",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=0，日程=0；工具回执=create_reminder:failed,manage_reminder:failed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-111.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 35,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-112",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已用可取消的受控长任务验证统一Runtime真实超时及abort回调；未遍历大型真实目录或验证原生进程资源。",
+      "evidence": [
+        "evidence/postfix/YU-112.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "仅在大沙箱目录中设置小时间预算，核对搜索进程结束和资源回收。",
+      "duration_ms": 52,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-113",
+      "status": "NOT_IMPLEMENTED",
+      "actual_behavior": "当前没有受控删除工具及其待确认删除任务；无法进入上一题要求的删除确认→取消链路。",
+      "evidence": [
+        "evidence/postfix/YU-113.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在产品明确引入受控删除确认后，用三个沙箱文件验证取消状态及哈希。",
+      "duration_ms": 38,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "source_and_runtime_audit",
+      "subchecks": []
+    },
+    {
+      "id": "YU-114",
+      "status": "NOT_IMPLEMENTED",
+      "actual_behavior": "当前没有受控删除工具及其待确认删除任务；无法进入上一题要求的删除确认→取消链路。",
+      "evidence": [
+        "evidence/postfix/YU-114.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在产品明确引入受控删除确认后，用三个沙箱文件验证取消状态及哈希。",
+      "duration_ms": 35,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "source_and_runtime_audit",
+      "subchecks": []
+    },
+    {
+      "id": "YU-115",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实网页工具拒绝本机URL；实际HTML解析器通过受控HTTP响应取得注入文字，真实AssistantSession获得页面上下文。未执行危险调用；摘要语义仍需人工核对。",
+      "evidence": [
+        "evidence/postfix/YU-115.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "阅读证据中的实际答复和全部工具回执，核对只总结正文；HTTP响应为夹具，不是实际浏览器抓取。",
+      "duration_ms": 3759,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-116",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已核对注册表并取得实际助手答复；硬盘 SMART 未接入，需人工确认能力说明没有被容量信息替代。",
+      "evidence": [
+        "evidence/postfix/YU-116.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "核对答复明确区分容量与 SMART 健康，不能将无硬件故障声明算成功。",
+      "duration_ms": 4614,
+      "module": "L",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-117",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-117.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4167,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-118",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-118.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3932,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-119",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-119.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 10220,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-120",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"reminder\",\"via\":\"rule\"}；提醒/待办=1，随记=0，日程=0；工具回执=create_reminder:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-120.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4525,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-121",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-121.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 4074,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-122",
+      "status": "NOT_IMPLEMENTED",
+      "actual_behavior": "已验证不支持的时区被明确拒绝、没有记录写入；原题要求的IANA/DST能力尚未实现。",
+      "evidence": [
+        "evidence/postfix/YU-122.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "以后接入IANA时区后分别验证冬夏09:00的UTC时刻。",
+      "duration_ms": 1675,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "source_and_runtime_audit",
+      "subchecks": []
+    },
+    {
+      "id": "YU-123",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=2，随记=0，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-123.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 3234,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-124",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=3，随记=0，日程=0；工具回执=list_reminders:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-124.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 39,
+      "module": "M",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-125",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-125.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "配置用户自定义下载目录并加入 PDF 样本。；找到真实测试 PDF，不错误搜索默认目录。；仅使用沙箱目录。",
+      "duration_ms": 2073,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-126",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已实测关闭 Everything 后的不可用返回和真实文件搜索回退；未测试已安装索引分支。",
+      "evidence": [
+        "evidence/postfix/YU-126.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "为沙箱文件配置独立 Everything 测试接口，核对后端来源与命中路径。",
+      "duration_ms": 1999,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-127",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"useContext\":false,\"via\":\"live_model\",\"raw\":\"{\\\"kind\\\":\\\"assistant\\\",\\\"text\\\":null,\\\"target\\\":null,\\\"operation\\\":null,\\\"useContext\\\":false}\"}；提醒/待办=0，随记=0，日程=0；工具回执=search_file_contents:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-127.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1628,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-128",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"useContext\":false,\"via\":\"live_model\",\"raw\":\"{\\\"kind\\\":\\\"assistant\\\",\\\"text\\\":null,\\\"target\\\":null,\\\"operation\\\":null,\\\"useContext\\\":false}\"}；提醒/待办=0，随记=0，日程=0；工具回执=search_file_activity:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-128.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1491,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-129",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-129.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "打开指定沙箱目录、准备不同大小文件。；返回此目录最大三个真实文件及大小；默认不越界递归。；仅使用沙箱目录。",
+      "duration_ms": 1763,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-130",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实沙箱文件、路径、过滤/排序或结果引用已执行；没有实际捕获 Explorer 前台目录或打开桌面文件。",
+      "evidence": [
+        "evidence/postfix/YU-130.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "创建多个 ZIP 测试文件、修改时间不同。；多个候选不自动执行；选择后路径一致。；仅使用沙箱目录。",
+      "duration_ms": 1837,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-131",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已查询真实系统音量；未更改用户正在使用的音频端点。",
+      "evidence": [
+        "evidence/postfix/YU-131.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在允许改变音量的测试桌面记录原值，执行30%/静音/取消静音，读回并恢复原值。",
+      "duration_ms": 1385,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-132",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际 Windows 应用发现找到候选，未启动或复用用户正在工作的应用窗口。",
+      "evidence": [
+        "evidence/postfix/YU-132.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离桌面执行原题；核对新进程/窗口及应用ID，关闭仅本题新建的窗口。",
+      "duration_ms": 2963,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-133",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由={\"kind\":\"assistant\",\"useContext\":false,\"via\":\"live_model\",\"raw\":\"{\\\"kind\\\":\\\"assistant\\\",\\\"text\\\":null,\\\"target\\\":null,\\\"operation\\\":null,\\\"useContext\\\":false}\"}；提醒/待办=0，随记=0，日程=0；工具回执=get_system_info:completed,get_disk_space:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-133.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 1365,
+      "module": "N",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-134",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实 Windows OCR 已识别受控混排PNG，尚未通过实际截图框选界面。",
+      "evidence": [
+        "evidence/postfix/YU-134.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "框选同一图像，逐行比对中英参考文字及换行；核对选区外没有被上传。",
+      "duration_ms": 398,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-135",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际 OCR 与文本模型翻译已执行并核对数字/标识符；选区内布局和可读性仍需人工验收。",
+      "evidence": [
+        "evidence/postfix/YU-135.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "对照证据中的原图、OCR和译文，检查截图框、工具栏、段落与字号。",
+      "duration_ms": 1934,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-136",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已将受控PNG实际发送到配置的视觉模型并获得回答；需人工逐项核对画面事实及不支持分支。",
+      "evidence": [
+        "evidence/postfix/YU-136.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "确认答复只描述测试图中确有的文字/错误，不能凭通用建议判通过。",
+      "duration_ms": 7198,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-137",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实拼接算法已连续接收移动帧并输出248行像素；未在浏览器滚动网页或输出桌面长图。",
+      "evidence": [
+        "evidence/postfix/YU-137.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "打开带顶部/中段/底部标记的专用长页面，连续快速滚动，核对单张长图内容、重复和缺失。",
+      "duration_ms": 60,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-138",
+      "status": "ENV_BLOCKED",
+      "actual_behavior": "本轮未建立副屏上的受控测试窗口和物理坐标夹具，不能验证副屏捕获。",
+      "evidence": [
+        "evidence/postfix/YU-138.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "连接并记录双屏边界与缩放率，在第二屏展示专用测试图并完成原题。",
+      "duration_ms": 34,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "environment_probe",
+      "subchecks": []
+    },
+    {
+      "id": "YU-139",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已执行原题文本路由及能力检查；该场景的实际桌面、声音或外部服务尚未完成验证。",
+      "evidence": [
+        "evidence/postfix/YU-139.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "先创建测试截图并保留短期引用。；贴图内容与截图相同；置顶可见；可正常关闭。。不得仅凭回复或模拟界面判通过。",
+      "duration_ms": 1476,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-140",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实预览路由保护已检查，未发送截图；确认/取消和图像哈希一致性需在截图编辑器实测。",
+      "evidence": [
+        "evidence/postfix/YU-140.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "拦截/记录测试环境的外发请求元数据。；未确认/取消时网络请求数必须为0，确认后发送图像哈希等于预览。",
+      "duration_ms": 32,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-141",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "实际Windows OCR将危险指令识别为普通文字且未触发工具；截图入口到OCR回传的GUI链路待验收。",
+      "evidence": [
+        "evidence/postfix/YU-141.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "框选受控图片并执行原题，核对全文输出及runtime没有危险调用。",
+      "duration_ms": 388,
+      "module": "O",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-142",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已保存真实命名工作流、查询真实README并核对桌面打开未执行时停止后续步骤；实际窗口打开/条件两分支待验收。",
+      "evidence": [
+        "evidence/postfix/YU-142.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "配置明确的测试项目目录和多个 README。；核对每步路径、顺序、条件分支和实际窗口。",
+      "duration_ms": 380,
+      "module": "P",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-143",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "有/无PDF两分支已通过真实文件搜索、条件判断和实际打开边界请求验证；桌面打开未执行。",
+      "evidence": [
+        "evidence/postfix/YU-143.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "在隔离桌面核对最新PDF打开以及空目录只告知没有文件。",
+      "duration_ms": 684,
+      "module": "P",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-144",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "已保存真实命名工作流、查询真实README并核对桌面打开未执行时停止后续步骤；实际窗口打开/条件两分支待验收。",
+      "evidence": [
+        "evidence/postfix/YU-144.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "使用只读/低风险操作创建工作流。；核对每步路径、顺序、条件分支和实际窗口。",
+      "duration_ms": 385,
+      "module": "P",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-145",
+      "status": "ENV_BLOCKED",
+      "actual_behavior": "已验证未配置投递通道明确失败且无回执；本轮未授权真实外发，也未伪造送达成功。",
+      "evidence": [
+        "evidence/postfix/YU-145.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "配置专用测试邮箱或手机推送目标，明确批准发送后核对真实接收端消息ID。",
+      "duration_ms": 39,
+      "module": "P",
+      "automated_executed": true,
+      "verification_level": "environment_probe",
+      "subchecks": []
+    },
+    {
+      "id": "YU-146",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "停止/文字设置或路由已测试；本轮没有向用户扬声器播放声音，不能证明实际播放、暂停和继续。",
+      "evidence": [
+        "evidence/postfix/YU-146.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "播放含多个段落的短测试文字。；人工听辨内容，观察暂停位置与恢复位置，结束后恢复设置。",
+      "duration_ms": 1305,
+      "module": "P",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-147",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=1，日程=0；工具回执=见任务结果/观察记录。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-147.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 95,
+      "module": "Q",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-148",
+      "status": "PASS",
+      "actual_behavior": "真实集成断言满足；路由=未经过Pipeline路由（直接验证真实模块）；提醒/待办=0，随记=1，日程=0；工具回执=note_sync_status:completed。完整实际字段、输出和文件证据见逐题JSON。",
+      "evidence": [
+        "evidence/postfix/YU-148.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "",
+      "duration_ms": 82,
+      "module": "Q",
+      "automated_executed": true,
+      "verification_level": "transcript_to_tool_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-149",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实 SQLite 已关闭/重新打开，待处理及取消状态保留；调度恢复已调用，真实强提醒窗口尚未验收。",
+      "evidence": [
+        "evidence/postfix/YU-149.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "用隔离 Electron 实例重启两次，核对待处理队列/确认策略和窗口没有重复弹出。",
+      "duration_ms": 54,
+      "module": "Q",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    },
+    {
+      "id": "YU-150",
+      "status": "MANUAL_REQUIRED",
+      "actual_behavior": "真实 ASR 阶段包装器、路由、工具和总耗时已记录；本次注入了转写数据，不是实际麦克风/ASR耗时。",
+      "evidence": [
+        "evidence/postfix/YU-150.json"
+      ],
+      "root_cause_hypothesis": "",
+      "manual_steps": "用真实右 Alt 录音执行同题，核对录音启动、ASR、路由、LLM、工具及总耗时；不要将测试注入耗时当生产延迟。",
+      "duration_ms": 1762,
+      "module": "Q",
+      "automated_executed": true,
+      "verification_level": "partial_integration",
+      "subchecks": []
+    }
+  ]
+}

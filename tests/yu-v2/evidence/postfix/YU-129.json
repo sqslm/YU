@@ -1,0 +1,390 @@
+{
+  "case_id": "YU-129",
+  "input": "【资源管理器当前打开 D:\\photo】这个目录里最大的三个文件是什么？",
+  "spoken_input": "这个目录里最大的三个文件是什么？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "file_results",
+      "value": {
+        "ok": true,
+        "summary": "找到 11 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite-wal",
+              "name": "history.sqlite-wal",
+              "bytes": 65952,
+              "modified": "2026-10-26T08:26:44.8594961Z",
+              "kind": "file",
+              "id": "9d57e326-f5d5-4fc7-92c7-e9470e896370"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite-shm",
+              "name": "history.sqlite-shm",
+              "bytes": 32768,
+              "modified": "2026-10-26T08:26:44.8549904Z",
+              "kind": "file",
+              "id": "50db6224-098d-4140-94f7-eef0a8542458"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite-shm",
+              "name": "reminders.sqlite-shm",
+              "bytes": 32768,
+              "modified": "2026-10-26T08:26:44.8362269Z",
+              "kind": "file",
+              "id": "8673965e-9788-44c4-ba2e-83f29b787d36"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite-wal",
+              "name": "reminders.sqlite-wal",
+              "bytes": 20632,
+              "modified": "2026-10-26T08:26:44.8412472Z",
+              "kind": "file",
+              "id": "d01e1f39-ca34-429c-ab20-cc4ec3c19d98"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite",
+              "name": "history.sqlite",
+              "bytes": 4096,
+              "modified": "2026-10-26T08:26:44.8529908Z",
+              "kind": "file",
+              "id": "ad9d47c1-0d50-4d52-983a-b819cdb52bc2"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite",
+              "name": "reminders.sqlite",
+              "bytes": 4096,
+              "modified": "2026-10-26T08:26:44.8332272Z",
+              "kind": "file",
+              "id": "6d371858-bb8f-4629-a69f-6af5ca57a2d3"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\latest.7z",
+              "name": "latest.7z",
+              "bytes": 510,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "deb6acfd-362a-4570-b58b-0d5a957ed250"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "267238ad-8174-495f-8450-35bf91ec7d0a"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\photo.png",
+              "name": "photo.png",
+              "bytes": 320,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "3fa1b1e8-9369-477d-889b-c9fbce63c7e6"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "32f260ba-5ee4-417b-9e88-46635f983cf5"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\old.zip",
+              "name": "old.zip",
+              "bytes": 110,
+              "modified": "2026-10-26T06:00:00.0000000Z",
+              "kind": "file",
+              "id": "b226fd75-a546-4823-a087-0799afcac07b"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 11 个文件"
+        },
+        "status": "completed",
+        "taskId": "c680b6da-f3d6-452d-b12c-29bebae5fc97"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129",
+        "sort": "size"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 11 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite-wal",
+              "name": "history.sqlite-wal",
+              "bytes": 65952,
+              "modified": "2026-10-26T08:26:44.8594961Z",
+              "kind": "file",
+              "id": "9d57e326-f5d5-4fc7-92c7-e9470e896370"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite-shm",
+              "name": "history.sqlite-shm",
+              "bytes": 32768,
+              "modified": "2026-10-26T08:26:44.8549904Z",
+              "kind": "file",
+              "id": "50db6224-098d-4140-94f7-eef0a8542458"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite-shm",
+              "name": "reminders.sqlite-shm",
+              "bytes": 32768,
+              "modified": "2026-10-26T08:26:44.8362269Z",
+              "kind": "file",
+              "id": "8673965e-9788-44c4-ba2e-83f29b787d36"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite-wal",
+              "name": "reminders.sqlite-wal",
+              "bytes": 20632,
+              "modified": "2026-10-26T08:26:44.8412472Z",
+              "kind": "file",
+              "id": "d01e1f39-ca34-429c-ab20-cc4ec3c19d98"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite",
+              "name": "history.sqlite",
+              "bytes": 4096,
+              "modified": "2026-10-26T08:26:44.8529908Z",
+              "kind": "file",
+              "id": "ad9d47c1-0d50-4d52-983a-b819cdb52bc2"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite",
+              "name": "reminders.sqlite",
+              "bytes": 4096,
+              "modified": "2026-10-26T08:26:44.8332272Z",
+              "kind": "file",
+              "id": "6d371858-bb8f-4629-a69f-6af5ca57a2d3"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\latest.7z",
+              "name": "latest.7z",
+              "bytes": 510,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "deb6acfd-362a-4570-b58b-0d5a957ed250"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "267238ad-8174-495f-8450-35bf91ec7d0a"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\photo.png",
+              "name": "photo.png",
+              "bytes": 320,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "3fa1b1e8-9369-477d-889b-c9fbce63c7e6"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "32f260ba-5ee4-417b-9e88-46635f983cf5"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\old.zip",
+              "name": "old.zip",
+              "bytes": 110,
+              "modified": "2026-10-26T06:00:00.0000000Z",
+              "kind": "file",
+              "id": "b226fd75-a546-4823-a087-0799afcac07b"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 11 个文件"
+        },
+        "status": "completed",
+        "taskId": "c680b6da-f3d6-452d-b12c-29bebae5fc97"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "c680b6da-f3d6-452d-b12c-29bebae5fc97",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "这个目录里最大的三个文件是什么？",
+    "target": {
+      "windowHandle": "10129",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-129"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 336
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite-wal",
+              "name": "history.sqlite-wal",
+              "bytes": 65952,
+              "modified": "2026-10-26T08:26:44.8594961Z",
+              "kind": "file",
+              "id": "9d57e326-f5d5-4fc7-92c7-e9470e896370"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite-shm",
+              "name": "history.sqlite-shm",
+              "bytes": 32768,
+              "modified": "2026-10-26T08:26:44.8549904Z",
+              "kind": "file",
+              "id": "50db6224-098d-4140-94f7-eef0a8542458"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite-shm",
+              "name": "reminders.sqlite-shm",
+              "bytes": 32768,
+              "modified": "2026-10-26T08:26:44.8362269Z",
+              "kind": "file",
+              "id": "8673965e-9788-44c4-ba2e-83f29b787d36"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite-wal",
+              "name": "reminders.sqlite-wal",
+              "bytes": 20632,
+              "modified": "2026-10-26T08:26:44.8412472Z",
+              "kind": "file",
+              "id": "d01e1f39-ca34-429c-ab20-cc4ec3c19d98"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\history.sqlite",
+              "name": "history.sqlite",
+              "bytes": 4096,
+              "modified": "2026-10-26T08:26:44.8529908Z",
+              "kind": "file",
+              "id": "ad9d47c1-0d50-4d52-983a-b819cdb52bc2"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\reminders.sqlite",
+              "name": "reminders.sqlite",
+              "bytes": 4096,
+              "modified": "2026-10-26T08:26:44.8332272Z",
+              "kind": "file",
+              "id": "6d371858-bb8f-4629-a69f-6af5ca57a2d3"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\latest.7z",
+              "name": "latest.7z",
+              "bytes": 510,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "deb6acfd-362a-4570-b58b-0d5a957ed250"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "267238ad-8174-495f-8450-35bf91ec7d0a"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\photo.png",
+              "name": "photo.png",
+              "bytes": 320,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "3fa1b1e8-9369-477d-889b-c9fbce63c7e6"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "32f260ba-5ee4-417b-9e88-46635f983cf5"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129\\old.zip",
+              "name": "old.zip",
+              "bytes": 110,
+              "modified": "2026-10-26T06:00:00.0000000Z",
+              "kind": "file",
+              "id": "b226fd75-a546-4823-a087-0799afcac07b"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 11 个文件"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-129）",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task c680b6da-f3d6-452d-b12c-29bebae5fc97] stage=tool ms=336 state=completed",
+    "[task c680b6da-f3d6-452d-b12c-29bebae5fc97] tool=search_files status=completed ms=336"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-129",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1387,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

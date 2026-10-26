@@ -1077,6 +1077,8 @@ async function nativeToolLoop(
       }
     }
     log(`[perf] enrich ${Date.now() - enrichStart}ms`)
+    const versionWarning = currentVersionReadWarning(question, runs)
+    if (versionWarning) return { text: versionWarning, runs, actions }
   }
 
   // Rounds exhausted with tools still pending: answer from what we have.
@@ -1256,6 +1258,15 @@ export function evidenceNote(results: SearchResult[], now: Date = new Date()): E
  * is the cheapest way to make claims checkable — and the budget comes from the
  * question kind, so a stock quote never pays for page fetches.
  */
+function currentVersionReadWarning(question: string, runs: ToolRun[]): string | undefined {
+  if (!/最新|latest|newest|current/iu.test(question) || !/版本|稳定版|穩定版|\b(?:version|stable release)\b/iu.test(question)) return undefined
+  const searches = runs.filter(run => run.name === 'web_search' && run.ok)
+  if (!searches.length) return undefined
+  if (searches.some(run => Array.isArray(run.data.pages) && run.data.pages.some(page => page && typeof page === 'object' && (page as Record<string, unknown>).firstParty === true))) return undefined
+  if (runs.some(run => run.name === 'read_webpage' && run.ok && pageCompleteness({ url: String(run.data.url), text: String(run.data.text) }, question).firstParty)) return undefined
+  return mt('暂时无法读取官方发布信息，不能确认当前最新稳定版。请检查网络或代理设置后重试。')
+}
+
 async function enrichWithPages(
   runs: ToolRun[],
   ctx: ToolContext,
@@ -1283,9 +1294,11 @@ async function enrichWithPages(
   // and each read keeps its own 6s ceiling, so one dead host cannot hold the
   // other two.
   const slots: Array<Record<string, unknown> | null> = new Array(targets.length).fill(null)
+  const failures: Array<{ url: string; error: string }> = []
   await runPool(targets, MAX_DEEP_READS, async (target, slot) => {
     const outcome = await runTool('read_webpage', { url: target.url }, ctx)
     if (!outcome.ok) {
+      failures.push({ url: target.url, error: outcome.error ?? outcome.summary })
       log(`[read] ${target.url} failed: ${outcome.error ?? ''}`)
       return
     }
@@ -1308,14 +1321,13 @@ async function enrichWithPages(
   })
   const pages = slots.filter((page): page is Record<string, unknown> => page !== null)
   log(`[perf] read ${targets.length} page(s) ${Date.now() - started}ms ok=${pages.length}`)
-  if (pages.length === 0) return runs
-
   const enriched = [...runs]
   enriched[index] = {
     ...searchRun,
     data: {
       ...searchRun.data,
       pages,
+      readFailures: failures,
       evidence: evidenceNote(ranked)
     }
   }
@@ -1649,6 +1661,8 @@ async function askTask(
     // is what lets the answer carry dates and quotes it can actually defend.
     const runs = await enrichWithPages(rawRuns, ctx, question, log)
     lastRuns = runs
+    const versionWarning = currentVersionReadWarning(question, runs)
+    if (versionWarning) return finish({ text: versionWarning, sources: collectSources(runs), searched: searchedFrom(runs), tools: toolLabel(runs) })
     const sources = collectSources(rawRuns)
     const system = systemForRuns(settings, context, runs)
     const answer = await answerText(settings, system, question, {

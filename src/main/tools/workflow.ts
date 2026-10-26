@@ -138,7 +138,16 @@ async function runWorkflow(
     }
     const stepCtx: ToolContext = { ...ctx, workflowReplay: true, allowedTools: [...(granted ?? []), step.tool] }
     let outcome:ToolOutcome
-    try { outcome = await runTool(step.tool, bindWorkflowArgs(step.args,actual), stepCtx) }
+    try {
+      const args = bindWorkflowArgs(step.args, actual)
+      const binding = step.args.id as { $ref?: unknown } | undefined
+      const reference = step.tool === 'open_file' && binding && typeof binding.$ref === 'string'
+        ? /^(\d+)\.items\.\d+\.id$/.exec(binding.$ref) : null
+      if (reference && ['search_files', 'search_file_contents', 'search_files_everything'].includes(steps[Number(reference[1]) - 1]?.tool) && typeof args.id === 'string') {
+        ctx.windows?.permitWorkflowFile(args.id)
+      }
+      outcome = await runTool(step.tool, args, stepCtx)
+    }
     catch(error){outcome={ok:false,summary:String(error instanceof Error?error.message:error),data:{ok:false}}}
     actual.push(outcome.data)
     results.push({ label: step.label, tool: step.tool, ok: outcome.ok, summary: outcome.summary })

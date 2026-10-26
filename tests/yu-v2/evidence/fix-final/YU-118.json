@@ -1,0 +1,208 @@
+{
+  "case_id": "YU-118",
+  "input": "从下周二开始，每两周上午九点提醒我开会。",
+  "spoken_input": "从下周二开始，每两周上午九点提醒我开会。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-118",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "create_reminder 执行失败：提醒解析字段无效",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "18bcc874-9315-4873-9b97-9c1225788e12",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "从下周二开始，每两周上午九点提醒我开会。",
+          "target": {
+            "windowHandle": "10118",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-118"
+          },
+          "state": "failed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "failed",
+              "durationMs": 3880
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "rule"
+          },
+          "transcript": "从下周二开始，每两周上午九点提醒我开会。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "failed",
+              "data": {
+                "ok": false,
+                "error": "create_reminder 执行失败：提醒解析字段无效"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": false,
+        "data": {
+          "ok": false,
+          "error": "create_reminder 执行失败：提醒解析字段无效"
+        },
+        "summary": "create_reminder 执行失败：提醒解析字段无效",
+        "error": "create_reminder 执行失败：提醒解析字段无效",
+        "status": "failed",
+        "taskId": "18bcc874-9315-4873-9b97-9c1225788e12"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "18bcc874-9315-4873-9b97-9c1225788e12",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "从下周二开始，每两周上午九点提醒我开会。",
+    "target": {
+      "windowHandle": "10118",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-118"
+    },
+    "state": "failed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "durationMs": 3880
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "rule"
+    },
+    "transcript": "从下周二开始，每两周上午九点提醒我开会。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "create_reminder 执行失败：提醒解析字段无效"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-118）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-118\"",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-118\"",
+    "[asr] local sense-voice-small: 20 chars",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-118\"",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] stage=routing ms=0",
+    "[voice-entry] reminder",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] stage=llm ms=2272",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] stage=llm ms=1607",
+    "[tool] create_reminder threw: 提醒解析字段无效 | args=<none>",
+    "[perf] tool:create_reminder 0ms ok=false",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] stage=tool ms=3880 state=failed",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] tool=create_reminder status=failed ms=3880",
+    "[task 18bcc874-9315-4873-9b97-9c1225788e12] stage=total ms=0 state=failed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2271,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1607,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "FAIL"
+}

@@ -1,0 +1,76 @@
+{
+  "case_id": "YU-045",
+  "input": "打开 VS Code。",
+  "spoken_input": "打开 VS Code。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-045",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "via": "rule",
+        "text": "打开 VS Code。"
+      }
+    },
+    {
+      "label": "installed_application_candidates",
+      "value": [
+        {
+          "appId": "OpenAI.Codex_2p2nqsd0c76g0!App",
+          "path": "",
+          "name": "ChatGPT"
+        },
+        {
+          "name": "code",
+          "path": "E:\\tools\\Microsoft VS Code\\Code.exe"
+        },
+        {
+          "name": "OpenCode",
+          "path": "C:\\Users\\17133\\AppData\\Local\\Programs\\@opencode-aidesktop\\OpenCode.exe"
+        },
+        {
+          "name": "Visual Studio",
+          "path": "E:\\tools\\Visual Studio\\18\\Community\\Common7\\IDE\\devenv.exe"
+        },
+        {
+          "name": "Visual Studio Code",
+          "path": "E:\\tools\\Microsoft VS Code\\Code.exe"
+        },
+        {
+          "name": "Visual Studio Installer",
+          "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\setup.exe"
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "7f579ceb-fa6f-480a-86ea-a2468ec44c1f",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开 VS Code。",
+    "target": {
+      "windowHandle": "10045",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-045"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-045）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

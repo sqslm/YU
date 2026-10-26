@@ -1,0 +1,318 @@
+{
+  "case_id": "YU-118",
+  "input": "从下周二开始，每两周上午九点提醒我开会。",
+  "spoken_input": "从下周二开始，每两周上午九点提醒我开会。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-118",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "fcab5637-f199-44d5-8ab7-23601e081765",
+        "taskState": "awaiting_confirmation",
+        "question": "从下周二开始，每两周上午九点提醒我开会。",
+        "answer": "请补充明确的事项和提醒时间，本次未保存",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "create_reminder",
+            "ok": false,
+            "summary": "请补充明确的事项和提醒时间，本次未保存",
+            "status": "awaiting_confirmation",
+            "taskId": "fcab5637-f199-44d5-8ab7-23601e081765"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "",
+            "showMode": true
+          }
+        ],
+        "cards": [
+          {
+            "taskId": "fcab5637-f199-44d5-8ab7-23601e081765",
+            "taskState": "awaiting_confirmation",
+            "question": "从下周二开始，每两周上午九点提醒我开会。",
+            "answer": "请补充明确的事项和提醒时间，本次未保存",
+            "sources": [],
+            "localResults": [
+              {
+                "tool": "create_reminder",
+                "ok": false,
+                "summary": "请补充明确的事项和提醒时间，本次未保存",
+                "status": "awaiting_confirmation",
+                "taskId": "fcab5637-f199-44d5-8ab7-23601e081765"
+              }
+            ],
+            "assistant": true,
+            "streaming": false
+          }
+        ],
+        "task": {
+          "id": "fcab5637-f199-44d5-8ab7-23601e081765",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "从下周二开始，每两周上午九点提醒我开会。",
+          "target": {
+            "windowHandle": "10118",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-118"
+          },
+          "state": "awaiting_confirmation",
+          "receipts": [
+            {
+              "tool": "get_datetime",
+              "state": "completed",
+              "durationMs": 1
+            },
+            {
+              "tool": "create_reminder",
+              "state": "awaiting_confirmation",
+              "durationMs": 3468
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "从下周二开始，每两周上午九点提醒我开会。",
+          "results": [
+            {
+              "tool": "get_datetime",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "now": "2026-10-26 16:00:00",
+                "iso": "2026-10-26T08:00:00.000Z",
+                "timezone": "Asia/Singapore",
+                "weekday": "星期一",
+                "date": "2026-10-26",
+                "today": "2026-10-26",
+                "tomorrow": "2026-10-27",
+                "dayAfterTomorrow": "2026-10-28",
+                "offsetDays": 0
+              }
+            },
+            {
+              "tool": "create_reminder",
+              "state": "awaiting_confirmation",
+              "data": {
+                "ok": false,
+                "saved": 0,
+                "needsClarification": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "fcab5637-f199-44d5-8ab7-23601e081765",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "从下周二开始，每两周上午九点提醒我开会。",
+    "target": {
+      "windowHandle": "10118",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-118"
+    },
+    "state": "awaiting_confirmation",
+    "receipts": [
+      {
+        "tool": "get_datetime",
+        "state": "completed",
+        "durationMs": 1
+      },
+      {
+        "tool": "create_reminder",
+        "state": "awaiting_confirmation",
+        "durationMs": 3468
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "从下周二开始，每两周上午九点提醒我开会。",
+    "results": [
+      {
+        "tool": "get_datetime",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "now": "2026-10-26 16:00:00",
+          "iso": "2026-10-26T08:00:00.000Z",
+          "timezone": "Asia/Singapore",
+          "weekday": "星期一",
+          "date": "2026-10-26",
+          "today": "2026-10-26",
+          "tomorrow": "2026-10-27",
+          "dayAfterTomorrow": "2026-10-28",
+          "offsetDays": 0
+        }
+      },
+      {
+        "tool": "create_reminder",
+        "state": "awaiting_confirmation",
+        "data": {
+          "ok": false,
+          "saved": 0,
+          "needsClarification": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-118）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-118\"",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-118\"",
+    "[asr] local sense-voice-small: 20 chars",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-118\"",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=llm ms=1243",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=routing ms=1243",
+    "[voice-entry] assistant",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=llm ms=1846",
+    "[perf] llm round0 0ms",
+    "[perf] tool:get_datetime 0ms ok=true",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=tool ms=1 state=completed",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] tool=get_datetime status=completed ms=1",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] get_datetime ok=true",
+    "[perf] enrich 0ms",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=llm ms=1306",
+    "[perf] llm round1 0ms",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=llm ms=1720",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=llm ms=1746",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=false",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=tool ms=3468 state=awaiting_confirmation",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] tool=create_reminder status=awaiting_confirmation ms=3468",
+    "[perf] tools round1 0ms (1 calls)",
+    "[tool] create_reminder ok=false 请补充明确的事项和提醒时间，本次未保存",
+    "[perf] llm answer 0ms streamed=true",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=llm ms=1925",
+    "[perf] ask total 0ms",
+    "[task fcab5637-f199-44d5-8ab7-23601e081765] stage=total ms=0 state=awaiting_confirmation"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1243,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1846,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1306,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1720,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1746,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-118",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1162,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "FAIL"
+}

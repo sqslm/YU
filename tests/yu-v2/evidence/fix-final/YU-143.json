@@ -1,0 +1,589 @@
+{
+  "case_id": "YU-143",
+  "input": "如果下载目录里有 PDF，就打开最新的；如果没有，直接告诉我。",
+  "spoken_input": "如果下载目录里有 PDF，就打开最新的；如果没有，直接告诉我。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143",
+  "observations": [
+    {
+      "label": "actual_conditional_branches",
+      "value": [
+        {
+          "name": "有PDF",
+          "wf": {
+            "id": "b8d9c904-4536-457d-b65b-af0fe105a5c5",
+            "name": "有PDF",
+            "steps": [
+              {
+                "tool": "search_files",
+                "args": {
+                  "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\with-pdf",
+                  "type": "pdf"
+                },
+                "label": "search_files"
+              },
+              {
+                "tool": "open_file",
+                "args": {
+                  "id": {
+                    "$ref": "1.items.0.id"
+                  }
+                },
+                "label": "open_file",
+                "when": {
+                  "ref": "1.items.0.id",
+                  "op": "exists"
+                }
+              }
+            ],
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "runs": 0
+          },
+          "r": {
+            "ok": false,
+            "summary": "有PDF：✓ search_files → ✗ open_file；第 open_file 步失败：Desktop opening not executed in integration harness",
+            "data": {
+              "ok": false,
+              "workflowId": "b8d9c904-4536-457d-b65b-af0fe105a5c5",
+              "steps": [
+                {
+                  "label": "search_files",
+                  "tool": "search_files",
+                  "ok": true,
+                  "summary": "找到 2 个文件"
+                },
+                {
+                  "label": "open_file",
+                  "tool": "open_file",
+                  "ok": false,
+                  "summary": "Desktop opening not executed in integration harness"
+                }
+              ],
+              "stoppedAt": "open_file"
+            },
+            "status": "failed",
+            "taskId": "eaaf4db2-9cbb-4c11-a3f0-c82d444d9328"
+          }
+        },
+        {
+          "name": "无PDF",
+          "wf": {
+            "id": "00608b51-66ce-49dd-b726-bc2fcd3212c1",
+            "name": "无PDF",
+            "steps": [
+              {
+                "tool": "search_files",
+                "args": {
+                  "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\without-pdf",
+                  "type": "pdf"
+                },
+                "label": "search_files"
+              },
+              {
+                "tool": "open_file",
+                "args": {
+                  "id": {
+                    "$ref": "1.items.0.id"
+                  }
+                },
+                "label": "open_file",
+                "when": {
+                  "ref": "1.items.0.id",
+                  "op": "exists"
+                }
+              }
+            ],
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "runs": 0
+          },
+          "r": {
+            "ok": true,
+            "summary": "无PDF：✓ search_files → ✓ open_file",
+            "data": {
+              "workflowId": "00608b51-66ce-49dd-b726-bc2fcd3212c1",
+              "steps": [
+                {
+                  "label": "search_files",
+                  "tool": "search_files",
+                  "ok": true,
+                  "summary": "找到 0 个文件"
+                },
+                {
+                  "label": "open_file",
+                  "tool": "open_file",
+                  "ok": true,
+                  "summary": "条件不满足，已跳过"
+                }
+              ],
+              "results": [
+                {
+                  "items": [],
+                  "backend": "windows-search+folder",
+                  "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\without-pdf",
+                  "partial": false,
+                  "indexUnavailable": false,
+                  "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+                  "ok": true,
+                  "summary": "找到 0 个文件"
+                },
+                null
+              ],
+              "ok": true
+            },
+            "status": "completed",
+            "taskId": "eaaf4db2-9cbb-4c11-a3f0-c82d444d9328"
+          }
+        }
+      ]
+    },
+    {
+      "label": "workflows_after_reload",
+      "value": [
+        {
+          "id": "b8d9c904-4536-457d-b65b-af0fe105a5c5",
+          "name": "有PDF",
+          "steps": [
+            {
+              "tool": "search_files",
+              "args": {
+                "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\with-pdf",
+                "type": "pdf"
+              },
+              "label": "search_files"
+            },
+            {
+              "tool": "open_file",
+              "args": {
+                "id": {
+                  "$ref": "1.items.0.id"
+                }
+              },
+              "label": "open_file",
+              "when": {
+                "ref": "1.items.0.id",
+                "op": "exists"
+              }
+            }
+          ],
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "runs": 1,
+          "lastRunAt": 1793001600000
+        },
+        {
+          "id": "00608b51-66ce-49dd-b726-bc2fcd3212c1",
+          "name": "无PDF",
+          "steps": [
+            {
+              "tool": "search_files",
+              "args": {
+                "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\without-pdf",
+                "type": "pdf"
+              },
+              "label": "search_files"
+            },
+            {
+              "tool": "open_file",
+              "args": {
+                "id": {
+                  "$ref": "1.items.0.id"
+                }
+              },
+              "label": "open_file",
+              "when": {
+                "ref": "1.items.0.id",
+                "op": "exists"
+              }
+            }
+          ],
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "runs": 1,
+          "lastRunAt": 1793001600000
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "save_workflow",
+      "args": {
+        "name": "有PDF",
+        "steps": [
+          {
+            "tool": "search_files",
+            "args": {
+              "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\with-pdf",
+              "type": "pdf"
+            }
+          },
+          {
+            "tool": "open_file",
+            "args": {
+              "id": {
+                "$ref": "1.items.0.id"
+              }
+            },
+            "when": {
+              "ref": "1.items.0.id",
+              "op": "exists"
+            }
+          }
+        ]
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "工作流已保存：有PDF",
+        "data": {
+          "id": "b8d9c904-4536-457d-b65b-af0fe105a5c5",
+          "name": "有PDF",
+          "detail": "2 步：search_files → open_file",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "eaaf4db2-9cbb-4c11-a3f0-c82d444d9328"
+      }
+    },
+    {
+      "name": "run_workflow",
+      "args": {
+        "id": "b8d9c904-4536-457d-b65b-af0fe105a5c5"
+      },
+      "outcome": {
+        "ok": false,
+        "summary": "有PDF：✓ search_files → ✗ open_file；第 open_file 步失败：Desktop opening not executed in integration harness",
+        "data": {
+          "ok": false,
+          "workflowId": "b8d9c904-4536-457d-b65b-af0fe105a5c5",
+          "steps": [
+            {
+              "label": "search_files",
+              "tool": "search_files",
+              "ok": true,
+              "summary": "找到 2 个文件"
+            },
+            {
+              "label": "open_file",
+              "tool": "open_file",
+              "ok": false,
+              "summary": "Desktop opening not executed in integration harness"
+            }
+          ],
+          "stoppedAt": "open_file"
+        },
+        "status": "failed",
+        "taskId": "eaaf4db2-9cbb-4c11-a3f0-c82d444d9328"
+      }
+    },
+    {
+      "name": "save_workflow",
+      "args": {
+        "name": "无PDF",
+        "steps": [
+          {
+            "tool": "search_files",
+            "args": {
+              "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\without-pdf",
+              "type": "pdf"
+            }
+          },
+          {
+            "tool": "open_file",
+            "args": {
+              "id": {
+                "$ref": "1.items.0.id"
+              }
+            },
+            "when": {
+              "ref": "1.items.0.id",
+              "op": "exists"
+            }
+          }
+        ]
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "工作流已保存：无PDF",
+        "data": {
+          "id": "00608b51-66ce-49dd-b726-bc2fcd3212c1",
+          "name": "无PDF",
+          "detail": "2 步：search_files → open_file",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "eaaf4db2-9cbb-4c11-a3f0-c82d444d9328"
+      }
+    },
+    {
+      "name": "run_workflow",
+      "args": {
+        "id": "00608b51-66ce-49dd-b726-bc2fcd3212c1"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "无PDF：✓ search_files → ✓ open_file",
+        "data": {
+          "workflowId": "00608b51-66ce-49dd-b726-bc2fcd3212c1",
+          "steps": [
+            {
+              "label": "search_files",
+              "tool": "search_files",
+              "ok": true,
+              "summary": "找到 0 个文件"
+            },
+            {
+              "label": "open_file",
+              "tool": "open_file",
+              "ok": true,
+              "summary": "条件不满足，已跳过"
+            }
+          ],
+          "results": [
+            {
+              "items": [],
+              "backend": "windows-search+folder",
+              "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\without-pdf",
+              "partial": false,
+              "indexUnavailable": false,
+              "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+              "ok": true,
+              "summary": "找到 0 个文件"
+            },
+            null
+          ],
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "eaaf4db2-9cbb-4c11-a3f0-c82d444d9328"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "eaaf4db2-9cbb-4c11-a3f0-c82d444d9328",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "如果下载目录里有 PDF，就打开最新的；如果没有，直接告诉我。",
+    "target": {
+      "windowHandle": "10143",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-143"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "durationMs": 1
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 341
+      },
+      {
+        "tool": "open_file",
+        "state": "failed",
+        "durationMs": 1
+      },
+      {
+        "tool": "run_workflow",
+        "state": "failed",
+        "durationMs": 343
+      },
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "durationMs": 1
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 305
+      },
+      {
+        "tool": "run_workflow",
+        "state": "completed",
+        "durationMs": 306
+      }
+    ],
+    "results": [
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "data": {
+          "id": "b8d9c904-4536-457d-b65b-af0fe105a5c5",
+          "name": "有PDF",
+          "detail": "2 步：search_files → open_file",
+          "ok": true
+        }
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\with-pdf\\new.pdf",
+              "name": "new.pdf",
+              "bytes": 580,
+              "modified": "2026-10-26T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "2ea71aec-323b-4ba4-b10c-76f6070caee2"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\with-pdf\\old.pdf",
+              "name": "old.pdf",
+              "bytes": 579,
+              "modified": "2026-10-26T07:59:00.0000000Z",
+              "kind": "file",
+              "id": "795bedc2-84ee-49e3-ada8-0cc7b252a8e1"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\with-pdf",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        }
+      },
+      {
+        "tool": "open_file",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "Desktop opening not executed in integration harness"
+        }
+      },
+      {
+        "tool": "run_workflow",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "workflowId": "b8d9c904-4536-457d-b65b-af0fe105a5c5",
+          "steps": [
+            {
+              "label": "search_files",
+              "tool": "search_files",
+              "ok": true,
+              "summary": "找到 2 个文件"
+            },
+            {
+              "label": "open_file",
+              "tool": "open_file",
+              "ok": false,
+              "summary": "Desktop opening not executed in integration harness"
+            }
+          ],
+          "stoppedAt": "open_file"
+        }
+      },
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "data": {
+          "id": "00608b51-66ce-49dd-b726-bc2fcd3212c1",
+          "name": "无PDF",
+          "detail": "2 步：search_files → open_file",
+          "ok": true
+        }
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\without-pdf",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 0 个文件"
+        }
+      },
+      {
+        "tool": "run_workflow",
+        "state": "completed",
+        "data": {
+          "workflowId": "00608b51-66ce-49dd-b726-bc2fcd3212c1",
+          "steps": [
+            {
+              "label": "search_files",
+              "tool": "search_files",
+              "ok": true,
+              "summary": "找到 0 个文件"
+            },
+            {
+              "label": "open_file",
+              "tool": "open_file",
+              "ok": true,
+              "summary": "条件不满足，已跳过"
+            }
+          ],
+          "results": [
+            {
+              "items": [],
+              "backend": "windows-search+folder",
+              "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\without-pdf",
+              "partial": false,
+              "indexUnavailable": false,
+              "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+              "ok": true,
+              "summary": "找到 0 个文件"
+            },
+            null
+          ],
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143）",
+    "[perf] tool:save_workflow 0ms ok=true",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] stage=tool ms=1 state=completed",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] tool=save_workflow status=completed ms=1",
+    "[workflow] 有PDF: search_files",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] stage=tool ms=341 state=completed",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] tool=search_files status=completed ms=341",
+    "[workflow] 有PDF: open_file",
+    "[perf] tool:open_file 0ms ok=false",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] stage=tool ms=1 state=failed",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] tool=open_file status=failed ms=1",
+    "[perf] tool:run_workflow 0ms ok=false",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] stage=tool ms=343 state=failed",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] tool=run_workflow status=failed ms=343",
+    "[perf] tool:save_workflow 0ms ok=true",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] stage=tool ms=1 state=completed",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] tool=save_workflow status=completed ms=1",
+    "[workflow] 无PDF: search_files",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] stage=tool ms=305 state=completed",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] tool=search_files status=completed ms=305",
+    "[perf] tool:run_workflow 0ms ok=true",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] stage=tool ms=306 state=completed",
+    "[task eaaf4db2-9cbb-4c11-a3f0-c82d444d9328] tool=run_workflow status=completed ms=306"
+  ],
+  "open_requests": [
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-143\\with-pdf\\new.pdf",
+      "executed": false
+    }
+  ],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

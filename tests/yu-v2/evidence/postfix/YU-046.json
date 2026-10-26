@@ -1,0 +1,165 @@
+{
+  "case_id": "YU-046",
+  "input": "打开我的下载文件夹。",
+  "spoken_input": "打开我的下载文件夹。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "via": "rule",
+        "text": "打开我的下载文件夹。"
+      }
+    },
+    {
+      "label": "file_results",
+      "value": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "b6e208a2-2bb9-428c-92e1-aba57b611361"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "2178c38f-9800-490b-b856-a007e8ed79d0"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "0ec8fdab-0b84-403f-8855-6dad53a87f19"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "downloads",
+        "type": "pdf"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "b6e208a2-2bb9-428c-92e1-aba57b611361"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "2178c38f-9800-490b-b856-a007e8ed79d0"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "0ec8fdab-0b84-403f-8855-6dad53a87f19"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "0ec8fdab-0b84-403f-8855-6dad53a87f19",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开我的下载文件夹。",
+    "target": {
+      "windowHandle": "10046",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-046"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 347
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "b6e208a2-2bb9-428c-92e1-aba57b611361"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "2178c38f-9800-490b-b856-a007e8ed79d0"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-046）",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task 0ec8fdab-0b84-403f-8855-6dad53a87f19] stage=tool ms=347 state=completed",
+    "[task 0ec8fdab-0b84-403f-8855-6dad53a87f19] tool=search_files status=completed ms=347"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

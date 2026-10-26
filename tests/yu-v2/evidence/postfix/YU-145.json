@@ -1,0 +1,45 @@
+{
+  "case_id": "YU-145",
+  "input": "把今天的待办简报发送到我配置的邮箱或手机。",
+  "spoken_input": "把今天的待办简报发送到我配置的邮箱或手机。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-145",
+  "observations": [
+    {
+      "label": "unconfigured_delivery",
+      "value": {
+        "reason": "请先在简报设置中配置并开启邮件或手机推送",
+        "receipts": []
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "9bef8dc9-1772-46dd-bee7-cc5f4cbbe001",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把今天的待办简报发送到我配置的邮箱或手机。",
+    "target": {
+      "windowHandle": "10145",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-145"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-145）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "ENV_BLOCKED"
+}

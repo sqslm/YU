@@ -1,0 +1,311 @@
+{
+  "case_id": "YU-087",
+  "input": "把刚刚的项目讨论改到下午四点到五点。",
+  "spoken_input": "把刚刚的项目讨论改到下午四点到五点。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-EiOkZl\\YU-087",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "5e0006cf-3d22-490a-89a1-3ffd22c71e4e",
+        "taskState": "completed",
+        "question": "把刚刚的项目讨论改到下午四点到五点。",
+        "answer": "日程已更新 · 项目讨论\n15:00–16:00 → 16:00–17:00",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "manage_event",
+            "ok": true,
+            "summary": "日程已更新 · 项目讨论\n15:00–16:00 → 16:00–17:00",
+            "status": "completed",
+            "taskId": "5e0006cf-3d22-490a-89a1-3ffd22c71e4e"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "日程已更新 · 项目讨论\n15:00–16:00 → 16:00–17:00",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "5e0006cf-3d22-490a-89a1-3ffd22c71e4e",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "把刚刚的项目讨论改到下午四点到五点。",
+          "target": {
+            "windowHandle": "10087",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-087"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "manage_event",
+              "state": "completed",
+              "durationMs": 8
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "把刚刚的项目讨论改到下午四点到五点。",
+          "recentExchange": {
+            "question": "创建日程",
+            "answer": "测试项目讨论"
+          },
+          "results": [
+            {
+              "tool": "manage_event",
+              "state": "completed",
+              "data": {
+                "id": "afded941-40c0-4530-842b-54155f2a0fda",
+                "action": "update",
+                "before": {
+                  "id": "afded941-40c0-4530-842b-54155f2a0fda",
+                  "title": "项目讨论",
+                  "start": 1793084400000,
+                  "end": 1793088000000,
+                  "allDay": false,
+                  "source": "manual",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "confirmed",
+                  "when": "15:00–16:00",
+                  "day": "2026-10-27",
+                  "cancelled": false
+                },
+                "item": {
+                  "id": "afded941-40c0-4530-842b-54155f2a0fda",
+                  "title": "项目讨论",
+                  "start": 1793088000000,
+                  "end": 1793091600000,
+                  "allDay": false,
+                  "source": "manual",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "confirmed",
+                  "when": "16:00–17:00",
+                  "day": "2026-10-27",
+                  "cancelled": false
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "calendar_after",
+      "value": [
+        {
+          "id": "afded941-40c0-4530-842b-54155f2a0fda",
+          "title": "项目讨论",
+          "start": 1793088000000,
+          "end": 1793091600000,
+          "allDay": false,
+          "source": "manual",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "confirmed"
+        },
+        {
+          "id": "db24af13-23f8-4ff5-86fd-8e9c278ce930",
+          "title": "后天任务",
+          "start": 1793170800000,
+          "end": 1793174400000,
+          "allDay": false,
+          "source": "manual",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "confirmed"
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [
+    {
+      "id": "afded941-40c0-4530-842b-54155f2a0fda",
+      "title": "项目讨论",
+      "start": 1793088000000,
+      "end": 1793091600000,
+      "allDay": false,
+      "source": "manual",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "confirmed"
+    },
+    {
+      "id": "db24af13-23f8-4ff5-86fd-8e9c278ce930",
+      "title": "后天任务",
+      "start": 1793170800000,
+      "end": 1793174400000,
+      "allDay": false,
+      "source": "manual",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "confirmed"
+    }
+  ],
+  "task": {
+    "id": "5e0006cf-3d22-490a-89a1-3ffd22c71e4e",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把刚刚的项目讨论改到下午四点到五点。",
+    "target": {
+      "windowHandle": "10087",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-087"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "manage_event",
+        "state": "completed",
+        "durationMs": 8
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "把刚刚的项目讨论改到下午四点到五点。",
+    "recentExchange": {
+      "question": "创建日程",
+      "answer": "测试项目讨论"
+    },
+    "results": [
+      {
+        "tool": "manage_event",
+        "state": "completed",
+        "data": {
+          "id": "afded941-40c0-4530-842b-54155f2a0fda",
+          "action": "update",
+          "before": {
+            "id": "afded941-40c0-4530-842b-54155f2a0fda",
+            "title": "项目讨论",
+            "start": 1793084400000,
+            "end": 1793088000000,
+            "allDay": false,
+            "source": "manual",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "confirmed",
+            "when": "15:00–16:00",
+            "day": "2026-10-27",
+            "cancelled": false
+          },
+          "item": {
+            "id": "afded941-40c0-4530-842b-54155f2a0fda",
+            "title": "项目讨论",
+            "start": 1793088000000,
+            "end": 1793091600000,
+            "allDay": false,
+            "source": "manual",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "confirmed",
+            "when": "16:00–17:00",
+            "day": "2026-10-27",
+            "cancelled": false
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-EiOkZl\\YU-087）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-087\"",
+    "[task 5e0006cf-3d22-490a-89a1-3ffd22c71e4e] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-087\"",
+    "[asr] local sense-voice-small: 18 chars",
+    "[task 5e0006cf-3d22-490a-89a1-3ffd22c71e4e] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-087\"",
+    "[task 5e0006cf-3d22-490a-89a1-3ffd22c71e4e] stage=llm ms=1916",
+    "[task 5e0006cf-3d22-490a-89a1-3ffd22c71e4e] stage=routing ms=1918",
+    "[voice-entry] assistant",
+    "[perf] tool:manage_event 0ms ok=true",
+    "[task 5e0006cf-3d22-490a-89a1-3ffd22c71e4e] stage=tool ms=8 state=completed",
+    "[task 5e0006cf-3d22-490a-89a1-3ffd22c71e4e] tool=manage_event status=completed ms=8",
+    "[task 5e0006cf-3d22-490a-89a1-3ffd22c71e4e] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-087",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1916,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

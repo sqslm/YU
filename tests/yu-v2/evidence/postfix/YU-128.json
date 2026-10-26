@@ -1,0 +1,200 @@
+{
+  "case_id": "YU-128",
+  "input": "找到昨天真正下载的文件，不要只看修改时间。",
+  "spoken_input": "找到昨天真正下载的文件，不要只看修改时间。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "direct_fixture_database_read",
+      "value": [
+        {
+          "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128\\one.pdf",
+          "name": "one.pdf",
+          "downloadedAt": "2026-10-25T08:00:00.000Z",
+          "source": "Chrome fixture",
+          "sourceUrl": "https://v2.example.invalid",
+          "completed": true
+        }
+      ]
+    },
+    {
+      "label": "actual_download_metadata",
+      "value": {
+        "ok": true,
+        "summary": "查到 1 条真实文件活动记录",
+        "data": {
+          "records": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128\\one.pdf",
+              "name": "one.pdf",
+              "downloadedAt": "2026-10-25T08:00:00.000Z",
+              "source": "Chrome · Default",
+              "sourceUrl": "https://v2.example.invalid",
+              "completed": true,
+              "exists": true
+            }
+          ],
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128\\one.pdf",
+              "name": "one.pdf",
+              "kind": "file",
+              "id": "4df3ab5f-b605-4a8f-8ac0-225aab97cfbb"
+            }
+          ],
+          "sources": [
+            "Chrome · Default"
+          ],
+          "unavailable": [
+            "Edge"
+          ],
+          "partial": true,
+          "coverage": "读取 Chrome/Edge 下载数据库中的真实开始时间与来源；不读取浏览记录，不以文件修改时间推算。",
+          "ok": true,
+          "summary": "查到 1 条真实文件活动记录"
+        },
+        "status": "completed",
+        "taskId": "c4a6a496-6b26-4977-801f-7dcd6eee6def"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_file_activity",
+      "args": {
+        "kind": "downloads",
+        "day": "yesterday",
+        "query": ".pdf"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "查到 1 条真实文件活动记录",
+        "data": {
+          "records": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128\\one.pdf",
+              "name": "one.pdf",
+              "downloadedAt": "2026-10-25T08:00:00.000Z",
+              "source": "Chrome · Default",
+              "sourceUrl": "https://v2.example.invalid",
+              "completed": true,
+              "exists": true
+            }
+          ],
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128\\one.pdf",
+              "name": "one.pdf",
+              "kind": "file",
+              "id": "4df3ab5f-b605-4a8f-8ac0-225aab97cfbb"
+            }
+          ],
+          "sources": [
+            "Chrome · Default"
+          ],
+          "unavailable": [
+            "Edge"
+          ],
+          "partial": true,
+          "coverage": "读取 Chrome/Edge 下载数据库中的真实开始时间与来源；不读取浏览记录，不以文件修改时间推算。",
+          "ok": true,
+          "summary": "查到 1 条真实文件活动记录"
+        },
+        "status": "completed",
+        "taskId": "c4a6a496-6b26-4977-801f-7dcd6eee6def"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "c4a6a496-6b26-4977-801f-7dcd6eee6def",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "找到昨天真正下载的文件，不要只看修改时间。",
+    "target": {
+      "windowHandle": "10128",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-128"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_file_activity",
+        "state": "completed",
+        "durationMs": 1
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_file_activity",
+        "state": "completed",
+        "data": {
+          "records": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128\\one.pdf",
+              "name": "one.pdf",
+              "downloadedAt": "2026-10-25T08:00:00.000Z",
+              "source": "Chrome · Default",
+              "sourceUrl": "https://v2.example.invalid",
+              "completed": true,
+              "exists": true
+            }
+          ],
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128\\one.pdf",
+              "name": "one.pdf",
+              "kind": "file",
+              "id": "4df3ab5f-b605-4a8f-8ac0-225aab97cfbb"
+            }
+          ],
+          "sources": [
+            "Chrome · Default"
+          ],
+          "unavailable": [
+            "Edge"
+          ],
+          "partial": true,
+          "coverage": "读取 Chrome/Edge 下载数据库中的真实开始时间与来源；不读取浏览记录，不以文件修改时间推算。",
+          "ok": true,
+          "summary": "查到 1 条真实文件活动记录"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-128）",
+    "[perf] tool:search_file_activity 0ms ok=true",
+    "[task c4a6a496-6b26-4977-801f-7dcd6eee6def] stage=tool ms=1 state=completed",
+    "[task c4a6a496-6b26-4977-801f-7dcd6eee6def] tool=search_file_activity status=completed ms=1"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-128",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1425,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

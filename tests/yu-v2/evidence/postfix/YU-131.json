@@ -1,0 +1,108 @@
+{
+  "case_id": "YU-131",
+  "input": "把声音调到百分之三十，然后静音，再取消静音。",
+  "spoken_input": "把声音调到百分之三十，然后静音，再取消静音。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-131",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "original_volume_read_only",
+      "value": {
+        "ok": true,
+        "summary": "系统音量 40%，未静音",
+        "data": {
+          "volume": 40,
+          "muted": false,
+          "ok": true,
+          "summary": "系统音量 40%，未静音"
+        },
+        "status": "completed",
+        "taskId": "9c156c08-9abb-4070-80de-17726aa3d3b6"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "get_system_volume",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "系统音量 40%，未静音",
+        "data": {
+          "volume": 40,
+          "muted": false,
+          "ok": true,
+          "summary": "系统音量 40%，未静音"
+        },
+        "status": "completed",
+        "taskId": "9c156c08-9abb-4070-80de-17726aa3d3b6"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "9c156c08-9abb-4070-80de-17726aa3d3b6",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把声音调到百分之三十，然后静音，再取消静音。",
+    "target": {
+      "windowHandle": "10131",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-131"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "get_system_volume",
+        "state": "completed",
+        "durationMs": 346
+      }
+    ],
+    "results": [
+      {
+        "tool": "get_system_volume",
+        "state": "completed",
+        "data": {
+          "volume": 40,
+          "muted": false,
+          "ok": true,
+          "summary": "系统音量 40%，未静音"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-131）",
+    "[perf] tool:get_system_volume 0ms ok=true",
+    "[task 9c156c08-9abb-4070-80de-17726aa3d3b6] stage=tool ms=346 state=completed",
+    "[task 9c156c08-9abb-4070-80de-17726aa3d3b6] tool=get_system_volume status=completed ms=346"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-131",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1006,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

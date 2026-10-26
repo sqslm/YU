@@ -17,6 +17,14 @@ const settings = () => mergeSettings({ profiles: [profile('primary')], chains: {
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks() })
 
 describe('fixed full-document reminder refinement', () => {
+  it('normalizes interval labels only when the parsed interval and unit agree', () => {
+    const reference = new Date(2026, 9, 26, 16).getTime()
+    const item = extracted({ title: '开会', time_expression: '从下周二开始，每两周上午九点', recurrence: 'every 2 weeks' })
+    expect(parseReminderOutput(JSON.stringify({ items: [item] }), reference)[0]).toMatchObject({ recurrence: 'weekly', needs_confirmation: false, rule: { interval: 2, weekdays: [2] }, dueAt: new Date(2026, 10, 3, 9).getTime() })
+    for (const recurrence of ['every 3 weeks', 'every 2 months', 'whenever possible']) {
+      expect(() => parseReminderOutput(JSON.stringify({ items: [{ ...item, recurrence }] }), reference)).toThrow()
+    }
+  })
   it('preserves the complete user prompt with only the authorized product-name substitutions', () => {
     expect(REFINEMENT_PROMPT.match(/语（YU）/g)).toHaveLength(2)
     expect(createHash('sha256').update(REFINEMENT_PROMPT.replace(/语（YU）/g, 'Typeless Rebuild').replace(/\r\n/g, '\n')).digest('hex'))

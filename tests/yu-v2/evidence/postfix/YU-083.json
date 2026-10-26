@@ -1,0 +1,54 @@
+{
+  "case_id": "YU-083",
+  "input": "我想让你分析这张截图，但先给我看一下准备发送的内容。",
+  "spoken_input": "我想让你分析这张截图，但先给我看一下准备发送的内容。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-083",
+  "observations": [
+    {
+      "label": "controlled_image",
+      "value": {
+        "sha256": "234eabb13a040ffe3058a1f5c18b3d250d68d528dc6ef06b296a2f23d11b688d",
+        "bytes": 16528,
+        "source": "generated non-private test image; not a desktop screenshot"
+      }
+    },
+    {
+      "label": "preview_guard",
+      "value": {
+        "opensEditor": true,
+        "source": "src/main/index.ts analyzeScreenshot checks screenshotNeedsEditor before capture/upload",
+        "modelCalls": 111
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "a40e1ba4-c30e-4a15-ab38-067a8766c1ad",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我想让你分析这张截图，但先给我看一下准备发送的内容。",
+    "target": {
+      "windowHandle": "10083",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-083"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-083）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

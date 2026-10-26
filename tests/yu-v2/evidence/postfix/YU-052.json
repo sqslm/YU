@@ -1,0 +1,193 @@
+{
+  "case_id": "YU-052",
+  "input": "打开刚才那个 PDF 所在的文件夹。",
+  "spoken_input": "打开刚才那个 PDF 所在的文件夹。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": true,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":true}"
+      }
+    },
+    {
+      "label": "file_results",
+      "value": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "518d682d-f4d3-4793-a47c-fbf949a286dc"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "587824f6-c605-44f3-b5e9-b4fe6c2632bd"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "61d72d43-2a75-4b64-b37d-4e66e349e696"
+      }
+    },
+    {
+      "label": "actual_result_pointer",
+      "value": {
+        "kind": "ordinal",
+        "index": 1,
+        "item": {
+          "id": "587824f6-c605-44f3-b5e9-b4fe6c2632bd",
+          "title": "two.pdf",
+          "fields": {
+            "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052\\two.pdf",
+            "name": "two.pdf",
+            "bytes": 410,
+            "modified": "2026-10-25T08:00:00.0000000Z",
+            "kind": "file",
+            "id": "587824f6-c605-44f3-b5e9-b4fe6c2632bd"
+          }
+        }
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "downloads",
+        "type": "pdf"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 2 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "518d682d-f4d3-4793-a47c-fbf949a286dc"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "587824f6-c605-44f3-b5e9-b4fe6c2632bd"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        },
+        "status": "completed",
+        "taskId": "61d72d43-2a75-4b64-b37d-4e66e349e696"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "61d72d43-2a75-4b64-b37d-4e66e349e696",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开刚才那个 PDF 所在的文件夹。",
+    "target": {
+      "windowHandle": "10052",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-052"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 335
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "518d682d-f4d3-4793-a47c-fbf949a286dc"
+            },
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052\\two.pdf",
+              "name": "two.pdf",
+              "bytes": 410,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "587824f6-c605-44f3-b5e9-b4fe6c2632bd"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 2 个文件"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-052）",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task 61d72d43-2a75-4b64-b37d-4e66e349e696] stage=tool ms=335 state=completed",
+    "[task 61d72d43-2a75-4b64-b37d-4e66e349e696] tool=search_files status=completed ms=335"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-052",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1410,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

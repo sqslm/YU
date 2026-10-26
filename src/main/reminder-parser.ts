@@ -16,6 +16,7 @@ source=voice 表示用户已主动选择快速提醒（快捷键或语音关键�
 只有明确要求强提醒才用 strong。create_reminder 缺少时间、有歧义、范围时间（如周五之前）须 needs_confirmation=true。明确只要求保存待办、没有要求定时提醒且没有时间表达式的 todo，无需补提醒时间，needs_confirmation=false。每周多个星期或星期范围（每周一三五、每周一至周五、every Monday and Wednesday）已支持，recurrence=weekly，不得标为 unsupported_recurrence。
 例：20分钟后提醒我打扫卫生，强提醒 → {"items":[{"intent":"create_reminder","title":"打扫卫生","time_expression":"20分钟后","level":"strong","recurrence":null,"needs_confirmation":false}]}。
 每日/每周重复的 time_expression 必须包含原始重复措辞，如“每周一上午9点”或“every Monday at 9 AM”。非重复 recurrence=null。没有事项返回空 items。
+recurrence 只表示基础频率：每 N 周仍填写 weekly，每 N 月仍填写 monthly；间隔、起始日和截止日完整保留在 time_expression，不把 every 2 weeks 之类的规则文字填进 recurrence。
 English: Remind me in 20 minutes to clean up → title="Clean up", time_expression="in 20 minutes", intent="create_reminder". In source=voice, the user has already selected Quick reminder, so "Clean up in 20 minutes" is also a request; they need not repeat "remind me". Strong/urgent reminders require explicit emphasis. A statement, a guess or a quote is not a reminder command. Use the final corrected time, preserving the original date context. Never infer a missing date or AM/PM.`
 
 interface RefinedReminder {
@@ -58,16 +59,24 @@ export function parseReminderOutput(raw: string, referenceTime: number, todoOnly
       typeof row.title !== 'string' || !row.title.trim() || row.title.length > 300 ||
       !(row.description === undefined || typeof row.description === 'string' && row.description.length <= 4000) ||
       !(row.time_expression === null || typeof row.time_expression === 'string' && row.time_expression.length <= 200) ||
-      !['normal', 'strong'].includes(String(row.level)) || ![null, 'daily', 'weekly', 'monthly', 'yearly'].includes(row.recurrence as string | null) ||
+      !['normal', 'strong'].includes(String(row.level)) || !(row.recurrence === null || typeof row.recurrence === 'string') ||
       typeof row.needs_confirmation !== 'boolean' || !(row.unsupported_recurrence === undefined || typeof row.unsupported_recurrence === 'boolean')) throw new Error(mt('提醒解析字段无效'))
     const plannedTodo = todoOnly && row.intent === 'todo' && PLANNED_DAY.test(String(row.time_expression ?? '').trim()) && row.recurrence === null && !row.unsupported_recurrence
     const untimedTodo = row.intent === 'todo' && (row.time_expression === null || plannedTodo) && row.recurrence === null && !row.unsupported_recurrence
     const time = untimedTodo ? { dueAt: null, recurrence: null } : row.unsupported_recurrence
       ? { dueAt: null, recurrence: null, issue: mt('暂不支持此重复规则，请手动确认') }
       : resolveReminderTime(row.time_expression as string | null, referenceTime)
-    const mismatch = row.recurrence !== (time.recurrence?.frequency ?? null)
+    let frequency = row.recurrence as string | null
+    if (![null, 'daily', 'weekly', 'monthly', 'yearly'].includes(frequency)) {
+      const interval = /^every\s+(\d{1,3})\s+(days?|weeks?|months?|years?)$/i.exec(frequency!)
+      const unit = interval?.[2].toLowerCase().replace(/s$/, '')
+      const normalized = ({ day: 'daily', week: 'weekly', month: 'monthly', year: 'yearly' } as Record<string, string>)[unit ?? '']
+      if (!interval || !time.recurrence || time.issue || normalized !== time.recurrence.frequency || Number(interval[1]) !== (time.recurrence.interval ?? 1)) throw new Error(mt('提醒解析字段无效'))
+      frequency = time.recurrence.frequency
+    }
+    const mismatch = frequency !== (time.recurrence?.frequency ?? null)
     return { intent: row.intent as ReminderDraft['intent'], title: row.title.trim(), description: [(row.description as string | undefined)?.trim(), plannedTodo ? row.time_expression : null].filter(Boolean).join('；'), time_expression: plannedTodo ? null : row.time_expression as string | null,
-      level: row.level as ReminderDraft['level'], recurrence: row.recurrence as ReminderDraft['recurrence'],
+      level: row.level as ReminderDraft['level'], recurrence: frequency as ReminderDraft['recurrence'],
       needs_confirmation: row.needs_confirmation || Boolean(time.issue) || mismatch, dueAt: time.dueAt, rule: time.recurrence,
       issue: time.issue || (mismatch ? '请确认重复规则' : undefined) }
   })

@@ -11,6 +11,7 @@ import { runTool, availableToolNames, type ToolContext, type ToolOutcome } from 
 import { redactSecrets } from './diagnostics'
 import { attachTask, createTask } from './task-context'
 import type { TaskContext } from '@shared/task'
+import { localDayKey } from '@shared/calendar'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
 import { WORKFLOW_TOOLS, type WorkflowTools } from './tools/workflow'
@@ -109,7 +110,7 @@ function quotedSpans(text: string): string[] {
 }
 
 /** "刚才那条" / "上一个" point at the last object, not at a position in a list. */
-const AMBIENT_REFERENCE = /刚才(?:那|说|的)?\s*(?:个|条|项|件)?|上(?:一)?(?:个|条|项)|这条|那条|这个|那个|它(?!们)|\b(?:that one|that item|the previous one)\b/iu
+const AMBIENT_REFERENCE = /刚(?:才|刚)(?:那|说|的)?\s*(?:个|条|项|件)?|上(?:一)?(?:个|条|项)|这条|那条|这个|那个|它(?!们)|\b(?:that one|that item|the previous one)\b/iu
 
 /**
  * A verb that acts on an object.
@@ -297,6 +298,23 @@ export function resolveReference(text: string, thread?: ReferenceContext | null)
     if (!item) return { kind: 'clarify', question: mt('刚才没有可以指的最后一条，请先让我查一次。') }
     return { kind: 'last', index: items.length - 1, item }
   }
+  const named = items.filter(item => {
+    const title = item.title.trim()
+    if (title.length < 2) return false
+    if (/^[\x00-\x7f]+$/.test(title)) return new RegExp(`(?:^|[^\\p{L}\\p{N}_])${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[^\\p{L}\\p{N}_])`, 'iu').test(text)
+    return text.includes(title)
+  })
+  if (named.length) {
+    const day = /今天|明天|后天|昨天/u.exec(text)?.[0]
+    const date = new Date()
+    date.setDate(date.getDate() + (day === '明天' ? 1 : day === '后天' ? 2 : day === '昨天' ? -1 : 0))
+    const matching = day ? named.filter(item => {
+      const at = item.fields.dueAt ?? item.fields.start
+      return typeof at === 'number' && localDayKey(at) === localDayKey(+date)
+    }) : named
+    if (matching.length === 1) return { kind: 'ambient', index: items.indexOf(matching[0]), item: matching[0] }
+    return { kind: 'clarify', question: mt('请明确要修改的事项和日期') }
+  }
   if (thread?.lastObject) return { kind: 'ambient', index: -1, item: thread.lastObject }
   if (items.length === 1) return { kind: 'ambient', index: 0, item: items[0] }
   // Several rows and no written object: asking is the only honest answer.
@@ -315,7 +333,7 @@ export function referenceEditHint(item: ReferenceItem): string | null {
   const end = item.fields.end
   if (typeof start !== 'number' || typeof end !== 'number' || end <= start) return null
   const minutes = Math.round((end - start) / 60_000)
-  return `这是日程：当前 ${clockOf(start)} 开始、${clockOf(end)} 结束，时长 ${minutes} 分钟。用户只给出新时间时只改开始时间并保持 ${minutes} 分钟时长（结束时间随开始时间平移），标题和其它字段保持不变。`
+  return `这是日程：当前 ${localDayKey(start)} ${clockOf(start)} 开始、${localDayKey(end)} ${clockOf(end)} 结束，时长 ${minutes} 分钟。用户只给出新时间时沿用原日期，只改开始时间并保持 ${minutes} 分钟时长（结束时间随开始时间平移），标题和其它字段保持不变。`
 }
 
 /**
@@ -348,6 +366,11 @@ export function referenceBlock(thread: ReferenceContext | null, outcome: Referen
 export function referenceOperation(input: string, pointer: ReferenceOutcome): { name: string; args: Record<string, unknown> } | null {
   if (pointer.kind === 'none' || pointer.kind === 'clarify' || isDictatedContent(input)) return null
   const item = pointer.item, path = item.fields.path
+  if (typeof item.fields.start === 'number' && typeof item.fields.end === 'number') {
+    const clock = '(?:凌晨|早上|早晨|上午|中午|下午|傍晚|晚上)?\\s*[零〇一二两三四五六七八九十\\d]{1,3}(?:[:：]\\d{2}|[点點时時](?:半|[零〇一二两三四五六七八九十\\d]{1,3}分?)?)'
+    const change = new RegExp(`(?:改到|改成|改为|挪到|移到|调整到)\\s*(${clock})(?:\\s*(?:到|至|[-–])\\s*(${clock}))?[。！!\\s]*$`, 'u').exec(input)
+    if (change && !/然后|并且|同时|\b(?:then|also)\b/iu.test(input)) return { name: 'manage_event', args: { id: item.id, action: 'update', start: change[1], ...(change[2] ? { end: change[2] } : {}) } }
+  }
   if (item.fields.kind !== 'file' && item.fields.kind !== 'folder' && item.fields.kind !== 'application') return null
   if (/^(?:请|帮我)?(?:把)?(?:它|这个|那个|刚才那个)(?:的|所在的|所在)?(?:父目录|文件夹|目录)(?:也)?打开[。！!]?$/u.test(input.trim()) &&
       typeof path === 'string' && win32.isAbsolute(path) && item.fields.kind === 'file') {

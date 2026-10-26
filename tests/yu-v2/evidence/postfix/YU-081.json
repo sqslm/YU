@@ -1,0 +1,120 @@
+{
+  "case_id": "YU-081",
+  "input": "这张截图上的柱状图主要说明什么？",
+  "spoken_input": "这张截图上的柱状图主要说明什么？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-081",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "capability_audit",
+      "value": {
+        "registered": [
+          "open_application",
+          "open_folder",
+          "open_file",
+          "open_url",
+          "search_files",
+          "search_file_contents",
+          "search_files_everything",
+          "get_active_window",
+          "get_disk_space",
+          "get_current_folder",
+          "get_current_page",
+          "get_system_info",
+          "get_system_volume",
+          "set_system_volume",
+          "search_file_activity",
+          "create_reminder",
+          "list_reminders",
+          "manage_reminder",
+          "create_note",
+          "search_notes",
+          "update_note_tags",
+          "update_note",
+          "extract_note_tasks",
+          "search_history",
+          "read_clipboard",
+          "copy_to_clipboard",
+          "open_page",
+          "control_note_audio",
+          "get_prompt_info",
+          "note_sync_status",
+          "prepare_selection_edit",
+          "apply_selection_edit",
+          "create_event",
+          "list_events",
+          "manage_event",
+          "daily_briefing",
+          "configure_briefing",
+          "speak_text",
+          "stop_speaking",
+          "control_speech",
+          "configure_speech",
+          "sync_status",
+          "sync_control",
+          "send_briefing",
+          "briefing_delivery_status",
+          "configure_briefing_delivery",
+          "save_workflow",
+          "list_workflows",
+          "run_workflow",
+          "manage_workflow",
+          "web_search",
+          "read_webpage",
+          "get_weather",
+          "get_datetime",
+          "calculate",
+          "open_search",
+          "get_selection",
+          "analyze_screenshot"
+        ]
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "13fec5fa-c7a0-4924-8712-2974b8bd8f24",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "这张截图上的柱状图主要说明什么？",
+    "target": {
+      "windowHandle": "10081",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-081"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-081）"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-081",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1476,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

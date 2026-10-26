@@ -1,0 +1,155 @@
+{
+  "case_id": "YU-116",
+  "input": "帮我检查本机磁盘健康状况。",
+  "spoken_input": "帮我检查本机磁盘健康状况。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-116",
+  "observations": [
+    {
+      "label": "available_hardware_tools",
+      "value": [
+        {
+          "name": "get_disk_space",
+          "description": "Read actual ready local disk total/free/used bytes through Windows. No guessed capacity values."
+        },
+        {
+          "name": "get_system_info",
+          "description": "Read actual CPU model, logical processors and total/free system memory. Never guess hardware."
+        },
+        {
+          "name": "get_system_volume",
+          "description": "Read the default Windows output device master volume and mute state."
+        },
+        {
+          "name": "set_system_volume",
+          "description": "Set master system volume 0-100 or mute/unmute only when explicitly requested, then read back actual state. This changes system output, not TTS-only volume."
+        }
+      ]
+    },
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "601e78bf-b0a7-40ff-9292-b4884a94fd86",
+        "taskState": "completed",
+        "question": "帮我检查本机磁盘健康状况。",
+        "answer": "从容量看，目前没有明显健康问题，所有本地磁盘都还有比较充裕的剩余空间：\n\n| 盘 | 用途 | 总容量 | 已用 | 可用 | 使用率 |\n|---|---|---|---|---|---|\n| C: | 系统 | 200 GB | 118.6 GB | 81.4 GB | 约 59% |\n| D: | 数据 | 3.64 TB | 829 GB | 2.83 TB | 约 22% |\n| E: | 软件 | 753 GB | 284 GB | 470 GB | 约 38% |\n| F: | 游戏 | 953 GB | 693 GB | 261 GB | 约 73% |\n\n几点说明：\n- C 盘还剩 81 GB，不算紧张，但系统盘建议长期留出 10% 以上空闲；现在完全够用。\n- F 盘使用率最高，为 73%，还剩约 261 GB；后续装大游戏前留意一下。\n- D 盘空间非常充裕。\n\n我只能读到容量层面的数据，读不到硬盘的 SMART 健康状态，比如坏道、通电次数、温度；这些需要查看专业的硬件检测信息。如果机器近期有异响、卡顿或掉盘，建议再用硬件检测工具核实。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "get_disk_space",
+            "ok": true,
+            "summary": "已读取磁盘容量",
+            "status": "completed",
+            "taskId": "601e78bf-b0a7-40ff-9292-b4884a94fd86"
+          }
+        ]
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "601e78bf-b0a7-40ff-9292-b4884a94fd86",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "帮我检查本机磁盘健康状况。",
+    "target": {
+      "windowHandle": "10116",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-116"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "get_disk_space",
+        "state": "completed",
+        "durationMs": 248
+      }
+    ],
+    "submittedAt": 1793001600000,
+    "results": [
+      {
+        "tool": "get_disk_space",
+        "state": "completed",
+        "data": {
+          "drives": [
+            {
+              "label": "系统",
+              "usedBytes": 127326920704,
+              "name": "C:\\",
+              "totalBytes": 214749409280,
+              "freeBytes": 87422488576
+            },
+            {
+              "label": "数据",
+              "usedBytes": 890028752896,
+              "name": "D:\\",
+              "totalBytes": 4000454610944,
+              "freeBytes": 3110425858048
+            },
+            {
+              "label": "软件",
+              "usedBytes": 304698011648,
+              "name": "E:\\",
+              "totalBytes": 809127710720,
+              "freeBytes": 504429699072
+            },
+            {
+              "label": "游戏",
+              "usedBytes": 744042614784,
+              "name": "F:\\",
+              "totalBytes": 1023877124096,
+              "freeBytes": 279834509312
+            }
+          ],
+          "asOf": 1793001600000,
+          "unit": "bytes",
+          "ok": true,
+          "summary": "已读取磁盘容量"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-116）",
+    "[task 601e78bf-b0a7-40ff-9292-b4884a94fd86] stage=llm ms=1255",
+    "[perf] llm round0 0ms",
+    "[perf] tool:get_disk_space 0ms ok=true",
+    "[task 601e78bf-b0a7-40ff-9292-b4884a94fd86] stage=tool ms=248 state=completed",
+    "[task 601e78bf-b0a7-40ff-9292-b4884a94fd86] tool=get_disk_space status=completed ms=248",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] get_disk_space ok=true",
+    "[perf] enrich 0ms",
+    "[task 601e78bf-b0a7-40ff-9292-b4884a94fd86] stage=llm ms=3077",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-116",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1254,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-116",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 3077,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

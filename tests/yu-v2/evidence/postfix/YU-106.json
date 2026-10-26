@@ -1,0 +1,59 @@
+{
+  "case_id": "YU-106",
+  "input": "把它改成第二个。",
+  "spoken_input": "把它改成第二个。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-106",
+  "observations": [
+    {
+      "label": "reference_resolution",
+      "value": {
+        "kind": "clarify",
+        "question": "我还不知道你指的是哪一条，请先让我查一次，或直接说要改的那条。"
+      }
+    },
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "c76e4ab8-3a5e-4960-8d71-c572c9794505",
+        "taskState": "awaiting_confirmation",
+        "question": "把它改成第二个。",
+        "answer": "我还不知道你指的是哪一条，请先让我查一次，或直接说要改的那条。",
+        "sources": [],
+        "state": "done",
+        "localResults": []
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "c76e4ab8-3a5e-4960-8d71-c572c9794505",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把它改成第二个。",
+    "target": {
+      "windowHandle": "10106",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-106"
+    },
+    "state": "awaiting_confirmation",
+    "receipts": [],
+    "submittedAt": 1793001600000
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-106）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "PASS"
+}

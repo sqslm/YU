@@ -8,6 +8,7 @@ import { extractReminders } from './reminder-parser'
 import { appIcon } from './app-icon'
 import { createReminderWindow } from './windows'
 import { mainLanguage, mt } from '@shared/mainI18n'
+import { unsupportedReminderZone } from './reminder-time'
 
 export class ReminderService {
   readonly store: ReminderStore
@@ -87,6 +88,7 @@ export class ReminderService {
    */
   async voice(text: string, signal: AbortSignal, onProgress?: (hint: string) => void, submittedAt = Date.now(),
     extra?: { priority?: TodoPriority; deadlineAt?: number | null }): Promise<{ message: string; undo?: boolean; reminder?: Reminder; saved?: number }> {
+    if (unsupportedReminderZone(text.split(/(?:提醒|通知)我|\bremind me to\b/iu)[0])) return { message: mt('暂不支持指定时区，请换算为本地日期和时间'), saved: 0 }
     const drafts = await extractReminders(this.settings(), text, 'voice', AbortSignal.any([signal, AbortSignal.timeout(60_000)]), onProgress, submittedAt)
     signal.throwIfAborted()
     this.log(`[reminders] voice parsed: ${drafts.length} item(s), intents=${drafts.map(item => item.intent).join(',')}`)

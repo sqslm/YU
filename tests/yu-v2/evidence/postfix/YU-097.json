@@ -1,0 +1,1148 @@
+{
+  "case_id": "YU-097",
+  "input": "① 十分钟后提醒我打扫卫生。② 改成二十分钟。③ 再改为强提醒。④ 算了取消这个提醒。",
+  "spoken_input": "算了取消这个提醒。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-097",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "2026/10/26 16:10 · 普通提醒 · 打扫卫生",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "c8a9aab7-762d-47f4-acde-5d39f39ef17c",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "十分钟后提醒我打扫卫生。",
+          "target": {
+            "windowHandle": "10097",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-097"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 3161
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "rule"
+          },
+          "transcript": "十分钟后提醒我打扫卫生。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "打扫卫生",
+                  "description": "",
+                  "dueAt": 1793002200000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "10分钟后",
+                  "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:10:00",
+                  "remainingSeconds": 600,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "ddba685e-8479-4d5e-8c9a-8599d7cb1515",
+        "taskState": "completed",
+        "question": "改成二十分钟。",
+        "answer": "已经改好了：「打扫卫生」提醒现在定在 16:20，也就是二十分钟后，原来是 16:10。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 1 个事项",
+            "status": "completed",
+            "taskId": "ddba685e-8479-4d5e-8c9a-8599d7cb1515"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "事项已更新 · 打扫卫生\n2026/10/26 16:10:00 → 2026/10/26 16:20:00 · 普通提醒",
+            "status": "completed",
+            "taskId": "ddba685e-8479-4d5e-8c9a-8599d7cb1515"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "已经改好了：「打扫卫生」提醒现在定在 16:20，也就是二十分钟后，原来是 16:10。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "ddba685e-8479-4d5e-8c9a-8599d7cb1515",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "改成二十分钟。",
+          "target": {
+            "windowHandle": "10097",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-097"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "durationMs": 0
+            },
+            {
+              "tool": "manage_reminder",
+              "state": "completed",
+              "durationMs": 3
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "改成二十分钟。",
+          "results": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "data": {
+                "total": 1,
+                "asOf": 1793001600000,
+                "items": [
+                  {
+                    "title": "打扫卫生",
+                    "description": "",
+                    "dueAt": 1793002200000,
+                    "level": "normal",
+                    "priority": "normal",
+                    "deadlineAt": null,
+                    "recurrence": null,
+                    "occurrences": 0,
+                    "source": "voice",
+                    "timeExpression": "10分钟后",
+                    "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600000,
+                    "status": "pending",
+                    "deliveredAt": null,
+                    "triggerTime": "2026/10/26 16:10:00",
+                    "remainingSeconds": 600,
+                    "overdue": false,
+                    "kind": "reminder",
+                    "levelName": "普通提醒",
+                    "priorityLabel": "普通"
+                  }
+                ],
+                "truncated": false,
+                "ok": true
+              }
+            },
+            {
+              "tool": "manage_reminder",
+              "state": "completed",
+              "data": {
+                "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                "action": "update",
+                "before": {
+                  "title": "打扫卫生",
+                  "description": "",
+                  "dueAt": 1793002200000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "10分钟后",
+                  "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:10:00",
+                  "remainingSeconds": 600,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "item": {
+                  "title": "打扫卫生",
+                  "description": "",
+                  "dueAt": 1793002800000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "20分钟后",
+                  "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:20:00",
+                  "remainingSeconds": 1200,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "37ea0229-b1da-426a-a42c-9fd55ab595c8",
+        "taskState": "completed",
+        "question": "再改为强提醒。",
+        "answer": "「打扫卫生」已经改成强提醒，时间仍是 16:20，还剩二十分钟。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 1 个事项",
+            "status": "completed",
+            "taskId": "37ea0229-b1da-426a-a42c-9fd55ab595c8"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "事项已更新 · 打扫卫生\n2026/10/26 16:20:00 → 2026/10/26 16:20:00 · 强提醒",
+            "status": "completed",
+            "taskId": "37ea0229-b1da-426a-a42c-9fd55ab595c8"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "「打扫卫生」已经改成强提醒，时间仍是 16:20，还剩二十分钟。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "37ea0229-b1da-426a-a42c-9fd55ab595c8",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "再改为强提醒。",
+          "target": {
+            "windowHandle": "10097",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-097"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "durationMs": 0
+            },
+            {
+              "tool": "manage_reminder",
+              "state": "completed",
+              "durationMs": 2
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "rule"
+          },
+          "transcript": "再改为强提醒。",
+          "recentExchange": {
+            "question": "改成二十分钟。",
+            "answer": "已经改好了：「打扫卫生」提醒现在定在 16:20，也就是二十分钟后，原来是 16:10。"
+          },
+          "results": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "data": {
+                "total": 1,
+                "asOf": 1793001600000,
+                "items": [
+                  {
+                    "title": "打扫卫生",
+                    "description": "",
+                    "dueAt": 1793002800000,
+                    "level": "normal",
+                    "priority": "normal",
+                    "deadlineAt": null,
+                    "recurrence": null,
+                    "occurrences": 0,
+                    "source": "voice",
+                    "timeExpression": "20分钟后",
+                    "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600000,
+                    "status": "pending",
+                    "deliveredAt": null,
+                    "triggerTime": "2026/10/26 16:20:00",
+                    "remainingSeconds": 1200,
+                    "overdue": false,
+                    "kind": "reminder",
+                    "levelName": "普通提醒",
+                    "priorityLabel": "普通"
+                  }
+                ],
+                "truncated": false,
+                "ok": true
+              }
+            },
+            {
+              "tool": "manage_reminder",
+              "state": "completed",
+              "data": {
+                "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                "action": "update",
+                "before": {
+                  "title": "打扫卫生",
+                  "description": "",
+                  "dueAt": 1793002800000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "20分钟后",
+                  "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:20:00",
+                  "remainingSeconds": 1200,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "item": {
+                  "title": "打扫卫生",
+                  "description": "",
+                  "dueAt": 1793002800000,
+                  "level": "strong",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "20分钟后",
+                  "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:20:00",
+                  "remainingSeconds": 1200,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "强提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 3,
+        "taskId": "e6c1729d-4f73-4b23-83c8-a96dbfe15ffc",
+        "taskState": "completed",
+        "question": "算了取消这个提醒。",
+        "answer": "「打扫卫生」这条提醒已经取消了，不会再在 16:20 提醒你。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 1 个事项",
+            "status": "completed",
+            "taskId": "e6c1729d-4f73-4b23-83c8-a96dbfe15ffc"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "取消提醒 · 打扫卫生\n2026/10/26 16:20:00 · 强提醒",
+            "status": "completed",
+            "taskId": "e6c1729d-4f73-4b23-83c8-a96dbfe15ffc"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "「打扫卫生」这条提醒已经取消了，不会再在 16:20 提醒你。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "e6c1729d-4f73-4b23-83c8-a96dbfe15ffc",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "算了取消这个提醒。",
+          "target": {
+            "windowHandle": "10097",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-097"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "durationMs": 0
+            },
+            {
+              "tool": "manage_reminder",
+              "state": "completed",
+              "durationMs": 4
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "rule"
+          },
+          "transcript": "算了取消这个提醒。",
+          "recentExchange": {
+            "question": "再改为强提醒。",
+            "answer": "「打扫卫生」已经改成强提醒，时间仍是 16:20，还剩二十分钟。"
+          },
+          "results": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "data": {
+                "total": 1,
+                "asOf": 1793001600000,
+                "items": [
+                  {
+                    "title": "打扫卫生",
+                    "description": "",
+                    "dueAt": 1793002800000,
+                    "level": "strong",
+                    "priority": "normal",
+                    "deadlineAt": null,
+                    "recurrence": null,
+                    "occurrences": 0,
+                    "source": "voice",
+                    "timeExpression": "20分钟后",
+                    "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600000,
+                    "status": "pending",
+                    "deliveredAt": null,
+                    "triggerTime": "2026/10/26 16:20:00",
+                    "remainingSeconds": 1200,
+                    "overdue": false,
+                    "kind": "reminder",
+                    "levelName": "强提醒",
+                    "priorityLabel": "普通"
+                  }
+                ],
+                "truncated": false,
+                "ok": true
+              }
+            },
+            {
+              "tool": "manage_reminder",
+              "state": "completed",
+              "data": {
+                "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                "action": "cancel",
+                "before": {
+                  "title": "打扫卫生",
+                  "description": "",
+                  "dueAt": 1793002800000,
+                  "level": "strong",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "20分钟后",
+                  "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:20:00",
+                  "remainingSeconds": 1200,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "强提醒",
+                  "priorityLabel": "普通"
+                },
+                "item": {
+                  "title": "打扫卫生",
+                  "description": "",
+                  "dueAt": 1793002800000,
+                  "level": "strong",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "20分钟后",
+                  "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "cancelled",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 16:20:00",
+                  "remainingSeconds": 1200,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "强提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "sequence_final",
+      "value": {
+        "records": [
+          {
+            "title": "打扫卫生",
+            "description": "",
+            "dueAt": 1793002800000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "20分钟后",
+            "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "cancelled",
+            "deliveredAt": null
+          }
+        ],
+        "notes": []
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "2026/10/26 16:10 · 普通提醒 · 打扫卫生",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "打扫卫生",
+            "description": "",
+            "dueAt": 1793002200000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "10分钟后",
+            "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:10:00",
+            "remainingSeconds": 600,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "c8a9aab7-762d-47f4-acde-5d39f39ef17c"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "打扫卫生",
+      "description": "",
+      "dueAt": 1793002800000,
+      "level": "strong",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "voice",
+      "timeExpression": "20分钟后",
+      "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "cancelled",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "e6c1729d-4f73-4b23-83c8-a96dbfe15ffc",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "算了取消这个提醒。",
+    "target": {
+      "windowHandle": "10097",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-097"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 4
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "rule"
+    },
+    "transcript": "算了取消这个提醒。",
+    "recentExchange": {
+      "question": "再改为强提醒。",
+      "answer": "「打扫卫生」已经改成强提醒，时间仍是 16:20，还剩二十分钟。"
+    },
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 1,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "打扫卫生",
+              "description": "",
+              "dueAt": 1793002800000,
+              "level": "strong",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "voice",
+              "timeExpression": "20分钟后",
+              "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:20:00",
+              "remainingSeconds": 1200,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "强提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+          "action": "cancel",
+          "before": {
+            "title": "打扫卫生",
+            "description": "",
+            "dueAt": 1793002800000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "20分钟后",
+            "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:20:00",
+            "remainingSeconds": 1200,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "强提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "打扫卫生",
+            "description": "",
+            "dueAt": 1793002800000,
+            "level": "strong",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "20分钟后",
+            "id": "6c547880-ff00-4550-8f87-867c0a2a78e6",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "cancelled",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:20:00",
+            "remainingSeconds": 1200,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "强提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-097）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[asr] local sense-voice-small: 12 chars",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] stage=routing ms=0",
+    "[voice-entry] reminder",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] stage=llm ms=1622",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] stage=llm ms=1535",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] stage=tool ms=3161 state=completed",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] tool=create_reminder status=completed ms=3161",
+    "[task c8a9aab7-762d-47f4-acde-5d39f39ef17c] stage=total ms=0 state=completed",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[asr] local sense-voice-small: 7 chars",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=llm ms=1575",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=routing ms=1575",
+    "[voice-entry] assistant",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=llm ms=1747",
+    "[perf] llm round0 0ms",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=tool ms=0 state=completed",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] tool=list_reminders status=completed ms=0",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] list_reminders ok=true",
+    "[perf] enrich 0ms",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=llm ms=1344",
+    "[perf] llm round1 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=tool ms=3 state=completed",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] tool=manage_reminder status=completed ms=3",
+    "[perf] tools round1 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=llm ms=1907",
+    "[perf] llm round2 0ms",
+    "[perf] ask total 0ms",
+    "[task ddba685e-8479-4d5e-8c9a-8599d7cb1515] stage=total ms=0 state=completed",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[asr] local sense-voice-small: 7 chars",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=routing ms=0",
+    "[voice-entry] assistant",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=tool ms=0 state=completed",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] tool=list_reminders status=completed ms=0",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=llm ms=1655",
+    "[perf] llm round0 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=tool ms=2 state=completed",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] tool=manage_reminder status=completed ms=2",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=llm ms=1023",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task 37ea0229-b1da-426a-a42c-9fd55ab595c8] stage=total ms=0 state=completed",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[asr] local sense-voice-small: 9 chars",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-097\"",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=routing ms=0",
+    "[voice-entry] assistant",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=tool ms=0 state=completed",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] tool=list_reminders status=completed ms=0",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=llm ms=1443",
+    "[perf] llm round0 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=tool ms=4 state=completed",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] tool=manage_reminder status=completed ms=4",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=llm ms=1715",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task e6c1729d-4f73-4b23-83c8-a96dbfe15ffc] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1622,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1535,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1574,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1746,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1344,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1907,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1655,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1023,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1443,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-097",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1715,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

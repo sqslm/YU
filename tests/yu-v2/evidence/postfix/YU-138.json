@@ -1,0 +1,46 @@
+{
+  "case_id": "YU-138",
+  "input": "框选第二块显示器左上角的这块区域。",
+  "spoken_input": "框选第二块显示器左上角的这块区域。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-138",
+  "observations": [
+    {
+      "label": "controlled_image",
+      "value": {
+        "sha256": "234eabb13a040ffe3058a1f5c18b3d250d68d528dc6ef06b296a2f23d11b688d",
+        "bytes": 16528,
+        "source": "generated non-private test image; not a desktop screenshot"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "35212ac4-3c1e-4c32-8ef3-5899faa8fd9c",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "框选第二块显示器左上角的这块区域。",
+    "target": {
+      "windowHandle": "10138",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-138"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-138）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "ENV_BLOCKED"
+}

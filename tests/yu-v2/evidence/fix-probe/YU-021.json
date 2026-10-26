@@ -1,0 +1,353 @@
+{
+  "case_id": "YU-021",
+  "input": "每个月一号晚上八点提醒我交房租。",
+  "spoken_input": "每个月一号晚上八点提醒我交房租。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-021",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "2026/11/01 20:00 · 普通提醒 · 交房租",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "每个月一号晚上八点提醒我交房租。",
+          "target": {
+            "windowHandle": "10021",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-021"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 3630
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "model"
+          },
+          "transcript": "每个月一号晚上八点提醒我交房租。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "交房租",
+                  "description": "",
+                  "dueAt": 1793534400000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": {
+                    "frequency": "monthly",
+                    "hour": 20,
+                    "minute": 0,
+                    "day": 1,
+                    "anchor": 1793534400000
+                  },
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "每个月一号晚上八点",
+                  "id": "63578a93-45fd-480c-bae6-7475360b89e0",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/11/1 20:00:00",
+                  "remainingSeconds": 532800,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": [
+        {
+          "title": "交房租",
+          "description": "",
+          "dueAt": 1793534400000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": {
+            "frequency": "monthly",
+            "hour": 20,
+            "minute": 0,
+            "day": 1,
+            "anchor": 1793534400000
+          },
+          "occurrences": 0,
+          "source": "voice",
+          "timeExpression": "每个月一号晚上八点",
+          "id": "63578a93-45fd-480c-bae6-7475360b89e0",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "2026/11/01 20:00 · 普通提醒 · 交房租",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "交房租",
+            "description": "",
+            "dueAt": 1793534400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "monthly",
+              "hour": 20,
+              "minute": 0,
+              "day": 1,
+              "anchor": 1793534400000
+            },
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "每个月一号晚上八点",
+            "id": "63578a93-45fd-480c-bae6-7475360b89e0",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/11/1 20:00:00",
+            "remainingSeconds": 532800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "交房租",
+      "description": "",
+      "dueAt": 1793534400000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": {
+        "frequency": "monthly",
+        "hour": 20,
+        "minute": 0,
+        "day": 1,
+        "anchor": 1793534400000
+      },
+      "occurrences": 0,
+      "source": "voice",
+      "timeExpression": "每个月一号晚上八点",
+      "id": "63578a93-45fd-480c-bae6-7475360b89e0",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "每个月一号晚上八点提醒我交房租。",
+    "target": {
+      "windowHandle": "10021",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-021"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 3630
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "model"
+    },
+    "transcript": "每个月一号晚上八点提醒我交房租。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "交房租",
+            "description": "",
+            "dueAt": 1793534400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "monthly",
+              "hour": 20,
+              "minute": 0,
+              "day": 1,
+              "anchor": 1793534400000
+            },
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "每个月一号晚上八点",
+            "id": "63578a93-45fd-480c-bae6-7475360b89e0",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/11/1 20:00:00",
+            "remainingSeconds": 532800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-021）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-021\"",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-021\"",
+    "[asr] local sense-voice-small: 16 chars",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-021\"",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=llm ms=1585",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=routing ms=1592",
+    "[voice-entry] reminder",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=llm ms=2166",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=llm ms=1442",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=tool ms=3630 state=completed",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] tool=create_reminder status=completed ms=3630",
+    "[task c2cce8f9-4bff-4a4d-9bfb-0366c855a5e4] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-021",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1583,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-021",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2166,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-021",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1442,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

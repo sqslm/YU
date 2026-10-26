@@ -1,0 +1,76 @@
+{
+  "retained_test_package_bytes": 7213842,
+  "retained_fixture_bytes": 27404012,
+  "directories": [
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-0EHTKP",
+      "bytes": 131216
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-0V3U6F",
+      "bytes": 188416
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-1KKyXd",
+      "bytes": 76561
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-5PGRsR",
+      "bytes": 73872
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-5VB2Ck",
+      "bytes": 2124960
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF",
+      "bytes": 10053260
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I",
+      "bytes": 365011
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-EiOkZl",
+      "bytes": 201482
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-FhLpLF",
+      "bytes": 250669
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-Fl1MTY",
+      "bytes": 75814
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts",
+      "bytes": 606289
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-hgA8UF",
+      "bytes": 777589
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-JpdvcL",
+      "bytes": 204118
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-mIagAD",
+      "bytes": 1379595
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-PIs7Oc",
+      "bytes": 433786
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-rpHGCe",
+      "bytes": 10039019
+    },
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-RtUhm0",
+      "bytes": 422355
+    }
+  ],
+  "reclaimed_bytes": 0,
+  "reason": "Previous recursive fixture cleanup was rejected by automatic approval; this task did not retry that deletion or use an alternative method. User data, active environments and historical release directories untouched."
+}

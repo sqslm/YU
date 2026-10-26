@@ -1,0 +1,166 @@
+{
+  "case_id": "YU-010",
+  "input": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+  "spoken_input": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-010",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+            "answer": "",
+            "status": "正在思考…",
+            "streaming": true,
+            "taskId": "5d7b5b13-9a08-4605-813e-e557f5fcdae4",
+            "taskState": "running"
+          },
+          {
+            "question": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+            "answer": "需要先知道你说的“打开应用”是哪种场景，因为实现方式差别很大。按常见的三种情况来说：\n\n**一、你的软件里点击按钮，打开别的程序**\n\nWindows 上用 `ShellExecute` 或 `QProcess` 传程序路径；macOS 用 `open -a \"AppName\"`；Linux 用 `xdg-open` 或直接执行可执行文件。核心是拼接启动命令，注意参数要做引号转义，避免空格路径和注入问题。\n\n**二、开机自启（Windows 桌面程序）**\n\n三个主流做法，选一种即可：\n- 注册表 `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` 写入程序路径，不需要管理员权限；\n- 在启动文件夹 `%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup` 放快捷方式；\n- 用任务计划程序（`schtasks`）支持延迟启动、管理员权限启动。\n\n**三、网页或服务端去唤醒本地应用**\n\n标准做法是注册自定义 URL Scheme（如 `myapp://`），浏览器点击链接后由系统调起你的程序；安全性要求高就用深链接校验或本地回环端口通信。纯网页无法直接启动任意本地程序，这是浏览器安全沙箱的限制，绕不过去。\n\n**几个容易踩的坑**\n- 路径含空格或中文时，不要拼裸字符串，用 API 或参数数组传参；\n- 开机自启的程序要判断是否已在运行（单实例锁），否则会重复启动；\n- 启动外部程序后不要假设它会成功，要捕获返回码并给用户提示；\n- 如果目标程序需要管理员权限，普通进程调起会失败或触发 UAC 弹窗。\n\n你告诉我具体是哪种场景（什么平台、什么语言、是启动自己的程序还是第三方程序），我可以给出对应的可用代码。",
+            "taskId": "5d7b5b13-9a08-4605-813e-e557f5fcdae4",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "5d7b5b13-9a08-4605-813e-e557f5fcdae4",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+          "target": {
+            "windowHandle": "10010",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-010"
+          },
+          "state": "completed",
+          "receipts": [],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "rule"
+          },
+          "transcript": "我想让软件能自动打开应用，这个功能应该怎么开发？"
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [],
+        "reminders": [],
+        "events": []
+      }
+    },
+    {
+      "label": "answer",
+      "value": "需要先知道你说的“打开应用”是哪种场景，因为实现方式差别很大。按常见的三种情况来说：\n\n**一、你的软件里点击按钮，打开别的程序**\n\nWindows 上用 `ShellExecute` 或 `QProcess` 传程序路径；macOS 用 `open -a \"AppName\"`；Linux 用 `xdg-open` 或直接执行可执行文件。核心是拼接启动命令，注意参数要做引号转义，避免空格路径和注入问题。\n\n**二、开机自启（Windows 桌面程序）**\n\n三个主流做法，选一种即可：\n- 注册表 `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` 写入程序路径，不需要管理员权限；\n- 在启动文件夹 `%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup` 放快捷方式；\n- 用任务计划程序（`schtasks`）支持延迟启动、管理员权限启动。\n\n**三、网页或服务端去唤醒本地应用**\n\n标准做法是注册自定义 URL Scheme（如 `myapp://`），浏览器点击链接后由系统调起你的程序；安全性要求高就用深链接校验或本地回环端口通信。纯网页无法直接启动任意本地程序，这是浏览器安全沙箱的限制，绕不过去。\n\n**几个容易踩的坑**\n- 路径含空格或中文时，不要拼裸字符串，用 API 或参数数组传参；\n- 开机自启的程序要判断是否已在运行（单实例锁），否则会重复启动；\n- 启动外部程序后不要假设它会成功，要捕获返回码并给用户提示；\n- 如果目标程序需要管理员权限，普通进程调起会失败或触发 UAC 弹窗。\n\n你告诉我具体是哪种场景（什么平台、什么语言、是启动自己的程序还是第三方程序），我可以给出对应的可用代码。"
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "5d7b5b13-9a08-4605-813e-e557f5fcdae4",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我想让软件能自动打开应用，这个功能应该怎么开发？",
+    "target": {
+      "windowHandle": "10010",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-010"
+    },
+    "state": "completed",
+    "receipts": [],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "rule"
+    },
+    "transcript": "我想让软件能自动打开应用，这个功能应该怎么开发？"
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-010）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-010\"",
+    "[task 5d7b5b13-9a08-4605-813e-e557f5fcdae4] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-010\"",
+    "[asr] local sense-voice-small: 24 chars",
+    "[task 5d7b5b13-9a08-4605-813e-e557f5fcdae4] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-010\"",
+    "[task 5d7b5b13-9a08-4605-813e-e557f5fcdae4] stage=routing ms=0",
+    "[voice-entry] ask",
+    "[task 5d7b5b13-9a08-4605-813e-e557f5fcdae4] stage=llm ms=4287",
+    "[perf] llm round0 0ms",
+    "[perf] ask total 0ms",
+    "[task 5d7b5b13-9a08-4605-813e-e557f5fcdae4] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-010",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 4287,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

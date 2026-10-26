@@ -1,0 +1,286 @@
+{
+  "case_id": "YU-122",
+  "input": "按纽约时间明天上午九点提醒我参加会议。",
+  "spoken_input": "按纽约时间明天上午九点提醒我参加会议。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-RtUhm0\\YU-122",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "a1fb5117-c8d2-4fb3-9a98-e1b7a591b164",
+        "taskState": "failed",
+        "question": "按纽约时间明天上午九点提醒我参加会议。",
+        "answer": "create_reminder 执行失败：提醒内容必须来自原始请求",
+        "sources": [],
+        "state": "error",
+        "localResults": [
+          {
+            "tool": "create_reminder",
+            "ok": false,
+            "summary": "create_reminder 执行失败：提醒内容必须来自原始请求",
+            "status": "failed",
+            "taskId": "a1fb5117-c8d2-4fb3-9a98-e1b7a591b164"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "create_reminder 执行失败：提醒内容必须来自原始请求",
+            "feedback": {
+              "failed": true
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "a1fb5117-c8d2-4fb3-9a98-e1b7a591b164",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "按纽约时间明天上午九点提醒我参加会议。",
+          "target": {
+            "windowHandle": "10122",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-122"
+          },
+          "state": "failed",
+          "receipts": [
+            {
+              "tool": "get_datetime",
+              "state": "completed",
+              "durationMs": 1
+            },
+            {
+              "tool": "create_reminder",
+              "state": "failed",
+              "durationMs": 5
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "按纽约时间明天上午九点提醒我参加会议。",
+          "results": [
+            {
+              "tool": "get_datetime",
+              "state": "completed",
+              "data": {
+                "ok": true,
+                "now": "2026-10-26 04:00:00",
+                "iso": "2026-10-26T08:00:00.000Z",
+                "timezone": "America/New_York",
+                "weekday": "星期二",
+                "date": "2026-10-27",
+                "today": "2026-10-26",
+                "tomorrow": "2026-10-27",
+                "dayAfterTomorrow": "2026-10-28",
+                "offsetDays": 1
+              }
+            },
+            {
+              "tool": "create_reminder",
+              "state": "failed",
+              "data": {
+                "ok": false,
+                "error": "create_reminder 执行失败：提醒内容必须来自原始请求"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "a1fb5117-c8d2-4fb3-9a98-e1b7a591b164",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "按纽约时间明天上午九点提醒我参加会议。",
+    "target": {
+      "windowHandle": "10122",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-122"
+    },
+    "state": "failed",
+    "receipts": [
+      {
+        "tool": "get_datetime",
+        "state": "completed",
+        "durationMs": 1
+      },
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "durationMs": 5
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "按纽约时间明天上午九点提醒我参加会议。",
+    "results": [
+      {
+        "tool": "get_datetime",
+        "state": "completed",
+        "data": {
+          "ok": true,
+          "now": "2026-10-26 04:00:00",
+          "iso": "2026-10-26T08:00:00.000Z",
+          "timezone": "America/New_York",
+          "weekday": "星期二",
+          "date": "2026-10-27",
+          "today": "2026-10-26",
+          "tomorrow": "2026-10-27",
+          "dayAfterTomorrow": "2026-10-28",
+          "offsetDays": 1
+        }
+      },
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "create_reminder 执行失败：提醒内容必须来自原始请求"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-RtUhm0\\YU-122）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-122\"",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-122\"",
+    "[asr] local sense-voice-small: 19 chars",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-122\"",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=llm ms=1500",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=routing ms=1501",
+    "[voice-entry] assistant",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=llm ms=2166",
+    "[perf] llm round0 0ms",
+    "[perf] tool:get_datetime 0ms ok=true",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=tool ms=1 state=completed",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] tool=get_datetime status=completed ms=1",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] get_datetime ok=true",
+    "[perf] enrich 0ms",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=llm ms=1365",
+    "[perf] llm round1 0ms",
+    "[tool] create_reminder threw: 提醒内容必须来自原始请求 | args=text:string(45)",
+    "[perf] tool:create_reminder 0ms ok=false",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=tool ms=5 state=failed",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] tool=create_reminder status=failed ms=5",
+    "[perf] tools round1 0ms (1 calls)",
+    "[tool] create_reminder ok=false create_reminder 执行失败：提醒内容必须来自原始请求",
+    "[perf] llm answer 0ms streamed=true",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=llm ms=1741",
+    "[perf] ask total 0ms",
+    "[assistant] request failed",
+    "[task a1fb5117-c8d2-4fb3-9a98-e1b7a591b164] stage=total ms=0 state=failed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-122",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1500,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-122",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2165,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-122",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1365,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-122",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1280,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "FAIL"
+}

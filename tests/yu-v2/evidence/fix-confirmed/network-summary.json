@@ -1,0 +1,23 @@
+[
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 2385,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1574,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-122",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1576,
+    "host": "api.huyangmq.icu"
+  }
+]

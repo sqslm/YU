@@ -1,0 +1,238 @@
+{
+  "case_id": "YU-095",
+  "input": "断网了，帮我记一下，明天检查网络设备。",
+  "spoken_input": "断网了，帮我记一下，明天检查网络设备。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-095",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "保存随记中…",
+            "showMode": true,
+            "taskLabel": "随记"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "随记已保存",
+            "feedback": {},
+            "taskLabel": "随记",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "994b89d0-65bf-42a4-ba68-aa0ac61c6067",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "断网了，帮我记一下，明天检查网络设备。",
+          "target": {
+            "windowHandle": "10095",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-095"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 133
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "notes",
+            "via": "rule"
+          },
+          "transcript": "断网了，帮我记一下，明天检查网络设备。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "f9dc4cd1-c756-434e-8bcd-44e41e1599bb",
+                "tags": [],
+                "text": "断网了，帮我记一下，明天检查网络设备。",
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "f9dc4cd1-c756-434e-8bcd-44e41e1599bb",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "断网了，帮我记一下，明天检查网络设备。",
+            "polished": "断网了，帮我记一下，明天检查网络设备。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/f9dc4cd1-c756-434e-8bcd-44e41e1599bb.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": []
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_note",
+      "args": {
+        "text": "断网了，帮我记一下，明天检查网络设备。"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "随记已保存",
+        "data": {
+          "id": "f9dc4cd1-c756-434e-8bcd-44e41e1599bb",
+          "tags": [],
+          "text": "断网了，帮我记一下，明天检查网络设备。",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "994b89d0-65bf-42a4-ba68-aa0ac61c6067"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "f9dc4cd1-c756-434e-8bcd-44e41e1599bb",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600002,
+      "durationMs": 1200,
+      "transcript": "断网了，帮我记一下，明天检查网络设备。",
+      "polished": "断网了，帮我记一下，明天检查网络设备。",
+      "polishStatus": "ok",
+      "audioPath": "notes/audio/f9dc4cd1-c756-434e-8bcd-44e41e1599bb.wav",
+      "audioFormat": "wav",
+      "audioBytes": 38444,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "994b89d0-65bf-42a4-ba68-aa0ac61c6067",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "断网了，帮我记一下，明天检查网络设备。",
+    "target": {
+      "windowHandle": "10095",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-095"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "durationMs": 133
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "notes",
+      "via": "rule"
+    },
+    "transcript": "断网了，帮我记一下，明天检查网络设备。",
+    "results": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "data": {
+          "id": "f9dc4cd1-c756-434e-8bcd-44e41e1599bb",
+          "tags": [],
+          "text": "断网了，帮我记一下，明天检查网络设备。",
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-095）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-095\"",
+    "[task 994b89d0-65bf-42a4-ba68-aa0ac61c6067] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-095\"",
+    "[asr] local sense-voice-small: 19 chars",
+    "[task 994b89d0-65bf-42a4-ba68-aa0ac61c6067] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-095\"",
+    "[task 994b89d0-65bf-42a4-ba68-aa0ac61c6067] stage=routing ms=0",
+    "[voice-entry] notes",
+    "[notes] 音频压缩不可用（failed：Unrecognized option 'application'.\r\nError splitting the argument list: Option not found），保存为 WAV",
+    "[notes] 新随记 f9dc4cd1-c756-434e-8bcd-44e41e1599bb 已保存（wav, 38 KB, 1200 ms）",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task 994b89d0-65bf-42a4-ba68-aa0ac61c6067] stage=tool ms=133 state=completed",
+    "[task 994b89d0-65bf-42a4-ba68-aa0ac61c6067] tool=create_note status=completed ms=133",
+    "[task 994b89d0-65bf-42a4-ba68-aa0ac61c6067] stage=total ms=0 state=completed",
+    "[task 994b89d0-65bf-42a4-ba68-aa0ac61c6067] stage=llm ms=1097"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-095",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1097,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

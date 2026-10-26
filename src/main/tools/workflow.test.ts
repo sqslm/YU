@@ -5,6 +5,10 @@ import type { Workflow, WorkflowStep } from '@shared/workflow'
 import { runTool, type ToolContext } from './registry'
 import type { WorkflowTools } from './workflow'
 import type { PersonalTools } from './personal'
+import { WindowsTools } from './windows'
+import { mkdtemp, realpath, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 /**
  * Replay authorization.
@@ -58,6 +62,27 @@ beforeEach(() => {
 afterEach(() => setMainLanguage('zh'))
 
 describe('run_workflow authorizes each step against this round', () => {
+  it('replays an explicitly bound real file result without permitting arbitrary same-round opens', async () => {
+    const folder = await realpath(await mkdtemp(join(tmpdir(), 'yu-workflow-selection-')))
+    const first = join(folder, 'new.pdf'), second = join(folder, 'old.pdf'), openPath = vi.fn().mockResolvedValue('')
+    try {
+      await writeFile(first, 'owned fixture'); await writeFile(second, 'owned fixture')
+      const windows = new WindowsTools({ folders: { downloads: folder, desktop: folder, documents: folder },
+        native: async () => ({ files: [{ name: 'new.pdf', path: first }, { name: 'old.pdf', path: second }] }), openPath, openUrl: vi.fn() })
+      const search = await windows.run('search_files', { folder, type: 'pdf' })
+      const item = (search.data.items as { id: string }[])[0]
+      expect((await windows.run('open_file', { id: item.id })).ok).toBe(false)
+      vi.mocked(store.get).mockReturnValue(workflowOf([step('open_file', { id: item.id })]))
+      expect((await runTool('run_workflow', { id: 'wf-1' }, { ...context(['run_workflow', 'open_file']), windows })).ok).toBe(false)
+      expect(openPath).not.toHaveBeenCalled()
+      const steps: WorkflowStep[] = [step('search_files', { folder, type: 'pdf' }),
+        { ...step('open_file', { id: { $ref: '1.items.0.id' } }), when: { ref: '1.items.0.id', op: 'exists' } }]
+      vi.mocked(store.get).mockReturnValue(workflowOf(steps))
+      const result = await runTool('run_workflow', { id: 'wf-1' }, { ...context(['run_workflow', 'search_files', 'open_file']), windows })
+      expect(result.ok).toBe(true)
+      expect(openPath).toHaveBeenCalledExactlyOnceWith(first)
+    } finally { await rm(folder, { recursive: true, force: true }) }
+  })
   it.each([true,false])('branches on a real result and binds its typed fields (has tasks=%s)',async hasTasks=>{
     const copy=vi.fn(),rows=hasTasks?[{id:'r1',title:'Actual title',dueAt:null,status:'pending',level:'normal'}]:[]
     const steps:WorkflowStep[]=[step('list_reminders'),{tool:'copy_to_clipboard',label:'Copy result',args:{text:{$ref:'1.items.0.title'}},when:{ref:'1.total',op:'gt',value:0},otherwise:{tool:'copy_to_clipboard',args:{text:'No tasks'},label:'No tasks'}}]

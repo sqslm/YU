@@ -52,7 +52,7 @@ export function App(): JSX.Element {
   const { settings, patch, saving, error, flush } = useSettings()
   const [page, setPage] = useState<Page>('home')
   const [reminderView, setReminderView] = useState<ReminderView | null>(null)
-  const [noteToOpen, setNoteToOpen] = useState<string | undefined>()
+  const [noteToOpen, setNoteToOpen] = useState<{ id: string } | undefined>()
   useEffect(() => {
     const open = (view: ReminderView): void => { setReminderView(view); setSettingsOpen(false); setPage('reminders') }
     const takeView = (): void => { void window.api.reminders.view().then(view => { if (view) open(view) }) }
@@ -66,8 +66,9 @@ export function App(): JSX.Element {
   useEffect(() => {
     const navigate = (): void => { void window.api.assistant.hubView().then(view => {
       if (!view) return
-      setSettingsOpen(view === 'settings')
-      if (view !== 'settings') setPage(view === 'overview' ? 'home' : view === 'corrections' ? 'dictionary' : view)
+      setSettingsOpen(view.page === 'settings')
+      if (view.page === 'notes') setNoteToOpen(view.noteId ? { id: view.noteId } : undefined)
+      if (view.page !== 'settings') setPage(view.page === 'overview' ? 'home' : view.page === 'corrections' ? 'dictionary' : view.page)
     }) }
     const off = window.api.assistant.onNavigate(navigate)
     navigate()
@@ -143,8 +144,8 @@ export function App(): JSX.Element {
     if (page === 'history') {
       return <HistoryPage settings={settings} patch={patch} initialQuery={historyQuery} />
     }
-    if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} initialNoteId={noteToOpen} />
-    if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen(id); setPage('notes') }} />
+    if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} openNote={noteToOpen} />
+    if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen({ id }); setPage('notes') }} />
     if (page === 'briefing') return <BriefingPage settings={settings} onOpenSettings={() => setSettingsOpen(true)} />
     if (page === 'calendar') return <CalendarPage />
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />

@@ -1,0 +1,56 @@
+{
+  "case_id": "YU-043",
+  "input": "打开计算器。",
+  "spoken_input": "打开计算器。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-043",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "via": "rule",
+        "text": "打开计算器。"
+      }
+    },
+    {
+      "label": "installed_application_candidates",
+      "value": [
+        {
+          "appId": "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App",
+          "path": "",
+          "name": "计算器"
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "f926e5e2-e950-4100-943c-bfc970ca0c8a",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开计算器。",
+    "target": {
+      "windowHandle": "10043",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-043"
+    },
+    "state": "pending",
+    "receipts": []
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-043）"
+  ],
+  "open_requests": [],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

@@ -1,0 +1,158 @@
+{
+  "case_id": "YU-057",
+  "input": "解释一下我选中的这段代码。",
+  "spoken_input": "解释一下我选中的这段代码。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-057",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "解释一下我选中的这段代码。",
+            "answer": "",
+            "status": "正在思考…",
+            "streaming": true,
+            "taskId": "98410587-c44e-49f8-bc4c-d4a13cf16cc0",
+            "taskState": "running"
+          },
+          {
+            "question": "解释一下我选中的这段代码。",
+            "answer": "这是一段 TypeScript 函数，用来求两个数的和。\n\n- `sum(a: number, b: number)`：函数名 `sum`，接收两个参数 `a` 和 `b`，类型标注 `: number` 表示两者都必须是数字，传字符串之类会编译报错。\n- `{ return a + b; }`：函数体把两数相加并返回结果，返回类型由 TS 自动推断为 `number`。\n- 因为参数限定了类型，`sum(1, 2)` 合法，而 `sum(\"1\", 2)` 在编译阶段就会被拦下。\n\n这是最基础的示例写法；实际项目里常会加上返回类型 `: number` 或写成箭头函数 `const sum = (a: number, b: number): number => a + b;`。",
+            "taskId": "98410587-c44e-49f8-bc4c-d4a13cf16cc0",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "98410587-c44e-49f8-bc4c-d4a13cf16cc0",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "解释一下我选中的这段代码。",
+          "target": {
+            "windowHandle": "10057",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-057"
+          },
+          "state": "completed",
+          "receipts": [],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "rule"
+          },
+          "transcript": "解释一下我选中的这段代码。",
+          "selection": "function sum(a: number,b: number) { return a+b; }"
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "selection_result",
+      "value": {
+        "original": "function sum(a: number,b: number) { return a+b; }",
+        "actual": "function sum(a: number,b: number) { return a+b; }",
+        "applied": null,
+        "answer": "这是一段 TypeScript 函数，用来求两个数的和。\n\n- `sum(a: number, b: number)`：函数名 `sum`，接收两个参数 `a` 和 `b`，类型标注 `: number` 表示两者都必须是数字，传字符串之类会编译报错。\n- `{ return a + b; }`：函数体把两数相加并返回结果，返回类型由 TS 自动推断为 `number`。\n- 因为参数限定了类型，`sum(1, 2)` 合法，而 `sum(\"1\", 2)` 在编译阶段就会被拦下。\n\n这是最基础的示例写法；实际项目里常会加上返回类型 `: number` 或写成箭头函数 `const sum = (a: number, b: number): number => a + b;`。"
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "98410587-c44e-49f8-bc4c-d4a13cf16cc0",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "解释一下我选中的这段代码。",
+    "target": {
+      "windowHandle": "10057",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-057"
+    },
+    "state": "completed",
+    "receipts": [],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "rule"
+    },
+    "transcript": "解释一下我选中的这段代码。",
+    "selection": "function sum(a: number,b: number) { return a+b; }"
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-057）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-057\"",
+    "[task 98410587-c44e-49f8-bc4c-d4a13cf16cc0] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-057\"",
+    "[asr] local sense-voice-small: 13 chars",
+    "[task 98410587-c44e-49f8-bc4c-d4a13cf16cc0] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-057\"",
+    "[task 98410587-c44e-49f8-bc4c-d4a13cf16cc0] stage=routing ms=0",
+    "[voice-entry] ask",
+    "[task 98410587-c44e-49f8-bc4c-d4a13cf16cc0] stage=llm ms=2594",
+    "[perf] llm round0 0ms",
+    "[perf] ask total 0ms",
+    "[task 98410587-c44e-49f8-bc4c-d4a13cf16cc0] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-057",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2594,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

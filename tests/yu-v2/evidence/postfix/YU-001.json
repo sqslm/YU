@@ -1,0 +1,257 @@
+{
+  "case_id": "YU-001",
+  "input": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+  "spoken_input": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-001",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "保存随记中…",
+            "showMode": true,
+            "taskLabel": "随记"
+          },
+          {
+            "phase": "done",
+            "mode": "dictation",
+            "text": "随记已保存",
+            "feedback": {},
+            "taskLabel": "随记",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+          "target": {
+            "windowHandle": "10001",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-001"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 39
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "notes",
+            "via": "rule"
+          },
+          "transcript": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "ac783e33-7655-4cef-8eb3-cf10f3ccb66e",
+                "tags": [],
+                "text": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "ac783e33-7655-4cef-8eb3-cf10f3ccb66e",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+            "polished": "我想记一下，做个能自动整理下载文件的小功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/ac783e33-7655-4cef-8eb3-cf10f3ccb66e.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [
+          {
+            "id": "ac783e33-7655-4cef-8eb3-cf10f3ccb66e",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600002,
+            "durationMs": 1200,
+            "transcript": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+            "polished": "我想记一下，做个能自动整理下载文件的小功能。",
+            "polishStatus": "ok",
+            "audioPath": "notes/audio/ac783e33-7655-4cef-8eb3-cf10f3ccb66e.wav",
+            "audioFormat": "wav",
+            "audioBytes": 38444,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "reminders": [],
+        "events": []
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_note",
+      "args": {
+        "text": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "随记已保存",
+        "data": {
+          "id": "ac783e33-7655-4cef-8eb3-cf10f3ccb66e",
+          "tags": [],
+          "text": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "ac783e33-7655-4cef-8eb3-cf10f3ccb66e",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600002,
+      "durationMs": 1200,
+      "transcript": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+      "polished": "我想记一下，做个能自动整理下载文件的小功能。",
+      "polishStatus": "ok",
+      "audioPath": "notes/audio/ac783e33-7655-4cef-8eb3-cf10f3ccb66e.wav",
+      "audioFormat": "wav",
+      "audioBytes": 38444,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+    "target": {
+      "windowHandle": "10001",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-001"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "durationMs": 39
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "notes",
+      "via": "rule"
+    },
+    "transcript": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+    "results": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "data": {
+          "id": "ac783e33-7655-4cef-8eb3-cf10f3ccb66e",
+          "tags": [],
+          "text": "呃，我想记一下，那个，做个能自动整理下载文件的小功能。",
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-001）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-001\"",
+    "[task 7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-001\"",
+    "[asr] local sense-voice-small: 27 chars",
+    "[task 7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-001\"",
+    "[task 7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc] stage=routing ms=3",
+    "[voice-entry] notes",
+    "[notes] 音频压缩不可用（failed：Unrecognized option 'application'.\r\nError splitting the argument list: Option not found），保存为 WAV",
+    "[notes] 新随记 ac783e33-7655-4cef-8eb3-cf10f3ccb66e 已保存（wav, 38 KB, 1200 ms）",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task 7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc] stage=tool ms=39 state=completed",
+    "[task 7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc] tool=create_note status=completed ms=39",
+    "[task 7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc] stage=total ms=0 state=completed",
+    "[task 7f40ff05-3d8b-46e3-b42a-3bc21cc0a9fc] stage=llm ms=1538"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-001",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1535,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

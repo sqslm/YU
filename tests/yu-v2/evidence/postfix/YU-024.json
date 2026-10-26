@@ -1,0 +1,324 @@
+{
+  "case_id": "YU-024",
+  "input": "把刚才设置的喝水提醒取消。",
+  "spoken_input": "把刚才设置的喝水提醒取消。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-024",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "602016c2-6df7-449e-a1f6-d035925b35b1",
+        "taskState": "completed",
+        "question": "把刚才设置的喝水提醒取消。",
+        "answer": "「喝水」提醒（原定 16:30）已取消，状态现在是已取消。「B 第二个提醒」（16:40）没有改动。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 2 个事项",
+            "status": "completed",
+            "taskId": "602016c2-6df7-449e-a1f6-d035925b35b1"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "取消提醒 · 喝水\n2026/10/26 16:30:00 · 普通提醒",
+            "status": "completed",
+            "taskId": "602016c2-6df7-449e-a1f6-d035925b35b1"
+          }
+        ]
+      }
+    },
+    {
+      "label": "before_after",
+      "value": {
+        "before": {
+          "title": "喝水",
+          "description": "",
+          "dueAt": 1793003400000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "4e3b2029-169a-4f2d-836d-85854f83dcfe",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "after": {
+          "title": "喝水",
+          "description": "",
+          "dueAt": 1793003400000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "4e3b2029-169a-4f2d-836d-85854f83dcfe",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "cancelled",
+          "deliveredAt": null
+        },
+        "other_before": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "7330dae1-d825-4d91-9608-d90f85ca7094",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_after": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "7330dae1-d825-4d91-9608-d90f85ca7094",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "B 第二个提醒",
+      "description": "",
+      "dueAt": 1793004000000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "7330dae1-d825-4d91-9608-d90f85ca7094",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "喝水",
+      "description": "",
+      "dueAt": 1793003400000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "4e3b2029-169a-4f2d-836d-85854f83dcfe",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "cancelled",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "602016c2-6df7-449e-a1f6-d035925b35b1",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把刚才设置的喝水提醒取消。",
+    "target": {
+      "windowHandle": "10024",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-024"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 2
+      }
+    ],
+    "submittedAt": 1793001600000,
+    "recentExchange": {
+      "question": "已查询本次事项",
+      "answer": "两条测试事项"
+    },
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "喝水",
+              "description": "",
+              "dueAt": 1793003400000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "4e3b2029-169a-4f2d-836d-85854f83dcfe",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:30:00",
+              "remainingSeconds": 1800,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "B 第二个提醒",
+              "description": "",
+              "dueAt": 1793004000000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "7330dae1-d825-4d91-9608-d90f85ca7094",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:40:00",
+              "remainingSeconds": 2400,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "4e3b2029-169a-4f2d-836d-85854f83dcfe",
+          "action": "cancel",
+          "before": {
+            "title": "喝水",
+            "description": "",
+            "dueAt": 1793003400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "4e3b2029-169a-4f2d-836d-85854f83dcfe",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:30:00",
+            "remainingSeconds": 1800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "喝水",
+            "description": "",
+            "dueAt": 1793003400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "manual",
+            "id": "4e3b2029-169a-4f2d-836d-85854f83dcfe",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "cancelled",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:30:00",
+            "remainingSeconds": 1800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-024）",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task 602016c2-6df7-449e-a1f6-d035925b35b1] stage=tool ms=0 state=completed",
+    "[task 602016c2-6df7-449e-a1f6-d035925b35b1] tool=list_reminders status=completed ms=0",
+    "[task 602016c2-6df7-449e-a1f6-d035925b35b1] stage=llm ms=1854",
+    "[perf] llm round0 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task 602016c2-6df7-449e-a1f6-d035925b35b1] stage=tool ms=2 state=completed",
+    "[task 602016c2-6df7-449e-a1f6-d035925b35b1] tool=manage_reminder status=completed ms=2",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 602016c2-6df7-449e-a1f6-d035925b35b1] stage=llm ms=1396",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-024",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1853,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-024",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1396,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

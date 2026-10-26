@@ -141,6 +141,7 @@ async function run(id: string, question: string): Promise<ScenarioRun> {
 beforeAll(async () => {
   const proc = spawn(process.execPath, ['scripts/mock-openai.mjs', '--port', String(PORT)], {
     cwd: ROOT,
+    env: { ...process.env, MOCK_SCENARIO_DATE: TODAY },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   child = proc
@@ -241,7 +242,7 @@ describe('G · old news vs reprints', () => {
     expect(runG.sources.some((item) => item.url.includes('example-reprint.com'))).toBe(false)
     expect(runG.sources.filter((item) => item.title.startsWith('Nvidia announces')).length).toBe(1)
     const finalBody = runG.chatBodies[runG.chatBodies.length - 1] ?? ''
-    expect(finalBody).toContain('2026-10-18')
+    expect(finalBody).toContain(TODAY)
   }, 20000)
 })
 

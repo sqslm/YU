@@ -1,0 +1,276 @@
+{
+  "case_id": "YU-087",
+  "input": "把刚刚的项目讨论改到下午四点到五点。",
+  "spoken_input": "把刚刚的项目讨论改到下午四点到五点。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-087",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "07b04435-24eb-4d38-b4ee-e428c8602872",
+        "taskState": "failed",
+        "question": "把刚刚的项目讨论改到下午四点到五点。",
+        "answer": "manage_event 执行失败：这个时间已经过去，请确认新的时间",
+        "sources": [],
+        "state": "error",
+        "localResults": [
+          {
+            "tool": "manage_event",
+            "ok": false,
+            "summary": "manage_event 执行失败：这个时间已经过去，请确认新的时间",
+            "status": "failed",
+            "taskId": "07b04435-24eb-4d38-b4ee-e428c8602872"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "manage_event 执行失败：这个时间已经过去，请确认新的时间",
+            "feedback": {
+              "failed": true
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "07b04435-24eb-4d38-b4ee-e428c8602872",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "把刚刚的项目讨论改到下午四点到五点。",
+          "target": {
+            "windowHandle": "10087",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-087"
+          },
+          "state": "failed",
+          "receipts": [
+            {
+              "tool": "manage_event",
+              "state": "failed",
+              "durationMs": 4
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "把刚刚的项目讨论改到下午四点到五点。",
+          "recentExchange": {
+            "question": "创建日程",
+            "answer": "测试项目讨论"
+          },
+          "results": [
+            {
+              "tool": "manage_event",
+              "state": "failed",
+              "data": {
+                "ok": false,
+                "error": "manage_event 执行失败：这个时间已经过去，请确认新的时间"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "calendar_after",
+      "value": [
+        {
+          "id": "dd772e95-0428-444c-a3d9-644d1ef5c07f",
+          "title": "项目讨论",
+          "start": 1793084400000,
+          "end": 1793088000000,
+          "allDay": false,
+          "source": "manual",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "confirmed"
+        },
+        {
+          "id": "d929d66f-e702-4639-b092-392c9ba61d9e",
+          "title": "后天任务",
+          "start": 1793170800000,
+          "end": 1793174400000,
+          "allDay": false,
+          "source": "manual",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "confirmed"
+        }
+      ]
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [
+    {
+      "id": "dd772e95-0428-444c-a3d9-644d1ef5c07f",
+      "title": "项目讨论",
+      "start": 1793084400000,
+      "end": 1793088000000,
+      "allDay": false,
+      "source": "manual",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "confirmed"
+    },
+    {
+      "id": "d929d66f-e702-4639-b092-392c9ba61d9e",
+      "title": "后天任务",
+      "start": 1793170800000,
+      "end": 1793174400000,
+      "allDay": false,
+      "source": "manual",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "confirmed"
+    }
+  ],
+  "task": {
+    "id": "07b04435-24eb-4d38-b4ee-e428c8602872",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把刚刚的项目讨论改到下午四点到五点。",
+    "target": {
+      "windowHandle": "10087",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-087"
+    },
+    "state": "failed",
+    "receipts": [
+      {
+        "tool": "manage_event",
+        "state": "failed",
+        "durationMs": 4
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "把刚刚的项目讨论改到下午四点到五点。",
+    "recentExchange": {
+      "question": "创建日程",
+      "answer": "测试项目讨论"
+    },
+    "results": [
+      {
+        "tool": "manage_event",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "manage_event 执行失败：这个时间已经过去，请确认新的时间"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-GU2qts\\YU-087）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-087\"",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-087\"",
+    "[asr] local sense-voice-small: 18 chars",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-087\"",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=llm ms=1172",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=routing ms=1177",
+    "[voice-entry] assistant",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=llm ms=2326",
+    "[perf] llm round0 0ms",
+    "[tool] manage_event threw: 这个时间已经过去，请确认新的时间 | args=action:string(6), id:string(36), start:string(6), end:string(6)",
+    "[perf] tool:manage_event 0ms ok=false",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=tool ms=4 state=failed",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] tool=manage_event status=failed ms=4",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_event ok=false manage_event 执行失败：这个时间已经过去，请确认新的时间",
+    "[perf] llm answer 0ms streamed=true",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=llm ms=1800",
+    "[perf] ask total 0ms",
+    "[assistant] request failed",
+    "[task 07b04435-24eb-4d38-b4ee-e428c8602872] stage=total ms=0 state=failed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-087",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1172,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-087",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2325,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-087",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1170,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "FAIL"
+}

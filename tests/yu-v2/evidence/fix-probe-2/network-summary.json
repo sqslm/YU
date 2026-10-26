@@ -1,0 +1,65 @@
+[
+  {
+    "case": "YU-070",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1362,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-070",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1602,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 2701,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 3343,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 1884,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-070",
+    "kind": "network",
+    "status": 200,
+    "duration_ms": 2558,
+    "host": "api.tavily.com"
+  },
+  {
+    "case": "YU-087",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1916,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 2012,
+    "host": "api.huyangmq.icu"
+  },
+  {
+    "case": "YU-118",
+    "kind": "model",
+    "status": 200,
+    "duration_ms": 1517,
+    "host": "api.huyangmq.icu"
+  }
+]

@@ -1,0 +1,174 @@
+{
+  "case_id": "YU-002",
+  "input": "我想问一下，为什么电脑用久了会越来越卡？",
+  "spoken_input": "我想问一下，为什么电脑用久了会越来越卡？",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-002",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "ask",
+            "hint": "检索并思考中…",
+            "showMode": true
+          },
+          {
+            "phase": "idle"
+          }
+        ],
+        "cards": [
+          {
+            "question": "我想问一下，为什么电脑用久了会越来越卡？",
+            "answer": "",
+            "status": "正在思考…",
+            "streaming": true,
+            "taskId": "bd876ce3-dcda-4c00-90a5-1d91da27a23a",
+            "taskState": "running"
+          },
+          {
+            "question": "我想问一下，为什么电脑用久了会越来越卡？",
+            "answer": "电脑越用越卡，主要是几个可累积的因素在叠加，不是“硬盘里的东西多了”这种笼统说法。\n\n**1. 硬盘变满、变碎**\n系统盘（尤其是 Windows 的 C 盘）剩余空间低于 10%~15% 时，虚拟内存、临时文件、系统更新都没地方展开，磁盘读写排队，整机就卡。机械硬盘还存在文件碎片问题；固态硬盘虽然不怕碎片，但写满后写入速度会明显下降。\n\n**2. 开机自启和后台进程越堆越多**\n装一个软件就塞一个更新器、一个托盘程序、一个云同步。这些常驻进程吃内存、抢 CPU、定时扫盘，日积月累就有几十个。\n\n**3. 内存被长期占用、泄漏**\n浏览器开几十个标签、微信/钉钉长期不关、某些软件有内存泄漏，内存吃满后系统频繁往硬盘换页，这是“卡一下半天”的典型原因。\n\n**4. 散热变差导致降频**\n风扇积灰、硅脂老化，CPU/GPU 温度一高就自动降频保护。老机器尤其明显：刚开机流畅，用一会儿就变慢。\n\n**5. 系统和驱动更新堆叠**\n老版本系统补丁叠加、驱动版本不匹配（尤其显卡驱动）、以及各种“安全软件”互相打架，都会拖慢响应。\n\n**6. 恶意或捆绑软件**\n国产软件安装包常见的捆绑安装、弹窗推广、挖矿程序，这类东西是隐形的性能杀手。\n\n**7. 硬件本身的自然老化**\n机械硬盘出现坏道、固态硬盘寿命写满、电源老化供电不稳，都会表现为随机卡顿。\n\n**排查顺序建议**：先看任务管理器里 CPU / 内存 / 磁盘哪个常年 100%；再看 C 盘剩余空间；然后清理自启项；最后检查温度和硬盘健康度（CrystalDiskInfo）。一般前两步就能解决大半问题。",
+            "taskId": "bd876ce3-dcda-4c00-90a5-1d91da27a23a",
+            "taskState": "completed"
+          }
+        ],
+        "task": {
+          "id": "bd876ce3-dcda-4c00-90a5-1d91da27a23a",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "我想问一下，为什么电脑用久了会越来越卡？",
+          "target": {
+            "windowHandle": "10002",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-002"
+          },
+          "state": "completed",
+          "receipts": [],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "ask",
+            "via": "model"
+          },
+          "transcript": "我想问一下，为什么电脑用久了会越来越卡？"
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [],
+        "reminders": [],
+        "events": []
+      }
+    },
+    {
+      "label": "answer",
+      "value": "电脑越用越卡，主要是几个可累积的因素在叠加，不是“硬盘里的东西多了”这种笼统说法。\n\n**1. 硬盘变满、变碎**\n系统盘（尤其是 Windows 的 C 盘）剩余空间低于 10%~15% 时，虚拟内存、临时文件、系统更新都没地方展开，磁盘读写排队，整机就卡。机械硬盘还存在文件碎片问题；固态硬盘虽然不怕碎片，但写满后写入速度会明显下降。\n\n**2. 开机自启和后台进程越堆越多**\n装一个软件就塞一个更新器、一个托盘程序、一个云同步。这些常驻进程吃内存、抢 CPU、定时扫盘，日积月累就有几十个。\n\n**3. 内存被长期占用、泄漏**\n浏览器开几十个标签、微信/钉钉长期不关、某些软件有内存泄漏，内存吃满后系统频繁往硬盘换页，这是“卡一下半天”的典型原因。\n\n**4. 散热变差导致降频**\n风扇积灰、硅脂老化，CPU/GPU 温度一高就自动降频保护。老机器尤其明显：刚开机流畅，用一会儿就变慢。\n\n**5. 系统和驱动更新堆叠**\n老版本系统补丁叠加、驱动版本不匹配（尤其显卡驱动）、以及各种“安全软件”互相打架，都会拖慢响应。\n\n**6. 恶意或捆绑软件**\n国产软件安装包常见的捆绑安装、弹窗推广、挖矿程序，这类东西是隐形的性能杀手。\n\n**7. 硬件本身的自然老化**\n机械硬盘出现坏道、固态硬盘寿命写满、电源老化供电不稳，都会表现为随机卡顿。\n\n**排查顺序建议**：先看任务管理器里 CPU / 内存 / 磁盘哪个常年 100%；再看 C 盘剩余空间；然后清理自启项；最后检查温度和硬盘健康度（CrystalDiskInfo）。一般前两步就能解决大半问题。"
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "bd876ce3-dcda-4c00-90a5-1d91da27a23a",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我想问一下，为什么电脑用久了会越来越卡？",
+    "target": {
+      "windowHandle": "10002",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-002"
+    },
+    "state": "completed",
+    "receipts": [],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "ask",
+      "via": "model"
+    },
+    "transcript": "我想问一下，为什么电脑用久了会越来越卡？"
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-002）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-002\"",
+    "[task bd876ce3-dcda-4c00-90a5-1d91da27a23a] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-002\"",
+    "[asr] local sense-voice-small: 20 chars",
+    "[task bd876ce3-dcda-4c00-90a5-1d91da27a23a] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-002\"",
+    "[task bd876ce3-dcda-4c00-90a5-1d91da27a23a] stage=llm ms=1701",
+    "[task bd876ce3-dcda-4c00-90a5-1d91da27a23a] stage=routing ms=1704",
+    "[voice-entry] ask",
+    "[task bd876ce3-dcda-4c00-90a5-1d91da27a23a] stage=llm ms=5271",
+    "[perf] llm round0 0ms",
+    "[perf] ask total 0ms",
+    "[task bd876ce3-dcda-4c00-90a5-1d91da27a23a] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-002",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1701,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-002",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 5270,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

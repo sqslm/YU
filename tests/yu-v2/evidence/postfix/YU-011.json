@@ -1,0 +1,314 @@
+{
+  "case_id": "YU-011",
+  "input": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+  "spoken_input": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-011",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "6a7ae3ca-56ac-4928-86a3-8946a7e2de3b",
+        "taskState": "failed",
+        "question": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+        "answer": "已完成的操作：\n随记已保存\n未完成的操作：\ncreate_reminder 执行失败：提醒内容必须来自原始请求",
+        "sources": [],
+        "state": "error",
+        "localResults": [
+          {
+            "tool": "create_note",
+            "ok": true,
+            "summary": "随记已保存",
+            "status": "completed",
+            "taskId": "6a7ae3ca-56ac-4928-86a3-8946a7e2de3b"
+          },
+          {
+            "tool": "create_reminder",
+            "ok": false,
+            "summary": "create_reminder 执行失败：提醒内容必须来自原始请求",
+            "status": "failed",
+            "taskId": "6a7ae3ca-56ac-4928-86a3-8946a7e2de3b"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "已完成的操作：\n随记已保存\n未完成的操作：\ncreate_reminder 执行失败：提醒内容必须来自原始请求",
+            "feedback": {
+              "failed": true
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "6a7ae3ca-56ac-4928-86a3-8946a7e2de3b",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+          "target": {
+            "windowHandle": "10011",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-011"
+          },
+          "state": "failed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 1
+            },
+            {
+              "tool": "create_reminder",
+              "state": "failed",
+              "durationMs": 0
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "f3616d54-d35e-4d5f-b124-f1b69e40dbac",
+                "tags": [],
+                "text": "整理照片的想法",
+                "ok": true
+              }
+            },
+            {
+              "tool": "create_reminder",
+              "state": "failed",
+              "data": {
+                "ok": false,
+                "error": "create_reminder 执行失败：提醒内容必须来自原始请求"
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "f3616d54-d35e-4d5f-b124-f1b69e40dbac",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "editedAt": 1793001600000,
+            "transcript": "整理照片的想法",
+            "polished": "",
+            "polishStatus": "skipped",
+            "durationMs": 0,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [
+          {
+            "id": "f3616d54-d35e-4d5f-b124-f1b69e40dbac",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "editedAt": 1793001600000,
+            "transcript": "整理照片的想法",
+            "polished": "",
+            "polishStatus": "skipped",
+            "durationMs": 0,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "reminders": [],
+        "events": []
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [],
+  "notes": [
+    {
+      "id": "f3616d54-d35e-4d5f-b124-f1b69e40dbac",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "整理照片的想法",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "6a7ae3ca-56ac-4928-86a3-8946a7e2de3b",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+    "target": {
+      "windowHandle": "10011",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-011"
+    },
+    "state": "failed",
+    "receipts": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "durationMs": 1
+      },
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "durationMs": 0
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+    "results": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "data": {
+          "id": "f3616d54-d35e-4d5f-b124-f1b69e40dbac",
+          "tags": [],
+          "text": "整理照片的想法",
+          "ok": true
+        }
+      },
+      {
+        "tool": "create_reminder",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "create_reminder 执行失败：提醒内容必须来自原始请求"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-011）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-011\"",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-011\"",
+    "[asr] local sense-voice-small: 29 chars",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-011\"",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=llm ms=1514",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=routing ms=1515",
+    "[voice-entry] assistant",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=llm ms=1986",
+    "[perf] llm round0 0ms",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=tool ms=1 state=completed",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] tool=create_note status=completed ms=1",
+    "[tool] create_reminder threw: 提醒内容必须来自原始请求 | args=text:string(10)",
+    "[perf] tool:create_reminder 0ms ok=false",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=tool ms=0 state=failed",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] tool=create_reminder status=failed ms=0",
+    "[perf] tools round0 0ms (2 calls)",
+    "[tool] create_note ok=true",
+    "[tool] create_reminder ok=false create_reminder 执行失败：提醒内容必须来自原始请求",
+    "[perf] llm answer 0ms streamed=true",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=llm ms=1741",
+    "[perf] ask total 0ms",
+    "[assistant] request failed",
+    "[task 6a7ae3ca-56ac-4928-86a3-8946a7e2de3b] stage=total ms=0 state=failed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1514,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1986,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1161,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "FAIL"
+}

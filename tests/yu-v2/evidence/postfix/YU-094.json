@@ -1,0 +1,165 @@
+{
+  "case_id": "YU-094",
+  "input": "先暂停云同步，但是提醒继续正常运行。",
+  "spoken_input": "先暂停云同步，但是提醒继续正常运行。",
+  "fixed_clock": "2026-10-26T08:01:01.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-094",
+  "observations": [
+    {
+      "label": "local_before_sync",
+      "value": {
+        "id": "c9ca8e64-0543-42f2-80b9-8100801462c9",
+        "pending": true
+      }
+    },
+    {
+      "label": "sync_pause_and_local_record",
+      "value": {
+        "sync": false,
+        "requestsBefore": 5,
+        "requestsAfter": 5,
+        "reminder": {
+          "title": "Local scheduler survives",
+          "description": "",
+          "dueAt": 1793001660000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "d9b80691-4017-4e38-94e7-aa9c75f6a924",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "sync_control",
+      "args": {
+        "action": "pause"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "已暂停云同步；本地提醒、随记与历史不受影响",
+        "data": {
+          "enabled": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "b634d760-4cb1-4b79-b9f2-b947d5ffe2f0"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "Local scheduler survives",
+      "description": "",
+      "dueAt": 1793001660000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "d9b80691-4017-4e38-94e7-aa9c75f6a924",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [
+    {
+      "id": "c9ca8e64-0543-42f2-80b9-8100801462c9",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "YU_V2 YU-094 先暂停云同步，但是提醒继续正常运行。",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "version": 1
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "b634d760-4cb1-4b79-b9f2-b947d5ffe2f0",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "先暂停云同步，但是提醒继续正常运行。",
+    "target": {
+      "windowHandle": "10094",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-094"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "sync_control",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "results": [
+      {
+        "tool": "sync_control",
+        "state": "completed",
+        "data": {
+          "enabled": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-094）",
+    "[sync] done, 0 row(s) on the server",
+    "[perf] tool:sync_control 0ms ok=true",
+    "[task b634d760-4cb1-4b79-b9f2-b947d5ffe2f0] stage=tool ms=0 state=completed",
+    "[task b634d760-4cb1-4b79-b9f2-b947d5ffe2f0] tool=sync_control status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-094",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 2,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-094",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-094",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 1,
+      "host": "127.0.0.1"
+    },
+    {
+      "case": "YU-094",
+      "kind": "network",
+      "status": 200,
+      "duration_ms": 0,
+      "host": "127.0.0.1"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

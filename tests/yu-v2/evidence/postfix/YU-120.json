@@ -1,0 +1,345 @@
+{
+  "case_id": "YU-120",
+  "input": "每天晚上十点提醒我做整理，一直到这个月底。",
+  "spoken_input": "每天晚上十点提醒我做整理，一直到这个月底。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-120",
+  "observations": [
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "解析提醒中…",
+            "showMode": true,
+            "taskLabel": "快速提醒"
+          },
+          {
+            "phase": "alert",
+            "alert": {
+              "kind": "reminder",
+              "level": "info",
+              "text": "2026/10/26 22:00 · 普通提醒 · 做整理",
+              "actions": []
+            }
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "0560f5c7-c18e-4345-98cd-77caecdd3b08",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "每天晚上十点提醒我做整理，一直到这个月底。",
+          "target": {
+            "windowHandle": "10120",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-120"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 4489
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "reminder",
+            "via": "rule"
+          },
+          "transcript": "每天晚上十点提醒我做整理，一直到这个月底。",
+          "results": [
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "做整理",
+                  "description": "持续到本月底",
+                  "dueAt": 1793023200000,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": {
+                    "frequency": "daily",
+                    "hour": 22,
+                    "minute": 0,
+                    "until": 1793462399999,
+                    "anchor": 1793023200000
+                  },
+                  "occurrences": 0,
+                  "source": "voice",
+                  "timeExpression": "每天晚上十点一直到这个月底",
+                  "id": "39fd613b-aba1-4a7b-a294-f287a480a080",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "2026/10/26 22:00:00",
+                  "remainingSeconds": 21600,
+                  "overdue": false,
+                  "kind": "reminder",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [],
+        "file_created": false
+      }
+    },
+    {
+      "label": "reminder_records",
+      "value": [
+        {
+          "title": "做整理",
+          "description": "持续到本月底",
+          "dueAt": 1793023200000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": {
+            "frequency": "daily",
+            "hour": 22,
+            "minute": 0,
+            "until": 1793462399999,
+            "anchor": 1793023200000
+          },
+          "occurrences": 0,
+          "source": "voice",
+          "timeExpression": "每天晚上十点一直到这个月底",
+          "id": "39fd613b-aba1-4a7b-a294-f287a480a080",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      ]
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "create_reminder",
+      "args": {},
+      "outcome": {
+        "ok": true,
+        "summary": "2026/10/26 22:00 · 普通提醒 · 做整理",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "做整理",
+            "description": "持续到本月底",
+            "dueAt": 1793023200000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "daily",
+              "hour": 22,
+              "minute": 0,
+              "until": 1793462399999,
+              "anchor": 1793023200000
+            },
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "每天晚上十点一直到这个月底",
+            "id": "39fd613b-aba1-4a7b-a294-f287a480a080",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 22:00:00",
+            "remainingSeconds": 21600,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "0560f5c7-c18e-4345-98cd-77caecdd3b08"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "做整理",
+      "description": "持续到本月底",
+      "dueAt": 1793023200000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": {
+        "frequency": "daily",
+        "hour": 22,
+        "minute": 0,
+        "until": 1793462399999,
+        "anchor": 1793023200000
+      },
+      "occurrences": 0,
+      "source": "voice",
+      "timeExpression": "每天晚上十点一直到这个月底",
+      "id": "39fd613b-aba1-4a7b-a294-f287a480a080",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "0560f5c7-c18e-4345-98cd-77caecdd3b08",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "每天晚上十点提醒我做整理，一直到这个月底。",
+    "target": {
+      "windowHandle": "10120",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-120"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 4489
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "reminder",
+      "via": "rule"
+    },
+    "transcript": "每天晚上十点提醒我做整理，一直到这个月底。",
+    "results": [
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "做整理",
+            "description": "持续到本月底",
+            "dueAt": 1793023200000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "daily",
+              "hour": 22,
+              "minute": 0,
+              "until": 1793462399999,
+              "anchor": 1793023200000
+            },
+            "occurrences": 0,
+            "source": "voice",
+            "timeExpression": "每天晚上十点一直到这个月底",
+            "id": "39fd613b-aba1-4a7b-a294-f287a480a080",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 22:00:00",
+            "remainingSeconds": 21600,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-120）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-120\"",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-120\"",
+    "[asr] local sense-voice-small: 21 chars",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-120\"",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] stage=routing ms=0",
+    "[voice-entry] reminder",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] stage=llm ms=2423",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] stage=llm ms=2063",
+    "[reminders] voice parsed: 1 item(s), intents=create_reminder",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] stage=tool ms=4489 state=completed",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] tool=create_reminder status=completed ms=4489",
+    "[task 0560f5c7-c18e-4345-98cd-77caecdd3b08] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-120",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2423,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-120",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2063,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

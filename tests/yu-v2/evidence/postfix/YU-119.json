@@ -1,0 +1,580 @@
+{
+  "case_id": "YU-119",
+  "input": "把我每周一三五锻炼的提醒，改成每周二和周四。",
+  "spoken_input": "把我每周一三五锻炼的提醒，改成每周二和周四。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-119",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 2,
+        "taskId": "4fa35223-38ee-4089-ab45-b74be31ef088",
+        "taskState": "completed",
+        "question": "把我每周一三五锻炼的提醒，改成每周二和周四。",
+        "answer": "改好了：「锻炼」现在是**每周二、周四晚上 20:00**，最近一次是明天 10 月 27 日 20:00，周一和周五的旧设置已经取消。\n\n补充一句：中间有两次没解析对，一次给成零点、一次两个字段对不上，最后换成了「晚上8点」的说法才正确，现在这条的规则是每周二、周四、20:00。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 2 个事项",
+            "status": "completed",
+            "taskId": "4fa35223-38ee-4089-ab45-b74be31ef088"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "事项已更新 · 锻炼\n2026/10/26 16:30:00 → 2026/10/27 00:00:00 · 普通提醒",
+            "status": "completed",
+            "taskId": "4fa35223-38ee-4089-ab45-b74be31ef088"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "事项已更新 · 锻炼\n2026/10/27 00:00:00 → 2026/10/27 00:00:00 · 普通提醒",
+            "status": "completed",
+            "taskId": "4fa35223-38ee-4089-ab45-b74be31ef088"
+          },
+          {
+            "tool": "manage_reminder",
+            "ok": true,
+            "summary": "事项已更新 · 锻炼\n2026/10/27 00:00:00 → 2026/10/27 20:00:00 · 普通提醒",
+            "status": "completed",
+            "taskId": "4fa35223-38ee-4089-ab45-b74be31ef088"
+          }
+        ]
+      }
+    },
+    {
+      "label": "before_after",
+      "value": {
+        "before": {
+          "title": "锻炼",
+          "description": "",
+          "dueAt": 1793003400000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": {
+            "frequency": "weekly",
+            "hour": 20,
+            "minute": 0,
+            "weekdays": [
+              1,
+              3,
+              5
+            ],
+            "anchor": 1793003400000
+          },
+          "occurrences": 0,
+          "source": "manual",
+          "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "after": {
+          "title": "锻炼",
+          "description": "",
+          "dueAt": 1793102400000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": {
+            "frequency": "weekly",
+            "hour": 20,
+            "minute": 0,
+            "weekdays": [
+              2,
+              4
+            ],
+            "anchor": 1793102400000
+          },
+          "occurrences": 0,
+          "source": "manual",
+          "timeExpression": "每周二、周四晚上8点",
+          "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_before": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "c333e4d8-c6b7-47c6-acac-d7eb961f7254",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "other_after": {
+          "title": "B 第二个提醒",
+          "description": "",
+          "dueAt": 1793004000000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "c333e4d8-c6b7-47c6-acac-d7eb961f7254",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        }
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "B 第二个提醒",
+      "description": "",
+      "dueAt": 1793004000000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "c333e4d8-c6b7-47c6-acac-d7eb961f7254",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "锻炼",
+      "description": "",
+      "dueAt": 1793102400000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": {
+        "frequency": "weekly",
+        "hour": 20,
+        "minute": 0,
+        "weekdays": [
+          2,
+          4
+        ],
+        "anchor": 1793102400000
+      },
+      "occurrences": 0,
+      "source": "manual",
+      "timeExpression": "每周二、周四晚上8点",
+      "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "4fa35223-38ee-4089-ab45-b74be31ef088",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "把我每周一三五锻炼的提醒，改成每周二和周四。",
+    "target": {
+      "windowHandle": "10119",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-119"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 2
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 3
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "durationMs": 3
+      }
+    ],
+    "submittedAt": 1793001600000,
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "锻炼",
+              "description": "",
+              "dueAt": 1793003400000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": {
+                "frequency": "weekly",
+                "hour": 20,
+                "minute": 0,
+                "weekdays": [
+                  1,
+                  3,
+                  5
+                ],
+                "anchor": 1793003400000
+              },
+              "occurrences": 0,
+              "source": "manual",
+              "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:30:00",
+              "remainingSeconds": 1800,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "B 第二个提醒",
+              "description": "",
+              "dueAt": 1793004000000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "c333e4d8-c6b7-47c6-acac-d7eb961f7254",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:40:00",
+              "remainingSeconds": 2400,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+          "action": "update",
+          "before": {
+            "title": "锻炼",
+            "description": "",
+            "dueAt": 1793003400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "weekly",
+              "hour": 20,
+              "minute": 0,
+              "weekdays": [
+                1,
+                3,
+                5
+              ],
+              "anchor": 1793003400000
+            },
+            "occurrences": 0,
+            "source": "manual",
+            "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/26 16:30:00",
+            "remainingSeconds": 1800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "锻炼",
+            "description": "",
+            "dueAt": 1793030400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "weekly",
+              "hour": 0,
+              "minute": 0,
+              "weekdays": [
+                2,
+                4
+              ],
+              "anchor": 1793030400000
+            },
+            "occurrences": 0,
+            "source": "manual",
+            "timeExpression": "每周二和周四 20:00",
+            "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/27 00:00:00",
+            "remainingSeconds": 28800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+          "action": "update",
+          "before": {
+            "title": "锻炼",
+            "description": "",
+            "dueAt": 1793030400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "weekly",
+              "hour": 0,
+              "minute": 0,
+              "weekdays": [
+                2,
+                4
+              ],
+              "anchor": 1793030400000
+            },
+            "occurrences": 0,
+            "source": "manual",
+            "timeExpression": "每周二和周四 20:00",
+            "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/27 00:00:00",
+            "remainingSeconds": 28800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "锻炼",
+            "description": "",
+            "dueAt": 1793030400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "weekly",
+              "hour": 0,
+              "minute": 0,
+              "weekdays": [
+                2,
+                4
+              ],
+              "anchor": 1793030400000
+            },
+            "occurrences": 0,
+            "source": "manual",
+            "timeExpression": "每周二和周四 20:00",
+            "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/27 00:00:00",
+            "remainingSeconds": 28800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      },
+      {
+        "tool": "manage_reminder",
+        "state": "completed",
+        "data": {
+          "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+          "action": "update",
+          "before": {
+            "title": "锻炼",
+            "description": "",
+            "dueAt": 1793030400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "weekly",
+              "hour": 0,
+              "minute": 0,
+              "weekdays": [
+                2,
+                4
+              ],
+              "anchor": 1793030400000
+            },
+            "occurrences": 0,
+            "source": "manual",
+            "timeExpression": "每周二和周四 20:00",
+            "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/27 00:00:00",
+            "remainingSeconds": 28800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "item": {
+            "title": "锻炼",
+            "description": "",
+            "dueAt": 1793102400000,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": {
+              "frequency": "weekly",
+              "hour": 20,
+              "minute": 0,
+              "weekdays": [
+                2,
+                4
+              ],
+              "anchor": 1793102400000
+            },
+            "occurrences": 0,
+            "source": "manual",
+            "timeExpression": "每周二、周四晚上8点",
+            "id": "c269d086-8494-49b7-b4e3-e10b957dd2ba",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "2026/10/27 20:00:00",
+            "remainingSeconds": 100800,
+            "overdue": false,
+            "kind": "reminder",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-119）",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=tool ms=0 state=completed",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] tool=list_reminders status=completed ms=0",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=llm ms=2324",
+    "[perf] llm round0 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=tool ms=2 state=completed",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] tool=manage_reminder status=completed ms=2",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=llm ms=3101",
+    "[perf] llm round1 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=tool ms=3 state=completed",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] tool=manage_reminder status=completed ms=3",
+    "[perf] tools round1 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=llm ms=2465",
+    "[perf] llm round2 0ms",
+    "[perf] tool:manage_reminder 0ms ok=true",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=tool ms=3 state=completed",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] tool=manage_reminder status=completed ms=3",
+    "[perf] tools round2 0ms (1 calls)",
+    "[tool] manage_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 4fa35223-38ee-4089-ab45-b74be31ef088] stage=llm ms=2282",
+    "[perf] llm round3 0ms",
+    "[perf] ask total 0ms"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-119",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2323,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-119",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 3101,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-119",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2465,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-119",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2282,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

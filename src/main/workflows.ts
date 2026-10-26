@@ -47,7 +47,7 @@ function sanitizeStep(value: unknown): WorkflowStep | null {
   const label = typeof step.label === 'string' && step.label.trim() ? step.label : step.tool
   const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args)
     ? step.args as Record<string, unknown> : {}
-  return { tool: step.tool, args, label }
+  return { tool: step.tool, args, label, ...(step.when !== undefined ? { when: step.when } : {}), ...(step.otherwise !== undefined ? { otherwise: step.otherwise } : {}) }
 }
 
 /** `null` when the row has no usable step left, so `load` can drop the whole row. */
@@ -65,7 +65,10 @@ function sanitizeWorkflow(value: unknown): Workflow | null {
   if (steps.length !== row.steps.length) {
     console.warn(`[workflows] dropped ${row.steps.length - steps.length} step(s) outside the allowlist from ${row.id}`)
   }
-  return { ...row as Workflow, steps: steps.slice(0, MAX_WORKFLOW_STEPS) }
+  // Validate the preserved branches and result references together. A damaged
+  // condition must never turn a conditional write into an unconditional step.
+  try { return { ...row as Workflow, steps: normalizeWorkflowSteps(steps.slice(0, MAX_WORKFLOW_STEPS)) } }
+  catch { return null }
 }
 
 /**

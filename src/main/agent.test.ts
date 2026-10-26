@@ -173,6 +173,20 @@ const weatherReport = {
   sourceUrl: 'https://open-meteo.com/en/docs'
 }
 
+it('does not assert a latest version when the primary page cannot be read', async () => {
+  mocks.searchWeb.mockResolvedValue([{ title: 'Acme official downloads', url: 'https://acme.test/downloads', snippet: 'Acme version 9.9.9 release information.' }])
+  let chats = 0
+  const fetchImpl = vi.fn(async (url: string) => {
+    if (String(url).includes('/chat/completions')) return ++chats === 1
+      ? toolCallResponse('web_search', { query: 'Acme latest stable version' }) : textResponse('最新版是9.9.9')
+    return new Response('Access denied', { status: 403 })
+  })
+  const result = await askAgent(makeSettings(), 'Acme 最新稳定版是多少？', {}, signal, () => {}, { reset: true, fetchImpl: fetchImpl as unknown as typeof fetch })
+  expect(result.text).toContain('不能确认')
+  expect(result.text).not.toContain('最新版是9.9.9')
+  expect(chats).toBe(1)
+})
+
 beforeEach(() => {
   mocks.complete.mockReset()
   mocks.searchWeb.mockReset()

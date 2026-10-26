@@ -1,0 +1,190 @@
+{
+  "case_id": "YU-126",
+  "input": "优先用 Everything 帮我找刚才那个项目文件。",
+  "spoken_input": "优先用 Everything 帮我找刚才那个项目文件。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-126",
+  "observations": [
+    {
+      "label": "routing",
+      "value": {
+        "kind": "assistant",
+        "useContext": false,
+        "via": "live_model",
+        "raw": "{\"kind\":\"assistant\",\"text\":null,\"target\":null,\"operation\":null,\"useContext\":false}"
+      }
+    },
+    {
+      "label": "index_unavailable",
+      "value": {
+        "ok": false,
+        "summary": "Everything 查询接口不可用，请改用内置文件搜索",
+        "error": "无法连接 Everything 查询接口（已按设置关闭 Everything 的 HTTP 服务；没有找到 es.exe（es.exe not found））",
+        "data": {
+          "ok": false,
+          "available": false,
+          "backend": "none",
+          "query": "one.pdf",
+          "reason": "无法连接 Everything 查询接口（已按设置关闭 Everything 的 HTTP 服务；没有找到 es.exe（es.exe not found））",
+          "fallback": [
+            "search_files",
+            "search_file_contents"
+          ]
+        },
+        "status": "unsupported",
+        "taskId": "657dcd68-e13e-4496-84be-707a6cee2105"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files_everything",
+      "args": {
+        "query": "one.pdf"
+      },
+      "outcome": {
+        "ok": false,
+        "summary": "Everything 查询接口不可用，请改用内置文件搜索",
+        "error": "无法连接 Everything 查询接口（已按设置关闭 Everything 的 HTTP 服务；没有找到 es.exe（es.exe not found））",
+        "data": {
+          "ok": false,
+          "available": false,
+          "backend": "none",
+          "query": "one.pdf",
+          "reason": "无法连接 Everything 查询接口（已按设置关闭 Everything 的 HTTP 服务；没有找到 es.exe（es.exe not found））",
+          "fallback": [
+            "search_files",
+            "search_file_contents"
+          ]
+        },
+        "status": "unsupported",
+        "taskId": "657dcd68-e13e-4496-84be-707a6cee2105"
+      }
+    },
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-126",
+        "name": "one.pdf"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 1 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-126\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "1f1aa5f8-3669-4c03-b147-2507d430f7ad"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-126",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 1 个文件"
+        },
+        "status": "completed",
+        "taskId": "657dcd68-e13e-4496-84be-707a6cee2105"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "657dcd68-e13e-4496-84be-707a6cee2105",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "优先用 Everything 帮我找刚才那个项目文件。",
+    "target": {
+      "windowHandle": "10126",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-126"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files_everything",
+        "state": "unsupported",
+        "durationMs": 2
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 329
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files_everything",
+        "state": "unsupported",
+        "data": {
+          "ok": false,
+          "available": false,
+          "backend": "none",
+          "query": "one.pdf",
+          "reason": "无法连接 Everything 查询接口（已按设置关闭 Everything 的 HTTP 服务；没有找到 es.exe（es.exe not found））",
+          "fallback": [
+            "search_files",
+            "search_file_contents"
+          ]
+        }
+      },
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-126\\one.pdf",
+              "name": "one.pdf",
+              "bytes": 210,
+              "modified": "2026-10-25T08:00:00.0000000Z",
+              "kind": "file",
+              "id": "1f1aa5f8-3669-4c03-b147-2507d430f7ad"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-126",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 1 个文件"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-126）",
+    "[perf] tool:search_files_everything 0ms ok=false",
+    "[task 657dcd68-e13e-4496-84be-707a6cee2105] stage=tool ms=2 state=unsupported",
+    "[task 657dcd68-e13e-4496-84be-707a6cee2105] tool=search_files_everything status=unsupported ms=2",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task 657dcd68-e13e-4496-84be-707a6cee2105] stage=tool ms=329 state=completed",
+    "[task 657dcd68-e13e-4496-84be-707a6cee2105] tool=search_files status=completed ms=329"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-126",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1633,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}

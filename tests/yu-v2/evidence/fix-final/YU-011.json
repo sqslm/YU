@@ -1,0 +1,410 @@
+{
+  "case_id": "YU-011",
+  "input": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+  "spoken_input": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-011",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "34e13534-89d1-4774-bc41-7ca59037b06b",
+        "taskState": "completed",
+        "question": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+        "answer": "两件事都已经记好了：\n\n- **笔记**：我记下了「整理照片的想法」这条想法。\n- **待办**：我建了一条周末研究一下的待办，优先级是普通，没有设定提醒时间。\n\n不过，你希望周末研究的具体是照片整理这件事吗？如果是，我可以给待办改个标题，写得更清楚一些。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "create_note",
+            "ok": true,
+            "summary": "随记已保存",
+            "status": "completed",
+            "taskId": "34e13534-89d1-4774-bc41-7ca59037b06b"
+          },
+          {
+            "tool": "create_reminder",
+            "ok": true,
+            "summary": "未设置提醒时间 · 待办 · 研究一下",
+            "status": "completed",
+            "taskId": "34e13534-89d1-4774-bc41-7ca59037b06b"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "两件事都已经记好了：\n\n- **笔记**：我记下了「整理照片的想法」这条想法。\n- **待办**：我建了一条周末研究一下的待办，优先级是普通，没有设定提醒时间。\n\n不过，你希望周末研究的具体是照片整理这件事吗？如果是，我可以给待办改个标题，写得更清楚一些。",
+            "feedback": {
+              "failed": false
+            },
+            "taskLabel": "任务结果",
+            "showMode": true
+          }
+        ],
+        "cards": [],
+        "task": {
+          "id": "34e13534-89d1-4774-bc41-7ca59037b06b",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+          "target": {
+            "windowHandle": "10011",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-011"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "durationMs": 2
+            },
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "durationMs": 4908
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+          "results": [
+            {
+              "tool": "create_note",
+              "state": "completed",
+              "data": {
+                "id": "902019a0-476e-4474-b5d2-db6e114427cf",
+                "tags": [],
+                "text": "整理照片的想法",
+                "ok": true
+              }
+            },
+            {
+              "tool": "create_reminder",
+              "state": "completed",
+              "data": {
+                "saved": 1,
+                "undo": true,
+                "item": {
+                  "title": "研究一下",
+                  "description": "待办：周末研究一下；周末",
+                  "dueAt": null,
+                  "level": "normal",
+                  "priority": "normal",
+                  "deadlineAt": null,
+                  "recurrence": null,
+                  "occurrences": 0,
+                  "source": "voice",
+                  "id": "a77869af-18fd-4f2b-aa8b-80a2215c85d2",
+                  "createdAt": 1793001600000,
+                  "updatedAt": 1793001600000,
+                  "status": "pending",
+                  "deliveredAt": null,
+                  "triggerTime": "未设置提醒时间",
+                  "remainingSeconds": null,
+                  "overdue": false,
+                  "kind": "todo",
+                  "levelName": "普通提醒",
+                  "priorityLabel": "普通"
+                },
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "notes_on_disk",
+      "value": {
+        "notes": [
+          {
+            "id": "902019a0-476e-4474-b5d2-db6e114427cf",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "editedAt": 1793001600000,
+            "transcript": "整理照片的想法",
+            "polished": "",
+            "polishStatus": "skipped",
+            "durationMs": 0,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "categories": [],
+        "deleted": []
+      }
+    },
+    {
+      "label": "business_records",
+      "value": {
+        "notes": [
+          {
+            "id": "902019a0-476e-4474-b5d2-db6e114427cf",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "editedAt": 1793001600000,
+            "transcript": "整理照片的想法",
+            "polished": "",
+            "polishStatus": "skipped",
+            "durationMs": 0,
+            "tags": [],
+            "pending": true
+          }
+        ],
+        "reminders": [
+          {
+            "title": "研究一下",
+            "description": "待办：周末研究一下；周末",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "id": "a77869af-18fd-4f2b-aa8b-80a2215c85d2",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null
+          }
+        ],
+        "events": []
+      }
+    }
+  ],
+  "tool_results": [],
+  "reminders": [
+    {
+      "title": "研究一下",
+      "description": "待办：周末研究一下；周末",
+      "dueAt": null,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "voice",
+      "id": "a77869af-18fd-4f2b-aa8b-80a2215c85d2",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [
+    {
+      "id": "902019a0-476e-4474-b5d2-db6e114427cf",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "editedAt": 1793001600000,
+      "transcript": "整理照片的想法",
+      "polished": "",
+      "polishStatus": "skipped",
+      "durationMs": 0,
+      "tags": [],
+      "pending": true
+    }
+  ],
+  "calendar": [],
+  "task": {
+    "id": "34e13534-89d1-4774-bc41-7ca59037b06b",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+    "target": {
+      "windowHandle": "10011",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-011"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "durationMs": 2
+      },
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "durationMs": 4908
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "先记一下我要整理照片的想法，再给我加个待办，周末研究一下。",
+    "results": [
+      {
+        "tool": "create_note",
+        "state": "completed",
+        "data": {
+          "id": "902019a0-476e-4474-b5d2-db6e114427cf",
+          "tags": [],
+          "text": "整理照片的想法",
+          "ok": true
+        }
+      },
+      {
+        "tool": "create_reminder",
+        "state": "completed",
+        "data": {
+          "saved": 1,
+          "undo": true,
+          "item": {
+            "title": "研究一下",
+            "description": "待办：周末研究一下；周末",
+            "dueAt": null,
+            "level": "normal",
+            "priority": "normal",
+            "deadlineAt": null,
+            "recurrence": null,
+            "occurrences": 0,
+            "source": "voice",
+            "id": "a77869af-18fd-4f2b-aa8b-80a2215c85d2",
+            "createdAt": 1793001600000,
+            "updatedAt": 1793001600000,
+            "status": "pending",
+            "deliveredAt": null,
+            "triggerTime": "未设置提醒时间",
+            "remainingSeconds": null,
+            "overdue": false,
+            "kind": "todo",
+            "levelName": "普通提醒",
+            "priorityLabel": "普通"
+          },
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-Cvu36I\\YU-011）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-011\"",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-011\"",
+    "[asr] local sense-voice-small: 29 chars",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-011\"",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=llm ms=1828",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=routing ms=1835",
+    "[voice-entry] assistant",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=llm ms=2054",
+    "[perf] llm round0 0ms",
+    "[perf] tool:create_note 0ms ok=true",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=tool ms=2 state=completed",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] tool=create_note status=completed ms=2",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=llm ms=2763",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=llm ms=2126",
+    "[reminders] voice parsed: 1 item(s), intents=todo",
+    "[perf] tool:create_reminder 0ms ok=true",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=tool ms=4908 state=completed",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] tool=create_reminder status=completed ms=4908",
+    "[perf] tools round0 0ms (2 calls)",
+    "[tool] create_note ok=true",
+    "[tool] create_reminder ok=true",
+    "[perf] enrich 0ms",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=llm ms=1734",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task 34e13534-89d1-4774-bc41-7ca59037b06b] stage=total ms=0 state=completed"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1826,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2053,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2762,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2126,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-011",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1734,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "PASS"
+}

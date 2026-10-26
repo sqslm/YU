@@ -27,6 +27,18 @@ function harness() {
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true }); vi.useRealTimers(); vi.clearAllMocks(); mock.notices.length = 0; mock.windows.length = 0; mock.handlers.clear() })
 const draft = (overrides: Partial<ReminderDraft> = {}): ReminderDraft => ({ title: 'Clean up', intent: 'create_reminder', level: 'normal', time_expression: 'in 20 minutes', dueAt: Date.now() + 1200000, rule: null, recurrence: null, needs_confirmation: false, ...overrides })
 describe('shared reminder delivery and entry points', () => {
+  it('refuses an unsupported requested zone before extraction without mistaking task content for its time', async () => {
+    const { service } = harness()
+    try {
+      const result = await service.voice('按纽约时间明天上午九点提醒我参加会议。', new AbortController().signal)
+      expect(result).toMatchObject({ saved: 0, message: expect.stringContaining('时区') })
+      expect(mock.extract).not.toHaveBeenCalled()
+      expect(service.store.list()).toHaveLength(0)
+      mock.extract.mockResolvedValue([draft({ title: '检查UTC文档' })])
+      await service.voice('十分钟后提醒我检查UTC文档。', new AbortController().signal)
+      expect(service.store.list()).toHaveLength(1)
+    } finally { service.stop() }
+  })
   it('shows missed strong reminders in the main-view queue instead of reopening a strong window, and keeps acknowledgment after restart', () => {
     vi.useFakeTimers();vi.setSystemTime(new Date(2026,9,24,8))
     const {service}=harness()

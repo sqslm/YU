@@ -18,6 +18,38 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
 
 describe('personal tools share real application services', () => {
+  it('explains unsupported source timezones even if the model rewrites the time argument', async () => {
+    const result = await runTool('create_reminder', { text: '明天晚上九点提醒我参加会议' }, { ...ctx, question: '按纽约时间明天上午九点提醒我参加会议。' })
+    expect(result).toMatchObject({ ok: false, status: 'awaiting_confirmation', summary: expect.stringContaining('时区') })
+    expect(api.remind).not.toHaveBeenCalled()
+  })
+  it.each([
+    ['加个待办：周末研究一下', '加个待办，周末研究一下'],
+    ['待办：周末研究一下。', '待办，周末研究一下']
+  ])('uses original words when a compound task argument only changes punctuation: %s', async (text, original) => {
+    const question = '先记一下我要整理照片的想法，再给我加个待办，周末研究一下。'
+    vi.mocked(api.remind).mockResolvedValue({ message: 'Saved', saved: 1 })
+    const result = await runTool('create_reminder', { text }, { ...ctx, question })
+    expect(result.ok).toBe(true)
+    expect(vi.mocked(api.remind).mock.calls[0][0]).toBe(original)
+    expect((await runTool('create_reminder', { text: '加个待办：周末删除照片' }, { ...ctx, question })).ok).toBe(false)
+    expect(api.remind).toHaveBeenCalledTimes(1)
+  })
+  it('opens the actual latest note ID, and rejects missing or conflicting targets', async () => {
+    vi.mocked(api.notes).mockReturnValue([
+      { ...api.notes()[0], id: 'old', createdAt: 1 },
+      { ...api.notes()[0], id: 'new', createdAt: 2 }
+    ])
+    const operation = personalCommand('打开我最近的一条随记。')!
+    const result = await runTool(operation.name, operation.args, ctx)
+    expect(result.ok).toBe(true)
+    expect(result.data).toMatchObject({ page: 'notes', noteId: 'new' })
+    expect(api.open).toHaveBeenCalledExactlyOnceWith('notes', 'new')
+    for (const args of [{ page: 'notes', note_id: 'missing' }, { page: 'notes', note_id: '' }, { page: 'notes', note_id: 'new', position: 'latest' }, { page: 'history', note_id: 'new' }]) {
+      expect((await runTool('open_page', args, ctx)).ok).toBe(false)
+    }
+    expect(api.open).toHaveBeenCalledTimes(1)
+  })
   it('allows an explicit reminder clause after a calendar clause without weakening modification/quotation guards',async()=>{
     const text='提醒我明天上午九点带资料',question=`帮我创建明天下午三点的日程，并${text}`
     vi.mocked(api.remind).mockResolvedValue({message:'Saved',saved:1})

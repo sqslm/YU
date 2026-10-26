@@ -1396,7 +1396,7 @@ export function classifyQuestion(text: string): QuestionKind {
     if (hint.pattern.test(source)) {
       // Model/version lookups need the documentation window. Earlier language,
       // weather and other explicit task matches retain their original priority.
-      if (hint.kind === 'news' && /(?:最新|latest|newest).{0,30}(?:模型|版本|\bmodel\b|\bversion\b)/i.test(source) &&
+      if (hint.kind === 'news' && /(?:最新|latest|newest).{0,30}(?:模型|版本|稳定版|穩定版|\bmodel\b|\bversion\b|\bstable\s+release\b)/i.test(source) &&
           !/新闻|头条|资讯|\b(?:news|headlines|roundup)\b/i.test(source)) return 'technical'
       return hint.kind
     }
@@ -2013,7 +2013,11 @@ export function rankSources(
     opts.maxAgeHours === undefined
       ? unique
       : filterByRecency(unique, { now, maxAgeHours: opts.maxAgeHours })
-  const clustered = dedupeSyndicated(fresh)
+  const freshOriginals = new Set(fresh.filter(result => !isAggregator(result)).map(result => titleFingerprint(result.title)))
+  const staleOriginals = new Set(unique.filter(result => !fresh.includes(result) && !isAggregator(result)).map(result => titleFingerprint(result.title)))
+  // An undated copy does not make a known-old announcement new again. Keep a
+  // genuinely fresh original with that headline, if one also exists.
+  const clustered = dedupeSyndicated(fresh.filter(result => !isAggregator(result) || !staleOriginals.has(titleFingerprint(result.title)) || freshOriginals.has(titleFingerprint(result.title))))
   const scored = clustered.map((result, index) => ({
     result,
     index,

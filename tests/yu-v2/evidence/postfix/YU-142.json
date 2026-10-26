@@ -1,0 +1,265 @@
+{
+  "case_id": "YU-142",
+  "input": "打开我的项目文件夹，然后找到最近改过的 README。",
+  "spoken_input": "打开我的项目文件夹，然后找到最近改过的 README。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142",
+  "observations": [
+    {
+      "label": "saved_actual_workflow",
+      "value": {
+        "ok": true,
+        "summary": "工作流已保存：启动工作区",
+        "data": {
+          "id": "0d8becca-b240-403a-980b-d2d4d01e09ea",
+          "name": "启动工作区",
+          "detail": "2 步：open_folder → search_files",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "b5318a58-5aa2-401a-b184-f31ca5241d5a"
+      }
+    },
+    {
+      "label": "workflow_run_stops_on_boundary_failure",
+      "value": {
+        "ok": false,
+        "summary": "启动工作区：✗ open_folder；第 open_folder 步失败：Desktop opening not executed in integration harness",
+        "data": {
+          "ok": false,
+          "workflowId": "0d8becca-b240-403a-980b-d2d4d01e09ea",
+          "steps": [
+            {
+              "label": "open_folder",
+              "tool": "open_folder",
+              "ok": false,
+              "summary": "Desktop opening not executed in integration harness"
+            }
+          ],
+          "stoppedAt": "open_folder"
+        },
+        "status": "failed",
+        "taskId": "b5318a58-5aa2-401a-b184-f31ca5241d5a"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "search_files",
+      "args": {
+        "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project",
+        "name": "README"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 1 个文件",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project\\README.md",
+              "name": "README.md",
+              "bytes": 28,
+              "modified": "2026-10-26T08:27:06.0827051Z",
+              "kind": "file",
+              "id": "efdfc0d9-1ce1-442d-b852-00f40b5623ca"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 1 个文件"
+        },
+        "status": "completed",
+        "taskId": "b5318a58-5aa2-401a-b184-f31ca5241d5a"
+      }
+    },
+    {
+      "name": "save_workflow",
+      "args": {
+        "name": "启动工作区",
+        "steps": [
+          {
+            "tool": "open_folder",
+            "args": {
+              "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project"
+            }
+          },
+          {
+            "tool": "search_files",
+            "args": {
+              "folder": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project",
+              "name": "README"
+            }
+          }
+        ]
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "工作流已保存：启动工作区",
+        "data": {
+          "id": "0d8becca-b240-403a-980b-d2d4d01e09ea",
+          "name": "启动工作区",
+          "detail": "2 步：open_folder → search_files",
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "b5318a58-5aa2-401a-b184-f31ca5241d5a"
+      }
+    },
+    {
+      "name": "run_workflow",
+      "args": {
+        "id": "0d8becca-b240-403a-980b-d2d4d01e09ea"
+      },
+      "outcome": {
+        "ok": false,
+        "summary": "启动工作区：✗ open_folder；第 open_folder 步失败：Desktop opening not executed in integration harness",
+        "data": {
+          "ok": false,
+          "workflowId": "0d8becca-b240-403a-980b-d2d4d01e09ea",
+          "steps": [
+            {
+              "label": "open_folder",
+              "tool": "open_folder",
+              "ok": false,
+              "summary": "Desktop opening not executed in integration harness"
+            }
+          ],
+          "stoppedAt": "open_folder"
+        },
+        "status": "failed",
+        "taskId": "b5318a58-5aa2-401a-b184-f31ca5241d5a"
+      }
+    }
+  ],
+  "reminders": [],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "b5318a58-5aa2-401a-b184-f31ca5241d5a",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "打开我的项目文件夹，然后找到最近改过的 README。",
+    "target": {
+      "windowHandle": "10142",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "windowTitle": "V2 controlled editor YU-142"
+    },
+    "state": "pending",
+    "receipts": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "durationMs": 342
+      },
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "durationMs": 1
+      },
+      {
+        "tool": "open_folder",
+        "state": "failed",
+        "durationMs": 1
+      },
+      {
+        "tool": "run_workflow",
+        "state": "failed",
+        "durationMs": 2
+      }
+    ],
+    "results": [
+      {
+        "tool": "search_files",
+        "state": "completed",
+        "data": {
+          "items": [
+            {
+              "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project\\README.md",
+              "name": "README.md",
+              "bytes": 28,
+              "modified": "2026-10-26T08:27:06.0827051Z",
+              "kind": "file",
+              "id": "efdfc0d9-1ce1-442d-b852-00f40b5623ca"
+            }
+          ],
+          "backend": "windows-search+folder",
+          "scope": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project",
+          "partial": false,
+          "indexUnavailable": false,
+          "coverage": "查询 Windows 索引并补查当前目录；未索引子目录不递归扫描。按修改时间筛选，不代表下载时间；不搜索文件正文。",
+          "ok": true,
+          "summary": "找到 1 个文件"
+        }
+      },
+      {
+        "tool": "save_workflow",
+        "state": "completed",
+        "data": {
+          "id": "0d8becca-b240-403a-980b-d2d4d01e09ea",
+          "name": "启动工作区",
+          "detail": "2 步：open_folder → search_files",
+          "ok": true
+        }
+      },
+      {
+        "tool": "open_folder",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "error": "Desktop opening not executed in integration harness"
+        }
+      },
+      {
+        "tool": "run_workflow",
+        "state": "failed",
+        "data": {
+          "ok": false,
+          "workflowId": "0d8becca-b240-403a-980b-d2d4d01e09ea",
+          "steps": [
+            {
+              "label": "open_folder",
+              "tool": "open_folder",
+              "ok": false,
+              "summary": "Desktop opening not executed in integration harness"
+            }
+          ],
+          "stoppedAt": "open_folder"
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142）",
+    "[perf] tool:search_files 0ms ok=true",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] stage=tool ms=342 state=completed",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] tool=search_files status=completed ms=342",
+    "[perf] tool:save_workflow 0ms ok=true",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] stage=tool ms=1 state=completed",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] tool=save_workflow status=completed ms=1",
+    "[workflow] 启动工作区: open_folder",
+    "[perf] tool:open_folder 0ms ok=false",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] stage=tool ms=1 state=failed",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] tool=open_folder status=failed ms=1",
+    "[perf] tool:run_workflow 0ms ok=false",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] stage=tool ms=2 state=failed",
+    "[task b5318a58-5aa2-401a-b184-f31ca5241d5a] tool=run_workflow status=failed ms=2"
+  ],
+  "open_requests": [
+    {
+      "path": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-142\\project",
+      "executed": false
+    }
+  ],
+  "network": [],
+  "final_status": "MANUAL_REQUIRED"
+}

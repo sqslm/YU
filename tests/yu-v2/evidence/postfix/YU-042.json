@@ -1,0 +1,729 @@
+{
+  "case_id": "YU-042",
+  "input": "我还有哪些没完成的待办？无时间的也列出来。",
+  "spoken_input": "我还有哪些没完成的待办？无时间的也列出来。",
+  "fixed_clock": "2026-10-26T08:00:00.000Z",
+  "scope": {
+    "asr": "injected transcript at local ASR seam",
+    "native_windows": "controlled boundary; native reads only when explicitly exercised",
+    "model": "actual configured provider, not mocked"
+  },
+  "fixture_directory": "E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-042",
+  "observations": [
+    {
+      "label": "assistant_turn",
+      "value": {
+        "id": 1,
+        "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec",
+        "taskState": "completed",
+        "question": "我还有哪些没完成的待办？无时间的也列出来。",
+        "answer": "你还有 2 项没完成：\n\n| 待办 | 类型 | 时间 | 优先级 |\n|---|---|---|---|\n| Future reminder | 定时提醒 | 今天（10 月 26 日）16:20，还剩 20 分钟 | 普通 |\n| Untimed task | 无时间待办 | 未设置提醒时间 | 普通 |\n\n这两项都是普通优先级，也都没有设定截止时间。",
+        "sources": [],
+        "state": "done",
+        "localResults": [
+          {
+            "tool": "list_reminders",
+            "ok": true,
+            "summary": "找到 2 个事项",
+            "status": "completed",
+            "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec"
+          }
+        ]
+      }
+    },
+    {
+      "label": "pipeline",
+      "value": {
+        "bars": [
+          {
+            "phase": "recording",
+            "mode": "dictation",
+            "since": 1793001600000,
+            "activation": "toggle",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "本地转写中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "working",
+            "mode": "dictation",
+            "hint": "识别任务中…",
+            "showMode": true,
+            "promptName": "内置润色提示词"
+          },
+          {
+            "phase": "done",
+            "mode": "ask",
+            "text": "",
+            "showMode": true
+          }
+        ],
+        "cards": [
+          {
+            "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec",
+            "taskState": "completed",
+            "question": "我还有哪些没完成的待办？无时间的也列出来。",
+            "answer": "你还有 2 项没完成：\n\n| 待办 | 类型 | 时间 | 优先级 |\n|---|---|---|---|\n| Future reminder | 定时提醒 | 今天（10 月 26 日）16:20，还剩 20 分钟 | 普通 |\n| Untimed task | 无时间待办 | 未设置提醒时间 | 普通 |\n\n这两项都是普通优先级，也都没有设定截止时间。",
+            "sources": [],
+            "localResults": [
+              {
+                "tool": "list_reminders",
+                "ok": true,
+                "summary": "找到 2 个事项",
+                "status": "completed",
+                "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec"
+              }
+            ],
+            "assistant": true,
+            "streaming": false
+          }
+        ],
+        "task": {
+          "id": "66962c68-2de5-4d72-bad0-335a8e5afeec",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "我还有哪些没完成的待办？无时间的也列出来。",
+          "target": {
+            "windowHandle": "10042",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-042"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "durationMs": 0
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "我还有哪些没完成的待办？无时间的也列出来。",
+          "results": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "data": {
+                "total": 2,
+                "asOf": 1793001600000,
+                "items": [
+                  {
+                    "title": "Future reminder",
+                    "description": "",
+                    "dueAt": 1793002800000,
+                    "level": "normal",
+                    "priority": "normal",
+                    "deadlineAt": null,
+                    "recurrence": null,
+                    "occurrences": 0,
+                    "source": "manual",
+                    "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600000,
+                    "status": "pending",
+                    "deliveredAt": null,
+                    "triggerTime": "2026/10/26 16:20:00",
+                    "remainingSeconds": 1200,
+                    "overdue": false,
+                    "kind": "reminder",
+                    "levelName": "普通提醒",
+                    "priorityLabel": "普通"
+                  },
+                  {
+                    "title": "Untimed task",
+                    "description": "",
+                    "dueAt": null,
+                    "level": "normal",
+                    "priority": "normal",
+                    "deadlineAt": null,
+                    "recurrence": null,
+                    "occurrences": 0,
+                    "source": "manual",
+                    "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600000,
+                    "status": "pending",
+                    "deliveredAt": null,
+                    "triggerTime": "未设置提醒时间",
+                    "remainingSeconds": null,
+                    "overdue": false,
+                    "kind": "todo",
+                    "levelName": "普通提醒",
+                    "priorityLabel": "普通"
+                  }
+                ],
+                "truncated": false,
+                "ok": true
+              }
+            }
+          ]
+        },
+        "insertions": []
+      }
+    },
+    {
+      "label": "query_context",
+      "value": {
+        "untimed": {
+          "title": "Untimed task",
+          "description": "",
+          "dueAt": null,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "future": {
+          "title": "Future reminder",
+          "description": "",
+          "dueAt": 1793002800000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "done": {
+          "title": "Finished",
+          "description": "",
+          "dueAt": 1793005200000,
+          "level": "normal",
+          "priority": "normal",
+          "deadlineAt": null,
+          "recurrence": null,
+          "occurrences": 0,
+          "source": "manual",
+          "id": "9d8e34bb-34b0-45f2-ab74-002b2f960d29",
+          "createdAt": 1793001600000,
+          "updatedAt": 1793001600000,
+          "status": "pending",
+          "deliveredAt": null
+        },
+        "turn": {
+          "id": 1,
+          "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec",
+          "taskState": "completed",
+          "question": "我还有哪些没完成的待办？无时间的也列出来。",
+          "answer": "你还有 2 项没完成：\n\n| 待办 | 类型 | 时间 | 优先级 |\n|---|---|---|---|\n| Future reminder | 定时提醒 | 今天（10 月 26 日）16:20，还剩 20 分钟 | 普通 |\n| Untimed task | 无时间待办 | 未设置提醒时间 | 普通 |\n\n这两项都是普通优先级，也都没有设定截止时间。",
+          "sources": [],
+          "state": "done",
+          "localResults": [
+            {
+              "tool": "list_reminders",
+              "ok": true,
+              "summary": "找到 2 个事项",
+              "status": "completed",
+              "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec"
+            }
+          ]
+        },
+        "task": {
+          "id": "66962c68-2de5-4d72-bad0-335a8e5afeec",
+          "source": "voice",
+          "triggeredAt": 1793001600000,
+          "originalInput": "我还有哪些没完成的待办？无时间的也列出来。",
+          "target": {
+            "windowHandle": "10042",
+            "processId": 1001,
+            "appName": "V2Editor",
+            "appPath": "v2-editor.exe",
+            "windowTitle": "V2 controlled editor YU-042"
+          },
+          "state": "completed",
+          "receipts": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "durationMs": 0
+            }
+          ],
+          "prompt": {
+            "id": "builtin",
+            "name": "内置润色提示词",
+            "kind": "polish",
+            "applied": false
+          },
+          "submittedAt": 1793001600000,
+          "route": {
+            "kind": "assistant",
+            "via": "model"
+          },
+          "transcript": "我还有哪些没完成的待办？无时间的也列出来。",
+          "results": [
+            {
+              "tool": "list_reminders",
+              "state": "completed",
+              "data": {
+                "total": 2,
+                "asOf": 1793001600000,
+                "items": [
+                  {
+                    "title": "Future reminder",
+                    "description": "",
+                    "dueAt": 1793002800000,
+                    "level": "normal",
+                    "priority": "normal",
+                    "deadlineAt": null,
+                    "recurrence": null,
+                    "occurrences": 0,
+                    "source": "manual",
+                    "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600000,
+                    "status": "pending",
+                    "deliveredAt": null,
+                    "triggerTime": "2026/10/26 16:20:00",
+                    "remainingSeconds": 1200,
+                    "overdue": false,
+                    "kind": "reminder",
+                    "levelName": "普通提醒",
+                    "priorityLabel": "普通"
+                  },
+                  {
+                    "title": "Untimed task",
+                    "description": "",
+                    "dueAt": null,
+                    "level": "normal",
+                    "priority": "normal",
+                    "deadlineAt": null,
+                    "recurrence": null,
+                    "occurrences": 0,
+                    "source": "manual",
+                    "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+                    "createdAt": 1793001600000,
+                    "updatedAt": 1793001600000,
+                    "status": "pending",
+                    "deliveredAt": null,
+                    "triggerTime": "未设置提醒时间",
+                    "remainingSeconds": null,
+                    "overdue": false,
+                    "kind": "todo",
+                    "levelName": "普通提醒",
+                    "priorityLabel": "普通"
+                  }
+                ],
+                "truncated": false,
+                "ok": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "independent_pending_query",
+      "value": {
+        "ok": true,
+        "summary": "找到 2 个事项",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "Future reminder",
+              "description": "",
+              "dueAt": 1793002800000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:20:00",
+              "remainingSeconds": 1200,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "Untimed task",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "list_reminders",
+      "args": {
+        "status": "pending"
+      },
+      "outcome": {
+        "ok": true,
+        "summary": "找到 2 个事项",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "Future reminder",
+              "description": "",
+              "dueAt": 1793002800000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:20:00",
+              "remainingSeconds": 1200,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "Untimed task",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        },
+        "status": "completed",
+        "taskId": "66962c68-2de5-4d72-bad0-335a8e5afeec"
+      }
+    }
+  ],
+  "reminders": [
+    {
+      "title": "Future reminder",
+      "description": "",
+      "dueAt": 1793002800000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "Untimed task",
+      "description": "",
+      "dueAt": null,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "pending",
+      "deliveredAt": null
+    },
+    {
+      "title": "Finished",
+      "description": "",
+      "dueAt": 1793005200000,
+      "level": "normal",
+      "priority": "normal",
+      "deadlineAt": null,
+      "recurrence": null,
+      "occurrences": 0,
+      "source": "manual",
+      "id": "9d8e34bb-34b0-45f2-ab74-002b2f960d29",
+      "createdAt": 1793001600000,
+      "updatedAt": 1793001600000,
+      "status": "completed",
+      "deliveredAt": null
+    }
+  ],
+  "notes": [],
+  "calendar": [],
+  "task": {
+    "id": "66962c68-2de5-4d72-bad0-335a8e5afeec",
+    "source": "voice",
+    "triggeredAt": 1793001600000,
+    "originalInput": "我还有哪些没完成的待办？无时间的也列出来。",
+    "target": {
+      "windowHandle": "10042",
+      "processId": 1001,
+      "appName": "V2Editor",
+      "appPath": "v2-editor.exe",
+      "windowTitle": "V2 controlled editor YU-042"
+    },
+    "state": "completed",
+    "receipts": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      },
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "durationMs": 0
+      }
+    ],
+    "prompt": {
+      "id": "builtin",
+      "name": "内置润色提示词",
+      "kind": "polish",
+      "applied": false
+    },
+    "submittedAt": 1793001600000,
+    "route": {
+      "kind": "assistant",
+      "via": "model"
+    },
+    "transcript": "我还有哪些没完成的待办？无时间的也列出来。",
+    "results": [
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "Future reminder",
+              "description": "",
+              "dueAt": 1793002800000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:20:00",
+              "remainingSeconds": 1200,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "Untimed task",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      },
+      {
+        "tool": "list_reminders",
+        "state": "completed",
+        "data": {
+          "total": 2,
+          "asOf": 1793001600000,
+          "items": [
+            {
+              "title": "Future reminder",
+              "description": "",
+              "dueAt": 1793002800000,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "78edc87e-135c-4064-83e4-825fcec3bbe3",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "2026/10/26 16:20:00",
+              "remainingSeconds": 1200,
+              "overdue": false,
+              "kind": "reminder",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            },
+            {
+              "title": "Untimed task",
+              "description": "",
+              "dueAt": null,
+              "level": "normal",
+              "priority": "normal",
+              "deadlineAt": null,
+              "recurrence": null,
+              "occurrences": 0,
+              "source": "manual",
+              "id": "3c206b35-05e5-4b2b-9beb-790d4af6dbf0",
+              "createdAt": 1793001600000,
+              "updatedAt": 1793001600000,
+              "status": "pending",
+              "deliveredAt": null,
+              "triggerTime": "未设置提醒时间",
+              "remainingSeconds": null,
+              "overdue": false,
+              "kind": "todo",
+              "levelName": "普通提醒",
+              "priorityLabel": "普通"
+            }
+          ],
+          "truncated": false,
+          "ok": true
+        }
+      }
+    ]
+  },
+  "logs": [
+    "[notes] 已加载 0 条随记（E:\\CpanQianYi\\Temp\\yu-v2-150-7VH7PF\\YU-042）",
+    "[pipeline] start dictation",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-042\"",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=capture ms=0",
+    "[pipeline] stop dictation: 1200ms captured",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-042\"",
+    "[asr] local sense-voice-small: 21 chars",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=asr ms=0",
+    "[route] kind=polish matchedBy=heuristic app=\"V2Editor\" title=\"V2 controlled editor YU-042\"",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=llm ms=1631",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=routing ms=1631",
+    "[voice-entry] assistant",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=llm ms=2451",
+    "[perf] llm round0 0ms",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=tool ms=0 state=completed",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] tool=list_reminders status=completed ms=0",
+    "[perf] tools round0 0ms (1 calls)",
+    "[tool] list_reminders ok=true",
+    "[perf] enrich 0ms",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=llm ms=1294",
+    "[perf] llm round1 0ms",
+    "[perf] ask total 0ms",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=total ms=0 state=completed",
+    "[perf] tool:list_reminders 0ms ok=true",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] stage=tool ms=0 state=completed",
+    "[task 66962c68-2de5-4d72-bad0-335a8e5afeec] tool=list_reminders status=completed ms=0"
+  ],
+  "open_requests": [],
+  "network": [
+    {
+      "case": "YU-042",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1631,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-042",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 2451,
+      "host": "api.huyangmq.icu"
+    },
+    {
+      "case": "YU-042",
+      "kind": "model",
+      "status": 200,
+      "duration_ms": 1294,
+      "host": "api.huyangmq.icu"
+    }
+  ],
+  "final_status": "MANUAL_REQUIRED"
+}
