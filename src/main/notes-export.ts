@@ -1,8 +1,9 @@
-import { copyFile, stat, writeFile } from 'node:fs/promises'
-import { extname, resolve } from 'node:path'
+import { copyFile, mkdir, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { dialog } from 'electron'
 import type { NoteCategory, NoteEntry, NoteExportFormat } from '@shared/types'
 import { mt } from '@shared/mainI18n'
+import { decodeAttachmentTarget, encodeAttachmentTarget } from '@shared/noteAttachments'
 import type { NotesStore } from './notes'
 
 /** Local timestamp shared by document headings and filesystem-safe names. */
@@ -63,7 +64,24 @@ export async function exportNoteText(store: NotesStore, ids: string[], format: N
     filters: [{ name: format === 'markdown' ? 'Markdown' : mt('纯文本'), extensions: [extension] }]
   })
   if (result.canceled || !result.filePath) return null
-  await writeFile(result.filePath, formatNotesExport(notes, categories, format), 'utf8')
+  const copies = new Map<string, string>()
+  const assetFolder = `${basename(result.filePath, extname(result.filePath))}.assets`
+  const portable = notes.map(note => {
+    const rewrite = (text: string): string => text.replace(/\]\((?:<(attachments\/[^>\r\n]+)>|(attachments\/[^\s)]+))\)/g, (target, angled: string, plain: string) => {
+      const path = decodeAttachmentTarget(angled || plain), source = store.attachmentPathOf(note.id, path)
+      if (!source) throw new Error(mt('随记附件缺失，请恢复附件后再导出'))
+      const destination = `${assetFolder}/${path}`
+      copies.set(destination, source)
+      return `](<${encodeAttachmentTarget(destination)}>)`
+    })
+    return { ...note, transcript: rewrite(note.transcript), polished: rewrite(note.polished) }
+  })
+  for (const [destination, source] of copies) {
+    const file = join(dirname(result.filePath), destination)
+    await mkdir(dirname(file), { recursive: true })
+    await copyFile(source, file)
+  }
+  await writeFile(result.filePath, formatNotesExport(portable, categories, format), 'utf8')
   return { path: result.filePath, count: notes.length }
 }
 

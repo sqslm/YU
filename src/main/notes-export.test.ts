@@ -59,6 +59,17 @@ describe('portable notes export', () => {
     expect(body).not.toMatch(/^- /m)
   })
 
+  it('exports attachment copies and relative Markdown links, independent of the note directory', async () => {
+    const path = 'attachments/6f6e65/123-file.pdf'
+    snapshot.notes[0].polished = `[report](<${path}>)`
+    store.attachmentPathOf = (_id, candidate) => candidate === path ? source : null
+    const target = join(dir, 'portable.md')
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: false, filePath: target })
+    await exportNoteText(store, ['one'], 'markdown')
+    expect(await readFile(target, 'utf8')).toContain(`](<portable.assets/${path}>)`)
+    expect(await readFile(join(dir, 'portable.assets', path), 'utf8')).toBe('OggS original recording bytes')
+  })
+
   it('handles empty text, missing categories, Markdown metacharacters and English labels', () => {
     const entry = note('n', { title: '# Plan [draft]', transcript: '', polished: '', categoryId: 'missing', tags: ['[tag]', '#topic'] })
     const md = formatNotesExport([entry], [], 'markdown')

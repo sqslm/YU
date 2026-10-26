@@ -1,4 +1,4 @@
-import { clipboard, dialog, protocol } from 'electron'
+import { clipboard, dialog, protocol, shell } from 'electron'
 import { open } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
@@ -7,6 +7,7 @@ import { mt } from '@shared/mainI18n'
 import { exportNoteAudio, exportNoteText } from './notes-export'
 import { decodeRecording } from './audio/decode'
 import { handle as ipcHandle } from './ipc-trust'
+import { attachmentMime } from './notes-attachments'
 
 /**
  * Notes are the one place where the renderer has to read a file from disk.
@@ -40,9 +41,9 @@ function asPcm(value: unknown): Int16Array {
  * scrubber look alive but seek nowhere. Stream only the requested bytes, so
  * seeking a long imported recording does not buffer the whole file each time.
  */
-async function serveAudio(file: string, range: string | null): Promise<Response> {
+async function serveAudio(file: string, range: string | null, attachment = false): Promise<Response> {
   const handle = await open(file, 'r')
-  const type = file.toLowerCase().endsWith('.ogg') ? 'audio/ogg' : 'audio/wav'
+  const type = attachment ? attachmentMime(file) : file.toLowerCase().endsWith('.ogg') ? 'audio/ogg' : 'audio/wav'
   try {
     const info = await handle.stat()
     if (!info.isFile()) throw new Error('Not a recording file')
@@ -56,6 +57,7 @@ async function serveAudio(file: string, range: string | null): Promise<Response>
       return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } })
     }
     const headers = { 'Content-Type': type, 'Content-Length': String(Math.max(0, end - start + 1)), 'Accept-Ranges': 'bytes',
+      ...(attachment ? { 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", ...(type === 'application/octet-stream' ? { 'Content-Disposition': 'attachment' } : {}) } : {}),
       ...(header ? { 'Content-Range': `bytes ${start}-${end}/${total}` } : {}) }
     if (!total) { await handle.close(); return new Response(null, { headers }) }
     const body = Readable.toWeb(handle.createReadStream({ start, end, autoClose: true })) as ReadableStream<Uint8Array>
@@ -95,6 +97,15 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
   })
 
   protocol.handle(NOTES_AUDIO_SCHEME, async (request) => {
+    const url = new URL(request.url)
+    if (url.hostname === 'attachment') {
+      try {
+        const [id, ...parts] = url.pathname.slice(1).split('/').map(decodeURIComponent)
+        const file = store.attachmentPathOf(id, parts.join('/'))
+        return file ? await serveAudio(file, request.headers.get('range'), true) : new Response('not found', { status: 404 })
+      } catch { return new Response('not found', { status: 404 }) }
+    }
+    if (url.hostname !== 'note') return new Response('not found', { status: 404 })
     let id = ''
     try {
       // `typeless-audio://note/<id>` — the host is a fixed label, the id is the
@@ -113,6 +124,17 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
   })
 
   ipcHandle('notes:list', () => store.list())
+  ipcHandle('notes:importAttachments', async (_event, id: string) => {
+    const chosen = await dialog.showOpenDialog({ title: mt('插入图片或附件'), properties: ['openFile', 'multiSelections'] })
+    if (chosen.canceled) return []
+    return chosen.filePaths.map(file => store.importAttachment(id, file))
+  })
+  ipcHandle('notes:addAttachment', (_event, id: string, input: { name: string; bytes: Uint8Array }) => store.addAttachment(id, input?.name, input?.bytes))
+  ipcHandle('notes:revealAttachment', (_event, id: string, path: string) => {
+    const file = store.attachmentPathOf(id, path)
+    if (!file) throw new Error(mt('附件不存在于这条随记目录中'))
+    shell.showItemInFolder(file)
+  })
   ipcHandle('notes:exportText', (_event, ids: string[], format: NoteExportFormat) => exportNoteText(store, ids, format))
   ipcHandle('notes:exportAudio', (_event, id: string) => exportNoteAudio(store, id))
   ipcHandle('notes:createText', async (_event, input?: { categoryId?: string; fromClipboard?: boolean; text?: string }) => {

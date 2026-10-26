@@ -103,6 +103,41 @@ async function loadedStore(): Promise<NotesStore> {
   return store
 }
 
+describe('owned note attachments', () => {
+  it('keeps imported bytes after the source changes and after migration/reload', async () => {
+    const store = await loadedStore(), note = await store.createText({ text: '# Markdown' })
+    const original = join(other, '原图.png'); writeFileSync(original, 'image bytes')
+    const file = store.importAttachment(note.id, original)
+    expect(file.image).toBe(true); expect(file.path).not.toContain(original)
+    writeFileSync(original, 'changed source')
+    expect(readFileSync(store.attachmentPathOf(note.id, file.path)!, 'utf8')).toBe('image bytes')
+    await store.update(note.id, { transcript: `# Heading\n\n![image](<${file.path}>)` })
+    const target = join(other, 'migrated')
+    expect(await store.migrate(target)).toMatchObject({ ok: true })
+    settings = makeSettings({ notesDir: target })
+    const reloaded = await loadedStore()
+    expect(readFileSync(reloaded.attachmentPathOf(note.id, file.path)!, 'utf8')).toBe('image bytes')
+    expect(reloaded.list().notes[0].transcript).toContain(file.path)
+  })
+  it('rejects missing notes, traversal and cross-note reads, and preserves attachment bytes in conflict copies', async () => {
+    const store = await loadedStore(), note = await store.createText({ text: '' }), second = await store.createText({ text: '' })
+    const file = store.addAttachment(note.id, 'plan.pdf', new Uint8Array([1, 2, 3]))
+    await store.update(note.id, { transcript: `[plan](<${file.path}>)` })
+    expect(store.attachmentPathOf(second.id, file.path)).toBeNull()
+    expect(store.attachmentPathOf(note.id, `${file.path}/../../notes.json`)).toBeNull()
+    expect(() => store.addAttachment('missing', 'a', new Uint8Array([1]))).toThrow()
+    expect(() => store.addAttachment(note.id, 'a', new Uint8Array(50 * 1024 * 1024 + 1))).toThrow()
+    store.applyRemote([{ id: note.id, version: 1, deleted: true }])
+    const fork = store.list().notes.find(row => row.tags.includes('冲突副本'))!
+    expect(fork.id).not.toBe(note.id)
+    const copiedPath = /<([^>]+)>/.exec(fork.transcript)![1]
+    expect(readFileSync(store.attachmentPathOf(fork.id, copiedPath)!)).toEqual(Buffer.from([1, 2, 3]))
+    const copy = store.attachmentPathOf(fork.id, copiedPath)!
+    await store.remove(fork.id)
+    expect(existsSync(copy)).toBe(false)
+  })
+})
+
 function readDb(root: string): NoteStore {
   return JSON.parse(readFileSync(join(root, 'notes.json'), 'utf8')) as NoteStore
 }

@@ -193,6 +193,9 @@ const api: TypelessApi = {
   notes: {
     audioControl:(action,id,options)=>ipcRenderer.invoke('note-audio:control',action,id,options),
     list: () => ipcRenderer.invoke('notes:list'),
+    importAttachments: id => ipcRenderer.invoke('notes:importAttachments', id),
+    addAttachment: (id, input) => ipcRenderer.invoke('notes:addAttachment', id, input),
+    revealAttachment: (id, path) => ipcRenderer.invoke('notes:revealAttachment', id, path),
     createText: (input) => ipcRenderer.invoke('notes:createText', input),
     importAudio: (categoryId) => ipcRenderer.invoke('notes:importAudio', categoryId),
     retranscribe: (id) => ipcRenderer.invoke('notes:retranscribe', id),

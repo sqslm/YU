@@ -33,6 +33,9 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import Replay10Icon from '@mui/icons-material/Replay10'
 import Forward10Icon from '@mui/icons-material/Forward10'
 import { useTranslation } from 'react-i18next'
+import { NoteMarkdown } from './NoteMarkdown'
+import { attachmentMarkdown } from '@shared/noteAttachments'
+import type { NoteAttachment } from '@shared/noteAttachments'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
 import { MicCapture } from '../../bar/capture'
 import { IconMic, IconPlus, IconSearch, IconSparkles, IconTrash } from '../icons'
@@ -212,6 +215,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const audioJobRef = useRef(false)
   const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
   const bodyInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const [markdownPreview, setMarkdownPreview] = useState(true)
+  const [attachmentBusy, setAttachmentBusy] = useState(false)
+  const attachmentJobRef = useRef(false)
   const focusNewNoteRef = useRef<string | null>(null)
 
   const micRef = useRef<MicCapture | null>(null)
@@ -277,6 +283,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const audioKey = selected?.audioPath ?? ''
   const primaryField = selected && (selected.polished.trim() || ['pending', 'ok'].includes(selected.polishStatus)) ? 'polished' : 'transcript'
   const primaryDraft = primaryField === 'polished' ? polishedDraft : transcriptDraft
+  const draftTextRef = useRef({ transcript: transcriptDraft, polished: polishedDraft })
+  draftTextRef.current = { transcript: transcriptDraft, polished: polishedDraft }
   const hasOriginal = Boolean(selected && (selected.durationMs > 0 || audioKey || selected.polished.trim()))
   const rate = clampPlaybackRate(settings.notePlaybackRate)
 
@@ -393,6 +401,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
       const note = await window.api.notes.createText({ categoryId: categoryId || undefined, fromClipboard })
       focusNewNoteRef.current = note.id
+      setMarkdownPreview(false)
       setNotes(prev => [note, ...prev.filter(item => item.id !== note.id)])
       setSelectedId(note.id)
       setQueryInput('')
@@ -509,6 +518,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
 
   const selectNote = useCallback(
     (id: string | null): void => {
+      if (attachmentJobRef.current) return
       if (id === selectedId) return
       void flushNow().then(() => {
         if (pendingRef.current) { setNotice(t('notes.createSaveFailed')); return }
@@ -519,12 +529,43 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   )
   const consumedOpenNote = useRef<typeof openNote>(undefined)
   useEffect(() => {
-    if (loading || !openNote || consumedOpenNote.current === openNote || !notesRef.current.some(note => note.id === openNote.id)) return
+    if (loading || attachmentBusy || !openNote || consumedOpenNote.current === openNote || !notesRef.current.some(note => note.id === openNote.id)) return
     consumedOpenNote.current = openNote
     // Use the same save-before-switch behavior as a click. A new request object
     // also allows reopening the same ID after a manual selection change.
     selectNote(openNote.id)
-  }, [loading, openNote, selectNote])
+  }, [loading, attachmentBusy, openNote, selectNote])
+
+  const insertAttachments = async (files?: File[]): Promise<void> => {
+    const note = selectedRef.current
+    if (!note || attachmentJobRef.current) return
+    const field = primaryField
+    const text = primaryDraft
+    const editor = bodyInputRef.current
+    const start = editor?.selectionStart, end = editor?.selectionEnd
+    attachmentJobRef.current = true; setAttachmentBusy(true); setNotice('')
+    try {
+      await flushNow()
+      if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
+      const imported: NoteAttachment[] = []
+      if (files) {
+        for (const file of files) {
+          if (file.size > 50 * 1024 * 1024) throw new Error(t('单个附件不能超过 50 MB'))
+          imported.push(await window.api.notes.addAttachment(note.id, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }))
+        }
+      } else imported.push(...await window.api.notes.importAttachments(note.id))
+      if (!imported.length) return
+      const current = selectedRef.current
+      if (current?.id !== note.id) throw new Error(t('随记已切换，请重新插入附件'))
+      const latestText = draftTextRef.current[field]
+      const at = latestText === text ? start ?? latestText.length : latestText.length, to = latestText === text ? end ?? at : at
+      const inserted = '\n\n' + imported.map(attachmentMarkdown).join('\n\n') + '\n\n'
+      editField(field, latestText.slice(0, at) + inserted + latestText.slice(to))
+      await flushNow()
+      if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
+    } catch (error) { setNotice(messageOf(error)) }
+    finally { attachmentJobRef.current = false; setAttachmentBusy(false) }
+  }
 
   // ---- microphone -------------------------------------------------------
 
@@ -1420,15 +1461,27 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
               </Stack>
 
               </Box>}
-              <Box data-notes-primary sx={{ mt: 2.25 }}>
+              <Box data-notes-primary sx={{ mt: 2.25 }}
+                onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
+                onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.dataTransfer.files)) } }}
+                onPaste={event => { if (event.clipboardData.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.clipboardData.files)) } }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary', mb: 1 }}>
                   {t(primaryField === 'polished' ? 'notes.polishedLabel' : 'notes.bodyLabel')}
                 </Typography>
-                <TextField data-notes-editor={primaryField} inputRef={bodyInputRef} disabled={retranscribingId === selected.id}
+                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap', gap: .5 }}>
+                  <ButtonGroup size="small" disabled={attachmentBusy}>
+                    <Button data-notes-mode="preview" variant={markdownPreview ? 'contained' : 'outlined'} onClick={() => { void flushNow(); setMarkdownPreview(true) }}>{t('预览')}</Button>
+                    <Button data-notes-mode="source" variant={!markdownPreview ? 'contained' : 'outlined'} onClick={() => setMarkdownPreview(false)}>Markdown {t('源码')}</Button>
+                  </ButtonGroup>
+                  <Button data-notes-insert-attachment size="small" disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button>
+                  <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{t('支持粘贴或拖入，附件保存到随记目录')}</Typography>
+                </Stack>
+                {markdownPreview ? <NoteMarkdown text={primaryDraft} noteId={selected.id} onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
+                <TextField data-notes-editor={primaryField} inputRef={bodyInputRef} disabled={attachmentBusy || retranscribingId === selected.id}
                   multiline minRows={16} fullWidth value={primaryDraft}
                   onChange={event => editField(primaryField, event.target.value)} onBlur={() => void flushNow()}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
-                  InputProps={{ sx: { fontSize: 14, lineHeight: 1.8, alignItems: 'flex-start', minHeight: '42vh' } }} />
+                  InputProps={{ sx: { fontSize: 14, lineHeight: 1.8, alignItems: 'flex-start', minHeight: '42vh', fontFamily: 'Consolas, monospace' } }} />}
                 <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
                   <Button data-notes-copy={primaryField} size="small" disabled={!primaryDraft.trim()} onClick={() => void copyDraft(primaryDraft)} sx={{ fontSize: 11.5 }}>
                     {t(primaryField === 'polished' ? 'notes.copyPolished' : '复制内容')}

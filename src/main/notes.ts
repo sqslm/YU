@@ -47,6 +47,7 @@ import { transcribe } from './providers/asr'
 import { complete, unwrapModelText } from './providers/llm'
 import { cleanPolishedText, POLISH_OUTPUT_RULES } from '@shared/polish'
 import { mt } from '@shared/mainI18n'
+import { forkNoteAttachments, importNoteAttachment, noteAttachmentDirectory, removeNoteAttachments, resolveNoteAttachment, writeNoteAttachment } from './notes-attachments'
 
 /** The database document at the data root. */
 const DB_FILE = 'notes.json'
@@ -581,6 +582,7 @@ export class NotesStore {
         for (const note of removed) {
           this.bump(note.id)
           if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
+          this.removeAttachments(note.id)
         }
         this.options.log(`[notes] 批量删除 ${removed.length} 条随记`)
       }
@@ -735,6 +737,25 @@ export class NotesStore {
     return join(this.root(), note.audioPath)
   }
 
+  addAttachment(id: string, name: string, bytes: Uint8Array): import('@shared/noteAttachments').NoteAttachment {
+    if (!this.find(id)) throw new Error(mt('随记不存在'))
+    return writeNoteAttachment(this.root(), id, name, bytes)
+  }
+
+  importAttachment(id: string, file: string): import('@shared/noteAttachments').NoteAttachment {
+    if (!this.find(id)) throw new Error(mt('随记不存在'))
+    return importNoteAttachment(this.root(), id, file)
+  }
+
+  attachmentPathOf(id: string, path: string): string | null {
+    return this.find(id) ? resolveNoteAttachment(this.root(), id, path) : null
+  }
+
+  private removeAttachments(id: string): void {
+    try { removeNoteAttachments(this.root(), id) }
+    catch (error) { this.options.log(`[notes] 附件清理失败 ${id}: ${describeError(error)}`) }
+  }
+
   // -------------------------------------------------------------------- sync
 
   /**
@@ -828,6 +849,7 @@ export class NotesStore {
             if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
           }
           this.bump(id)
+          this.removeAttachments(id)
           changed = true
         }
         // The server's deletion also answers any local tombstone for this id.
@@ -1178,6 +1200,10 @@ export class NotesStore {
     const now = Date.now()
     const copy = cloneNote(note)
     copy.id = randomUUID()
+    forkNoteAttachments(this.root(), note.id, copy.id)
+    const from = noteAttachmentDirectory(note.id) + '/', to = noteAttachmentDirectory(copy.id) + '/'
+    copy.transcript = copy.transcript.replaceAll(from, to)
+    copy.polished = copy.polished.replaceAll(from, to)
     copy.createdAt = now
     copy.updatedAt = now
     copy.tags = normalizeTags([...note.tags, '冲突副本'])

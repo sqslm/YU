@@ -2,7 +2,7 @@
 
 The application source is licensed under MIT. Third-party components retain their own licenses.
 
-The table below records the installed production dependencies used for this release. License and notice texts are in `licenses/`. Electron and Chromium additionally ship their upstream notice files beside the executable.
+The tables below record production dependencies and bundled renderer dependencies used for this release. License and notice texts are in `licenses/`. Electron and Chromium additionally ship their upstream notice files beside the executable.
 
 Optional speech models are downloaded separately and are not included in the installer or source archive. Their own upstream model licenses apply.
 
@@ -120,3 +120,105 @@ Optional speech models are downloaded separately and are not included in the ins
 | argparse | 2.0.1 | Python-2.0 | [LICENSE](licenses/argparse-2.0.1-LICENSE) |
 
 Native runtime: sherpa-onnx bundles ONNX Runtime 1.28.2 on Windows. Its upstream license and third-party notices are included in `licenses/`.
+
+## Markdown renderer dependencies
+
+| Package | Version | License | License texts |
+| --- | --- | --- | --- |
+| @types/debug | 4.1.13 | MIT | [LICENSE](licenses/_types_debug-4.1.13-LICENSE) |
+| @types/estree | 1.0.9 | MIT | [LICENSE](licenses/_types_estree-1.0.9-LICENSE) |
+| @types/estree-jsx | 1.0.5 | MIT | [LICENSE](licenses/_types_estree-jsx-1.0.5-LICENSE) |
+| @types/hast | 3.0.5 | MIT | [LICENSE](licenses/_types_hast-3.0.5-LICENSE) |
+| @types/mdast | 4.0.4 | MIT | [LICENSE](licenses/_types_mdast-4.0.4-LICENSE) |
+| @types/ms | 2.1.0 | MIT | [LICENSE](licenses/_types_ms-2.1.0-LICENSE) |
+| @types/unist | 3.0.3 | MIT | [LICENSE](licenses/_types_unist-3.0.3-LICENSE) |
+| @ungap/structured-clone | 1.4.0 | ISC | [LICENSE](licenses/_ungap_structured-clone-1.4.0-LICENSE) |
+| bail | 2.0.2 | MIT | [LICENSE](licenses/bail-2.0.2-license) |
+| ccount | 2.0.1 | MIT | [LICENSE](licenses/ccount-2.0.1-license) |
+| character-entities | 2.0.2 | MIT | [LICENSE](licenses/character-entities-2.0.2-license) |
+| character-entities-html4 | 2.1.0 | MIT | [LICENSE](licenses/character-entities-html4-2.1.0-license) |
+| character-entities-legacy | 3.0.0 | MIT | [LICENSE](licenses/character-entities-legacy-3.0.0-license) |
+| character-reference-invalid | 2.0.1 | MIT | [LICENSE](licenses/character-reference-invalid-2.0.1-license) |
+| comma-separated-tokens | 2.0.3 | MIT | [LICENSE](licenses/comma-separated-tokens-2.0.3-license) |
+| decode-named-character-reference | 1.3.0 | MIT | [LICENSE](licenses/decode-named-character-reference-1.3.0-license) |
+| dequal | 2.0.3 | MIT | [LICENSE](licenses/dequal-2.0.3-license) |
+| devlop | 1.1.0 | MIT | [LICENSE](licenses/devlop-1.1.0-license) |
+| estree-util-is-identifier-name | 3.0.0 | MIT | [LICENSE](licenses/estree-util-is-identifier-name-3.0.0-license) |
+| extend | 3.0.2 | MIT | [LICENSE](licenses/extend-3.0.2-LICENSE) |
+| hast-util-to-jsx-runtime | 2.3.6 | MIT | [LICENSE](licenses/hast-util-to-jsx-runtime-2.3.6-license) |
+| hast-util-whitespace | 3.0.0 | MIT | [LICENSE](licenses/hast-util-whitespace-3.0.0-license) |
+| html-url-attributes | 3.0.1 | MIT | [LICENSE](licenses/html-url-attributes-3.0.1-license) |
+| inline-style-parser | 0.2.7 | MIT | [LICENSE](licenses/inline-style-parser-0.2.7-LICENSE) |
+| is-alphabetical | 2.0.1 | MIT | [LICENSE](licenses/is-alphabetical-2.0.1-license) |
+| is-alphanumerical | 2.0.1 | MIT | [LICENSE](licenses/is-alphanumerical-2.0.1-license) |
+| is-decimal | 2.0.1 | MIT | [LICENSE](licenses/is-decimal-2.0.1-license) |
+| is-hexadecimal | 2.0.1 | MIT | [LICENSE](licenses/is-hexadecimal-2.0.1-license) |
+| is-plain-obj | 4.1.0 | MIT | [LICENSE](licenses/is-plain-obj-4.1.0-license) |
+| longest-streak | 3.1.0 | MIT | [LICENSE](licenses/longest-streak-3.1.0-license) |
+| markdown-table | 3.0.4 | MIT | [LICENSE](licenses/markdown-table-3.0.4-license) |
+| mdast-util-find-and-replace | 3.0.4 | MIT | [LICENSE](licenses/mdast-util-find-and-replace-3.0.4-license) |
+| mdast-util-from-markdown | 2.1.0 | MIT | [LICENSE](licenses/mdast-util-from-markdown-2.1.0-license) |
+| mdast-util-gfm | 3.1.0 | MIT | [LICENSE](licenses/mdast-util-gfm-3.1.0-license) |
+| mdast-util-gfm-autolink-literal | 2.0.1 | MIT | [LICENSE](licenses/mdast-util-gfm-autolink-literal-2.0.1-license) |
+| mdast-util-gfm-footnote | 2.1.0 | MIT | [LICENSE](licenses/mdast-util-gfm-footnote-2.1.0-license) |
+| mdast-util-gfm-strikethrough | 2.0.1 | MIT | [LICENSE](licenses/mdast-util-gfm-strikethrough-2.0.1-license) |
+| mdast-util-gfm-table | 2.0.0 | MIT | [LICENSE](licenses/mdast-util-gfm-table-2.0.0-license) |
+| mdast-util-gfm-task-list-item | 2.0.0 | MIT | [LICENSE](licenses/mdast-util-gfm-task-list-item-2.0.0-license) |
+| mdast-util-mdx-expression | 2.0.1 | MIT | [LICENSE](licenses/mdast-util-mdx-expression-2.0.1-license) |
+| mdast-util-mdx-jsx | 3.2.0 | MIT | [LICENSE](licenses/mdast-util-mdx-jsx-3.2.0-license) |
+| mdast-util-mdxjs-esm | 2.0.1 | MIT | [LICENSE](licenses/mdast-util-mdxjs-esm-2.0.1-license) |
+| mdast-util-phrasing | 4.1.0 | MIT | [LICENSE](licenses/mdast-util-phrasing-4.1.0-license) |
+| mdast-util-to-hast | 13.2.1 | MIT | [LICENSE](licenses/mdast-util-to-hast-13.2.1-license) |
+| mdast-util-to-markdown | 2.2.0 | MIT | [LICENSE](licenses/mdast-util-to-markdown-2.2.0-license) |
+| mdast-util-to-string | 4.0.0 | MIT | [LICENSE](licenses/mdast-util-to-string-4.0.0-license) |
+| micromark | 4.0.3 | MIT | [LICENSE](licenses/micromark-4.0.3-license) |
+| micromark-core-commonmark | 2.0.4 | MIT | [LICENSE](licenses/micromark-core-commonmark-2.0.4-license) |
+| micromark-extension-gfm | 3.0.0 | MIT | [LICENSE](licenses/micromark-extension-gfm-3.0.0-license) |
+| micromark-extension-gfm-autolink-literal | 2.1.0 | MIT | [LICENSE](licenses/micromark-extension-gfm-autolink-literal-2.1.0-license) |
+| micromark-extension-gfm-footnote | 2.1.0 | MIT | [LICENSE](licenses/micromark-extension-gfm-footnote-2.1.0-license) |
+| micromark-extension-gfm-strikethrough | 2.1.0 | MIT | [LICENSE](licenses/micromark-extension-gfm-strikethrough-2.1.0-license) |
+| micromark-extension-gfm-table | 2.1.2 | MIT | [LICENSE](licenses/micromark-extension-gfm-table-2.1.2-license) |
+| micromark-extension-gfm-tagfilter | 2.0.0 | MIT | [LICENSE](licenses/micromark-extension-gfm-tagfilter-2.0.0-license) |
+| micromark-extension-gfm-task-list-item | 2.1.0 | MIT | [LICENSE](licenses/micromark-extension-gfm-task-list-item-2.1.0-license) |
+| micromark-factory-destination | 2.0.1 | MIT | [LICENSE](licenses/micromark-factory-destination-2.0.1-license) |
+| micromark-factory-label | 2.0.1 | MIT | [LICENSE](licenses/micromark-factory-label-2.0.1-license) |
+| micromark-factory-space | 2.1.0 | MIT | [LICENSE](licenses/micromark-factory-space-2.1.0-license) |
+| micromark-factory-title | 2.0.1 | MIT | [LICENSE](licenses/micromark-factory-title-2.0.1-license) |
+| micromark-factory-whitespace | 2.0.1 | MIT | [LICENSE](licenses/micromark-factory-whitespace-2.0.1-license) |
+| micromark-util-character | 2.1.1 | MIT | [LICENSE](licenses/micromark-util-character-2.1.1-license) |
+| micromark-util-chunked | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-chunked-2.0.1-license) |
+| micromark-util-classify-character | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-classify-character-2.0.1-license) |
+| micromark-util-combine-extensions | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-combine-extensions-2.0.1-license) |
+| micromark-util-decode-numeric-character-reference | 2.0.2 | MIT | [LICENSE](licenses/micromark-util-decode-numeric-character-reference-2.0.2-license) |
+| micromark-util-decode-string | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-decode-string-2.0.1-license) |
+| micromark-util-edit-map | 1.0.0 | MIT | [LICENSE](licenses/micromark-util-edit-map-1.0.0-license) |
+| micromark-util-encode | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-encode-2.0.1-license) |
+| micromark-util-html-tag-name | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-html-tag-name-2.0.1-license) |
+| micromark-util-normalize-identifier | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-normalize-identifier-2.0.1-license) |
+| micromark-util-resolve-all | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-resolve-all-2.0.1-license) |
+| micromark-util-sanitize-uri | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-sanitize-uri-2.0.1-license) |
+| micromark-util-subtokenize | 2.1.0 | MIT | [LICENSE](licenses/micromark-util-subtokenize-2.1.0-license) |
+| micromark-util-symbol | 2.0.1 | MIT | [LICENSE](licenses/micromark-util-symbol-2.0.1-license) |
+| micromark-util-types | 2.0.3 | MIT | [LICENSE](licenses/micromark-util-types-2.0.3-license) |
+| parse-entities | 4.0.2 | MIT | [LICENSE](licenses/parse-entities-4.0.2-license) |
+| property-information | 7.2.0 | MIT | [LICENSE](licenses/property-information-7.2.0-license) |
+| react-markdown | 10.1.0 | MIT | [LICENSE](licenses/react-markdown-10.1.0-license) |
+| remark-gfm | 4.0.1 | MIT | [LICENSE](licenses/remark-gfm-4.0.1-license) |
+| remark-parse | 11.0.0 | MIT | [LICENSE](licenses/remark-parse-11.0.0-license) |
+| remark-rehype | 11.1.2 | MIT | [LICENSE](licenses/remark-rehype-11.1.2-license) |
+| remark-stringify | 11.0.0 | MIT | [LICENSE](licenses/remark-stringify-11.0.0-license) |
+| space-separated-tokens | 2.0.2 | MIT | [LICENSE](licenses/space-separated-tokens-2.0.2-license) |
+| stringify-entities | 4.0.4 | MIT | [LICENSE](licenses/stringify-entities-4.0.4-license) |
+| style-to-js | 1.1.21 | MIT | [LICENSE](licenses/style-to-js-1.1.21-LICENSE) |
+| style-to-object | 1.0.14 | MIT | [LICENSE](licenses/style-to-object-1.0.14-LICENSE) |
+| trim-lines | 3.0.1 | MIT | [LICENSE](licenses/trim-lines-3.0.1-license) |
+| trough | 2.2.0 | MIT | [LICENSE](licenses/trough-2.2.0-license) |
+| unified | 11.0.5 | MIT | [LICENSE](licenses/unified-11.0.5-license) |
+| unist-util-is | 6.0.1 | MIT | [LICENSE](licenses/unist-util-is-6.0.1-license) |
+| unist-util-position | 5.0.0 | MIT | [LICENSE](licenses/unist-util-position-5.0.0-license) |
+| unist-util-stringify-position | 4.0.0 | MIT | [LICENSE](licenses/unist-util-stringify-position-4.0.0-license) |
+| unist-util-visit | 5.2.0 | MIT | [LICENSE](licenses/unist-util-visit-5.2.0-license) |
+| unist-util-visit-parents | 6.1.0 | MIT | [LICENSE](licenses/unist-util-visit-parents-6.1.0-license) |
+| vfile | 6.0.3 | MIT | [LICENSE](licenses/vfile-6.0.3-license) |
+| vfile-message | 4.0.3 | MIT | [LICENSE](licenses/vfile-message-4.0.3-license) |
+| zwitch | 2.0.4 | MIT | [LICENSE](licenses/zwitch-2.0.4-license) |

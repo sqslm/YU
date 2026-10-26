@@ -262,6 +262,9 @@ export interface TypelessApi {
   notes: {
     audioControl(action:import('./noteAudio').NoteAudioAction,id?:string,options?:{positionMs?:number;rate?:number}):Promise<import('./noteAudio').NoteAudioState>
     list(): Promise<NoteStore>
+    importAttachments(id: string): Promise<import('./noteAttachments').NoteAttachment[]>
+    addAttachment(id: string, input: { name: string; bytes: Uint8Array }): Promise<import('./noteAttachments').NoteAttachment>
+    revealAttachment(id: string, path: string): Promise<void>
     createText(input?: { categoryId?: string; fromClipboard?: boolean; text?: string }): Promise<NoteEntry>
     importAudio(categoryId?: string): Promise<NoteEntry | null>
     retranscribe(id: string): Promise<NoteEntry | null>

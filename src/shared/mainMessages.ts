@@ -7,6 +7,19 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "源码": "Source",
+  "插入图片 / 附件": "Insert image / attachment",
+  "正在保存附件…": "Saving attachments…",
+  "支持粘贴或拖入，附件保存到随记目录": "Paste or drop files; copies are stored with the note",
+  "单个附件不能超过 50 MB": "Each attachment must be 50 MB or smaller",
+  "随记已切换，请重新插入附件": "The note changed; please insert the attachment again",
+  "附件内容为空或格式无效": "The attachment is empty or invalid",
+  "附件目录超出随记目录": "The attachment directory is outside this note",
+  "请选择不超过 50 MB 的附件文件": "Choose an attachment file no larger than 50 MB",
+  "插入图片或附件": "Insert images or attachments",
+  "附件不存在于这条随记目录中": "The attachment is not present in this note directory",
+  "随记附件缺失，请恢复附件后再导出": "A note attachment is missing; restore it before exporting",
+
   '工具当前不可用：{{name}}': 'Tool currently unavailable: {{name}}',
   '目标文件夹已有随记数据，请选择空文件夹': 'The target already contains notes data. Choose an empty folder.',
   '请明确要求读取截图': 'Please explicitly request a screenshot',
