@@ -21,9 +21,10 @@ import {
 import Add from '@mui/icons-material/Add'
 import ChevronLeft from '@mui/icons-material/ChevronLeft'
 import ChevronRight from '@mui/icons-material/ChevronRight'
-import type { CalendarEvent, CalendarEventInput } from '@shared/calendar'
+import type { CalendarEvent } from '@shared/calendar'
 import { MAX_EVENT_LEAD_MINUTES, MAX_EVENT_NOTES, MAX_EVENT_TITLE, formatEventTime } from '@shared/calendar'
 import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
+import { emptyForm, formOf, toInput, withStartDate, type CalendarForm as Form } from './calendarForm'
 import i18n from '../../i18n'
 
 /**
@@ -39,103 +40,10 @@ import i18n from '../../i18n'
  * request stayed anchored on today's month while the grid moved on.
  */
 
-const DAY_MS = 24 * 60 * 60_000
-
 /** Lead-time choices, per product spec: `null` means "do not remind me at all". */
 const LEADS: readonly (number | null)[] = [null, 0, 5, 10, 15, 30, 60, MAX_EVENT_LEAD_MINUTES]
 
 const WEEKDAY_PROBE = new Date(2024, 0, 1) // A Monday, so +index walks the headers.
-
-interface Form {
-  title: string
-  /** `YYYY-MM-DD`, the shape `<input type="date">` speaks. */
-  date: string
-  /** `HH:MM`; ignored while `allDay` is on, kept so toggling back restores it. */
-  start: string
-  end: string
-  allDay: boolean
-  location: string
-  notes: string
-  /** `'none'` or a number of minutes as a string, because `<Select>` values are strings. */
-  lead: string
-  /** Preserved on edit: editing an imported event must not orphan its ICS UID. */
-  source: CalendarEventInput['source']
-}
-
-const pad = (value: number): string => String(value).padStart(2, '0')
-
-const clockOf = (at: number): string => {
-  const date = new Date(at)
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-/** Local epoch for a day key plus a `HH:MM` clock; the two halves the form edits. */
-function stampOf(dayKey: string, clock: string): number {
-  const day = dayStart(dayKey)
-  if (day === null) return Number.NaN
-  const [hours, minutes] = clock.split(':').map(Number)
-  const date = new Date(day)
-  date.setHours(Number.isFinite(hours) ? hours! : 0, Number.isFinite(minutes) ? minutes! : 0, 0, 0)
-  return date.getTime()
-}
-
-function emptyForm(dayKey: string): Form {
-  const now = new Date()
-  // Next hour on today, 09:00 elsewhere: a slot the user probably means, not midnight.
-  const start = dayKey === dayKeyOf(now.getTime()) ? Math.min(23, now.getHours() + 1) : 9
-  return {
-    title: '',
-    date: dayKey,
-    start: `${pad(start)}:00`,
-    end: `${pad(Math.min(23, start + 1))}:00`,
-    allDay: false,
-    location: '',
-    notes: '',
-    lead: 'none',
-    source: 'manual'
-  }
-}
-
-function formOf(row: CalendarEvent): Form {
-  return {
-    title: row.title,
-    date: dayKeyOf(row.start),
-    start: clockOf(row.start),
-    end: clockOf(row.end),
-    allDay: row.allDay,
-    location: row.location ?? '',
-    notes: row.notes ?? '',
-    lead: row.leadMinutes === null || row.leadMinutes === undefined ? 'none' : String(row.leadMinutes),
-    source: row.source
-  }
-}
-
-/** Form → IPC payload. Throws the message the dialog shows verbatim. */
-function toInput(form: Form): CalendarEventInput {
-  const title = form.title.trim()
-  if (!title) throw new Error(i18n.t('请填写日程标题'))
-  const day = dayStart(form.date)
-  if (day === null) throw new Error(i18n.t('请选择日期'))
-  const leadMinutes = form.lead === 'none' ? null : Number(form.lead)
-  if (form.allDay) {
-    // An all-day event is exactly one local day; the store normalises it the same way.
-    return { title, start: day, end: day + DAY_MS, allDay: true, leadMinutes, source: form.source }
-  }
-  const start = stampOf(form.date, form.start)
-  const end = stampOf(form.date, form.end)
-  if (!Number.isFinite(start) || !Number.isFinite(end)) throw new Error(i18n.t('请填写开始和结束时间'))
-  if (end <= start) throw new Error(i18n.t('结束时间要晚于开始时间'))
-  return {
-    title,
-    start,
-    end,
-    allDay: false,
-    ...(form.location.trim() ? { location: form.location.trim() } : {}),
-    ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
-    leadMinutes,
-    source: form.source
-  }
-}
 
 /** Strips Electron's `Error invoking remote method …` wrapper so the dialog reads like a sentence. */
 function messageOf(error: unknown): string {
@@ -147,6 +55,7 @@ function messageOf(error: unknown): string {
 function LeadField({ value, onChange }: { value: string; onChange: (value: string) => void }): JSX.Element {
   return (
     <TextField select label={i18n.t('提前提醒')} size="small" value={value} onChange={event => onChange(event.target.value)}>
+      <MenuItem value="default">{i18n.t('使用默认提前提醒')}</MenuItem>
       {LEADS.map(lead => (
         <MenuItem key={String(lead)} value={lead === null ? 'none' : String(lead)}>
           {lead === null ? i18n.t('不提醒') : lead === 0 ? i18n.t('到点提醒') : i18n.t('{{n}} 分钟前', { n: lead })}
@@ -534,20 +443,23 @@ export function CalendarPage(): JSX.Element {
             <Stack spacing={1.5}>
               <TextField label={i18n.t('标题')} autoFocus value={editor.form.title} inputProps={{ maxLength: MAX_EVENT_TITLE }} required
                 onChange={event => setEditor({ ...editor, form: { ...editor.form, title: event.target.value } })} />
-              <Stack direction="row" spacing={1} alignItems="center">
-                <TextField label={i18n.t('日期')} type="date" fullWidth InputLabelProps={{ shrink: true }}
+              <FormControlLabel sx={{ m: 0 }}
+                control={<Switch size="small" checked={editor.form.allDay}
+                  onChange={event => setEditor({ ...editor, form: { ...editor.form, allDay: event.target.checked } })} />}
+                label={<Typography sx={{ fontSize: 12.5 }}>{i18n.t('全天')}</Typography>} />
+              <Stack direction="row" spacing={1}>
+                <TextField label={i18n.t(editor.form.allDay ? '日期' : '开始日期')} type="date" fullWidth InputLabelProps={{ shrink: true }}
                   value={editor.form.date} sx={{ colorScheme: theme => theme.palette.mode }}
-                  onChange={event => setEditor({ ...editor, form: { ...editor.form, date: event.target.value } })} />
-                <FormControlLabel sx={{ m: 0, whiteSpace: 'nowrap' }}
-                  control={<Switch size="small" checked={editor.form.allDay}
-                    onChange={event => setEditor({ ...editor, form: { ...editor.form, allDay: event.target.checked } })} />}
-                  label={<Typography sx={{ fontSize: 12.5 }}>{i18n.t('全天')}</Typography>} />
+                  onChange={event => setEditor({ ...editor, form: withStartDate(editor.form, event.target.value) })} />
+                {!editor.form.allDay && <TextField label={i18n.t('开始时间')} type="time" fullWidth InputLabelProps={{ shrink: true }}
+                  value={editor.form.start} sx={{ colorScheme: theme => theme.palette.mode }}
+                  onChange={event => setEditor({ ...editor, form: { ...editor.form, start: event.target.value } })} />}
               </Stack>
               {!editor.form.allDay && (
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <TextField label={i18n.t('开始时间')} type="time" fullWidth InputLabelProps={{ shrink: true }}
-                    value={editor.form.start} sx={{ colorScheme: theme => theme.palette.mode }}
-                    onChange={event => setEditor({ ...editor, form: { ...editor.form, start: event.target.value } })} />
+                  <TextField label={i18n.t('日程结束日期')} type="date" fullWidth InputLabelProps={{ shrink: true }}
+                    value={editor.form.endDate} sx={{ colorScheme: theme => theme.palette.mode }}
+                    onChange={event => setEditor({ ...editor, form: { ...editor.form, endDate: event.target.value } })} />
                   <TextField label={i18n.t('结束时间')} type="time" fullWidth InputLabelProps={{ shrink: true }}
                     value={editor.form.end} sx={{ colorScheme: theme => theme.palette.mode }}
                     onChange={event => setEditor({ ...editor, form: { ...editor.form, end: event.target.value } })} />

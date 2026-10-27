@@ -62,7 +62,7 @@ A fresh install has no working connections: this is where you add a recognition 
 
 ![Schedule & briefing](resources/screenshots/prefs-life.png)
 
-Events carry a start, an end, a location and an advance alert, and can be imported from or exported to ICS. The daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud, and quiet hours hold it back. Events have their own page under Reminders in the main window, and local calendar data works offline and can sync when cloud sync is enabled and signed in.
+Events have separate start and end dates and times, including overnight schedules. All-day events also keep their location and notes. Advance alerts can inherit the default, be explicitly disabled, or use a specific number of minutes; editing preserves the existing choice. Events can be imported from or exported to ICS. The daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud, and quiet hours hold it back. Events have their own page under Reminders in the main window, and local calendar data works offline and can sync when cloud sync is enabled and signed in.
 
 The automation page lists the workflows you saved: describe a run of steps once, then replay it with a single sentence — no model in the loop, each step reported as it finishes.
 
