@@ -35,6 +35,7 @@ import Forward10Icon from '@mui/icons-material/Forward10'
 import { useTranslation } from 'react-i18next'
 import { NoteMarkdown } from './NoteMarkdown'
 import { saveNoteEdit } from './notesSave'
+import { noteBodyField } from '@shared/noteBody'
 import { attachmentMarkdown } from '@shared/noteAttachments'
 import type { NoteAttachment } from '@shared/noteAttachments'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
@@ -282,7 +283,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   selectedRef.current = selected
 
   const audioKey = selected?.audioPath ?? ''
-  const primaryField = selected && (selected.polished.trim() || ['pending', 'ok'].includes(selected.polishStatus)) ? 'polished' : 'transcript'
+  const primaryField = selected ? noteBodyField(selected) : 'transcript'
   const primaryDraft = primaryField === 'polished' ? polishedDraft : transcriptDraft
   const draftTextRef = useRef({ transcript: transcriptDraft, polished: polishedDraft })
   draftTextRef.current = { transcript: transcriptDraft, polished: polishedDraft }
@@ -835,7 +836,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       if (!updated) return
       patchEntry(updated)
       const pending = pendingRef.current
-      if (!(pending && pending.id === updated.id && pending.patch.polished !== undefined)) {
+      if (selectedRef.current?.id === updated.id && !(pending && pending.id === updated.id && pending.patch.polished !== undefined)) {
         setPolishedDraft(updated.polished)
       }
     } catch (err) {

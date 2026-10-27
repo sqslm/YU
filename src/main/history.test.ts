@@ -105,6 +105,47 @@ function ids(store: HistoryStore): string[] {
   return store.list().map((item) => item.id)
 }
 
+describe('history archive round trips', () => {
+  it('syncs archive and restore after a cursor', async () => {
+    const store = makeStore()
+    const first = await store.add({ mode: 'dictation', transcript: 'Text', final: 'Text', durationMs: 0 })
+    const cursor = first.updatedAt!
+    await store.archive(first.id)
+    const archived = store.changesSince(cursor)
+    expect(archived).toHaveLength(1)
+    expect(archived[0].status).toBe('archived')
+    await store.archive(first.id, false)
+    expect(store.changesSince(archived[0].updatedAt!)).toMatchObject([{ id: first.id, status: 'completed' }])
+  })
+
+  it.each(['error', 'dismissed', 'empty', 'completed'] as const)('restores %s status after repeated archive and a restart', async status => {
+    const store = makeStore()
+    const original = { ...entry('legacy', Date.now(), 'audio/legacy.wav'), status, ...(status === 'error' ? { final: '', error: 'Connection failed' } : {}) }
+    store.migrateFrom([original])
+    await store.archive(original.id)
+    await store.archive(original.id)
+    expect(store.changesSince(0)).toHaveLength(status === 'completed' ? 1 : 0)
+    store.close()
+    const reopened = makeStore()
+    await reopened.load()
+    await reopened.archive(original.id, false)
+    const restored = reopened.get(original.id)!
+    expect(restored.status).toBe(status)
+    expect(restored.audioPath).toBe(original.audioPath)
+    expect(restored.error).toBe(original.error)
+    expect(reopened.changesSince(0)).toHaveLength(status === 'completed' ? 1 : 0)
+    expect(restored).not.toHaveProperty('archivedStatus')
+  })
+
+  it('restores a failure archived by an older version without status metadata', async () => {
+    const store = makeStore()
+    store.migrateFrom([{ ...entry('old-archive', Date.now(), 'audio/legacy.wav'), status: 'archived', final: '', error: 'Offline' }])
+    await store.archive('old-archive', false)
+    expect(store.get('old-archive')).toMatchObject({ status: 'error', error: 'Offline', audioPath: 'audio/legacy.wav' })
+    expect(store.changesSince(0)).toEqual([])
+  })
+})
+
 it('filters by a local calendar range before applying the result limit, combined with literal keyword search', async () => {
   const from = +new Date(2026, 9, 22), until = +new Date(2026, 9, 23)
   seedStore([entry('today', until + 1000), entry('yesterday', from + 1000), entry('before', from - 1), entry('boundary', until)])

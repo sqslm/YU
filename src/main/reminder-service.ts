@@ -9,6 +9,7 @@ import { appIcon } from './app-icon'
 import { createReminderWindow } from './windows'
 import { mainLanguage, mt } from '@shared/mainI18n'
 import { unsupportedReminderZone } from './reminder-time'
+import { noteBodyField } from '@shared/noteBody'
 
 export class ReminderService {
   readonly store: ReminderStore
@@ -144,7 +145,7 @@ export class ReminderService {
     if (this.extracting) throw new Error(mt('正在提取待办，请稍候'))
     const note = notes.list().notes.find(item => item.id === id)
     if (!note) throw new Error(mt('随记不存在'))
-    const text = note.transcript.trim() || note.polished.trim()
+    const text = note[noteBodyField(note)].trim()
     this.extracting = true
     const controller = new AbortController()
     this.noteAbort = controller
@@ -154,7 +155,7 @@ export class ReminderService {
       signal?.throwIfAborted()
       const current = notes.list().notes.find(item => item.id === id)
       if (!current) throw new Error(mt('随记不存在'))
-      if ((current.transcript.trim() || current.polished.trim()) !== text) throw new Error(mt('随记内容已更改，请重新提取'))
+      if (current[noteBodyField(current)].trim() !== text) throw new Error(mt('随记内容已更改，请重新提取'))
       if (!drafts.length) throw new Error(mt('没有发现待办或提醒事项'))
       this.open({ drafts, noteId: id })
       return mt('已提取 {{count}} 个候选事项，请确认后保存', { count: drafts.length })

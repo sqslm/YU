@@ -726,8 +726,8 @@ export interface PromptLibrary {
 export type ThemeMode = 'dark' | 'light' | 'system'
 
 /**
- * New takes are stored only as completed; archived is a successful result put
- * away by the user. Other statuses remain readable for old history and cleanup.
+ * New takes are stored only as completed. Archived entries retain their original
+ * status locally for restore; other statuses remain readable for legacy history.
  */
 export type HistoryStatus = 'completed' | 'dismissed' | 'empty' | 'error' | 'archived'
 
@@ -779,6 +779,8 @@ export interface HistoryEntry {
   route?: PipelineMode
   /** Missing on entries written before v0.9; readers must default to `completed`. */
   status?: HistoryStatus
+  /** Local pre-archive status for restoring legacy abnormal entries. Not synced. */
+  archivedStatus?: Exclude<HistoryStatus, 'archived'>
   /** Set when an error classification produced a bar alert (REQ-12). */
   alertKind?: string
   /** How many times a retry was attempted for this entry (REQ-02). */

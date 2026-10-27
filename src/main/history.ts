@@ -28,6 +28,7 @@ const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000
 // local until the user chooses cleanup, and must not be uploaded again.
 const NORMAL_HISTORY_SQL = `status IN ('completed', 'archived')
   AND trim(final, char(9) || char(10) || char(13) || ' ') <> ''
+  AND coalesce(json_extract(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.archivedStatus'), 'completed') = 'completed'
   AND coalesce(trim(json_extract(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.error')), '') = ''`
 
 /**
@@ -852,12 +853,17 @@ export class HistoryStore {
    * dictionary-learning signal; archiving is the opposite — the text was good,
    * the user just does not want it in the list any more. Keeping them apart is
    * why the reference client has an `archived` state instead of one "hidden".
+   * Legacy abnormal entries retain their original status locally when put away.
    */
   async archive(id: string, archived = true): Promise<boolean> {
     const entry = this.get(id)
     if (!entry) return false
-    this.upsert({ ...entry, status: archived ? 'archived' : 'completed' })
-    await this.flush()
+    if ((entry.status === 'archived') === archived) return true
+    const previous = entry.status === 'archived'
+      ? entry.archivedStatus ?? (entry.error?.trim() ? 'error' : 'completed')
+      : entry.status ?? (entry.error?.trim() ? 'error' : 'completed')
+    await this.update(id, { status: archived ? 'archived' : previous,
+      archivedStatus: archived && previous !== 'completed' ? previous : undefined })
     return true
   }
 

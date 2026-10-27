@@ -28,6 +28,8 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | **Updates** | Checks this project's GitHub Releases by default; when a newer build exists the hub shows a pill at the bottom left, and one click downloads and restarts into it |
 | **Sync** | Optional self-hosted server for history, notes, note audio, events, reminders and per-device personal stats; dictation audio stays on the machine that recorded it |
 
+Extract to-dos uses the note body currently displayed; if that body changes during extraction, run it again. Editing a snoozed reminder's title or description preserves its repeat rule and completed count. Archiving and restoring history syncs across devices; restoring a legacy failed entry retains its failure status and retry action.
+
 ## Unified entry capabilities
 
 The [complete capability inventory and operating conditions](ASSISTANT_ROADMAP.md#统一入口功能清单) lists the supported operations for writing your own tests. rc.14 connects note audio control, actual prompt provenance, per-note sync failures, frozen selection preview/apply, hardware and system volume, PDF content, real download/recent records, permissions, monthly/yearly and finite reminders, workflow branches/result bindings, cross-monitor capture/pins, and email/mobile briefing delivery.

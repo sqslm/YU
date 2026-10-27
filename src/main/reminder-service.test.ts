@@ -78,6 +78,28 @@ describe('shared reminder delivery and entry points', () => {
       expect(mock.extract.mock.calls[0][1]).toBe('Call tomorrow at 10 AM')
     } finally { service.stop() }
   })
+  it.each([
+    { transcript: 'Meeting at nine', polished: 'Meeting at ten', polishStatus: 'ok', expected: 'Meeting at ten' },
+    { transcript: 'Meeting at nine', polished: '', polishStatus: 'skipped', expected: 'Meeting at nine' },
+    { transcript: 'Meeting at nine', polished: '', polishStatus: 'ok', expected: '' }
+  ])('extracts the currently visible note body: $polishStatus / $expected', async ({ expected, ...note }) => {
+    const { service } = harness()
+    try {
+      mock.extract.mockResolvedValue([draft()])
+      await service.extractNote({ list: () => ({ notes: [{ id: 'n', ...note }] }) } as never, 'n')
+      expect(mock.extract.mock.calls[0][1]).toBe(expected)
+    } finally { service.stop() }
+  })
+  it('rejects extraction if the visible polished body changes while parsing', async () => {
+    const { service, open } = harness()
+    const note = { id: 'n', transcript: 'Meeting at nine', polished: 'Meeting at ten', polishStatus: 'ok' }
+    try {
+      mock.extract.mockImplementationOnce(async () => { note.polished = 'Meeting cancelled'; return [draft()] })
+      await expect(service.extractNote({ list: () => ({ notes: [note] }) } as never, 'n')).rejects.toThrow('随记内容已更改')
+      expect(open).not.toHaveBeenCalled()
+      expect(service.store.list()).toHaveLength(0)
+    } finally { service.stop() }
+  })
   it.each(['deleted', 'edited'])('does not open stale extraction when the note was %s during parsing', async change => {
     const { service, open } = harness()
     let notes = [{ id: 'changing-note', transcript: 'Call tomorrow at 10 AM', polished: '' }]
