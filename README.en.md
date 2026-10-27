@@ -116,6 +116,8 @@ After Right Alt starts a task, the bar first shows Smart task. Prompt cards stay
 
 Settings group wake words, voice commands, text insertion, read-aloud and shortcuts under Voice & input. Assistant & permissions owns file access, tool permissions and local search; Schedule & reminders owns calendar, briefing and reminder notifications; Data & performance owns storage, retention and resource policies. Wake confidence is adjustable from 50% to 99% in Voice & input → Voice wake, saved automatically and applied locally without restarting the microphone. Lower thresholds wake more easily; higher thresholds reduce false activations. Older settings retain their previous defaults, including stricter matching for short phrases.
 
+Custom wake phrases match the complete text or pronunciation, ignoring punctuation and whitespace. Chinese name phrases such as “你好，胡小杨” allow a pause of about one second between the greeting and name, and can match homophonic name spellings. The configured utterance threshold is the confidence gate; no hidden per-word floor overrides it. Pronunciations come from the installed Windows recognizer, without name-specific aliases or cloud audio uploads. Wait for the recording bar before continuing with your request.
+
 Three things worth knowing:
 
 - **Trigger mode** can be switched in the Shortcuts page between "press to start, press to stop" (default) and "hold to talk". In press mode, dictation, Ask and voice translation all end with another single `Right Alt`.

@@ -15,6 +15,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Speech.AudioFormat;
 using System.Speech.Recognition;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 
@@ -290,6 +292,18 @@ public static class YUWake {
     return index;
   }
 
+  static string MatchText(string text) {
+    return Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"[^\p{L}\p{N}]", "").ToLowerInvariant();
+  }
+
+  static string Phones(System.Collections.ObjectModel.ReadOnlyCollection<RecognizedWordUnit> words) {
+    StringBuilder value = new StringBuilder();
+    foreach (var word in words) value.Append(word.Pronunciation);
+    // Match the whole pronunciation, allowing tone/word-boundary differences in
+    // Chinese name spellings. Never accept a substring or a guessed edit distance.
+    return Regex.Replace(value.ToString().Normalize(NormalizationForm.FormD), @"[\p{M}\s]", "").ToLowerInvariant();
+  }
+
   public static void Run(string phrase, string language, string wave, string device) {
     RecognizerInfo selected = null;
     foreach (var info in SpeechRecognitionEngine.InstalledRecognizers()) {
@@ -297,9 +311,22 @@ public static class YUWake {
     }
     if (selected == null) { Emit(new { type = "error", error = "language" }); return; }
     using (var engine = new SpeechRecognitionEngine(selected)) {
+      string spoken = Regex.Replace(phrase.Normalize(NormalizationForm.FormKC), @"[^\p{L}\p{N}]+", " ").Trim();
+      if (language == "zh") spoken = spoken.Replace(" ", "");
+      if (MatchText(spoken).Length < 2) { Emit(new { type = "error", error = "unavailable" }); return; }
+      // A natural pause after a greeting must not end recognition before the name.
+      engine.InitialSilenceTimeout = TimeSpan.Zero;
+      engine.EndSilenceTimeout = TimeSpan.FromMilliseconds(1200);
+      engine.EndSilenceTimeoutAmbiguous = TimeSpan.FromMilliseconds(1500);
       var grammar = new GrammarBuilder { Culture = selected.Culture };
-      grammar.Append(phrase);
+      grammar.Append(spoken);
       engine.LoadGrammar(new Grammar(grammar) { Name = "wake" });
+      // The installed recognizer supplies pronunciations; no downloaded pinyin
+      // dictionary, remote ASR or hardcoded aliases for a particular person's name.
+      engine.SetInputToNull();
+      var target = engine.EmulateRecognize(spoken);
+      string targetPhones = target == null ? "" : Phones(target.Words);
+      string targetText = MatchText(spoken);
       // Competing ordinary speech can be rejected instead of forced into the one wake phrase.
       engine.LoadGrammar(new DictationGrammar { Name = "background", Weight = 0.5f });
       int index = Resolve(device, !String.IsNullOrEmpty(wave));
@@ -334,7 +361,8 @@ public static class YUWake {
       } catch { Emit(new { type = "error", error = "microphone" }); return; }
       using (var ended = new ManualResetEvent(false)) {
         engine.SpeechRecognized += (sender, e) => {
-          if (e.Result.Grammar.Name == "wake" && String.Equals(e.Result.Text, phrase, StringComparison.OrdinalIgnoreCase)) {
+          if (e.Result.Audio == null) return; // Emulated startup input cannot wake the app.
+          if (MatchText(e.Result.Text) == targetText || targetPhones.Length > 0 && Phones(e.Result.Words) == targetPhones) {
             float wordConfidence = 1;
             foreach (var word in e.Result.Words) wordConfidence = Math.Min(wordConfidence, word.Confidence);
             Emit(new { type = "wake", phrase = phrase, confidence = e.Result.Confidence,

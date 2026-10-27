@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { Settings } from '@shared/types'
 import type { WakeWordStatus } from '@shared/wake-word'
-import { isShortWakePhrase, normalizeWakeConfidence } from '@shared/wake-word'
+import { normalizeWakeConfidence } from '@shared/wake-word'
 
 /** A capture endpoint the recogniser can be pointed at. `id` is the waveIn index, as text. */
 export interface WakeWordDevice {
@@ -33,7 +33,7 @@ export function parseDeviceList(stdout: string): WakeWordDevice[] {
   return []
 }
 
-/** Windows offline, exact-phrase grammar. No ASR provider, recording or polling while waiting. */
+/** Windows offline, whole-phrase text/pronunciation matching. No cloud ASR or saved audio. */
 export class WakeWordHost {
   private child: ChildProcessWithoutNullStreams | null = null
   private phrase = ''
@@ -117,7 +117,6 @@ export class WakeWordHost {
     this.stop()
     this.phrase = settings.phrase
     this.deviceId = device
-    const shortPhrase = isShortWakePhrase(this.phrase)
     if (process.platform !== 'win32') { this.publish({ phase: 'error', error: 'unavailable' }); return }
     this.publish({ phase: 'starting' })
     const child = spawn(this.shell,
@@ -145,9 +144,11 @@ export class WakeWordHost {
             this.startup = null
             this.publish({ phase: 'listening' })
           }
+          // The configured utterance threshold is the confidence gate. A second
+          // fixed word-score floor made the sensitivity control ineffective for names.
           else if (event.type === 'wake' && this.status.phase === 'listening' &&
             event.phrase === this.phrase && event.confidence >= this.confidence &&
-            event.wordConfidence >= (shortPhrase ? 0.75 : 0.50) && event.durationMs >= 300 && event.durationMs <= 9000 && Date.now() - this.lastWake >= 5000) {
+            event.durationMs >= 300 && event.durationMs <= 9000 && Date.now() - this.lastWake >= 5000) {
             this.lastWake = Date.now()
             this.stop(); this.publish({ phase: 'paused' }); this.deps.wake(); return
           } else if (event.type === 'error') failed(['language', 'microphone'].includes(event.error) ? event.error : 'unavailable')
