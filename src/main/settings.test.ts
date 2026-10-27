@@ -17,6 +17,19 @@ let dir: string
 beforeEach(async () => { cryptoMock.available = false; dir = await mkdtemp(join(tmpdir(), 'typeless-settings-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
+it('encrypts active and saved TTS credentials and restores all connection fields after restart', async () => {
+  cryptoMock.available = true
+  const file = join(dir, 'settings.json'), store = new SettingsStore(file)
+  await store.load()
+  await store.update({ tts: { provider: 'openai', apiKey: 'active-tts-secret', baseUrl: 'https://example.test/v1/audio/speech', model: 'tts', apiVoice: 'alloy', speed: 1.3,
+    connections: { minimax: { apiKey: 'saved-tts-secret', baseUrl: 'https://example.test/minimax', model: 'speech-2.8-hd', apiVoice: 'a' } } } as never })
+  const raw = await readFile(file, 'utf8')
+  expect(raw).not.toContain('active-tts-secret'); expect(raw).not.toContain('saved-tts-secret')
+  const reloaded = await new SettingsStore(file).load()
+  expect(reloaded.tts).toMatchObject({ provider: 'openai', apiKey: 'active-tts-secret', model: 'tts', apiVoice: 'alloy', speed: 1.3,
+    connections: { minimax: { apiKey: 'saved-tts-secret', model: 'speech-2.8-hd' } } })
+})
+
 it('saves wake confidence independently and retains it after restart', async () => {
   const file = join(dir, 'settings.json'), store = new SettingsStore(file)
   await store.load()

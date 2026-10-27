@@ -7,6 +7,11 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "请配置 TTS 接口地址": "Configure the TTS API endpoint",
+  "请配置 TTS 音色 ID": "Configure the TTS voice ID",
+  "请配置 TTS 模型": "Configure the TTS model",
+  "请配置 TTS API Key": "Configure the TTS API key",
+
   '智能任务': 'Smart task',
   '翻译中…': 'Translating…',
   "源码": "Source",

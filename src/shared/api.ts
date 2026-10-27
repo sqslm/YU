@@ -133,6 +133,7 @@ export interface TypelessApi {
     onChanged(callback: () => void): () => void
     voices(): Promise<{ ok: boolean; error?: string; voices?: string[] }>
     speak(text: string): Promise<{ spoken: number; skipped: boolean }>
+    stopSpeaking(): Promise<void>
     briefing(): Promise<import('./briefing').Briefing>
     refreshBriefing(): Promise<import('./briefing').Briefing>
     /** What was actually delivered, newest last: the page shows real history, not a recomposition. */
@@ -407,6 +408,8 @@ export interface TypelessApi {
   }
   bar: {
     onNoteAudio(callback:(request:import('./noteAudio').NoteAudioRequest)=>void):()=>void
+    onSpeechPlayback(callback:(request:import('./speech').SpeechPlaybackRequest)=>void):()=>void
+    replySpeechPlayback(reply:import('./speech').SpeechPlaybackReply):Promise<void>
     replyNoteAudio(reply:import('./noteAudio').NoteAudioReply):Promise<void>
     onLayout(callback: (layout: import('./types').BarWindowLayout) => void): () => void
     captionVisible(visible: boolean): void

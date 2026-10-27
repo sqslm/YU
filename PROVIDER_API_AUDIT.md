@@ -111,3 +111,17 @@
 | 预设 | 协议 | 覆盖 | 文档 |
 | --- | --- | --- | --- |
 | Google Gemini（多模态） | x-goog-api-key / generateContent | 本地协议测试 | [官方参考](https://ai.google.dev/gemini-api/docs/audio) |
+
+### TTS（2026-10-28 补充）
+
+下列接口均通过本地 HTTP 服务验证请求与响应解析，音频播放另经 Chromium 实测开始、暂停、继续、停止和结束。未使用这些供应商的真实付费账号；实际模型、音色授权及区域仍需账号验证。Windows 系统朗读继续保留，连接配置由用户自行填写。
+
+| 提供商 | 协议及解析 | 官方依据 |
+| --- | --- | --- |
+| OpenAI / 自定义兼容 | Bearer；audio/speech；二进制 MP3 | [Speech API](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create) |
+| 硅基流动 | Bearer；audio/speech；二进制音频，默认 CosyVoice2 单人朗读 | [语音合成](https://docs.siliconflow.cn/docs/userguide/capabilities/text-to-speech) |
+| MiniMax | Bearer；t2a_v2；业务状态码和十六进制音频 | [同步语音合成](https://platform.minimax.cn/docs/api-reference/speech-t2a-http) |
+| 百炼 Qwen | Bearer；multimodal-generation/generation；下载 output.audio.url，不携带 API Key | [Qwen-TTS](https://www.alibabacloud.com/help/en/model-studio/qwen-tts-api) |
+| 豆包 | 新版 X-Api-Key + X-Api-Resource-Id；V3 SSE；拼接 Base64 音频 | [字节跳动官方示例](https://github.com/bytedance/agentkit-samples/blob/main/skills/byted-text-to-speech/scripts/text_to_speech.py) |
+| ElevenLabs | xi-api-key；text-to-speech/voice_id；二进制 MP3 | [Create speech](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) |
+| Azure Speech | Ocp-Apim-Subscription-Key；SSML；二进制 MP3 | [REST TTS](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech) |

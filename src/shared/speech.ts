@@ -19,11 +19,42 @@ export interface TtsSettings {
   voice: string
   /** SAPI rate: -10 slowest, 0 normal, 10 fastest. */
   rate: number
-  /** SAPI volume, percent. */
+  /** Playback volume, percent. */
   volume: number
+  provider: TtsProvider
+  baseUrl: string
+  apiKey: string
+  apiKeyEnc?: string
+  model: string
+  apiVoice: string
+  /** API voices use a playback speed multiplier; the SAPI rate stays separate. */
+  speed: number
+  /** Saved connections let switching providers retain each provider's own credentials. */
+  connections?: Partial<Record<TtsProvider, TtsConnection>>
+}
+export interface TtsConnection { baseUrl: string; apiKey: string; apiKeyEnc?: string; model: string; apiVoice: string }
+
+export const TTS_PRESETS = {
+  windows: { label: 'Windows', baseUrl: '', model: '', apiVoice: '' },
+  openai: { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1/audio/speech', model: 'gpt-4o-mini-tts', apiVoice: 'alloy' },
+  siliconflow: { label: 'SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1/audio/speech', model: 'FunAudioLLM/CosyVoice2-0.5B', apiVoice: 'FunAudioLLM/CosyVoice2-0.5B:alex' },
+  minimax: { label: 'MiniMax', baseUrl: 'https://api.minimax.cn/v1/t2a_v2', model: 'speech-2.8-hd', apiVoice: 'male-qn-qingse' },
+  dashscope: { label: '阿里云百炼 / Qwen', baseUrl: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation', model: 'qwen3-tts-flash', apiVoice: 'Cherry' },
+  volcengine: { label: '火山引擎 / 豆包', baseUrl: 'https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse', model: 'seed-tts-2.0', apiVoice: 'zh_female_vv_uranus_bigtts' },
+  elevenlabs: { label: 'ElevenLabs', baseUrl: 'https://api.elevenlabs.io/v1/text-to-speech', model: 'eleven_multilingual_v2', apiVoice: 'JBFqnCBsd6RMkjVDRZzb' },
+  azure: { label: 'Azure Speech', baseUrl: 'https://eastasia.tts.speech.microsoft.com/cognitiveservices/v1', model: '', apiVoice: 'zh-CN-XiaoxiaoNeural' },
+  custom: { label: '自定义 OpenAI 兼容', baseUrl: '', model: '', apiVoice: '' }
+} as const
+export type TtsProvider = keyof typeof TTS_PRESETS
+
+export const DEFAULT_TTS_SETTINGS: TtsSettings = {
+  enabled: false, voice: '', rate: 0, volume: 100,
+  provider: 'windows', baseUrl: '', apiKey: '', model: '', apiVoice: '', speed: 1
 }
 
-export const DEFAULT_TTS_SETTINGS: TtsSettings = { enabled: false, voice: '', rate: 0, volume: 100 }
+export interface SpeechAudio { bytes: Uint8Array; mime: string }
+export interface SpeechPlaybackRequest { id: string; action: 'play' | 'pause' | 'resume' | 'stop'; audio?: SpeechAudio; volume?: number; speed?: number }
+export interface SpeechPlaybackReply { id: string; event: 'started' | 'ended' | 'control' | 'error'; error?: string }
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value))
@@ -48,12 +79,29 @@ function toNumber(input: unknown, fallback: number): number {
  */
 export function normalizeTtsSettings(input: unknown): TtsSettings {
   const source: Record<string, unknown> = typeof input === 'object' && input !== null ? input as Record<string, unknown> : {}
+  const connection = (value: Record<string, unknown>): TtsConnection => ({
+    baseUrl: typeof value.baseUrl === 'string' ? value.baseUrl.trim() : '',
+    apiKey: typeof value.apiKey === 'string' ? value.apiKey.trim() : '',
+    ...(typeof value.apiKeyEnc === 'string' ? { apiKeyEnc: value.apiKeyEnc } : {}),
+    model: typeof value.model === 'string' ? value.model.trim() : '',
+    apiVoice: typeof value.apiVoice === 'string' ? value.apiVoice.trim() : ''
+  })
+  const connections: TtsSettings['connections'] = {}
+  if (source.connections && typeof source.connections === 'object') {
+    for (const [key, value] of Object.entries(source.connections)) {
+      if (Object.hasOwn(TTS_PRESETS, key) && key !== 'windows' && value && typeof value === 'object') connections[key as TtsProvider] = connection(value as Record<string, unknown>)
+    }
+  }
   return {
     // Strict `true`: a stored "false" string must never switch reading on.
     enabled: source.enabled === true,
     voice: typeof source.voice === 'string' ? source.voice.trim() : '',
     rate: Math.round(clamp(toNumber(source.rate, DEFAULT_TTS_SETTINGS.rate), -10, 10)),
-    volume: Math.round(clamp(toNumber(source.volume, DEFAULT_TTS_SETTINGS.volume), 0, 100))
+    volume: Math.round(clamp(toNumber(source.volume, DEFAULT_TTS_SETTINGS.volume), 0, 100)),
+    provider: typeof source.provider === 'string' && Object.hasOwn(TTS_PRESETS, source.provider) ? source.provider as TtsProvider : 'windows',
+    ...connection(source),
+    speed: clamp(toNumber(source.speed, 1), 0.5, 2),
+    ...(Object.keys(connections).length ? { connections } : {})
   }
 }
 

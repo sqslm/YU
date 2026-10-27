@@ -3,6 +3,7 @@ import { mergeSettings } from '@shared/defaults'
 import { setMainLanguage } from '@shared/mainI18n'
 import type { LifeBriefing, LifeEvent, LifeSyncStatus, LifeTools } from './life'
 import { LIFE_TOOLS } from './life'
+import { DEFAULT_TTS_SETTINGS } from '@shared/speech'
 import { runTool, toolSchemas, type ToolContext } from './registry'
 
 /**
@@ -50,6 +51,22 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); setMainLanguage('zh') })
 
 describe('life tools reach real stores and stay out of ordinary answers', () => {
+  it('propagates tool cancellation to pending speech so a timed-out request cannot speak later', async () => {
+    let signal: AbortSignal | undefined
+    api.speak = vi.fn((_text, received) => { signal = received; return new Promise<{ spoken: number; skipped: boolean }>(() => undefined) })
+    ctx.timeouts = { speak_text: 5 }
+    const pending = runTool('speak_text', { text: 'hello' }, ctx)
+    await vi.advanceTimersByTimeAsync(6)
+    expect((await pending).status).toBe('timeout')
+    expect(signal?.aborted).toBe(true)
+  })
+  it('does not disclose provider credentials through read-aloud tool results', async () => {
+    api.speechSettings = () => ({ ...DEFAULT_TTS_SETTINGS, apiKey: 'tts-secret', connections: { openai: { baseUrl: 'https://example.test', apiKey: 'saved-secret', model: 'tts', apiVoice: 'a' } } })
+    api.setSpeechSettings = vi.fn()
+    const result = await runTool('configure_speech', {}, ctx)
+    expect(result.ok).toBe(true)
+    expect(JSON.stringify(result)).not.toContain('secret')
+  })
   it('resolves both tomorrow endpoints against the original request day, and refuses a reversed range', async () => {
     expect((await runTool('create_event', { title: '项目讨论', start: '明天下午三点', end: '明天下午四点' }, ctx)).ok).toBe(true)
     expect(api.saveEvent).toHaveBeenCalledWith(expect.objectContaining({ start: +new Date(2026,9,24,15), end: +new Date(2026,9,24,16) }))
@@ -147,7 +164,7 @@ describe('life tools reach real stores and stay out of ordinary answers', () => 
     expect(quiet.summary).toContain('没有朗读')
     vi.mocked(api.ttsEnabled).mockReturnValue(true)
     const spoken = await runTool('daily_briefing', { speak: true }, ctx)
-    expect(api.speak).toHaveBeenCalledWith(briefing().body)
+    expect(api.speak).toHaveBeenCalledWith(briefing().body, expect.any(AbortSignal))
     expect(spoken.data).toMatchObject({ spoken: 42 })
   })
 
@@ -158,7 +175,7 @@ describe('life tools reach real stores and stay out of ordinary answers', () => 
     expect(result.data).toMatchObject({ spoken: 0, skipped: true, reason: 'disabled' })
     vi.mocked(api.ttsEnabled).mockReturnValue(true)
     const read = await runTool('speak_text', { text: '这是一段文字' }, ctx)
-    expect(api.speak).toHaveBeenCalledWith('这是一段文字')
+    expect(api.speak).toHaveBeenCalledWith('这是一段文字', expect.any(AbortSignal))
     expect(read.data).toMatchObject({ spoken: 42, skipped: false })
     expect((await runTool('speak_text', {}, ctx)).ok).toBe(false)
   })

@@ -149,9 +149,9 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   web_search: 8000,
   read_webpage: 6000,
   get_weather: 8000,
-  // Speech synthesis is a second process plus a device handshake; the ceiling
-  // only stops a wedged voice from holding the answer hostage for a minute.
-  speak_text: 20_000,
+  // Cloud synthesis can take longer than the local device handshake. Cancellation
+  // reaches the provider and playback; this budget covers synthesis, not narration.
+  speak_text: 120_000,
   // A replay is up to eight ordinary tool calls back to back, so it gets the sum
   // of what its steps could each take rather than one step's ceiling.
   run_workflow: 180_000

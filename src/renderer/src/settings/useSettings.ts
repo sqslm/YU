@@ -82,6 +82,7 @@ export function useSettings(): UseSettingsResult {
 
   const patch = useCallback(
     (delta: Partial<Settings>) => {
+      setSaving(true)
       setSettings((current) => (current ? applySettingsPatch(current, delta) : current))
       pending.current = applySettingsPatch(pending.current, delta)
       if (timer.current) clearTimeout(timer.current)

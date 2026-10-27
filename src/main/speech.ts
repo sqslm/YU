@@ -12,7 +12,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mt } from '@shared/mainI18n'
-import { normalizeTtsSettings, speechText, type TtsSettings } from '@shared/speech'
+import { normalizeTtsSettings, speechText, type TtsSettings, type SpeechAudio } from '@shared/speech'
 
 export interface SpeechRequest {
   action: 'speak' | 'stop' | 'voices'
@@ -20,6 +20,8 @@ export interface SpeechRequest {
   rate?: number
   volume?: number
   voice?: string
+  audio?: SpeechAudio
+  speed?: number
 }
 
 export interface SpeechResult {
@@ -108,6 +110,7 @@ export function createWindowsSpeechRunner(scriptPath: string): SpeechRunner {
 export interface SpeechDeps {
   settings: () => { tts: TtsSettings } | { tts?: TtsSettings }
   run: SpeechRunner
+  cloud?: { synthesize: (settings: TtsSettings, text: string, signal: AbortSignal) => Promise<SpeechAudio>; play: SpeechRunner }
   log: (line: string) => void
   /** Injected clock so failure log lines stay assertable. */
   now?: () => number
@@ -119,6 +122,8 @@ export class SpeechService {
   private active: AbortController | null = null
   private paused = false
   private lastError = ''
+  private activeRunner: SpeechRunner | null = null
+  private resumePending: (() => void) | null = null
 
   /** Placeholder: read-aloud is never translated, the synthesizer speaks as-is. */
   translate?: never
@@ -160,13 +165,27 @@ export class SpeechService {
     const started = this.now()
 
     try {
-      const result = await this.deps.run({
+      const runner = tts.provider === 'windows' ? this.deps.run : this.deps.cloud?.play
+      if (!runner) throw Error('TTS provider is not available')
+      const audio = tts.provider === 'windows' ? undefined : await this.deps.cloud!.synthesize(tts, spoken, controller.signal)
+      if (this.paused && !controller.signal.aborted) {
+        await new Promise<void>(resolve => {
+          const done = (): void => { controller.signal.removeEventListener('abort', done); resolve() }
+          this.resumePending = done
+          controller.signal.addEventListener('abort', done, { once: true })
+        })
+      }
+      controller.signal.throwIfAborted()
+      this.activeRunner = runner
+      const result = await runner({
         action: 'speak',
         text: spoken,
         rate: tts.rate,
         volume: tts.volume,
-        ...(tts.voice ? { voice: tts.voice } : {})
-      }, controller.signal, onStarted)
+        ...(tts.voice ? { voice: tts.voice } : {}),
+        ...(audio ? { audio, speed: tts.speed } : {})
+      }, controller.signal, () => { if (!controller.signal.aborted) onStarted?.() })
+      controller.signal.throwIfAborted()
       if (!result.ok) throw new Error(result.error || 'unknown')
       return { spoken: spoken.length, skipped: false }
     } catch (error) {
@@ -182,7 +201,7 @@ export class SpeechService {
       throw new Error(mt('朗读失败：{{message}}', { message }))
     } finally {
       signal?.removeEventListener('abort', relay)
-      if (this.active === controller) { this.active = null; this.paused = false }
+      if (this.active === controller) { this.active = null; this.activeRunner = null; this.resumePending = null; this.paused = false }
     }
   }
 
@@ -196,16 +215,18 @@ export class SpeechService {
   status():{speaking:boolean;paused:boolean;error:string} {return {speaking:this.active!==null,paused:this.paused,error:this.lastError}}
   async pause():Promise<ReturnType<SpeechService['status']>> {
     if(!this.active)return this.status()
+    if(!this.activeRunner){this.paused=true;return this.status()}
     const current=this.active
-    const result=await this.deps.run.control?.('pause')
+    const result=await this.activeRunner?.control?.('pause')
     if(!result?.ok)throw new Error(result?.error||'Cannot pause speech')
     if(this.active===current)this.paused=true
     return this.status()
   }
   async resume():Promise<ReturnType<SpeechService['status']>> {
     if(!this.active)return this.status()
+    if(!this.activeRunner){this.paused=false;this.resumePending?.();this.resumePending=null;return this.status()}
     const current=this.active
-    const result=await this.deps.run.control?.('resume')
+    const result=await this.activeRunner?.control?.('resume')
     if(!result?.ok)throw new Error(result?.error||'Cannot resume speech')
     if(this.active===current)this.paused=false
     return this.status()
@@ -219,9 +240,12 @@ export class SpeechService {
     const controller = this.active
     if (!controller) return
     this.active = null
+    this.activeRunner = null
     this.paused = false
     try {
       controller.abort()
+      this.resumePending?.()
+      this.resumePending = null
     } catch (error) {
       this.deps.log(`speech: stop failed: ${messageOf(error)}`)
     }

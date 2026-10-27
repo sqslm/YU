@@ -51,6 +51,13 @@ function pendingHarness() {
 }
 
 describe('SpeechService.speak', () => {
+  it('does not report stopped speech as successfully read even if the bridge completes late', async () => {
+    const h = pendingHarness()
+    const pending = h.service.speak('被停止的内容')
+    h.service.stop()
+    h.settling[0]({ ok: true })
+    await expect(pending).resolves.toEqual({ spoken: 0, skipped: true })
+  })
   it('says nothing while read-aloud is switched off in the settings', async () => {
     const h = harness(async () => ({ ok: true }), { enabled: false })
     await expect(h.service.speak('你好')).resolves.toEqual({ spoken: 0, skipped: true })
@@ -166,6 +173,31 @@ describe('SpeechService.voices', () => {
 })
 
 describe('SpeechService settings', () => {
+  it('uses API audio and prevents cancelled synthesis from playing late', async () => {
+    let finish: (audio: { bytes: Uint8Array; mime: string }) => void = () => undefined
+    const synthesize = vi.fn(() => new Promise<{ bytes: Uint8Array; mime: string }>(resolve => { finish = resolve }))
+    const play = vi.fn(async () => ({ ok: true })), run = vi.fn(async () => ({ ok: true }))
+    const service = new SpeechService({ settings: () => ({ tts: { ...DEFAULT_TTS_SETTINGS, enabled: true, provider: 'openai' } }), run, cloud: { synthesize, play }, log: vi.fn() })
+    const pending = service.speak('hello')
+    service.stop()
+    finish({ bytes: new Uint8Array([1]), mime: 'audio/mpeg' })
+    expect(await pending).toMatchObject({ skipped: true })
+    expect(play).not.toHaveBeenCalled(); expect(run).not.toHaveBeenCalled()
+  })
+  it('pauses pending API synthesis and plays only after resume', async () => {
+    let finish: (audio: { bytes: Uint8Array; mime: string }) => void = () => undefined
+    const play = vi.fn(async () => ({ ok: true }))
+    const service = new SpeechService({ settings: () => ({ tts: { ...DEFAULT_TTS_SETTINGS, enabled: true, provider: 'openai' } }), run: vi.fn(async () => ({ ok: true })),
+      cloud: { synthesize: () => new Promise(resolve => { finish = resolve }), play }, log: vi.fn() })
+    const pending = service.speak('hello')
+    expect(await service.pause()).toMatchObject({ paused: true })
+    finish({ bytes: new Uint8Array([1]), mime: 'audio/mpeg' })
+    await Promise.resolve()
+    expect(play).not.toHaveBeenCalled()
+    await service.resume()
+    expect(await pending).toMatchObject({ skipped: false })
+    expect(play).toHaveBeenCalledOnce()
+  })
   it('treats a settings object without a tts block as switched off', async () => {
     const calls: SpeechRequest[] = []
     const service = new SpeechService({
@@ -198,11 +230,11 @@ describe('normalizeTtsSettings', () => {
     expect(normalizeTtsSettings(undefined)).toEqual(DEFAULT_TTS_SETTINGS)
     expect(normalizeTtsSettings({})).toEqual(DEFAULT_TTS_SETTINGS)
     expect(normalizeTtsSettings({ enabled: 'yes', rate: 99, volume: -5, voice: '  Microsoft Huihui  ' }))
-      .toEqual({ enabled: false, voice: 'Microsoft Huihui', rate: 10, volume: 0 })
+      .toEqual({ ...DEFAULT_TTS_SETTINGS, enabled: false, voice: 'Microsoft Huihui', rate: 10, volume: 0 })
     expect(normalizeTtsSettings({ enabled: true, rate: -12.6, volume: 140, voice: 7 }))
-      .toEqual({ enabled: true, voice: '', rate: -10, volume: 100 })
+      .toEqual({ ...DEFAULT_TTS_SETTINGS, enabled: true, voice: '', rate: -10, volume: 100 })
     expect(normalizeTtsSettings({ enabled: true, rate: '4', volume: '48' }))
-      .toEqual({ enabled: true, voice: '', rate: 4, volume: 48 })
+      .toEqual({ ...DEFAULT_TTS_SETTINGS, enabled: true, voice: '', rate: 4, volume: 48 })
   })
 })
 

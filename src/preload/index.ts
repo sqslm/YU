@@ -94,6 +94,7 @@ const api: TypelessApi = {
     },
     voices: () => ipcRenderer.invoke('life:voices'),
     speak: text => ipcRenderer.invoke('life:speak', text),
+    stopSpeaking: () => ipcRenderer.invoke('life:stop-speaking'),
     briefing: () => ipcRenderer.invoke('briefing:latest'),
     refreshBriefing: () => ipcRenderer.invoke('briefing:refresh'),
     briefingHistory: () => ipcRenderer.invoke('briefing:history'),
@@ -315,6 +316,12 @@ const api: TypelessApi = {
       ipcRenderer.invoke('models:list', input)
   },
   bar: {
+    onSpeechPlayback: callback => {
+      const listener = (_event: unknown, request: import('@shared/speech').SpeechPlaybackRequest): void => callback(request)
+      ipcRenderer.on('speech:playback', listener)
+      return () => ipcRenderer.removeListener('speech:playback', listener)
+    },
+    replySpeechPlayback: reply => ipcRenderer.invoke('speech:playback-reply', reply),
     onNoteAudio:callback=>{
       const listener=(_event:unknown,request:import('@shared/noteAudio').NoteAudioRequest):void=>callback(request)
       ipcRenderer.on('note-audio:command',listener)

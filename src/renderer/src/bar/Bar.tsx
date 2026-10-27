@@ -5,6 +5,7 @@ import { MicCapture } from './capture'
 import { disposeCues, playCue } from './cues'
 import { CaptionTicker } from './CaptionTicker'
 import { createNoteAudioPlayer } from './noteAudio'
+import { createSpeechPlayer } from './speechPlayback'
 import i18n, { applyUiLanguage } from '../i18n'
 
 /**
@@ -54,6 +55,11 @@ export function modeLabelFor(state: BarState, showMode: boolean): string | null 
  * rounded glass pill with a live waveform, then collapses again.
  */
 export function Bar(): JSX.Element {
+  useEffect(() => {
+    const player = createSpeechPlayer(reply => { void window.api.bar.replySpeechPlayback(reply) })
+    const off = window.api.bar.onSpeechPlayback(request => { void player.run(request) })
+    return () => { off(); player.dispose() }
+  }, [])
   useEffect(()=>{
     const player=createNoteAudioPlayer()
     const off=window.api.bar.onNoteAudio(request=>{

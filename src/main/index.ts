@@ -53,6 +53,8 @@ import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCale
 import { RemindersSync } from './reminders-sync'
 import { BriefingScheduler, briefingTasks, type BriefingState } from './briefing'
 import { SpeechService, createWindowsSpeechRunner } from './speech'
+import { createSpeechPlayback } from './speech-playback'
+import { synthesizeSpeech } from './providers/tts'
 import { WorkflowStore } from './workflows'
 import {
   formatEventTime,
@@ -290,7 +292,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
       const next = await store.update({ tts: { ...store.get().tts, enabled } })
       for (const win of [settingsWindow, barWindow, cardWindow]) if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next)
     },
-    speak: text => speech!.start(text),
+    speak: (text, signal) => speech!.start(text, signal),
     stopSpeaking: () => speech!.stop(),
     ttsEnabled: () => store.get().tts.enabled,
     speechSettings:()=>store.get().tts,
@@ -1135,6 +1137,7 @@ function registerIpc(): void {
   handle('settings:update', async (_event, patch: Partial<Settings>) => {
     const previous = store.get()
     const next = await store.update(patch)
+    if (!next.tts.enabled) speech?.stop()
     setMainLanguage(next.uiLanguage)
     refreshWakeWord()
     tray?.refresh()
@@ -1410,6 +1413,7 @@ function registerIpc(): void {
     }
   })
   handle('life:speak', (_event, text: string) => speech?.speak(text) ?? { spoken: 0, skipped: true })
+  handle('life:stop-speaking', () => { speech?.stop() })
   handle('workflow:list', () => workflows?.list() ?? [])
   handle('workflow:save', (_event, input: { name: string; steps: import('@shared/workflow').WorkflowStep[] }, id?: string) => {
     if (!workflows) return null
@@ -2023,6 +2027,7 @@ async function bootstrap(): Promise<void> {
     run: createWindowsSpeechRunner(app.isPackaged
       ? join(process.resourcesPath, 'speech.ps1')
       : join(app.getAppPath(), 'resources/speech.ps1')),
+    cloud: { synthesize: synthesizeSpeech, play: createSpeechPlayback(() => barWindow) },
     log })
   calendarScheduler = new CalendarScheduler({ store: calendar, settings: () => store.get().calendar,
     // The stamp is written only once the notification is up: a failed delivery

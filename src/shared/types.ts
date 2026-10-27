@@ -1,3 +1,4 @@
+import type { TtsSettings } from './speech'
 export type Mode = 'dictation' | 'translate' | 'ask'
 export type VoiceCommandMode = Mode | 'reminder' | 'notes'
 export interface VoiceCommandsSettings {
@@ -681,15 +682,7 @@ export interface BriefingSettings {
   quietHours: BriefingQuietHours
 }
 
-export interface TtsSettings {
-  enabled: boolean
-  /** Installed voice name; blank means the system default. */
-  voice: string
-  /** -10…10, the SAPI rate. */
-  rate: number
-  /** 0…100. */
-  volume: number
-}
+export type { TtsSettings } from './speech'
 
 /**
  * Prompt task types. `polish` is the default dictation prompt, `document` and

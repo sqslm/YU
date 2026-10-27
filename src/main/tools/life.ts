@@ -60,7 +60,7 @@ export interface LifeTools {
   speechVoices?():Promise<string[]>
   setSpeechSettings?(patch:Partial<TtsSettings>):Promise<TtsSettings>
   controlSpeech?(action:'pause'|'resume'|'status'):Promise<Record<string,unknown>>
-  speak(text: string): Promise<{ spoken: number; skipped: boolean }>
+  speak(text: string, signal?: AbortSignal): Promise<{ spoken: number; skipped: boolean }>
   stopSpeaking(): void
   ttsEnabled(): boolean
   syncStatus(): LifeSyncStatus
@@ -121,10 +121,16 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools, 
   }
   if(name==='configure_speech'){
     if(!api.speechSettings||!api.setSpeechSettings)throw Error(mt('朗读设置服务尚未就绪'))
-    if(args.voice && (!api.speechVoices||!(await api.speechVoices()).includes(String(args.voice))))throw Error(mt('本机未安装指定的朗读声音'))
+    const current=api.speechSettings(),cloud=current.provider!=='windows'
+    if(args.voice && !cloud && (!api.speechVoices||!(await api.speechVoices()).includes(String(args.voice))))throw Error(mt('本机未安装指定的朗读声音'))
     if(args.volume!==undefined&&(!Number.isInteger(args.volume)||Number(args.volume)<0||Number(args.volume)>100)||args.rate!==undefined&&(!Number.isInteger(args.rate)||Number(args.rate)<-10||Number(args.rate)>10))throw Error(mt('朗读音量为 0–100，语速为 -10–10'))
-    const settings=Object.keys(args).length?await api.setSpeechSettings(args as Partial<TtsSettings>):api.speechSettings()
-    return ok(mt('朗读设置已更新'),{settings})
+    if(args.speed!==undefined&&(!Number.isFinite(args.speed)||Number(args.speed)<0.5||Number(args.speed)>2))throw Error('Speech speed must be 0.5–2')
+    const patch={...args} as Partial<TtsSettings>
+    if(cloud && patch.voice!==undefined){patch.apiVoice=patch.voice;delete patch.voice}
+    const settings=Object.keys(args).length?await api.setSpeechSettings(patch):current
+    // Tool output is sent to the assistant provider; keys and saved connections stay local.
+    const {enabled,provider,volume,rate,speed}=settings
+    return ok(mt('朗读设置已更新'),{settings:{enabled,provider,volume,rate,speed,voice:cloud?settings.apiVoice:settings.voice}})
   }
   if(name==='control_speech'){
     if(!api.controlSpeech)throw Error(mt('朗读控制服务尚未就绪'))
@@ -213,7 +219,7 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools, 
     const briefing = api.briefing()
     if (args.speak === true && !briefing.empty) {
       if (!api.ttsEnabled()) return ok(`${briefing.body}\n\n${mt('朗读已在设置里关闭，以上内容没有朗读。')}`, { title: briefing.title, body: briefing.body, empty: false, spoken: 0 })
-      const spoken = await api.speak(briefing.body)
+      const spoken = await api.speak(briefing.body, signal)
       return ok(`${briefing.body}\n\n${spoken.skipped ? mt('没有可朗读的内容。') : mt('已开始朗读。')}`, { title: briefing.title, body: briefing.body, empty: false, spoken: spoken.spoken })
     }
     return ok(briefing.body, { title: briefing.title, body: briefing.body, empty: briefing.empty })
@@ -228,7 +234,7 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools, 
     const text = string(args.text)
     if (!text) throw new Error(mt('请提供要朗读的内容'))
     if (!api.ttsEnabled()) return ok(mt('朗读已在设置里关闭，本次没有朗读'), { spoken: 0, skipped: true, reason: 'disabled' })
-    const result = await api.speak(text)
+    const result = await api.speak(text, signal)
     return result.skipped
       ? ok(mt('这段文本没有可朗读的内容'), { spoken: 0, skipped: true })
       : ok(mt('已开始朗读 {{count}} 字', { count: result.spoken }), { spoken: result.spoken, skipped: false })
@@ -271,14 +277,14 @@ const schemas: Record<typeof LIFE_TOOLS[number], { description: string; properti
   send_briefing:{description:'Send the current actual briefing via explicitly enabled, user-configured Resend email / ntfy mobile push. Requires a sending request. Report per-channel provider receipts and errors, never claim recipient delivery. No configuration means no sending.',properties:{channel:{type:'string',enum:['email','push']}}},
   briefing_delivery_status:{description:'Read real persistent briefing delivery attempts, provider message IDs and failures. Accepted does not mean received/read by recipient.',properties:{}},
   configure_briefing_delivery:{description:'Read delivery configuration status or enable/disable email/push for scheduled briefings. Keys and targets must be configured by the user in settings; this tool cannot change or disclose them. Does not send immediately.',properties:{email:{type:'boolean'},push:{type:'boolean'}}},
-  configure_speech:{description:'Read or persist Windows read-aloud settings: enabled, volume 0-100, rate -10 through 10, or installed voice name. This is TTS volume, not system master volume. Preserve unspecified settings; never silently enable speech.',properties:{enabled:{type:'boolean'},volume:{type:'number'},rate:{type:'number'},voice:{type:'string'}}},
+  configure_speech:{description:'Read or persist read-aloud preferences: enabled, volume 0-100, Windows rate -10 through 10, API playback speed 0.5-2, or voice ID/name. Provider credentials are configured only in settings. This is TTS volume, not system master volume. Preserve unspecified settings; never silently enable speech.',properties:{enabled:{type:'boolean'},volume:{type:'number'},rate:{type:'number'},speed:{type:'number'},voice:{type:'string'}}},
   control_speech:{description:'Pause or resume the existing local speech without restarting its text, or read actual playback status. If speaking=false report nothing is currently active; do not claim paused/resumed audio exists.',properties:{action:{type:'string',enum:['pause','resume','status']}},required:['action']},
   create_event: { description: 'Add a local calendar event from the actual request. start (and optional end) are natural-language time expressions parsed by the existing time parser, e.g. "明天下午三点" or "9:30"; never invent a time and never turn a schedule into a reminder. Set all_day for whole-day items. Missing details must be asked for in text.', properties: { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, all_day: { type: 'boolean' }, location: { type: 'string' }, notes: { type: 'string' }, lead_minutes: { type: 'number' } }, required: ['title', 'start'] },
   list_events: { description: 'Read actual confirmed calendar events. range: today/tomorrow/week/upcoming/yesterday by local calendar day, or day=YYYY-MM-DD for one date. Returns real IDs and absolute times; answer from these fields instead of counting down relative phrases.', properties: { range: { type: 'string', enum: ['today', 'tomorrow', 'week', 'upcoming', 'yesterday'] }, day: { type: 'string' }, query: { type: 'string' } } },
   manage_event: { description: 'Change a real event ID returned by list_events. action=update edits title/start/end/all_day/location/notes/lead_minutes in place and keeps the ID; cancel keeps the data recoverable and restore undoes it. Deletion is not available.', properties: { id: { type: 'string' }, action: { type: 'string', enum: ['update', 'cancel', 'restore'] }, title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, all_day: { type: 'boolean' }, location: { type: 'string' }, notes: { type: 'string' }, lead_minutes: { type: 'number' } }, required: ['id', 'action'] },
   daily_briefing: { description: 'Build today\'s briefing from real local data: today\'s schedule, due todos, overdue items, tomorrow preview and yesterday\'s dictation recap. Use this instead of guessing what is scheduled, and answer from the returned text. speak only when the user asked to hear it.', properties: { speak: { type: 'boolean' } } },
   configure_briefing: { description: 'Read or configure the ONE existing local daily briefing schedule. enabled turns it on/off; time is the explicitly requested local HH:mm clock. speak/notify control delivery. Preserve unspecified settings; do not create a reminder, event, workflow or duplicate schedule. Empty arguments read current settings. Use for daily task briefings and changes to their time.', properties: { enabled: { type: 'boolean' }, time: { type: 'string' }, speak: { type: 'boolean' }, notify: { type: 'boolean' } } },
-  speak_text: { description: 'Read text aloud through the local Windows voice only on the explicit user request. Report the real outcome: when reading is disabled in settings nothing is read.', properties: { text: { type: 'string' } }, required: ['text'] },
+  speak_text: { description: 'Read text aloud through the user-configured system voice or TTS provider only on explicit user request. Report the real outcome: when reading is disabled in settings nothing is read.', properties: { text: { type: 'string' } }, required: ['text'] },
   stop_speaking: { description: 'Stop the current read-aloud immediately. text_only=true also disables future automatic speech when explicitly requested; otherwise preserve the current preference.', properties: { text_only: { type: 'boolean' } } },
   sync_status: { description: 'Read the actual cloud-sync state: enabled, signed in, server, last successful sync time. Never guess whether something was synced or claim a sync succeeded.', properties: {} },
   sync_control: { description: 'Pause or resume cloud sync on the explicit user request. Pausing never deletes local data, and reminders keep working while sync is paused.', properties: { action: { type: 'string', enum: ['pause', 'resume'] } }, required: ['action'] }
