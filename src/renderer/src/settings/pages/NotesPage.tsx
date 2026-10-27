@@ -1,6 +1,7 @@
 import { PagedList } from '../Pagination'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Alert,
   Box,
   Button,
   ButtonGroup,
@@ -800,14 +801,17 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
    * keeps `notes` untouched and only clears references to categories that are
    * gone, so deleting a bucket never deletes a note.
    */
-  const writeCategories = async (next: NoteCategory[]): Promise<void> => {
+  const writeCategories = async (next: NoteCategory[]): Promise<boolean> => {
+    setNotice('')
     try {
       const saved = await window.api.notes.setCategories(next)
       setCategories(saved)
       // A note that lost its bucket must stop showing the old chip, so re-read.
       void reload()
+      return true
     } catch (err) {
       setNotice(messageOf(err))
+      return false
     }
   }
 
@@ -821,13 +825,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     // A stable, opaque id: the name is editable, the id must never be derived
     // from it or a rename would orphan every note filed under it.
     const id = `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-    await writeCategories([...categories, { id, name }])
-    setCategoryDraft('')
+    if (await writeCategories([...categories, { id, name }])) setCategoryDraft('')
   }
 
   const removeCategory = async (id: string): Promise<void> => {
-    if (categoryId === id) setCategoryId(ALL_CATEGORIES)
-    await writeCategories(categories.filter((category) => category.id !== id))
+    if (await writeCategories(categories.filter((category) => category.id !== id))) {
+      if (categoryId === id) setCategoryId(ALL_CATEGORIES)
+    }
   }
 
   const runRepolish = async (): Promise<void> => {
@@ -1660,7 +1664,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       </Menu>
 
       <Menu anchorEl={moreAt} open={Boolean(moreAt)} onClose={() => setMoreAt(null)}>
-        <MenuItem data-notes-category-manage onClick={() => { setMoreAt(null); setCategoryDraft(''); setCategoriesOpen(true) }}>{t('notes.categoryManage')}</MenuItem>
+        <MenuItem data-notes-category-manage onClick={() => { setMoreAt(null); setNotice(''); setCategoryDraft(''); setCategoriesOpen(true) }}>{t('notes.categoryManage')}</MenuItem>
         <MenuItem data-notes-export disabled={exportBusy || bulkBusy || loading || !exportIds.length} onClick={() => { const anchor = moreAt!; setMoreAt(null); setExportMenu({ anchor, ids: exportIds, label: t(selection.length ? 'notes.exportSelected' : 'notes.exportFiltered', { count: exportIds.length }) }) }}>{t('notes.export')}</MenuItem>
         <MenuItem data-notes-filter-tags onClick={() => { setMoreAt(null); setTagFiltersOpen(open => !open) }}>{t('notes.tagFilter')}</MenuItem>
         <MenuItem data-notes-prefs-open onClick={() => { setMoreAt(null); setPrefsOpen(true) }}>{t('notes.prefsTitle')}</MenuItem>
@@ -1910,6 +1914,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       >
         <DialogTitle sx={{ fontSize: 15, fontWeight: 600, pb: 1 }}>{t('notes.categoryManage')}</DialogTitle>
         <DialogContent>
+          {notice && <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setNotice('')}>{notice}</Alert>}
           <DialogContentText sx={{ fontSize: 12.5, lineHeight: 1.7 }}>
             {t('notes.categoryBody')}
           </DialogContentText>

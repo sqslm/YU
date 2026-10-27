@@ -11,9 +11,17 @@ describe('reminder and todo views', () => {
     expect(reminderView(rows, { ...all, kind: 'reminder' }).map(row => row.id)).toEqual(['meeting'])
     expect(reminderView(rows, { ...all, kind: 'todo' }).map(row => row.id)).toEqual(['write report'])
   })
-  it('filters today by scheduled time for reminders and creation time for todos', () => {
+  it('filters today by scheduled time for reminders and creation time for undated todos', () => {
     const rows = [row('today', stamp(24)), row('tomorrow', stamp(25)), row('new todo', null), row('old todo', null, { createdAt: stamp(23) })]
     expect(reminderView(rows, { ...all, bounds: reminderDateBounds('today', '', '', stamp(24)) }).map(row => row.id)).toEqual(['today', 'new todo'])
+  })
+  it('filters deadline-only todos by deadline instead of creation date', () => {
+    const rows = [row('due today', null, { createdAt: stamp(23), deadlineAt: stamp(24, 18) }),
+      row('due tomorrow', null, { deadlineAt: stamp(25, 18) }), row('undated', null)]
+    const today = reminderDateBounds('today', '', '', stamp(24))
+    expect(reminderView(rows, { ...all, kind: 'todo', bounds: today }).map(row => row.id)).toEqual(['due today', 'undated'])
+    expect(reminderView(rows, { ...all, kind: 'todo', bounds: reminderDateBounds('custom', '2026-10-25', '2026-10-25') }).map(row => row.id)).toEqual(['due tomorrow'])
+    expect(reminderView(rows, { ...all, kind: 'todo', bounds: reminderDateBounds('nextWeek', '', '', stamp(25)) }).map(row => row.id)).toEqual(['due tomorrow'])
   })
   it('supports the previous seven calendar days and next seven days without mixing them', () => {
     const week = reminderDateBounds('week', '', '', stamp(24)), next = reminderDateBounds('nextWeek', '', '', stamp(24))

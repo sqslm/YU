@@ -34,7 +34,7 @@ export function reminderView(rows: readonly Reminder[], options: ReminderViewOpt
   const { status, kind, bounds, priority = 'all' } = options, query = options.query.trim().toLowerCase()
   if (bounds.error) return []
   return sortTodos(rows.filter(row => {
-    const todo = row.dueAt === null, stamp = row.dueAt ?? row.createdAt
+    const todo = row.dueAt === null, stamp = row.dueAt ?? row.deadlineAt ?? row.createdAt
     return (kind === 'all' || (kind === 'todo') === todo) &&
       (priority === 'all' || normalizePriority(row.priority) === priority) &&
       (status === 'all' || status === 'active' && ['pending', 'due'].includes(row.status) || status === 'upcoming' && row.status === 'pending' && !todo || status === row.status) &&

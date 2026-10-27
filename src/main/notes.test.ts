@@ -11,7 +11,7 @@
  * Only the three things that leave the process are mocked: the ASR provider, the
  * LLM provider and the ffmpeg transcode; the failover chain itself runs for real.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -417,6 +417,24 @@ describe('re-transcription', () => {
 })
 
 describe('pipeline failures', () => {
+  it('preserves manual text on disk when an in-flight transcription fails', async () => {
+    let reject!: (error: Error) => void
+    mocks.transcribe.mockReturnValue(new Promise((_resolve, fail) => { reject = fail }))
+    const store = await loadedStore()
+    const entry = await store.create({ pcm: pcm(), durationMs: 1000 })
+    await vi.waitFor(() => expect(mocks.transcribe).toHaveBeenCalledTimes(1))
+    const edited = await store.update(entry.id, { transcript: '人工修正的原文', polished: '人工整理的正文' })
+
+    reject(new Error('connection refused'))
+    await vi.waitFor(() => expect(store.list().notes[0].polishStatus).toBe('failed'))
+    const current = store.list().notes[0]
+    expect(current).toMatchObject({ transcript: '人工修正的原文', polished: '人工整理的正文', editedAt: edited!.editedAt })
+    expect(current.polishError).toContain('转写失败')
+    expect(readDb(dir).notes[0]).toEqual(current)
+    expect((await loadedStore()).list().notes[0]).toEqual(current)
+    expect(existsSync(store.audioPathOf(entry.id)!)).toBe(true)
+    expect(mocks.complete).not.toHaveBeenCalled()
+  })
   it('keeps the transcript and the recording when polish fails', async () => {
     mocks.transcribe.mockResolvedValue({ text: '今天开会讨论预算', model: 'whisper-1' })
     mocks.complete.mockRejectedValue(Object.assign(new Error('model overloaded'), { status: 503 }))
@@ -561,6 +579,27 @@ describe('removal', () => {
 })
 
 describe('categories', () => {
+  it.each(['create', 'rename', 'remove'])('reports a failed category %s and keeps categories and assignments until retry', async action => {
+    const store = await loadedStore()
+    await store.setCategories([{ id: 'work', name: '工作' }])
+    const entry = await store.createText({ text: '项目计划', categoryId: 'work' })
+    const before = store.list(), diskBefore = readDb(dir)
+    const next = action === 'create' ? [...before.categories, { id: 'life', name: '生活' }]
+      : action === 'rename' ? [{ id: 'work', name: '项目' }] : []
+    const temp = join(dir, `notes.json.${process.pid}.tmp`)
+    mkdirSync(temp)
+    notify.mockClear()
+    await expect(store.setCategories(next)).rejects.toThrow()
+    expect(store.list()).toEqual(before)
+    expect(readDb(dir)).toEqual(diskBefore)
+    expect(notify).not.toHaveBeenCalled()
+
+    rmdirSync(temp)
+    expect(await store.setCategories(next)).toEqual(next)
+    const reloaded = await loadedStore()
+    expect(reloaded.list()).toEqual(store.list())
+    expect(reloaded.list().notes.find(note => note.id === entry.id)?.categoryId).toBe(action === 'remove' ? undefined : 'work')
+  })
   it('drops blank and duplicate categories and never deletes notes with them', async () => {
     const store = await loadedStore()
     const saved = await store.setCategories([

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -90,6 +90,35 @@ describe('calendar store', () => {
     expect(store.get(first.id)).toBeUndefined()
     expect(store.list().map(row => row.id)).toEqual([second.id])
     expect(new CalendarStore(file, () => NOW).list().map(row => row.id)).toEqual([second.id])
+  })
+
+  it.each(['create', 'edit', 'cancel', 'restore', 'notify', 'put', 'remove'])('retains the persisted state when %s fails and accepts a retry', operation => {
+    const store = new CalendarStore(file, () => NOW)
+    const event = store.save(input())
+    if (operation === 'restore') store.action(event.id, 'cancel')
+    const before = store.list(), diskBefore = readFileSync(file, 'utf8')
+    const change = (): void => {
+      switch (operation) {
+        case 'create': store.save(input({ title: '新日程' })); break
+        case 'edit': store.save(input({ title: '新名称', start: at(21, 14), end: at(21, 15) }), event.id); break
+        case 'cancel': store.action(event.id, 'cancel'); break
+        case 'restore': store.action(event.id, 'restore'); break
+        case 'notify': store.markNotified(event.id, NOW); break
+        case 'put': store.put({ ...event, title: '远程修改' }); break
+        case 'remove': store.remove(event.id); break
+      }
+    }
+    const temp = `${file}.${process.pid}.tmp`
+    mkdirSync(temp)
+    expect(change).toThrow()
+    expect(store.list()).toEqual(before)
+    expect(readFileSync(file, 'utf8')).toBe(diskBefore)
+    expect(new CalendarStore(file, () => NOW).list()).toEqual(before)
+
+    rmdirSync(temp)
+    change()
+    expect(store.list()).not.toEqual(before)
+    expect(new CalendarStore(file, () => NOW).list()).toEqual(store.list())
   })
 
   it('rejects an unknown id and refuses to grow past the cap', () => {

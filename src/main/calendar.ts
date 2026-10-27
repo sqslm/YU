@@ -154,9 +154,7 @@ export class CalendarStore {
       ...((normalized.uid ?? existing?.uid) === undefined ? {} : { uid: normalized.uid ?? existing?.uid }),
       ...(existing?.notifiedAt === undefined || rescheduled ? {} : { notifiedAt: existing.notifiedAt })
     }
-    if (existing) this.events = this.events.map(row => row.id === event.id ? event : row)
-    else this.events.push(event)
-    this.flush()
+    this.flush(existing ? this.events.map(row => row.id === event.id ? event : row) : [...this.events, event])
     return event
   }
 
@@ -167,8 +165,7 @@ export class CalendarStore {
     // Idempotent on purpose: a menu click and a voice command may both fire.
     if (row.status === status) return row
     const updated: CalendarEvent = { ...row, status, updatedAt: this.now() }
-    this.events = this.events.map(item => item.id === id ? updated : item)
-    this.flush()
+    this.flush(this.events.map(item => item.id === id ? updated : item))
     return updated
   }
 
@@ -184,8 +181,7 @@ export class CalendarStore {
     const row = this.get(id)
     if (!row || row.notifiedAt === at) return
     const updated: CalendarEvent = { ...row, notifiedAt: at }
-    this.events = this.events.map(item => item.id === id ? updated : item)
-    this.flush()
+    this.flush(this.events.map(item => item.id === id ? updated : item))
   }
 
   /**
@@ -198,14 +194,12 @@ export class CalendarStore {
    */
   put(row: CalendarEvent): void {
     const exists = this.events.some(item => item.id === row.id)
-    this.events = exists ? this.events.map(item => item.id === row.id ? row : item) : [...this.events, row]
-    this.flush()
+    this.flush(exists ? this.events.map(item => item.id === row.id ? row : item) : [...this.events, row])
   }
 
   remove(id: string): void {
-    const before = this.events.length
-    this.events = this.events.filter(row => row.id !== id)
-    if (this.events.length !== before) this.flush()
+    const kept = this.events.filter(row => row.id !== id)
+    if (kept.length !== this.events.length) this.flush(kept)
   }
 
   range(from: number, until: number): CalendarEvent[] {
@@ -301,13 +295,14 @@ export class CalendarStore {
     return toIcs(this.active(), this.now())
   }
 
-  /** Atomic: temp sibling then rename, so a crash cannot truncate the document. */
-  flush(): void {
+  /** Publish changes only after the atomic disk write succeeds. */
+  flush(events: CalendarEvent[] = this.events): void {
     mkdirSync(dirname(this.file), { recursive: true })
     const temp = `${this.file}.${process.pid}.tmp`
-    const payload: CalendarFile = { version: VERSION, events: sortEvents(this.events) }
+    const payload: CalendarFile = { version: VERSION, events: sortEvents(events) }
     writeFileSync(temp, JSON.stringify(payload, null, 2), 'utf8')
     renameSync(temp, this.file)
+    this.events = events
   }
 
   private load(): void {

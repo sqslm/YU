@@ -719,6 +719,8 @@ export class NotesStore {
    */
   async setCategories(categories: NoteCategory[]): Promise<NoteCategory[]> {
     const next = sanitizeCategories(categories)
+    const before = this.data.categories
+    const notesBefore = this.data.notes.map(cloneNote)
     this.data.categories = next
     const known = new Set(next.map((category) => category.id))
     for (const note of this.data.notes) {
@@ -726,7 +728,12 @@ export class NotesStore {
       // the note keeps its place in a time-ordered list.
       if (note.categoryId && !known.has(note.categoryId)) delete note.categoryId
     }
-    this.save()
+    try { this.save(true) }
+    catch (error) {
+      this.data.categories = before
+      this.data.notes = notesBefore
+      throw error
+    }
     return next.map((category) => ({ ...category }))
   }
 
@@ -1239,7 +1246,8 @@ export class NotesStore {
       if (this.stale(id, token)) return
       const message = describeError(error)
       this.options.log(`[notes] 转写失败 ${id}：${message}`)
-      this.patch(id, token, { transcript: '', polishStatus: 'failed', polishError: mt('转写失败：{{message}}', { message }) })
+      // A provider error changes the status, never text the user already saved.
+      this.patch(id, token, { polishStatus: 'failed', polishError: mt('转写失败：{{message}}', { message }) })
       return
     }
 
