@@ -34,6 +34,7 @@ import Replay10Icon from '@mui/icons-material/Replay10'
 import Forward10Icon from '@mui/icons-material/Forward10'
 import { useTranslation } from 'react-i18next'
 import { NoteMarkdown } from './NoteMarkdown'
+import { saveNoteEdit } from './notesSave'
 import { attachmentMarkdown } from '@shared/noteAttachments'
 import type { NoteAttachment } from '@shared/noteAttachments'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
@@ -375,13 +376,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     setSaveState((prev) => nextSaveState(prev, 'flushStarted'))
     const saving = (async (): Promise<void> => {
       try {
-        const updated = await window.api.notes.update(pending.id, pending.patch)
-        if (!updated) throw new Error('Note no longer exists')
+        const updated = await saveNoteEdit(pending, pendingRef, window.api.notes.update)
         patchEntry(updated)
         setSaveState((prev) => nextSaveState(prev, 'flushSucceeded'))
       } catch {
-        // Keep the only copy of an unsaved edit available for the next retry.
-        pendingRef.current = pendingRef.current ?? pending
         setSaveState((prev) => nextSaveState(prev, 'flushFailed'))
       }
     })()
