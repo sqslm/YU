@@ -36,9 +36,9 @@ import { controlSx, SettingsField, SettingsHint, wideControlSx } from './General
 import i18n from '../../i18n'
 
 const KIND_LABEL: Record<ProviderKind, string> = {
-  asr: '语音转写',
-  llm: '语言模型',
-  multimodal: '多模态'
+  asr: 'ASR模型',
+  llm: 'LLM模型',
+  multimodal: '多模态LLM模型'
 }
 
 function ProviderInfo({ preset }: { preset?: ProviderPreset }): JSX.Element | null {

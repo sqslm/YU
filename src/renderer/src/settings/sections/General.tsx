@@ -29,20 +29,21 @@ export const wideControlSx = { width: 300 } as const
 /** Narrow control for numbers and short codes. */
 export const narrowControlSx = { width: 120 } as const
 
-/** Keep a number editable until blur/Enter, then save a finite integer in range. */
-export function SettingsNumber({ value, min, max, step = 1, disabled = false, onChange }: {
+/** Keep a number editable until blur/Enter; fractional steps allow fractional values. */
+export function SettingsNumber({ value, min, max, step = 1, disabled = false, label, onChange }: {
   value: number
   min: number
   max: number
   step?: number
   disabled?: boolean
+  label?: string
   onChange: (value: number) => void
 }): JSX.Element {
   const [draft, setDraft] = useState(String(value))
   useEffect(() => setDraft(String(value)), [value])
   const commit = (): void => {
     const parsed = draft.trim() === '' ? Number.NaN : Number(draft)
-    const next = Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : value
+    const next = Number.isFinite(parsed) ? Math.min(max, Math.max(min, step < 1 ? parsed : Math.round(parsed))) : value
     setDraft(String(next))
     if (next !== value) onChange(next)
   }
@@ -54,7 +55,7 @@ export function SettingsNumber({ value, min, max, step = 1, disabled = false, on
     onChange={(event) => setDraft(event.target.value)}
     onBlur={commit}
     onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.querySelector('input')?.blur() }}
-    slotProps={{ htmlInput: { min, max, step, 'aria-label': `${min}–${max}` } }}
+    slotProps={{ htmlInput: { min, max, step, 'aria-label': label ?? `${min}–${max}` } }}
     sx={narrowControlSx}
     helperText={`${min}–${max}`}
   />

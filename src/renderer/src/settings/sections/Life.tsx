@@ -283,7 +283,7 @@ export function LifeSection({ settings, patch }: {
           <Switch size="small" checked={settings.briefing.notify}
             onChange={e => patch({ briefing: { ...settings.briefing, notify: e.target.checked } })} />
         </SettingsRow>
-        <SettingsRow label={i18n.t('同时朗读')} description={i18n.t('请先在「语音与输入 → 朗读」中启用朗读。')}>
+        <SettingsRow label={i18n.t('同时朗读')} description={i18n.t('请先在「AI 与模型 → TTS模型」中启用朗读。')}>
           <Switch size="small" checked={settings.briefing.speak} disabled={!settings.tts.enabled}
             onChange={e => patch({ briefing: { ...settings.briefing, speak: e.target.checked } })} />
         </SettingsRow>

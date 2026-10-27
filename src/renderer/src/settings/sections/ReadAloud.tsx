@@ -3,7 +3,7 @@ import { Alert, Box, Button, MenuItem, Stack, Switch, TextField } from '@mui/mat
 import VolumeUpOutlined from '@mui/icons-material/VolumeUpOutlined'
 import type { Settings } from '@shared/types'
 import { TTS_PRESETS, type TtsProvider } from '@shared/speech'
-import { SettingsGroup, SettingsHint, SettingsRow, controlSx, narrowControlSx } from './General'
+import { SettingsGroup, SettingsHint, SettingsNumber, SettingsRow, controlSx } from './General'
 import i18n from '../../i18n'
 
 export function ReadAloudSection({ settings, patch, saving, saveError }: { settings: Settings; patch: (delta: Partial<Settings>) => void; saving: boolean; saveError: string }): JSX.Element {
@@ -45,7 +45,7 @@ export function ReadAloudSection({ settings, patch, saving, saveError }: { setti
 
   return <Stack spacing={2}>
     {notice && <Alert severity={notice.error ? 'error' : 'success'} onClose={() => setNotice(null)}>{notice.text}</Alert>}
-    <SettingsGroup icon={<VolumeUpOutlined fontSize="small"/>} title={i18n.t('朗读')}>
+    <SettingsGroup icon={<VolumeUpOutlined fontSize="small"/>} title={i18n.t('TTS模型')}>
       <SettingsRow label={i18n.t('启用朗读')}
         description={i18n.t('使用系统声音或你配置的 TTS 服务朗读内容。默认关闭。')}>
         <Switch size="small" checked={settings.tts.enabled}
@@ -79,13 +79,11 @@ export function ReadAloudSection({ settings, patch, saving, saveError }: { setti
       </SettingsRow>
       </>}
       <SettingsRow label={i18n.t('语速')} description={i18n.t(cloud ? '0.5–2 倍速，1 为正常速度。' : '0 为正常速度，负数更慢，正数更快。')}>
-        <TextField size="small" type="number" sx={narrowControlSx} value={cloud ? tts.speed : tts.rate} disabled={busy}
-          inputProps={{ min: cloud ? 0.5 : -10, max: cloud ? 2 : 10, step: cloud ? 0.1 : 1, 'aria-label': i18n.t('语速') }}
-          onChange={e => update(cloud ? { speed: Math.max(0.5, Math.min(2, Number(e.target.value) || 1)) } : { rate: Math.round(Math.max(-10, Math.min(10, Number(e.target.value) || 0))) })} />
+        <SettingsNumber key={tts.provider} value={cloud ? tts.speed : tts.rate} min={cloud ? 0.5 : -10} max={cloud ? 2 : 10} step={cloud ? 0.1 : 1} disabled={busy} label={i18n.t('语速')}
+          onChange={value => update(cloud ? { speed: value } : { rate: value })} />
       </SettingsRow>
       <SettingsRow label={i18n.t('音量')}>
-        <TextField size="small" type="number" sx={narrowControlSx} value={settings.tts.volume} disabled={busy} inputProps={{ min: 0, max: 100, step: 1, 'aria-label': i18n.t('音量') }}
-          onChange={e => patch({ tts: { ...settings.tts, volume: Math.max(0, Math.min(100, Number(e.target.value) || 0)) } })} />
+        <SettingsNumber value={tts.volume} min={0} max={100} disabled={busy} label={i18n.t('音量')} onChange={volume => update({ volume })} />
       </SettingsRow>
       <Box sx={{ px: 2, py: 1.5 }}>
         <Button size="small" variant="outlined" disabled={busy || !settings.tts.enabled || saving || !!saveError} onClick={() => void preview()}>{i18n.t(busy ? '正在试听…' : '试听')}</Button>

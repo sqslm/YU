@@ -1,4 +1,11 @@
 {
+  "ASR模型": "ASR models",
+  "LLM模型": "LLM models",
+  "TTS模型": "TTS models",
+  "多模态LLM模型": "Multimodal LLM models",
+  "配置文本模型和音频直达使用的多模态模型。": "Configure text models and multimodal models for direct audio processing.",
+  "将文字转换为语音，支持系统声音与云端 TTS 服务。": "Turn text into speech with system voices or cloud TTS providers.",
+  "请先在「AI 与模型 → TTS模型」中启用朗读。": "Enable read-aloud in AI & models → TTS models first.",
   "使用系统声音或你配置的 TTS 服务朗读内容。默认关闭。": "Read aloud using a system voice or your TTS provider. Off by default.",
   "朗读提供商": "Speech provider",
   "各提供商的连接配置独立保存。云端朗读会将文本发送给所选服务。": "Each provider keeps its own connection settings. Cloud speech sends text to the selected service.",

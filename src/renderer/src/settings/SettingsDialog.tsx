@@ -4,7 +4,6 @@ import type { Settings } from '@shared/types'
 import { GeneralSection, SpeechSection, InputSection, StorageSection, ReminderSettingsSection, AssistantSettingsSection } from './sections/General'
 import { WakeWordSection } from './sections/WakeWordSection'
 import { VoiceCommandsSection } from './sections/VoiceCommands'
-import { ReadAloudSection } from './sections/ReadAloud'
 import { ShortcutsSection } from './sections/Shortcuts'
 import { ProvidersSection } from './sections/Providers'
 import { PromptsSection } from './sections/Prompts'
@@ -48,7 +47,7 @@ interface SettingsDialogProps {
  */
 const SECTIONS = [
   { id: 'general', labelKey: 'settings.nav.general', hintKey: 'settings.hint.general', icon: <IconSliders />, pages: ['general'] },
-  { id: 'speech', labelKey: '语音与输入', hintKey: '录音、语言、唤醒、语音指令与文本输入', icon: <IconWaveMic />, pages: ['speech', 'wake', 'commands', 'input', 'readAloud', 'shortcuts'] },
+  { id: 'speech', labelKey: '语音与输入', hintKey: '录音、语言、唤醒、语音指令与文本输入', icon: <IconWaveMic />, pages: ['speech', 'wake', 'commands', 'input', 'shortcuts'] },
   { id: 'models', labelKey: 'AI 与模型', hintKey: '连接模型，管理提示词、自动路由与搜索', icon: <IconCpu />, pages: ['models', 'prompts', 'routing', 'search'] },
   { id: 'assistant', labelKey: '助手与权限', hintKey: '工具权限、文件访问范围与本地检索', icon: <LockOutlined sx={{ fontSize: 16 }} />, pages: ['assistant'] },
   { id: 'life', labelKey: '日程与提醒', hintKey: '待办提醒、日程与每日简报', icon: <IconBook />, pages: ['life', 'reminders'] },
@@ -58,7 +57,7 @@ const SECTIONS = [
   { id: 'about', labelKey: 'settings.nav.about', hintKey: '产品理念、版本与诊断', icon: <IconInfo />, pages: ['about'] }
 ]
 const PAGE_LABELS: Record<string, string> = {
-  speech: '录音与语言', wake: '语音唤醒', commands: '语音指令', input: '文本插入', readAloud: '朗读', shortcuts: 'settings.nav.shortcuts',
+  speech: '录音与语言', wake: '语音唤醒', commands: '语音指令', input: '文本插入', shortcuts: 'settings.nav.shortcuts',
   models: 'settings.nav.models', prompts: 'settings.nav.prompts', routing: 'settings.nav.routing', search: 'settings.nav.search',
   storage: 'settings.nav.storage', resources: 'settings.nav.resources', about: 'settings.nav.about',
   life: 'settings.nav.life', reminders: '提醒与待办', automation: 'settings.nav.automation',
@@ -236,7 +235,6 @@ export function SettingsDialog({
           {section === 'speech' && <SpeechSection settings={settings} patch={patch} />}
           {section === 'wake' && <WakeWordSection settings={settings} patch={patch} />}
           {section === 'commands' && <VoiceCommandsSection settings={settings} patch={patch} />}
-          {section === 'readAloud' && <ReadAloudSection settings={settings} patch={patch} saving={saving} saveError={saveError} />}
           {section === 'input' && <InputSection settings={settings} patch={patch} />}
           {section === 'storage' && <StorageSection settings={settings} patch={patch} />}
           {section === 'life' && <LifeSection settings={settings} patch={patch} />}
@@ -244,7 +242,7 @@ export function SettingsDialog({
           {section === 'assistant' && <AssistantSettingsSection settings={settings} patch={patch} />}
           {section === 'automation' && <WorkflowsSection />}
           {section === 'shortcuts' && <ShortcutsSection settings={settings} patch={patch} />}
-          {section === 'models' && <ProvidersSection settings={settings} patch={patch} />}
+          {section === 'models' && <ProvidersSection settings={settings} patch={patch} saving={saving} saveError={saveError} />}
           {section === 'prompts' && <PromptsSection settings={settings} patch={patch} />}
           {section === 'routing' && <RoutingSection settings={settings} patch={patch} />}
           {section === 'search' && <SearchSection settings={settings} patch={patch} />}
