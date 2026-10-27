@@ -395,8 +395,10 @@ export class Pipeline {
     const win = this.bar()
     if (!win) return
     const live = state.phase === 'recording' || state.phase === 'working'
+    const selected = this.takePrompt.get(this.runToken)
+    const promptName = state.phase === 'working' && selected?.applied ? selected.card.name : undefined
     if (!win.isDestroyed()) win.webContents.send('bar:state', live
-      ? { ...state, promptName: this.takePrompt.get(this.runToken)?.card.name, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('任务处理') : undefined }
+      ? { ...state, promptName, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('任务处理') : state.mode === 'dictation' && !promptName ? mt('智能任务') : undefined }
       : state)
     this.barPhase = state.phase
     if (live || state.phase === 'alert' || state.phase === 'error') {
@@ -2106,7 +2108,11 @@ export class Pipeline {
   ): string {
     const card = this.promptCardFor(kind, settings)
     const selected = this.takePrompt.get(this.runToken)
-    if (selected?.kind === kind) selected.applied = true
+    if (selected?.kind === kind && !selected.applied) {
+      selected.applied = true
+      this.setBarState({ phase: 'working', mode: this.stageMode,
+        hint: mt(this.stageMode === 'translate' ? '翻译中…' : '润色中…'), showMode: settings.showModeInBar })
+    }
     const task = this.tasks.get(this.runToken)
     if (task?.prompt?.kind === kind) task.prompt.applied = true
     // A card — user-written, or a built-in one the user edited — is the source

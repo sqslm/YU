@@ -464,7 +464,7 @@ export interface Settings {
    * Optional because settings files written before device selection exist, and
    * `mergeSettings` fills it in on load rather than rejecting the old shape.
    */
-  wakeWord: { enabled: boolean; phrase: string; deviceId?: string }
+  wakeWord: { enabled: boolean; phrase: string; deviceId?: string; confidence?: number }
   reminders: { notifications: boolean; strongSound: boolean; snoozeMinutes: number }
   polish: PolishSettings
   /** 'classic' = ASR + text LLM, 'multimodal' = one audio-in model does both. */

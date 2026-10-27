@@ -17,6 +17,15 @@ let dir: string
 beforeEach(async () => { cryptoMock.available = false; dir = await mkdtemp(join(tmpdir(), 'typeless-settings-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
+it('saves wake confidence independently and retains it after restart', async () => {
+  const file = join(dir, 'settings.json'), store = new SettingsStore(file)
+  await store.load()
+  await store.update({ wakeWord: { enabled: true, phrase: '我的唤醒词', deviceId: '2', confidence: 0.91 } })
+  await store.update({ wakeWord: { confidence: 0.72 } as never })
+  const loaded = await new SettingsStore(file).load()
+  expect(loaded.wakeWord).toEqual({ enabled: true, phrase: '我的唤醒词', deviceId: '2', confidence: 0.72 })
+})
+
 it('encrypts every search credential on disk and restores pool and legacy provider keys after restart', async () => {
   cryptoMock.available = true
   const file = join(dir, 'settings.json'), store = new SettingsStore(file)

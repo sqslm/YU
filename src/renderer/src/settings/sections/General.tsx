@@ -3,7 +3,6 @@ import { Autocomplete, Box, Button, MenuItem, Stack, Switch, TextField, Typograp
 import type { Settings } from '@shared/types'
 import { MAX_TRANSLATE_TARGETS } from '@shared/defaults'
 import { MicTest } from './MicTest'
-import { WakeWordSection } from './WakeWordSection'
 // Kept on its own line so the history-retention row (REQ-05) does not restyle
 // the imports the other rows already share.
 import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Select } from '@mui/material'
@@ -941,7 +940,12 @@ export function GeneralSection({ settings, patch }: {
           />
         </SettingsRow>
       </SettingsGroup>
-      <SettingsGroup icon={<IconHistory />} title={i18n.t('提醒')}>
+    </Stack>
+  )
+}
+
+export function ReminderSettingsSection({ settings, patch }: { settings: Settings; patch: (delta: Partial<Settings>) => void }): JSX.Element {
+  return <SettingsGroup icon={<IconHistory />} title={i18n.t('提醒')}>
         <SettingsRow label={i18n.t('普通提醒通知')} description={i18n.t('到期时通过 Windows 系统通知提示。')}>
           <Switch size="small" checked={settings.reminders.notifications} onChange={e => patch({ reminders: { ...settings.reminders, notifications: e.target.checked } })} />
         </SettingsRow>
@@ -955,8 +959,6 @@ export function GeneralSection({ settings, patch }: {
           </TextField>
         </SettingsRow>
       </SettingsGroup>
-    </Stack>
-  )
 }
 
 export function SpeechSection({ settings, patch }: {
@@ -1143,7 +1145,6 @@ export function SpeechSection({ settings, patch }: {
           />
         </SettingsRow>
       </SettingsGroup>}
-      <WakeWordSection settings={settings} patch={patch} />
     </Stack>
   )
 }
@@ -1251,6 +1252,20 @@ export function InputSection({ settings, patch }: {
   )
 }
 
+export function AssistantSettingsSection({ settings, patch }: { settings: Settings; patch: (delta: Partial<Settings>) => void }): JSX.Element {
+  return <Stack spacing={3}>
+    <AssistantAccessSection settings={settings} patch={patch} />
+    <SettingsGroup icon={<IconFolder />} title={i18n.t('助手文件搜索')}>
+      <SettingsRow label={i18n.t('下载目录')} description={settings.assistantDownloadFolder || i18n.t('使用 Windows 下载目录；浏览器另设目录时可在这里指定')}>
+        <Stack direction="row" spacing={1}>
+          {settings.assistantDownloadFolder && <Button size="small" onClick={() => patch({ assistantDownloadFolder: '' })}>{i18n.t('恢复默认')}</Button>}
+          <Button size="small" variant="outlined" onClick={() => void window.api.app.chooseDownloadFolder().then(path => { if (path) patch({ assistantDownloadFolder: path }) })}>{i18n.t('选择目录')}</Button>
+        </Stack>
+      </SettingsRow>
+    </SettingsGroup>
+  </Stack>
+}
+
 export function StorageSection({ settings, patch }: {
   settings: Settings
   patch: (delta: Partial<Settings>) => void
@@ -1296,15 +1311,6 @@ export function StorageSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
       <NotesDataGroup settings={settings} patch={patch} />
-      <AssistantAccessSection settings={settings} patch={patch}/>
-      <SettingsGroup icon={<IconFolder />} title={i18n.t('助手文件搜索')}>
-        <SettingsRow label={i18n.t('下载目录')} description={settings.assistantDownloadFolder || i18n.t('使用 Windows 下载目录；浏览器另设目录时可在这里指定')}>
-          <Stack direction="row" spacing={1}>
-            {settings.assistantDownloadFolder && <Button size="small" onClick={() => patch({ assistantDownloadFolder: '' })}>{i18n.t('恢复默认')}</Button>}
-            <Button size="small" variant="outlined" onClick={() => void window.api.app.chooseDownloadFolder().then(path => { if (path) patch({ assistantDownloadFolder: path }) })}>{i18n.t('选择目录')}</Button>
-          </Stack>
-        </SettingsRow>
-      </SettingsGroup>
       <SettingsGroup icon={<IconFolder />} title={i18n.t('应用数据')}>
         <SettingsRow
           label={i18n.t('用户数据总目录')}

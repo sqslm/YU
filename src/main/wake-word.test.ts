@@ -61,6 +61,28 @@ describe('offline custom wake lifecycle', () => {
     children[0].stdout.write(JSON.stringify({ type: 'wake', phrase: '小语', confidence: .86, wordConfidence: .65, durationMs: 450 }) + '\n')
     expect(wake).not.toHaveBeenCalled()
   })
+  it.each([0.5, 0.75, 0.99])('uses the configured confidence boundary %s', confidence => {
+    const settings = { enabled: true, phrase: '你好语助手', confidence }
+    host.update(settings, false)
+    children[0].stdout.write('{"type":"ready"}\n')
+    const event = { type: 'wake', phrase: settings.phrase, confidence: confidence - 0.01, wordConfidence: 0.95, durationMs: 800 }
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+    expect(wake).not.toHaveBeenCalled()
+    children[0].stdout.write(JSON.stringify({ ...event, confidence }) + '\n')
+    expect(wake).toHaveBeenCalledOnce()
+  })
+  it('applies threshold changes without reopening the microphone', () => {
+    const settings = { enabled: true, phrase: '你好语助手', confidence: 0.9 }
+    host.update(settings, false)
+    children[0].stdout.write('{"type":"ready"}\n')
+    const event = JSON.stringify({ type: 'wake', phrase: settings.phrase, confidence: 0.85, wordConfidence: 0.9, durationMs: 800 }) + '\n'
+    children[0].stdout.write(event)
+    expect(wake).not.toHaveBeenCalled()
+    host.update({ ...settings, confidence: 0.8 }, false)
+    expect(children).toHaveLength(1)
+    children[0].stdout.write(event)
+    expect(wake).toHaveBeenCalledOnce()
+  })
   it('surfaces a missing language pack and retries only when requested', () => {
     const settings = { enabled: true, phrase: 'Hey Qinly' }
     host.update(settings, false); children[0].stdout.write('{"type":"error","error":"language"}\n')

@@ -848,6 +848,27 @@ describe('prompt label uses the request card', () => {
     pipeline.pushAudio(tone(900))
     const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
   }
+  it('shows Smart task during recording and recognition, then the actual card when polishing starts', async () => {
+    let recognized!: (value: { text: string }) => void, polished!: (value: string) => void
+    mocks.transcribe.mockReturnValueOnce(new Promise(resolve => { recognized = resolve }))
+    mocks.complete.mockReturnValueOnce(new Promise(resolve => { polished = resolve }))
+    const { pipeline, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: false,
+      mainPromptKind: 'polish', mainPromptCardId: 'manual' })
+    pipeline.start('dictation')
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '智能任务', promptName: undefined })
+    pipeline.pushAudio(tone(900))
+    const stopping = pipeline.stop(); pipeline.audioStopped()
+    await vi.waitFor(() => expect(mocks.transcribe).toHaveBeenCalledOnce())
+    expect(sent.at(-1)).toMatchObject({ phase: 'working', taskLabel: '智能任务', promptName: undefined })
+    expect(sent.every(state => !('promptName' in state) || !state.promptName)).toBe(true)
+    recognized({ text: '你好' })
+    await vi.waitFor(() => expect(mocks.complete).toHaveBeenCalledOnce())
+    expect(sent.at(-1)).toMatchObject({ phase: 'working', hint: '润色中…', promptName: '手动卡片', taskLabel: undefined })
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_MANUAL')
+    polished('你好。')
+    await stopping
+    expect(entries[0].promptName).toBe('手动卡片')
+  })
   it.each([
     { auto: true, match: 'code', name: '代码开发', content: 'CARD_CODE' },
     { auto: true, match: 'unmatched', name: '日常聊天', content: 'CARD_CHAT' },
@@ -856,12 +877,14 @@ describe('prompt label uses the request card', () => {
     const { pipeline, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: auto,
       mainPromptKind: 'polish', mainPromptCardId: 'manual', appRules: [{ id: 'rule', match, kind: 'ai' }] })
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: name })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined, taskLabel: '智能任务' })
     expect(mocks.complete).not.toHaveBeenCalled()
     await finish(pipeline)
     expect(mocks.complete).toHaveBeenCalledOnce()
     expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain(content)
-    expect(sent.filter(state => state.phase === 'working').every(state => state.promptName === name)).toBe(true)
+    const labelled = sent.filter(state => state.phase === 'working' && state.promptName)
+    expect(labelled.length).toBeGreaterThan(0)
+    expect(labelled.every(state => state.phase === 'working' && state.promptName === name)).toBe(true)
     expect(entries[0].promptName).toBe(name)
     expect(sent.at(-1)).toMatchObject({ phase: 'done' })
     expect(sent.at(-1)).not.toHaveProperty('promptName')
@@ -873,7 +896,7 @@ describe('prompt label uses the request card', () => {
     mocks.foregroundWindow.mockReturnValue({ title: '微信', className: 'WeChat', appName: '', pid: 2 })
     pipeline.pushAudio(tone(500))
     expect(mocks.foregroundWindow).toHaveBeenCalledTimes(reads)
-    expect(sent.at(-1)).toMatchObject({ promptName: '代码开发' })
+    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
     await finish(pipeline)
     expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_CODE')
   })
@@ -881,14 +904,16 @@ describe('prompt label uses the request card', () => {
     const { pipeline, settings, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: false,
       mainPromptKind: 'polish', mainPromptCardId: 'chat' })
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ promptName: '日常聊天' })
+    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
     settings.mainPromptCardId = 'manual'
     mocks.transcribe.mockImplementationOnce(async () => {
       Object.assign(settings.promptLibrary.cards.polish[1], { name: '随后修改的名字', content: 'LATER_EDIT' })
       return { text: '你好' }
     })
     await finish(pipeline)
-    expect(sent.filter(state => state.phase === 'working').every(state => state.promptName === '手动卡片')).toBe(true)
+    const labelled = sent.filter(state => state.phase === 'working' && state.promptName)
+    expect(labelled.length).toBeGreaterThan(0)
+    expect(labelled.every(state => state.phase === 'working' && state.promptName === '手动卡片')).toBe(true)
     expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_MANUAL')
     expect(mocks.complete.mock.calls[0][1].messages[0].content).not.toContain('LATER_EDIT')
     expect(entries[0].promptName).toBe('手动卡片')
@@ -897,8 +922,9 @@ describe('prompt label uses the request card', () => {
     const { pipeline, sent } = harness({ promptLibrary: library(), appRules: [{ id: 'r', match: 'code', kind: 'ai' }] })
     pipeline.start('dictation')
     pipeline.upgrade('translate')
-    expect(sent.at(-1)).toMatchObject({ mode: 'translate', promptName: '翻译卡片' })
+    expect(sent.at(-1)).toMatchObject({ mode: 'translate', promptName: undefined })
     await finish(pipeline)
+    expect(sent.some(state => state.phase === 'working' && state.promptName === '翻译卡片')).toBe(true)
     expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_TRANSLATE')
   })
   it('omits library cards for pure transcription and for the separate Ask agent', async () => {
@@ -918,7 +944,8 @@ describe('prompt label uses the request card', () => {
     const { pipeline, sent, entries } = harness({ promptLibrary: library(), pipelineMode: 'multimodal',
       polish: { ...mergeSettings({}).polish, enabled: false }, appRules: [{ id: 'r', match: 'code', kind: 'ai' }] })
     pipeline.start('dictation'); await finish(pipeline)
-    expect(sent.find(s => s.phase === 'recording')).toMatchObject({ promptName: '代码开发' })
+    expect(sent.find(s => s.phase === 'recording')).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
+    expect(sent.some(s => s.phase === 'working' && s.promptName === '代码开发')).toBe(true)
     expect(mocks.generateFromAudio.mock.calls[0][1]).toMatchObject({ prompt: expect.stringContaining('CARD_CODE'), temperature: 0.2 })
     expect(entries[0].promptName).toBe('代码开发')
   })
@@ -934,7 +961,7 @@ describe('prompt label uses the request card', () => {
     settings.polish.enabled = true
     settings.autoActivatePrompts = false; settings.mainPromptKind = 'polish'; settings.mainPromptCardId = 'manual'
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ promptName: '手动卡片' })
+    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
     pipeline.discard()
   })
   it('cannot overwrite the next task while an old context read finishes after cancellation', async () => {
@@ -950,7 +977,7 @@ describe('prompt label uses the request card', () => {
     pipeline.start('dictation')
     release(null)
     expect(await old).toBeNull()
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: '手动卡片' })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined, taskLabel: '智能任务' })
     expect(mocks.transcribe).not.toHaveBeenCalled()
     expect(mocks.complete).not.toHaveBeenCalled()
     pipeline.discard()
@@ -1213,7 +1240,7 @@ describe('dedicated voice reminder capture', () => {
     const first = pipeline.stop(); pipeline.audioStopped(); await first
     expect(store.add).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
     pipeline.start('dictation'); pipeline.pushAudio(tone(1200))
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: undefined })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '智能任务' })
     const second = pipeline.stop(); pipeline.audioStopped(); await second
     expect(mocks.insertText).toHaveBeenCalledOnce(); expect(onReminder).toHaveBeenCalledOnce()
   })
@@ -1308,7 +1335,7 @@ describe('opening phrase mode activation', () => {
     pipeline.start('dictation'); pipeline.pushAudio(tone(2000))
     await vi.advanceTimersByTimeAsync(1800)
     expect(pipeline.isRecording).toBe(true)
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', mode: 'translate', promptName: expect.any(String) })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', mode: 'translate', promptName: undefined })
     expect(send.mock.calls.some(([channel, value]) => channel === 'bar:caption' && value.active)).toBe(false)
     const done = finish(pipeline); await vi.advanceTimersByTimeAsync(600); await done
     expect(mocks.transcribe).toHaveBeenCalledTimes(2)
@@ -1352,7 +1379,7 @@ describe('opening phrase mode activation', () => {
     expect(entries[0]).toMatchObject({ mode: 'dictation', transcript: '今天一起吃饭' })
     expect(mocks.askAgent).not.toHaveBeenCalled()
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', mode: 'dictation', taskLabel: undefined })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', mode: 'dictation', taskLabel: '智能任务' })
     pipeline.cancel()
   })
   it('does not treat the beginning of a later sliding caption window as the beginning of the task', async () => {

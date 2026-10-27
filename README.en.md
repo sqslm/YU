@@ -24,7 +24,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | **Briefing / read-aloud** | Its own page plus a daily schedule: today's events, due to-dos, overdue items and tomorrow's preview, optionally written as one paragraph by a model (falling back to the template), readable aloud; quiet hours hold delivery back, and the last two weeks stay on this machine |
 | **Automation** | Save a sequence of steps you repeat as a named workflow and replay it with one sentence, with no model in the loop; each step runs with the saved arguments and reports its result |
 | **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR, translation in place, scrolling screenshots, cross-monitor regions and pinned images with copy/save |
-| **Wake word** | Optional offline wake word using Windows on-device speech, with a selectable input device; nothing is uploaded or stored before it fires |
+| **Wake word** | Optional offline wake word using Windows on-device speech, with a selectable input device and adjustable confidence threshold; nothing is uploaded or stored before it fires |
 | **Updates** | Checks this project's GitHub Releases by default; when a newer build exists the hub shows a pill at the bottom left, and one click downloads and restarts into it |
 | **Sync** | Optional self-hosted server for history, notes, note audio, events, reminders and per-device personal stats; dictation audio stays on the machine that recorded it |
 
@@ -34,7 +34,7 @@ Extract to-dos uses the note body currently displayed; if that body changes duri
 
 The [complete capability inventory and operating conditions](ASSISTANT_ROADMAP.md#统一入口功能清单) lists the supported operations for writing your own tests. rc.14 connects note audio control, actual prompt provenance, per-note sync failures, frozen selection preview/apply, hardware and system volume, PDF content, real download/recent records, permissions, monthly/yearly and finite reminders, workflow branches/result bindings, cross-monitor capture/pins, and email/mobile briefing delivery.
 
-External delivery is off by default. Configure Resend email or ntfy mobile push in Calendar & Briefing, then enable the channel. Keys use OS encryption; receipts distinguish provider acceptance, failure and unknown delivery. Everything port/CLI and access exclusions are in Data & Performance. External ICS subscriptions remain read-only; two-way sync refers to local data through the self-hosted server.
+External delivery is off by default. Configure Resend email or ntfy mobile push in Schedule & reminders → Calendar & briefing, then enable the channel. Keys use OS encryption; receipts distinguish provider acceptance, failure and unknown delivery. Everything port/CLI, file access, tool permissions and exclusions are in Assistant & permissions. External ICS subscriptions remain read-only; two-way sync refers to local data through the self-hosted server.
 
 ## Screens
 
@@ -108,6 +108,10 @@ pnpm package          # -> release\YU-<version>-setup.exe (unsigned)
 | Region capture / OCR / smart translate | `Left Ctrl + Right Shift + X` |
 | Settings / new note | `Ctrl + ,` / `Ctrl + N` (notes page only) |
 
+After Right Alt starts a task, the bar first shows Smart task. Prompt cards stay hidden during recording and recognition, then appear when the selected card is actually used for polishing or translation.
+
+Settings group wake words, voice commands, text insertion, read-aloud and shortcuts under Voice & input. Assistant & permissions owns file access, tool permissions and local search; Schedule & reminders owns calendar, briefing and reminder notifications; Data & performance owns storage, retention and resource policies. Wake confidence is adjustable from 50% to 99% in Voice & input → Voice wake, saved automatically and applied locally without restarting the microphone. Lower thresholds wake more easily; higher thresholds reduce false activations. Older settings retain their previous defaults, including stricter matching for short phrases.
+
 Three things worth knowing:
 
 - **Trigger mode** can be switched in the Shortcuts page between "press to start, press to stop" (default) and "hold to talk". In press mode, dictation, Ask and voice translation all end with another single `Right Alt`.
@@ -130,7 +134,7 @@ Scrolling screenshots: select the content area and choose Scrolling screenshot. 
 - **Insertion and newlines**: insertion method (auto / SendInput / clipboard), multi-line handling (space / Shift+Enter / real newline), and whether to restore the clipboard after pasting.
 - **Prompts**: five card types (AI, polish, translation, document, email) with editable built-in cards and per-card temperature. "Auto activate" picks a card from the foreground app, and the Window classification page lets you add manual rules and preview which rule wins.
 
-- **Schedule & briefing**: the Schedule & briefing page holds the default advance alert, calendar subscriptions (https / webcal only — private and loopback addresses are refused), the briefing time, quiet hours, whether a model should write the paragraph, and the system voice used for read-aloud.
+- **Schedule & reminders**: calendar and briefing options hold default advance alerts, calendar subscriptions (https / webcal only), delivery time and quiet hours. Reminder notifications and snooze duration have their own tab. System voice and playback settings are under Voice & input → Read aloud.
 - **Wake word**: pick the input device explicitly. If it disappears the app falls back to the system default and logs a line in diagnostics instead of failing silently.
 - **Updates**: checked against GitHub Releases by default; point `update-feed.txt` or an environment variable at your own feed if you prefer, or turn update checks off entirely.
 

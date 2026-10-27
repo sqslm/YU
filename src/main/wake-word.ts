@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { Settings } from '@shared/types'
 import type { WakeWordStatus } from '@shared/wake-word'
+import { isShortWakePhrase, normalizeWakeConfidence } from '@shared/wake-word'
 
 /** A capture endpoint the recogniser can be pointed at. `id` is the waveIn index, as text. */
 export interface WakeWordDevice {
@@ -37,6 +38,7 @@ export class WakeWordHost {
   private child: ChildProcessWithoutNullStreams | null = null
   private phrase = ''
   private deviceId = ''
+  private confidence = 0.8
   private status: WakeWordStatus = { phase: 'off' }
   /** Set once the script reports it could not open the chosen device. */
   private deviceNotice: '' | 'device-missing' = ''
@@ -104,6 +106,8 @@ export class WakeWordHost {
     this.deviceNotice = ''
   }
   update(settings: WakeWordInput, paused: boolean, retry = false): void {
+    // The script reports raw confidence: a threshold change needs no microphone restart.
+    this.confidence = normalizeWakeConfidence(settings.confidence, settings.phrase)
     if (!settings.enabled || paused) {
       this.stop(); this.publish({ phase: settings.enabled ? 'paused' : 'off' }); return
     }
@@ -113,8 +117,7 @@ export class WakeWordHost {
     this.stop()
     this.phrase = settings.phrase
     this.deviceId = device
-    const letters = this.phrase.replace(/[^\p{L}\p{N}]/gu, '')
-    const shortPhrase = /[\u3400-\u9fff]/u.test(letters) ? letters.length < 4 : this.phrase.trim().split(/\s+/).length < 2
+    const shortPhrase = isShortWakePhrase(this.phrase)
     if (process.platform !== 'win32') { this.publish({ phase: 'error', error: 'unavailable' }); return }
     this.publish({ phase: 'starting' })
     const child = spawn(this.shell,
@@ -143,7 +146,7 @@ export class WakeWordHost {
             this.publish({ phase: 'listening' })
           }
           else if (event.type === 'wake' && this.status.phase === 'listening' &&
-            event.phrase === this.phrase && event.confidence >= (shortPhrase ? 0.94 : 0.80) &&
+            event.phrase === this.phrase && event.confidence >= this.confidence &&
             event.wordConfidence >= (shortPhrase ? 0.75 : 0.50) && event.durationMs >= 300 && event.durationMs <= 9000 && Date.now() - this.lastWake >= 5000) {
             this.lastWake = Date.now()
             this.stop(); this.publish({ phase: 'paused' }); this.deps.wake(); return

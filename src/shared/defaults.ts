@@ -18,6 +18,7 @@ import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingSettings } from './briefing
 import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings } from './speech'
 import { DEFAULT_BRIEFING_DELIVERY, normalizeBriefingDelivery } from './briefingDelivery'
 import { DEFAULT_ASSISTANT_ACCESS, normalizeAssistantAccess } from './assistantAccess'
+import { normalizeWakeConfidence } from './wake-word'
 
 export const SETTINGS_VERSION = 1
 
@@ -61,7 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   briefingDelivery: structuredClone(DEFAULT_BRIEFING_DELIVERY),
   assistantAccess: structuredClone(DEFAULT_ASSISTANT_ACCESS),
   voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
-  wakeWord: { enabled: false, phrase: '你好语助手', deviceId: '' },
+  wakeWord: { enabled: false, phrase: '你好语助手', deviceId: '', confidence: 0.8 },
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
     baseUrl: '',
@@ -302,6 +303,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
         ? input.wakeWord.deviceId.trim()
         : ''
   }
+  merged.wakeWord.confidence = normalizeWakeConfidence(input.wakeWord?.confidence, merged.wakeWord.phrase)
   merged.reminders = {
     notifications: input.reminders?.notifications !== false,
     strongSound: input.reminders?.strongSound !== false,

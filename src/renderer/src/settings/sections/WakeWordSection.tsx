@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Button, Stack, Switch, TextField, Typography } from '@mui/material'
+import { Button, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
 import type { WakeWordStatus } from '@shared/wake-word'
+import { MAX_WAKE_CONFIDENCE, MIN_WAKE_CONFIDENCE, normalizeWakeConfidence } from '@shared/wake-word'
 import { SettingsGroup, SettingsRow } from './General'
 import i18n from '../../i18n'
 
@@ -40,9 +41,21 @@ export function WakeWordSection({ settings, patch }: { settings: Settings; patch
   }
   const labels = { off: '已关闭', starting: '正在启动本地唤醒…', listening: '正在等待唤醒词', paused: '任务进行中，唤醒已暂停', error: '语音唤醒不可用' }
   const errors = { language: '请在 Windows 设置中安装唤醒词对应的中文或英文语音识别语言包。', microphone: '无法访问 Windows 默认麦克风，请检查系统麦克风权限和输入设备。', unavailable: 'Windows 本地语音识别启动失败，请重试。' }
-  return <SettingsGroup title={i18n.t('语音唤醒')} collapsible defaultOpen={settings.wakeWord.enabled}>
+  const confidence = normalizeWakeConfidence(settings.wakeWord.confidence, settings.wakeWord.phrase)
+  return <SettingsGroup title={i18n.t('语音唤醒')}>
     <SettingsRow label={i18n.t('启用语音唤醒')} description={i18n.t('使用 Windows 本地离线识别等待唤醒词，默认关闭；唤醒前不上传音频。')}>
       <Switch size="small" inputProps={{ 'aria-label': i18n.t('启用语音唤醒') }} checked={settings.wakeWord.enabled} onChange={event => patch({ wakeWord: { ...settings.wakeWord, enabled: event.target.checked } })} />
+    </SettingsRow>
+    <SettingsRow label={i18n.t('唤醒置信度')} description={i18n.t('阈值越低越容易唤醒，越高越少误触发。调整后自动保存并立即生效。')}>
+      <Stack sx={{ width: 220, maxWidth: '100%' }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Slider aria-label={i18n.t('唤醒置信度')} min={MIN_WAKE_CONFIDENCE} max={MAX_WAKE_CONFIDENCE} step={0.01} value={confidence}
+            valueLabelDisplay="auto" valueLabelFormat={value => `${Math.round(value * 100)}%`}
+            onChange={(_event, value) => patch({ wakeWord: { ...settings.wakeWord, confidence: value as number } })} />
+          <Typography sx={{ fontSize: 12, minWidth: 32, fontVariantNumeric: 'tabular-nums' }}>{Math.round(confidence * 100)}%</Typography>
+        </Stack>
+        <Stack direction="row" justifyContent="space-between"><Typography variant="caption" color="text.secondary">{i18n.t('更易唤醒')}</Typography><Typography variant="caption" color="text.secondary">{i18n.t('更少误触发')}</Typography></Stack>
+      </Stack>
     </SettingsRow>
     <SettingsRow label={i18n.t('自定义唤醒词')} description={i18n.t('说出唤醒词，看到录音条后再说需求；停顿后自动提交，右 Alt 结束，Esc 取消。')}>
       <TextField size="small" sx={{ width: 220 }} value={draft} error={invalid} inputProps={{ maxLength: 40, 'aria-label': i18n.t('自定义唤醒词') }}

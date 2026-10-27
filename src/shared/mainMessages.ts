@@ -7,6 +7,8 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '智能任务': 'Smart task',
+  '翻译中…': 'Translating…',
   "源码": "Source",
   "插入图片 / 附件": "Insert image / attachment",
   "正在保存附件…": "Saving attachments…",

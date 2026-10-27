@@ -1983,5 +1983,18 @@
   "请选择不超过 50 MB 的附件文件": "Choose an attachment file no larger than 50 MB",
   "插入图片或附件": "Insert images or attachments",
   "附件不存在于这条随记目录中": "The attachment is not present in this note directory",
-  "随记附件缺失，请恢复附件后再导出": "A note attachment is missing; restore it before exporting"
+  "随记附件缺失，请恢复附件后再导出": "A note attachment is missing; restore it before exporting",
+  "录音、语言、唤醒、语音指令与文本输入": "Recording, languages, wake words, voice commands and text input",
+  "助手与权限": "Assistant & permissions",
+  "工具权限、文件访问范围与本地检索": "Tool permissions, file access and local search",
+  "日程与提醒": "Schedule & reminders",
+  "待办提醒、日程与每日简报": "Reminders, calendar and daily briefings",
+  "录音与语言": "Recording & languages",
+  "语音指令": "Voice commands",
+  "唤醒置信度": "Wake confidence threshold",
+  "阈值越低越容易唤醒，越高越少误触发。调整后自动保存并立即生效。": "Lower thresholds wake more easily; higher thresholds reduce false activations. Changes are saved automatically and applied immediately.",
+  "更易唤醒": "Easier to wake",
+  "更少误触发": "Fewer false activations",
+  "请先在「语音与输入 → 朗读」中启用朗读。": "Enable read-aloud in Voice & input → Read aloud first.",
+  "智能任务": "Smart task"
 }
