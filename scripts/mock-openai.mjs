@@ -229,13 +229,13 @@ const SCENARIOS = {
     results: [
       {
         title: 'EU agrees AI liability rules',
-        url: 'https://www.reuters.com/technology/eu-ai-liability-2026-10-19/',
-        content: 'Reuters, 2026-10-19: EU member states agreed on AI liability rules.'
+        url: `https://www.reuters.com/technology/eu-ai-liability-${SCENARIO_DATE}/`,
+        content: `Reuters, ${SCENARIO_DATE}: EU member states agreed on AI liability rules.`
       },
       {
         title: 'Brussels seals AI liability deal',
         url: 'https://www.bbc.com/news/technology-eu-ai-liability',
-        content: 'BBC News, 2026-10-19: separate reporting from Brussels.'
+        content: `BBC News, ${SCENARIO_DATE}: separate reporting from Brussels.`
       }
     ]
   },
