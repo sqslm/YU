@@ -34,6 +34,7 @@ interface SettingsDialogProps {
   saving: boolean
   saveError: string
   onRetry: () => void
+  initialSection?: string
 }
 
 /**
@@ -65,9 +66,10 @@ export function SettingsDialog({
   patch,
   saving,
   saveError,
-  onRetry
+  onRetry,
+  initialSection = 'general'
 }: SettingsDialogProps): JSX.Element {
-  const [section, setSection] = useState('general')
+  const [section, setSection] = useState(initialSection)
   const version = useAppVersion()
   const { t } = useTranslation()
   const active = SECTIONS.find((item) => item.pages.includes(section)) ?? SECTIONS[0]

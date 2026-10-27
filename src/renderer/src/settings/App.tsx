@@ -63,9 +63,11 @@ export function App(): JSX.Element {
   /** Scene name the home page asked to look up; history seeds its search box with it. */
   const [historyQuery, setHistoryQuery] = useState<string | undefined>(undefined)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsSection, setSettingsSection] = useState('general')
   useEffect(() => {
     const navigate = (): void => { void window.api.assistant.hubView().then(view => {
       if (!view) return
+      if (view.page === 'settings') setSettingsSection('general')
       setSettingsOpen(view.page === 'settings')
       if (view.page === 'notes') setNoteToOpen(view.noteId ? { id: view.noteId } : undefined)
       if (view.page !== 'settings') setPage(view.page === 'overview' ? 'home' : view.page === 'corrections' ? 'dictionary' : view.page)
@@ -124,6 +126,7 @@ export function App(): JSX.Element {
     const onKey = (event: KeyboardEvent): void => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') {
         event.preventDefault()
+        setSettingsSection('general')
         setSettingsOpen(true)
       }
     }
@@ -146,14 +149,16 @@ export function App(): JSX.Element {
     }
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} openNote={noteToOpen} />
     if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen({ id }); setPage('notes') }} />
-    if (page === 'briefing') return <BriefingPage settings={settings} onOpenSettings={() => setSettingsOpen(true)} />
+    if (page === 'briefing') return <BriefingPage settings={settings} onOpenSettings={() => { setSettingsSection('life'); setSettingsOpen(true) }} />
     if (page === 'calendar') return <CalendarPage />
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />
     return (
       <HomePage
         settings={settings}
         mode={mode}
-        onOpenPage={(id) => setPage(id)}
+        onOpenPage={(id) => { if (id === 'notes') setNoteToOpen(undefined); setPage(id) }}
+        onOpenNote={(id) => { setNoteToOpen({ id }); setPage('notes') }}
+        onOpenSettings={(section) => { setSettingsSection(section); setSettingsOpen(true) }}
         onOpenHistory={(query) => {
           setHistoryQuery(query)
           setPage('history')
@@ -243,10 +248,11 @@ export function App(): JSX.Element {
               tabIndex={0}
               data-settings-entry
               aria-label={translate('nav.settings')}
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => { setSettingsSection('general'); setSettingsOpen(true) }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
+                  setSettingsSection('general')
                   setSettingsOpen(true)
                 }
               }}
@@ -272,6 +278,7 @@ export function App(): JSX.Element {
       {settings && settingsOpen && (
         <SettingsDialog
           open={settingsOpen}
+          initialSection={settingsSection}
           onClose={() => { void flush(); setSettingsOpen(false) }}
           saving={saving}
           saveError={error}

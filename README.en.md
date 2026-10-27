@@ -36,6 +36,8 @@ External delivery is off by default. Configure Resend email or ntfy mobile push 
 
 ## Screens
 
+The overview is a personal AI workspace, with quick access to notes, screenshots, workflows, and history. Today's agenda, to-dos, briefing, and recent activity take priority. Complete a to-do directly, see dates on deadlines, and expand Usage statistics for input trends, the heat map, and app usage. Failed reads show their cause and a retry action while keeping loaded content available.
+
 ![Overview](resources/screenshots/hub-home.png)
 
 | The bar while recording | Ask answer card |

@@ -1,1205 +1,207 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material'
-import type { HistoryEntry, Settings } from '@shared/types'
-import { emptyStats, type StatsFile } from '@shared/stats'
-import { palettes, type Tokens } from '../theme'
-import { IconBook, IconChart, IconClock, IconMic, IconSparkles } from '../icons'
-import {
-  WEEKDAY,
-  bucketFromStats,
-  clock,
-  heatFromStats,
-  heatLevel,
-  monthLabels,
-  shortClock,
-  todayFromStats
-} from './overview'
-import { durationLabel, group, insightsFromStats, savedLabel, wpmLabel } from './insights'
-import { formatEventTime, type CalendarEvent } from '@shared/calendar'
-import type { Briefing } from '@shared/briefing'
-import { PRIORITY_LABELS, isOverdue, sortTodos, type Reminder } from '@shared/reminders'
-import { buildShareCard, drawShareCard, shareCardFileName } from './shareCard'
-import { AppShareDialog } from './AppShareDialog'
-import { appColor, piePercentages } from './pie'
-import i18n, { currentUiLanguage } from '../../i18n'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Alert, Box, Button, ButtonBase, Checkbox, Skeleton, Typography } from '@mui/material'
+import ArrowForward from '@mui/icons-material/ArrowForward'
+import CalendarMonth from '@mui/icons-material/CalendarMonthOutlined'
+import CheckCircle from '@mui/icons-material/CheckCircleOutline'
+import ExpandMore from '@mui/icons-material/ExpandMore'
+import StickyNote from '@mui/icons-material/StickyNote2Outlined'
+import Screenshot from '@mui/icons-material/ScreenshotMonitorOutlined'
+import AccountTree from '@mui/icons-material/AccountTreeOutlined'
+import History from '@mui/icons-material/History'
+import type { Settings } from '@shared/types'
+import { formatEventTime } from '@shared/calendar'
+import { isOverdue } from '@shared/reminders'
+import { UsageInsights } from './UsageInsights'
+import { loadHomeData, openTodos, recentActivity, todayAgenda, todoTime, type HomeData } from './homeView'
+import { modeLabel } from './historyView'
+import { useTranslation } from 'react-i18next'
 
 interface HomeProps {
   settings: Settings
-  /** Resolved light/dark, so `'system'` is already collapsed by the shell. */
   mode: 'dark' | 'light'
-  /** Opens the history page, optionally pre-filtered to a scene name. */
   onOpenHistory: (query?: string) => void
-  /**
-   * Opens one of the pages the today board links to. The board is the only place
-   * that has to send someone elsewhere, so it takes the smallest possible hook
-   * instead of the whole shell's navigator.
-   */
-  onOpenPage: (page: 'reminders' | 'calendar' | 'briefing') => void
+  onOpenPage: (page: 'notes' | 'reminders' | 'calendar' | 'briefing') => void
+  onOpenNote: (id: string) => void
+  onOpenSettings: (section: 'models' | 'shortcuts' | 'automation') => void
 }
 
-type Range = 7 | 30
-type Metric = 'count' | 'chars' | 'duration'
-
-/**
- * Read once so the first paint has the shape the page expects. Every figure on
- * this page comes from the lifetime rollup, never from the history rows: deleting
- * a row is not the same thing as un-dictating it, and the page has to say so.
- */
-const NO_STATS: StatsFile = emptyStats()
-
-/** Space above the cells reserved for the month captions. */
-const MONTH_ROW = 14
-/** Gap between heat cells; the same value drives the weekday label column. */
-const HEAT_GAP = 2
-
-const METRIC_LABEL: Record<Metric, string> = {
-  count: '条数',
-  chars: '字数',
-  duration: '时长'
+const SECTION_KEYS: Record<keyof HomeData, string> = {
+  events: '日程', todos: '提醒与待办', briefing: '简报', notes: '随记',
+  history: '历史记录', workflows: '自动化', stats: '使用统计'
 }
+const focusSx = { '&:focus-visible, &.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 3 } }
+const clipSx = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const
 
-/**
- * Poll period of the silent overview refresh. Long enough that even a long
- * dictation session never notices the two file reads, short enough that the
- * numbers look live next to the editor this page usually sits beside.
- */
-const REFRESH_MS = 5000
+export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote, onOpenSettings }: HomeProps): JSX.Element {
+  const { t, i18n } = useTranslation()
+  const language = i18n.resolvedLanguage === 'en' ? 'en' : 'zh'
+  const [data, setData] = useState<Partial<HomeData>>({})
+  const [errors, setErrors] = useState<Awaited<ReturnType<typeof loadHomeData>>['errors']>([])
+  const [loading, setLoading] = useState(true)
+  const [now, setNow] = useState(Date.now)
+  const [showUsage, setShowUsage] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [completing, setCompleting] = useState<string | null>(null)
+  const [capturing, setCapturing] = useState(false)
+  const request = useRef(0)
 
-function timeLabel(ts: number): string {
-  const d = new Date(ts)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-export function HomePage({ settings, mode, onOpenHistory, onOpenPage }: HomeProps): JSX.Element {
-  const t = palettes[mode]
-  const [entries, setEntries] = useState<HistoryEntry[]>([])
-  const [stats, setStats] = useState<StatsFile>(NO_STATS)
-  const [range, setRange] = useState<Range>(7)
-  const [metric, setMetric] = useState<Metric>('count')
-  const [sharing, setSharing] = useState(false)
-  const [shareHint, setShareHint] = useState<string | null>(null)
-  /** Per-app breakdown dialog; its open state is independent of `hover`. */
-  const [appShareOpen, setAppShareOpen] = useState(false)
-  /** Column under the pointer; the bar and its number brighten together. */
-  const [hover, setHover] = useState<number | null>(null)
-  /** Today's board: the day's events, the open to-dos and the briefing. */
-  const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [todos, setTodos] = useState<Reminder[]>([])
-  const [briefing, setBriefing] = useState<Briefing | null>(null)
-
-  const reload = useCallback(() => {
-    const start = new Date()
-    const from = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime()
-    const until = from + 86_400_000
-    void Promise.all([
-      window.api.history.list(),
-      window.api.stats.get(),
-      // Today's board is secondary data: a damaged calendar file or an
-      // unavailable briefing must not blank out the numbers above it.
-      window.api.life.eventsBetween(from, until).catch(() => [] as CalendarEvent[]),
-      window.api.reminders.list().catch(() => [] as Reminder[]),
-      window.api.life.briefing().catch(() => null)
-    ]).then(([rows, rollup, todayEvents, openTodos, card]) => {
-      setEntries(rows)
-      setStats(rollup)
-      setEvents(todayEvents)
-      setTodos(openTodos)
-      setBriefing(card)
-    })
+  const reload = useCallback(async (): Promise<void> => {
+    const ticket = ++request.current
+    const at = Date.now()
+    const result = await loadHomeData(window.api, at)
+    if (request.current !== ticket) return
+    setData(previous => ({ ...previous, ...result.data }))
+    setErrors(result.errors)
+    setNow(at)
+    setLoading(false)
   }, [])
 
   useEffect(() => {
-    reload()
-  }, [reload])
-
-  /**
-   * The overview is the page people leave on screen while they dictate, so it
-   * has to follow the history by itself; the 刷新状态 button is a manual retry,
-   * not the only way to see a new take. A tick only writes `entries` and `stats`
-   * — the hovered column, the range/metric pills and an open dialog are state of
-   * their own and survive it — and nothing is animated, so values change in
-   * place instead of flashing.
-   *
-   * The poll and the two listeners answer different questions: the interval
-   * catches takes that land while the window is in front, the listeners catch
-   * the far more common case of dictating into another app and coming back,
-   * which would otherwise show up to five seconds stale.
-   */
-  useEffect(() => {
-    const refresh = (): void => reload()
-    const timer = window.setInterval(refresh, REFRESH_MS)
-    const onVisibility = (): void => {
-      if (document.visibilityState === 'visible') reload()
-    }
+    void reload()
+    const refresh = (): void => { if (document.visibilityState === 'visible') void reload() }
+    const timer = window.setInterval(refresh, 30_000)
     window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', onVisibility)
+    document.addEventListener('visibilitychange', refresh)
+    const off = [window.api.life.onChanged(refresh), window.api.reminders.onChanged(refresh),
+      window.api.notes.onChanged(refresh), window.api.workflow.onChanged(refresh), window.api.life.onBriefing(refresh)]
     return () => {
+      ++request.current
       window.clearInterval(timer)
       window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', onVisibility)
+      document.removeEventListener('visibilitychange', refresh)
+      off.forEach(unsubscribe => unsubscribe())
     }
   }, [reload])
 
-  const today = useMemo(() => todayFromStats(stats), [stats])
+  const agenda = todayAgenda(data.events ?? [], now)
+  const todos = openTodos(data.todos ?? [], now)
+  const overdue = todos.filter(row => isOverdue(row, now)).length
+  const activity = recentActivity(data.history ?? [], data.notes ?? [])
+  const workflowCount = data.workflows?.filter(row => !row.archivedAt).length
+  const hasTextModel = settings.profiles.some(profile => profile.enabled && profile.kind === 'llm' && profile.model.trim() && profile.baseUrl.trim())
+  const panelSx = { border: '1px solid', borderColor: 'divider', borderRadius: '14px', bgcolor: 'background.paper', p: 2.25, minWidth: 0 }
 
-  // Vendor-style lifetime insights: cumulative volume, weighted speaking rate,
-  // time saved versus typing, the streak and the apps the text landed in.
-  const insights = useMemo(() => insightsFromStats(stats, { topApps: Object.keys(stats.apps).length }), [stats])
-  const saved = useMemo(() => savedLabel(insights.savedMs), [insights.savedMs])
+  const complete = async (id: string): Promise<void> => {
+    setCompleting(id); setActionError('')
+    try { await window.api.reminders.action(id, 'complete'); await reload() }
+    catch (error) { setActionError(error instanceof Error ? error.message : String(error)) }
+    finally { setCompleting(null) }
+  }
 
-  /**
-   * Calls across every app in the rollup. `insights.apps` contains the full ranked list, so
-   * the dialog's centre number comes from the rollup itself: a capped list
-   * summed on its own would report "68 次" while the history holds 90.
-   */
-  const appTotal = useMemo(
-    () => Object.values(stats.apps).reduce((sum, count) => sum + count, 0),
-    [stats]
-  )
+  const capture = async (): Promise<void> => {
+    setCapturing(true); setActionError('')
+    try { if (!await window.api.screenshot.open()) setActionError(t('截图未能打开，请稍后重试')) }
+    catch (error) { setActionError(error instanceof Error ? error.message : String(error)) }
+    finally { setCapturing(false) }
+  }
 
-  /**
-   * Percentages for the 热门场景 chips, from the same helper the dialog's ring
-   * uses. `share * 100` rounded per chip reads 6% for a 6.38% slice while the
-   * ring, which has to add up to 100, prints 7% — one number, two answers. The
-   * largest-remainder split is therefore computed once here and both views print
-   * its digits.
-   */
-  const appPercents = useMemo(
-    () => piePercentages(insights.apps.map((app) => app.count)),
-    [insights.apps]
-  )
+  const empty = (section: keyof HomeData, text: string): ReactNode => loading
+    ? <Skeleton height={44} />
+    : <Typography sx={{ color: 'text.secondary', fontSize: 12.5, lineHeight: 1.8, py: 1.5 }}>
+        {data[section] === undefined ? t('暂时无法读取，请刷新重试') : text}
+      </Typography>
 
-  const buckets = useMemo(() => bucketFromStats(stats, range), [stats, range])
-
-  const chart = useMemo(() => {
-    const value = (day: { count: number; chars: number; ms: number }): number =>
-      metric === 'count' ? day.count : metric === 'chars' ? day.chars : Math.round(day.ms / 1000)
-    const values = buckets.map(value)
-    const total = values.reduce((sum, n) => sum + n, 0)
-    const max = Math.max(1, ...values)
-    return { values, total, max, average: Math.round(total / Math.max(1, buckets.length)) }
-  }, [buckets, metric])
-
-  const heat = useMemo(() => heatFromStats(stats), [stats])
-
-  /**
-   * Cell size for the year grid. A fixed 11px cell left a wide strip of empty
-   * card to the right of December, so the size comes from the width the card
-   * actually offers: 53 columns plus their gaps, minus the weekday label column.
-   * The value is deliberately fractional — rounding down left a 30px gutter on
-   * the right, and a tenth of a pixel per cell is invisible while the grid now
-   * ends exactly at the card's padding edge.
-   */
-  const heatBoxRef = useRef<HTMLDivElement | null>(null)
-  const [heatCell, setHeatCell] = useState(11)
-  const heatWeekCount = heat.weeks.length
-  useEffect(() => {
-    const element = heatBoxRef.current
-    if (!element) return
-    const measure = (): void => {
-      const available = element.clientWidth - 26
-      if (available <= 0 || heatWeekCount === 0) return
-      const raw = (available - HEAT_GAP * (heatWeekCount - 1)) / heatWeekCount
-      setHeatCell(Math.max(8, Math.min(20, Math.round(raw * 100) / 100)))
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [heatWeekCount])
-
-  /**
-   * Month captions land on the column where that month's first week starts.
-   * 11px columns are narrower than a "10月" caption, so neighbouring labels
-   * collide; `monthLabels` drops the ones that would overlap (the current
-   * month always survives, because that is the one the reader looks for).
-   */
-  // `monthLabels` translates month names itself, so the memo has to recompute when
-  // the interface language flips; keyed on `heat` alone it kept the labels it
-  // captured on the first render (Chinese, on a reload, before settings applied).
-  const language = currentUiLanguage()
-  const monthCols = useMemo(() => monthLabels(heat.weeks), [heat, language])
-
-  /**
-   * Renders the same figures into a 1080×1350 PNG and hands it to the main
-   * process for a save dialog. Off-screen canvas so nothing flashes on screen.
-   */
-  const shareInsights = useCallback(async (): Promise<void> => {
-    if (sharing) return
-    setSharing(true)
-    setShareHint(i18n.t('生成中…'))
-    try {
-      const levels = heat.weeks.flatMap((week) =>
-        week.map((cell) => heatLevel(cell.count, heat.max))
-      )
-      const model = buildShareCard(insights, { heat: levels })
-      const canvas = document.createElement('canvas')
-      canvas.width = model.width
-      canvas.height = model.height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) throw new Error(i18n.t('浏览器不支持绘图'))
-      drawShareCard(ctx, model, {
-        canvas: t.canvas,
-        surface: t.surface,
-        text: t.text,
-        textDim: t.textDim,
-        textFaint: t.textFaint,
-        accent: t.accent,
-        line: t.line
-      })
-      const result = await window.api.app.saveImage(
-        canvas.toDataURL('image/png'),
-        shareCardFileName(Date.now())
-      )
-      setShareHint(result.ok ? i18n.t('已保存') : (result.message ?? i18n.t('保存失败')))
-    } catch (err) {
-      setShareHint(err instanceof Error ? err.message : i18n.t('生成失败'))
-    } finally {
-      setSharing(false)
-      window.setTimeout(() => setShareHint(null), 2600)
-    }
-  }, [heat, insights, sharing, t])
-
-
-  // The renderer runs on file://, which has no clipboard permission — the copy
-  // has to go through the main process (same path the history page uses).
-  const card = {
-    bgcolor: t.surface,
-    border: `1px solid ${t.line}`,
-    borderRadius: '12px'
-  } as const
   return (
-    <Box
-      sx={{
-        // One screen, no scrolling: the page is a fixed grid whose middle row
-        // takes whatever height is left over. Anything that does not fit inside
-        // that row scrolls inside its own card instead of pushing the heat map
-        // off the bottom of the window.
-        px: 3,
-        pt: 1.25,
-        pb: 1.75,
-        height: '100%',
-        minHeight: 0,
-        // The page grew a today board; on a short window the honest answer is a
-        // scrollbar, not a year heat map clipped at the bottom edge.
-        overflowY: 'auto',
-        boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6 }}>{i18n.t(i18n.t('概览'))}</Typography>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={reload}
-          sx={{
-            ml: 'auto',
-            height: 26,
-            fontSize: 11.5,
-            borderColor: t.line,
-            color: t.textDim,
-            '&:hover': { borderColor: t.textFaint }
-          }}
-        >
-          {i18n.t('刷新状态')}
-        </Button>
-      </Box>
-
-      {/* One strip, four numbers. Four separate tiles made the page read as a
-          dashboard of dashboards; the three "today" numbers belong together, and
-          the lifetime count answers a different question, so it sits behind a
-          divider instead of in a tile of its own. */}
-      <Box
-        data-today-stats
-        sx={{ ...card, display: 'flex', alignItems: 'stretch', px: 2, py: 1.15, gap: 2, flexShrink: 0 }}
-      >
-        {[
-          {
-            icon: <IconSparkles size={12} />,
-            label: i18n.t('今日字数'),
-            value: String(today.chars),
-            sub: i18n.t('{{n}} 段', { n: today.segments })
-          },
-          {
-            icon: <IconClock size={12} />,
-            label: i18n.t('今日总时长'),
-            value: clock(today.spoken),
-            sub: today.segments > 0 ? i18n.t('平均 {{n}}', { n: shortClock(today.average) }) : i18n.t('今天还没有说话')
-          },
-          {
-            icon: <IconMic size={12} />,
-            // Pace is the one today-number the old tiles never showed: "average
-            // paragraph" only repeated the footnote under the duration.
-            label: i18n.t('今日语速'),
-            value: today.spoken > 0 ? String(Math.round(today.chars / (today.spoken / 60000))) : '—',
-            sub: today.spoken > 0 ? i18n.t('字/分') : i18n.t('今天还没有说话')
-          }
-        ].map((item) => (
-          <Box key={item.label} sx={{ flex: 1, minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-              <Box sx={{ display: 'grid', placeItems: 'center', color: t.textDim, opacity: 0.9 }}>{item.icon}</Box>
-              <Typography sx={{ fontSize: 10.5, color: t.textDim }}>{item.label}</Typography>
-            </Box>
-            <Typography
-              sx={{
-                fontSize: 18,
-                fontWeight: 700,
-                letterSpacing: -0.5,
-                lineHeight: 1.35,
-                fontVariantNumeric: 'tabular-nums'
-              }}
-            >
-              {item.value}
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: 9.5,
-                color: t.textFaint,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {item.sub}
-            </Typography>
-          </Box>
-        ))}
-
-        <Box sx={{ width: '1px', bgcolor: t.line, flexShrink: 0 }} />
-
+    <Box component="main" data-home-workspace sx={{ px: { xs: 2, md: 3.5 }, pt: 1.5, pb: 3.5, maxWidth: 1440, mx: 'auto',
+      '& .MuiButton-root': focusSx, '& .MuiButtonBase-root': { transition: 'background-color .16s ease', ...focusSx } }}>
+      <Box component="header" sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5 }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-            <Box sx={{ display: 'grid', placeItems: 'center', color: t.textDim, opacity: 0.9 }}>
-              <IconBook size={12} />
-            </Box>
-            <Typography sx={{ fontSize: 10.5, color: t.textDim }}>{i18n.t('累计记录')}</Typography>
-          </Box>
-          <Typography
-            sx={{
-              fontSize: 18,
-              fontWeight: 700,
-              letterSpacing: -0.5,
-              lineHeight: 1.35,
-              fontVariantNumeric: 'tabular-nums'
-            }}
-          >
-            {String(entries.length)}
+          <Typography component="h1" sx={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.7 }}>{t('语，与你常在')}</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.4 }}>
+            {new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(now)}
+            {' · '}{t('记录想法，安排事务，交给助手处理')}
           </Typography>
-          <Typography
-            sx={{
-              fontSize: 9.5,
-              color: t.textFaint,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {i18n.t('本机存档（上限 {{n}}）', { n: settings.historyLimit })}
-          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {!hasTextModel && <Button size="small" variant="contained" onClick={() => onOpenSettings('models')}>{t('配置 AI 与模型')}</Button>}
+          <Button size="small" onClick={() => onOpenSettings('shortcuts')} sx={{ color: 'text.secondary' }}>{t('查看快捷键')}</Button>
+          <Button size="small" onClick={() => void reload()} sx={{ color: 'text.secondary' }}>{t('刷新状态')}</Button>
         </Box>
       </Box>
 
-      <TodayCard card={card} t={t} events={events} todos={todos} briefing={briefing} onOpenPage={onOpenPage} />
+      {errors.length > 0 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => void reload()}>{t('重试')}</Button>}>
+        {t('部分内容未能更新，已加载的内容仍可使用。请重试。')}
+        <Box component="ul" sx={{ m: 0, pl: 2.5 }}>{errors.map(error => <li key={error.section}>{t(SECTION_KEYS[error.section])}：{error.message}</li>)}</Box>
+      </Alert>}
+      {actionError && <Alert severity="error" onClose={() => setActionError('')} sx={{ mb: 2 }}>{actionError}</Alert>}
 
-      {/* Trend and lifetime insights share one band: both answer "how am I
-          doing over time", and side by side they cost a row instead of two. */}
-      <Box
-        data-home-trend
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)',
-          gap: 1,
-          minHeight: 200,
-          flexShrink: 0
-        }}
-      >
-        <Box
-          sx={{
-            ...card,
-            p: 1.5,
-            flex: 1,
-            // Bars are drawn as a percentage of this card, so a card squeezed
-            // to 120 px renders bars shorter than their own labels.
-            minHeight: 186,
-            display: 'flex',
-            flexDirection: 'column'
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Pills
-              t={t}
-              items={[
-                { id: '7', label: i18n.t('近 7 天') },
-                { id: '30', label: i18n.t('近 30 天') }
-              ]}
-              value={String(range)}
-              onChange={(id) => setRange(id === '30' ? 30 : 7)}
-            />
-            <Box sx={{ ml: 'auto' }}>
-              <Pills
-                t={t}
-                items={[
-                  { id: 'count', label: i18n.t(METRIC_LABEL.count) },
-                  { id: 'chars', label: i18n.t(METRIC_LABEL.chars) },
-                  { id: 'duration', label: i18n.t(METRIC_LABEL.duration) }
-                ]}
-                value={metric}
-                onChange={(id) => setMetric(id as Metric)}
-              />
-            </Box>
-          </Box>
-
-          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
-            <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8 }}>
-              {chart.total}
-            </Typography>
-            <Typography sx={{ fontSize: 11, color: t.textFaint }}>
-              {i18n.t('日均 {{n}}', { n: chart.average })}
-              {metric === 'duration' ? ' ' + i18n.t('秒') : ''}
-            </Typography>
-          </Box>
-
-          <Box
-            sx={{
-              mt: 1,
-              // Grows to fill the card so the chart's baseline lines up with the
-              // bottom of the neighbouring list instead of leaving a dead band.
-              flex: 1,
-              minHeight: 96,
-              display: 'flex',
-              alignItems: 'flex-end',
-              gap: range === 7 ? 1.75 : 0.4,
-              position: 'relative',
-              // The card is full width now; without a cap seven buckets spread
-              // across ~800 px read as slabs floating in a gap. 620 px keeps the
-              // pitch of a normal week and centres the plot under the numbers.
-              width: '100%',
-              maxWidth: 620,
-              mx: 'auto'
-            }}
-          >
-            {[0, 0.5, 1].map((ratio) => (
-              <Box
-                key={ratio}
-                sx={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  bottom: `${ratio * 100}%`,
-                  borderTop: `1px dashed ${t.line}`
-                }}
-              />
-            ))}
-            {chart.values.map((value, index) => {
-              const unit = metric === 'duration' ? i18n.t('秒') : metric === 'chars' ? i18n.t('字') : i18n.t('条')
-              const active = hover === index
-              const bucket = buckets[index]
-              // 30px is reserved for the number above and the weekday below, so
-              // the bar can be a percentage of whatever height the card offers.
-              const ratio = value > 0 ? Math.max(0.05, value / chart.max) : 0
-              /**
-               * The whole day, not just the plotted metric: the bar answers "which
-               * day was busiest", and the card answers "so what happened on it".
-               */
-              const detail = bucket ? (
-                <Box data-chart-detail={bucket.key} sx={{ py: 0.25 }}>
-                  <Typography sx={{ fontSize: 11, fontWeight: 600, color: t.text }}>
-                    {i18n.t('{{m}} 月 {{d}} 日 · 周', { m: Number(bucket.key.slice(5, 7)), d: Number(bucket.key.slice(8)) })}
-                    {bucket.label}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      mt: 0.4,
-                      fontSize: 10.5,
-                      color: t.textDim,
-                      fontVariantNumeric: 'tabular-nums'
-                    }}
-                  >
-                    {i18n.t('{{count}} 条 · {{chars}} 字 · {{time}}', { count: bucket.count, chars: bucket.chars, time: bucket.ms > 0 ? clock(bucket.ms) : '0:00' })}
-                  </Typography>
-                  {active && (
-                    <Typography sx={{ mt: 0.2, fontSize: 10, color: t.textFaint }}>
-                      {i18n.t('当前按「{{metric}}」排序，这一天 {{value}} {{unit}}', { metric: i18n.t(METRIC_LABEL[metric] ?? ''), value, unit })}
-                    </Typography>
-                  )}
-                </Box>
-              ) : (
-                ''
-              )
-              return (
-                <Tooltip key={index} arrow placement="top" title={detail}>
-                  <Box
-                    data-chart-column={index}
-                    data-chart-column-active={active ? 'on' : 'off'}
-                    onMouseEnter={() => setHover(index)}
-                    onMouseLeave={() => setHover(null)}
-                    sx={{
-                      flex: 1,
-                      minWidth: 0,
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'flex-end',
-                      alignItems: 'center',
-                      position: 'relative',
-                      // No column background on hover: the ring around the bar read
-                      // as a selected cell rather than as the bar reacting.
-                      cursor: 'default'
-                    }}
-                  >
-                    {value > 0 && (
-                      <Typography
-                        sx={{
-                          fontSize: 9.5,
-                          color: active ? 'text.primary' : t.textDim,
-                          mb: 0.5,
-                          fontVariantNumeric: 'tabular-nums',
-                          transition: 'color .12s ease'
-                        }}
-                      >
-                        {value}
-                      </Typography>
-                    )}
-                    <Box
-                      data-chart-bar={index}
-                      data-chart-bar-active={active ? 'on' : 'off'}
-                      sx={{
-                        width: range === 7 ? '52%' : '68%',
-                        height: value > 0 ? `calc((100% - 30px) * ${ratio})` : 2,
-                        borderRadius: '3px',
-                        bgcolor:
-                          value > 0
-                            ? active
-                              ? 'rgba(230,230,236,.98)'
-                              : 'rgba(168,168,172,.58)'
-                            : t.line,
-                        // A 2px lift and a slightly brighter body: enough to feel
-                        // alive under the pointer, small enough not to move the axis.
-                        transform: active && value > 0 ? 'translateY(-2px)' : 'none',
-                        transformOrigin: 'bottom',
-                        boxShadow: active && value > 0 ? '0 3px 10px rgba(0,0,0,.35)' : 'none',
-                        transition:
-                          'transform .16s cubic-bezier(.2,.7,.3,1), background-color .12s ease, box-shadow .16s ease'
-                      }}
-                    />
-                    {range === 7 && (
-                      <Typography
-                        sx={{ mt: 0.5, fontSize: 9.5, color: active ? t.textDim : t.textFaint }}
-                      >
-                        {bucket?.label}
-                      </Typography>
-                    )}
-                  </Box>
-                </Tooltip>
-              )
-            })}
+        <Box component="section" aria-labelledby="home-tools-title" sx={{ ...panelSx, py: 1.75, mb: 2 }}>
+          <Typography component="h2" id="home-tools-title" sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary', mb: 1 }}>{t('常用工具')}</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: 1 }}>
+          {[
+            { title: '随记', hint: '文字与录音，随手记录', icon: <StickyNote />, action: () => onOpenPage('notes') },
+            { title: '截图工具', hint: '截图、识字与翻译', icon: <Screenshot />, action: () => void capture(), disabled: capturing },
+            { title: '自动化', hint: workflowCount === undefined ? t('管理保存的工作流') : t('{{n}} 个可用工作流', { n: workflowCount }), icon: <AccountTree />, action: () => onOpenSettings('automation') },
+            { title: '历史记录', hint: '找回输入、问答与翻译', icon: <History />, action: () => onOpenHistory() }
+          ].map(tool => <ButtonBase key={tool.title} title={t(tool.hint)} disabled={tool.disabled} onClick={tool.action} sx={{ width: '100%', minWidth: 0, textAlign: 'left', py: 1, px: 0.5, borderRadius: 1.5, gap: 1.25, '&:hover': { bgcolor: 'action.hover' } }}>
+            <Box sx={{ display: 'grid', placeItems: 'center', width: 32, height: 32, borderRadius: 1.5, bgcolor: 'action.hover', color: 'text.secondary', '& svg': { fontSize: 18 } }}>{tool.icon}</Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontSize: 13, fontWeight: 600 }}>{t(tool.title)}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary', ...clipSx }}>{t(tool.hint)}</Typography></Box>
+          </ButtonBase>)}
           </Box>
         </Box>
 
-        {/* Lifetime numbers, not today's: these are the ones that make the
-            habit feel worth keeping. */}
-        <Box sx={{ ...card, px: 1.75, py: 1.25, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ fontSize: 11.5, color: t.textDim }}>{i18n.t(i18n.t('使用洞察'))}</Typography>
-            <Button
-              size="small"
-              data-share-insights
-              variant="text"
-              disabled={sharing}
-              onClick={() => void shareInsights()}
-              sx={{
-                ml: 'auto',
-                minWidth: 0,
-                px: 0.75,
-                py: 0,
-                fontSize: 10.5,
-                lineHeight: '16px',
-                color: t.textDim,
-                '&:hover': { color: t.text, bgcolor: t.surfaceHi }
-              }}
-            >
-              {shareHint ?? i18n.t('分享成图')}
-            </Button>
-          </Box>
-          <Box
-            sx={{
-              mt: 0.75,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              columnGap: 1.5,
-              rowGap: 1.1
-            }}
-          >
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1.65fr) minmax(235px, 1fr)' }, gap: 2, alignItems: 'start' }}>
+        <Box component="section" aria-labelledby="home-today-title" sx={panelSx}>
+          <SectionHeading id="home-today-title" title={t('今天，先做这些')} />
+          <Box sx={{ display: 'flex', gap: 2.5, my: 2, py: 1.5, borderTop: 1, borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap' }}>
             {[
-              {
-                label: i18n.t('累计口述字数'),
-                value: group(insights.units),
-                sub: i18n.t('字 · 累计 {{span}}', { span: durationLabel(insights.spokenMs) })
-              },
-              {
-                label: i18n.t('平均语速'),
-                value: wpmLabel(insights.wpm),
-                sub:
-                  insights.measured > 0
-                    ? i18n.t('字/分 · {{n}} 条样本', { n: group(insights.measured) })
-                    : i18n.t('字/分 · 暂无样本')
-              },
-              {
-                label: i18n.t('节省时间'),
-                value: saved.value,
-                sub: i18n.t('{{unit}} · 对比 {{wpm}} 字/分', { unit: i18n.t(saved.unit), wpm: insights.typingWpm })
-              },
-              {
-                label: i18n.t('连续天数'),
-                value: insights.records === 0 ? '—' : String(insights.streak.current),
-                sub: insights.records === 0 ? i18n.t('还没有记录') : `天 · 最长 ${insights.streak.longest} 天`
-              }
-            ].map((item) => (
-              <Box key={item.label} sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: 10, color: t.textFaint }}>{item.label}</Typography>
-                <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.3 }}>
-                  {item.value}
-                </Typography>
-                {/* The footnote gets its own line: four columns are too narrow
-                    for a number and a sentence side by side. */}
-                <Typography
-                  sx={{
-                    fontSize: 9.5,
-                    color: t.textFaint,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    minWidth: 0
-                  }}
-                >
-                  {item.sub}
-                </Typography>
-              </Box>
-            ))}
+              { label: '日程', value: data.events ? agenda.length : '—', action: () => onOpenPage('calendar') },
+              { label: '待处理', value: data.todos ? todos.length : '—', action: () => onOpenPage('reminders') },
+              { label: '已逾期', value: data.todos ? overdue : '—', action: () => onOpenPage('reminders'), danger: overdue > 0 }
+            ].map(item => <ButtonBase key={item.label} onClick={item.action} sx={{ gap: 1, borderRadius: 1, color: item.danger ? 'error.main' : 'text.primary' }}>
+              <Typography sx={{ fontSize: 25, lineHeight: 1.2, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>{item.value}</Typography>
+              <Typography sx={{ fontSize: 11.5, color: item.danger ? 'inherit' : 'text.secondary' }}>{t(item.label)}</Typography>
+            </ButtonBase>)}
+          </Box>
+          <SectionHeading title={t('今天的日程')} icon={<CalendarMonth sx={{ fontSize: 16 }} />} action={t('查看日程')} onAction={() => onOpenPage('calendar')} />
+          {agenda.length === 0 ? empty('events', t('今天没有安排，为重要的事留点时间。')) : <Box sx={{ mt: 1 }}>{agenda.slice(0, 3).map(event => <Box key={event.id} sx={{ display: 'flex', gap: 1.5, py: 1, minWidth: 0 }}>
+            <Box sx={{ width: 3, borderRadius: 2, flexShrink: 0, bgcolor: event.end <= now ? 'divider' : 'primary.main' }} />
+            <Box sx={{ minWidth: 0 }}><Typography sx={{ fontSize: 12.5, fontWeight: 500, color: event.end <= now ? 'text.secondary' : 'text.primary', overflowWrap: 'anywhere' }}>{event.title}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>{formatEventTime(event, language)}{event.location ? ` · ${event.location}` : ''}{event.end <= now ? ` · ${t('已结束')}` : ''}</Typography></Box>
+          </Box>)}</Box>}
+          <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+            <SectionHeading title={t('待办与提醒')} icon={<CheckCircle sx={{ fontSize: 16 }} />} action={t('查看全部')} onAction={() => onOpenPage('reminders')} />
+            {todos.length === 0 ? empty('todos', t('没有待处理事项，随时可以记下新的计划。')) : <Box sx={{ mt: 0.75 }}>{todos.slice(0, 3).map(todo => <Box key={todo.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, py: 0.7 }}>
+              <Checkbox size="small" checked={false} disabled={completing !== null} onChange={() => void complete(todo.id)} inputProps={{ 'aria-label': t('完成待办：{{title}}', { title: todo.title }) }} sx={{ p: 0.5, ml: -0.5 }} />
+              <Box sx={{ minWidth: 0, pt: 0.35 }}><Typography sx={{ fontSize: 12.5, overflowWrap: 'anywhere' }}>{todo.title}</Typography><Typography sx={{ fontSize: 11, color: isOverdue(todo, now) ? 'error.main' : 'text.secondary', mt: 0.4 }}>
+                {todoTime(todo, language) ?? t('未设置时间 · 待办')}{isOverdue(todo, now) ? ` · ${t('已逾期')}` : ''}{todo.priority === 'high' ? ` · ${t('高优先级')}` : ''}
+              </Typography></Box>
+            </Box>)}</Box>}
+          </Box>
+        </Box>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <Box component="section" aria-labelledby="home-briefing-title" sx={panelSx}>
+            <SectionHeading id="home-briefing-title" title={t('今日简报')} action={t('打开简报')} onAction={() => onOpenPage('briefing')} />
+            {!data.briefing || data.briefing.empty ? empty('briefing', t('今天没有需要汇报的安排。')) : <Typography sx={{ mt: 1.5, fontSize: 12.5, lineHeight: 1.9, whiteSpace: 'pre-line', color: 'text.secondary', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 6, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{data.briefing.body}</Typography>}
+            <Button size="small" onClick={() => onOpenPage('briefing')} sx={{ mt: 1.5, px: 0 }}>{t('生成或朗读简报')}<ArrowForward sx={{ fontSize: 14, ml: 0.75 }} /></Button>
+          </Box>
+          <Box component="section" aria-labelledby="home-activity-title" sx={panelSx}>
+            <SectionHeading id="home-activity-title" title={t('最近活动')} />
+            {activity.length === 0 ? empty(data.history ? 'notes' : 'history', t('你的随记、问答和输入记录会出现在这里。')) : <Box sx={{ mt: 1 }}>{activity.map(item => <ButtonBase key={`${item.kind}-${item.id}`} onClick={() => item.kind === 'note' ? onOpenNote(item.id) : onOpenHistory(item.text)} sx={{ width: '100%', display: 'block', textAlign: 'left', py: 1, px: 0.5, borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}><Typography sx={{ fontSize: 10.5, color: item.failed ? 'error.main' : 'text.secondary' }}>{item.kind === 'note' ? t('随记') : modeLabel(item.kind)}{item.failed ? ` · ${t('失败')}` : ''}</Typography><Typography sx={{ ml: 'auto', fontSize: 10.5, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(item.at)}</Typography></Box>
+              <Typography sx={{ fontSize: 12, ...clipSx }}>{item.text}</Typography>
+            </ButtonBase>)}</Box>}
           </Box>
         </Box>
       </Box>
 
-      {/* The year in one picture, with no caption: the four numbers above already
-          say what period this is, and a 少→多 swatch row only repeated the five
-          shades the cells themselves make obvious. Cells are sized to the card so
-          the grid fills it edge to edge instead of hugging the left. */}
-      <Box sx={{ ...card, px: 1.5, py: 1.25, flexShrink: 0 }}>
-        <Box ref={heatBoxRef} sx={{ display: 'flex', gap: 1, minWidth: 0 }}>
-          <Box
-            sx={{
-              pt: `${MONTH_ROW + 2}px`,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: `${HEAT_GAP}px`,
-              flexShrink: 0
-            }}
-          >
-            {WEEKDAY.map((day, index) => (
-              <Typography
-                key={day}
-                sx={{
-                  fontSize: 9,
-                  color: t.textFaint,
-                  height: heatCell,
-                  lineHeight: `${heatCell}px`
-                }}
-              >
-                {index % 2 === 0 && index < 5 ? i18n.t(day) : ''}
-              </Typography>
-            ))}
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${heat.weeks.length}, ${heatCell}px)`,
-                columnGap: `${HEAT_GAP}px`,
-                height: MONTH_ROW
-              }}
-            >
-              {monthCols.map((item) => (
-                <Typography
-                  key={item.label}
-                  sx={{
-                    gridColumnStart: item.col + 1,
-                    gridRow: 1,
-                    fontSize: 9,
-                    lineHeight: `${MONTH_ROW}px`,
-                    // Month labels stay neutral on hover: only cells react, so the
-                    // axis never competes with the activity colour.
-                    fontWeight: item.current ? 600 : 400,
-                    color: t.textFaint,
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {item.label}
-                </Typography>
-              ))}
-            </Box>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${heat.weeks.length}, ${heatCell}px)`,
-                gridTemplateRows: `repeat(7, ${heatCell}px)`,
-                gridAutoFlow: 'column',
-                columnGap: `${HEAT_GAP}px`,
-                rowGap: `${HEAT_GAP}px`,
-                mt: '2px'
-              }}
-            >
-              {heat.weeks.flatMap((week, weekIndex) =>
-                week.map((cell, dayIndex) => {
-                  const level = heatLevel(cell.count, heat.max)
-                  return (
-                    <Box
-                      key={`${weekIndex}-${dayIndex}`}
-                      title={i18n.t('{{key}} · {{n}} 次', { key: cell.key, n: cell.count })}
-                      data-heat-cell
-                      data-heat-level={level}
-                      sx={{
-                        width: heatCell,
-                        height: heatCell,
-                        borderRadius: '3px',
-                        bgcolor:
-                          level === 0
-                            ? 'rgba(127,127,127,.12)'
-                            : `rgba(76,141,255,${0.25 + level * 0.19})`,
-                        // Hover deepens what is already there: a used cell keeps its
-                        // own blue and gets a few shades darker, an empty one just
-                        // gains a bit more grey. Nothing jumps to a shared colour.
-                        transition: 'filter .12s ease, background-color .12s ease',
-                        '&:hover':
-                          level === 0
-                            ? { bgcolor: 'rgba(127,127,127,.26)', filter: 'brightness(.9)' }
-                            : { filter: 'brightness(.74)' }
-                      }}
-                    />
-                  )
-                })
-              )}
-            </Box>
-          </Box>
+      <Box sx={{ mt: 2.5, borderTop: 1, borderColor: 'divider', pt: 1.5 }}>
+        <ButtonBase aria-expanded={showUsage} aria-controls="home-usage" onClick={() => setShowUsage(value => !value)} sx={{ width: '100%', justifyContent: 'space-between', gap: 2, py: 0.75, borderRadius: 1, textAlign: 'left' }}>
+          <Box><Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{t('使用统计')}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>{t('输入趋势、累计用量与应用分布')}</Typography></Box>
+          <ExpandMore sx={{ fontSize: 20, transform: showUsage ? 'rotate(180deg)' : 'none', transition: 'transform .16s ease' }} />
+        </ButtonBase>
+        <Box id="home-usage" hidden={!showUsage} sx={{ pt: showUsage ? 2 : 0 }}>
+          {showUsage && (data.stats ? <UsageInsights settings={settings} mode={mode} stats={data.stats} entries={data.history} now={now} onOpenHistory={onOpenHistory} /> : empty('stats', ''))}
         </Box>
-      </Box>
-
-      <Box data-app-scenes sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 22, flexShrink: 0 }}>
-        <Tooltip title={i18n.t('按产生文字的记录统计 · 点击查看')}>
-          <Typography data-app-share-hint tabIndex={0} sx={{ fontSize: 10.5, color: t.textDim, flexShrink: 0 }}>{i18n.t('热门场景')}</Typography>
-        </Tooltip>
-        <Box
-          data-app-scene-list
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.75,
-            flex: 1,
-            minWidth: 0,
-            flexWrap: 'nowrap'
-          }}
-        >
-          {insights.apps.length === 0 ? (
-            <Typography
-              sx={{
-                fontSize: 10.5,
-                color: t.textFaint,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {i18n.t('说几句话之后，这里会按 App 统计文字用在了哪里')}
-            </Typography>
-          ) : (
-            insights.apps.slice(0, 5).map((app, index) => (
-              <AppChip
-                key={app.name}
-                t={t}
-                name={app.name}
-                count={app.count}
-                percent={appPercents[index] ?? 0}
-                color={appColor(index)}
-                onOpen={() => onOpenHistory(app.name)}
-              />
-            ))
-          )}
-        </Box>
-        <Button data-app-share-open size="small" variant="text" aria-label={i18n.t('查看各 App 的调用占比')}
-          title={i18n.t('各 App 的调用占比')} onClick={() => setAppShareOpen(true)}
-          sx={{ flexShrink: 0, minWidth: 0, height: 22, py: 0, px: 0.9, gap: 0.5, fontSize: 10.5,
-            lineHeight: '16px', color: t.textDim, border: `1px solid ${t.surfaceHi}`, borderRadius: '6px',
-            '&:hover': { color: t.text, borderColor: t.textFaint, bgcolor: t.surfaceHi } }}>
-          <IconChart size={11} />{i18n.t('分布')}
-        </Button>
-      </Box>
-
-      {/* Portalled, so it is declared here and paints over the whole window. */}
-      <AppShareDialog
-        open={appShareOpen}
-        onClose={() => setAppShareOpen(false)}
-        t={t}
-        apps={insights.apps}
-        total={appTotal}
-      />
-    </Box>
-  )
-}
-
-interface TodayCardProps {
-  card: Record<string, unknown>
-  t: Tokens
-  events: CalendarEvent[]
-  todos: Reminder[]
-  briefing: Briefing | null
-  onOpenPage: (page: 'reminders' | 'calendar' | 'briefing') => void
-}
-
-/**
- * What is on the person today: the schedule and the to-dos on the left, the
- * briefing on the right, all in one card.
- *
- * The first question on opening the app stopped being "how much did I dictate"
- * and became "what is on me today", so this is the hero of the page and the
- * analytics sit below it. Schedule and to-dos share the left column because they
- * are one question — what happens next — read in time order; the briefing is a
- * paragraph, so it gets the narrower column where lines do not wrap into a
- * three-word ladder.
- */
-function TodayCard({ card, t, events, todos, briefing, onOpenPage }: TodayCardProps): JSX.Element {
-  const language = currentUiLanguage() === 'en' ? 'en' : 'zh'
-  const now = Date.now()
-  const open = sortTodos(todos.filter((row) => row.status === 'pending' || row.status === 'due'))
-  const shownEvents = events.slice(0, 3)
-  const shownTodos = open.slice(0, 3)
-  /**
-   * Three lines is what a preview is worth: past that the paragraph stops being
-   * scannable and the full briefing — which has its own page — is what you want.
-   */
-  const lines: Array<{ text: string; heading: boolean }> = briefing && !briefing.empty
-    ? briefing.body
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .slice(0, 4)
-        .map((line) =>
-          /^[-•*]\s+/.test(line)
-            ? { text: line.replace(/^[-•*]\s+/, ''), heading: false }
-            : { text: line, heading: true }
-        )
-    : []
-  // A heading whose lines fell outside the slice reads as a broken section, so
-  // the preview ends on content instead.
-  while (lines.length > 0 && lines[lines.length - 1].heading) lines.pop()
-
-  const head = (label: string, page: 'reminders' | 'calendar' | 'briefing', count?: number): JSX.Element => (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-      <Typography sx={{ fontSize: 11.5, color: t.textDim, fontWeight: 650 }}>{label}</Typography>
-      {count !== undefined && count > 0 && (
-        <Typography sx={{ fontSize: 10, color: t.textFaint, fontVariantNumeric: 'tabular-nums' }}>{count}</Typography>
-      )}
-      <ButtonBase
-        onClick={() => onOpenPage(page)}
-        sx={{
-          ml: 'auto',
-          fontSize: 10,
-          color: t.textFaint,
-          borderRadius: '5px',
-          px: 0.5,
-          '&:hover': { color: t.text, bgcolor: t.accentSoft }
-        }}
-      >
-        {i18n.t('查看')}
-      </ButtonBase>
-    </Box>
-  )
-
-  const empty = (text: string): JSX.Element => (
-    <Typography sx={{ fontSize: 11, color: t.textFaint, lineHeight: 1.6, mt: 0.25 }}>{text}</Typography>
-  )
-
-  const more = (count: number): JSX.Element => (
-    <Typography sx={{ fontSize: 10, color: t.textFaint, mt: 0.1 }}>
-      {i18n.t('还有 {{n}} 条', { n: count })}
-    </Typography>
-  )
-  return (
-    <Box
-      data-today-board
-      sx={{ ...card, display: 'flex', alignItems: 'stretch', px: 0, py: 0, flexShrink: 0, minHeight: 196 }}
-    >
-      {/* Schedule above to-dos, both in time order: that is the order the day
-          actually happens in, and a single rail reads faster than two lists. */}
-      <Box
-        data-today-agenda
-        sx={{ flex: '1.55 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, px: 1.75, py: 1.25 }}
-      >
-        <Box data-today-events sx={{ display: 'flex', flexDirection: 'column', gap: 0.55, minWidth: 0 }}>
-          {head(i18n.t('今天的日程'), 'calendar', events.length)}
-          {events.length === 0
-            ? empty(i18n.t('今天没有安排'))
-            : shownEvents.map((event) => (
-                <Box
-                  key={event.id}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    gap: 1,
-                    minWidth: 0,
-                    opacity: event.status === 'cancelled' ? 0.62 : 1
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      flexShrink: 0,
-                      width: 76,
-                      fontSize: 10,
-                      color: t.textFaint,
-                      fontVariantNumeric: 'tabular-nums',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {formatEventTime(event, language)}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      flex: 1,
-                      minWidth: 0,
-                      fontSize: 11.5,
-                      color: t.text,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {event.title}
-                  </Typography>
-                  {event.location && (
-                    <Typography
-                      sx={{
-                        flexShrink: 0,
-                        maxWidth: '38%',
-                        fontSize: 10,
-                        color: t.textFaint,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {event.location}
-                    </Typography>
-                  )}
-                </Box>
-              ))}
-          {events.length > shownEvents.length && more(events.length - shownEvents.length)}
-        </Box>
-
-        <Box sx={{ height: '1px', bgcolor: t.line, flexShrink: 0 }} />
-
-        <Box data-today-todos sx={{ display: 'flex', flexDirection: 'column', gap: 0.55, minWidth: 0 }}>
-          {head(i18n.t('待办'), 'reminders', open.length)}
-          {open.length === 0
-            ? empty(i18n.t('没有待办'))
-            : shownTodos.map((todo) => {
-                const overdue = isOverdue(todo, now)
-                const when = todo.dueAt === null ? i18n.t('未设置') : timeLabel(todo.dueAt)
-                return (
-                  <Box key={todo.id} sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
-                    <Box
-                      sx={{
-                        flexShrink: 0,
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        alignSelf: 'center',
-                        ml: '1px',
-                        bgcolor:
-                          todo.priority === 'high' ? t.danger : todo.priority === 'low' ? t.textFaint : t.textDim
-                      }}
-                      aria-label={i18n.t(PRIORITY_LABELS[todo.priority])}
-                    />
-                    <Typography
-                      sx={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 11.5,
-                        color: t.text,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {todo.title}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        flexShrink: 0,
-                        fontSize: 10,
-                        color: overdue ? t.danger : t.textFaint,
-                        fontVariantNumeric: 'tabular-nums'
-                      }}
-                    >
-                      {overdue ? i18n.t('已逾期') : when}
-                    </Typography>
-                  </Box>
-                )
-              })}
-          {open.length > shownTodos.length && more(open.length - shownTodos.length)}
-        </Box>
-      </Box>
-
-      <Box sx={{ width: '1px', bgcolor: t.line, flexShrink: 0 }} />
-
-      <Box
-        data-today-briefing
-        sx={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.6, px: 1.75, py: 1.25 }}
-      >
-        {head(i18n.t('今日简报'), 'briefing')}
-        {lines.length === 0 ? (
-          empty(i18n.t('今天还没有生成简报'))
-        ) : (
-          lines.map((line, index) =>
-            line.heading ? (
-              // Section headings keep their scan value here; stripped of their
-              // markers they were reading as one more stray sentence.
-              <Typography
-                key={index}
-                sx={{ fontSize: 9.5, color: t.textFaint, letterSpacing: 0.3, mt: index === 0 ? 0.25 : 0.15 }}
-              >
-                {line.text}
-              </Typography>
-            ) : (
-              <Typography
-                key={index}
-                sx={{
-                  fontSize: 11,
-                  color: t.textDim,
-                  lineHeight: 1.5,
-                  overflow: 'hidden',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 1,
-                  WebkitBoxOrient: 'vertical'
-                }}
-              >
-                {line.text}
-              </Typography>
-            )
-          )
-        )}
-        {briefing?.source === 'model' && (
-          <Typography sx={{ mt: 'auto', fontSize: 9.5, color: t.textFaint }}>{i18n.t('模型撰写')}</Typography>
-        )}
       </Box>
     </Box>
   )
 }
 
-
-interface PillsProps {
-  t: { surface: string; surfaceHi: string; text: string; textDim: string; line: string }
-  items: Array<{ id: string; label: string }>
-  value: string
-  onChange: (id: string) => void
+function SectionHeading({ id, title, icon, action, onAction }: { id?: string; title: string; icon?: ReactNode; action?: string; onAction?: () => void }): JSX.Element {
+  return <Box sx={{ display: 'flex', gap: 0.8, alignItems: 'center', minWidth: 0 }}>
+    {icon && <Box sx={{ display: 'flex', color: 'text.secondary' }}>{icon}</Box>}
+    <Typography component={id ? 'h2' : 'h3'} id={id} sx={{ fontSize: 13, fontWeight: 650, flex: 1 }}>{title}</Typography>
+    {action && <Button size="small" onClick={onAction} sx={{ minWidth: 0, p: 0, fontSize: 11, color: 'text.secondary', flexShrink: 0 }}>{action}</Button>}
+  </Box>
 }
-
-function Pills({ t, items, value, onChange }: PillsProps): JSX.Element {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-      {items.map((item) => {
-        const active = item.id === value
-        return (
-          <Box
-            key={item.id}
-            onClick={() => onChange(item.id)}
-            sx={{
-              px: 1.1,
-              height: 24,
-              display: 'grid',
-              placeItems: 'center',
-              borderRadius: '99px',
-              fontSize: 11.5,
-              cursor: 'pointer',
-              color: active ? t.text : t.textDim,
-              bgcolor: active ? t.surfaceHi : 'transparent',
-              transition: 'background-color .15s ease'
-            }}
-          >
-            {item.label}
-          </Box>
-        )
-      })}
-    </Box>
-  )
-}
-
-/**
- * One app of the 热门场景 row: colour dot, label, record count, its share, and a
- * link to it. The dot is the app's segment colour in the breakdown dialog, so
- * the row and the ring are readable against each other.
- */
-function AppChip({
-  t,
-  name,
-  count,
-  percent,
-  color,
-  onOpen
-}: {
-  t: { surfaceHi: string; text: string; textDim: string; textFaint: string }
-  name: string
-  count: number
-  /** Already-rounded share, shared with the breakdown dialog's legend. */
-  percent: number
-  color: string
-  onOpen: () => void
-}): JSX.Element {
-  return (
-    <ButtonBase
-      data-app-scene={name}
-      title={i18n.t('{{name}} · {{n}} 次 · {{pct}}%', { name, n: count, pct: percent })}
-      aria-label={i18n.t('查看 {{name}} 的记录', { name })}
-      onClick={onOpen}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.6,
-        px: 0.9,
-        height: 22,
-        borderRadius: '6px',
-        border: `1px solid ${t.surfaceHi}`,
-        maxWidth: 200,
-        minWidth: 0,
-        flexShrink: 1,
-        cursor: 'pointer',
-        transition: 'border-color .12s ease, background-color .12s ease',
-        '&:hover': { borderColor: t.textFaint, backgroundColor: t.surfaceHi }
-      }}
-    >
-      <Box
-        sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color, flexShrink: 0 }}
-      />
-      <Typography
-        sx={{
-          fontSize: 11,
-          color: t.text,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        {name}
-      </Typography>
-      <Typography
-        sx={{ fontSize: 10.5, color: t.textFaint, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}
-      >
-        {i18n.t('{{n}} 次 · {{pct}}%', { n: group(count), pct: percent })}
-      </Typography>
-    </ButtonBase>
-  )
-}
-
-
-
