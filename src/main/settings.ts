@@ -180,28 +180,35 @@ export class SettingsStore {
     }
   }
 
-  async save(): Promise<void> {
+  private async writeSnapshot(settings: Settings): Promise<void> {
     if (this.readOnlyRecovery) {
       // Explicitly requested writes (the user just changed something) lift the
       // guard: at that point the in-memory state *is* what they want on disk.
       this.readOnlyRecovery = false
     }
-    const payload = JSON.stringify(this.diskView(this.current), null, 2)
-    const job = this.writing.then(async () => {
-      await mkdir(dirname(this.path), { recursive: true })
-      const temp = `${this.path}.${process.pid}.tmp`
-      await writeFile(temp, payload, 'utf8')
-      await rename(temp, this.path)
-    })
+    const payload = JSON.stringify(this.diskView(settings), null, 2)
+    await mkdir(dirname(this.path), { recursive: true })
+    const temp = `${this.path}.${process.pid}.tmp`
+    await writeFile(temp, payload, 'utf8')
+    await rename(temp, this.path)
+  }
+
+  async save(): Promise<void> {
+    const job = this.writing.then(() => this.writeSnapshot(this.current))
     // The chain survives a failed write; the caller still sees the error.
     this.writing = job.catch(() => undefined)
     await job
   }
 
   async update(patch: Partial<Settings>): Promise<Settings> {
-    this.current = mergeSettings(applySettingsPatch(this.current, patch))
-    await this.save()
-    return this.current
+    const job = this.writing.then(async () => {
+      const next = mergeSettings(applySettingsPatch(this.current, patch))
+      await this.writeSnapshot(next)
+      this.current = next
+      return next
+    })
+    this.writing = job.then(() => undefined, () => undefined)
+    return job
   }
 
   /** Moves an unparseable settings file aside instead of overwriting its bytes. */

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -16,6 +16,21 @@ vi.mock('electron', () => ({
 let dir: string
 beforeEach(async () => { cryptoMock.available = false; dir = await mkdtemp(join(tmpdir(), 'typeless-settings-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+
+it('does not activate a rejected model configuration or carry it into the next save', async () => {
+  const file = join(dir, 'settings.json'), store = new SettingsStore(file)
+  await store.load()
+  const before = structuredClone(store.get().tts)
+  const blocked = `${file}.${process.pid}.tmp`
+  await mkdir(blocked)
+  await expect(store.update({ tts: { provider: 'openai', apiKey: 'unsaved-key', model: 'unsaved-model' } as never })).rejects.toThrow()
+  expect(store.get().tts).toEqual(before)
+  await rm(blocked, { recursive: true })
+  await store.update({ alertHideSeconds: 8 })
+  const restarted = await new SettingsStore(file).load()
+  expect(restarted.tts).toEqual(before)
+  expect(restarted.alertHideSeconds).toBe(8)
+})
 
 it('encrypts active and saved TTS credentials and restores all connection fields after restart', async () => {
   cryptoMock.available = true
@@ -73,6 +88,25 @@ it('retains both rapid updates in the final file', async () => {
   const disk = JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8'))
   expect(disk.alertHideSeconds).toBe(9)
   expect(disk.historyLimit).toBe(800)
+})
+
+it('does not let an explicit save overwrite a queued update with stale settings', async () => {
+  const file = join(dir, 'settings.json'), store = new SettingsStore(file)
+  await store.load()
+  await Promise.all([store.update({ alertHideSeconds: 9 }), store.save()])
+  expect(store.get().alertHideSeconds).toBe(9)
+  expect(JSON.parse(await readFile(file, 'utf8')).alertHideSeconds).toBe(9)
+})
+
+it('applies a queued update after a failed update using only committed settings', async () => {
+  const file = join(dir, 'settings.json'), store = new SettingsStore(file)
+  await store.load()
+  const rejected = store.update({ briefingDelivery: { ...store.get().briefingDelivery, email: { ...store.get().briefingDelivery.email, apiKey: 'cannot-be-stored' } } })
+  const accepted = store.update({ historyLimit: 800 })
+  const results = await Promise.allSettled([rejected, accepted])
+  expect(results.map(result => result.status)).toEqual(['rejected', 'fulfilled'])
+  expect(store.get().briefingDelivery.email.apiKey).toBe('')
+  expect((await new SettingsStore(file).load()).historyLimit).toBe(800)
 })
 
 it('persists an update made while an earlier save is still finishing', async () => {
