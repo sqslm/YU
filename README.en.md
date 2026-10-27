@@ -64,7 +64,7 @@ The overview is a personal AI workspace, with quick access to notes, screenshots
 
 ![AI & models](resources/screenshots/prefs-models.png)
 
-A fresh install has no working connections: this is where you add a recognition and a text connection — address, key, model — test it, then save. Records shown in these screenshots are demo content.
+A fresh install has no working connections: this is where you add a recognition and a text connection — address, key, model — let it save automatically, then test the connection. Records shown in these screenshots are demo content.
 
 ![Schedule & briefing](resources/screenshots/prefs-life.png)
 
@@ -89,7 +89,7 @@ Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue   # see Known
 node_modules\electron\dist\electron.exe .
 ```
 
-For development use `pnpm dev`. A fresh install has no model connections: open **Settings → AI & models**, add an ASR connection and a text connection, fill in address, key and model, test it, save. With the fake backend, point the address at `http://127.0.0.1:8787/v1` (starting the mock does not change your settings).
+For development use `pnpm dev`. A fresh install has no model connections: open **Settings → AI & models**, add an ASR connection and a text connection, fill in address, key and model, let it save automatically, then test the connection. With the fake backend, point the address at `http://127.0.0.1:8787/v1` (starting the mock does not change your settings).
 
 Building the installer:
 
@@ -133,14 +133,14 @@ Scrolling screenshots: select the content area and choose Scrolling screenshot. 
 
 ## Configuration
 
-- **Models**: choose "staged" (ASR plus text model) or "audio direct" (Gemini `generateContent` in one call), then manage connections in three groups — recognition, text, audio. The text connection is always available and serves Ask and selection work. "Fetch model list" calls `GET /models`; reasoning efforts are generated from each model's capabilities.
+- **Models**: switch between ASR, LLM and TTS. Select a connection or provider on the left and edit its configuration on the right. ASR includes local recognition; LLM groups text and audio-direct connections separately. Add a connection from a searchable provider template, enter its name, key, URL and model, then test it. OpenAI-compatible services support fetching model IDs or entering them manually. Connections can be enabled, made primary or reordered for failover; request paths and extra headers are under Advanced settings. Voice processing supports staged ASR → LLM or multimodal audio direct. Text connections remain available for Ask and selection work. TTS keeps voice, preview and playback controls together, with separate saved configuration for each provider.
 - **Search**: single backend, sequential failover, or merged sources. Every connection stores its own key, address, result count and order, and each one can be tested on its own. Weather questions go straight to Open-Meteo instead of a search engine.
 - **Dictionary**: literal replacements applied after polishing, for proper nouns the ASR keeps getting wrong; longer entries win.
 - **Audio**: fidelity first by default (48 kHz capture, resampled in the browser to 16 kHz mono PCM16); switch to "call noise reduction" in noisy rooms. The speaker test reuses the real capture path for up to 10 seconds and never calls a recognition service.
 - **Insertion and newlines**: insertion method (auto / SendInput / clipboard), multi-line handling (space / Shift+Enter / real newline), and whether to restore the clipboard after pasting.
 - **Prompts**: five card types (AI, polish, translation, document, email) with editable built-in cards and per-card temperature. "Auto activate" picks a card from the foreground app, and the Window classification page lets you add manual rules and preview which rule wins.
 
-- **Schedule & reminders**: calendar and briefing options hold default advance alerts, calendar subscriptions (https / webcal only), delivery time and quiet hours. Reminder notifications and snooze duration have their own tab. System voice and playback settings are under Voice & input → Read aloud.
+- **Schedule & reminders**: calendar and briefing options hold default advance alerts, calendar subscriptions (https / webcal only), delivery time and quiet hours. Reminder notifications and snooze duration have their own tab. System voice, cloud TTS and playback settings are under AI & models → Models → TTS.
 - **Wake word**: pick the input device explicitly. If it disappears the app falls back to the system default and logs a line in diagnostics instead of failing silently.
 - **Updates**: checked against GitHub Releases by default; point `update-feed.txt` or an environment variable at your own feed if you prefer, or turn update checks off entirely.
 

@@ -86,9 +86,9 @@ export function SettingsDialog({
       slotProps={{
         paper: {
           sx: {
-            width: 900,
+            width: 1080,
             maxWidth: '92vw',
-            height: 660,
+            height: 740,
             maxHeight: '88vh',
             m: 0,
             borderRadius: '12px',
@@ -124,7 +124,7 @@ export function SettingsDialog({
 
       <Box
         sx={{
-          width: 200,
+          width: 176,
           flex: '0 0 auto',
           borderRight: 1,
           borderColor: 'divider',
