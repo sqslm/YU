@@ -15,7 +15,7 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * The hub's 简报 page: today's briefing, the delivered history, and a read-only
+ * The hub's 简报 page: today's briefing, saved history, and a read-only
  * view of when it arrives.
  *
  * Read-only by design. Everything that changes when or whether a briefing is sent
@@ -44,7 +44,12 @@ export function BriefingPage({ settings, onOpenSettings }: { settings: Settings;
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void load()
+    // Match the overview's refresh cadence, including when left open overnight.
+    const timer = window.setInterval(() => void load(), 30_000)
+    return () => window.clearInterval(timer)
+  }, [load])
 
   /**
    * The scheduler pushes a briefing while this page is open. Adopt the delivered

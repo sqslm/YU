@@ -5,8 +5,9 @@ import {
   narrateBriefing, nextAllowedAt, nextBriefingAt, normalizeBriefingSettings, normalizeBriefingTime
 } from '@shared/briefing'
 import type { Briefing, BriefingData, BriefingQuietHours, BriefingRecord, BriefingSettings } from '@shared/briefing'
-import { BriefingScheduler } from './briefing'
+import { BriefingScheduler, briefingTasks } from './briefing'
 import type { BriefingState } from './briefing'
+import { ReminderStore } from './reminders'
 
 /** 2026-08-25 08:00 local, so every expectation stays timezone independent. */
 const NOW = new Date(2026, 7, 25, 8, 0).getTime()
@@ -43,6 +44,41 @@ const fullEn = (): Partial<BriefingData> => ({
   overdue: [{ id: 't2', title: 'Medical checkup', dueAt: at(24, 18) }],
   tomorrow: [{ id: 'e3', title: 'Interview', start: at(26, 10), end: at(26, 11), allDay: false }],
   stats: { entries: 12, characters: 860, durationMs: 4200 }
+})
+
+describe('briefing task projection', () => {
+  it('includes deadline-only and overdue tasks with their priority', () => {
+    const store = new ReminderStore(':memory:', () => at(24, 0))
+    try {
+      const today = store.save({ title: 'Submit plan', dueAt: null, deadlineAt: at(25, 12), priority: 'high', level: 'normal', source: 'manual', recurrence: null })
+      const overdue = store.save({ title: 'Reply to customer', dueAt: null, deadlineAt: at(24, 18), priority: 'high', level: 'normal', source: 'manual', recurrence: null })
+      const projected = briefingTasks(store.list(), NOW, at(26, 0))
+      expect(projected.tasks).toEqual([expect.objectContaining({ id: today.id, dueAt: at(25, 12), priority: 'high' })])
+      expect(projected.overdue).toEqual([expect.objectContaining({ id: overdue.id, dueAt: at(24, 18), priority: 'high', overdue: true })])
+      const briefing = composeBriefing(data({ language: 'en', ...projected }))
+      expect(briefing.empty).toBe(false)
+      expect(briefing.body).toContain('Submit plan')
+      expect(briefing.body).toContain('Reply to customer')
+    } finally { store.close() }
+  })
+  it('uses the deadline before the alert and excludes closed or undated work', () => {
+    const store = new ReminderStore(':memory:', () => at(24, 0))
+    try {
+      const save = (title: string, dueAt: number | null, deadlineAt: number | null = null) =>
+        store.save({ title, dueAt, deadlineAt, level: 'normal', source: 'manual', recurrence: null })
+      const upcoming = save('Already alerted; finish today', at(25, 7), at(25, 12))
+      const late = save('Finish yesterday; alert later', at(25, 9), at(24, 18))
+      const alertOnly = save('Old reminder', NOW)
+      save('Tomorrow', at(26, 0))
+      save('Undated', null)
+      const done = save('Done', NOW), cancelled = save('Cancelled', NOW)
+      const rows = store.list().map(row => row.id === done.id ? { ...row, status: 'completed' as const }
+        : row.id === cancelled.id ? { ...row, status: 'cancelled' as const } : row)
+      const projected = briefingTasks(rows, NOW, at(26, 0))
+      expect(projected.tasks.map(row => row.id).sort()).toEqual([upcoming.id, alertOnly.id].sort())
+      expect(projected.overdue.map(row => row.id)).toEqual([late.id])
+    } finally { store.close() }
+  })
 })
 
 describe('briefing settings', () => {
@@ -471,6 +507,34 @@ describe('BriefingScheduler quiet hours', () => {
 })
 
 describe('BriefingScheduler history', () => {
+  it('persists a manual briefing while disabled without consuming the scheduled slot', () => {
+    const h = harness({ now: SLOT - 60_000, settings: { ...DEFAULT_BRIEFING_SETTINGS, enabled: false } })
+    const manual = { ...emptyBriefing, body: 'Generated manually', empty: false, source: 'model' as const }
+    h.scheduler.record(manual)
+    expect(h.saved).toHaveLength(1)
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().lastDay).toBeUndefined()
+    const restarted = harness({ now: h.clock.now, state: h.state })
+    expect(restarted.scheduler.status().history).toEqual([
+      { dayKey: '2026-08-25', title: manual.title, body: manual.body, createdAt: h.clock.now, source: 'model' }
+    ])
+    restarted.scheduler.start()
+    expect(restarted.scheduler.status().nextAt).toBe(SLOT)
+    restarted.run(60_000)
+    expect(restarted.deliver).toHaveBeenCalledTimes(1)
+    expect(restarted.scheduler.status().history).toHaveLength(1)
+  })
+  it('replaces today’s history on manual regeneration and retains empty results', () => {
+    const h = harness({ now: SLOT })
+    h.scheduler.start()
+    h.clock.now += 1000
+    h.scheduler.record(emptyBriefing)
+    expect(h.scheduler.status().history).toEqual([
+      { dayKey: '2026-08-25', title: emptyBriefing.title, body: emptyBriefing.body, createdAt: h.clock.now, source: 'template' }
+    ])
+    expect(h.scheduler.status().lastDay).toBe('2026-08-25')
+    expect(h.deliver).toHaveBeenCalledTimes(1)
+  })
   it('records every delivery and exposes it through status()', () => {
     const h = harness({ now: SLOT })
     h.scheduler.start()
@@ -676,6 +740,54 @@ describe('BriefingScheduler narration', () => {
     expect(h.deliver).not.toHaveBeenCalled()
     expect(h.scheduler.status().lastDay).toBeUndefined()
     expect(h.scheduler.status().history).toEqual([])
+  })
+  it('discards the old narration when its delivery time is moved later', async () => {
+    let release!: (value: Briefing) => void
+    const pending = new Promise<Briefing>(resolve => { release = resolve })
+    const h = harness({ now: SLOT, compose: () => pending })
+    h.scheduler.start()
+    h.settings.value = settingsWith(false, { enabled: true, time: '09:00' })
+    h.clock.now += 3000
+    h.scheduler.start()
+    release({ ...emptyBriefing, empty: false, body: 'Old schedule' })
+    await flush()
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().lastDay).toBeUndefined()
+    expect(h.scheduler.status().history).toEqual([])
+    expect(h.scheduler.status().nextAt).toBe(at(25, 9))
+
+    h.clock.now = at(25, 9)
+    h.scheduler.check()
+    await flush()
+    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.scheduler.status().lastDay).toBe('2026-08-25')
+  })
+  it('does not let an old result clear a newer narration in flight', async () => {
+    const releases: Array<(value: Briefing) => void> = []
+    const h = harness({ now: SLOT, compose: () => new Promise(resolve => { releases.push(resolve) }) })
+    h.scheduler.start()
+    h.scheduler.stop()
+    h.scheduler.start()
+    releases[0]({ ...emptyBriefing, empty: false, body: 'Cancelled' })
+    await flush()
+    expect(h.deliver).not.toHaveBeenCalled()
+    h.scheduler.check()
+    expect(h.compose).toHaveBeenCalledTimes(2)
+    releases[1]({ ...emptyBriefing, empty: false, body: 'Current' })
+    await flush()
+    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.scheduler.status().history[0].body).toBe('Current')
+  })
+  it('drops a narration that finishes on the following day', async () => {
+    let release!: (value: Briefing) => void
+    const h = harness({ now: at(25, 23, 59), settings: settingsWith(false, { enabled: true, time: '23:59' }),
+      compose: () => new Promise(resolve => { release = resolve }) })
+    h.scheduler.start()
+    h.clock.now = at(26, 0)
+    release({ ...emptyBriefing, empty: false, body: 'Yesterday' })
+    await flush()
+    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.scheduler.status().lastDay).toBeUndefined()
   })
   it('still skips an empty narrated day and settles it', async () => {
     const h = harness({ now: SLOT, compose: async () => emptyBriefing })

@@ -1,10 +1,22 @@
 import { appendBriefingHistory, briefingDayKey, nextAllowedAt, nextBriefingAt } from '@shared/briefing'
-import type { Briefing, BriefingRecord, BriefingSettings } from '@shared/briefing'
+import type { Briefing, BriefingData, BriefingRecord, BriefingSettings, BriefingTask } from '@shared/briefing'
+import { effectiveDeadline, type Reminder } from '@shared/reminders'
+
+/** A task's deadline, rather than its optional alert, decides its briefing section. */
+export function briefingTasks(rows: readonly Reminder[], now: number, until: number): Pick<BriefingData, 'tasks' | 'overdue'> {
+  const open: BriefingTask[] = rows
+    .filter(row => row.status === 'pending' || row.status === 'due')
+    .map(row => ({ id: row.id, title: row.title, dueAt: effectiveDeadline(row), level: row.level, priority: row.priority }))
+  return {
+    tasks: open.filter(row => row.dueAt !== null && row.dueAt >= now && row.dueAt < until),
+    overdue: open.filter(row => row.dueAt !== null && row.dueAt < now).map(row => ({ ...row, overdue: true }))
+  }
+}
 
 export interface BriefingState {
   /** Day key of the last settled briefing. Older state files carry only this. */
   lastDay?: string
-  /** Delivered briefings, oldest first. Missing in state files written before history. */
+  /** Generated or delivered briefings, oldest first. Older files omit history. */
   history?: BriefingRecord[]
 }
 
@@ -53,7 +65,7 @@ export class BriefingScheduler {
   /** The quiet-hours end already reported, so the poll loop logs it once. */
   private loggedQuietAt: number | null = null
   /** The narration currently being awaited for today; null once it settles. */
-  private settling: Promise<void> | null = null
+  private settling: Promise<Briefing> | null = null
   private state: BriefingState
   private readonly now: () => number
   private readonly setTimer: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>
@@ -71,12 +83,15 @@ export class BriefingScheduler {
   }
 
   start(): void {
+    // Reconfiguration invalidates the old result even when the service stays on.
+    this.settling = null
     this.active = true
     this.check()
   }
 
   stop(): void {
     this.active = false
+    this.settling = null
     this.disarm()
     this.nextAt = null
   }
@@ -88,6 +103,17 @@ export class BriefingScheduler {
       lastDay: this.state.lastDay,
       history: this.state.history ?? []
     }
+  }
+
+  /** Manual generation is retained without consuming today's scheduled delivery. */
+  record(briefing: Briefing, at: number = this.now()): void {
+    this.state = {
+      ...this.state,
+      history: appendBriefingHistory(this.state.history ?? [], {
+        dayKey: briefingDayKey(at), title: briefing.title, body: briefing.body, createdAt: at, source: briefing.source
+      })
+    }
+    this.deps.save(this.state)
   }
 
   check(): void {
@@ -182,7 +208,8 @@ export class BriefingScheduler {
     }
     if (isThenable(produced)) {
       // The timer chain moves on immediately; the day is claimed when the text lands.
-      this.settling = this.settleLater(produced, now, settings, today)
+      this.settling = produced
+      void this.settleLater(produced, now, settings, today)
       return true
     }
     return this.settle(produced, now, settings, today)
@@ -207,18 +234,10 @@ export class BriefingScheduler {
         return false
       }
     }
-    if (skipped) {
-      // An empty briefing has nothing worth keeping, but the day itself is settled.
-      this.state = { ...this.state, lastDay: today }
-    } else {
-      this.state = {
-        ...this.state,
-        lastDay: today,
-        history: appendBriefingHistory(this.state.history ?? [],
-          { dayKey: today, title: briefing.title, body: briefing.body, createdAt: now, source: briefing.source })
-      }
-    }
-    this.deps.save(this.state)
+    this.state = { ...this.state, lastDay: today }
+    // A skipped empty briefing has nothing worth keeping in history.
+    if (skipped) this.deps.save(this.state)
+    else this.record(briefing, now)
     return true
   }
 
@@ -236,13 +255,13 @@ export class BriefingScheduler {
       briefing = await produced
     } catch (error) {
       this.deps.log(`briefing: compose failed: ${describe(error)}`)
+      if (this.settling === produced) this.settling = null
       return
-    } finally {
-      this.settling = null
     }
-    // A narration that lands after stop() belongs to a briefing the user switched
-    // off (or a time they already changed), so it is dropped rather than delivered.
-    if (!this.active) return
+    // An old promise must neither deliver nor clear a newer attempt after restart.
+    if (this.settling !== produced) return
+    this.settling = null
+    if (!this.active || briefingDayKey(this.now()) !== today) return
     try {
       this.settle(briefing, now, settings, today)
     } catch (error) {

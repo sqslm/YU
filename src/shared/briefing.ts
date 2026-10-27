@@ -127,7 +127,7 @@ export function nextAllowedAt(settings: BriefingSettings, at: number): number {
  */
 export type BriefingSource = 'model' | 'template'
 
-/** One delivered briefing, kept so the latest copy survives a restart. */
+/** One generated or delivered briefing, kept locally across restarts. */
 export interface BriefingRecord {
   dayKey: string
   title: string

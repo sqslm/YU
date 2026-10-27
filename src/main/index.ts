@@ -51,7 +51,7 @@ import { appIcon, appUserModelId, repairDevelopmentShortcut } from './app-icon'
 import { handle, subscribe } from './ipc-trust'
 import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
 import { RemindersSync } from './reminders-sync'
-import { BriefingScheduler, type BriefingState } from './briefing'
+import { BriefingScheduler, briefingTasks, type BriefingState } from './briefing'
 import { SpeechService, createWindowsSpeechRunner } from './speech'
 import { WorkflowStore } from './workflows'
 import {
@@ -61,8 +61,7 @@ import {
   type CalendarEventInput,
   type CalendarRange
 } from '@shared/calendar'
-import { composeBriefing, narrateBriefing, type Briefing, type BriefingData } from '@shared/briefing'
-import type { BriefingTask } from '@shared/briefing'
+import { briefingDayKey, composeBriefing, narrateBriefing, type Briefing, type BriefingData } from '@shared/briefing'
 import type { LifeSyncStatus } from './tools/life'
 import {
   anchorCardToBar,
@@ -139,8 +138,9 @@ let briefing: BriefingScheduler | null = null
 let briefingDelivery:BriefingDeliveryService|null=null
 let speech: SpeechService | null = null
 let workflows: WorkflowStore | null = null
-/** Past briefings stay in memory so the settings window can show the last one. */
+/** Reuse today's generated wording while keeping older copies in saved history. */
 let latestBriefing: Briefing | null = null
+let latestBriefingDay: string | null = null
 let hubRetireTimer: NodeJS.Timeout | null = null
 let quitting = false
 let assistantCardActive = false
@@ -395,14 +395,9 @@ function dailyBriefingData(): BriefingData {
   const confirmed = (row: CalendarEvent) => row.status === 'confirmed'
   const events = (calendar?.range(today.from, today.until) ?? []).filter(confirmed)
   const ahead = (calendar?.range(tomorrow.from, tomorrow.until) ?? []).filter(confirmed)
-  const open = (reminders?.store.list() ?? []).filter(row => row.status === 'pending' || row.status === 'due')
-  const task = (row: (typeof open)[number]): BriefingTask => ({ id: row.id, title: row.title, dueAt: row.dueAt, level: row.level })
   return { now, language: mainLanguage() === 'en' ? 'en' : 'zh',
     events, tomorrow: ahead,
-    // 待办 is what is still ahead today; a task whose time already passed is 已经过期,
-    // even when it was due this morning — that is the part worth seeing first.
-    tasks: open.filter(row => row.dueAt !== null && row.dueAt >= now && row.dueAt < today.until).map(task),
-    overdue: open.filter(row => row.dueAt !== null && row.dueAt < now).map(row => ({ ...task(row), overdue: true })) }
+    ...briefingTasks(reminders?.store.list() ?? [], now, today.until) }
 }
 
 function composeDailyBriefing(): Briefing {
@@ -449,8 +444,9 @@ function briefingDeliveryView():Record<string,unknown> {
   return {email:{enabled:email.enabled,configured:Boolean(email.apiKey&&email.from&&email.to),to:email.to},push:{enabled:push.enabled,configured:Boolean(push.baseUrl&&push.topic),topic:push.topic}}
 }
 
-function deliverBriefing(briefing: Briefing): void {
+function deliverBriefing(briefing: Briefing, at: number): void {
   latestBriefing = briefing
+  latestBriefingDay = briefingDayKey(at)
   const settings = store.get()
   if(settings.briefingDelivery.email.enabled||settings.briefingDelivery.push.enabled)void briefingDelivery?.send(briefing).catch(error=>log(`[briefing] external delivery failed: ${String(error)}`))
   log(`[briefing] ${briefing.empty ? 'empty' : 'delivered'}, ${briefing.body.length} chars`)
@@ -1294,14 +1290,16 @@ function registerIpc(): void {
   handle('update:pause', () => updater?.pause())
   // The last composed briefing, handed to the UI instead of recomposed there:
   // two composers would drift apart on what "today" means.
-  handle('briefing:latest', () => latestBriefing ?? composeDailyBriefing())
+  handle('briefing:latest', () => latestBriefing && latestBriefingDay === briefingDayKey(Date.now()) ? latestBriefing : composeDailyBriefing())
   handle('briefing:refresh', async () => {
+    const at = Date.now()
     const value = await briefingCompose()
+    briefing?.record(value, at)
     latestBriefing = value
+    latestBriefingDay = briefingDayKey(at)
     return value
   })
-  // Delivery history is stored by the scheduler and used to be invisible: the page
-  // could only show the latest briefing, never what was actually delivered.
+  // Manual generations and scheduled deliveries share the same persisted history.
   handle('briefing:history', () => briefing?.status().history ?? [])
   handle('briefing:delivery-history',()=>briefingDelivery?.history()??[])
   handle('briefing:send',()=>{if(!briefingDelivery)throw Error(mt('简报投递服务尚未就绪'));return briefingDelivery.send(composeDailyBriefing())})
@@ -2035,7 +2033,7 @@ async function bootstrap(): Promise<void> {
     for(const win of [settingsWindow,barWindow])if(win&&!win.isDestroyed())win.webContents.send('briefing:delivery-changed')
   })}catch(error){log(`[briefing] delivery history unavailable: ${String(error)}`)}
   briefing = new BriefingScheduler({ settings: () => store.get().briefing, compose: () => briefingCompose(),
-    deliver: value => deliverBriefing(value), load: loadBriefingState, save: saveBriefingState, log })
+    deliver: deliverBriefing, load: loadBriefingState, save: saveBriefingState, log })
 
   /**
    * A closed lid, a sleep or a screen lock ends the session that was recording.

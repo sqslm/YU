@@ -655,6 +655,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
         categoryId: categoryId || undefined
       })
       setNotes((prev) => [created, ...prev.filter((note) => note.id !== created.id)])
+      // Persist the recording even if an older draft cannot be saved. Keep that
+      // draft selected until it is safe to switch to the newly created note.
+      await flushNow()
+      if (pendingRef.current) {
+        setMicMessage(t('notes.createSaveFailed'))
+        return
+      }
       setQueryInput('')
       setQuery('')
       setActiveTags([])
