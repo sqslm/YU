@@ -54,7 +54,7 @@ it.skipIf(process.platform !== 'win32')('finds actual unindexed subfolder archiv
 }, 20000)
 
 it.skipIf(process.platform !== 'win32')('checks the original native window before reading browser or Explorer context', async () => {
-  for (const action of ['browser-url', 'explorer-folder']) await expect(windowsNative({ action, handle: '0', pid: process.pid, title: '' })).rejects.toThrow('Original window is unavailable')
+  for (const action of ['browser-url', 'explorer-folder', 'current-content']) await expect(windowsNative({ action, handle: '0', pid: process.pid, title: '' })).rejects.toThrow('Original window is unavailable')
 }, 20000)
 
 it.skipIf(process.platform !== 'win32')('returns real local drive capacities and refuses activation of invented applications', async () => {

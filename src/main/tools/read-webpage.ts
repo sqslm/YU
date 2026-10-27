@@ -54,6 +54,8 @@ export interface ReadWebpageOptions {
   resolveHost?: HostResolver
   maxBytes?: number
   maxChars?: number
+  /** Explicit current-page summaries prefer article/main over site chrome. */
+  mainContent?: boolean
   /**
    * Hard ceiling for fetch + body read, in milliseconds. `0` disables it.
    * Defaults to `DEFAULT_READ_TIMEOUT_MS`.
@@ -109,7 +111,7 @@ const NOISE_BLOCK =
   /<(script|style|noscript|template|svg|canvas|iframe|nav|header|footer|aside|form|head|title)\b[^>]*>[\s\S]*?<\/\1\s*>/gi
 
 /** Exported for tests: HTML → `{title, text}` with the noise removed. */
-export function cleanHtml(html: string): { title: string; text: string } {
+export function cleanHtml(html: string, mainContent = false): { title: string; text: string } {
   const source = String(html ?? '')
   const withoutComments = source.replace(/<!--[\s\S]*?-->/g, ' ')
 
@@ -128,6 +130,11 @@ export function cleanHtml(html: string): { title: string; text: string } {
   // An unclosed <script> at the end of a truncated document would swallow the
   // rest of the page; drop the tail instead.
   body = body.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*$/gi, ' ')
+  if (mainContent) {
+    // Remove scripts first: embedded HTML strings are not the actual article.
+    const articles = [...body.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article\s*>/gi)]
+    body = articles.length ? articles.map(match => match[1]).join('\n') : /<main\b[^>]*>([\s\S]*?)<\/main\s*>/i.exec(body)?.[1] ?? body
+  }
   body = body
     .replace(/<\/(?:p|div|li|tr|h[1-6]|section|article|blockquote)>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -298,31 +305,38 @@ async function fetchChecked(
  * `await response.text()` buffered the whole page before slicing it, so one
  * link to a 200 MB file was a 200 MB allocation plus the parsing that followed.
  */
-async function readLimited(response: Response, maxBytes: number): Promise<string> {
+async function readLimited(response: Response, maxBytes: number): Promise<{ body: string; truncated: boolean }> {
   const reader = response.body?.getReader()
   // Some fetch implementations (and every hand-written test double) hand back an
   // object with only `text()`; there is nothing to stream there, so fall back to
   // reading the whole thing and let the caller slice it.
-  if (!reader) return response.text()
+  if (!reader) {
+    const body = await response.text()
+    return { body: body.slice(0, maxBytes), truncated: body.length > maxBytes }
+  }
   const decoder = new TextDecoder('utf-8', { fatal: false })
   let out = ''
   let received = 0
+  let truncated = false
   try {
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
       if (!value) continue
-      received += value.byteLength
-      out += decoder.decode(value, { stream: true })
+      const chunk = value.subarray(0, maxBytes - received)
+      received += chunk.byteLength
+      out += decoder.decode(chunk, { stream: true })
       if (received >= maxBytes) {
+        truncated = true
         await reader.cancel().catch(() => undefined)
         break
       }
     }
   } catch {
     // A truncated or reset stream still yields what did arrive.
+    truncated = true
   }
-  return out + decoder.decode()
+  return { body: out + decoder.decode(), truncated }
 }
 
 async function loadPage(
@@ -339,8 +353,10 @@ async function loadPage(
   const { response, url: landed } = fetched
 
   let body: string
+  let partial = false
   try {
-    body = await readLimited(response, maxBytes)
+    const limited = await readLimited(response, maxBytes)
+    body = limited.body; partial = limited.truncated
   } catch (err) {
     return { ok: false, error: mt('读取失败：{{message}}', { message: messageOf(err) }) }
   }
@@ -349,10 +365,10 @@ async function loadPage(
   const contentType = response.headers.get('content-type') ?? ''
   const looksHtml = /html|xml/i.test(contentType) || /<html|<body|<!doctype/i.test(sliced.slice(0, 1024))
   const cleaned = looksHtml
-    ? cleanHtml(sliced)
+    ? cleanHtml(sliced, options.mainContent)
     : { title: '', text: sliced.replace(/[ \t\r\f\v]+/g, ' ').replace(/\s+/g, ' ').trim() }
 
-  const truncated = sliced.length < body.length || cleaned.text.length > maxChars
+  const truncated = partial || sliced.length < body.length || cleaned.text.length > maxChars
   const text = cleaned.text.length > maxChars ? cleaned.text.slice(0, maxChars) : cleaned.text
 
   return {

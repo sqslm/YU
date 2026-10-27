@@ -26,6 +26,14 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('resolves a new current document against the new window even when a classifier requests old context', async () => {
+    session.rememberAnswer('之前的项目', 'Old unrelated answer')
+    await session.send('帮我总结这个打开的文档', undefined, undefined, now, { appName: 'WINWORD', windowHandle: '123', processId: 42 }, true)
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(ask.mock.calls[0][2]).toMatchObject({ appName: 'WINWORD', windowHandle: '123' })
+    expect(ask.mock.calls[0][5]?.conversation?.messages).toEqual([])
+    expect(session.snapshot().turns.at(-1)?.answer).toBe('Actual answer')
+  })
   it.each([true, false])('accepts an unavailable Everything probe only when a later built-in search succeeds: %s', async recovered => {
     const windows = new WindowsTools({ folders: { downloads: '.', desktop: '.', documents: '.' }, native: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })
     ask.mockImplementationOnce(async (...args) => {

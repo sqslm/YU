@@ -73,7 +73,7 @@ if ($request.action -eq 'ocr') {
   } finally { if ($bitmap) { $bitmap.Dispose() }; $writer.Dispose(); $stream.Dispose() }
   exit
 }
-if ($request.action -in @('explorer-folder','browser-url','window-check')) {
+if ($request.action -in @('explorer-folder','browser-url','window-check','current-content')) {
   Add-Type -TypeDefinition @'
 using System;
 using System.Text;
@@ -81,6 +81,7 @@ using System.Runtime.InteropServices;
 public static class YUWindow {
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
 }
@@ -110,31 +111,7 @@ public static class YUWindow {
     } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($windows); [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
     exit
   }
-  Add-Type -AssemblyName UIAutomationClient
-  Add-Type -AssemblyName UIAutomationTypes
-  $element = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
-  $edits = $element.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))
-  $urls = New-Object System.Collections.Generic.List[string]
-  foreach ($edit in $edits | Select-Object -First 100) {
-    if ($edit.Current.IsPassword -or $edit.Current.IsOffscreen) { continue }
-    if ($edit.Current.AutomationId -notmatch '^(?:addressEditBox|urlbar-input|urlbar)$' -and $edit.Current.Name -notmatch '\u5730\u5740|\u7db2\u5740|address|search or enter|\u641c\u7d22\u6216\u8f93\u5165|\u641c\u5c0b\u6216\u8f38\u5165') { continue }
-    # Only browser chrome under a toolbar; never a page's similarly named form field.
-    $ancestor = $edit; $toolbar = $false
-    for ($depth=0; $depth -lt 12; $depth++) {
-      $ancestor = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($ancestor)
-      if (!$ancestor -or $ancestor.Current.ControlType -eq [System.Windows.Automation.ControlType]::Document) { break }
-      if ($ancestor.Current.ControlType -eq [System.Windows.Automation.ControlType]::ToolBar) { $toolbar=$true; break }
-    }
-    if (!$toolbar) { continue }
-    $pattern = $null
-    if ($edit.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
-      $value = ([System.Windows.Automation.ValuePattern]$pattern).Current.Value
-      if ($value -match '^https?://') { $urls.Add($value) }
-    }
-  }
-  Assert-OriginalWindow
-  $unique = @($urls | Select-Object -Unique)
-  @{url=$(if ($unique.Count -eq 1) { $unique[0] } else { $null })} | ConvertTo-Json -Compress
+  . (Join-Path $PSScriptRoot 'current-content.ps1')
   exit
 }
 if ($request.action -eq 'disk-space') {

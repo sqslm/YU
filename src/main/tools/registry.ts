@@ -45,6 +45,7 @@ import { WORKFLOW_DEFINITIONS, WORKFLOW_TOOLS, type WorkflowTools } from './work
 import type { TaskContext, ToolState } from '@shared/task'
 import { argumentError } from './schema'
 import { requestsContextRead } from '../context-access'
+import { isCurrentContentRequest } from '../voice-intent'
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
@@ -148,6 +149,7 @@ const MAX_SEARCH_RESULTS = 10
 export const TOOL_TIMEOUTS: Record<string, number> = {
   web_search: 8000,
   read_webpage: 6000,
+  read_current_content: 30_000,
   get_weather: 8000,
   // Cloud synthesis can take longer than the local device handshake. Cancellation
   // reaches the provider and playback; this budget covers synthesis, not narration.
@@ -158,7 +160,7 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
 }
 
 /** Reuse reads and identical personal writes within one task, never across tasks. */
-const CACHEABLE = new Set(['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_event', 'create_note', 'extract_note_tasks', 'get_selection', 'read_clipboard', 'analyze_screenshot', 'send_briefing', 'prepare_selection_edit', 'apply_selection_edit', 'get_current_folder', 'get_current_page'])
+const CACHEABLE = new Set(['read_current_content', 'web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'create_reminder', 'create_event', 'create_note', 'extract_note_tasks', 'get_selection', 'read_clipboard', 'analyze_screenshot', 'send_briefing', 'prepare_selection_edit', 'apply_selection_edit', 'get_current_folder', 'get_current_page'])
 const taskCaches = new WeakMap<TaskContext, Map<string, Promise<ToolOutcome>>>()
 
 /** Planned queries in flight at once. The plan is two; more is throttling bait. */
@@ -699,6 +701,7 @@ export function availableToolNames(ctx: ToolContext): string[] {
     const name = tool.name
     if (tool.available && !tool.available(ctx)) return false
     if (disabled.includes(name) || ctx.allowedTools && !ctx.allowedTools.includes(name)) return false
+    if (name === 'read_current_content' && !isCurrentContentRequest(ctx.question)) return false
     if (!ctx.workflowReplay && name === 'read_clipboard' && !requestsContextRead(ctx.question, 'clipboard')) return false
     if (!ctx.workflowReplay && ['get_selection', 'replace_selection'].includes(name) && !ctx.selectionGuard && ctx.taskContext?.task?.selection === undefined && !requestsContextRead(ctx.question, 'selection')) return false
     if (!ctx.workflowReplay && name === 'analyze_screenshot' && !requestsContextRead(ctx.question, 'screenshot')) return false
@@ -851,12 +854,12 @@ async function runTaskTool(name: string, args: Record<string, unknown>, ctx: Too
     task.results = [...(task.results ?? []), { tool: name, state: status, data: outcome.data }].slice(-8)
     recordTaskStage(task, 'tool', durationMs, ctx.log, status)
     if (outcome.ok && name === 'get_current_folder' && typeof outcome.data.folder === 'string') task.directory = outcome.data.folder
-    if (outcome.ok && name === 'get_current_page' && typeof outcome.data.url === 'string') task.pageUrl = outcome.data.url
+    if (outcome.ok && ['get_current_page', 'read_current_content'].includes(name) && typeof outcome.data.url === 'string') task.pageUrl = outcome.data.url
   }
   if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary, status, taskId: task?.id,
     ...(needsFileSearchFallback(name, outcome) ? { fallback: true } : {}),
     items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
-    detail: [outcome.data.coverage, outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
+    detail: [outcome.data.coverage, name === 'read_current_content' && outcome.data.truncated ? mt('当前内容仅读取了部分，摘要可能不完整。') : '', outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[task ${task?.id ?? 'unscoped'}] tool=${tool?.name ?? 'unknown'} status=${status} ms=${durationMs}${outcome.reused ? ' reused=true' : ''}`)
   return outcome
 }

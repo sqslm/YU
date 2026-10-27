@@ -48,7 +48,7 @@ import { complete, unwrapModelText } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
 import { generateFromAudio } from './providers/gemini'
 import { askAgent, askFollowUp } from './agent'
-import { directVoiceIntent, parseVoiceIntent, VOICE_INTENT_PROMPT } from './voice-intent'
+import { directVoiceIntent, isCurrentContentRequest, parseVoiceIntent, VOICE_INTENT_PROMPT } from './voice-intent'
 import type { SelectionTarget } from './selection-editor'
 import { insertOk, insertRich, insertText, verifyInsertion } from './insert'
 import { captureEdit, type LearnedCandidate } from './editCapture'
@@ -1363,6 +1363,18 @@ export class Pipeline {
         return null
       }
 
+      // Explicit Ask and opening keywords must have the same current-document
+      // access as the unified Alt entry. Transcribe once, then reuse it below.
+      if (mode === 'ask' && !purpose) {
+        transcript = transcript || (route === 'multimodal'
+          ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
+          : await this.asrTranscript(settings, wav, controller.signal, progress))
+        if (token !== this.runToken) return null
+        if (isCurrentContentRequest(transcript)) {
+          purpose = 'assistant'; assistantUseContext = false
+          task.route = { kind: 'assistant', via: 'rule' }
+        }
+      }
       if (purpose === 'assistant') {
         transcript = transcript || (route === 'multimodal'
           ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)

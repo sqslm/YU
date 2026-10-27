@@ -1472,6 +1472,18 @@ describe('unified voice entry', () => {
   })
 
   const smart = { ...DEFAULT_VOICE_COMMANDS, smartRouting: true }
+  it('uses the original-window assistant reader for an explicit Ask page summary without repeating ASR', async () => {
+    mocks.foregroundWindow.mockReturnValue({ appName: 'msedge', title: 'Actual article', className: 'Chrome_WidgetWin_1', pid: 42, handle: '1234', appPath: 'C:\\msedge.exe', rect: null })
+    const onAssistant = vi.fn().mockResolvedValue({ text: 'Actual page summary' })
+    const h = harness({}, { onAssistant })
+    mocks.transcribe.mockResolvedValue({ text: '帮我总结一下这个网页' })
+    h.pipeline.start('ask'); h.pipeline.pushAudio(tone(1200))
+    const pending = h.pipeline.stop(); h.pipeline.audioStopped(); await pending
+    expect(mocks.transcribe).toHaveBeenCalledTimes(1)
+    expect(onAssistant).toHaveBeenCalledWith('帮我总结一下这个网页', expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ windowHandle: expect.any(String) }), false)
+    expect(mocks.askAgent).not.toHaveBeenCalled()
+    expect(mocks.insertText).not.toHaveBeenCalled()
+  })
   const finish = async (pipeline: InstanceType<typeof Pipeline>): Promise<HistoryEntry | null> => {
     pipeline.pushAudio(tone(1200)); const pending = pipeline.stop(); pipeline.audioStopped(); return pending
   }

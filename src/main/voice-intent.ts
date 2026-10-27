@@ -17,6 +17,7 @@ export function isDictatedContent(text: string): boolean {
 
 function isReadOnlySelectionRequest(text: string): boolean {
   if (/剪贴板|\bclipboard\b/iu.test(text)) return false
+  if (/选中.{0,8}(?:文件|文档|表格|PDF)|\bselected (?:(?:source|code) )?(?:file|document|spreadsheet|presentation)\b/iu.test(text) && !/文字|文本|片段|选区|\b(?:text|passage|paragraph)\b/iu.test(text)) return false
   return !isDictatedContent(text) && /选中|选区|这段(?:代码|文字|文本|注释)|\b(?:selected|selection|this code|this text|this comment)\b/iu.test(text) &&
     /解释|说明|分析|总结|\b(?:explain|summarize|analyse|analyze|describe)\b/iu.test(text) &&
     !/润色|改写|修改|替换|翻译|\b(?:polish|rewrite|edit|replace|translate)\b/iu.test(text)
@@ -29,9 +30,19 @@ export function isCurrentWindowQuestion(text: string): boolean {
     /^(?:please\s+)?(?:tell me\s+)?(?:(?:what|which)\s+(?:app(?:lication)?|program|window)\s+(?:am I(?: currently)?\s+(?:using|in)|is (?:this|active|current|in focus))|what is (?:this|the (?:current|active))\s+(?:app(?:lication)?|program|window))[?.\s]*$/iu.test(text.trim())
 }
 
+/** Resolve "this page/file" against the original window, never an older answer. */
+export function isCurrentContentRequest(text: string): boolean {
+  if (isDictatedContent(text) || isReminderCreationRequest(text) || isReadOnlySelectionRequest(text) ||
+      /(?:不要|不用|无需|别).{0,4}(?:总结|概括|读取|阅读|分析|介绍)|\b(?:do not|don.t|never)\s+(?:read|summari[sz]e|analy[sz]e|explain)\b/iu.test(text) ||
+      /剪贴板|\bclipboard\b|刚才|之前|上次|上一个|上一条|\b(?:previous|earlier|last answer)\b/iu.test(text)) return false
+  if (/^(?:(?:请|帮我|请帮我|麻烦|麻烦你|请你|你帮我)\s*)?(?:总结|概括)(?:一下)?(?:吧|啊|呀|好吗)?[。！？!?.\s]*$/u.test(text.trim())) return true
+  const target = /(?:这个|这篇|这份|该|当前|正在|打开的|选中的?|屏幕上|浏览器里).{0,24}(?:网页|文章|页面|网站|项目|仓库|文件|文档|表格|幻灯片|PDF|Word|Excel|PPT)|(?:这|当前)(?:个)?(?:网页|文章|文档)|\b(?:this|the (?:current|active|open|opened)|(?:the )?selected)\s+(?:(?:web|browser)\s*)?(?:page|article|website|repository|repo|project|file|document|spreadsheet|presentation|pdf)\b/iu.test(text)
+  return target && /总结|概括|介绍|解释|分析|阅读|读一下|主要|内容|讲什么|说什么|干嘛|干什么|做什么|是什么|用途|\b(?:summari[sz]e|explain|describe|analy[sz]e|read|what)\b/iu.test(text)
+}
+
 /** Keep only explicitly referential requests attached to the temporary session. */
 export function needsAssistantContext(text: string): boolean {
-  if (isCurrentWindowQuestion(text) || isDictatedContent(text)) return false
+  if (isCurrentWindowQuestion(text) || isCurrentContentRequest(text) || isDictatedContent(text)) return false
   return /刚才|之前|上一(?:个|条|次|段|轮)|那(?:个|条|些|段|份)|第[一二三四五六七八九十\d]+(?:个|项)|(?:把|将|修改|改成|改为|取消|删除).{0,6}(?:这条|这个)|^(?:继续|再试|重试|再改|改成|改为|再详细|展开说|具体点)|^(?:为什么|为什么呢|是吗)[？?。\s]*$|^(?:那|那么).{0,14}呢[？?。\s]*$|^(?:那|那么|所以).{0,8}(?:怎么|如何)|(?:用|换成)(?:英文|中文|英语|汉语).{0,5}(?:回答|解释|说)|\b(?:that|those|these|them|previous|earlier|second|third|last (?:answer|result|task)|continue|retry|try again|what about|tell me more|explain more)\b|^(?:why|how so|really|yes|no)[?!.\s]*$|^(?:(?:please|can you|could you)\s+)?(?:open|save|copy|translate|summarize|explain|analy[sz]e|polish|change|move|delete|cancel|complete|make|read|rewrite|tag)\b.{0,40}\bit\b|^(?:so\s+)?how\b.{0,30}\b(?:fix|solve|change|open|use)\b.{0,12}\bit\b/iu.test(text)
 }
 
@@ -77,7 +88,7 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false, operati
   if(/选区|选中(?:的)?(?:文字|文本)|selected (?:text|selection)/iu.test(value)&&/润色|翻译|polish|translate/iu.test(value)&&/预览|先.{0,12}看|给我看|不要替换|preview/iu.test(value))return {kind:'assistant'}
   if(/(?:刚才|上次|上轮|预览).{0,12}(?:润色|翻译|结果)|(?:润色|翻译).{0,12}(?:结果|预览)/u.test(value)&&/替换|写回|应用|填入|放回/u.test(value))return {kind:'assistant'}
   if (/^(?:只|仅)(?:给我|提供).{0,8}(?:建议|意见)/u.test(value)) return { kind: 'ask' }
-  if (/(?:这篇|当前|该).{0,6}(?:文章|网页)|当前浏览器/iu.test(value) && /总结|主要|内容|说什么|讲什么|阅读/u.test(value)) return { kind: 'assistant' }
+  if (isCurrentContentRequest(value)) return { kind: 'assistant' }
   if (/剪贴板|\bclipboard\b/iu.test(value) && /读取|读|复制|总结|解释|翻译|\b(?:read|copied?|summari[sz]e|explain|translate)\b/iu.test(value)) return { kind: 'assistant' }
   if (isCurrentWindowQuestion(value)) return { kind: 'assistant' }
   if (/^(?:(?:请|帮我|请帮我)\s*)?(?:把|给|将|为|分类|重命名|命名).{0,60}(?:随记|笔记).{0,30}(?:分类|命名|改名)|^(?:(?:请|帮我|请帮我)\s*)?(?:分类|重命名|命名).{0,30}(?:随记|笔记)|^(?:please\s+)?(?:rename|name|categorize|categorise)\b.{0,70}\bnotes?\b/iu.test(value)) return { kind: 'assistant' }
@@ -111,7 +122,7 @@ useContext: true only for an assistant follow-up that needs the previous exchang
 dictation: ordinary text to insert, articles, quoted commands/examples, messages, programming requirements or prompts addressed to another agent. Preserve automatic prompt-card polishing for these. When uncertain between dictation and execution choose dictation. A sentence mentioning a command is not an instruction to perform it.
 ask: actual questions addressed to YU, including ordinary knowledge, explanation, calculation, time, weather, news, web research, and explicitly selected text questions. Do not restrict Ask to news or fixed phrases. Questions about actual local tasks, notes, history, files, disk capacity or the original active app require assistant tools instead of a general knowledge answer.
 assistant also handles explicit current-window screenshot analysis, screen/image OCR, or chart/interface interpretation requests using actual screenshot tools. Do not claim an image was read without a tool result. A general question about what screenshots are remains ask.
-Use assistant for reading or summarizing the current browser page/article, including deictic references to the article on screen, resolving the actual browser URL before public webpage reading. If an actual selected passage is provided, its explanation can still use ask. Never substitute a search about the window title for reading the user's current page.
+Use assistant for reading, summarizing or explaining the current browser page/article/repository or open document/file/spreadsheet/presentation, including deictic references to content on screen and a standalone summarize request. Read the actual original content with read_current_content before answering; current content always uses useContext=false. If an actual selected passage is provided, its explanation can still use ask. Never substitute a search about the window title for reading the user's current page.
 selection: an explicit request to polish or translate the currently selected text (not supplied dictation). operation must be polish or translate. Replacement/append follows the user's existing selection settings. For explaining/summarizing selected text use ask. For a request to rewrite a previous assistant answer, use assistant instead so the actual answer is the target. Never invent text when no target exists.
 translate: an explicit request to translate supplied text. text MUST be an exact nonempty substring of the input, containing only the source passage, with no paraphrase. target is an explicitly requested BCP-47 language code (en, zh, ja, etc), otherwise null; do not infer a target from the source language.
 notes: an explicit request to record supplied content in a note; spoken fillers before or inside that request do not change its intent. Recording a software idea is not creating a reminder or executing the feature described in the idea. text MUST be the exact content substring without cleaning or rewriting punctuation; leave null only for references like 'the previous answer' that require the assistant to resolve a target.

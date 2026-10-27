@@ -7,6 +7,9 @@ import { cleanHtml, inspectUrl, readWebpage } from './read-webpage'
  * nothing here opens a socket.
  */
 describe('inspectUrl', () => {
+  it('does not mistake HTML inside scripts for the visible article', () => {
+    expect(cleanHtml('<script>const fake="<article>Wrong article</article>";</script><main>Actual long article</main>', true).text).toBe('Actual long article')
+  })
   it('accepts public http(s) URLs', () => {
     for (const url of ['https://example.com/a?b=1#c', 'http://news.test/2026/10/19']) {
       const check = inspectUrl(url)
@@ -140,6 +143,12 @@ describe('readWebpage', () => {
     })
     expect(page.ok).toBe(true)
     expect(page.text?.length).toBe(50)
+    expect(page.truncated).toBe(true)
+  })
+
+  it('reports the byte limit even when extracted text is shorter than the character limit', async () => {
+    const page = await readWebpage('https://example.test/huge', { fetchImpl: vi.fn(async () => new Response('x'.repeat(300))), maxBytes: 100, maxChars: 1000 })
+    expect(page.text).toBe('x'.repeat(100))
     expect(page.truncated).toBe(true)
   })
 

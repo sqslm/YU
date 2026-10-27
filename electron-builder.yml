@@ -30,6 +30,8 @@ extraResources:
     to: voice-wake.ps1
   - from: resources/windows-tools.ps1
     to: windows-tools.ps1
+  - from: resources/current-content.ps1
+    to: current-content.ps1
   - from: resources/speech.ps1
     to: speech.ps1
   - from: resources/installer.ico
