@@ -26,6 +26,13 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('does not offer screenshot tools when the screenshot integration is disconnected', async () => {
+    await session.send('帮我框选截图并分析')
+    expect(ask).toHaveBeenCalled()
+    const options = ask.mock.calls[0][5]
+    expect(options?.allowedTools).not.toContain('analyze_screenshot')
+    expect(options?.analyzeScreenshot).toBeUndefined()
+  })
   it('reads the full uniquely titled note directly without a model round', async () => {
     const body = '这是实际随记正文。'.repeat(400)
     const notes = vi.fn().mockReturnValue([{ id: 'note-1', title: '优化点', transcript: 'raw', polished: body, createdAt: 1, tags: [] }])
