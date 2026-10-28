@@ -116,6 +116,7 @@ export function Bar(): JSX.Element {
 
     const offState = window.api.bar.onState((next) => {
       const previous = stateRef.current.phase
+      const previousSince = stateRef.current.phase === 'recording' ? stateRef.current.since : undefined
       stateRef.current = next
       setState(next)
       if (next.phase !== 'recording') setCaption({ active: false, text: '' })
@@ -126,13 +127,19 @@ export function Bar(): JSX.Element {
       // Cues fire on transitions only: a repeated `recording` frame (waveform
       // updates) must not re-beep.
       if (next.phase !== previous) {
-        if (next.phase === 'recording') playCue('start', soundsRef.current)
-        else if (next.phase === 'done') playCue(next.feedback?.failed ? 'error' : 'done', soundsRef.current)
-        else if (next.phase === 'error') playCue('error', soundsRef.current)
+        if (next.phase === 'done') void playCue(next.feedback?.failed ? 'error' : 'done', soundsRef.current)
+        else if (next.phase === 'error') void playCue('error', soundsRef.current)
       }
-      if (next.phase === 'recording') {
-        void capture.setActive(true)
-        void capture.start()
+      if (next.phase === 'recording' && (previous !== 'recording' || next.since !== previousSince)) {
+        void (async () => {
+          await playCue('start', soundsRef.current)
+          if (stateRef.current.phase !== 'recording' || stateRef.current.since !== next.since) return
+          if (next.taskId) window.api.bar.startCueFinished(next.taskId)
+          await capture.setActive(true)
+          if (stateRef.current.phase !== 'recording' || stateRef.current.since !== next.since) return
+          await capture.start()
+          if (stateRef.current.phase !== 'recording') { await capture.setActive(false, false); await capture.stop() }
+        })()
       }
       if (next.phase === 'idle') {
         // Idle means the take was cancelled or discarded, so the drained tail is
@@ -151,6 +158,7 @@ export function Bar(): JSX.Element {
       await capture.setActive(false)
       window.api.bar.stopped()
     })
+    window.api.bar.ready()
 
     return () => {
       offSettings()

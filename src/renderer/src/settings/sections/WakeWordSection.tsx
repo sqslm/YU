@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Button, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
+import { Button, LinearProgress, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
+import { WakeTrainingDialog } from './WakeTrainingDialog'
 import type { Settings } from '@shared/types'
 import type { WakeWordStatus } from '@shared/wake-word'
 import { MAX_WAKE_CONFIDENCE, MIN_WAKE_CONFIDENCE, normalizeWakeConfidence } from '@shared/wake-word'
 import { SettingsGroup, SettingsRow } from './General'
 import i18n from '../../i18n'
 
-export function WakeWordSection({ settings, patch }: { settings: Settings; patch: (delta: Partial<Settings>) => void }): JSX.Element {
+export function WakeWordSection({ settings, patch, saving }: { settings: Settings; patch: (delta: Partial<Settings>) => void; saving: boolean }): JSX.Element {
+  const [learning, setLearning] = useState(false)
   const [draft, setDraft] = useState(settings.wakeWord.phrase)
   const [status, setStatus] = useState<WakeWordStatus>({ phase: 'off' })
   // The device field and its IPC land after this file (Lead owns types.ts/api.ts); these
@@ -74,6 +76,11 @@ export function WakeWordSection({ settings, patch }: { settings: Settings; patch
     </SettingsRow>
     <Stack direction="column" spacing={0.5} sx={{ p: 1.5 }}>
       <Stack direction="row" spacing={1} alignItems="center">
+        <Button size="small" variant="outlined" disabled={saving || invalid || phrase !== settings.wakeWord.phrase || !settings.wakeWord.enabled} onClick={() => setLearning(true)}>{i18n.t('学习唤醒词')}</Button>
+        {settings.wakeWord.training && <><Typography variant="caption">{i18n.t('已学习 {{count}} 遍', { count: settings.wakeWord.training.sampleCount })}</Typography><Button size="small" onClick={() => patch({ wakeWord: { ...settings.wakeWord, training: undefined } })}>{i18n.t('清除学习')}</Button></>}
+      </Stack>
+      {status.phase === 'listening' && <><Typography variant="caption">{status.deviceName || i18n.t('系统默认麦克风')}</Typography><LinearProgress variant="determinate" value={status.audioLevel ?? 0} aria-label={i18n.t('麦克风输入音量')} sx={{ maxWidth: 300 }} /></>}
+      <Stack direction="row" spacing={1} alignItems="center">
         <Typography sx={{ fontSize: 12, color: status.phase === 'error' ? 'error.main' : 'text.secondary' }} role="status">
           {i18n.t(labels[status.phase])}{status.error ? ` · ${i18n.t(errors[status.error])}` : ''}
         </Typography>
@@ -87,5 +94,6 @@ export function WakeWordSection({ settings, patch }: { settings: Settings; patch
         {i18n.t('选中的麦克风已不可用，已改用系统默认麦克风；如需指定设备，请在上方重新选择。')}
       </Typography>}
     </Stack>
+    {learning && <WakeTrainingDialog settings={settings} onClose={() => setLearning(false)} />}
   </SettingsGroup>
 }

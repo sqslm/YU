@@ -2,8 +2,9 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { Settings } from '@shared/types'
+import { mt } from '@shared/mainI18n'
 import type { WakeWordStatus } from '@shared/wake-word'
-import { normalizeWakeConfidence } from '@shared/wake-word'
+import { normalizeWakeConfidence, learnWakeTraining, normalizeWakeTraining, type WakeTrainingSample, type WakeTraining } from '@shared/wake-word'
 
 /** A capture endpoint the recogniser can be pointed at. `id` is the waveIn index, as text. */
 export interface WakeWordDevice {
@@ -39,6 +40,8 @@ export class WakeWordHost {
   private phrase = ''
   private deviceId = ''
   private confidence = 0.8
+  private trainingKey = ''
+  private learning: ChildProcessWithoutNullStreams | null = null
   private status: WakeWordStatus = { phase: 'off' }
   /** Set once the script reports it could not open the chosen device. */
   private deviceNotice: '' | 'device-missing' = ''
@@ -48,6 +51,32 @@ export class WakeWordHost {
   deviceIssue: '' | 'unavailable' | 'timeout' = ''
   constructor(private deps: { wake: () => void; changed: (status: WakeWordStatus) => void }) {}
   snapshot(): WakeWordStatus { return { ...this.status } }
+  resetCooldown(): void { this.lastWake = -Infinity }
+  cancelLearning(): void { this.learning?.kill(); this.learning = null }
+  learn(phrase: string, samples: Uint8Array[], confidence: number): Promise<{ training: WakeTraining; confidence: number }> {
+    this.cancelLearning()
+    const child = spawn(this.shell, ['-NoProfile', '-NonInteractive', '-File', this.script], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    this.learning = child
+    return new Promise((resolve, reject) => {
+      let output = '', settled = false
+      const finish = (error?: Error): void => {
+        if (settled) return
+        settled = true; clearTimeout(timer)
+        if (this.learning === child) this.learning = null
+        if (error) { child.kill(); reject(error); return }
+        try {
+          const event = output.split('\n').map(line => { try { return JSON.parse(line.replace(/^\uFEFF/, '')) } catch { return null } }).find(row => row?.type === 'learned')
+          if (!event) throw Error(mt('本地唤醒学习失败，请检查麦克风和识别语言包'))
+          resolve(learnWakeTraining(phrase, event.samples as WakeTrainingSample[], confidence))
+        } catch (error) { reject(new Error(mt(error instanceof Error ? error.message : String(error)))) }
+      }
+      const timer = setTimeout(() => finish(Error(mt('唤醒学习超时，请重试'))), 30_000)
+      child.stdout.setEncoding('utf8'); child.stdout.on('data', text => { output += text; if (output.length > 32_768) finish(Error(mt('唤醒学习结果过长'))) })
+      child.stderr.resume(); child.on('error', error => finish(error)); child.on('close', code => finish(code === 0 ? undefined : Error(mt('本地唤醒学习未完成'))))
+      child.stdin.on('error', error => finish(error))
+      child.stdin.end(JSON.stringify({ mode: 'learn', phrase, language: /[\u3400-\u9fff]/u.test(phrase) ? 'zh' : 'en', samples: samples.map(wav => Buffer.from(wav).toString('base64')) }) + '\n', 'utf8')
+    })
+  }
   private get script(): string {
     return app.isPackaged ? join(process.resourcesPath, 'voice-wake.ps1') : join(app.getAppPath(), 'resources/voice-wake.ps1')
   }
@@ -112,11 +141,14 @@ export class WakeWordHost {
       this.stop(); this.publish({ phase: settings.enabled ? 'paused' : 'off' }); return
     }
     const device = settings.deviceId ?? ''
+    const training = normalizeWakeTraining(settings.training, settings.phrase)
+    const trainingKey = JSON.stringify(training?.variants ?? [])
     // A device switch has to restart the recogniser: waveIn cannot re-target an open input.
-    if (this.phrase === settings.phrase && this.deviceId === device && (this.child || this.status.phase === 'error') && !retry) return
+    if (this.phrase === settings.phrase && this.deviceId === device && this.trainingKey === trainingKey && (this.child || this.status.phase === 'error') && !retry) return
     this.stop()
     this.phrase = settings.phrase
     this.deviceId = device
+    this.trainingKey = trainingKey
     if (process.platform !== 'win32') { this.publish({ phase: 'error', error: 'unavailable' }); return }
     this.publish({ phase: 'starting' })
     const child = spawn(this.shell,
@@ -142,10 +174,12 @@ export class WakeWordHost {
           if (event.type === 'ready') {
             if (this.startup) clearTimeout(this.startup)
             this.startup = null
-            this.publish({ phase: 'listening' })
+            this.publish({ ...this.status, phase: 'listening' })
           }
           // The configured utterance threshold is the confidence gate. A second
           // fixed word-score floor made the sensitivity control ineffective for names.
+          else if (event.type === 'level' && this.status.phase === 'listening' && Number.isInteger(event.value) && event.value >= 0 && event.value <= 100) this.publish({ ...this.status, audioLevel: event.value })
+          else if (event.type === 'device' && typeof event.name === 'string') this.publish({ ...this.status, deviceName: event.name.slice(0, 120) })
           else if (event.type === 'wake' && this.status.phase === 'listening' &&
             event.phrase === this.phrase && Number.isFinite(event.confidence) &&
             event.durationMs >= 300 && event.durationMs <= 9000) {
@@ -172,6 +206,6 @@ export class WakeWordHost {
     child.on('exit', () => failed())
     child.stdin.on('error', () => failed())
     this.startup = setTimeout(() => failed(), 15_000)
-    child.stdin.end(JSON.stringify({ phrase: settings.phrase, language: /[\u3400-\u9fff]/u.test(settings.phrase) ? 'zh' : 'en', device }) + '\n', 'utf8')
+    child.stdin.end(JSON.stringify({ phrase: settings.phrase, language: /[\u3400-\u9fff]/u.test(settings.phrase) ? 'zh' : 'en', device, ...(training ? { variants: training.variants } : {}) }) + '\n', 'utf8')
   }
 }

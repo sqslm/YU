@@ -1,4 +1,5 @@
 import { registerGameModePreparation } from '../gameModePreparation'
+import { playCue } from '../../bar/cues'
 import { PagedList } from '../Pagination'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -598,7 +599,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       if (micRef.current !== mic) return
       await mic.start()
       if (micRef.current !== mic) { await mic.stop(); return }
-      if (mic.isRunning) await mic.setActive(true)
+      if (mic.isRunning) {
+        await playCue('start', settings.playSounds)
+        if (micRef.current !== mic) { await mic.stop(); return }
+        await mic.setActive(true)
+      }
     } catch (err) {
       micErrorRef.current = messageOf(err)
     }

@@ -19,6 +19,13 @@ ipcRenderer.on('card:hidden', () => { lastCard = null })
 const api: TypelessApi = {
   checkAsr: () => ipcRenderer.invoke('asr:check'),
   wakeWord: {
+    setup: mode => ipcRenderer.invoke('wake:setup', mode),
+    learn: (phrase, samples) => ipcRenderer.invoke('wake:learn', phrase, samples),
+    onTestDetected: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('wake:test-detected', listener)
+      return () => ipcRenderer.removeListener('wake:test-detected', listener)
+    },
     devices: (): Promise<Array<{ id: string; name: string }>> => ipcRenderer.invoke('wake:devices'),
     status: () => ipcRenderer.invoke('wake:status'),
     retry: () => ipcRenderer.invoke('wake:retry'),
@@ -29,6 +36,7 @@ const api: TypelessApi = {
     }
   },
   screenshot: {
+    openQrUrl: text => ipcRenderer.invoke('screenshot:open-qr-url', text),
     allScreens:()=>ipcRenderer.invoke('screenshot:all-screens'),
     open: () => ipcRenderer.invoke('screenshot:open'),
     frame: () => ipcRenderer.invoke('screenshot:frame'),
@@ -326,6 +334,8 @@ const api: TypelessApi = {
       ipcRenderer.invoke('models:list', input)
   },
   bar: {
+    ready: () => ipcRenderer.send('bar:ready'),
+    startCueFinished: taskId => ipcRenderer.send('bar:start-cue-finished', taskId),
     onSpeechPlayback: callback => {
       const listener = (_event: unknown, request: import('@shared/speech').SpeechPlaybackRequest): void => callback(request)
       ipcRenderer.on('speech:playback', listener)

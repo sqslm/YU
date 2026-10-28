@@ -17,7 +17,27 @@ describe('offline custom wake lifecycle', () => {
     })
     host = new WakeWordHost({ wake, changed })
   })
-  afterEach(() => { host.stop(); vi.useRealTimers() })
+  afterEach(() => { host.stop(); host.cancelLearning(); vi.useRealTimers() })
+  it('learns three local recordings and restarts listening with the learned variants', async () => {
+    const phrase = '你好胡小杨'
+    const learning = host.learn(phrase, [new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])], .8)
+    const input = JSON.parse(children[0].stdin.read().toString())
+    expect(input).toMatchObject({ mode: 'learn', phrase, samples: ['AQ==', 'Ag==', 'Aw=='] })
+    const sample = { text: '你好胡晓阳', phones: 'nihao huxiaoyang', targetPhones: 'nihao huxiaoyang', confidence: .3 }
+    children[0].stdout.write(JSON.stringify({ type: 'learned', samples: [sample, sample, sample] }) + '\n')
+    children[0].emit('close', 0)
+    const learned = await learning
+    expect(learned.confidence).toBe(.24)
+    host.update({ enabled: true, phrase, ...learned }, false)
+    expect(JSON.parse(children[1].stdin.read().toString()).variants).toEqual(learned.training.variants)
+  })
+  it('cancels an unfinished local learning helper without accepting its profile', async () => {
+    const learning = host.learn('你好胡小杨', [], .8)
+    const rejected = expect(learning).rejects.toThrow('未完成')
+    host.cancelLearning(); children[0].emit('close', null)
+    expect(children[0].kill).toHaveBeenCalled()
+    await rejected
+  })
   it('does not open a microphone until explicitly enabled; pauses and resumes without duplicate helpers', () => {
     host.update({ enabled: false, phrase: '你好轻令' }, false); expect(mocks.spawn).not.toHaveBeenCalled()
     const settings = { enabled: true, phrase: '你好轻令' }

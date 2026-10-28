@@ -26,7 +26,7 @@ const TONES: Record<CueKind, Tone[]> = {
   ],
   // Rising pair: "I am listening".
   start: [
-    { frequency: 660, to: 880, durationMs: 70, gain: 0.05, type: 'sine' }
+    { frequency: 660, to: 880, durationMs: 130, gain: 0.1, type: 'sine' }
   ],
   // Falling minor third: "saved".
   done: [
@@ -55,33 +55,42 @@ function audioContext(): AudioContext | null {
  * Plays the cue for `kind`. Silent when the user turned cues off; every failure
  * path is swallowed, because a missing beep must never break a recording.
  */
-export function playCue(kind: CueKind, enabled: boolean): void {
+export async function playCue(kind: CueKind, enabled: boolean): Promise<void> {
   if (!enabled) return
   const ctx = audioContext()
   if (!ctx) return
   // Autoplay policy parks a fresh context in `suspended`; resume is cheap and
   // idempotent, and the cue still schedules against `currentTime`.
-  if (ctx.state === 'suspended') void ctx.resume()
-
-  let at = ctx.currentTime
-  for (const tone of TONES[kind]) {
-    const start = at
-    const end = start + tone.durationMs / 1000
-    const oscillator = ctx.createOscillator()
-    const envelope = ctx.createGain()
-    oscillator.type = tone.type
-    oscillator.frequency.setValueAtTime(tone.frequency, start)
-    if (tone.to !== tone.frequency) {
-      oscillator.frequency.exponentialRampToValueAtTime(tone.to, end)
+  let expired = false
+  const oscillators: OscillatorNode[] = []
+  let timer: ReturnType<typeof setTimeout>
+  const deadline = new Promise<void>(resolve => { timer = setTimeout(() => { expired = true; resolve() }, 1000) })
+  try {
+    if (ctx.state === 'suspended') await Promise.race([ctx.resume(), deadline])
+    if (expired) return
+    let at = ctx.currentTime
+    const ended: Array<Promise<void>> = []
+    for (const tone of TONES[kind]) {
+      const start = at, end = start + tone.durationMs / 1000
+      const oscillator = ctx.createOscillator(), envelope = ctx.createGain()
+      oscillators.push(oscillator)
+      oscillator.type = tone.type
+      oscillator.frequency.setValueAtTime(tone.frequency, start)
+      if (tone.to !== tone.frequency) oscillator.frequency.exponentialRampToValueAtTime(tone.to, end)
+      envelope.gain.setValueAtTime(0.0001, start)
+      envelope.gain.exponentialRampToValueAtTime(tone.gain, start + 0.008)
+      envelope.gain.exponentialRampToValueAtTime(0.0001, end)
+      oscillator.connect(envelope).connect(ctx.destination)
+      ended.push(new Promise<void>(resolve => {
+        oscillator.onended = () => { oscillator.disconnect(); envelope.disconnect(); resolve() }
+      }))
+      oscillator.start(start); oscillator.stop(end + 0.01); at = end
     }
-    // Short attack/decay so the tone reads as a tick, not a click.
-    envelope.gain.setValueAtTime(0.0001, start)
-    envelope.gain.exponentialRampToValueAtTime(tone.gain, start + 0.008)
-    envelope.gain.exponentialRampToValueAtTime(0.0001, end)
-    oscillator.connect(envelope).connect(ctx.destination)
-    oscillator.start(start)
-    oscillator.stop(end + 0.01)
-    at = end
+    await Promise.race([Promise.all(ended), deadline])
+  } catch { /* A missing playback device must not prevent capture. */ }
+  finally {
+    clearTimeout(timer!)
+    if (expired) for (const oscillator of oscillators) { try { oscillator.stop(); oscillator.disconnect() } catch { /* Already ended. */ } }
   }
 }
 

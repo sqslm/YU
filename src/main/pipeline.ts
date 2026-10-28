@@ -131,6 +131,7 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  revealBar?: (win: BrowserWindow) => void
   contentTarget?: (original: ForegroundInfo) => ForegroundInfo | undefined
   checkAsr?: () => Promise<void>
   preserveAudio?: (pcm: Int16Array, signal: AbortSignal) => Promise<void>
@@ -280,6 +281,23 @@ export class Pipeline {
   private languageHinted = false
   /** CoreAudio refused once; do not ask again for the life of the process. */
   private muteUnavailable = false
+  private muteStartTimer: ReturnType<typeof setTimeout> | null = null
+  private latestBarState: BarState = { phase: 'idle' }
+  startCueFinished(taskId: string): void {
+    if (this.stage !== 'recording' || this.tasks.get(this.runToken)?.id !== taskId || !this.getSettings().muteWhileRecording) return
+    if (this.muteStartTimer) clearTimeout(this.muteStartTimer)
+    this.muteStartTimer = null
+    this.mutePlayback()
+  }
+  replayBarState(): void {
+    const win = this.bar()
+    if (!win || win.isDestroyed()) return
+    win.webContents.send('bar:state', this.latestBarState)
+    if (this.barPhase === 'recording' || this.barPhase === 'working') {
+      if (this.options.revealBar) this.options.revealBar(win)
+      else win.showInactive()
+    }
+  }
   /** Opus copy of the current take, captured by the bar renderer (REQ-11). */
   private encoded: { data: Uint8Array; contentType: string } | null = null
 
@@ -300,6 +318,8 @@ export class Pipeline {
   }
 
   private unmutePlayback(): void {
+    if (this.muteStartTimer) clearTimeout(this.muteStartTimer)
+    this.muteStartTimer = null
     restoreOthers()
   }
 
@@ -399,16 +419,18 @@ export class Pipeline {
   private setBarState(state: BarState, autoHideMs = 0, options: { force?: boolean } = {}): void {
     this.options.onActivity?.(this.isRecording, this.isBusy)
     const win = this.bar()
-    if (!win) return
     const live = state.phase === 'recording' || state.phase === 'working'
     const selected = this.takePrompt.get(this.runToken)
     const promptName = state.phase === 'working' && selected?.applied ? selected.card.name : undefined
-    if (!win.isDestroyed()) win.webContents.send('bar:state', live
+    this.latestBarState = live
       ? { ...state, promptName, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('任务处理') : state.mode === 'dictation' && !promptName ? mt('智能任务') : undefined }
-      : state)
+      : state
     this.barPhase = state.phase
+    if (!win || win.isDestroyed()) return
+    win.webContents.send('bar:state', this.latestBarState)
     if (live || state.phase === 'alert' || state.phase === 'error') {
-      if (!win.isVisible()) win.showInactive()
+      if (this.options.revealBar) this.options.revealBar(win)
+      else win.showInactive()
     }
     // A take owns the pill while it runs, so a timer armed by the notice that
     // preceded it must not fire into the middle of the next recording.
@@ -707,7 +729,16 @@ export class Pipeline {
     })
     // OPT-09: silence other audio while the microphone is open. The playback
     // endpoint is muted, not the input, so dictation itself is unaffected.
-    if (opening.muteWhileRecording) this.mutePlayback()
+    if (opening.muteWhileRecording) {
+      if (!opening.playSounds) this.mutePlayback()
+      else {
+        const token = this.runToken
+        this.muteStartTimer = setTimeout(() => {
+          this.muteStartTimer = null
+          if (token === this.runToken && this.stage === 'recording') this.mutePlayback()
+        }, 1500)
+      }
+    }
     // Ambiguous voice input has not authorized a field/selection read yet.
     this.contextRead = options.purpose || this.takeSmartRouting || this.takeVoiceCommands || mode === 'ask' ? Promise.resolve(null) : this.readContext()
     this.armSessionCap()
@@ -715,6 +746,7 @@ export class Pipeline {
       phase: 'recording',
       mode,
       since: this.recording.startedAt,
+      taskId: this.tasks.get(this.runToken)?.id,
       activation: this.getSettings().activationMode,
       showMode: this.getSettings().showModeInBar,
       handsFree: options.handsFree

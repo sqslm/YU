@@ -233,7 +233,7 @@ export function SettingsDialog({
           {section === 'account' && <AccountSection settings={settings} patch={patch} />}
           {section === 'general' && <GeneralSection settings={settings} patch={patch} />}
           {section === 'speech' && <SpeechSection settings={settings} patch={patch} />}
-          {section === 'wake' && <WakeWordSection settings={settings} patch={patch} />}
+          {section === 'wake' && <WakeWordSection settings={settings} patch={patch} saving={saving} />}
           {section === 'commands' && <VoiceCommandsSection settings={settings} patch={patch} />}
           {section === 'input' && <InputSection settings={settings} patch={patch} />}
           {section === 'storage' && <StorageSection settings={settings} patch={patch} />}

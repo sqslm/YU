@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, nativeImage, screen, Menu } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, nativeImage, screen, Menu, shell } from 'electron'
+import { qrWebUrl } from '@shared/qr'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Settings } from '@shared/types'
@@ -43,6 +44,12 @@ export class ScreenshotTool {
     handle('screenshot:frame', event => { owned(event); return this.frame })
     handle('screenshot:ready', event => { owned(event); if (!this.gaming) { this.win!.show(); this.win!.focus() } })
     handle('screenshot:close', event => { owned(event); this.close() })
+    handle('screenshot:open-qr-url', async (event, text: string) => {
+      owned(event)
+      const url = qrWebUrl(text)
+      if (!url) throw new Error(mt('二维码内容不是网页链接'))
+      await shell.openExternal(url)
+    })
     handle('screenshot:all-screens', async event => { owned(event);this.close();await new Promise(resolve=>setTimeout(resolve,120));await this.open(true) })
     handle('screenshot:scroll-start', (event, rect: CaptureRect, controls: CaptureRect) => { owned(event); this.startScroll(rect, controls) })
     handle('screenshot:scroll-finish', event => { owned(event); return this.finishScroll() })

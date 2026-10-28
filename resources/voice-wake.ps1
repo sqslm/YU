@@ -277,9 +277,17 @@ public static class YUWake {
    * longer exists (unplugged headset, reordered devices) falls back to the default
    * with one logged line: silently listening to nothing reads as a broken app.
    */
+  [DllImport("winmm.dll")]
+  static extern int waveInMessage(IntPtr handle, uint message, out uint device, out uint flags);
+
+  static int PreferredDevice() {
+    uint device, flags;
+    return waveInMessage(new IntPtr(-1), 0x2015, out device, out flags) == 0 && device < DeviceCount() ? (int)device : -1;
+  }
+
   static int Resolve(string device, bool hasWave) {
     if (hasWave) return -1;
-    if (String.IsNullOrEmpty(device)) return -1;
+    if (String.IsNullOrEmpty(device)) return PreferredDevice();
     int index;
     if (!Int32.TryParse(device, out index)) { Log("device '" + device + "' is not an index; using the default input"); return -1; }
     if (index < 0) return -1;
@@ -304,7 +312,48 @@ public static class YUWake {
     return Regex.Replace(value.ToString().Normalize(NormalizationForm.FormD), @"[\p{M}\s]", "").ToLowerInvariant();
   }
 
-  public static void Run(string phrase, string language, string wave, string device) {
+  public static void Learn(string phrase, string language, string[] waves) {
+    RecognizerInfo selected = null;
+    foreach (var info in SpeechRecognitionEngine.InstalledRecognizers()) if (info.Culture.TwoLetterISOLanguageName == language) { selected = info; break; }
+    if (selected == null) throw new InvalidOperationException("Recognition language unavailable");
+    var samples = new List<object>();
+    using (var engine = new SpeechRecognitionEngine(selected)) {
+      string spoken = Regex.Replace(phrase, @"[^\p{L}\p{N}]+", language == "zh" ? "" : " ").Trim();
+      var builder = new GrammarBuilder { Culture = selected.Culture }; builder.Append(spoken);
+      var grammar = new Grammar(builder); engine.LoadGrammar(grammar); engine.SetInputToNull();
+      var target = engine.EmulateRecognize(spoken);
+      string targetPhones = target == null ? "" : Phones(target.Words);
+      engine.UnloadGrammar(grammar); engine.LoadGrammar(new DictationGrammar());
+      engine.InitialSilenceTimeout = TimeSpan.FromSeconds(6);
+      foreach (string wave in waves) {
+        var text = new StringBuilder(); var phones = new StringBuilder(); float confidence = 0; int words = 0;
+        using (var stream = new MemoryStream(Convert.FromBase64String(wave))) {
+          engine.SetInputToWaveStream(stream);
+          using (var completed = new ManualResetEvent(false)) {
+            Action<RecognitionResult> collect = result => {
+              if (result == null) return;
+              text.Append(result.Text); phones.Append(Phones(result.Words));
+              foreach (var word in result.Words) { confidence += word.Confidence; words++; }
+            };
+            EventHandler<SpeechRecognizedEventArgs> recognized = (sender, e) => collect(e.Result);
+            EventHandler<SpeechRecognitionRejectedEventArgs> rejected = (sender, e) => collect(e.Result);
+            EventHandler<RecognizeCompletedEventArgs> ended = (sender, e) => completed.Set();
+            engine.SpeechRecognized += recognized; engine.SpeechRecognitionRejected += rejected; engine.RecognizeCompleted += ended;
+            try {
+              engine.RecognizeAsync(RecognizeMode.Multiple);
+              if (!completed.WaitOne(8000)) { engine.RecognizeAsyncCancel(); completed.WaitOne(2000); throw new TimeoutException("Wake learning timed out"); }
+            } finally {
+              engine.SpeechRecognized -= recognized; engine.SpeechRecognitionRejected -= rejected; engine.RecognizeCompleted -= ended; engine.SetInputToNull();
+            }
+          }
+        }
+        samples.Add(new { text = text.ToString(), phones = phones.ToString(), targetPhones = targetPhones, confidence = words == 0 ? 0 : confidence / words });
+      }
+    }
+    Emit(new { type = "learned", samples = samples });
+  }
+
+  public static void Run(string phrase, string language, string wave, string device, string variantsJson) {
     RecognizerInfo selected = null;
     foreach (var info in SpeechRecognitionEngine.InstalledRecognizers()) {
       if (info.Culture.TwoLetterISOLanguageName == language) { selected = info; break; }
@@ -322,14 +371,23 @@ public static class YUWake {
       // slider ever sees them. The host owns the only adjustable confidence gate.
       engine.UpdateRecognizerSetting("CFGConfidenceRejectionThreshold", 0);
       var grammar = new GrammarBuilder { Culture = selected.Culture };
-      grammar.Append(spoken);
+      var texts = new HashSet<string>(); texts.Add(spoken);
+      var phones = new HashSet<string>();
+      var variants = new JavaScriptSerializer().Deserialize<List<Dictionary<string, string>>>(variantsJson) ?? new List<Dictionary<string, string>>();
+      foreach (var variant in variants) {
+        if (variant.ContainsKey("text") && variant["text"].Length <= 80) texts.Add(variant["text"]);
+        if (variant.ContainsKey("phones") && variant["phones"].Length <= 240) phones.Add(variant["phones"]);
+      }
+      var choices = new Choices(); foreach (string text in texts) choices.Add(text);
+      grammar.Append(choices);
       engine.LoadGrammar(new Grammar(grammar) { Name = "wake" });
       // The installed recognizer supplies pronunciations; no downloaded pinyin
       // dictionary, remote ASR or hardcoded aliases for a particular person's name.
       engine.SetInputToNull();
       var target = engine.EmulateRecognize(spoken);
       string targetPhones = target == null ? "" : Phones(target.Words);
-      string targetText = MatchText(spoken);
+      var targetTexts = new HashSet<string>(); foreach (string text in texts) targetTexts.Add(MatchText(text));
+      if (targetPhones.Length > 0) phones.Add(targetPhones);
       // Competing ordinary speech can be rejected instead of forced into the one wake phrase.
       engine.LoadGrammar(new DictationGrammar { Name = "background", Weight = 0.5f });
       int index = Resolve(device, !String.IsNullOrEmpty(wave));
@@ -363,24 +421,42 @@ public static class YUWake {
         }
       } catch { Emit(new { type = "error", error = "microphone" }); return; }
       using (var ended = new ManualResetEvent(false)) {
+        string pendingText = "", pendingPhones = "";
+        float pendingConfidence = 0; int pendingWords = 0;
+        TimeSpan pendingStart = TimeSpan.Zero, pendingEnd = TimeSpan.Zero;
         Action<RecognitionResult> candidate = result => {
           if (result == null || result.Audio == null || String.IsNullOrEmpty(result.Text)) return;
-          // A complete wake phrase can lead into another sentence. Compare whole
-          // word boundaries at the start, not the whole utterance or arbitrary substrings.
-          var prefix = new List<RecognizedWordUnit>();
-          var prefixText = new StringBuilder();
-          float wordConfidence = 1, confidence = 0;
+          var audioStart = result.Audio.AudioPosition;
+          bool carry = pendingWords > 0 && audioStart >= pendingEnd && audioStart - pendingEnd <= TimeSpan.FromSeconds(3);
+          var prefixText = new StringBuilder(carry ? pendingText : "");
+          var prefixPhones = new StringBuilder(carry ? pendingPhones : "");
+          float confidence = carry ? pendingConfidence : 0; int count = carry ? pendingWords : 0;
+          var began = carry ? pendingStart : audioStart;
+          pendingText = ""; pendingPhones = ""; pendingConfidence = 0; pendingWords = 0;
+          int local = 0;
           foreach (var word in result.Words) {
-            prefix.Add(word); prefixText.Append(word.Text);
-            wordConfidence = Math.Min(wordConfidence, word.Confidence);
-            confidence += word.Confidence;
-            if (MatchText(prefixText.ToString()) != targetText && (targetPhones.Length == 0 || Phones(prefix) != targetPhones)) continue;
-            bool whole = prefix.Count == result.Words.Count;
-            double duration = whole ? result.Audio.Duration.TotalMilliseconds : result.GetAudioForWordRange(prefix[0], word).Duration.TotalMilliseconds;
-            Emit(new { type = "wake", phrase = phrase, confidence = whole ? result.Confidence : confidence / prefix.Count,
-              wordConfidence = wordConfidence, durationMs = duration });
-            break;
+            local++; count++; confidence += word.Confidence;
+            prefixText.Append(MatchText(word.Text)); prefixPhones.Append(Phones(new[] { word }));
+            string text = prefixText.ToString(), pronunciation = prefixPhones.ToString();
+            if (targetTexts.Contains(text) || phones.Contains(pronunciation)) {
+              double duration = (audioStart - began).TotalMilliseconds + (local == result.Words.Count ? result.Audio.Duration : result.GetAudioForWordRange(result.Words[0], word).Duration).TotalMilliseconds;
+              Emit(new { type = "wake", phrase = phrase, confidence = carry || local < result.Words.Count ? confidence / count : result.Confidence, durationMs = duration });
+              return;
+            }
+            bool partial = false;
+            foreach (string expected in targetTexts) if (expected.StartsWith(text, StringComparison.Ordinal)) partial = true;
+            foreach (string expected in phones) if (expected.StartsWith(pronunciation, StringComparison.Ordinal)) partial = true;
+            if (!partial) return;
           }
+          if (audioStart + result.Audio.Duration - began < TimeSpan.FromSeconds(9)) {
+            pendingText = prefixText.ToString(); pendingPhones = prefixPhones.ToString(); pendingConfidence = confidence; pendingWords = count;
+            pendingStart = began; pendingEnd = audioStart + result.Audio.Duration;
+          }
+        };
+        DateTime lastLevel = DateTime.MinValue;
+        engine.AudioLevelUpdated += (sender, e) => {
+          if ((DateTime.UtcNow - lastLevel).TotalMilliseconds < 500) return;
+          lastLevel = DateTime.UtcNow; Emit(new { type = "level", value = e.AudioLevel });
         };
         engine.SpeechRecognized += (sender, e) => candidate(e.Result);
         engine.SpeechRecognitionRejected += (sender, e) => candidate(e.Result);
@@ -407,8 +483,14 @@ public static class YUWake {
   $request = [Console]::ReadLine() | ConvertFrom-Json
   if (-not $request.phrase -or $request.phrase.Length -gt 40) { throw 'Invalid phrase' }
   # Test input is never exposed as a user setting. Production always uses the microphone.
-  [YUWake]::Run([string]$request.phrase, [string]$request.language, [string]$request.wave, [string]$request.device)
+  if ($request.mode -eq 'learn') {
+    [YUWake]::Learn([string]$request.phrase, [string]$request.language, [string[]]@($request.samples))
+  } else {
+    $variants = if ($request.variants) { ConvertTo-Json -InputObject @($request.variants) -Compress } else { '[]' }
+    [YUWake]::Run([string]$request.phrase, [string]$request.language, [string]$request.wave, [string]$request.device, [string]$variants)
+  }
 } catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
   [Console]::WriteLine('{"type":"error","error":"unavailable"}')
   exit 1
 }

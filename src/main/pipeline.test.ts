@@ -24,6 +24,8 @@ import type { UiaSnapshot } from './uia/reader'
  */
 
 const mocks = vi.hoisted(() => ({
+  muteOthers: vi.fn(),
+  restoreOthers: vi.fn(),
   complete: vi.fn(),
   transcribe: vi.fn(),
   insertText: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/typeless') }
 }))
 vi.mock('./windows', () => ({ setBarInteractive: mocks.setBarInteractive }))
+vi.mock('./systemAudio', () => ({ muteOthers: mocks.muteOthers, restoreOthers: mocks.restoreOthers }))
 vi.mock('./insert', () => ({
   insertText: mocks.insertText,
   verifyInsertion: mocks.verifyInsertion,
@@ -165,6 +168,7 @@ function harness(
   send: ReturnType<typeof vi.fn>
   log: ReturnType<typeof vi.fn>
   settings: Settings
+  window: BrowserWindow
 } {
   const { store, entries } = makeHistory()
   const sent: BarState[] = []
@@ -191,7 +195,7 @@ function harness(
     log,
     options
   )
-  return { pipeline, store, entries, sent, send, log, settings }
+  return { pipeline, store, entries, sent, send, log, settings, window: barWindow as unknown as BrowserWindow }
 }
 
 function alerts(sent: BarState[]): Array<Extract<BarState, { phase: 'alert' }>> {
@@ -1430,6 +1434,37 @@ describe('opening phrase mode activation', () => {
 
 
 describe('unified voice entry', () => {
+  it('plays the start cue before muting playback and ignores stale cue acknowledgments', () => {
+    vi.useFakeTimers(); mocks.muteOthers.mockReturnValue(true)
+    const { pipeline, sent } = harness({ muteWhileRecording: true, playSounds: true })
+    pipeline.start('dictation')
+    const first = sent.find(state => state.phase === 'recording') as Extract<BarState, { phase: 'recording' }>
+    expect(first.taskId).toBeTruthy()
+    expect(mocks.muteOthers).not.toHaveBeenCalled()
+    pipeline.startCueFinished('old-task')
+    expect(mocks.muteOthers).not.toHaveBeenCalled()
+    pipeline.startCueFinished(first.taskId!)
+    expect(mocks.muteOthers).toHaveBeenCalledOnce()
+    pipeline.cancel()
+    vi.advanceTimersByTime(2000)
+    expect(mocks.muteOthers).toHaveBeenCalledOnce()
+    expect(mocks.restoreOthers).toHaveBeenCalled()
+  })
+  it('replays a live recording when the bar renderer subscribes late', () => {
+    const { pipeline, send, window } = harness({})
+    pipeline.start('dictation'); send.mockClear(); vi.mocked(window.showInactive).mockClear()
+    pipeline.replayBarState()
+    expect(send).toHaveBeenCalledWith('bar:state', expect.objectContaining({ phase: 'recording', taskId: expect.any(String) }))
+    expect(window.showInactive).toHaveBeenCalledOnce()
+    pipeline.cancel()
+  })
+  it('reveals the recording bar even when Windows reports the old hidden surface as visible', () => {
+    const h = harness({})
+    vi.spyOn(h.window, 'isVisible').mockReturnValue(true)
+    h.pipeline.start('dictation')
+    expect(h.window.showInactive).toHaveBeenCalledOnce()
+    h.pipeline.cancel()
+  })
   it('freezes the readable window behind YU separately from its insertion target', async () => {
     const own = { title: '语', pid: process.pid, appName: 'YU', handle: '700', className: 'YU', appPath: 'YU.exe', rect: null }
     const external = { title: 'Actual GitHub project', pid: 42, appName: 'ego', handle: '123', className: 'Chrome', appPath: 'ego.exe', rect: null }

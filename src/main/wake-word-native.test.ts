@@ -3,11 +3,12 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { learnWakeTraining } from '@shared/wake-word'
 
 const shell = join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
 function run(args: string[], input?: object): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = execFile(shell, ['-NoProfile', '-NonInteractive', ...args], { windowsHide: true, encoding: 'utf8', timeout: 20_000 }, (error, stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve(stdout))
+    const child = execFile(shell, ['-NoProfile', '-NonInteractive', ...args], { windowsHide: true, encoding: 'utf8', timeout: 20_000 }, (error, stdout, stderr) => error ? reject(new Error([stderr, stdout, error.message].filter(Boolean).join('\n'))) : resolve(stdout))
     child.stdin?.end(input ? JSON.stringify(input) + '\n' : '')
   })
 }
@@ -49,12 +50,17 @@ try {
   $synth.SetOutputToWaveFile((Join-Path $OutputRoot 'command.wav'))
   $synth.Speak('你好胡小杨，帮我朗读一下随记。')
   $synth.SetOutputToNull()
+  $synth.SetOutputToWaveFile((Join-Path $OutputRoot 'pause.wav'))
+  $synth.SpeakSsml('<speak version="1.0" xml:lang="zh-CN">你好<break time="2000ms"/>阿语</speak>')
+  $synth.SetOutputToNull()
 } finally { $synth.Dispose() }
 `)
     if ((await run(['-File', synth, root])).includes('unavailable')) { context.skip(); return }
     const stdout = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, 'command.wav') })
     const events = stdout.trim().split('\n').map(line => JSON.parse(line.replace(/^\uFEFF/, '')))
     expect(events.filter(event => event.type === 'wake'), JSON.stringify(events)).toHaveLength(1)
+    const paused = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { phrase: '你好，阿语', language: 'zh', wave: join(root, 'pause.wav') })
+    expect(paused.split('\n').some(line => line.includes('"type":"wake"'))).toBe(true)
   } finally { await rm(root, { recursive: true }) }
 }, 30_000)
 
@@ -113,6 +119,14 @@ try {
           });`))
     const streamed = await run(['-File', streamScript], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, 'homophone.wav') })
     expect(streamed.split('\n').some(line => line.includes('"type":"wake"'))).toBe(true)
+    const recording = (await readFile(join(root, 'homophone.wav'))).toString('base64')
+    const learnedOutput = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { mode: 'learn', phrase: '你好，胡小杨', language: 'zh', samples: [recording, recording, recording] })
+    const learnedEvent = learnedOutput.trim().split('\n').map(line => JSON.parse(line.replace(/^\uFEFF/, ''))).find(event => event.type === 'learned')
+    expect(learnedEvent.samples).toHaveLength(3)
+    const learned = learnWakeTraining('你好，胡小杨', learnedEvent.samples, .8)
+    expect(learned.training.sampleCount).toBe(3)
+    const trainedOutput = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { phrase: '你好，胡小杨', language: 'zh', variants: learned.training.variants, wave: join(root, 'homophone.wav') })
+    expect(trainedOutput.split('\n').some(line => line.includes('"type":"wake"'))).toBe(true)
     for (const name of ['name', 'homophone', 'unrelated']) {
       const stdout = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, name + '.wav') })
       const events = stdout.trim().split('\n').map(line => JSON.parse(line.replace(/^\uFEFF/, '')))

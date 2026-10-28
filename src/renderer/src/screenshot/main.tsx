@@ -4,7 +4,9 @@ import { Alert, Box, Button, CssBaseline, MenuItem, Paper, Stack, TextField, The
 import { useTranslation } from 'react-i18next'
 import type { CaptureRect, ScreenshotAction, ScrollCaptureProgress } from '@shared/screenshot'
 import { screenshotCrop, captureWindowAt, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
-import { CropSquare, RadioButtonUnchecked, NorthEast, Create, TextFields, GridOn, Mouse, Undo, RestartAlt, SaveAlt, Check, Close, Translate, TextSnippet, SmartToy, UnfoldMore } from '@mui/icons-material'
+import { CropSquare, RadioButtonUnchecked, NorthEast, Create, TextFields, GridOn, Mouse, Undo, RestartAlt, SaveAlt, Check, Close, Translate, TextSnippet, SmartToy, UnfoldMore, QrCodeScanner } from '@mui/icons-material'
+import { qrWebUrl } from '@shared/qr'
+import { decodeQr } from './qr'
 import { resolveTranslateTargets } from '@shared/translate'
 import { useSettings } from '../settings/useSettings'
 import { makeTheme, resolveThemeMode, onSystemThemeChange } from '../settings/theme'
@@ -68,7 +70,8 @@ function ScreenshotEditor(): JSX.Element {
   const windows = useRef<CaptureRect[]>([])
   const [hover, setHover] = useState<CaptureRect | null>(null)
   const [tool, setTool] = useState<Tool>('select'), [color, setColor] = useState(COLORS[0])
-  const [panel, setPanel] = useState<Tool | 'ocr' | 'translate' | 'ask' | null>(null)
+  const [panel, setPanel] = useState<Tool | 'ocr' | 'translate' | 'ask' | 'qr' | null>(null)
+  const [resultKind, setResultKind] = useState<'text' | 'qr'>('text')
   const [stroke, setStroke] = useState(3), [fontSize, setFontSize] = useState(20), [mosaicSize, setMosaicSize] = useState(12)
   const [ocrLanguage, setOcrLanguage] = useState('auto'), [selectedMark, setSelectedMark] = useState<number | null>(null)
   const undoStack = useRef<Mark[][]>([])
@@ -252,7 +255,7 @@ function ScreenshotEditor(): JSX.Element {
   }
   const run = async (action: ScreenshotAction): Promise<void> => {
     if (busy) return
-    setError(''); setBusy(true)
+    setError(''); setBusy(true); setResultKind('text')
     try {
       const source = exportCanvas()
       const response = await window.api.screenshot.run(action, source.toDataURL('image/png'), question.trim() || t('请分析这张截图'), target, ocrLanguage)
@@ -262,6 +265,17 @@ function ScreenshotEditor(): JSX.Element {
         if (painted.overflow) setError(t('部分译文过长，已用省略号标记；可复制文字查看完整译文'))
         setShowOriginal(false); setPanel(null); setResult('')
       } else if (response.text) setResult(response.text)
+    } catch (err) { reportError(err) } finally { setBusy(false) }
+  }
+  const scanQr = async (): Promise<void> => {
+    if (busy) return
+    setError(''); setResult(''); setBusy(true); setResultKind('qr'); setPanel('qr')
+    try {
+      const source = exportCanvas()
+      const pixels = source.getContext('2d')!.getImageData(0, 0, source.width, source.height)
+      const text = await decodeQr(pixels.data, pixels.width, pixels.height)
+      if (text === null || text === '') throw Error(t('未识别到二维码，请框选完整二维码并保留四周空白'))
+      setResult(text)
     } catch (err) { reportError(err) } finally { setBusy(false) }
   }
   const runRef = useRef(run); runRef.current = run
@@ -332,6 +346,7 @@ function ScreenshotEditor(): JSX.Element {
           {([['ocr', '识别文字', TextSnippet], ['translate', '翻译', Translate], ['ask', '截图问答', SmartToy]] as const).map(([id, label, Icon]) =>
             <Tooltip key={id} title={t(label) + ' · ' + t(id === 'ocr' ? '在本机识别' : id === 'translate' ? '仅向模型发送识别文字' : '向视觉模型发送所选截图')}><span><Button size="small" disabled={busy} data-screenshot-action={id} aria-label={t(label)} variant={panel === id ? 'contained' : 'text'}
               onClick={() => { commitText(); setPanel(panel === id ? null : id); if (id === 'ocr') void run('ocr') }}><Icon fontSize="small" /></Button></span></Tooltip>)}
+          <Tooltip title={t('扫描二维码 · 在本机识别')}><span><Button size="small" aria-label={t('扫描二维码')} data-screenshot-action="qr" disabled={busy} variant={panel === 'qr' ? 'contained' : 'text'} onClick={() => { commitText(); void scanQr() }}><QrCodeScanner fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('撤销')}><span><Button size="small" aria-label={t('撤销')} disabled={busy || !marks.length} onClick={undo}><Undo fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('滚动截图')}><span><Button size="small" aria-label={t('滚动截图')} data-screenshot-action="scroll" disabled={busy} onClick={startScroll}><UnfoldMore fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('重新框选')}><span><Button size="small" aria-label={t('重新框选')} disabled={busy} onClick={reset}><RestartAlt fontSize="small" /></Button></span></Tooltip>
@@ -352,6 +367,7 @@ function ScreenshotEditor(): JSX.Element {
               <MenuItem value="auto">{t('中英文自动')}</MenuItem><MenuItem value="zh">中文</MenuItem><MenuItem value="en">English</MenuItem>
             </TextField>}
             {panel === 'ocr' && <Button size="small" disabled={busy} onClick={() => run('ocr')}>{t('识别文字')}</Button>}
+            {panel === 'qr' && <><Typography variant="caption">{t('框选完整二维码，在本机识别；不会自动打开链接。')}</Typography><Button size="small" disabled={busy} onClick={() => { void scanQr() }}>{t('重新扫描')}</Button></>}
             {panel === 'translate' && <><TextField select size="small" sx={{ width: 140 }} label={t('翻译目标')} value={target} onChange={event => setTarget(event.target.value)}>
               <MenuItem value="auto">{t('智能翻译')}</MenuItem>
               {[...new Set(['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', ...resolveTranslateTargets(settings ?? {})])].map(code => <MenuItem key={code} value={code}>{({ en: 'English', zh: '中文', ja: '日本語', ko: '한국어', de: 'Deutsch', fr: 'Français', es: 'Español' } as Record<string, string>)[code] || code}</MenuItem>)}
@@ -400,9 +416,10 @@ function ScreenshotEditor(): JSX.Element {
       </Stack>
     </Paper>}
     {result && <Paper data-screenshot-result elevation={5} sx={{ position: 'fixed', top: '8%', left: '50%', transform: 'translateX(-50%)', width: Math.min(700, view.width - 32), p: 2 }}>
-      <Stack direction="row" justifyContent="space-between"><Typography fontWeight={600}>{t('处理结果')}</Typography><Button onClick={() => setResult('')}>{t('关闭')}</Button></Stack>
+      <Stack direction="row" justifyContent="space-between"><Typography fontWeight={600}>{t(resultKind === 'qr' ? '二维码内容' : '处理结果')}</Typography><Button onClick={() => setResult('')}>{t('关闭')}</Button></Stack>
       <TextField multiline minRows={5} maxRows={14} fullWidth value={result} onChange={event => setResult(event.target.value)} sx={{ my: 1 }} />
       <Button variant="contained" onClick={() => window.api.screenshot.copyText(result).catch(reportError)}>{t('复制文字')}</Button>
+      {resultKind === 'qr' && qrWebUrl(result) && <Button sx={{ ml: 1 }} onClick={() => window.api.screenshot.openQrUrl(result).catch(reportError)}>{t('打开链接')}</Button>}
     </Paper>}
   </ThemeProvider>
 }

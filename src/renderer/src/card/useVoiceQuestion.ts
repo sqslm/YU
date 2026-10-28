@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { encodeWav, SAMPLE_RATE } from '@shared/audio'
 import { MicCapture } from '../bar/capture'
+import { playCue } from '../bar/cues'
 import i18n from '../i18n'
 
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error)).replace(/^Error invoking remote method '[^']+': Error: /, '')
@@ -73,6 +74,8 @@ export function useVoiceQuestion(submit: (text: string) => void): { recording: b
       await mic.start()
       if (take.cancelled) { await mic.stop(); return }
       if (!mic.isRunning) throw new Error(i18n.t('无法打开麦克风'))
+      await playCue('start', settings.playSounds)
+      if (take.cancelled) { await mic.stop(); return }
       await mic.setActive(true)
       if (take.cancelled) { await mic.setActive(false, false); await mic.stop(); return }
       take.finishing = false

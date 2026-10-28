@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { globalShortcut } from 'electron'
+import { globalShortcut, shell } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeSettings } from '@shared/defaults'
 import type { Settings } from '@shared/types'
@@ -7,6 +7,7 @@ import type { ScreenshotAction } from '@shared/screenshot'
 
 const mocks = vi.hoisted(() => ({ menu: vi.fn(), popup: vi.fn(), cursor: { x: -100, y: 50 }, capture: vi.fn(), sources: vi.fn(), image: vi.fn(), copyImage: vi.fn(), copyText: vi.fn(), save: vi.fn(), write: vi.fn(), native: vi.fn(), complete: vi.fn(), vision: vi.fn(), handlers: new Map<string, (...args: any[]) => any>(), windows: [] as any[] }))
 vi.mock('electron', () => ({
+  shell: { openExternal: vi.fn(async () => undefined) },
   Menu: {buildFromTemplate: mocks.menu},
   app: { getPath: () => '/pictures', getAppPath: () => '/app', getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
   globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
@@ -59,6 +60,15 @@ beforeEach(() => {
 afterEach(() => { tool.close(); vi.useRealTimers() })
 
 describe('explicit screenshot tool', () => {
+  it('opens a scanned web link only on the owned editor request, refusing executable payloads', async () => {
+    await tool.open()
+    const open = mocks.handlers.get('screenshot:open-qr-url')!
+    expect(shell.openExternal).not.toHaveBeenCalled()
+    for (const value of ['javascript:alert(1)', 'file:///C:/run.exe', 'data:text/html,hi', 'https://user:pass@example.com']) await expect(open(event(), value)).rejects.toThrow()
+    await open(event(), 'https://github.com/sqslm/YU')
+    expect(shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://github.com/sqslm/YU')
+    await expect(open({ sender: {} }, 'https://example.com')).rejects.toThrow()
+  })
   it('keeps a pin in an independent topmost window with working copy/save/close actions',async()=>{
     await tool.open();const editor=mocks.windows[0]
     await run('pin')

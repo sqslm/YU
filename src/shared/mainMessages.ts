@@ -7,6 +7,19 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "二维码内容不是网页链接": "The QR content is not a web link",
+  "请先录制三次当前唤醒词": "Record the current wake phrase three times first",
+  "每段唤醒录音需要 0.35–8 秒": "Each wake recording must last 0.35–8 seconds",
+  "录音中没有清晰语音，请检查麦克风后重试": "No clear speech in the recording. Check your microphone and try again.",
+  "唤醒词已变化，请重新学习": "The wake phrase changed. Learn it again.",
+  "无效的唤醒学习请求": "Invalid wake learning request",
+  "请先结束当前任务再学习唤醒词": "Finish the current task before learning a wake phrase",
+  "请录制三次唤醒词": "Record the wake phrase three times",
+  "未识别到两次一致的完整唤醒词，请在安静环境中重新录制": "Could not recognize two consistent, complete readings. Record again in a quiet place.",
+  "本地唤醒学习失败，请检查麦克风和识别语言包": "Local wake learning failed. Check your microphone and speech language pack.",
+  "唤醒学习超时，请重试": "Wake learning timed out. Try again.",
+  "唤醒学习结果过长": "Wake learning result is too long",
+  "本地唤醒学习未完成": "Local wake learning did not complete",
   "正在总结已读取的正文…": "Summarizing the document…",
   "正在完成正文总结…": "Completing the document summary…",
   "模型未返回实际总结": "The model did not return a completed summary",

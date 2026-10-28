@@ -86,11 +86,13 @@ import {
   rememberBarBounds,
   resizeCardToContent,
   setBarInteractive,
-  setBarCaptionVisible
+  setBarCaptionVisible,
+  revealBarWindow
 } from './windows'
 import { createTray } from './tray'
 import { releaseStuckModifiers } from './insert'
 import { foregroundWindow, listRoutedWindows, type ForegroundInfo } from './foreground'
+import { encodeWav, trimSilencePcm, isSilent, pcmDurationMs } from './audio/wav'
 import type { PromptContext } from '@shared/prompts'
 import { BriefingDeliveryService } from './briefing-delivery'
 import { assistantAppExcluded } from '@shared/assistantAccess'
@@ -157,7 +159,7 @@ let assistantCardActive = false
 let tray: ReturnType<typeof createTray> | null = null
 let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
-const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
+const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || Boolean(wakeSetupMode) || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
 const noteAudio=new NoteAudioPlayer(()=>barWindow,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null)
 let selectionPreview:{target:import('./selection-editor').SelectionTarget;text:string;at:number}|null=null
 function pausePlaybackForRecording(): void {
@@ -717,7 +719,7 @@ function applyGameMode(status: GameModeStatus): void {
       ensureBarWindow()
       uia.start()
       hotkeys?.start(store.get())
-      hotkeys?.setSuspended(screenshotTool.isOpen)
+      hotkeys?.setSuspended(screenshotTool.isOpen || Boolean(wakeSetupMode))
       screenshotTool.setGameMode(false)
       refreshWakeWord()
       if (!wakeSuspended && !wakeLocked) reminders?.resume()
@@ -738,9 +740,17 @@ const cardVoice: CardVoice = new CardVoice({ settings: () => store.get(), change
   } })
 let wakeSuspended = false
 let wakeLocked = false
+let wakeSetupMode: 'recording' | 'testing' | null = null
+let wakePhase = ''
 const wakeWord = new WakeWordHost({
   wake: () => {
     gameMode.poll()
+    if (wakeSetupMode === 'testing' && !gameMode.snapshot().active && !wakeLocked && !wakeSuspended) {
+      wakeWord.resetCooldown()
+      settingsWindow?.webContents.send('wake:test-detected')
+      return
+    }
+    if (wakeSetupMode) return
     if (gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || pipeline?.isBusy || notesRecording || cardVoice.active || assistant.busy || screenshotTool.isOpen || selectionEditor?.isBusy) return
     // Listening always wins over speaking: the microphone would otherwise record
     // the assistant's own voice, and asking something new means the old answer can
@@ -751,15 +761,16 @@ const wakeWord = new WakeWordHost({
   },
   changed: status => {
     if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('wake:changed', status)
-    tray?.refresh()
+    if (wakePhase !== status.phase) { wakePhase = status.phase; tray?.refresh() }
   }
 })
 function refreshWakeWord(screenshotActive = screenshotTool.isOpen, retry = false): void {
-  wakeWord.update(store.get().wakeWord, gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || screenshotActive || notesRecording || cardVoice.active || Boolean(pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy), retry)
+  wakeWord.update(store.get().wakeWord, wakeSetupMode === 'recording' || gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || screenshotActive || notesRecording || cardVoice.active || Boolean(pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy), retry)
 }
 
 function refreshHotkeyActivity(): void {
   refreshWakeWord()
+  hotkeys?.setSuspended(Boolean(wakeSetupMode) || screenshotTool.isOpen || gameMode.snapshot().active)
   hotkeys?.setActivity(notesRecording || cardVoice.active || pipeline?.isRecording ? 'recording' : pipeline?.isBusy ? 'working' : 'idle')
   tray?.refresh()
 }
@@ -909,6 +920,7 @@ function ensureSettingsWindow(): BrowserWindow {
     win.hide()
   })
   win.on('hide', () => {
+    if (wakeSetupMode) { wakeSetupMode = null; wakeWord.cancelLearning(); refreshHotkeyActivity() }
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     hubRetireTimer = setTimeout(() => {
       hubRetireTimer = null
@@ -919,11 +931,13 @@ function ensureSettingsWindow(): BrowserWindow {
   win.on('show', () => { if (hubRetireTimer) clearTimeout(hubRetireTimer); hubRetireTimer = null })
   settingsWindow.on('blur', () => hotkeys?.setCapturing(false))
   settingsWindow.webContents.on('render-process-gone', () => {
+    wakeSetupMode = null; wakeWord.cancelLearning()
     hotkeys?.setCapturing(false)
     notesRecording = false
     refreshHotkeyActivity()
   })
   settingsWindow.on('closed', () => {
+    wakeSetupMode = null; wakeWord.cancelLearning()
     hotkeys?.setCapturing(false)
     settingsWindow = null
     notesRecording = false
@@ -1840,6 +1854,14 @@ function registerIpc(): void {
     if (event.sender !== barWindow?.webContents) return
     setBarCaptionVisible(visible === true)
   })
+  subscribe('bar:ready', event => {
+    if (event.sender !== barWindow?.webContents) return
+    setBarCaptionVisible(false)
+    pipeline?.replayBarState()
+  })
+  subscribe('bar:start-cue-finished', (event, taskId: string) => {
+    if (event.sender === barWindow?.webContents && typeof taskId === 'string') pipeline?.startCueFinished(taskId)
+  })
 
   subscribe('bar:action', (_event, id: BarActionId) => {
     handleBarAction(id)
@@ -1855,7 +1877,7 @@ function wireHotkeys(): void {
         return
       }
       gameMode.poll()
-      if (!pipeline || gameMode.snapshot().active) return
+      if (!pipeline || gameMode.snapshot().active || wakeSetupMode) return
       const detail = 'mode' in event ? ` ${event.mode}` : ''
       const at = 'at' in event ? ` @${event.at}` : ''
       log(`[hotkey] ${event.type}${detail}${at}`)
@@ -2000,6 +2022,7 @@ async function bootstrap(): Promise<void> {
   }, broadcastReminders, log)
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+    revealBar: revealBarWindow,
     contentTarget: original => original.pid === process.pid ? foregroundWindow(true) : undefined,
     checkAsr: () => checkAsrReadiness(store.get(), localAsr),
     preserveAudio: async (pcm, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16), recovery: true }, signal) },
@@ -2150,6 +2173,28 @@ async function bootstrap(): Promise<void> {
   registerIpc()
   handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
   handle('wake:status', () => wakeWord.snapshot())
+  handle('wake:setup', (event, mode: 'recording' | 'testing' | null) => {
+    if (event.sender !== settingsWindow?.webContents || ![null, 'recording', 'testing'].includes(mode)) throw Error(mt('无效的唤醒学习请求'))
+    if (mode && (gameMode.snapshot().active || pipeline?.isBusy || assistant.busy || notesRecording || cardVoice.active)) throw Error(mt('请先结束当前任务再学习唤醒词'))
+    if (mode !== 'recording') wakeWord.cancelLearning()
+    wakeSetupMode = mode
+    hotkeys?.setSuspended(Boolean(mode) || screenshotTool.isOpen || gameMode.snapshot().active)
+    refreshWakeWord()
+  })
+  handle('wake:learn', async (event, phrase: string, samples: Int16Array[]) => {
+    if (event.sender !== settingsWindow?.webContents || wakeSetupMode !== 'recording' || phrase !== store.get().wakeWord.phrase || !Array.isArray(samples) || samples.length !== 3) throw Error(mt('请先录制三次当前唤醒词'))
+    const waves = samples.map(sample => {
+      if (!(sample instanceof Int16Array) || sample.length < 5600 || sample.length > 128_000) throw Error(mt('每段唤醒录音需要 0.35–8 秒'))
+      const pcm = trimSilencePcm(sample)
+      if (isSilent(pcm) || pcmDurationMs(pcm) < 300) throw Error(mt('录音中没有清晰语音，请检查麦克风后重试'))
+      return encodeWav(pcm)
+    })
+    const learned = await wakeWord.learn(phrase, waves, store.get().wakeWord.confidence ?? 0.8)
+    if (wakeSetupMode !== 'recording' || store.get().wakeWord.phrase !== phrase) throw Error(mt('唤醒词已变化，请重新学习'))
+    const current = await store.update({ wakeWord: { ...store.get().wakeWord, ...learned } })
+    settingsWindow?.webContents.send('settings:changed', current)
+    return current.wakeWord
+  })
   // Enumerating inputs cold-starts PowerShell and compiles Add-Type (~1s), and the
   // settings page asks again on every open, so a short cache keeps the dropdown
   // instant without hiding a device the user just plugged in.
@@ -2535,6 +2580,7 @@ if (!gotLock) {
     if (gameResourceTimer) clearInterval(gameResourceTimer)
     gamePreparation?.finish(false)
     wakeWord.stop()
+    wakeWord.cancelLearning()
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()
     screenshotTool.close()

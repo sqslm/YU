@@ -138,6 +138,7 @@ export class MicCapture {
   private workletUrl: string | null = null
   private running = false
   private active = false
+  private activationGeneration = 0
   private deviceId = ''
   private processing: AudioProcessingMode = 'fidelity'
   private appliedKey = ''
@@ -195,7 +196,7 @@ export class MicCapture {
     if (this.changing) return this.changing
     this.changing = (async () => {
       do {
-        await this.stop()
+        await this.stop(true)
         await this.start()
       } while (this.running && !this.active && this.appliedKey !== `${this.deviceId}|${this.processing}`)
     })().finally(() => { this.changing = null })
@@ -211,10 +212,12 @@ export class MicCapture {
    * next take cannot inherit it, but it is not forwarded.
    */
   async setActive(active: boolean, keepTail = true): Promise<void> {
+    const generation = ++this.activationGeneration
     if (active) {
       if (this.deactivating) await this.deactivating
       if (this.changing) await this.changing
       await this.refreshDevice()
+      if (generation !== this.activationGeneration) return
       if (this.active) return
       this.active = true
       this.discardTail = false
@@ -453,7 +456,8 @@ export class MicCapture {
     void this.stop()
   }
 
-  async stop(): Promise<void> {
+  async stop(preserveActivation = false): Promise<void> {
+    if (!preserveActivation) { ++this.activationGeneration; this.active = false }
     this.running = false
     this.discardTail = true
     // A tail waiter must not hang a stop: nothing will answer it any more.

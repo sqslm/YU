@@ -469,7 +469,7 @@ export interface Settings {
    * Optional because settings files written before device selection exist, and
    * `mergeSettings` fills it in on load rather than rejecting the old shape.
    */
-  wakeWord: { enabled: boolean; phrase: string; deviceId?: string; confidence?: number }
+  wakeWord: { enabled: boolean; phrase: string; deviceId?: string; confidence?: number; training?: import('./wake-word').WakeTraining }
   reminders: { notifications: boolean; strongSound: boolean; snoozeMinutes: number }
   polish: PolishSettings
   /** 'classic' = ASR + text LLM, 'multimodal' = one audio-in model does both. */
@@ -932,6 +932,7 @@ export type BarState =
       phase: 'recording'
       mode: Mode
       since: number
+      taskId?: string
       activation?: ActivationMode
       /** True while a double-press take runs without the key held (REQ-16). */
       handsFree?: boolean

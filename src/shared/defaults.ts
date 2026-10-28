@@ -19,7 +19,7 @@ import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingSettings } from './briefing
 import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings, patchTtsSettings } from './speech'
 import { DEFAULT_BRIEFING_DELIVERY, normalizeBriefingDelivery } from './briefingDelivery'
 import { DEFAULT_ASSISTANT_ACCESS, normalizeAssistantAccess } from './assistantAccess'
-import { normalizeWakeConfidence } from './wake-word'
+import { normalizeWakeConfidence, normalizeWakeTraining } from './wake-word'
 
 export const SETTINGS_VERSION = 1
 
@@ -309,6 +309,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
         : ''
   }
   merged.wakeWord.confidence = normalizeWakeConfidence(input.wakeWord?.confidence, merged.wakeWord.phrase)
+  merged.wakeWord.training = normalizeWakeTraining(input.wakeWord?.training, merged.wakeWord.phrase)
   merged.reminders = {
     notifications: input.reminders?.notifications !== false,
     strongSound: input.reminders?.strongSound !== false,

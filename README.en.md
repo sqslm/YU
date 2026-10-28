@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.1.0-rc.5**, Windows 10/11 x64, MIT.
+> Current version **1.1.0-rc.9**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -39,6 +39,10 @@ Current-document reading supports opened Word, Excel and PowerPoint documents (i
 The [complete capability inventory and operating conditions](ASSISTANT_ROADMAP.md#统一入口功能清单) lists the supported operations for writing your own tests. rc.14 connects note audio control, actual prompt provenance, per-note sync failures, frozen selection preview/apply, hardware and system volume, PDF content, real download/recent records, permissions, monthly/yearly and finite reminders, workflow branches/result bindings, cross-monitor capture/pins, and email/mobile briefing delivery.
 
 External delivery is off by default. Configure Resend email or ntfy mobile push in Schedule & reminders → Calendar & briefing, then enable the channel. Keys use OS encryption; receipts distinguish provider acceptance, failure and unknown delivery. Everything port/CLI, file access, tool permissions and exclusions are in Assistant & permissions. External ICS subscriptions remain read-only; two-way sync refers to local data through the self-hosted server.
+
+Wake learning: enable Voice & input → Wake word, then choose Learn wake phrase and record three natural readings. The local recognizer learns consistent pronunciation/recognition variants and calibrates the visible confidence threshold; it does not train a new speaker model. Only recognized variants are saved; raw audio stays in memory and is never uploaded or saved. Test the phrase directly after learning without starting a task. Changing the phrase invalidates the old profile; clearing and re-recording are supported. Device name and input level help verify the actual input.
+
+Screenshot QR scanning: select the entire code, including a clear border, then click Scan QR code. Decoding is local and needs no configured model. Copy the text or explicitly open a recognized HTTP(S) link; QR content is never executed automatically.
 
 ## Screens
 
@@ -257,7 +261,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.1.0-rc.5`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.1.0-rc.9`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -275,6 +279,8 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 | [src/main/prompts/reminder-refinement.md](src/main/prompts/reminder-refinement.md) | The full prompt used for reminder extraction |
 
 ## Changelog
+
+- **1.1.0-rc.9**: restores and repositions the recording bar for each take and replays its state after reload. The start cue finishes before playback is muted; cancellation cannot reopen a pending recording gate. Offline wake follows the Windows default recording device, retains brief phrase pauses, and adds three local readings to learn consistent recognition variants and calibrate confidence, followed by a wake test. Screenshot QR decoding runs locally with copy and explicit web-link opening.
 
 - **1.1.0-rc.8**: fixes actual page/document bodies being dropped when a read also contains source links. Summaries use the verified content, return their result directly, and do not reconfirm the captured URL. Confirmation-only, contradictory or future-delivery drafts receive one bounded correction before the final result is published.
 - **1.1.0-rc.7**: fixes external content targeting from YU windows and removes unrelated focused-field dialogue from page summaries. Read-aloud resolves real sources directly, reports progress and plays long content in segments. Prompt cycling fires on each main-key press with modifiers held. Fixes live microphone position resets discarding unread audio. Complete wake phrases can match at the start of a longer utterance while retaining word-boundary, confidence and game-mode gates.

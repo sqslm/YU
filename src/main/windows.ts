@@ -270,6 +270,9 @@ export function createBarWindow(position: BarPlacement | null): BrowserWindow {
     resizable: false,
     movable: true,
     skipTaskbar: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
     alwaysOnTop: true,
     focusable: false,
     hasShadow: false,
@@ -282,7 +285,8 @@ export function createBarWindow(position: BarPlacement | null): BrowserWindow {
       nodeIntegration: false,
       // The pill draws frames continuously, so spelling can never be needed here.
       spellcheck: false,
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      autoplayPolicy: 'no-user-gesture-required'
     }
   })
   trustWindow(win)
@@ -323,6 +327,17 @@ let barLayout: BarWindowLayout = { barTop: 0, captionSide: 'above' }
 export function recordingBarBounds(win: BrowserWindow): Electron.Rectangle {
   const bounds = win.getBounds()
   return { x: bounds.x, y: bounds.y + barLayout.barTop, width: BAR_WIDTH, height: BAR_HEIGHT }
+}
+
+/** Re-showing a take must recover minimized, covered and off-screen surfaces. */
+export function revealBarWindow(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  const base = recordingBarBounds(win), spot = clampBarPlacement(base)
+  const bounds = win.getBounds()
+  if (base.x !== spot.x || base.y !== spot.y) win.setBounds({ ...bounds, x: spot.x, y: spot.y - barLayout.barTop }, false)
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.showInactive()
 }
 
 export function setBarCaptionVisible(visible: boolean): void {

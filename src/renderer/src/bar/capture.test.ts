@@ -48,6 +48,17 @@ function capture(): { mic: MicCapture; onChunk: ReturnType<typeof vi.fn>; onEnco
 }
 
 describe('recording integrity', () => {
+  it('does not reopen the recording gate after cancellation during activation', async () => {
+    const { mic } = capture()
+    await mic.start()
+    const activating = mic.setActive(true)
+    await mic.setActive(false, false)
+    await activating
+    expect(mic.isActive).toBe(false)
+    expect(recorders).toHaveLength(0)
+    expect(nodes[0].port.postMessage).not.toHaveBeenCalledWith({ active: true })
+    await mic.stop()
+  })
   it('requests native-quality input and keeps voice processing optional', () => {
     expect(captureConstraints('fidelity')).toMatchObject({ sampleRate: { ideal: 48000 }, echoCancellation: false, noiseSuppression: false, autoGainControl: false })
     expect(captureConstraints('voice')).toMatchObject({ echoCancellation: true, noiseSuppression: true, autoGainControl: true })

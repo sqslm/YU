@@ -4,6 +4,13 @@ import { defaultSearchProviders } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL } from './local-asr'
 
 describe('mergeSettings', () => {
+  it('keeps learned wake readings only for their original phrase and supports clearing them', () => {
+    const training = { phrase: '你好胡小杨', variants: [{ text: '你好胡晓阳', phones: 'nihaohuxiaoyang' }], sampleCount: 3, trainedAt: 1 }
+    const saved = mergeSettings({ wakeWord: { enabled: true, phrase: training.phrase, training } })
+    expect(saved.wakeWord.training).toEqual(training)
+    expect(mergeSettings(applySettingsPatch(saved, { wakeWord: { ...saved.wakeWord, phrase: '你好阿语' } })).wakeWord.training).toBeUndefined()
+    expect(mergeSettings(applySettingsPatch(saved, { wakeWord: { ...saved.wakeWord, training: undefined } })).wakeWord.training).toBeUndefined()
+  })
   it('normalizes wake confidence and keeps short-phrase defaults on upgrade', () => {
     const wake = (confidence?: number, phrase = '你好语助手') => mergeSettings({ wakeWord: { enabled: false, phrase, confidence } }).wakeWord
     expect(wake().confidence).toBe(0.8)

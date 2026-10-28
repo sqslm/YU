@@ -58,6 +58,9 @@ export interface UpdateState {
 export interface TypelessApi {
   checkAsr(): Promise<void>
   wakeWord: {
+    setup(mode: 'recording' | 'testing' | null): Promise<void>
+    learn(phrase: string, samples: Int16Array[]): Promise<Settings['wakeWord']>
+    onTestDetected(callback: () => void): () => void
     /** Enumerates capture devices; never rejects, an empty list means "use default". */
     devices(): Promise<Array<{ id: string; name: string }>>
     status(): Promise<import('./wake-word').WakeWordStatus>
@@ -65,6 +68,7 @@ export interface TypelessApi {
     onChanged(callback: (status: import('./wake-word').WakeWordStatus) => void): () => void
   }
   screenshot: {
+    openQrUrl(text: string): Promise<void>
     allScreens(): Promise<void>
     open(): Promise<boolean>
     frame(): Promise<import('./screenshot').ScreenshotFrame>
@@ -411,6 +415,8 @@ export interface TypelessApi {
     >
   }
   bar: {
+    ready(): void
+    startCueFinished(taskId: string): void
     onNoteAudio(callback:(request:import('./noteAudio').NoteAudioRequest)=>void):()=>void
     onSpeechPlayback(callback:(request:import('./speech').SpeechPlaybackRequest)=>void):()=>void
     replySpeechPlayback(reply:import('./speech').SpeechPlaybackReply):Promise<void>
