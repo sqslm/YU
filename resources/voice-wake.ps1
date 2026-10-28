@@ -365,8 +365,8 @@ public static class YUWake {
       if (MatchText(spoken).Length < 2) { Emit(new { type = "error", error = "unavailable" }); return; }
       // A natural pause after a greeting must not end recognition before the name.
       engine.InitialSilenceTimeout = TimeSpan.Zero;
-      engine.EndSilenceTimeout = TimeSpan.FromMilliseconds(1200);
-      engine.EndSilenceTimeoutAmbiguous = TimeSpan.FromMilliseconds(1500);
+      engine.EndSilenceTimeout = TimeSpan.FromMilliseconds(650);
+      engine.EndSilenceTimeoutAmbiguous = TimeSpan.FromMilliseconds(800);
       // SAPI otherwise rejects candidates internally before our confidence
       // slider ever sees them. The host owns the only adjustable confidence gate.
       engine.UpdateRecognizerSetting("CFGConfidenceRejectionThreshold", 0);
