@@ -12,7 +12,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mt } from '@shared/mainI18n'
-import { normalizeTtsSettings, speechText, type TtsSettings, type SpeechAudio } from '@shared/speech'
+import { MAX_SPEECH_CHARS, normalizeTtsSettings, speechText, type TtsSettings, type SpeechAudio } from '@shared/speech'
 
 export interface SpeechRequest {
   action: 'speak' | 'stop' | 'voices'
@@ -112,6 +112,7 @@ export interface SpeechDeps {
   run: SpeechRunner
   cloud?: { synthesize: (settings: TtsSettings, text: string, signal: AbortSignal) => Promise<SpeechAudio>; play: SpeechRunner }
   log: (line: string) => void
+  onBackgroundError?: (message: string) => void
   /** Injected clock so failure log lines stay assertable. */
   now?: () => number
 }
@@ -147,10 +148,10 @@ export class SpeechService {
    * switched off, or the message cleaned down to nothing. The tool layer
    * reports that honestly instead of letting the model claim it read the answer.
    */
-  async speak(text: unknown, signal?: AbortSignal, onStarted?:()=>void): Promise<{ spoken: number; skipped: boolean }> {
+  async speak(text: unknown, signal?: AbortSignal, onStarted?:()=>void, full = false): Promise<{ spoken: number; skipped: boolean }> {
     const tts = normalizeTtsSettings(this.deps.settings().tts)
     if (!tts.enabled) return { spoken: 0, skipped: true }
-    const spoken = speechText(text)
+    const spoken = speechText(text, full ? Infinity : undefined)
     if (!spoken) return { spoken: 0, skipped: true }
     if (signal?.aborted) return { spoken: 0, skipped: true }
 
@@ -167,26 +168,47 @@ export class SpeechService {
     try {
       const runner = tts.provider === 'windows' ? this.deps.run : this.deps.cloud?.play
       if (!runner) throw Error('TTS provider is not available')
-      const audio = tts.provider === 'windows' ? undefined : await this.deps.cloud!.synthesize(tts, spoken, controller.signal)
-      if (this.paused && !controller.signal.aborted) {
-        await new Promise<void>(resolve => {
-          const done = (): void => { controller.signal.removeEventListener('abort', done); resolve() }
-          this.resumePending = done
-          controller.signal.addEventListener('abort', done, { once: true })
+      let offset = 0, acknowledged = false
+      while (offset < spoken.length) {
+        controller.signal.throwIfAborted()
+        // Start with a shorter segment so API synthesis can begin playback promptly.
+        const limit = full && !offset ? 500 : MAX_SPEECH_CHARS
+        let end = Math.min(spoken.length, offset + limit)
+        if (end < spoken.length) {
+          const segment = spoken.slice(offset, end)
+          const boundary = [...segment.matchAll(/[。！？!?；;]|\.(?=\s|$)/g)].at(-1)
+          if (boundary && boundary.index > segment.length / 2) end = offset + boundary.index + boundary[0].length
+        }
+        const part = spoken.slice(offset, end)
+        this.activeRunner = null
+        const audio = tts.provider === 'windows' ? undefined : await this.deps.cloud!.synthesize(tts, part, controller.signal)
+        if (this.paused && !controller.signal.aborted) {
+          await new Promise<void>(resolve => {
+            const done = (): void => { controller.signal.removeEventListener('abort', done); resolve() }
+            this.resumePending = done
+            controller.signal.addEventListener('abort', done, { once: true })
+          })
+        }
+        controller.signal.throwIfAborted()
+        this.activeRunner = runner
+        const result = await runner({
+          action: 'speak',
+          text: part,
+          rate: tts.rate,
+          volume: tts.volume,
+          ...(tts.voice ? { voice: tts.voice } : {}),
+          ...(audio ? { audio, speed: tts.speed } : {})
+        }, controller.signal, () => {
+          if (controller.signal.aborted || acknowledged) return
+          acknowledged = true
+          // The tool ends at playback start; the task's deadline must not cut off a long read-out.
+          if (full) signal?.removeEventListener('abort', relay)
+          onStarted?.()
         })
+        controller.signal.throwIfAborted()
+        if (!result.ok) throw new Error(result.error || 'unknown')
+        offset = end
       }
-      controller.signal.throwIfAborted()
-      this.activeRunner = runner
-      const result = await runner({
-        action: 'speak',
-        text: spoken,
-        rate: tts.rate,
-        volume: tts.volume,
-        ...(tts.voice ? { voice: tts.voice } : {}),
-        ...(audio ? { audio, speed: tts.speed } : {})
-      }, controller.signal, () => { if (!controller.signal.aborted) onStarted?.() })
-      controller.signal.throwIfAborted()
-      if (!result.ok) throw new Error(result.error || 'unknown')
       return { spoken: spoken.length, skipped: false }
     } catch (error) {
       const message = messageOf(error)
@@ -209,7 +231,7 @@ export class SpeechService {
   start(text:string,signal?:AbortSignal):Promise<{spoken:number;skipped:boolean}> {
     return new Promise((resolve,reject)=>{
       let started=false
-      void this.speak(text,signal,()=>{started=true;resolve({spoken:speechText(text).length,skipped:false})}).then(result=>{if(!started)resolve(result)},error=>{if(!started)reject(error)})
+      void this.speak(text,signal,()=>{started=true;resolve({spoken:speechText(text,Infinity).length,skipped:false})},true).then(result=>{if(!started)resolve(result)},error=>{if(!started)reject(error);else this.deps.onBackgroundError?.(messageOf(error))})
     })
   }
   status():{speaking:boolean;paused:boolean;error:string} {return {speaking:this.active!==null,paused:this.paused,error:this.lastError}}

@@ -15,6 +15,7 @@ type KoffiType = ReturnType<typeof koffi.proto>
  */
 interface User32 {
   GetForegroundWindow(): unknown
+  GetWindow(hwnd: unknown, command: number): unknown
   GetWindowTextW(hwnd: unknown, buf: Buffer, max: number): number
   GetClassNameW(hwnd: unknown, buf: Buffer, max: number): number
   GetWindowThreadProcessId(hwnd: unknown, pid: Buffer): number
@@ -61,6 +62,7 @@ function win32(): Win32 {
     enumProc,
     user32: {
       GetForegroundWindow: user32.func('void *GetForegroundWindow()'),
+      GetWindow: user32.func('void *GetWindow(void *hwnd, uint32_t command)'),
       GetWindowTextW: user32.func('int GetWindowTextW(void *hWnd, char16_t *buf, int max)'),
       GetClassNameW: user32.func('int GetClassNameW(void *hWnd, char16_t *buf, int max)'),
       GetWindowThreadProcessId: user32.func(
@@ -179,10 +181,24 @@ function windowRect(user32: User32, hwnd: unknown): ForegroundRect | null {
 }
 
 /** Describes the window that currently owns the caret, for history labelling. */
-export function foregroundWindow(): ForegroundInfo {
+export function foregroundWindow(excludeOwn = false): ForegroundInfo {
   const { user32, kernel32 } = win32()
-  const hwnd = user32.GetForegroundWindow()
+  let hwnd = user32.GetForegroundWindow()
   if (!hwnd) return noForeground()
+  if (excludeOwn) {
+    // The settings/card may own focus while the requested browser is underneath.
+    // Walk Z order only on invocation; never choose a window by guessed title or browser name.
+    let found = false
+    for (let count = 0; hwnd && count < MAX_VISIBLE_WINDOWS; count++) {
+      const pid = Buffer.alloc(4), name = Buffer.alloc(512), title = Buffer.alloc(2048)
+      user32.GetWindowThreadProcessId(hwnd, pid)
+      const length = user32.GetClassNameW(hwnd, name, 256)
+      if (pid.readUInt32LE(0) && pid.readUInt32LE(0) !== process.pid && user32.IsWindowVisible(hwnd) && !user32.IsIconic(hwnd) &&
+          user32.GetWindowTextW(hwnd, title, 1024) > 0 && !SHELL_CLASSES.has(name.toString('utf16le', 0, length * 2))) { found = true; break }
+      hwnd = user32.GetWindow(hwnd, 2) // GW_HWNDNEXT
+    }
+    if (!found) return noForeground()
+  }
 
   const titleBuf = Buffer.alloc(1024)
   const titleLen = user32.GetWindowTextW(hwnd, titleBuf, 512)

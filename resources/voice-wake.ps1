@@ -127,10 +127,10 @@ public static class YUWake {
     public override long Length { get { return ReportedLength; } }
     public override long Position { get { return 0; } set { throw new NotSupportedException(); } }
     public override void Flush() { }
-    // The recogniser re-reads from zero on teardown; honouring offset 0 keeps it from
-    // dying with NotSupportedException after a perfectly good session.
+    // SAPI probes/resets position zero during stream setup. This is a live input,
+    // not a rewindable file: acknowledge the probe without discarding unread speech.
     public override long Seek(long offset, SeekOrigin origin) {
-      if (offset == 0) { lock (gate) { pending = new byte[0]; head = 0; } return 0; }
+      if (offset == 0) return 0;
       throw new NotSupportedException();
     }
     public override void SetLength(long value) { throw new NotSupportedException(); }
@@ -296,7 +296,7 @@ public static class YUWake {
     return Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"[^\p{L}\p{N}]", "").ToLowerInvariant();
   }
 
-  static string Phones(System.Collections.ObjectModel.ReadOnlyCollection<RecognizedWordUnit> words) {
+  static string Phones(IEnumerable<RecognizedWordUnit> words) {
     StringBuilder value = new StringBuilder();
     foreach (var word in words) value.Append(word.Pronunciation);
     // Match the whole pronunciation, allowing tone/word-boundary differences in
@@ -365,11 +365,21 @@ public static class YUWake {
       using (var ended = new ManualResetEvent(false)) {
         Action<RecognitionResult> candidate = result => {
           if (result == null || result.Audio == null || String.IsNullOrEmpty(result.Text)) return;
-          if (MatchText(result.Text) == targetText || targetPhones.Length > 0 && Phones(result.Words) == targetPhones) {
-            float wordConfidence = 1;
-            foreach (var word in result.Words) wordConfidence = Math.Min(wordConfidence, word.Confidence);
-            Emit(new { type = "wake", phrase = phrase, confidence = result.Confidence,
-              wordConfidence = wordConfidence, durationMs = result.Audio.Duration.TotalMilliseconds });
+          // A complete wake phrase can lead into another sentence. Compare whole
+          // word boundaries at the start, not the whole utterance or arbitrary substrings.
+          var prefix = new List<RecognizedWordUnit>();
+          var prefixText = new StringBuilder();
+          float wordConfidence = 1, confidence = 0;
+          foreach (var word in result.Words) {
+            prefix.Add(word); prefixText.Append(word.Text);
+            wordConfidence = Math.Min(wordConfidence, word.Confidence);
+            confidence += word.Confidence;
+            if (MatchText(prefixText.ToString()) != targetText && (targetPhones.Length == 0 || Phones(prefix) != targetPhones)) continue;
+            bool whole = prefix.Count == result.Words.Count;
+            double duration = whole ? result.Audio.Duration.TotalMilliseconds : result.GetAudioForWordRange(prefix[0], word).Duration.TotalMilliseconds;
+            Emit(new { type = "wake", phrase = phrase, confidence = whole ? result.Confidence : confidence / prefix.Count,
+              wordConfidence = wordConfidence, durationMs = duration });
+            break;
           }
         };
         engine.SpeechRecognized += (sender, e) => candidate(e.Result);

@@ -107,7 +107,7 @@ let selectionTranslateBinding: Binding | null = null
 let assistantBinding: Binding | null = null
 let screenshotBinding: Binding | null = null
 let promptCycleBinding: Binding | null = null
-let actionPending: { type: 'selection' | 'selection-translate' | 'paste-last' | 'assistant-toggle' | 'screenshot' | 'prompt-cycle'; keys: number[] } | null = null
+let actionPending: { type: 'selection' | 'selection-translate' | 'paste-last' | 'assistant-toggle' | 'screenshot'; keys: number[] } | null = null
 /**
  * True while the answer card is on screen. ESC then belongs to the card — the
  * window is shown inactive, so the card's own keydown handler never fires and
@@ -491,7 +491,7 @@ function drive(): void {
       continue
     }
     if (promptCycleBinding && vk === chordKey(promptCycleBinding) && allDown(promptCycleBinding.keys)) {
-      actionPending = { type: 'prompt-cycle', keys: promptCycleBinding.keys }
+      post({ type: 'prompt-cycle', at: now })
       continue
     }
     if (screenshotBinding && vk === chordKey(screenshotBinding) && allDown(screenshotBinding.keys)) {

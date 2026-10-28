@@ -1430,6 +1430,27 @@ describe('opening phrase mode activation', () => {
 
 
 describe('unified voice entry', () => {
+  it('freezes the readable window behind YU separately from its insertion target', async () => {
+    const own = { title: '语', pid: process.pid, appName: 'YU', handle: '700', className: 'YU', appPath: 'YU.exe', rect: null }
+    const external = { title: 'Actual GitHub project', pid: 42, appName: 'ego', handle: '123', className: 'Chrome', appPath: 'ego.exe', rect: null }
+    const onAssistant = vi.fn(async (_text, _signal, _at, context) => {
+      expect(context.task.target).toMatchObject({ windowHandle: '700', processId: process.pid })
+      expect(context.task.contentTarget).toMatchObject({ windowHandle: '123', processId: 42, windowTitle: 'Actual GitHub project' })
+      h.pipeline.reportAssistantProgress('正在读取网页…')
+      return { text: 'Actual summary' }
+    })
+    const h = harness({}, { onAssistant, contentTarget: () => external })
+    mocks.foregroundWindow.mockReturnValue(own)
+    mocks.transcribe.mockResolvedValue({ text: '帮我总结这个网页' })
+    h.pipeline.start('ask', { target: own, purpose: 'assistant' })
+    mocks.foregroundWindow.mockReturnValue({ ...external, handle: '999', title: 'Later window' })
+    await finish(h.pipeline)
+    expect(onAssistant).toHaveBeenCalledOnce()
+    expect(h.sent).toContainEqual(expect.objectContaining({ phase: 'working', hint: '正在读取网页…' }))
+    const count = h.sent.length
+    h.pipeline.reportAssistantProgress('Late progress')
+    expect(h.sent).toHaveLength(count)
+  })
   it('keeps the original target for a typed card follow-up after focus moves to YU', async () => {
     const h = harness({})
     const original = { windowHandle: '1234', processId: 42, appName: 'Editor', windowTitle: 'Original code' }

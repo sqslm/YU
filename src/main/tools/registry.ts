@@ -46,6 +46,7 @@ import type { TaskContext, ToolState } from '@shared/task'
 import { argumentError } from './schema'
 import { requestsContextRead } from '../context-access'
 import { isCurrentContentRequest } from '../voice-intent'
+import { readAloudDefinition } from './read-aloud'
 
 /** Everything a tool may look at. Injected by `agent.ts`, faked in tests. */
 export interface ToolContext {
@@ -154,6 +155,7 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   // Cloud synthesis can take longer than the local device handshake. Cancellation
   // reaches the provider and playback; this budget covers synthesis, not narration.
   speak_text: 120_000,
+  read_aloud: 120_000,
   // A replay is up to eight ordinary tool calls back to back, so it gets the sum
   // of what its steps could each take rather than one step's ceiling.
   run_workflow: 180_000
@@ -573,6 +575,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   ...PERSONAL_DEFINITIONS,
   ...LIFE_DEFINITIONS,
+  readAloudDefinition(runTool),
   ...WORKFLOW_DEFINITIONS,
   ...WINDOWS_DEFINITIONS,
   {

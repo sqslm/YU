@@ -7,6 +7,23 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "当前目标是语自身，请切到要读取的网页或文档后重新呼出": "The current target is YU. Switch to the page or document and invoke the assistant again.",
+  "请说明要朗读哪条随记的标题，或说“朗读最新随记”。": "Name the note to read, or say “read my latest note”.",
+  "正在查找随记：{{title}}": "Finding note: {{title}}",
+  "最新随记": "Latest note",
+  "没有找到指定内容：{{title}}": "Could not find: {{title}}",
+  "找到多条同名随记，请先在随记中选择要朗读的那一条。": "Multiple notes have this title. Select the note to read in Notes.",
+  "没有找到可朗读的已完成结果。": "No completed result is available to read aloud.",
+  "最近的处理结果": "Latest result",
+  "上一条回答": "Previous answer",
+  "正在读取要朗读的内容…": "Reading the requested content…",
+  "所选内容": "Selected content",
+  "指定文本": "Requested text",
+  "请说明要朗读的内容，例如“朗读随记里标题为优化点的内容”或“朗读刚才的润色结果”。": "Specify what to read, for example “read the note titled Improvements” or “read my latest polished result”.",
+  "没有找到可朗读的文字，请选择具体内容后重试。": "No readable text was found. Select the content and try again.",
+  "正在生成语音：{{title}}": "Generating speech: {{title}}",
+  "已开始朗读：{{title}}": "Reading aloud: {{title}}",
+  "当前来源仅读取了部分，朗读仅覆盖已读取的文字。": "Only part of the source was available; narration covers the text that was read.",
   "自动路由": "Automatic routing",
   "后续步骤引用了此步骤，请先修改引用再删除": "A later step references this step. Update the reference before removing it.",
   "当前没有可提交的语音追问": "No voice follow-up is ready to submit",

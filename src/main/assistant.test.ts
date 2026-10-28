@@ -26,6 +26,36 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('reads the full uniquely titled note directly without a model round', async () => {
+    const body = '这是实际随记正文。'.repeat(400)
+    const notes = vi.fn().mockReturnValue([{ id: 'note-1', title: '优化点', transcript: 'raw', polished: body, createdAt: 1, tags: [] }])
+    const speak = vi.fn().mockResolvedValue({ spoken: body.length, skipped: false })
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), personal: { notes } as unknown as PersonalTools,
+      life: { speak, ttsEnabled: () => true } as unknown as LifeTools })
+    await current.send('帮我朗读一下随记里面标题为优化点的内容')
+    expect(ask).not.toHaveBeenCalled()
+    expect(notes).toHaveBeenCalledOnce()
+    expect(speak).toHaveBeenCalledWith(body, expect.any(AbortSignal))
+    expect(current.snapshot().turns.at(-1)?.answer).toContain('优化点')
+    expect(changed.mock.calls.some(([state]) => /生成语音/.test(state.status))).toBe(true)
+  })
+  it('reads the latest real polished result without rewriting it with a model', async () => {
+    const history = vi.fn().mockReturnValue([{ id: 'failed', createdAt: 9, mode: 'dictation', final: 'failure', status: 'failed' }, { id: 'result', createdAt: 5, mode: 'dictation', final: '实际润色结果', status: 'completed' }])
+    const speak = vi.fn().mockResolvedValue({ spoken: 6, skipped: false })
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), personal: { history } as unknown as PersonalTools,
+      life: { speak, ttsEnabled: () => true } as unknown as LifeTools })
+    await current.send('把刚才的润色结果读给我听')
+    expect(speak).toHaveBeenCalledWith('实际润色结果', expect.any(AbortSignal))
+    expect(ask).not.toHaveBeenCalled()
+  })
+  it('preserves the previous answer for an explicit narration request', async () => {
+    const speak = vi.fn().mockResolvedValue({ spoken: 6, skipped: false })
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), life: { speak, ttsEnabled: () => true } as unknown as LifeTools })
+    current.rememberAnswer('Q', '真实的上一次回答')
+    await current.send('朗读这个回答')
+    expect(speak).toHaveBeenCalledWith('真实的上一次回答', expect.any(AbortSignal))
+    expect(ask).not.toHaveBeenCalled()
+  })
   it('retains the actual answer when an explicit card continuation says only summarize', async () => {
     session.rememberAnswer('Explain the project', 'Actual prior answer')
     await session.send('总结一下', undefined, undefined, now, {}, true)

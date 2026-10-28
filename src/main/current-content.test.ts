@@ -8,6 +8,7 @@ import { DEFAULT_ASSISTANT_ACCESS } from '@shared/assistantAccess'
 import { mergeSettings } from '@shared/defaults'
 import { askAgent } from './agent'
 import { runTool } from './tools/registry'
+import { createTask } from './task-context'
 
 const context = { windowHandle: '123', processId: 456, windowTitle: 'Actual document', appName: 'ego' }
 const mocks = vi.hoisted(() => ({ complete: vi.fn() }))
@@ -15,6 +16,24 @@ vi.mock('./providers/llm', async original => ({ ...await original<typeof import(
 const dirs: string[] = []
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true }) })
 const make = (native = vi.fn(), access = DEFAULT_ASSISTANT_ACCESS) => new WindowsTools({ native, folders: { downloads: '', desktop: '', documents: '' }, openPath: vi.fn(), openUrl: vi.fn(), access: () => access })
+
+it('never summarizes YU itself when its card or settings owns the foreground', async () => {
+  const native = vi.fn().mockResolvedValue({ text: 'Ask 对话：请总结我的网页' })
+  const result = await make(native).run('read_current_content', {}, undefined, { ...context, processId: process.pid, appName: 'YU', windowTitle: '语' })
+  expect(result.ok).toBe(false)
+  expect(native).not.toHaveBeenCalled()
+})
+
+it('uses the external window frozen before recording while retaining the original insertion target', async () => {
+  const native = vi.fn().mockResolvedValue({ url: 'https://github.com/Niko1221/Strata', text: 'Run powerful AI on your own computer.', title: 'Strata' })
+  const own = { windowHandle: '700', processId: process.pid, appName: 'YU', windowTitle: '语' }
+  const task = createTask('wake', own)
+  task.contentTarget = Object.freeze({ ...context })
+  const result = await make(native).run('read_current_content', {}, undefined, { ...own, task })
+  expect(native).toHaveBeenCalledWith(expect.objectContaining({ handle: '123', pid: 456, title: 'Actual document' }), undefined)
+  expect(result.data.url).toBe('https://github.com/Niko1221/Strata')
+  expect(task.target.windowHandle).toBe('700')
+})
 
 it('retains the captured browser link when fetching the body fails', async () => {
   const native = vi.fn().mockResolvedValue({ url: 'https://example.com/article' })
@@ -199,6 +218,16 @@ it('reports the summary model failure without retrying with an ungrounded plain 
   expect(result.taskState).toBe('failed')
   expect(result.text).toContain('模型未能完成总结')
   expect(mocks.complete).toHaveBeenCalledTimes(1)
+})
+
+it('does not include the focused YU conversation as document context when summarizing an external page', async () => {
+  mocks.complete.mockClear(); mocks.complete.mockResolvedValueOnce('Actual project explanation')
+  const run = vi.fn().mockResolvedValue({ ok: true, summary: 'Read', data: { title: 'Strata', url: 'https://github.com/Niko1221/Strata', text: 'Run powerful AI on your own computer.' } })
+  await askAgent(mergeSettings({}), '帮我总结这个网页', { ...context, appName: 'YU', windowTitle: '语', fieldContent: 'UNRELATED_ASK_DIALOGUE', textBefore: 'UNRELATED_ASK_DIALOGUE' }, undefined, undefined,
+    { windows: { run } as unknown as WindowsTools, allowedTools: WINDOWS_TOOLS })
+  const messages = JSON.stringify(mocks.complete.mock.calls[0][1].messages)
+  expect(messages).toContain('Run powerful AI on your own computer.')
+  expect(messages).not.toContain('UNRELATED_ASK_DIALOGUE')
 })
 
 it('summarizes the previous answer for a bare card follow-up instead of reading a new window', async () => {

@@ -17,7 +17,8 @@ import type { BriefingDeliveryReceipt, DeliveryChannel } from '@shared/briefingD
  * flips a setting. Keeping them separable lets the assistant turn individual
  * groups on without dragging the rest in.
  */
-export const LIFE_TOOLS = ['create_event', 'list_events', 'manage_event', 'daily_briefing', 'configure_briefing', 'speak_text', 'stop_speaking', 'control_speech', 'configure_speech', 'sync_status', 'sync_control', 'send_briefing', 'briefing_delivery_status', 'configure_briefing_delivery'] as const
+const LIFE_ACTIONS = ['create_event', 'list_events', 'manage_event', 'daily_briefing', 'configure_briefing', 'speak_text', 'stop_speaking', 'control_speech', 'configure_speech', 'sync_status', 'sync_control', 'send_briefing', 'briefing_delivery_status', 'configure_briefing_delivery'] as const
+export const LIFE_TOOLS = [...LIFE_ACTIONS, 'read_aloud'] as const
 
 /** Shapes the stores project into. Structural on purpose: `index.ts` owns the mapping. */
 export interface LifeEvent {
@@ -273,7 +274,7 @@ async function run(name: string, args: Record<string, unknown>, api: LifeTools, 
   throw new Error(mt('未知工具：{{name}}', { name }))
 }
 
-const schemas: Record<typeof LIFE_TOOLS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
+const schemas: Record<typeof LIFE_ACTIONS[number], { description: string; properties: Record<string, { type: string; enum?: readonly string[]; items?: { type: string }; maxItems?: number }>; required?: string[] }> = {
   send_briefing:{description:'Send the current actual briefing via explicitly enabled, user-configured Resend email / ntfy mobile push. Requires a sending request. Report per-channel provider receipts and errors, never claim recipient delivery. No configuration means no sending.',properties:{channel:{type:'string',enum:['email','push']}}},
   briefing_delivery_status:{description:'Read real persistent briefing delivery attempts, provider message IDs and failures. Accepted does not mean received/read by recipient.',properties:{}},
   configure_briefing_delivery:{description:'Read delivery configuration status or enable/disable email/push for scheduled briefings. Keys and targets must be configured by the user in settings; this tool cannot change or disclose them. Does not send immediately.',properties:{email:{type:'boolean'},push:{type:'boolean'}}},
@@ -296,7 +297,7 @@ const optionalMethods: Partial<Record<typeof LIFE_TOOLS[number], Array<keyof Lif
   send_briefing: ['sendBriefing'], briefing_delivery_status: ['briefingDeliveryHistory'],
   configure_speech: ['speechSettings', 'setSpeechSettings'], control_speech: ['controlSpeech']
 }
-export const LIFE_DEFINITIONS: ToolDefinition[] = LIFE_TOOLS.map(name => ({ name, description: schemas[name].description,
+export const LIFE_DEFINITIONS: ToolDefinition[] = LIFE_ACTIONS.map(name => ({ name, description: schemas[name].description,
   available: ctx => Boolean(ctx.life && (optionalMethods[name] ?? []).every(method => typeof ctx.life![method] === 'function')),
   parameters: { type: 'object', properties: schemas[name].properties, required: schemas[name].required ?? [], additionalProperties: false },
   run: async (args, ctx) => {

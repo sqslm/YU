@@ -16,6 +16,8 @@ export interface TaskContext {
   originalInput?: string
   transcript?: string
   target: TaskTarget
+  /** External document behind YU, captured at invocation without redirecting dictation insertion. */
+  contentTarget?: TaskTarget
   prompt?: { id: string; name: string; kind: PromptKind; applied: boolean }
   route?: { kind: string; via: 'explicit' | 'rule' | 'model' }
   state: TaskState

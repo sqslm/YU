@@ -51,9 +51,23 @@ function events(type: string): unknown[] {
   return native.post.mock.calls.map(([event]) => event).filter(event => event.type === type)
 }
 
-it('cycles prompts once per released chord, without starting a recording', () => {
+it('cycles prompts on each fresh main-key press while modifiers remain held', () => {
+  native.receive!({ data: { type: 'config', bindings: {}, pasteLast: [], promptCycle: ['LeftCtrl', 'LeftAlt', 'S'] } })
+  native.post.mockClear()
+  key(0xa2, true); key(0xa4, true); key(0x53, true)
+  expect(events('prompt-cycle')).toHaveLength(1)
+  key(0x53, true)
+  expect(events('prompt-cycle')).toHaveLength(1)
+  key(0x53, false); key(0x53, true)
+  expect(events('prompt-cycle')).toHaveLength(2)
+  key(0x53, false); key(0xa4, false); key(0xa2, false)
+  expect(events('prompt-cycle')).toHaveLength(2)
+  expect(events('start')).toHaveLength(0)
+})
+
+it('cycles prompts once on press, without starting a recording', () => {
   key(0xa2, true); key(0xa1, true); key(0x50, true); key(0x50, true)
-  expect(events('prompt-cycle')).toHaveLength(0)
+  expect(events('prompt-cycle')).toHaveLength(1)
   key(0x50, false); key(0xa2, false); key(0xa1, false)
   expect(events('prompt-cycle')).toHaveLength(1)
   expect(events('start')).toHaveLength(0)

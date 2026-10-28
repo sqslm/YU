@@ -1,3 +1,5 @@
+import { readAloudCommand } from './read-aloud-command'
+
 /** One decision per completed take. Previews never execute an action. */
 export type VoiceIntent = {
   kind: 'dictation' | 'translate' | 'ask' | 'reminder' | 'notes' | 'assistant' | 'selection'
@@ -37,16 +39,17 @@ export function isBareSummaryRequest(text: string): boolean {
 
 export function isCurrentContentRequest(text: string): boolean {
   if (isDictatedContent(text) || isReminderCreationRequest(text) || isReadOnlySelectionRequest(text) ||
-      /(?:不要|不用|无需|别).{0,4}(?:总结|概括|读取|阅读|分析|介绍)|\b(?:do not|don.t|never)\s+(?:read|summari[sz]e|analy[sz]e|explain)\b/iu.test(text) ||
+      /(?:不要|不用|无需|别).{0,4}(?:总结|概括|读取|阅读|朗读|念|播报|分析|介绍)|\b(?:do not|don.t|never)\s+(?:read|summari[sz]e|analy[sz]e|explain)\b/iu.test(text) ||
       /剪贴板|\bclipboard\b|刚才|之前|上次|上一个|上一条|\b(?:previous|earlier|last answer)\b/iu.test(text)) return false
   if (isBareSummaryRequest(text)) return true
   const target = /(?:这个|这篇|这份|该|当前|正在|打开的|选中的?|屏幕上|浏览器里).{0,24}(?:网页|文章|页面|网站|项目|仓库|文件|文档|表格|幻灯片|PDF|Word|Excel|PPT)|(?:这|当前)(?:个)?(?:网页|文章|文档)|\b(?:this|the (?:current|active|open|opened)|(?:the )?selected)\s+(?:(?:web|browser)\s*)?(?:page|article|website|repository|repo|project|file|document|spreadsheet|presentation|pdf)\b/iu.test(text)
-  return target && /总结|概括|介绍|解释|分析|阅读|读一下|主要|内容|讲什么|说什么|干嘛|干什么|做什么|是什么|用途|\b(?:summari[sz]e|explain|describe|analy[sz]e|read|what)\b/iu.test(text)
+  return target && /总结|概括|介绍|解释|分析|朗读|念|播报|阅读|读一下|主要|内容|讲什么|说什么|干嘛|干什么|做什么|是什么|用途|\b(?:summari[sz]e|explain|describe|analy[sz]e|read|what)\b/iu.test(text)
 }
 
 /** Keep only explicitly referential requests attached to the temporary session. */
 export function needsAssistantContext(text: string): boolean {
   if (isCurrentWindowQuestion(text) || isCurrentContentRequest(text) || isDictatedContent(text)) return false
+  if (readAloudCommand(text)?.args.source === 'answer') return true
   return /刚才|之前|上一(?:个|条|次|段|轮)|那(?:个|条|些|段|份)|第[一二三四五六七八九十\d]+(?:个|项)|(?:把|将|修改|改成|改为|取消|删除).{0,6}(?:这条|这个)|^(?:继续|再试|重试|再改|改成|改为|再详细|展开说|具体点)|^(?:为什么|为什么呢|是吗)[？?。\s]*$|^(?:那|那么).{0,14}呢[？?。\s]*$|^(?:那|那么|所以).{0,8}(?:怎么|如何)|(?:用|换成)(?:英文|中文|英语|汉语).{0,5}(?:回答|解释|说)|\b(?:that|those|these|them|previous|earlier|second|third|last (?:answer|result|task)|continue|retry|try again|what about|tell me more|explain more)\b|^(?:why|how so|really|yes|no)[?!.\s]*$|^(?:(?:please|can you|could you)\s+)?(?:open|save|copy|translate|summarize|explain|analy[sz]e|polish|change|move|delete|cancel|complete|make|read|rewrite|tag)\b.{0,40}\bit\b|^(?:so\s+)?how\b.{0,30}\b(?:fix|solve|change|open|use)\b.{0,12}\bit\b/iu.test(text)
 }
 
@@ -86,6 +89,7 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false, operati
   if (REMIND_ME_PREFIX.test(value) && isReminderCreationRequest(value) && !/然后|并且|同时|[,，;；]\s*(?:打开|帮我|读取|创建|保存)|\b(?:and then|then|also)\b/iu.test(value)) return { kind: 'reminder' }
   if (stopSpeakingRequest(value)) return { kind: 'assistant' }
   if (speechPlaybackRequest(value)) return {kind:'assistant'}
+  if (readAloudCommand(value)) return { kind: 'assistant' }
   if (screenshotNeedsEditor(value)) return { kind: 'assistant' }
   if(/(?:今天|昨天|最近|刚才).{0,15}(?:下载|打开|使用).{0,10}(?:文件|文档)|\b(?:recent|today|yesterday)\b.{0,30}\b(?:downloads?|files?)\b/iu.test(value)&&/哪|什么|查询|查找|查看|查我|列出|\b(?:find|list|show|which|what|open)\b/iu.test(value))return {kind:'assistant'}
   if (/提示词卡片|实际.{0,8}(?:卡片|提示词)|随记.{0,12}(?:同步|录音)|(?:播放|暂停|继续).{0,12}录音|同步失败|(?:我的|本机|电脑|系统).{0,12}(?:CPU|处理器|内存|音量)|\b(?:my (?:cpu|memory)|system volume|note recording)\b/iu.test(value)) return { kind:'assistant' }

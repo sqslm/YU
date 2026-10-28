@@ -120,8 +120,10 @@ export class WindowsTools {
   }
   async run(name: string, args: Record<string, unknown>, signal?: AbortSignal, context?: PromptContext, options?: { fetchImpl?: typeof fetch; allowNetwork: boolean }): Promise<ToolOutcome> {
     signal?.throwIfAborted()
+    if (['get_current_folder', 'get_current_page', 'read_current_content'].includes(name) && context?.task?.contentTarget) context = { ...context, ...context.task.contentTarget }
     const ok = (summary: string, data: Record<string, unknown> = {}): ToolOutcome => ({ ok: true, summary, data: { ...data, ok: true, summary } })
     const failed = (message: string): ToolOutcome => ({ ok: false, summary: message, error: message, data: { ok: false, error: message } })
+    if (['get_current_folder', 'get_current_page', 'read_current_content'].includes(name) && context?.processId === process.pid) return failed(mt('当前目标是语自身，请切到要读取的网页或文档后重新呼出'))
     const schema = WINDOWS_DEFINITIONS.find(tool => tool.name === name)?.parameters
     const access=this.deps.access?.()??DEFAULT_ASSISTANT_ACCESS
     if(access.disabledTools.includes(name))return failed(mt('此工具已在权限设置中关闭：{{name}}',{name}))

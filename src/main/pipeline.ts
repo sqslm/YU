@@ -131,6 +131,7 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  contentTarget?: (original: ForegroundInfo) => ForegroundInfo | undefined
   checkAsr?: () => Promise<void>
   preserveAudio?: (pcm: Int16Array, signal: AbortSignal) => Promise<void>
   captureSelection?: (context?: PromptContext, signal?: AbortSignal) => Promise<SelectionTarget>
@@ -325,6 +326,11 @@ export class Pipeline {
   /** True while a take is capturing or still being transcribed/answered. */
   get isBusy(): boolean {
     return this.stage !== 'idle'
+  }
+
+  reportAssistantProgress(hint: string): void {
+    if (this.stage !== 'working' || this.takePurpose !== 'assistant') return
+    this.setBarState({ phase: 'working', mode: this.stageMode, hint, showMode: this.getSettings().showModeInBar })
   }
 
   get currentMode(): Mode {
@@ -621,7 +627,7 @@ export class Pipeline {
     }, capMs)
   }
 
-  start(mode: Mode, options: { handsFree?: boolean; purpose?: 'reminder' | 'assistant'; target?: ForegroundInfo; viaWake?: boolean } = {}): void {
+  start(mode: Mode, options: { handsFree?: boolean; purpose?: 'reminder' | 'assistant'; target?: ForegroundInfo; contentTarget?: ForegroundInfo; viaWake?: boolean } = {}): void {
     // The stage stays `recording` while `stop()` waits for the renderer to flush
     // its tail, so a press in that window must be reported as busy instead of
     // being ignored as a duplicate start.
@@ -678,6 +684,11 @@ export class Pipeline {
       windowTitle: opened.title, appPath: opened.appPath, windowRect: opened.rect ?? undefined
     }, undefined, this.takeSmartRouting ? undefined : mode))
     if (this.tasks.size > 8) for (const key of this.tasks.keys()) if (key !== this.runToken) this.tasks.delete(key)
+    const contentTarget = options.contentTarget ?? this.options.contentTarget?.(opened)
+    if (contentTarget?.pid && contentTarget.handle) this.tasks.get(this.runToken)!.contentTarget = Object.freeze({
+      windowHandle: contentTarget.handle, processId: contentTarget.pid, appName: contentTarget.appName,
+      appPath: contentTarget.appPath, windowTitle: contentTarget.title, windowRect: contentTarget.rect ?? undefined
+    })
     this.takeVoiceCommands = mode === 'dictation' && !options.purpose && opening.voiceCommands.enabled
       ? structuredClone(opening.voiceCommands) : null
     this.startCaptions(opening)
@@ -1376,6 +1387,7 @@ export class Pipeline {
         }
       }
       if (purpose === 'assistant') {
+        this.takePurpose = 'assistant'
         transcript = transcript || (route === 'multimodal'
           ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
           : await this.asrTranscript(settings, wav, controller.signal, progress))
@@ -2241,6 +2253,7 @@ export class Pipeline {
     } : foregroundWindow()
     const task = createTask('text', this.contextFor(settings, target, null), text, 'ask')
     task.selection = originalContext?.task?.selection
+    task.contentTarget = originalContext?.task?.contentTarget
     task.state = 'running'; this.tasks.set(token, task)
     const context = attachTask(this.contextFor(settings, target, null), task)
 

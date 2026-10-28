@@ -2,6 +2,42 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TTS_SETTINGS, MAX_SPEECH_CHARS, normalizeTtsSettings, speechText, type TtsSettings } from '@shared/speech'
 import { SpeechService, createWindowsSpeechRunner, type SpeechRequest, type SpeechResult, type SpeechRunner } from './speech'
 
+it('reads a complete explicitly requested source in bounded chunks without losing its tail', async () => {
+  const body = '这是一篇需要全部朗读的文章。'.repeat(220) + '这是最后一句。'
+  const calls: string[] = []
+  const run: SpeechRunner = async (request, _signal, started) => { calls.push(request.text!); started?.(); return { ok: true } }
+  const service = new SpeechService({ settings: () => ({ tts: { ...DEFAULT_TTS_SETTINGS, enabled: true } }), run, log: vi.fn() })
+  const result = await service.start(body)
+  await vi.waitFor(() => expect(service.speaking()).toBe(false))
+  expect(result).toEqual({ spoken: body.length, skipped: false })
+  expect(calls.length).toBeGreaterThan(1)
+  expect(calls.every(text => text.length <= MAX_SPEECH_CHARS)).toBe(true)
+  expect(calls.join('')).toBe(body)
+})
+
+it('keeps started narration alive after its task ends but still stops on an explicit stop', async () => {
+  const task = new AbortController()
+  let playbackSignal: AbortSignal | undefined, complete!: (result: SpeechResult) => void
+  const run: SpeechRunner = (_request, signal, started) => { playbackSignal = signal; started?.(); return new Promise(resolve => { complete = resolve }) }
+  const service = new SpeechService({ settings: () => ({ tts: { ...DEFAULT_TTS_SETTINGS, enabled: true } }), run, log: vi.fn() })
+  await service.start('实际朗读内容', task.signal)
+  task.abort()
+  expect(playbackSignal?.aborted).toBe(false)
+  service.stop(); expect(playbackSignal?.aborted).toBe(true)
+  complete({ ok: true })
+})
+
+it('reports a later API segment failure after acknowledging the first segment', async () => {
+  const synthesize = vi.fn().mockResolvedValueOnce({ bytes: new Uint8Array([1]), mime: 'audio/mpeg' }).mockRejectedValueOnce(new Error('provider unavailable'))
+  const play: SpeechRunner = async (_request, _signal, started) => { started?.(); return { ok: true } }
+  const onBackgroundError = vi.fn()
+  const service = new SpeechService({ settings: () => ({ tts: { ...DEFAULT_TTS_SETTINGS, enabled: true, provider: 'openai' } }),
+    run: play, cloud: { synthesize, play }, onBackgroundError, log: vi.fn() })
+  expect(await service.start('这是需要分段朗读的长篇正文。'.repeat(200))).toMatchObject({ skipped: false })
+  await vi.waitFor(() => expect(onBackgroundError).toHaveBeenCalledWith(expect.stringContaining('provider unavailable')))
+  expect(service.status()).toMatchObject({ speaking: false, error: 'provider unavailable' })
+})
+
 it('acknowledges real start and preserves the utterance across pause/resume', async () => {
   let started:(()=>void)|undefined, finish:((r:SpeechResult)=>void)|undefined
   const run:SpeechRunner=(_request,_signal,onStarted)=>{started=onStarted;return new Promise(resolve=>{finish=resolve})}

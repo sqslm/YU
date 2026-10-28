@@ -334,6 +334,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   },
   changed: state => {
     const turn = state.turns.at(-1)
+    if (state.busy && !assistantCardActive) pipeline?.reportAssistantProgress(state.status)
     if (assistantCardActive && turn) showAnswerCard({ taskId: turn.taskId, taskState: turn.taskState, question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
     tray?.refresh()
     refreshWakeWord()
@@ -941,7 +942,7 @@ function cancelAssistant(): void { assistant.cancel(); assistantCardActive = fal
 
 function openAsk(): boolean {
   if (gameMode.snapshot().active || screenshotTool.isOpen || notesRecording || cardVoice.active || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy) return false
-  assistantTarget = foregroundWindow()
+  assistantTarget = foregroundWindow(true)
   showAnswerCard({ question: '', answer: '', assistant: true })
   const win = cardWindow!
   const focus = (): void => { if (!win.isDestroyed()) { win.show(); win.focus() } }
@@ -952,7 +953,10 @@ function openAsk(): boolean {
 
 async function runAssistant(text: string, signal?: AbortSignal, submittedAt?: number, context = assistantContext(), useContext?: boolean, fromCard = false): Promise<{ text: string; failed?: boolean; taskState?: import('@shared/task').TaskState; answerCard?: AnswerCardPayload } | void> {
   signal?.throwIfAborted()
-  if (context.windowHandle) assistantTarget = { handle: context.windowHandle, title: context.windowTitle ?? '', appName: context.appName ?? '', className: '', pid: context.processId ?? 0, appPath: context.appPath ?? '', rect: context.windowRect ?? null }
+  const target = context.task?.contentTarget
+  if (target || context.windowHandle) assistantTarget = target
+    ? { handle: target.windowHandle, title: target.windowTitle ?? '', appName: target.appName ?? '', className: '', pid: target.processId ?? 0, appPath: target.appPath ?? '', rect: target.windowRect ?? null }
+    : { handle: context.windowHandle, title: context.windowTitle ?? '', appName: context.appName ?? '', className: '', pid: context.processId ?? 0, appPath: context.appPath ?? '', rect: context.windowRect ?? null }
   assistantCardActive = fromCard
   try {
     await assistant.send(text, signal, undefined, submittedAt, context, useContext)
@@ -1521,7 +1525,7 @@ function registerIpc(): void {
       return { ok: false, error: String(error), voices: [] as string[] }
     }
   })
-  handle('life:speak', (_event, text: string) => speech?.speak(text) ?? { spoken: 0, skipped: true })
+  handle('life:speak', (_event, text: string) => speech?.start(text) ?? { spoken: 0, skipped: true })
   handle('life:stop-speaking', () => { speech?.stop() })
   handle('workflow:list', () => workflows?.list() ?? [])
   handle('workflow:tools', () => TOOL_DEFINITIONS.filter(tool => WORKFLOW_STEP_TOOLS.includes(tool.name))
@@ -1864,7 +1868,9 @@ function wireHotkeys(): void {
             if (!gameMode.snapshot().active && !pipeline?.isBusy && !cardVoice.active) pipeline?.showAlert({ kind: 'selection', level: 'info', text: label, actions: [] })
           }).catch(error => log(`[prompt-cycle] ${String(error)}`))
           break
-        case 'start':
+        case 'start': {
+          const target = foregroundWindow()
+          const contentTarget = target.pid === process.pid ? foregroundWindow(true) : undefined
           if (assistant.busy) cancelAssistant()
           // A stale answer card would otherwise float over the next take.
           hideCard()
@@ -1875,8 +1881,9 @@ function wireHotkeys(): void {
           if (!event.purpose) uia.warm()
           // Same rule as the wake word: a new take ends any read-aloud first.
           pausePlaybackForRecording()
-          pipeline.start(event.mode, { handsFree: event.handsFree, purpose: event.purpose })
+          pipeline.start(event.mode, { target, contentTarget, handsFree: event.handsFree, purpose: event.purpose })
           break
+        }
         case 'mode':
           pipeline.upgrade(event.mode)
           break
@@ -1993,6 +2000,7 @@ async function bootstrap(): Promise<void> {
   }, broadcastReminders, log)
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+    contentTarget: original => original.pid === process.pid ? foregroundWindow(true) : undefined,
     checkAsr: () => checkAsrReadiness(store.get(), localAsr),
     preserveAudio: async (pcm, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16), recovery: true }, signal) },
     captureSelection: (context, signal) => captureSelectionTarget(store.get(), context, signal),
@@ -2101,6 +2109,7 @@ async function bootstrap(): Promise<void> {
       ? join(process.resourcesPath, 'speech.ps1')
       : join(app.getAppPath(), 'resources/speech.ps1')),
     cloud: { synthesize: synthesizeSpeech, play: createSpeechPlayback(() => barWindow) },
+    onBackgroundError: text => pipeline?.showAlert({ kind: 'selection', level: 'error', text }),
     log })
   calendarScheduler = new CalendarScheduler({ store: calendar, settings: () => store.get().calendar,
     // The stamp is written only once the notification is up: a failed delivery

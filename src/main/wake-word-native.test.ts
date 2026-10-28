@@ -12,6 +12,52 @@ function run(args: string[], input?: object): Promise<string> {
   })
 }
 
+it.skipIf(process.platform !== 'win32')('preserves queued microphone audio when SAPI resets the stream position', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'yu-wake-stream-'))
+  try {
+    const source = await readFile(join(process.cwd(), 'resources/voice-wake.ps1'), 'utf8')
+    const cs = /@'\r?\n([\s\S]*?)\r?\n'@/u.exec(source)![1]
+    const script = join(root, 'stream.ps1')
+    await writeFile(script, '\uFEFF' + `Add-Type -AssemblyName System.Speech
+Add-Type -ReferencedAssemblies System.Speech,System.Web.Extensions -TypeDefinition @'
+${cs}
+'@
+$stream = New-Object YUWake+MicStream
+$stream.Push([byte[]](1,2,3,4), 4)
+[void]$stream.Seek(0, [IO.SeekOrigin]::Begin)
+$stream.Finish()
+$buffer = New-Object byte[] 4
+$count = $stream.Read($buffer,0,4)
+@{ count=$count; bytes=@($buffer | ForEach-Object { [int]$_ }) } | ConvertTo-Json -Compress
+`)
+    const result = JSON.parse(await run(['-File', script]))
+    expect(result).toEqual({ count: 4, bytes: [1, 2, 3, 4] })
+  } finally { await rm(root, { recursive: true }) }
+})
+
+it.skipIf(process.platform !== 'win32')('recognizes the complete custom wake phrase when it leads into a command', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'yu-wake-command-'))
+  try {
+    const synth = join(root, 'synthesize.ps1')
+    await writeFile(synth, '\uFEFF' + `param([string]$OutputRoot)
+Add-Type -AssemblyName System.Speech
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try {
+  $voice = $synth.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name -eq 'zh-CN' } | Select-Object -First 1
+  if (!$voice) { Write-Output 'unavailable'; exit }
+  $synth.SelectVoice($voice.VoiceInfo.Name)
+  $synth.SetOutputToWaveFile((Join-Path $OutputRoot 'command.wav'))
+  $synth.Speak('你好胡小杨，帮我朗读一下随记。')
+  $synth.SetOutputToNull()
+} finally { $synth.Dispose() }
+`)
+    if ((await run(['-File', synth, root])).includes('unavailable')) { context.skip(); return }
+    const stdout = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, 'command.wav') })
+    const events = stdout.trim().split('\n').map(line => JSON.parse(line.replace(/^\uFEFF/, '')))
+    expect(events.filter(event => event.type === 'wake'), JSON.stringify(events)).toHaveLength(1)
+  } finally { await rm(root, { recursive: true }) }
+}, 30_000)
+
 it.skipIf(process.platform !== 'win32')('recognizes a custom Chinese name after a one-second pause through the real offline engine', async context => {
   const root = await mkdtemp(join(tmpdir(), 'yu-wake-replay-'))
   try {
