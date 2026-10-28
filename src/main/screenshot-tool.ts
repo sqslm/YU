@@ -32,6 +32,7 @@ export class ScreenshotTool {
   private scrollEscape = false
   private pins = new Set<BrowserWindow>()
   private allScreens = false
+  private gaming = false
   constructor(private settings: () => Settings, private active: (value: boolean) => void, private log: (text: string) => void = () => {}) {}
   get isOpen(): boolean { return this.opening || Boolean(this.win && !this.win.isDestroyed()) }
 
@@ -40,7 +41,7 @@ export class ScreenshotTool {
       if (!this.win || event.sender !== this.win.webContents || event.senderFrame !== this.win.webContents.mainFrame) throw new Error('Screenshot editor required')
     }
     handle('screenshot:frame', event => { owned(event); return this.frame })
-    handle('screenshot:ready', event => { owned(event); this.win!.show(); this.win!.focus() })
+    handle('screenshot:ready', event => { owned(event); if (!this.gaming) { this.win!.show(); this.win!.focus() } })
     handle('screenshot:close', event => { owned(event); this.close() })
     handle('screenshot:all-screens', async event => { owned(event);this.close();await new Promise(resolve=>setTimeout(resolve,120));await this.open(true) })
     handle('screenshot:scroll-start', (event, rect: CaptureRect, controls: CaptureRect) => { owned(event); this.startScroll(rect, controls) })
@@ -57,6 +58,7 @@ export class ScreenshotTool {
   }
 
   async open(allScreens=false): Promise<void> {
+    if (this.gaming) throw new Error(mt('游戏模式已暂停语音功能'))
     if (this.isOpen) { this.win?.focus(); return }
     this.opening = true
     this.allScreens = allScreens
@@ -113,6 +115,21 @@ export class ScreenshotTool {
   close(): void { this.stopScroll(); this.scroll = null; this.captureController?.abort(); this.controller?.abort(); this.win?.destroy(); this.win = null; this.frame = null; this.displayBounds = null }
   closePins():void { for(const win of this.pins)win.destroy();this.pins.clear() }
 
+  /** Preserve unsaved screenshots and pins, but never cover the game or own Escape. */
+  setGameMode(active: boolean): void {
+    this.gaming = active
+    if (active) {
+      this.stopScroll()
+      this.captureController?.abort()
+      this.controller?.abort()
+      this.win?.hide()
+      for (const win of this.pins) win.hide()
+    } else {
+      if (this.win && !this.win.isDestroyed()) this.win.showInactive()
+      for (const win of this.pins) if (!win.isDestroyed()) win.showInactive()
+    }
+  }
+
   private async pin(image:Electron.NativeImage):Promise<void> {
     const area=screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workAreaSize,size=image.getSize()
     const width=Math.min(size.width,Math.max(120,area.width-80)),height=Math.min(size.height+40,Math.max(120,area.height-80))
@@ -138,6 +155,7 @@ export class ScreenshotTool {
   }
 
   private startScroll(rect: CaptureRect, controls: CaptureRect): void {
+    if (this.gaming) throw new Error(mt('游戏模式已暂停语音功能'))
     const bounds = this.displayBounds, win = this.win
     if (!bounds || !win || this.scroll || this.controller) throw new Error(mt('正在处理上一条，稍后再试'))
     if (![rect, controls].every(r => r && [r.x, r.y, r.width, r.height].every(Number.isFinite) && r.x >= 0 && r.y >= 0 &&
@@ -204,6 +222,7 @@ export class ScreenshotTool {
   }
 
   private async run(action: ScreenshotAction, dataUrl: string, question?: string, target?: string, ocrLanguage = 'auto'): Promise<ScreenshotResult> {
+    if (this.gaming) throw new Error(mt('游戏模式已暂停语音功能'))
     if (this.scroll) throw new Error(mt('请先完成滚动截图'))
     if (!['copy', 'save', 'ocr', 'translate', 'ask', 'pin'].includes(action) || typeof dataUrl !== 'string' ||
       !dataUrl.startsWith('data:image/png;base64,') || dataUrl.length > 64 * 1024 * 1024) throw new Error(mt('截图数据无效或过大'))

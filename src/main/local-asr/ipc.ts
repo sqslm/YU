@@ -17,6 +17,7 @@ export interface LocalAsrIpcOptions {
   /** Persists `localAsr` onto settings. */
   patch: (patch: { modelId?: string; modelDir?: string; language?: string; mirror?: LocalAsrMirror; enabled?: boolean }) => Promise<unknown>
   log: (line: string) => void
+  blocked?: () => boolean
 }
 
 export function registerLocalAsrIpc(options: LocalAsrIpcOptions): void {
@@ -25,6 +26,7 @@ export function registerLocalAsrIpc(options: LocalAsrIpcOptions): void {
   handle('localAsr:status', () => host.status())
 
   handle('localAsr:activate', async () => {
+    if (options.blocked?.()) throw new Error(mt('游戏模式已暂停语音功能'))
     const status = await host.activate()
     log(`[local-asr] activate → ${status.phase}: ${status.message}`)
     return status

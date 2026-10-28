@@ -271,6 +271,15 @@ const api: TypelessApi = {
     version: (): Promise<string> => ipcRenderer.invoke('app:version'),
     resources: () => ipcRenderer.invoke('app:resources'),
     releaseResources: () => ipcRenderer.invoke('app:releaseResources'),
+    setGameMode: active => ipcRenderer.invoke('app:gameMode', active),
+    onPrepareForGameMode: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, id: number): void => {
+        void Promise.resolve().then(callback).then(ok => ipcRenderer.send('app:gameMode-prepared', id, ok === true),
+          () => ipcRenderer.send('app:gameMode-prepared', id, false))
+      }
+      ipcRenderer.on('app:gameMode-prepare', listener)
+      return () => { ipcRenderer.off('app:gameMode-prepare', listener) }
+    },
     setChromeDim: (dimmed: boolean): Promise<void> =>
       ipcRenderer.invoke('app:chromeDim', dimmed),
     saveImage: (

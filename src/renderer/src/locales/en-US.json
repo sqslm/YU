@@ -2069,5 +2069,17 @@
   "请先在「语音与输入 → 朗读」中启用朗读。": "Enable read-aloud in Voice & input → Read aloud first.",
   "智能任务": "Smart task",
   "启用": "Enabled",
-  "高级设置": "Advanced settings"
+  "高级设置": "Advanced settings",
+  "游戏模式": "Game mode",
+  "游戏退出后自动恢复，Alt+Tab 切出仍保持暂停。": "Resume after the game exits. Alt+Tab keeps game mode active.",
+  "自动检测游戏": "Detect games automatically",
+  "识别常见游戏、游戏窗口及独占 3D 全屏；普通浏览器全屏不会触发。": "Detect known games, game windows and exclusive 3D full-screen. Browser full-screen alone does not trigger game mode.",
+  "手动游戏模式": "Manual game mode",
+  "检测到游戏，已暂停": "Game detected; paused",
+  "正常运行": "Running normally",
+  "额外游戏进程": "Additional game processes",
+  "一行一个进程名或 exe 完整路径。未识别的窗口化游戏可加入此列表。": "One process name or full exe path per line. Add unrecognized windowed games here.",
+  "结束手动模式": "End manual mode",
+  "手动保持游戏模式": "Keep game mode on manually",
+  "暂停语音唤醒与所有语音快捷键，关闭录音条，释放本地模型和空闲界面，暂停同步与提醒调度。未保存成功的草稿和截图会保留；退出后恢复原设置。": "Pause wake words and voice shortcuts, close the recording bar, unload local models and idle interfaces, and pause sync and reminder scheduling. Unsaved drafts and screenshots are retained. Your settings are restored afterward."
 }

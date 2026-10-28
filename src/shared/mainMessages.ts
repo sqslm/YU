@@ -7,6 +7,10 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "游戏模式": "Game mode",
+  "手动保持游戏模式": "Keep game mode on manually",
+  "游戏模式已暂停语音功能": "Voice features are paused in game mode",
+
   '连接测试超时，请检查地址或网络后重试。': 'Connection test timed out. Check the endpoint or network and try again.',
   '当前内容仅读取了部分，摘要可能不完整。': 'Only part of the current content was read; the summary may be incomplete.',
   '浏览器通过辅助功能提供的当前页面正文': 'Current rendered page text provided by browser accessibility',

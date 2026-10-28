@@ -1,3 +1,4 @@
+import type { GameModeStatus } from './game-mode'
 import type {
   AccountView,
   ShortcutKeyEvent,
@@ -344,6 +345,8 @@ export interface TypelessApi {
     version(): Promise<string>
     resources(): Promise<ResourceUsage>
     releaseResources(): Promise<ResourceUsage>
+    setGameMode(active: boolean): Promise<GameModeStatus>
+    onPrepareForGameMode(callback: () => Promise<boolean>): () => void
     /**
      * Dim the native window buttons with the page while a dialog is open. They
      * are drawn above the web content, so the renderer cannot reach them.

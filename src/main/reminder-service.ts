@@ -12,6 +12,7 @@ import { unsupportedReminderZone } from './reminder-time'
 import { noteBodyField } from '@shared/noteBody'
 
 export class ReminderService {
+  private suspended = false
   readonly store: ReminderStore
   readonly scheduler: ReminderScheduler
   private strong: BrowserWindow | null = null
@@ -30,8 +31,17 @@ export class ReminderService {
     }, () => this.changed())
   }
   start(): void { this.store.recoverMissed(); this.refresh() }
-  suspend(): void { this.scheduler.stop() }
-  resume(): boolean { const recovered = this.store.recoverMissed(); this.refresh(); return recovered > 0 }
+  suspend(): void {
+    this.suspended = true
+    this.scheduler.stop()
+    this.noteAbort?.abort()
+    const strong = this.strong
+    this.strong = null
+    strong?.destroy()
+    for (const notice of this.notices.values()) notice.close()
+    this.notices.clear()
+  }
+  resume(): boolean { this.suspended = false; const recovered = this.store.recoverMissed(); this.refresh(); return recovered > 0 }
   open(view: ReminderView = {}): void { this.view = view; this.openView(view) }
   private closeNotice(id: string): void { this.notices.get(id)?.close(); this.notices.delete(id) }
   save(input: ReminderInput, id?: string): Reminder {
@@ -45,7 +55,7 @@ export class ReminderService {
     this.dismissed.delete(id); this.closeNotice(id); this.refresh()
   }
   remove(id: string): void { this.store.remove(id); this.dismissed.delete(id); this.closeNotice(id); this.refresh() }
-  refresh(): void { this.scheduler.check(); this.updateStrong(); this.changed() }
+  refresh(): void { if (!this.suspended) { this.scheduler.check(); this.updateStrong() }; this.changed() }
   settingsChanged(): void {
     if (this.strong && !this.strong.isDestroyed()) {
       this.strong.setTitle(`${mt('强提醒')} · ${mt('语')}`)
@@ -54,6 +64,7 @@ export class ReminderService {
   }
   strongRows(): Reminder[] { return this.store.due().filter(row => row.level === 'strong' && row.missedAt !== row.dueAt && !this.dismissed.has(row.id)) }
   private updateStrong(): void {
+    if (this.suspended) return
     const rows = this.strongRows()
     if (!rows.length) {
       if (this.strong && !this.strong.isDestroyed()) this.strong.close()
@@ -63,9 +74,10 @@ export class ReminderService {
       const win = createReminderWindow(this.settings().themeMode)
       this.strong = win
       win.on('closed', () => {
+        if (this.strong !== win) return
         // An emergency close leaves every item pending and restores it on the
         // next launch. It never reopens in a loop in this session.
-        for (const row of this.strongRows()) this.dismissed.add(row.id)
+        if (!this.suspended) for (const row of this.strongRows()) this.dismissed.add(row.id)
         this.strong = null
       })
     } else this.strong.webContents.send('reminders:changed')

@@ -528,6 +528,12 @@ export class LocalAsrHost {
     return { loaded: this.ready(), autoResume: this.resumeAfterIdle }
   }
 
+  /** Game mode cancels loading too; the next deliberate take may reload the model. */
+  suspend(): void {
+    this.release()
+    this.resumeAfterIdle = this.settings().enabled
+  }
+
   /** Free idle weights without turning the user's local recognition choice off. */
   reclaim(): boolean {
     if (!this.ready() || this.inUse || this.callbacks.isBusy?.()) return false

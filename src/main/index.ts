@@ -1,3 +1,6 @@
+import { GameMode } from './game-mode'
+import { observeGame, gameProcessAlive } from './game-mode-native'
+import type { GameModeStatus } from '@shared/game-mode'
 import { personalCommand } from './tools/personal'
 import { taskDiagnosticSummary } from './task-diagnostics'
 import { app, clipboard, dialog, nativeTheme, Notification, powerMonitor, protocol, session, shell } from 'electron'
@@ -150,7 +153,7 @@ let assistantCardActive = false
 let tray: ReturnType<typeof createTray> | null = null
 let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
-const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active); refreshWakeWord(active) }, line => log(line))
+const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
 const noteAudio=new NoteAudioPlayer(()=>barWindow,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null)
 let selectionPreview:{target:import('./selection-editor').SelectionTarget;text:string;at:number}|null=null
 function pausePlaybackForRecording(): void {
@@ -158,7 +161,7 @@ function pausePlaybackForRecording(): void {
   if (barWindow && !barWindow.isDestroyed()) void noteAudio.control('pause').catch(error => log(`note audio pause: ${String(error)}`))
 }
 async function openScreenshot(): Promise<boolean> {
-  if (pipeline?.isBusy || notesRecording || assistant.busy || selectionEditor?.isBusy) return false
+  if (gameMode.snapshot().active || pipeline?.isBusy || notesRecording || assistant.busy || selectionEditor?.isBusy) return false
   try { await screenshotTool.open(); return true }
   catch (error) {
     log('[screenshot] capture failed')
@@ -285,7 +288,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     briefingSettings: () => store.get().briefing,
     setBriefingSettings: async patch => {
       const next = await store.update({ briefing: { ...store.get().briefing, ...patch } })
-      briefing?.start()
+      if (!gameMode.snapshot().active) briefing?.start()
       for (const win of [settingsWindow, barWindow, cardWindow]) if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next)
       return next.briefing
     },
@@ -308,7 +311,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     syncStatus: () => lifeSyncStatus(),
     // Flipping the switch is all it takes: `reconfigure()` re-arms the timer and
     // stops the requests, exactly the path the settings page uses.
-    setSyncEnabled: enabled => { void store.update({ syncEnabled: enabled }).then(() => sync?.reconfigure()) }
+    setSyncEnabled: enabled => { void store.update({ syncEnabled: enabled }).then(() => { if (!gameMode.snapshot().active) sync?.reconfigure() }) }
   },
   /**
    * Saved workflows. Writes announce themselves because the settings page and the
@@ -501,7 +504,7 @@ async function refreshFeeds(): Promise<{ feeds: number; added: number; updated: 
       void store.update({ calendar: { ...current.calendar, externalCalendars: feeds } })
     }
   })
-  if (result.added || result.updated) { announceCalendar(); calendarScheduler?.check() }
+  if (result.added || result.updated) { announceCalendar(); if (!gameMode.snapshot().active) calendarScheduler?.check() }
   return result
 }
 
@@ -523,6 +526,7 @@ const notes = new NotesStore({
   localAsr: {
     enabled: () => store.get().localAsr.enabled,
     prepare: async () => {
+      if (gameMode.snapshot().active) throw new Error(mt('游戏模式已暂停语音功能'))
       if (localAsr.available()) return
       const status = await localAsr.activate()
       if (status.phase !== 'ready') throw new Error(status.message)
@@ -641,12 +645,92 @@ const uia = new UiaHost(log)
  * their own schedule, and each of them repaints the same overlay.
  */
 let chromeDimmed = false
+let gameResourceTimer: ReturnType<typeof setInterval> | null = null
+let gamePreparation: { id: number; window: BrowserWindow; finish: (ok: boolean) => void } | null = null
+let gamePreparationId = 0
+let reclaimingGameResources = false
+const gameMode = new GameMode({ observe: observeGame, alive: gameProcessAlive,
+  changed: status => applyGameMode(status), log: message => log(message) })
+
+async function reclaimGameResources(): Promise<void> {
+  if (!gameMode.snapshot().active || reclaimingGameResources) return
+  reclaimingGameResources = true
+  try {
+    if (!notesRecording && !localAsr.inUse) localAsr.reclaim()
+    const win = settingsWindow
+    if (win && !win.isDestroyed()) {
+      // An explicit tray open is usable during game mode; do not close a focused editor.
+      if (win.isFocused()) return
+      const ready = await new Promise<boolean>(resolve => {
+        const id = ++gamePreparationId
+        const timer = setTimeout(() => finish(false), 10_000)
+        const finish = (ok: boolean): void => {
+          clearTimeout(timer)
+          if (gamePreparation?.id === id) gamePreparation = null
+          resolve(ok)
+        }
+        gamePreparation = { id, window: win, finish }
+        win.webContents.send('app:gameMode-prepare', id)
+      })
+      if (!gameMode.snapshot().active || !ready || win.isDestroyed() || win.isFocused()) return
+      win.destroy()
+    }
+    if (!gameMode.snapshot().active) return
+    localAsr.suspend()
+  } finally { reclaimingGameResources = false }
+}
+
+function applyGameMode(status: GameModeStatus): void {
+  log(`[game-mode] ${status.active ? 'entered' : 'left'} source=${status.source} game=${status.game}`)
+  if (status.active) {
+    hotkeys?.stop()
+    refreshWakeWord()
+    cancelAssistant()
+    selectionEditor?.cancel()
+    pipeline?.cancel('game-mode')
+    speech?.stop()
+    screenshotTool.setGameMode(true)
+    uia.stop()
+    hideCard()
+    if (cardWindow && !cardWindow.isDestroyed()) cardWindow.destroy()
+    noteAudio.dispose()
+    if (barWindow && !barWindow.isDestroyed()) barWindow.destroy()
+    reminders?.suspend()
+    calendarScheduler?.stop()
+    briefing?.stop()
+    sync?.stop()
+    void reclaimGameResources().catch(error => log(`[game-mode] reclaim failed: ${String(error)}`))
+    if (!gameResourceTimer) {
+      gameResourceTimer = setInterval(() => { void reclaimGameResources().catch(error => log(`[game-mode] reclaim failed: ${String(error)}`)) }, 5000)
+      gameResourceTimer.unref?.()
+    }
+  } else {
+    gamePreparation?.finish(false)
+    if (gameResourceTimer) clearInterval(gameResourceTimer)
+    gameResourceTimer = null
+    if (!quitting) {
+      ensureBarWindow()
+      uia.start()
+      hotkeys?.start(store.get())
+      hotkeys?.setSuspended(screenshotTool.isOpen)
+      screenshotTool.setGameMode(false)
+      refreshWakeWord()
+      if (!wakeSuspended && !wakeLocked) reminders?.resume()
+      calendarScheduler?.start()
+      briefing?.start()
+      sync?.reconfigure()
+    }
+  }
+  tray?.refresh()
+}
+
 let notesRecording = false
 let wakeSuspended = false
 let wakeLocked = false
 const wakeWord = new WakeWordHost({
   wake: () => {
-    if (quitting || wakeSuspended || wakeLocked || pipeline?.isBusy || notesRecording || assistant.busy || screenshotTool.isOpen || selectionEditor?.isBusy) return
+    gameMode.poll()
+    if (gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || pipeline?.isBusy || notesRecording || assistant.busy || screenshotTool.isOpen || selectionEditor?.isBusy) return
     // Listening always wins over speaking: the microphone would otherwise record
     // the assistant's own voice, and asking something new means the old answer can
     // stop being read out.
@@ -660,7 +744,7 @@ const wakeWord = new WakeWordHost({
   }
 })
 function refreshWakeWord(screenshotActive = screenshotTool.isOpen, retry = false): void {
-  wakeWord.update(store.get().wakeWord, quitting || wakeSuspended || wakeLocked || screenshotActive || notesRecording || Boolean(pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy), retry)
+  wakeWord.update(store.get().wakeWord, gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || screenshotActive || notesRecording || Boolean(pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy), retry)
 }
 
 function refreshHotkeyActivity(): void {
@@ -759,6 +843,7 @@ async function appendFeedback(input: {
  * (REQ-01).
  */
 function handleBarAction(id: BarActionId): void {
+  if (gameMode.snapshot().active) return
   switch (id) {
     case 'undo-reminder':
       reminders?.undo()
@@ -845,7 +930,7 @@ function navigateHub(page: import('./tools/personal').HubPage, noteId?: string):
 function cancelAssistant(): void { assistant.cancel(); assistantCardActive = false }
 
 function openAsk(): boolean {
-  if (screenshotTool.isOpen || notesRecording || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy) return false
+  if (gameMode.snapshot().active || screenshotTool.isOpen || notesRecording || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy) return false
   assistantTarget = foregroundWindow()
   showAnswerCard({ question: '', answer: '', assistant: true })
   const win = cardWindow!
@@ -962,6 +1047,7 @@ let lastAnswerContext: PromptContext | undefined
 let selectionEditor: SelectionEditor | null = null
 
 function showAnswerCard(payload: AnswerCardPayload, context?: PromptContext): void {
+  if (gameMode.snapshot().active) return
   lastAnswerContext = context
   clearCardRetire()
   const win = ensureCardWindow()
@@ -995,6 +1081,7 @@ function showAnswerCard(payload: AnswerCardPayload, context?: PromptContext): vo
  * overwritten after they clicked that button, and `ask` is a follow-up turn.
  */
 async function handleCardAction(action: CardAction): Promise<void> {
+  if (gameMode.snapshot().active) return
   if (action.id === 'stop') {
     const partial = lastAnswer
     if (partial?.assistant && partial.streaming) {
@@ -1140,10 +1227,11 @@ function registerIpc(): void {
     const next = await store.update(patch)
     if (!next.tts.enabled) speech?.stop()
     setMainLanguage(next.uiLanguage)
+    gameMode.configure(next.gameMode)
     refreshWakeWord()
     tray?.refresh()
     reminders?.settingsChanged()
-    if (patch.briefing) briefing?.start()
+    if (patch.briefing && !gameMode.snapshot().active) briefing?.start()
     hotkeys?.apply(next)
     if (next.launchAtStartup !== previous.launchAtStartup) {
       app.setLoginItemSettings({ name: 'typeless-rebuild', openAtLogin: next.launchAtStartup, args: ['--background'] })
@@ -1174,7 +1262,7 @@ function registerIpc(): void {
     if (next.syncEnabled !== previous.syncEnabled ||
         next.syncIntervalSeconds !== previous.syncIntervalSeconds ||
         next.syncServerUrl !== previous.syncServerUrl) {
-      sync?.reconfigure()
+      if (!gameMode.snapshot().active) sync?.reconfigure()
     }
     return next
   })
@@ -1467,15 +1555,22 @@ function registerIpc(): void {
     refreshHotkeyActivity()
   })
   handle('pipeline:retry', async (_event, id?: string) =>
-    pipeline ? pipeline.retry(id) : { ok: false, message: mt('尚未就绪') }
+    pipeline && !gameMode.snapshot().active ? pipeline.retry(id) : { ok: false, message: mt('尚未就绪') }
   )
 
   handle('app:openDataFolder', async () => {
     await shell.openPath(app.getPath('userData'))
   })
   const resources = (): ReturnType<typeof collectResources> =>
-    collectResources(app.getAppMetrics(), localAsr.memoryState())
+    ({ ...collectResources(app.getAppMetrics(), localAsr.memoryState()), gameMode: gameMode.snapshot() })
   handle('app:resources', resources)
+  handle('app:gameMode', (_event, active: unknown) => {
+    if (typeof active !== 'boolean') throw new Error('Invalid game mode')
+    return gameMode.setManual(active)
+  })
+  subscribe('app:gameMode-prepared', (event, id: number, ok: boolean) => {
+    if (gamePreparation?.id === id && event.sender === gamePreparation.window.webContents) gamePreparation.finish(ok === true)
+  })
   handle('app:releaseResources', async () => {
     if (pipeline?.isBusy || localAsr.inUse) throw new Error(mt('录音或识别进行中，请结束后再释放资源'))
     localAsr.reclaim()
@@ -1722,7 +1817,8 @@ function wireHotkeys(): void {
         settingsWindow?.webContents.send('settings:shortcut-key', { token: event.token, down: event.down })
         return
       }
-      if (!pipeline) return
+      gameMode.poll()
+      if (!pipeline || gameMode.snapshot().active) return
       const detail = 'mode' in event ? ` ${event.mode}` : ''
       const at = 'at' in event ? ` @${event.at}` : ''
       log(`[hotkey] ${event.type}${detail}${at}`)
@@ -1959,7 +2055,7 @@ async function bootstrap(): Promise<void> {
    * the schedulers too: a briefing is due whether or not a window is open.
    */
   calendar = new CalendarStore(join(app.getPath('userData'), 'calendar.json'))
-  speech = new SpeechService({ settings: () => store.get(),
+  speech = new SpeechService({ settings: () => gameMode.snapshot().active ? { tts: { ...store.get().tts, enabled: false } } : store.get(),
     run: createWindowsSpeechRunner(app.isPackaged
       ? join(process.resourcesPath, 'speech.ps1')
       : join(app.getAppPath(), 'resources/speech.ps1')),
@@ -1998,8 +2094,8 @@ async function bootstrap(): Promise<void> {
     cancelAssistant()
     pipeline?.cancel('lock')
   })
-  powerMonitor.on('resume', () => { wakeSuspended = false; refreshWakeWord(); calendarScheduler?.check(); briefing?.check(); if (reminders?.resume()) ensureSettingsWindow() })
-  powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); reminders?.refresh() })
+  powerMonitor.on('resume', () => { if (gameMode.snapshot().active) { wakeSuspended = false; refreshWakeWord(); return }; wakeSuspended = false; refreshWakeWord(); calendarScheduler?.check(); briefing?.check(); if (reminders?.resume()) ensureSettingsWindow() })
+  powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); if (!gameMode.snapshot().active) reminders?.resume() })
 
   registerIpc()
   handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
@@ -2033,6 +2129,7 @@ async function bootstrap(): Promise<void> {
   })
   registerLocalAsrIpc({
     host: localAsr,
+    blocked: () => gameMode.snapshot().active,
     patch: async (patch) => {
       const next = await store.update({ localAsr: { ...store.get().localAsr, ...patch } })
       // A different model or language invalidates whatever is in memory; the page
@@ -2106,17 +2203,19 @@ async function bootstrap(): Promise<void> {
   })
   // Background check, well after startup work: a packaged build with a feed
   // configured only. Development builds log "skipped" instead of failing.
-  setTimeout(() => void updater?.check(), 8000)
+  setTimeout(() => { if (!gameMode.snapshot().active) void updater?.check() }, 8000)
 
   tray = createTray({
     openMain: () => { ensureSettingsWindow() },
     openAsk: () => { openAsk() },
     openNotes: () => navigateHub('notes'),
     openReminders: () => navigateHub('reminders'),
-    status: () => notesRecording || pipeline?.isRecording ? mt('录音中') : pipeline?.isBusy || assistant.busy ? mt('处理中') : wakeWord.snapshot().phase === 'listening' ? mt('唤醒待命') : store.get().hotkeys.enabled ? mt('待命') : mt('快捷键已暂停'),
+    status: () => gameMode.snapshot().active ? mt('游戏模式') : notesRecording || pipeline?.isRecording ? mt('录音中') : pipeline?.isBusy || assistant.busy ? mt('处理中') : wakeWord.snapshot().phase === 'listening' ? mt('唤醒待命') : store.get().hotkeys.enabled ? mt('待命') : mt('快捷键已暂停'),
     pasteLast: () => void pipeline?.pasteLast(),
     openSettings: () => navigateHub('settings'),
     hotkeysEnabled: () => store.get().hotkeys.enabled,
+    manualGameMode: () => gameMode.snapshot().source === 'manual',
+    toggleGameMode: () => { gameMode.setManual(gameMode.snapshot().source !== 'manual') },
     resetKeyboard: () => {
       // Also drop the hook's own view of what is held: after a reset the app must
       // not still believe a chord key is down.
@@ -2151,6 +2250,7 @@ async function bootstrap(): Promise<void> {
       app.quit()
     }
   })
+  gameMode.configure(store.get().gameMode)
 
   log(`[app] ready, settings at ${store.file}`)
 
@@ -2381,6 +2481,9 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     quitting = true
+    gameMode.stop()
+    if (gameResourceTimer) clearInterval(gameResourceTimer)
+    gamePreparation?.finish(false)
     wakeWord.stop()
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()

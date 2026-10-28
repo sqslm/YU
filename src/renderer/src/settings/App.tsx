@@ -1,3 +1,4 @@
+import { prepareForGameMode } from './gameModePreparation'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Box,
@@ -50,6 +51,7 @@ const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
 
 export function App(): JSX.Element {
   const { settings, patch, saving, error, flush } = useSettings()
+  useEffect(() => window.api.app.onPrepareForGameMode(prepareForGameMode), [])
   const [page, setPage] = useState<Page>('home')
   const [reminderView, setReminderView] = useState<ReminderView | null>(null)
   const [noteToOpen, setNoteToOpen] = useState<{ id: string } | undefined>()

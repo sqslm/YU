@@ -1,3 +1,4 @@
+import { registerGameModePreparation } from '../gameModePreparation'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Alert, Autocomplete, Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Link, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import AddRounded from '@mui/icons-material/AddRounded'
@@ -153,6 +154,7 @@ export function ProviderProfiles({ kind, settings, patch, saving, saveError, loc
   const [selectedId, setSelectedId] = useState<string | null>(kind === 'asr' && settings.localAsr.enabled ? 'local' : list[0]?.id ?? null)
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState<ProviderProfile | null>(null)
+  useEffect(() => registerGameModePreparation(async () => draft === null), [draft])
   const [drag, setDrag] = useState<{ id: string; over: string; after: boolean } | null>(null)
   const selected = selectedId === 'local' && localModel ? undefined : list.find(profile => profile.id === selectedId) ?? list[0]
   const activeId = selectedId === 'local' && localModel ? 'local' : selected?.id

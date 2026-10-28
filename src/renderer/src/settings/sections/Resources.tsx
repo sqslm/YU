@@ -1,5 +1,6 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
-import { Alert, Box, Button, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { normalizeGameProcesses } from '@shared/game-mode'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { Alert, Box, Button, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import type { ResourceUsage, Settings } from '@shared/types'
 import { controlSx, IconCpu, SettingsGroup, SettingsHint, SettingsRow } from './General'
 import i18n from '../../i18n'
@@ -22,6 +23,9 @@ export function ResourcesSection({ settings, patch }: {
   const [page, setPage] = useState(1)
   const [usage, setUsage] = useState<ResourceUsage | null>(null)
   const [busy, setBusy] = useState(false)
+  const editingGames = useRef(false)
+  const [gamesDraft, setGamesDraft] = useState(settings.gameMode.processes.join('\n'))
+  useEffect(() => { if (!editingGames.current) setGamesDraft(settings.gameMode.processes.join('\n')) }, [settings.gameMode.processes])
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null)
   const refresh = useCallback(async () => {
     try { setUsage(await window.api.app.resources()) }
@@ -63,6 +67,31 @@ export function ResourcesSection({ settings, patch }: {
 
   return (
     <Stack spacing={3}>
+      <SettingsGroup title={i18n.t('游戏模式')} hint={i18n.t('游戏退出后自动恢复，Alt+Tab 切出仍保持暂停。')}>
+        <SettingsRow label={i18n.t('自动检测游戏')} description={i18n.t('识别常见游戏、游戏窗口及独占 3D 全屏；普通浏览器全屏不会触发。')}>
+          <Switch size="small" checked={settings.gameMode.enabled} inputProps={{ 'aria-label': i18n.t('自动检测游戏') }}
+            onChange={event => patch({ gameMode: { ...settings.gameMode, enabled: event.target.checked } })} />
+        </SettingsRow>
+        <SettingsRow label={i18n.t('当前状态')}>
+          <Typography data-game-mode-status sx={{ fontSize: 12.5, color: usage?.gameMode?.active ? 'primary.main' : 'text.secondary' }}>
+            {i18n.t(usage?.gameMode?.active ? usage.gameMode.source === 'manual' ? '手动游戏模式' : '检测到游戏，已暂停' : '正常运行')}
+            {usage?.gameMode?.game ? ` · ${usage.gameMode.game}` : ''}
+          </Typography>
+        </SettingsRow>
+        <Box sx={{ px: 2, py: 1.5 }}>
+          <TextField fullWidth size="small" multiline minRows={2} label={i18n.t('额外游戏进程')} value={gamesDraft}
+            placeholder={'mygame.exe\ngame-win64-shipping.exe'}
+            onFocus={() => { editingGames.current = true }}
+            onBlur={() => { editingGames.current = false; setGamesDraft(settings.gameMode.processes.join('\n')) }}
+            onChange={event => { const value = event.target.value; setGamesDraft(value); patch({ gameMode: { ...settings.gameMode, processes: normalizeGameProcesses(value.split(/[\n,;，；]+/)) } }) }}
+            helperText={i18n.t('一行一个进程名或 exe 完整路径。未识别的窗口化游戏可加入此列表。')} />
+          <Button data-game-mode-manual size="small" sx={{ mt: 1.5 }} disabled={busy} onClick={() => {
+            setBusy(true)
+            void window.api.app.setGameMode(usage?.gameMode?.source !== 'manual').then(() => refresh(), error => setNotice({ error: true, text: String(error) })).finally(() => setBusy(false))
+          }}>{i18n.t(usage?.gameMode?.source === 'manual' ? '结束手动模式' : '手动保持游戏模式')}</Button>
+        </Box>
+        <SettingsHint>{i18n.t('暂停语音唤醒与所有语音快捷键，关闭录音条，释放本地模型和空闲界面，暂停同步与提醒调度。未保存成功的草稿和截图会保留；退出后恢复原设置。')}</SettingsHint>
+      </SettingsGroup>
       <SettingsGroup icon={<IconCpu />} title={i18n.t('资源占用')}>
         <SettingsRow label={i18n.t('当前驻留内存')} description={privateAvailable
           ? i18n.t('各进程实际占用的私有物理内存，不重复计算共享页。')

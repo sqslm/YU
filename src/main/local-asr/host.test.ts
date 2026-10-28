@@ -46,6 +46,16 @@ describe('local model memory lifecycle', () => {
   })
   afterEach(() => { host.release(); vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks() })
 
+  it('unloads for game mode without forgetting the enabled local model', async () => {
+    await host.activate()
+    host.suspend()
+    await vi.advanceTimersByTimeAsync(60)
+    expect(workers[0].kill).toHaveBeenCalledOnce()
+    expect(host.memoryState()).toEqual({ loaded: false, autoResume: true })
+    expect(await host.transcribeWav(new Uint8Array([1]))).toBe('hello')
+    expect(workers).toHaveLength(2)
+  })
+
   it('reclaims idle weights and loads them again for the next dictation', async () => {
     expect((await host.activate()).phase).toBe('ready')
     await vi.advanceTimersByTimeAsync(60_050)

@@ -1,3 +1,4 @@
+import type { GameModeSettings, GameModeStatus } from './game-mode'
 import type { TtsSettings } from './speech'
 export type Mode = 'dictation' | 'translate' | 'ask'
 export type VoiceCommandMode = Mode | 'reminder' | 'notes'
@@ -408,6 +409,7 @@ export interface LocalAsrSettings {
 }
 
 export interface ResourceUsage {
+  gameMode?: GameModeStatus
   measuredAt: number
   /** Private physical RAM, excluding shared pages; null when unavailable. */
   privateResidentBytes: number | null
@@ -430,6 +432,7 @@ export interface BarWindowLayout {
 }
 
 export interface Settings {
+  gameMode: GameModeSettings
   briefingDelivery: import('./briefingDelivery').BriefingDeliverySettings
   assistantAccess: import('./assistantAccess').AssistantAccessSettings
   version: number

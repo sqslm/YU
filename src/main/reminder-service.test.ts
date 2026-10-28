@@ -27,6 +27,19 @@ function harness() {
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true }); vi.useRealTimers(); vi.clearAllMocks(); mock.notices.length = 0; mock.windows.length = 0; mock.handlers.clear() })
 const draft = (overrides: Partial<ReminderDraft> = {}): ReminderDraft => ({ title: 'Clean up', intent: 'create_reminder', level: 'normal', time_expression: 'in 20 minutes', dueAt: Date.now() + 1200000, rule: null, recurrence: null, needs_confirmation: false, ...overrides })
 describe('shared reminder delivery and entry points', () => {
+  it('does not restart notifications when reminders are edited during game-mode suspension', async () => {
+    vi.useFakeTimers()
+    const { service } = harness()
+    try {
+      service.suspend()
+      service.save({ title: 'After game', dueAt: Date.now() + 1000, level: 'normal', source: 'manual', recurrence: null })
+      service.settingsChanged()
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(mock.notices).toHaveLength(0)
+      expect(service.resume()).toBe(true)
+      expect(service.store.missed()).toHaveLength(1)
+    } finally { service.stop() }
+  })
   it('refuses an unsupported requested zone before extraction without mistaking task content for its time', async () => {
     const { service } = harness()
     try {

@@ -1,3 +1,4 @@
+import { DEFAULT_GAME_MODE, normalizeGameProcesses } from './game-mode'
 import type {
   AppRule,
   PromptKind,
@@ -62,6 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   briefingDelivery: structuredClone(DEFAULT_BRIEFING_DELIVERY),
   assistantAccess: structuredClone(DEFAULT_ASSISTANT_ACCESS),
   voiceCommands: structuredClone(DEFAULT_VOICE_COMMANDS),
+  gameMode: DEFAULT_GAME_MODE,
   wakeWord: { enabled: false, phrase: '你好语助手', deviceId: '', confidence: 0.8 },
   reminders: { notifications: true, strongSound: true, snoozeMinutes: 5 },
   asr: {
@@ -198,7 +200,7 @@ export function applySettingsPatch(current: Settings, patch: Partial<Settings>):
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings>
 export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Settings>): Partial<Settings> {
   const next = { ...current, ...patch }
-  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord', 'calendar', 'briefing', 'tts'] as const) {
+  for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord', 'gameMode', 'calendar', 'briefing', 'tts'] as const) {
     if (patch[key]) next[key] = { ...current[key], ...patch[key] } as never
   }
   if (patch.hotkeys?.bindings) {
@@ -240,6 +242,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   // A hand-edited group comes back through the same normalizers the settings UI
   // uses: a typo must land on the documented default, never on a schedule that
   // silently never fires (or a voice at 400% volume).
+  merged.gameMode = { enabled: input.gameMode?.enabled !== false, processes: normalizeGameProcesses(input.gameMode?.processes) }
   merged.briefing = normalizeBriefingSettings(merged.briefing)
   merged.tts = normalizeTtsSettings(merged.tts)
   merged.calendar = { ...merged.calendar,

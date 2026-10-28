@@ -1,3 +1,4 @@
+import { registerGameModePreparation } from './gameModePreparation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Settings } from '@shared/types'
 import { applySettingsPatch } from '@shared/defaults'
@@ -53,6 +54,11 @@ export function useSettings(): UseSettingsResult {
       if (savedOk && Object.keys(pending.current).length > 0) void flushRef.current()
     }
   }, [])
+
+  useEffect(() => registerGameModePreparation(async () => {
+    await flush()
+    return writing.current === null && Object.keys(pending.current).length === 0
+  }), [flush])
 
   // The unmount cleanup runs after the hook body, so it reaches the latest flush
   // through a ref instead of capturing the first render's closure.

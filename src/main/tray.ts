@@ -12,6 +12,8 @@ export interface TrayHandlers {
   openSettings: () => void
   toggleHotkeys: () => boolean
   hotkeysEnabled: () => boolean
+  manualGameMode?: () => boolean
+  toggleGameMode?: () => void
   /** Resolves to the sentence shown to the user about update state. */
   checkUpdate?: () => Promise<string>
   /**
@@ -35,7 +37,7 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
 
   let menuKey = ''
   const rebuild = (): void => {
-    const key = `${handlers.status()}|${handlers.hotkeysEnabled()}|${mt('设置…')}`
+    const key = `${handlers.status()}|${handlers.hotkeysEnabled()}|${handlers.manualGameMode?.()}|${mt('设置…')}`
     if (key === menuKey) return
     menuKey = key
     tray.setToolTip(`${mt('语')} — ${handlers.status()}`)
@@ -57,6 +59,10 @@ export function createTray(handlers: TrayHandlers): Tray & { refresh: () => void
             handlers.toggleHotkeys()
             rebuild()
           }
+        },
+        {
+          label: mt('手动保持游戏模式'), type: 'checkbox', checked: handlers.manualGameMode?.() ?? false,
+          click: () => { handlers.toggleGameMode?.(); rebuild() }
         },
         {
           label: mt('粘贴上一条听写'),

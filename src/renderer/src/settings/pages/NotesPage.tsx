@@ -1,3 +1,4 @@
+import { registerGameModePreparation } from '../gameModePreparation'
 import { PagedList } from '../Pagination'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -616,6 +617,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     recTimerRef.current = setInterval(() => setRecordedMs(Date.now() - recStartRef.current), 200)
   }
 
+  const recordSaveFailedRef = useRef(false)
   const stopRecording = async (cancel = false): Promise<void> => {
     if (!micRef.current) return
     const mic = micRef.current
@@ -626,6 +628,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       clearInterval(recTimerRef.current)
       recTimerRef.current = null
     }
+    recordSaveFailedRef.current = false
     setRecording(false)
     setStarting(false)
     window.api.notes.recording(false)
@@ -670,9 +673,19 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       setSelectedId(created.id)
       void reload()
     } catch (err) {
+      recordSaveFailedRef.current = true
       setMicMessage(messageOf(err))
     }
   }
+
+  const prepareGameRef = useRef<() => Promise<boolean>>(async () => false)
+  prepareGameRef.current = async () => {
+    if (starting || attachmentJobRef.current) return false
+    await stopRecording()
+    await flushNow()
+    return !recordSaveFailedRef.current && !pendingRef.current && !saveInFlightRef.current
+  }
+  useEffect(() => registerGameModePreparation(() => prepareGameRef.current()), [])
 
   // Leaving the page must not hold the device open.
   useEffect(() => {
