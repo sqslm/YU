@@ -432,6 +432,7 @@ export interface BarWindowLayout {
 }
 
 export interface Settings {
+  speechEnhancement: boolean
   gameMode: GameModeSettings
   briefingDelivery: import('./briefingDelivery').BriefingDeliverySettings
   assistantAccess: import('./assistantAccess').AssistantAccessSettings

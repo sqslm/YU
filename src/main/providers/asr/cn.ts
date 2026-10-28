@@ -111,7 +111,7 @@ async function runAliyun(ctx: AsrAdapterContext, input: AsrAdapterInput): Promis
     const res = await request(ctx, `${base}/api/v1/services/aigc/multimodal-generation/generation`, {
       method: 'POST',
       headers: { ...bearer(ctx), 'content-type': 'application/json', ...(field(ctx, 'workspace') ? { 'X-DashScope-WorkSpace': field(ctx, 'workspace') } : {}) },
-      body: JSON.stringify({ model: input.model, input: { messages: [{ role: 'user', content: [{ audio }] }] }, parameters: { result_format: 'message', asr_options: { enable_itn: false, ...(language ? { language } : {}) } } })
+      body: JSON.stringify({ model: input.model, input: { messages: [...(input.entityContext ? [{ role: 'system', content: [{ text: input.entityContext }] }] : []), { role: 'user', content: [{ audio }] }] }, parameters: { result_format: 'message', asr_options: { enable_itn: false, ...(language ? { language } : {}) } } })
     }, 60_000)
     failUnless(httpOk(res.status), res.status, res.body, 'Qwen ASR Flash')
     return pickString(res.json, 'output', 'choices', 0, 'message', 'content', 0, 'text').trim()

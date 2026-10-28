@@ -1,6 +1,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import type { ProviderSettings } from '@shared/types'
+import { asrEnhancementCapability } from '@shared/asr-enhancement'
 import {
   SAMPLE_RATE,
   decodeWavPcm16,
@@ -22,6 +23,8 @@ export interface AsrRequest {
   model?: string
   language?: string
   prompt?: string
+  /** Bounded entity context; sent only through a verified protocol capability. */
+  entityContext?: string
   signal?: AbortSignal
   /**
    * Sink for the `[perf] asr` line. Optional so every existing caller keeps
@@ -524,6 +527,18 @@ export async function transcribe(
   cfg: ProviderSettings,
   req: AsrRequest
 ): Promise<{ text: string; model: string }> {
+  if (req.entityContext && asrEnhancementCapability({ ...cfg, model: req.model || cfg.model }) !== 'none') {
+    try { return await transcribeRequest(cfg, req) }
+    catch (error) {
+      if (req.signal?.aborted || !/HTTP[ ):]*(?:400|422)\b/u.test(error instanceof Error ? error.message : String(error))) throw error
+      ;(req.log ?? defaultLog)('[asr] enhanced request rejected; retrying ordinary transcription')
+      return transcribeRequest(cfg, { ...req, entityContext: undefined })
+    }
+  }
+  return transcribeRequest(cfg, req)
+}
+
+async function transcribeRequest(cfg: ProviderSettings, req: AsrRequest): Promise<{ text: string; model: string }> {
   if (!cfg.baseUrl) throw new ProviderError('ASR base URL is empty')
   const model = req.model || cfg.model
 
@@ -542,7 +557,8 @@ export async function transcribe(
         model,
         language: req.language,
         signal: req.signal,
-        log
+        log,
+        entityContext: asrEnhancementCapability({ ...cfg, model }) === 'context' ? req.entityContext : undefined
       })
       log(`[perf] asr ${Date.now() - started}ms`)
       return { text: text.trim(), model: model || adapter.id }
@@ -573,7 +589,8 @@ export async function transcribe(
     // outright (StepFun does), and every transcription model's default is already
     // greedy decoding, so sending it buys nothing and costs compatibility.
     if (req.language) fields.push(['language', req.language])
-    if (req.prompt) fields.push(['prompt', req.prompt])
+    const entityContext = asrEnhancementCapability({ ...cfg, model }) === 'prompt' ? req.entityContext : undefined
+    if (req.prompt || entityContext) fields.push(['prompt', [req.prompt, entityContext].filter(Boolean).join('\n')])
 
     const headers: Record<string, string> = { ...parseHeaderLines(cfg.extraHeaders) }
     for (const name of Object.keys(headers)) {

@@ -261,7 +261,7 @@ export function PromptsSection({
               <MenuItem value="">{i18n.t(i18n.t('跟随该类型的当前卡片'))}</MenuItem>
               {mainCards.map((card) => (
                 <MenuItem key={card.id} value={card.id}>
-                  {card.builtin ? i18n.t('{{name}}（内置）', { name: card.name }) : card.name}
+                  {card.name}
                 </MenuItem>
               ))}
             </TextField>

@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type { TaskContext, TaskState, ToolState } from '@shared/task'
 import { classifyError, type ClassifiedError } from './errors'
 
-type Stage = 'capture' | 'asr' | 'routing' | 'llm' | 'tool' | 'total'
+type Stage = 'capture' | 'asr' | 'routing' | 'llm' | 'tool' | 'total' | 'hotwords' | 'entity-candidates'
 type Sample = { stage: Stage; ms: number; state?: TaskState | ToolState; reason?: ClassifiedError['kind'] }
 const scope = new AsyncLocalStorage<{ task: TaskContext; log: (line: string) => void }>()
 const samples: Sample[] = []
@@ -38,10 +38,10 @@ export function finishTaskTrace(task: TaskContext, log: (line: string) => void):
 
 /** Finite in-memory samples; no task input, IDs, URLs, resource bytes or secrets. */
 export function taskDiagnosticSummary(): object {
-  const stages = Object.fromEntries((['capture', 'asr', 'routing', 'llm', 'tool', 'total'] as Stage[]).map(stage => {
+  const stages = Object.fromEntries((['capture', 'hotwords', 'asr', 'routing', 'entity-candidates', 'llm', 'tool', 'total'] as Stage[]).map(stage => {
     const values = samples.filter(row => row.stage === stage).map(row => row.ms).sort((a, b) => a - b)
     const percentile = (p: number): number | null => values.length ? Math.round(values[Math.ceil(values.length * p) - 1] * 100) / 100 : null
-    return [stage, { count: values.length, p50: percentile(.5), p95: percentile(.95) }]
+    return [stage, { count: values.length, averageMs: values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100) / 100 : null, p50: percentile(.5), p95: percentile(.95) }]
   }))
   const counts = (stage: Stage): Record<string, number> => {
     const result: Record<string, number> = {}

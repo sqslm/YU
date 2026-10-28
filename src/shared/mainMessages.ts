@@ -7,6 +7,11 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "模型修改了受保护的版本、标识符或路径，未插入结果，请使用原始转写重试": "The model changed a protected version, identifier or path. Nothing was inserted; retry using the original transcript.",
+  "原始转写已保留在历史记录中": "The original transcript was kept in history.",
+  "原始转写保存失败，请检查历史存储": "Could not save the original transcript. Check history storage.",
+  "请从设置管理专有名词": "Manage proper names from Settings",
+  "词库文件不能超过 5 MB": "Dictionary files must be no larger than 5 MB",
   "二维码内容不是网页链接": "The QR content is not a web link",
   "请先录制三次当前唤醒词": "Record the current wake phrase three times first",
   "每段唤醒录音需要 0.35–8 秒": "Each wake recording must last 0.35–8 seconds",

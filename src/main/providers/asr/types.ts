@@ -40,6 +40,7 @@ export interface AsrAdapterContext {
 }
 
 export interface AsrAdapterInput {
+  entityContext?: string
   /** 16 kHz mono PCM16 WAV, RIFF header included. */
   wav: Uint8Array
   /** Duration of that audio, measured from the take. */

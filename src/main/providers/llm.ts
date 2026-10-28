@@ -10,6 +10,7 @@ export interface ChatMessage {
 }
 
 export interface ChatRequest {
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void
   messages: ChatMessage[]
   temperature?: number
   maxTokens?: number
@@ -167,7 +168,7 @@ async function completeRequest(
   // A 200 that is not JSON is what a captive portal or a mis-set base URL returns.
   // `JSON.parse` threw a bare SyntaxError, which no caller could classify and
   // which surfaced as "unexpected token <".
-  let parsed: { choices?: Array<{ message?: { content?: string } }> }
+  let parsed: { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } }
   try {
     parsed = JSON.parse(text) as typeof parsed
   } catch {
@@ -175,6 +176,7 @@ async function completeRequest(
   }
   const content = parsed.choices?.[0]?.message?.content
   if (typeof content !== 'string') throw new ProviderError('LLM response has no content')
+  if (Number.isFinite(parsed.usage?.prompt_tokens) && Number.isFinite(parsed.usage?.completion_tokens)) req.onUsage?.({ inputTokens: parsed.usage!.prompt_tokens!, outputTokens: parsed.usage!.completion_tokens! })
   return content.trim()
 }
 

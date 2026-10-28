@@ -56,6 +56,13 @@ export interface UpdateState {
 }
 
 export interface TypelessApi {
+  entities: {
+    list(): Promise<import('./entities').EntityTerm[]>
+    save(input: import('./entities').EntityInput, id?: string): Promise<void>
+    remove(id: string): Promise<void>
+    import(): Promise<number | null>
+    export(): Promise<boolean>
+  }
   checkAsr(): Promise<void>
   wakeWord: {
     setup(mode: 'recording' | 'testing' | null): Promise<void>

@@ -3,6 +3,7 @@ import { Box, Button, Dialog, IconButton, Tab, Tabs, Typography } from '@mui/mat
 import type { Settings } from '@shared/types'
 import { GeneralSection, SpeechSection, InputSection, StorageSection, ReminderSettingsSection, AssistantSettingsSection } from './sections/General'
 import { WakeWordSection } from './sections/WakeWordSection'
+import { EntityEnhancement } from './sections/EntityEnhancement'
 import { VoiceCommandsSection } from './sections/VoiceCommands'
 import { ShortcutsSection } from './sections/Shortcuts'
 import { ProvidersSection } from './sections/Providers'
@@ -232,7 +233,7 @@ export function SettingsDialog({
         >
           {section === 'account' && <AccountSection settings={settings} patch={patch} />}
           {section === 'general' && <GeneralSection settings={settings} patch={patch} />}
-          {section === 'speech' && <SpeechSection settings={settings} patch={patch} />}
+          {section === 'speech' && <><SpeechSection settings={settings} patch={patch} /><EntityEnhancement settings={settings} patch={patch} /></>}
           {section === 'wake' && <WakeWordSection settings={settings} patch={patch} saving={saving} />}
           {section === 'commands' && <VoiceCommandsSection settings={settings} patch={patch} />}
           {section === 'input' && <InputSection settings={settings} patch={patch} />}

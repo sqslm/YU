@@ -116,6 +116,13 @@ describe('spec table', () => {
 })
 
 describe('aliyun (DashScope async recording)', () => {
+  it('sends bounded context as the leading system text using the official Qwen toolkit shape', async () => {
+    const server = await listen((_seen, res) => json(res, { output: { choices: [{ message: { content: [{ text: 'Kubernetes' }] } }] } }))
+    try {
+      await spec('aliyun').run(context(server.baseUrl, {}, { apiKey: 'test' }), { ...input(wav().bytes, 'qwen3-asr-flash', 'zh'), entityContext: 'Kubernetes, Docker' })
+      expect(JSON.parse(server.seen[0].body.toString()).input.messages[0]).toEqual({ role: 'system', content: [{ text: 'Kubernetes, Docker' }] })
+    } finally { await server.close() }
+  })
   it('routes Qwen Flash to synchronous inline audio without an upload URL', async () => {
     const server = await listen((_seen, res) => json(res, { output: { choices: [{ message: { content: [{ text: '直接识别' }] } }] } }))
     try {

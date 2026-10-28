@@ -102,6 +102,7 @@ export async function runAsrAdapter(
   cfg: ProfileLike,
   wav: Uint8Array,
   options: {
+    entityContext?: string
     model: string
     language?: string
     signal?: AbortSignal
@@ -110,6 +111,7 @@ export async function runAsrAdapter(
 ): Promise<string> {
   const pcmBytes = Math.max(0, wav.length - 44)
   const input: AsrAdapterInput = {
+    entityContext: options.entityContext,
     wav,
     ms: Math.round(pcmBytes / 32),
     model: options.model || cfg.model,

@@ -17,6 +17,13 @@ ipcRenderer.on('card:data', (_event, payload: AnswerCardPayload) => { lastCard =
 ipcRenderer.on('card:hidden', () => { lastCard = null })
 
 const api: TypelessApi = {
+  entities: {
+    list: () => ipcRenderer.invoke('entities:list'),
+    save: (input, id) => ipcRenderer.invoke('entities:save', input, id),
+    remove: id => ipcRenderer.invoke('entities:remove', id),
+    import: () => ipcRenderer.invoke('entities:import'),
+    export: () => ipcRenderer.invoke('entities:export')
+  },
   checkAsr: () => ipcRenderer.invoke('asr:check'),
   wakeWord: {
     setup: mode => ipcRenderer.invoke('wake:setup', mode),

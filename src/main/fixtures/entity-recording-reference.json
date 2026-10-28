@@ -1,0 +1,19 @@
+{
+  "source": "用户于 2026-10-29 确认的测试录音专名；仅用于测试，不自动加入个人词库",
+  "expected": {
+    "录音 (2).m4a": ["嫁金钗"],
+    "录音 (3).m4a": ["嫁金钗", "闫桉"],
+    "录音 (4).m4a": [],
+    "录音 (5).m4a": ["高启强"],
+    "录音 (6).m4a": ["卿卿日常"],
+    "录音 (7).m4a": ["蒸蒸日上", "高叶"]
+  },
+  "terms": [
+    { "canonical": "嫁金钗", "type": "work", "aliases": [], "domain": "影视", "related": ["田曦薇", "闫桉"], "source": "用户确认的测试录音名称", "verified": true, "enabled": true },
+    { "canonical": "闫桉", "type": "person", "aliases": ["延安"], "domain": "影视", "related": ["嫁金钗"], "source": "用户确认的测试录音名称", "verified": true, "enabled": true },
+    { "canonical": "高启强", "type": "person", "aliases": ["张高启祥", "高启祥"], "domain": "影视", "related": ["狂飙"], "source": "用户确认的测试录音名称", "verified": true, "enabled": true },
+    { "canonical": "卿卿日常", "type": "work", "aliases": ["青青日常"], "domain": "影视", "related": ["田曦薇", "白敬亭"], "source": "用户确认的测试录音名称", "verified": true, "enabled": true },
+    { "canonical": "蒸蒸日上", "type": "work", "aliases": [], "domain": "影视", "related": ["高叶"], "source": "用户确认的测试录音名称，不以模型已知片名覆盖", "verified": true, "enabled": true },
+    { "canonical": "高叶", "type": "person", "aliases": ["高烨"], "domain": "影视", "related": ["蒸蒸日上"], "source": "用户确认的测试录音名称", "verified": true, "enabled": true }
+  ]
+}

@@ -125,3 +125,33 @@
 | 豆包 | 新版 X-Api-Key + X-Api-Resource-Id；V3 SSE；拼接 Base64 音频 | [字节跳动官方示例](https://github.com/bytedance/agentkit-samples/blob/main/skills/byted-text-to-speech/scripts/text_to_speech.py) |
 | ElevenLabs | xi-api-key；text-to-speech/voice_id；二进制 MP3 | [Create speech](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) |
 | Azure Speech | Ocp-Apim-Subscription-Key；SSML；二进制 MP3 | [REST TTS](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech) |
+
+
+## 专有名词增强检查（2026-10-29）
+
+- 最终转写：`pipeline.asrTranscript` 在录音结束后调用本地 sherpa 或 `providers/asr.ts`。通用分支上传 multipart 到 audio/transcriptions；阿里云 Qwen3-ASR-Flash 使用 DashScope multimodal-generation JSON；其他适配器各自构造协议。不能仅凭 model 字符串把所有服务视为支持热词。
+- 字幕：`LiveCaptions` 保留至多六秒音频，通过既有转写回调获取预览；不在每个 PCM 分片读取词库或调用 LLM。最终转写独立保存原始文本。
+- 场景：开始录音时冻结前台窗口与任务，`promptLibrary` 选择 ai/polish/translate/document/email；五类共享同一个 pipeline，而非五套词库。
+- 现有词典：Settings.replacements 与 suggestions 是直接替换/人工接受的提示，不能把实体别名自动变成替换规则。保留其既有行为，不自动读取私人历史建立实体。
+- 存储：复用现有 node:sqlite DatabaseSync，实体使用独立 entities.sqlite。检查发现“不保留历史”会删除 history.sqlite，所以不把词库表放进历史文件，避免清理历史误删词库；不新增数据库服务，不改历史行或 API Key。
+- 上下文支持：OpenAI 官方转写协议支持 prompt；Qwen3-ASR-Flash 的 system message 可提供上下文/实体词表。未知兼容地址、其他模型和本地引擎默认不声称支持增强。适配参数必须按该协议核实，并在未支持或增强参数失败时保留普通转写路径。
+- 来源：[OpenAI 转写](https://developers.openai.com/api/docs/guides/speech-to-text)、[Qwen-ASR](https://help.aliyun.com/zh/model-studio/qwen-asr-api-reference)。没有更换现有提供商或模型。
+- GitHub 取舍：pinyin-pro（MIT，GitHub API 查询 pushed_at 2026-10-10）、phrase-pinyin-data（MIT，2026-10-28）、THUOCL（MIT，2023-04-03）。前两项解决读音而非完整实体核实；THUOCL 是领域词表，缺少本任务所需别名/来源关系且更新较久，暂不整库内置。只引入小型本地拼音转换依赖；允许用户导入 JSON 词条，不下载大型人物百科。
+- 测试边界：接口契约、文本候选与端到端模拟可自动验证；未提供可复用真实录音和真实服务结果时，不报告真实准确率、误纠率或供应商延迟改善数字。
+
+
+### 实现与验证（rc.12）
+
+- `shared/builtin-prompts.json` 完整保存用户提供的五份卡片正文；`promptLibrary` 只升级未编辑的旧默认正文，保留用户改写、空白和删除操作。分类名为 agent协作，出厂卡片为内置润色、内置翻译、内置文档、内置邮件、内置协作。
+- `entity-store.ts` 管理 entities.sqlite 的 entity_terms 表：id、canonical、domain、结构化 data、created_at、updated_at；data 包含 type、aliases、related、source、verified、enabled、userDefined。名称+领域唯一，最多 10000 项；导入先校验再用事务写入，重复条目保留已有个人编辑，回滚不会修改历史文件。
+- `entity-matcher.ts` 缓存读音和名称匹配器。热词在录音开始时冻结到 Task ID，不按分片查询数据库；领域、应用及卡片场景匹配后取最多 20 项，协议上下文限制为 200 UTF-8 字节、完整词条。候选按精确名称、显式别名、带语境的同音/有限近音匹配排序，最多 8 项、附加 JSON 最多 3000 字符。未确定的两字人名不在无语境时只凭拼音匹配；手动常用姓名支持已明确配置的别名。关联只是候选排序依据，不作为强制替换。
+- 代码块、路径、URL、邮箱、精确型号版本、API 标识符、JSON 字段、布尔值和命令参数不参加候选纠错。明确要求逐字保留时不提供改名候选。模型若改变受保护的版本、路径或标识符，停止插入，按用户的历史保留设置保存原始转写并报错，不增加纠错重试调用；选择“不保留历史”时不保存。
+- `pipeline` 把候选作为不可信数据附加到已有五类卡片的润色/翻译请求；ASR 原文不被覆盖，不另外调用纠错 LLM。翻译多目标分别检查精确内容。关闭润色时不额外启动 LLM。音频直达模式不人为增加独立 ASR 或文本纠错调用。
+- `asr-enhancement` 只允许官方 OpenAI 已核实转写接口的 prompt，或当前已接入 DashScope 协议的精确 qwen3-asr-flash 模型。Qwen JSON 的 leading system/content/text 结构核对了[官方工具包源码](https://github.com/QwenLM/Qwen3-ASR-Toolkit/blob/main/qwen3_asr_toolkit/qwen3asr.py)。未核实的兼容地址、模型变体、其他适配器、本地 SenseVoice 不发送新增参数。HTTP 400/422 拒绝增强请求时，仅回退一次普通转写；其他错误正常报告，不更换提供商。
+- 设置入口：语音与输入 → 录音与语言 → 语音识别增强。默认关闭，开启前说明相关词条可能发送给当前配置的 ASR/LLM；支持搜索、类别、标准名称、别名、领域、关联、核实依据、启停、删除及 JSON 导入/导出。不会自动从用户历史采集或同步词条。
+- 诊断沿用 Task ID，记录 hotwords、entity-candidates、ASR、LLM、total 耗时，汇总平均/分位数所需样本；LLM 返回 usage 时仅记录数值 Token 数。供应商未返回 usage 则为未提供，不按零用量报告。日志不新增词条正文、私密文本或密钥。
+- 已用用户提供的 6 份 m4a 及本机已有 SenseVoice Small 真实转写两遍。6/6 的 ASR 输出一致；当前接口没有原生热词，所以不宣称 ASR 准确率提升。基线平均 125.05ms、P95 190.93ms，对照平均 120.19ms、P95 187.98ms，仅是同模型配对耗时波动，不是优化收益。
+- 用户人工确认的 7 处专名中，原始 ASR 精确命中 3 处。同批人工配置词条后的候选回放覆盖 7 处；这是接线与召回验证，不是独立测试集或最终 LLM 纠错率。完整对照保存在本地 release/verification-entities，不将用户录音或全文转写提交到 Git。
+- 真实 LLM 对照的独立请求因缺少鉴权返回 HTTP 401，已停止继续请求；最终专名正确率、修复率、误纠率及真实 LLM/端到端 P95 尚未验证，不能用候选召回率代替。独立测试脚本支持通过环境变量提供测试服务，不把密钥写到报告或词库。
+- 验证结果：类型检查通过；完整回归 2965 项通过、7 项跳过。真实录音候选回放另行通过。rc.12 安装包经 NSIS 完整性、更新摘要、打包主程序与构建产物一致性、原生模块加载及独立配置启动检查；未模拟真实用户按键或证明真实 LLM 最终准确率。
+- 回滚：先关闭语音识别增强即恢复原有处理路径；词库可先导出 JSON，再按提交回滚代码。新表不改写历史/设置和原音频；旧版忽略 entities.sqlite。用户改写卡片仍保留；恢复出厂卡片是独立手动操作。

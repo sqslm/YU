@@ -50,6 +50,8 @@ import { generateFromAudio } from './providers/gemini'
 import { askAgent, askFollowUp } from './agent'
 import { directVoiceIntent, isCurrentContentRequest, parseVoiceIntent, VOICE_INTENT_PROMPT } from './voice-intent'
 import { cursorGeneration, cursorGenerationPrompt } from './cursor-generation'
+import { asrTermContext } from '@shared/asr-enhancement'
+import { EntityOutputError, assertEntityOutput, entityCandidatePrompt, type EntityCandidate } from '@shared/entities'
 import type { SelectionTarget } from './selection-editor'
 import { insertOk, insertRich, insertText, verifyInsertion } from './insert'
 import { captureEdit, type LearnedCandidate } from './editCapture'
@@ -132,6 +134,7 @@ function describeFailure(error: unknown): string {
 
 /** Optional collaborators; the pipeline works standalone without them. */
 export interface PipelineOptions {
+  entities?: { hotwords(scene: string): string[]; candidates(text: string, scene: string): EntityCandidate[] }
   revealBar?: (win: BrowserWindow) => void
   contentTarget?: (original: ForegroundInfo) => ForegroundInfo | undefined
   checkAsr?: () => Promise<void>
@@ -284,6 +287,18 @@ export class Pipeline {
   private muteUnavailable = false
   private muteStartTimer: ReturnType<typeof setTimeout> | null = null
   private latestBarState: BarState = { phase: 'idle' }
+  private takeEntityWords: string[] = []
+  private entityTaskId = ''
+  private entityScene(context: PromptContext, kind: PromptKind): string {
+    return `${kind} ${kind === 'ai' ? 'technology programming 技术 编程 开发' : ''} ${context.appName ?? ''} ${context.windowTitle ?? ''}`
+  }
+  private entityPrompt(settings: Settings, text: string, context: PromptContext, kind: PromptKind): string {
+    if (!settings.speechEnhancement || !this.options.entities) return ''
+    const at = performance.now()
+    try { return entityCandidatePrompt(this.options.entities.candidates(text, this.entityScene(context, kind))) }
+    catch { this.log('[enhancement] candidate lookup unavailable; continuing without candidates'); return '' }
+    finally { recordTaskStage(this.tasks.get(this.runToken), 'entity-candidates', performance.now() - at, this.log) }
+  }
   startCueFinished(taskId: string): void {
     if (this.stage !== 'recording' || this.tasks.get(this.runToken)?.id !== taskId || !this.getSettings().muteWhileRecording) return
     if (this.muteStartTimer) clearTimeout(this.muteStartTimer)
@@ -716,6 +731,14 @@ export class Pipeline {
       ? structuredClone(opening.voiceCommands) : null
     this.startCaptions(opening)
     if (!options.purpose) this.selectTakePrompt(mode, opening, { appName: opened.className, windowTitle: opened.title })
+    this.takeEntityWords = []
+    this.entityTaskId = this.tasks.get(this.runToken)!.id
+    if (opening.speechEnhancement && this.options.entities) {
+      const at = performance.now()
+      try { this.takeEntityWords = this.options.entities.hotwords(this.entityScene(this.contextFor(opening, opened, null), this.takePrompt.get(this.runToken)?.kind ?? 'polish')) }
+      catch { this.log('[enhancement] hotwords unavailable; continuing ordinary transcription') }
+      recordTaskStage(this.tasks.get(this.runToken), 'hotwords', performance.now() - at, this.log)
+    }
     recordingLog.begin({
       mode,
       appName: opened ? appLabel(opened.appName, opened.title) : '',
@@ -828,7 +851,8 @@ export class Pipeline {
         }
         if (!profile) throw new Error(mt('请先配置语音转写模型'))
         const result = await transcribe({ ...settings.asr, ...profile }, {
-          wav, signal, language: settings.language || undefined, timeoutMs: 5000, warm: false
+          wav, signal, language: settings.language || undefined, timeoutMs: 5000, warm: false,
+          entityContext: settings.speechEnhancement && this.tasks.get(token)?.id === this.entityTaskId ? asrTermContext(this.takeEntityWords) : undefined
         })
         return result.text
       },
@@ -1629,6 +1653,18 @@ export class Pipeline {
       // Failures remain visible as alerts and diagnostics, without a history row.
       const classified = classifyError(err)
       const alert = buildBarAlert(classified)
+      if (err instanceof EntityOutputError && transcript && !controller.signal.aborted) {
+        alert.text = mt(err.message)
+        alert.actions = alert.actions?.filter(action => action.id !== 'retry')
+        try {
+          await this.history.add({ mode, transcript, final: '', durationMs: spokenMs, app: appLabel(target.appName, target.title),
+            route, status: 'error', error: message, wordCount: 0, focusedWindowTitle: target.title })
+          if (token !== this.runToken) return null
+          if (this.getSettings().historyDurationSeconds !== 0) alert.text += '\n' + mt('原始转写已保留在历史记录中')
+        } catch {
+          alert.text += '\n' + mt('原始转写保存失败，请检查历史存储')
+        }
+      }
       if (!transcript && !controller.signal.aborted && this.options.preserveAudio) {
         try {
           await this.options.preserveAudio(pcm, controller.signal)
@@ -1739,7 +1775,8 @@ export class Pipeline {
             asrAdapter: profile.asrAdapter,
             vendor: profile.vendor
           },
-          { wav, language: settings.language || undefined, signal, encoded: this.encoded }
+          { wav, language: settings.language || undefined, signal, encoded: this.encoded,
+            entityContext: settings.speechEnhancement && task?.id === this.entityTaskId ? asrTermContext(this.takeEntityWords) : undefined }
         ),
       (profile, error, index) => {
         // A cancelled take must not spend the next provider's quota.
@@ -1792,6 +1829,11 @@ export class Pipeline {
   }
 
   private async llmRequest(settings: Settings, request: Parameters<typeof complete>[1]): Promise<string> {
+    const task = this.tasks.get(this.runToken)
+    const measured = { ...request, onUsage: (usage: { inputTokens: number; outputTokens: number }): void => {
+      request.onUsage?.(usage)
+      if (task) this.log(`[task ${task.id}] llm_tokens input=${usage.inputTokens} output=${usage.outputTokens}`)
+    } }
     const chain = chainFor(settings, 'llm')
     const { value, profile: llmProfile } = await withFailover(
       chain,
@@ -1806,7 +1848,7 @@ export class Pipeline {
             requestPath: profile.requestPath,
             authHeader: profile.authHeader
           },
-          request
+          measured
         ),
       (profile, error, index) => {
         if (request.signal?.aborted) return
@@ -1872,13 +1914,15 @@ export class Pipeline {
       return result
     }
     const kind = this.promptKindFor(settings, context)
+    const entityPrompt = this.entityPrompt(settings, comments.items.map(item => item.text).join('\n'), context, kind)
     const raw = await this.llm(settings, { messages: [
-      { role: 'system', content: this.systemPromptFor(kind, settings, context) },
+      { role: 'system', content: this.systemPromptFor(kind, settings, context) + entityPrompt },
       ...(instruction ? [{ role: 'system' as const, content: `Requested edit: ${instruction}` }] : []),
       { role: 'system', content: 'Polish only the supplied comment prose, preserving language, meaning and identifiers. Return ONLY a JSON array with exactly the same line IDs and one text string per item. Do not add comment delimiters, code, newlines, explanations or extra items. Code and indentation are restored by the application.' },
       { role: 'user', content: JSON.stringify(comments.items) }
     ], temperature: this.temperatureFor(kind, settings), signal })
     const result=comments.restore(raw, prose => applyReplacements(prose, settings.replacements))
+    if (entityPrompt) assertEntityOutput(text, result)
     this.rememberSelectionPrompt(result)
     return result
   }
@@ -1907,9 +1951,10 @@ export class Pipeline {
     // gets the email prompt, an editor gets the document one, a coding agent the
     // AI card, everything else the plain polish prompt.
     const kind = this.promptKindFor(settings, context)
-    return this.llm(settings, {
+    const entityPrompt = this.entityPrompt(settings, transcript, context, kind)
+    const result = await this.llm(settings, {
       messages: [
-        { role: 'system', content: this.systemPromptFor(kind, settings, context) },
+        { role: 'system', content: this.systemPromptFor(kind, settings, context) + entityPrompt },
         ...(mode === 'dictation' ? [{ role: 'system' as const, content: POLISH_OUTPUT_RULES }] : []),
         ...(instruction ? [{ role: 'system' as const, content: `Requested edit: ${instruction}` }] : []),
         { role: 'user', content: transcript }
@@ -1917,6 +1962,8 @@ export class Pipeline {
       temperature: this.temperatureFor(kind, settings),
       signal
     })
+    if (entityPrompt) assertEntityOutput(transcript, result)
+    return result
   }
 
   /**
@@ -1947,17 +1994,19 @@ export class Pipeline {
     const card = this.systemPromptFor('translate', settings, context, {
       translateTarget: multi ? undefined : translateTargets[0]
     })
+    const entityPrompt = this.entityPrompt(settings, transcript, context, 'translate')
     const raw = await this.llm(settings, {
       messages: [
         {
           role: 'system',
-          content: multi ? `${card}${multiTargetInstruction(translateTargets)}` : card
+          content: (multi ? `${card}${multiTargetInstruction(translateTargets)}` : card) + entityPrompt
         },
         { role: 'user', content: transcript }
       ],
       temperature: this.temperatureFor('translate', settings),
       signal
     })
+    if (entityPrompt) assertEntityOutput(transcript, raw)
 
     if (!multi) {
       const text = raw.trim()
@@ -1971,6 +2020,7 @@ export class Pipeline {
       target,
       text: parsed.find((block) => block.target === target)?.text ?? ''
     }))
+    if (entityPrompt) for (const block of blocks) if (block.text) assertEntityOutput(transcript, block.text)
     const delivered = blocks.filter((block) => block.text.length > 0)
     const failed = missingTargets(delivered, translateTargets)
 

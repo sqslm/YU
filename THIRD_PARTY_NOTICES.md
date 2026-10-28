@@ -8,6 +8,7 @@ Optional speech models are downloaded separately and are not included in the ins
 
 | Package | Version | License | License texts |
 | --- | --- | --- | --- |
+| pinyin-pro | 3.29.5 | MIT | [LICENSE](licenses/pinyin-pro-3.29.5-LICENSE) |
 | jsQR | 1.4.0 | Apache-2.0 | [LICENSE](licenses/jsqr-1.4.0-LICENSE) |
 | pdfjs-dist | 6.4.299 | Apache-2.0 | [LICENSE](licenses/pdfjs-dist-6.4.299-LICENSE), [Adobe CMaps](licenses/pdfjs-dist-CMaps-LICENSE), [Foxit fonts](licenses/pdfjs-dist-Foxit-LICENSE), [Liberation fonts](licenses/pdfjs-dist-Liberation-LICENSE) |
 | @napi-rs/canvas (including Windows x64 native runtime) | 1.0.13 | MIT / bundled resource notices | [LICENSE](licenses/napi-rs-canvas-1.0.13-LICENSE); upstream Windows binary includes sbom.cdx.json |

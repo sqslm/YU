@@ -30,6 +30,7 @@
 !/scripts/make-icon.mjs
 !/scripts/make-icon.py
 !/scripts/release.mjs
+!/scripts/evaluate-entities.mjs
 **/node_modules/
 **/data/
 **/.env

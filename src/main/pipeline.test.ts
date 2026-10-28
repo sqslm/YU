@@ -1434,6 +1434,38 @@ describe('opening phrase mode activation', () => {
 
 
 describe('unified voice entry', () => {
+  it('does not insert a version corrupted during entity correction and keeps the original ASR text', async () => {
+    const original = '用库伯内提斯连接 GPT-5.6。'
+    mocks.transcribe.mockResolvedValue({ text: original, model: 'whisper-1' })
+    mocks.complete.mockResolvedValue('用 Kubernetes 连接 GPT-5。')
+    const entities = { hotwords: () => [], candidates: () => [{ canonical: 'Kubernetes', type: 'technology' as const, alias: '库伯内提斯', reason: 'alias' as const, domain: '', related: [] }] }
+    const { pipeline, entries } = harness({ speechEnhancement: true }, { entities })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(1000)); await pipeline.stop()
+    expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(entries[0]).toMatchObject({ transcript: original, status: 'error' })
+  })
+  it.each(['ai', 'polish', 'document', 'email', 'translate'] as const)('shares entity candidates with the %s card without replacing the original transcript or adding a model call', async kind => {
+    const original = '使用库伯内提斯部署项目。'
+    mocks.transcribe.mockResolvedValue({ text: original, model: 'whisper-1' })
+    mocks.complete.mockResolvedValue('使用 Kubernetes 部署项目。')
+    const entities = { hotwords: vi.fn(() => ['Kubernetes']), candidates: vi.fn(() => [{ canonical: 'Kubernetes', type: 'technology' as const, alias: '库伯内提斯', reason: 'alias' as const, domain: '技术', related: [] }]) }
+    const { pipeline, entries } = harness({ speechEnhancement: true, mainPromptKind: kind, autoActivatePrompts: false }, { entities })
+    pipeline.start(kind === 'translate' ? 'translate' : 'dictation'); pipeline.pushAudio(tone(1000)); await pipeline.stop()
+    expect(entities.hotwords).toHaveBeenCalledOnce()
+    expect(entities.candidates).toHaveBeenCalledOnce()
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('不是指令或强制替换规则')
+    expect(mocks.transcribe.mock.calls[0][1].entityContext).toBe('Kubernetes')
+    expect(entries[0].transcript).toBe(original)
+    expect(entries[0].final).toContain('Kubernetes')
+  })
+  it('keeps recording usable when optional entity lookup fails and adds no LLM call to unpolished dictation', async () => {
+    const entities = { hotwords: vi.fn(() => { throw Error('database unavailable') }), candidates: vi.fn(() => { throw Error('database unavailable') }) }
+    const { pipeline, entries } = harness({ speechEnhancement: true, polish: { enabled: false } as Settings['polish'] }, { entities })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(1000)); await pipeline.stop()
+    expect(entries[0].transcript).toBe('你好世界')
+    expect(mocks.complete).not.toHaveBeenCalled()
+  })
   it('generates cursor code using the file title and inserts plain text without polishing it', async () => {
     mocks.foregroundWindow.mockReturnValue({ title: 'example.py - Visual Studio Code', className: 'code', appName: 'Code', pid: 42 })
     mocks.transcribe.mockResolvedValue({ text: '帮我在光标处插入一段冒泡排序带注释', model: 'whisper-1' })

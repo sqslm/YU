@@ -14,6 +14,9 @@ import type { BarActionId, BarState, CardAction, ModelListResult, Settings } fro
 import type { AnswerCardPayload } from '@shared/api'
 import { SettingsStore } from './settings'
 import { HistoryStore } from './history'
+import { EntityStore } from './entity-store'
+import { EntityMatcher } from './entity-matcher'
+import type { EntityInput } from '@shared/entities'
 import { exportHistory } from './history-export'
 import { AccountStore } from './account'
 import { CloudClient, SyncEngine } from './cloud'
@@ -115,6 +118,12 @@ app.setName('YU')
 if (process.platform === 'win32') app.setAppUserModelId(appUserModelId())
 const store = new SettingsStore()
 const history = new HistoryStore()
+const entityStore = new EntityStore(join(app.getPath('userData'), 'entities.sqlite'))
+const entityMatcher = new EntityMatcher()
+function refreshEntities(): void {
+  try { entityMatcher.set(entityStore.list()) }
+  catch { entityMatcher.set([]); log('[enhancement] entity database unavailable; ordinary recognition remains enabled') }
+}
 /**
  * The signed-in account and the engine that keeps two machines' history in step.
  * Both are inert until a server URL is set and the user signs in: this build is
@@ -1216,6 +1225,26 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  const entityOwner = (event: Electron.IpcMainInvokeEvent): void => {
+    if (event.sender !== settingsWindow?.webContents) throw Error(mt('请从设置管理专有名词'))
+  }
+  handle('entities:list', event => { entityOwner(event); return entityStore.list() })
+  handle('entities:save', (event, input: EntityInput, id?: string) => { entityOwner(event); entityStore.save(input, id); refreshEntities() })
+  handle('entities:remove', (event, id: string) => { entityOwner(event); if (typeof id !== 'string') throw Error('Invalid term ID'); entityStore.remove(id); refreshEntities() })
+  handle('entities:import', async event => {
+    entityOwner(event)
+    const result = await dialog.showOpenDialog(settingsWindow!, { filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] })
+    if (result.canceled || !result.filePaths[0]) return null
+    if ((await stat(result.filePaths[0])).size > 5 * 1024 * 1024) throw Error(mt('词库文件不能超过 5 MB'))
+    const added = entityStore.import(JSON.parse((await readFile(result.filePaths[0], 'utf8')).replace(/^\uFEFF/u, '')))
+    refreshEntities(); return added
+  })
+  handle('entities:export', async event => {
+    entityOwner(event)
+    const result = await dialog.showSaveDialog(settingsWindow!, { defaultPath: 'YU-entities.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
+    if (result.canceled || !result.filePath) return false
+    await writeFile(result.filePath, JSON.stringify({ version: 1, terms: entityStore.list() }, null, 2), 'utf8'); return true
+  })
   noteAudio.register()
   screenshotTool.register()
   handle('screenshot:open', () => openScreenshot())
@@ -1997,6 +2026,7 @@ async function bootstrap(): Promise<void> {
   }, broadcastReminders, log)
 
   pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+    entities: entityMatcher,
     revealBar: revealBarWindow,
     contentTarget: original => original.pid === process.pid ? foregroundWindow(true) : undefined,
     checkAsr: () => checkAsrReadiness(store.get(), localAsr),
@@ -2146,6 +2176,7 @@ async function bootstrap(): Promise<void> {
   powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); if (!gameMode.snapshot().active) reminders?.resume() })
 
   registerIpc()
+  setImmediate(refreshEntities)
   handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
   handle('wake:status', () => wakeWord.snapshot())
   handle('wake:setup', (event, mode: 'recording' | 'testing' | null) => {
@@ -2556,6 +2587,7 @@ if (!gotLock) {
     gamePreparation?.finish(false)
     wakeWord.stop()
     wakeWord.cancelLearning()
+    entityStore.close()
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()
     screenshotTool.close()

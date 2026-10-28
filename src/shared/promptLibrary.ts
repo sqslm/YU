@@ -27,15 +27,8 @@ export const PROMPT_KIND_HINT: Record<PromptKind, string> = {
 /** Stable id for the built-in prompt of each kind. */
 export const BUILTIN_PROMPT_ID = 'builtin'
 
-/**
- * Shipped default text of the built-in card, one per kind.
- *
- * These used to be empty strings: the builtin card was a pointer at the
- * context-aware builders in `@shared/prompts`, which made it impossible to
- * rewrite. The text now lives on the card itself, so the editor can show it,
- * the user can edit it, and "恢复默认文本" has a factory value to restore.
- * Kept only to recognize unchanged defaults during upgrades; edited cards stay intact.
- */
+/** Previous factory texts, used only to upgrade unchanged built-in cards.
+ * Custom names, edited content, deliberate blanks and deleted cards are preserved. */
 const LEGACY_BUILTIN_PROMPT_TEXT: Record<PromptKind, string> = {
   polish: [
     '你负责把用户口述的短文本整理成可以直接发出去的样子。',
