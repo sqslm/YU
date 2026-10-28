@@ -31,7 +31,7 @@
 - Azure 必须填写真实资源地址、部署名与 API 版本；阿里云地址、业务空间、模型和密钥必须属于同一可用地域。Replicate / fal 使用可用的实际模型或部署。
 - 全部 LLM 预设通过本地传输契约测试；这不证明目录中的每个模型对每个账号均开放，也不证明每家模型都支持工具、流式、思考或温度的全部组合。不支持工具时沿用现有 JSON 意图回退。本轮未把 Chat Completions 重构为 Responses。
 - 密钥只在本机配置；本次未批量开通账号、核验免费额度或消耗所有供应商的真实调用配额。
-- 三家流式适配器里只有阿里云百炼实时识别用了真实账号：2026-10-29 用 16 kHz 单声道 PCM16 的 9.86 秒合成录音回放，返回文本与待识别句子逐字一致，用时 2.99 秒。同一账号的百炼专属地址（`*.maas.aliyuncs.com`）返回 `AllocationQuota.FreeTierOnly`（免费额度已耗尽），而公网 `dashscope.aliyuncs.com` 地址可用，因此预设指向公网地址；这属于账号配额状态，不是协议问题。腾讯云实时识别只有本地协议测试，未申请账号验证真实返回。火山引擎豆包流式识别在 2026-10-29 用真实账号验证：新版控制台只给一个 API Key（`X-Api-Key` + `X-Api-Resource-Id: volc.seedasr.sauc.duration`），不再需要 App ID 与 Access Token；5.40 秒合成录音回放得到 `definite` 结果「这是一段用于测试火山引擎流式语音识别的录音。」，报文为 gzip JSON + 二进制音频包，2.0 与 1.0 只差 Resource Id。
+- 四家流式适配器里已有三家用真实账号验证过（百炼、豆包、讯飞实时转写）：2026-10-29 用 16 kHz 单声道 PCM16 的 9.86 秒合成录音回放，返回文本与待识别句子逐字一致，用时 2.99 秒。同一账号的百炼专属地址（`*.maas.aliyuncs.com`）返回 `AllocationQuota.FreeTierOnly`（免费额度已耗尽），而公网 `dashscope.aliyuncs.com` 地址可用，因此预设指向公网地址；这属于账号配额状态，不是协议问题。腾讯云实时识别只有本地协议测试，未申请账号验证真实返回。火山引擎豆包流式识别在 2026-10-29 用真实账号验证：新版控制台只给一个 API Key（`X-Api-Key` + `X-Api-Resource-Id: volc.seedasr.sauc.duration`），不再需要 App ID 与 Access Token；5.40 秒合成录音回放得到 `definite` 结果「这是一段用于测试火山引擎流式语音识别的录音。」，报文为 gzip JSON + 二进制音频包，2.0 与 1.0 只差 Resource Id。
 
 ## 目录与验证覆盖
 
@@ -71,6 +71,7 @@
 | 阿里云百炼（实时识别） | WebSocket 二进制帧 / run-task→finish-task | 真实账号联调（2026-10-29，9.86 秒音频回放，输出与预期一致） | [官方参考](https://help.aliyun.com/zh/model-studio/paraformer-real-time-speech-recognition-api) |
 | 腾讯云实时识别 | WebSocket / HMAC-SHA1 查询串签名 | 本地协议测试 | [官方参考](https://cloud.tencent.com/document/product/1093/48982) |
 | 火山引擎豆包流式识别 | WebSocket 二进制帧 / gzip JSON | 真实账号联调（新版控制台 API Key） | [官方参考](https://www.volcengine.com/docs/6561/1354869) |
+| 科大讯飞实时语音转写 | WebSocket / 文本 JSON + 裸 PCM / APIKey 签名 | 真实账号联调（2026-10-29，RTA 新用户免费包，逐句返回与预期一致） | [官方参考](https://www.xfyun.cn/doc/asr/rtasr/API.html) |
 
 ### LLM（34）
 
@@ -179,3 +180,12 @@
 - 火山引擎豆包流式识别（`volcengine-streaming`）：`wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async`，握手头 `X-Api-Key`（新版控制台）或 `X-Api-App-Key` + `X-Api-Access-Key`（旧版控制台）/ `X-Api-Resource-Id` / `X-Api-Request-Id` / `X-Api-Connect-Id` / `X-Api-Sequence: -1`；4 字节头（version|header size、message type|flags、serialization|compression）+ 可选序号与事件字段，JSON 用 gzip 压缩，音频按 200 ms 一包，最后一包 flags=0b0010。
 - 两处需要说明的选择：百炼把录音文件识别（https）和实时识别（wss）放在同一域名，仅凭主机名无法区分，所以给适配器加了可选的 `schemes` 声明，`aliyun` 只认 http/https，`dashscope-realtime` 只认 ws/wss；预设的 `baseUrl` 一律写 `https://`，由适配器自己升级为 wss，因为连接测试走的是 HTTP 探测。
 - 验证边界：`src/main/providers/asr/realtime.test.ts` 用本地 WebSocket 服务覆盖三家的握手头、帧切分、签名、累积文本与错误映射；类型检查通过；完整回归 2975 项通过，仅 `wake-word-native.test.ts` 两项在干净树上同样失败（离线唤醒引擎环境问题，与本次改动无关）。
+
+### 讯飞实时语音转写适配器（rc.16）
+
+- 新增适配器 `xfyun-rta`（仍在 `src/main/providers/asr/realtime.ts`）：`wss://rtasr.xfyun.cn/v1/ws?appid&ts&signa`，可选 `lang`、`vadMdn`。签名 = Base64(HMAC-SHA1(key=APIKey, msg=md5hex(appid + ts)))，`md5` 取小写十六进制、`ts` 为秒、结果 URL 编码；官方文档的示例（appid `595f23df`、ts `1512041814`、key `d9f4aa7e…`）算得 `IrrzsJeOFk1NGfJHW6SkHUoN9CU=`，已固化为测试用例。
+- 音频是裸二进制帧，每 40 ms 发 1280 字节（16 kHz、16 bit、单声道），不能加速；收尾必须发二进制帧 `{"end": true}`（空格也算在字节里），服务端随后把最后一句的终稿推上来并关闭连接，因此客户端在写入 end 之后再等 5 秒收尾，比只等关闭更稳。
+- 结果帧是 `{"action":"result","code":"0","data":"<JSON 字符串>"}`，`data` 需要二次解析；`cn.st.type` 为 `"0"` 是终稿、`"1"` 是中间稿，终稿带整句，所以按 `seg_id` 追加、并丢弃已被终稿覆盖的中间稿，否则整段话会重复一遍。15 秒没有音频会收到 `37005` 并断开。
+- 与语音听写（IAT）的区别：实时转写按时长与并发路数计费、单会话没有 60 秒上限；旧文档页 `RTASR.html` 已 404，有效页面是 `API.html`。注意不要与 `global.xfyun.cn/doc/rtasr/` 混用，那是另一个服务（`ist-api-sg`，HMAC-SHA256，用 APISecret，5 小时上限）。
+- 真实账号联调：2026-10-29 用 9.86 秒合成录音，一次 1 倍速发送与一次 4 倍速发送都与预期文本一致，1 倍速约 3.3 秒返回终稿。
+- 同时修正：火山引擎预设的 `App ID` 与 `Access Token` 由必填改为可选（新控制台只需 API Key），避免表单红框挡住本可用的连接。

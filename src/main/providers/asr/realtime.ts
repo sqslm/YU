@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID } from 'node:crypto'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { SAMPLE_RATE, decodeWavPcm16 } from '../../audio/wav'
 import { ProviderError } from '../providerError'
@@ -945,9 +945,288 @@ export const VOLCENGINE_STREAMING_SPEC: AsrAdapterSpec = {
   run: runVolcengineStreaming
 }
 
+// ---------------------------------------------------------------------------
+// 科大讯飞 实时语音转写 (RTASR)
+//
+// The same vendor as the 语音听写 adapter in `cn.ts`, and nothing else in common:
+// a different URL, a different signature, raw binary PCM instead of base64 JSON,
+// no 60 s session cap, and a `data` field that is JSON *inside* JSON. The one
+// piece of shared ground is the credential — the HMAC is keyed with the APIKey,
+// not the APISecret, which is what confuses most hand-written clients.
+// ---------------------------------------------------------------------------
+
+const XFYUN_RTA = 'wss://rtasr.xfyun.cn/v1/ws'
+/** 40 ms of 16 kHz PCM16 — the vendor's documented frame, and a hard one. */
+const XFYUN_RTA_FRAME_BYTES = 1280
+const XFYUN_RTA_FRAME_MS = 40
+/** Ceiling on the wait for the tail results after `{"end": true}`. */
+const XFYUN_RTA_TAIL_MS = 5_000
+
+const XFYUN_RTA_HINTS: Record<string, string> = {
+  '10105': mt('密钥不对、没开实时语音转写，或 IP 白名单把本机挡了'),
+  '10106': mt('参数不合法（检查接口地址是否写成了别的服务）'),
+  '10107': mt('参数值不合法（检查语言 / 领域这类取值）'),
+  '10110': mt('这个应用没有该语言的授权（方言、小语种要先在控制台添加）'),
+  '10700': mt('引擎内部错误，或超过 15 秒没有发送音频'),
+  '10800': mt('超过授权的并发路数'),
+  '37005': mt('超过 15 秒没有发送音频，服务端主动断开')
+}
+
+/**
+ * `signa` per the API doc: HMAC-SHA1 keyed with the **APIKey**, over the
+ * lowercase hex MD5 of `appid + ts`, then base64.
+ *
+ * Exported because it is the one part of this adapter that is worth pinning to
+ * the doc's own worked example: get the hex casing wrong and the server answers
+ * `10110 illegal signa` with no hint about which step was wrong.
+ */
+export function xfyunRtaSigna(appId: string, ts: string, apiKey: string): string {
+  const digest = createHash('md5').update(`${appId}${ts}`).digest('hex')
+  return createHmac('sha1', apiKey).update(digest).digest('base64')
+}
+
+/**
+ * The signed socket URL.
+ *
+ * The profile may hold the bare origin, `/v1/ws`, or the full path with a stray
+ * query, so the path is normalised and the signature parameters are rebuilt on
+ * every call — `ts` must be fresh, the server rejects a stale one.
+ */
+function xfyunRtaUrl(ctx: AsrAdapterContext, appId: string, apiKey: string): string {
+  const raw = (ctx.baseUrl || XFYUN_RTA).replace(/\/+$/, '')
+  const target = new URL(raw)
+  target.protocol = target.protocol === 'wss:' || target.protocol === 'https:' ? 'wss:' : 'ws:'
+  if (!target.pathname.replace(/\/+$/, '').endsWith('/v1/ws')) target.pathname = '/v1/ws'
+  const ts = String(Math.floor(Date.now() / 1000))
+  const params: Record<string, string> = {
+    appid: appId,
+    ts,
+    signa: xfyunRtaSigna(appId, ts, apiKey)
+  }
+  const lang = (ctx.fields.lang ?? '').trim()
+  if (lang) params.lang = lang
+  const vadMdn = (ctx.fields.vadMdn ?? '').trim()
+  if (vadMdn) params.vadMdn = vadMdn
+  const pd = (ctx.fields.pd ?? '').trim()
+  if (pd) params.pd = pd
+  target.search = new URLSearchParams(params).toString()
+  return target.toString()
+}
+
+interface XfyunRtaSentence {
+  seg: number
+  text: string
+  final: boolean
+}
+
+/** Pulls the sentence out of one `result` frame's double-encoded `data`. */
+function xfyunRtaSentence(data: string): XfyunRtaSentence | null {
+  if (!data.trim()) return null
+  let inner: {
+    seg_id?: unknown
+    cn?: { st?: { type?: unknown; rt?: Array<{ ws?: Array<{ cw?: Array<{ w?: string }> }> }> } }
+  }
+  try {
+    inner = JSON.parse(data)
+  } catch {
+    return null
+  }
+  const st = inner.cn?.st
+  // Translation frames reuse `data` without the `cn.st` envelope; they carry no
+  // transcript, so they are dropped rather than mined for the source text.
+  if (!st) return null
+  const text = (st.rt ?? [])
+    .map((paragraph) => (paragraph.ws ?? []).map((word) => (word.cw ?? []).map((piece) => piece.w ?? '').join('')).join(''))
+    .join('')
+  const seg = Number(inner.seg_id ?? 0)
+  // The doc's table writes 0/1, the wire sends the string form.
+  return { seg: Number.isFinite(seg) ? seg : 0, text, final: String(st.type) === '0' }
+}
+
+/**
+ * Assembles the take from the frames seen.
+ *
+ * A `type: "0"` frame holds the *whole* sentence for its `seg_id`, so finals are
+ * appended once each, in segment order. Interim frames repeat a growing prefix
+ * of the sentence still in progress, so only the longest one past the last final
+ * segment is worth keeping — that covers a recording cut off mid-sentence, where
+ * no final ever arrives.
+ */
+export function xfyunRtaJoin(sentences: XfyunRtaSentence[]): string {
+  const finals = new Map<number, string>()
+  const interims = new Map<number, string>()
+  for (const sentence of sentences) {
+    if (!sentence.text) continue
+    if (sentence.final) finals.set(sentence.seg, sentence.text)
+    else interims.set(sentence.seg, sentence.text)
+  }
+  const bySeg = (a: [number, string], b: [number, string]): number => a[0] - b[0]
+  const ordered = [...finals.entries()].sort(bySeg).map(([, text]) => text)
+  const lastFinal = [...finals.keys()].reduce((max, seg) => Math.max(max, seg), -1)
+  const tail = [...interims.entries()]
+    .filter(([seg]) => seg > lastFinal)
+    .sort(bySeg)
+    .map(([, text]) => text)
+    .pop()
+  return `${ordered.join('')}${tail ?? ''}`
+}
+
+function xfyunRtaFailure(code: unknown, desc: unknown): ProviderError {
+  const key = String(code ?? '')
+  const hint = XFYUN_RTA_HINTS[key]
+  const detail = [key, desc].filter((part) => String(part ?? '').trim() !== '').join(' ')
+  return new ProviderError(
+    hint
+      ? mt('讯飞实时语音转写失败（{{detail}}）：{{hint}}', { detail, hint })
+      : mt('讯飞实时语音转写失败（{{detail}}）', { detail })
+  )
+}
+
+async function runXfyunRta(ctx: AsrAdapterContext, input: AsrAdapterInput): Promise<string> {
+  const appId = need(ctx, 'appId', mt('讯飞 AppID'))
+  // The console labels this credential APIKey on one page and "API Key" in the
+  // app list, so either box is accepted; the profile's own key is the fallback.
+  const apiKey = (ctx.fields.apiKey ?? '').trim() || ctx.apiKey
+  if (!apiKey) throw new ProviderError(mt('讯飞实时语音转写需要 APIKey（填在「API Key」里即可，不是 APISecret）'))
+  const pcm = pcmBytes(input.wav)
+  const { ws, opened } = openSocket(xfyunRtaUrl(ctx, appId, apiKey), {}, mt('讯飞实时语音转写'))
+
+  const sentences: XfyunRtaSentence[] = []
+  let failure: Error | null = null
+  let settle = (): void => {}
+  let tailTimer: NodeJS.Timeout | null = null
+
+  const finished = new Promise<void>((resolve) => {
+    settle = resolve
+    ws.addEventListener('message', (event) => {
+      const raw = wsText((event as { data: unknown }).data)
+      if (!raw) return
+      let body: { action?: string; code?: unknown; desc?: unknown; data?: unknown }
+      try {
+        body = JSON.parse(raw)
+      } catch {
+        return
+      }
+      if (body.action === 'error') {
+        failure ??= xfyunRtaFailure(body.code, body.desc)
+        settle()
+        return
+      }
+      if (body.action !== 'result' || typeof body.data !== 'string') return
+      const sentence = xfyunRtaSentence(body.data)
+      if (sentence) sentences.push(sentence)
+    })
+    ws.addEventListener('error', () => {
+      failure ??= new ProviderError(mt('讯飞实时语音转写连接出错（检查 AppID / APIKey / 网络）'))
+      settle()
+    })
+    ws.addEventListener('close', () => {
+      // Every result has been delivered once the server closes by itself; a close
+      // before anything arrived means the session died on the way in.
+      if (!failure && sentences.length === 0) {
+        failure = new ProviderError(mt('讯飞在返回识别结果前关闭了连接'))
+      }
+      settle()
+    })
+  })
+
+  let onAbort = (): void => {}
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new ProviderError(mt('讯飞实时语音转写已取消')))
+    if (ctx.signal.aborted) onAbort()
+    else ctx.signal.addEventListener('abort', onAbort, { once: true })
+  })
+
+  const watchdog = setTimeout(() => {
+    failure ??= new ProviderError(mt('讯飞实时语音转写超时（120 s 内没有拿到结果）'))
+    settle()
+  }, REALTIME_BUDGET_MS)
+
+  void (async () => {
+    try {
+      await opened
+      // The doc is explicit that a burst breaks the engine, so this pump runs at
+      // real time — unlike the other vendors, the pacing here is protocol, not
+      // politeness.
+      const started = Date.now()
+      for (let offset = 0; offset < pcm.length; offset += XFYUN_RTA_FRAME_BYTES) {
+        const frame = pcm.subarray(offset, Math.min(offset + XFYUN_RTA_FRAME_BYTES, pcm.length))
+        ws.send(frame)
+        const sentMs = ((offset + XFYUN_RTA_FRAME_BYTES) / XFYUN_RTA_FRAME_BYTES) * XFYUN_RTA_FRAME_MS
+        const ahead = sentMs - (Date.now() - started)
+        if (ahead > 0 && offset + XFYUN_RTA_FRAME_BYTES < pcm.length) await pause(ctx, Math.min(Math.ceil(ahead), 250))
+      }
+      // Sent as a binary frame with the doc's exact bytes: the text form with the
+      // same payload is silently ignored, and the session then dies of the 15 s
+      // idle timeout instead of closing.
+      ws.send(new TextEncoder().encode('{"end": true}'))
+      tailTimer = setTimeout(() => settle(), XFYUN_RTA_TAIL_MS)
+    } catch (error) {
+      failure ??= error instanceof Error ? error : new ProviderError(reasonOf(error))
+      settle()
+    }
+  })()
+
+  try {
+    await Promise.race([finished, aborted])
+  } finally {
+    if (tailTimer) clearTimeout(tailTimer)
+    clearTimeout(watchdog)
+    ctx.signal.removeEventListener('abort', onAbort)
+    try {
+      ws.close()
+    } catch {
+      /* already closed */
+    }
+  }
+  if (failure) throw failure
+  const text = xfyunRtaJoin(sentences).trim()
+  if (!text) throw new ProviderError(mt('讯飞实时语音转写没有返回文字（录音里可能没有人声）'))
+  return text
+}
+
+export const XFYUN_RTA_SPEC: AsrAdapterSpec = {
+  id: 'xfyun-rta',
+  label: '科大讯飞实时语音转写',
+  hosts: ['rtasr.xfyun.cn'],
+  schemes: ['ws', 'wss'],
+  fields: [
+    { key: 'appId', label: 'AppID', required: true },
+    {
+      key: 'apiKey',
+      get label() {
+        return mt('APIKey')
+      },
+      get hint() {
+        return mt('控制台「Websocket服务接口认证信息」里的 APIKey；留空则用上面的 API Key')
+      }
+    },
+    {
+      key: 'lang',
+      get label() {
+        return mt('语言')
+      },
+      get hint() {
+        return mt('cn 中文/中英混合（默认留空），en 英文；方言要先在控制台添加')
+      }
+    },
+    {
+      key: 'vadMdn',
+      get label() {
+        return mt('拾音方式')
+      },
+      get hint() {
+        return mt('留空为远场；对着麦克风说话填 2（近场）')
+      }
+    }
+  ],
+  run: runXfyunRta
+}
+
 /** Every WebSocket-only vendor, in fallback-host specificity order. */
 export const REALTIME_SPECS: AsrAdapterSpec[] = [
   DASHSCOPE_REALTIME_SPEC,
   TENCENT_REALTIME_SPEC,
-  VOLCENGINE_STREAMING_SPEC
+  VOLCENGINE_STREAMING_SPEC,
+  XFYUN_RTA_SPEC
 ]

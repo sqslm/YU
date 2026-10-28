@@ -55,24 +55,44 @@ export const PRESET_FIELDS: Record<string, PresetField[]> = {
     }
   ],
   'volcengine-streaming-asr': [
+    // The new console hands out a single API Key, so neither of the old pair is
+    // required any more: demanding them is what made this connection look broken.
     {
       key: 'appId',
-      get label() { return mt('App ID') },
-      required: true,
-      get hint() { return mt('语音技术控制台应用列表里的 App ID') }
+      get label() { return mt('App ID（旧版控制台，可选）') },
+      get hint() { return mt('新版控制台只用上面的 API Key，这里留空即可') }
     },
     {
       key: 'accessKey',
-      get label() { return mt('Access Token') },
-      required: true,
-      get hint() { return mt('与 App ID 成对的那串 Access Token（不是 API Key）') }
+      get label() { return mt('Access Token（旧版控制台，可选）') },
+      get hint() { return mt('与 App ID 成对的那串 Access Token，只有旧版控制台才需要') }
     },
     {
       key: 'resourceId',
       get label() { return mt('Resource Id') },
-      get hint() { return mt('1.0 填 volc.bigasr.sauc.duration，2.0 填 volc.seedasr.sauc.duration') },
-      value: 'volc.bigasr.sauc.duration',
-      placeholder: 'volc.bigasr.sauc.duration'
+      get hint() { return mt('留空即 2.0 小时版；并发版 volc.seedasr.sauc.concurrent，1.0 老账号 volc.bigasr.sauc.duration') },
+      value: 'volc.seedasr.sauc.duration',
+      placeholder: 'volc.seedasr.sauc.duration'
+    }
+  ],
+  'xfyun-rta-asr': [
+    { key: 'appId', get label() { return mt('AppID') }, required: true, get hint() { return mt('控制台「Websocket服务接口认证信息」里的 8 位 AppID') } },
+    {
+      key: 'apiKey',
+      get label() { return mt('APIKey') },
+      get hint() { return mt('同一栏里的 APIKey；留空则用上面的 API Key。签名用的是它，不是 APISecret') }
+    },
+    {
+      key: 'lang',
+      get label() { return mt('语言') },
+      get hint() { return mt('留空为中文/中英混合；英文填 en，方言要先在控制台添加') },
+      value: 'cn',
+      placeholder: 'cn'
+    },
+    {
+      key: 'vadMdn',
+      get label() { return mt('拾音方式') },
+      get hint() { return mt('留空为远场；贴近麦克风说话填 2（近场）') }
     }
   ],
   'aliyun-paraformer': [

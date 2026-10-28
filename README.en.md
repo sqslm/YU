@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.1.0-rc.15**, Windows 10/11 x64, MIT.
+> Current version **1.1.0-rc.16**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -261,7 +261,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.1.0-rc.15`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.1.0-rc.16`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -284,6 +284,7 @@ Proper-name enhancement is off by default. Open Settings → Voice & input → R
 
 ## Changelog
 
+- **1.1.0-rc.16**: adds a streaming adapter for iFlytek's realtime transcription service (`rtasr.xfyun.cn/v1/ws`: the signature uses the APIKey rather than the APISecret, 40 ms / 1280-byte frames, billed per session length with no duration cap), and makes Volcengine's App ID and Access Token optional in the form so the new-console API Key is no longer blocked.
 - **1.1.0-rc.15**: Volcengine Doubao streaming now authenticates with the new-console API Key (`X-Api-Key` plus a Resource Id) instead of an App ID and Access Token, which still work for the old console; exercised against a real account. "Get models" no longer sends an HTTP request to a socket URL — streaming adapters list the models their engine supports, and Tencent realtime says to use its engine parameter instead.
 - **1.1.0-rc.14**: three streaming transcription adapters (Alibaba Bailian realtime, Tencent Cloud realtime, Volcengine Doubao streaming) and a paraformer-v2 file-transcription preset. Streaming adapters send audio while it is still being recorded and replay an already-recorded take at 4x, still returning the whole transcript; existing connections, keys and settings are untouched. Bailian realtime was exercised against a real account, the other two are covered by local protocol tests.
 - **1.1.0-rc.13**: community dictionary import/update from reviewed GitHub lists, preserving personal edits and disabled entries; public homophone candidates require relevant context, and unrelated public terms are not preloaded as ASR hints.

@@ -416,6 +416,20 @@ const ASR_PRESETS: ProviderPreset[] = [
     dropIn: true
   },
   {
+    id: 'xfyun-rta-asr',
+    get name() { return mt('科大讯飞（实时语音转写）') },
+    asrAdapter: 'xfyun-rta',
+    kind: 'asr',
+    protocol: 'openai',
+    // 讯飞按 domain / 语种选引擎，没有 model 字段。
+    model: '',
+    baseUrl: 'https://rtasr.xfyun.cn/v1/ws',
+    keyUrl: 'https://console.xfyun.cn/services/rta',
+    docsUrl: 'https://www.xfyun.cn/doc/asr/rtasr/API.html',
+    get notes() { return mt('WebSocket 流式：1280 字节一帧、40 ms 一帧，签名用 APIKey（不是 APISecret）。模型留空即可；免费套餐按时长与并发路数计，5 小时用完为止。') },
+    dropIn: true
+  },
+  {
     id: 'baidu-asr',
     get name() { return mt('百度短语音识别') },
     asrAdapter: 'baidu',

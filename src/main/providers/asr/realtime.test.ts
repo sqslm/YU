@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProviderProfile } from '@shared/types'
 import { SAMPLE_RATE, encodeWav } from '../../audio/wav'
 import { resolveAsrAdapter } from './index'
-import { REALTIME_SPECS } from './realtime'
+import { REALTIME_SPECS, xfyunRtaJoin, xfyunRtaSigna } from './realtime'
 import type { AsrAdapterContext, AsrAdapterInput } from './types'
 
 // ---------------------------------------------------------------------------
@@ -25,6 +25,8 @@ interface Frame {
 interface WsSession {
   sendText: (text: string) => void
   sendBinary: (payload: Buffer) => void
+  /** Close the way a real server ends a finished stream: close frame, then FIN. */
+  close: () => void
 }
 
 interface WsHarness {
@@ -65,7 +67,11 @@ async function listenWs(
     )
     const session: WsSession = {
       sendText: (text) => socket.write(serverFrame(Buffer.from(text, 'utf8'), 0x1)),
-      sendBinary: (payload) => socket.write(serverFrame(payload, 0x2))
+      sendBinary: (payload) => socket.write(serverFrame(payload, 0x2)),
+      close: () => {
+        socket.write(serverFrame(Buffer.alloc(0), 0x8))
+        socket.end()
+      }
     }
     readFrames(socket, (frame) => {
       harness.frames.push(frame)
@@ -178,11 +184,12 @@ const profile = (patch: Partial<ProviderProfile> = {}): ProviderProfile => ({
 // ---------------------------------------------------------------------------
 
 describe('realtime spec table', () => {
-  it('lists the three socket vendors and nothing else', () => {
+  it('lists the four socket vendors and nothing else', () => {
     expect(REALTIME_SPECS.map((item) => item.id)).toEqual([
       'dashscope-realtime',
       'tencent-realtime',
-      'volcengine-streaming'
+      'volcengine-streaming',
+      'xfyun-rta'
     ])
     for (const item of REALTIME_SPECS) {
       expect(item.hosts.length).toBeGreaterThan(0)
@@ -195,7 +202,9 @@ describe('realtime spec table', () => {
       }
       // None of them has a `/models` route, so each lists its model ids for the
       // "获取模型" button (Tencent uses an engine field instead, hence none).
-      if (item.id !== 'tencent-realtime') expect((item.models ?? []).length).toBeGreaterThan(0)
+      if (item.id === 'dashscope-realtime' || item.id === 'volcengine-streaming') {
+        expect((item.models ?? []).length).toBeGreaterThan(0)
+      }
     }
   })
 
@@ -488,5 +497,103 @@ describe('volcengine streaming (binary envelope + gzip)', () => {
     await expect(
       spec('volcengine-streaming').run(context('ws://127.0.0.1:1', {}), input(wav().bytes))
     ).rejects.toThrow(/API Key/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 讯飞 实时语音转写 (RTASR)
+//
+// Two things here are worth pinning down rather than trusting: the signature
+// (the doc ships a worked example, so the casing of the MD5 is checkable) and
+// the assembly rule (finals carry the whole sentence, so appending every frame
+// repeats the text).
+// ---------------------------------------------------------------------------
+
+describe('xfyun rta signature', () => {
+  it('reproduces the worked example from the API doc', () => {
+    // appid 595f23df + ts 1512041814 → md5 0829d4012497c14a30e7e72aeebe565e
+    expect(xfyunRtaSigna('595f23df', '1512041814', 'd9f4aa7ea6d94faca62cd88a28fd5234')).toBe(
+      'IrrzsJeOFk1NGfJHW6SkHUoN9CU='
+    )
+  })
+})
+
+describe('xfyun rta assembly', () => {
+  it('appends each final sentence once, in segment order', () => {
+    expect(
+      xfyunRtaJoin([
+        { seg: 0, text: '今天下午三点', final: false },
+        { seg: 1, text: '今天下午三点开会', final: true },
+        { seg: 2, text: '请把纪要发我', final: true }
+      ])
+    ).toBe('今天下午三点开会请把纪要发我')
+  })
+
+  it('keeps the longest interim when the take ends mid-sentence', () => {
+    expect(
+      xfyunRtaJoin([
+        { seg: 0, text: '提醒我明天', final: true },
+        { seg: 1, text: '上午', final: false },
+        { seg: 2, text: '上午要提交周报', final: false }
+      ])
+    ).toBe('提醒我明天上午要提交周报')
+  })
+
+  it('reads the string form of the sentence type', () => {
+    expect(xfyunRtaJoin([{ seg: 0, text: '一句话', final: true }])).toBe('一句话')
+  })
+})
+
+describe('xfyun rta socket', () => {
+  it('signs the query, streams raw PCM, and closes the session with the exact end frame', async () => {
+    const take = wav()
+    let voice = 0
+    let endBytes: Buffer | null = null
+    const result = (seg: number, type: string, text: string): string =>
+      JSON.stringify({
+        action: 'result',
+        code: '0',
+        desc: 'success',
+        data: JSON.stringify({ seg_id: seg, cn: { st: { type, rt: [{ ws: [{ cw: [{ w: text }] }] }] } } })
+      })
+    const server = await listenWs((frame, session) => {
+      if (!frame.binary) return
+      // The end marker must be the doc's exact bytes, binary frame included.
+      if (frame.payload.equals(Buffer.from('{"end": true}'))) {
+        endBytes = frame.payload
+        // 讯飞 only flushes the trailing sentence after the marker, then closes.
+        session.sendText(result(1, '0', '。'))
+        session.close()
+        return
+      }
+      voice += 1
+      if (voice > 1) return
+      session.sendText(result(0, '1', '你好'))
+      session.sendText(result(0, '0', '你好。'))
+    })
+
+    try {
+      const text = await spec('xfyun-rta').run(
+        context(`ws://127.0.0.1:${server.port}`, { appId: '595f23df' }, 'api-key-only'),
+        input(take.bytes)
+      )
+      // The interim repeated the final, and both were dropped once each: two
+      // segments, not the concatenation of every frame the server sent.
+      expect(text).toBe('你好。。')
+      const url = new URL(server.url)
+      expect(url.pathname).toBe('/v1/ws')
+      expect(url.searchParams.get('appid')).toBe('595f23df')
+      const ts = String(url.searchParams.get('ts'))
+      expect(url.searchParams.get('signa')).toBe(xfyunRtaSigna('595f23df', ts, 'api-key-only'))
+      expect(endBytes).toEqual(Buffer.from('{"end": true}'))
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('names the credential when the profile has none', async () => {
+    await expect(spec('xfyun-rta').run(context('ws://127.0.0.1:1', { appId: 'ab' }), input(wav().bytes))).rejects.toThrow(
+      /APIKey/
+    )
   })
 })
