@@ -27,3 +27,12 @@ it('retains the model-list request headers and HTTP verdict', async () => {
   expect(await probeConnection({ baseUrl: 'https://gw/v1/', apiKey: 'test-only', extraHeaders: 'X-Org: workspace' })).toMatchObject({ ok: false, status: 401 })
   expect(fetchMock).toHaveBeenCalledWith('https://gw/v1/models', expect.objectContaining({ headers: { Authorization: 'Bearer test-only', 'X-Org': 'workspace' } }))
 })
+
+it('says an HTTP probe cannot judge a WebSocket connection', async () => {
+  const fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+  const result = await probeConnection({ baseUrl: 'https://dashscope.aliyuncs.com/api-ws/v1/inference', apiKey: 'test-only', asrAdapter: 'dashscope-realtime' })
+  expect(result.ok).toBe(true)
+  expect(result.message).toContain('WebSocket')
+  expect(fetchMock).not.toHaveBeenCalled()
+})

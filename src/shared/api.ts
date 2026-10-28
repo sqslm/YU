@@ -388,6 +388,8 @@ export interface TypelessApi {
       baseUrl: string
       apiKey: string
       extraHeaders?: string
+      /** Streaming adapters cannot be judged by an HTTP probe; say so instead. */
+      asrAdapter?: string
     }): Promise<{ ok: boolean; status?: number; message: string }>
     /**
      * Multimodal connectivity check: sends the smallest possible generateContent

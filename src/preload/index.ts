@@ -315,6 +315,7 @@ const api: TypelessApi = {
       baseUrl: string
       apiKey: string
       extraHeaders?: string
+      asrAdapter?: string
     }): Promise<{ ok: boolean; status?: number; message: string }> =>
       ipcRenderer.invoke('net:probe', input),
     probeMultimodal: (input: {

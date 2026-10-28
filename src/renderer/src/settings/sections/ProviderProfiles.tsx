@@ -110,7 +110,7 @@ function ProfileEditor({ profile, settings, patch, saving, saveError, onRemove }
     try {
       const result = profile.kind === 'multimodal'
         ? await window.api.net.probeMultimodal({ baseUrl: profile.baseUrl, apiKey: profile.apiKey, model: profile.model, extraHeaders: profile.extraHeaders })
-        : await window.api.net.probe({ baseUrl: profile.baseUrl, apiKey: profile.apiKey, extraHeaders: profile.extraHeaders })
+        : await window.api.net.probe({ baseUrl: profile.baseUrl, apiKey: profile.apiKey, extraHeaders: profile.extraHeaders, asrAdapter: profile.kind === 'asr' ? profile.asrAdapter : undefined })
       if (token !== request.current) return
       setTest({ busy: false, ok: result.ok, text: result.ok ? result.status ? i18n.t('连接正常 · HTTP {{status}}', { status: result.status }) : i18n.t('连接正常') : result.message })
     } catch (error) { if (token === request.current) setTest({ busy: false, ok: false, text: error instanceof Error ? error.message : String(error) }) }
