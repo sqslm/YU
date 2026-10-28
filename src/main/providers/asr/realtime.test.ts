@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProviderProfile } from '@shared/types'
 import { SAMPLE_RATE, encodeWav } from '../../audio/wav'
 import { resolveAsrAdapter } from './index'
-import { REALTIME_SPECS, xfyunRtaJoin, xfyunRtaSigna } from './realtime'
+import { REALTIME_SPECS, dashscopeRealtimeModel, xfyunRtaJoin, xfyunRtaSigna } from './realtime'
 import type { AsrAdapterContext, AsrAdapterInput } from './types'
 
 // ---------------------------------------------------------------------------
@@ -21,6 +21,12 @@ interface Frame {
   binary: boolean
   payload: Buffer
 }
+
+it('uses the realtime Paraformer model for file-model aliases without rewriting custom models', () => {
+  expect(dashscopeRealtimeModel('paraformer-v2')).toBe('paraformer-realtime-v2')
+  expect(dashscopeRealtimeModel('paraformer-v1')).toBe('paraformer-realtime-v1')
+  expect(dashscopeRealtimeModel('custom-model')).toBe('custom-model')
+})
 
 interface WsSession {
   sendText: (text: string) => void

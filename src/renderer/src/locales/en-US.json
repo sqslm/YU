@@ -2288,5 +2288,7 @@
   "请选择有效的公共词库": "Select a valid community dictionary.",
   "公共词库下载为空": "The dictionary download was empty.",
   "公共词库文件过大": "The dictionary file is too large.",
-  "公共词库正在下载，请稍候": "Community dictionaries are downloading. Please wait."
+  "公共词库正在下载，请稍候": "Community dictionaries are downloading. Please wait.",
+  "支持服务端热词；本地词库尚未自动上传，仅提供 LLM 候选": "Supports server-side vocabulary; local terms are not uploaded automatically and only inform LLM candidates",
+  "支持请求级热词；当前未直传本地词库，仅提供 LLM 候选": "Supports per-request hotwords; local terms currently only inform LLM candidates"
 }

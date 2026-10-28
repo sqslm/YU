@@ -187,8 +187,12 @@ interface DashscopeSentence {
   sentence_end?: unknown
 }
 
+export function dashscopeRealtimeModel(model: string): string {
+  return model === 'paraformer-v2' ? 'paraformer-realtime-v2' : model === 'paraformer-v1' ? 'paraformer-realtime-v1' : model || 'paraformer-realtime-v2'
+}
+
 async function runDashscopeRealtime(ctx: AsrAdapterContext, input: AsrAdapterInput): Promise<string> {
-  const model = input.model || 'paraformer-realtime-v2'
+  const model = dashscopeRealtimeModel(input.model)
   const pcm = pcmBytes(input.wav)
   const taskId = randomUUID()
   const { ws, opened } = openSocket(dashscopeUrl(ctx), { Authorization: `bearer ${ctx.apiKey}` }, mt('阿里云实时识别'))

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Alert, Box, Button, CssBaseline, MenuItem, Paper, Stack, TextField, ThemeProvider, Tooltip, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { CaptureRect, ScreenshotAction, ScrollCaptureProgress } from '@shared/screenshot'
-import { screenshotCrop, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
+import { captureWindowAt, screenshotCrop, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
 import { CropSquare, RadioButtonUnchecked, NorthEast, Create, TextFields, GridOn, Mouse, Undo, RestartAlt, SaveAlt, Check, Close, Translate, TextSnippet, SmartToy, UnfoldMore, QrCodeScanner } from '@mui/icons-material'
 import { qrWebUrl } from '@shared/qr'
 import { decodeQr } from './qr'
@@ -17,7 +17,7 @@ import { paintScreenshotTranslation } from './translation'
 
 type Point = { x: number; y: number }
 type Tool = 'select' | 'rect' | 'ellipse' | 'arrow' | 'pen' | 'text' | 'mosaic'
-type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark' | 'mark-resize'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle; bounds?: CaptureRect; moved?: boolean }
+type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark' | 'mark-resize'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle; bounds?: CaptureRect; moved?: boolean; snap?: CaptureRect | null }
 const TOOLS: [Tool, string][] = [['select', '鼠标'], ['rect', '矩形'], ['ellipse', '椭圆'], ['arrow', '箭头'], ['pen', '画笔'], ['text', '文字'], ['mosaic', '马赛克']]
 const COLORS = ['#ff4d5b', '#4c8dff', '#ffd54f', '#ffffff', '#202020']
 const TOOL_ICONS = { select: Mouse, rect: CropSquare, ellipse: RadioButtonUnchecked, arrow: NorthEast, pen: Create, text: TextFields, mosaic: GridOn }
@@ -67,6 +67,8 @@ function ScreenshotEditor(): JSX.Element {
   useEffect(() => { if (settings) applyUiLanguage(settings.uiLanguage) }, [settings?.uiLanguage])
   const [view, setView] = useState(() => ({ width: innerWidth, height: innerHeight }))
   const canvas = useRef<HTMLCanvasElement>(null), image = useRef<HTMLCanvasElement | null>(null), gesture = useRef<Gesture | null>(null)
+  const windows = useRef<CaptureRect[]>([])
+  const [hover, setHover] = useState<CaptureRect | null>(null)
   const [loaded, setLoaded] = useState(false), [selection, setSelection] = useState<CaptureRect | null>(null)
   const [tool, setTool] = useState<Tool>('select'), [color, setColor] = useState(COLORS[0])
   const [panel, setPanel] = useState<Tool | 'ocr' | 'translate' | 'ask' | 'qr' | null>(null)
@@ -109,7 +111,7 @@ function ScreenshotEditor(): JSX.Element {
       if (!alive) return
       const source = document.createElement('canvas'); source.width = frame.width; source.height = frame.height
       source.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(frame.pixels), frame.width, frame.height), 0, 0)
-      image.current = source; setLoaded(true)
+      image.current = source; windows.current = frame.windows; setHover(captureWindowAt(frame.cursor, frame.windows)); setLoaded(true)
       setAllScreens(frame.allScreens===true)
     }).catch(reportError)
     return () => { alive = false; image.current = null }
@@ -140,7 +142,7 @@ function ScreenshotEditor(): JSX.Element {
       ctx.restore()
     }
     ctx.fillStyle = 'rgba(0,0,0,.48)'; ctx.beginPath(); ctx.rect(0, 0, view.width, view.height)
-    const preview = selection
+    const preview = selection ?? hover
     if (preview) ctx.rect(preview.x, preview.y, preview.width, preview.height)
     ctx.fill('evenodd')
     if (preview && !selection) { ctx.strokeStyle = '#4c8dff'; ctx.lineWidth = 2; ctx.strokeRect(preview.x, preview.y, preview.width, preview.height) }
@@ -152,7 +154,7 @@ function ScreenshotEditor(): JSX.Element {
         for (const id of CAPTURE_HANDLES) { const p = captureHandle(r, id); ctx.fillRect(p.x - 3, p.y - 3, 6, 6) }
       }
     }
-  }, [loaded, selection, marks, draft, view, selectedMark, tool, translated, showOriginal, scrolling])
+  }, [loaded, selection, hover, marks, draft, view, selectedMark, tool, translated, showOriginal, scrolling])
 
   useEffect(() => {
     if (!loaded || !settings) return
@@ -184,7 +186,7 @@ function ScreenshotEditor(): JSX.Element {
       if (tool === 'text') { setText({ point: p, value: '' }); return }
       kind = 'draw'
     } else { setSelectedMark(null) }
-    const g: Gesture = { kind, start: p, rect: selection, marks, ...(hit >= 0 ? { index: hit } : {}), ...(edge && edge !== 'move' ? { handle: edge } : {}) }
+    const g: Gesture = { kind, start: p, rect: selection, marks, snap: !selection && !event.altKey ? captureWindowAt(p, windows.current) : null, ...(hit >= 0 ? { index: hit } : {}), ...(edge && edge !== 'move' ? { handle: edge } : {}) }
     if (kind === 'mark-resize') { g.index = selectedMark!; g.handle = layerEdge as ResizeHandle; g.bounds = bounds! }
     if (kind === 'draw') { g.mark = { tool: tool as Mark['tool'], color, width: tool === 'mosaic' ? mosaicSize : stroke, points: [p] } }
     gesture.current = g; event.currentTarget.setPointerCapture(event.pointerId)
@@ -194,6 +196,7 @@ function ScreenshotEditor(): JSX.Element {
     const g = gesture.current
     const p = point(event)
     if (!g) {
+      if (!selection) setHover(event.altKey ? null : captureWindowAt(p, windows.current))
       const edge = tool === 'select' && selection ? captureHit(p, selection) : null
       const layerEdge = tool === 'select' && selectedMark !== null && marks[selectedMark] ? captureHit(p, markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null)) : null
       const handle = layerEdge && layerEdge !== 'move' ? layerEdge : edge
@@ -229,7 +232,7 @@ function ScreenshotEditor(): JSX.Element {
     move(event)
     const g = gesture.current, mark = g?.mark
     if (g?.kind === 'select') {
-      if (!g.moved) setSelection(g.rect)
+      if (!g.moved) setSelection(g.snap ?? g.rect)
       else { undoStack.current = []; setMarks([]) }
     }
     if (g?.kind === 'move' && g.rect) {
@@ -322,7 +325,7 @@ function ScreenshotEditor(): JSX.Element {
   return <ThemeProvider theme={theme}><CssBaseline />
     <style>{'html, body, #root { background: transparent; overflow: hidden; }'}</style>
     <canvas ref={canvas} width={view.width} height={view.height} data-screenshot-canvas data-screenshot-loaded={loaded || undefined}
-      data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
+      data-screenshot-snap={!selection && hover ? JSON.stringify(hover) : undefined} data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
       data-screenshot-layer-bounds={tool === 'select' && selectedMark !== null && marks[selectedMark] ? JSON.stringify(markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null)) : undefined}
       style={{ position: 'fixed', inset: 0, cursor, touchAction: 'none', pointerEvents: scrolling || longCapture ? 'none' : 'auto' }}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={() => {

@@ -61,8 +61,10 @@ function ProfileFields({ profile, onChange, children }: { profile: ProviderProfi
   const vendorField = (field: typeof fields[number]): JSX.Element => <TextField key={field.key} fullWidth size="small" label={field.label} required={field.required} value={profile.vendor?.[field.key] ?? ''}
     placeholder={field.placeholder} helperText={field.hint} error={field.required && !profile.vendor?.[field.key]?.trim()} sx={modelFieldSx}
     inputProps={{ 'data-vendor-field': field.key }} onChange={event => onChange({ ...profile, vendor: { ...profile.vendor, [field.key]: event.target.value } })} />
+  const [name, setName] = useState(profile.name)
+  useEffect(() => setName(profile.name), [profile.id, profile.name])
   return <Stack spacing={2}>
-    <TextField fullWidth size="small" label={i18n.t('连接名称')} value={profile.name} sx={modelFieldSx} onChange={event => onChange({ ...profile, name: event.target.value })} />
+    <TextField fullWidth size="small" label={i18n.t('连接名称')} value={name} sx={modelFieldSx} onChange={event => setName(event.target.value)} onBlur={() => { const trimmed = name.trim(); if (trimmed) onChange({ ...profile, name: trimmed }); else setName(profile.name) }} />
     <TextField fullWidth size="small" label="API Key" type={showKey ? 'text' : 'password'} autoComplete="off" value={profile.apiKey} sx={modelFieldSx}
       placeholder={i18n.t('本机服务可留空')} onChange={event => onChange({ ...profile, apiKey: event.target.value })}
       InputProps={{ endAdornment: <InputAdornment position="end"><IconButton size="small" aria-label={i18n.t(showKey ? '隐藏密钥' : '显示密钥')} onClick={() => setShowKey(value => !value)}>{showKey ? <VisibilityOffOutlined sx={{ fontSize: 17 }} /> : <VisibilityOutlined sx={{ fontSize: 17 }} />}</IconButton></InputAdornment> }} />

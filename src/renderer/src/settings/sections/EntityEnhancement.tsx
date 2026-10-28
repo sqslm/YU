@@ -38,7 +38,7 @@ export function EntityEnhancement({ settings, patch }: { settings: Settings; pat
       <Typography variant="caption" color="text.secondary">{t('启用后，相关词条可能发送给当前配置的 ASR 或 LLM；不自动采集私人历史，不建立长期记忆。')}</Typography>
       {settings.pipelineMode === 'multimodal' ? <Typography variant="body2">{t('音频直达模式沿用现有请求，不增加 ASR 或纠错调用。')}</Typography> : <>
         {settings.localAsr.enabled && <Typography variant="body2">{t('内置本地 ASR：当前不支持原生热词；可在已有 LLM 润色中提供候选。')}</Typography>}
-        {profiles.map(profile => profile && <Typography key={profile.id} variant="body2">{profile.name} · {t(asrEnhancementCapability(profile) === 'none' ? '原生增强未验证，仅提供 LLM 候选' : '支持 ASR 上下文与 LLM 候选')}</Typography>)}
+        {profiles.map(profile => profile && <Typography key={profile.id} variant="body2">{profile.name} · {t(['dashscope-realtime', 'xfyun-rta'].includes(profile.asrAdapter ?? '') ? '支持服务端热词；本地词库尚未自动上传，仅提供 LLM 候选' : ['volcengine-streaming', 'tencent-realtime'].includes(profile.asrAdapter ?? '') ? '支持请求级热词；当前未直传本地词库，仅提供 LLM 候选' : asrEnhancementCapability(profile) === 'none' ? '原生增强未验证，仅提供 LLM 候选' : '支持 ASR 上下文与 LLM 候选')}</Typography>)}
         {!settings.localAsr.enabled && !profiles.length && <Typography variant="body2">{t('请先配置 ASR 模型')}</Typography>}
       </>}
       <Button size="small" sx={{ mt: 1 }} onClick={() => { setOpen(true); void run(load) }}>{t('管理专有名词词库')}</Button>

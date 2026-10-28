@@ -135,6 +135,17 @@
 
 ## 专有名词增强检查（2026-10-29）
 
+### 新增实时适配器复核
+
+- 百炼 Paraformer 实时接口支持服务端热词 `vocabulary_id`，并非直接提交任意词数组。[官方客户端事件](https://help.aliyun.com/en/model-studio/paraformer-client-events)。本地词库当前不自动上传或创建云词表。
+- 腾讯实时接口支持 `hotword_id` / `hotword_list`；请求级临时词表可能覆盖云词表，不能未经选择静默合并。[官方接口](https://cloud.tencent.com.cn/document/api/1093/131127)。当前适配器未传本地热词，保留现状。
+- 豆包 bigmodel 支持 corpus/context 热词与云端词表；直传和云词表存在优先级，应避免全库直传及强权重。[官方热词与上下文](https://docs.volcengine.com/docs/doubao-voice/hot-words-and-context?lang=zh)。当前适配器未自动发送本地热词。
+- 讯飞当前适配器连接标准版 rtasr `/v1/ws`，支持控制台个性化热词，不应挪用文件转写 lfasr 的 `hotWord` 参数。[标准版接口](https://www.xfyun.cn/doc/asr/rtasr/API.html)。本地词库未自动上传。
+- 本机保存的 llama.cpp / Qwen3-ASR GGUF 配置是否支持提示词取决于该服务版本和请求协议，未据模型名称推断支持。没有读取密钥或发起付费语音请求；以上是官方协议及本地真实 WebSocket 契约测试验证，不代表账号已开通热词或实际识别准确率验证。
+- 当前上述新实时适配器只使用本地词库提供 LLM 候选，不额外传原生热词，因而不会重复叠加或覆盖用户云词库。LLM 候选仍可能误判，沿用语境限制、少量候选与精确标识符保护；原有人工 replacements 规则仍会按字面替换，不属于热词。
+- 修复已保存实时适配器使用 `paraformer-v2` 文件模型名的情况：仅在实时请求中映射为 `paraformer-realtime-v2`，v1 同理，未知自定义模型保留。腾讯实际发送已经单独限速为 2 倍，无需调整。握手检查确认本机 Node WebSocket 会发送指定鉴权头。
+- 本轮同时仅恢复截图窗口预览/单击吸附，保留拖动阈值、工具点击不绘制和双击完成；连接名称改为本地编辑、失焦提交，避免删空过程中设置标准化补回默认名称。类型检查及 29 项相关测试通过；没有声称真人鼠标/键盘或付费 ASR 已验证。
+
 - 最终转写：`pipeline.asrTranscript` 在录音结束后调用本地 sherpa 或 `providers/asr.ts`。通用分支上传 multipart 到 audio/transcriptions；阿里云 Qwen3-ASR-Flash 使用 DashScope multimodal-generation JSON；其他适配器各自构造协议。不能仅凭 model 字符串把所有服务视为支持热词。
 - 字幕：`LiveCaptions` 保留至多六秒音频，通过既有转写回调获取预览；不在每个 PCM 分片读取词库或调用 LLM。最终转写独立保存原始文本。
 - 场景：开始录音时冻结前台窗口与任务，`promptLibrary` 选择 ai/polish/translate/document/email；五类共享同一个 pipeline，而非五套词库。
