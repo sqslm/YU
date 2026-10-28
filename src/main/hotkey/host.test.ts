@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeSettings } from '@shared/defaults'
 
 const mock = vi.hoisted(() => ({ fork: vi.fn() }))
@@ -8,6 +8,32 @@ import { HotkeyHost } from './host'
 
 describe('shortcut recording suspension', () => {
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
+  it('does not acknowledge through a child stopped by the start handler', () => {
+    const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+    mock.fork.mockReturnValue(child)
+    const host = new HotkeyHost(() => host.stop())
+    host.start(mergeSettings({})); child.postMessage.mockClear()
+    child.emit('message', { type: 'start', mode: 'dictation', at: 1 })
+    expect(child.kill).toHaveBeenCalled()
+    expect(child.postMessage).not.toHaveBeenCalled()
+  })
+  it('ignores events and exits from a stopped child after restarting', async () => {
+    vi.useFakeTimers()
+    const old = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+    const current = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+    mock.fork.mockReturnValueOnce(old).mockReturnValue(current)
+    const events = vi.fn(), host = new HotkeyHost(events)
+    host.start(mergeSettings({})); host.stop(); host.start(mergeSettings({}))
+    old.emit('message', { type: 'start', mode: 'dictation', at: 1 })
+    old.emit('exit', 0)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(events).not.toHaveBeenCalled()
+    expect(mock.fork).toHaveBeenCalledTimes(2)
+    host.setActivity('working')
+    expect(current.postMessage).toHaveBeenCalledWith({ type: 'activity', value: 'working' })
+    host.stop()
+  })
   it('suspends voice shortcuts during screenshot editing and preserves suspension across config updates', () => {
     const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
     mock.fork.mockReturnValue(child)

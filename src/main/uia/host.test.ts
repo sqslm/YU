@@ -7,6 +7,30 @@ vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() } }))
 
 describe('context reader reclamation', () => {
   afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
+  it('bounds repeated crashes before a reader ever becomes ready', async () => {
+    vi.useFakeTimers()
+    const children: EventEmitter[] = []
+    vi.mocked(utilityProcess.fork).mockReset().mockImplementation(() => {
+      const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+      children.push(child); return child as never
+    })
+    const host = new UiaHost(); host.start(); host.warm()
+    for (let attempt = 0; attempt < 5; attempt++) {
+      children.at(-1)!.emit('exit', 1)
+      await vi.advanceTimersByTimeAsync(1300)
+    }
+    expect(children).toHaveLength(4)
+    host.stop()
+  })
+  it('does not restart a reader after stop cancels a queued crash retry', async () => {
+    vi.useFakeTimers()
+    const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+    vi.mocked(utilityProcess.fork).mockReset().mockReturnValue(child as never)
+    const host = new UiaHost()
+    host.start(); host.warm(); child.emit('exit', 1); host.stop()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(utilityProcess.fork).toHaveBeenCalledTimes(1)
+  })
   it('keeps active reads and ignores late events from the reclaimed child', async () => {
     vi.useFakeTimers()
     const workers: Array<EventEmitter & { postMessage: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn> }> = []

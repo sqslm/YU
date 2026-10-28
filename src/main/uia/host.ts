@@ -55,6 +55,7 @@ export class UiaHost {
   private stopped = false
   private wanted = false
   private ready = false
+  private restartTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly log: (line: string) => void = () => {}) {}
 
@@ -78,11 +79,15 @@ export class UiaHost {
       this.scheduleIdle()
       return
     }
+    this.restarts = 0
     this.spawn()
     this.scheduleIdle()
   }
 
   private spawn(): void {
+    if (this.stopped || !this.wanted || this.proc) return
+    if (this.restartTimer) clearTimeout(this.restartTimer)
+    this.restartTimer = null
     const entry = join(__dirname, 'uia.js')
     try {
       const child = utilityProcess.fork(entry, [], {
@@ -90,7 +95,6 @@ export class UiaHost {
         stdio: 'inherit'
       })
       this.proc = child
-      this.restarts = 0
       child.on('message', (message: unknown) => {
         if (this.proc === child) this.onMessage(message as ChildMessage)
       })
@@ -102,7 +106,7 @@ export class UiaHost {
         this.flushPending()
         if (!this.stopped && this.restarts < MAX_RESTARTS) {
           this.restarts += 1
-          setTimeout(() => this.spawn(), 1200)
+          this.restartTimer = setTimeout(() => { this.restartTimer = null; this.spawn() }, 1200)
         }
       })
     } catch (err) {
@@ -113,6 +117,7 @@ export class UiaHost {
 
   private onMessage(message: ChildMessage): void {
     if (message.type === 'ready') {
+      this.restarts = 0
       this.ready = true
       this.log('[uia] ready')
       // Arm the reclaimer here as well as after a read: a child that comes back
@@ -227,11 +232,16 @@ export class UiaHost {
   stop(): void {
     this.stopped = true
     this.wanted = false
+    if (this.restartTimer) clearTimeout(this.restartTimer)
+    this.restartTimer = null
     this.clearIdle()
     this.flushPending()
     const proc = this.proc
     this.proc = null
     this.ready = false
+    const waiters = this.readyWaiters
+    this.readyWaiters = []
+    for (const wake of waiters) wake()
     proc?.kill()
   }
 

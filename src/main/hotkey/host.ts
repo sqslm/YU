@@ -56,6 +56,7 @@ export class HotkeyHost {
   private restarts = 0
   /** Set by `stop()` so a deliberate teardown is not mistaken for a crash. */
   private stopping = false
+  private restartTimer: ReturnType<typeof setTimeout> | null = null
   /** Mirrors the answer card's visibility in the hook; see `setCardOpen`. */
   private cardOpen = false
   private capturing = false
@@ -67,6 +68,9 @@ export class HotkeyHost {
   ) {}
 
   start(settings: Settings): void {
+    if (this.proc) { this.apply(settings); return }
+    if (this.restartTimer) clearTimeout(this.restartTimer)
+    this.restartTimer = null
     this.settings = settings
     this.stopping = false
     this.restarts = 0
@@ -83,6 +87,7 @@ export class HotkeyHost {
     this.proc = child
 
     child.on('message', (message: unknown) => {
+      if (this.proc !== child || this.stopping) return
       const msg = message as HotkeyMessage
       if (msg.type === 'ready') {
         this.onLog('[hotkey] ready')
@@ -109,10 +114,11 @@ export class HotkeyHost {
       this.onEvent(msg)
       // Main may reject a start while busy or in an excluded app. Acknowledge
       // its actual state even when unchanged, so the hook cannot retain a ghost take.
-      if (msg.type === 'start') child.postMessage({ type: 'activity', value: this.activity })
+      if (msg.type === 'start' && this.proc === child && !this.stopping) child.postMessage({ type: 'activity', value: this.activity })
     })
 
     child.on('exit', (code) => {
+      if (this.proc !== child) return
       this.onLog(`[hotkey] exited with ${code}`)
       this.proc = null
       // A teardown we asked for is not a crash. Restarting here is how quitting
@@ -131,8 +137,9 @@ export class HotkeyHost {
           message: mt('键盘钩子反复退出，快捷键可能暂时失效（已在后台重试）')
         })
       }
-      setTimeout(() => {
-        if (!this.stopping) this.spawn()
+      this.restartTimer = setTimeout(() => {
+        this.restartTimer = null
+        if (!this.stopping && !this.proc) this.spawn()
       }, delay)
     })
   }
@@ -215,7 +222,10 @@ export class HotkeyHost {
 
   stop(): void {
     this.stopping = true
-    this.proc?.kill()
+    if (this.restartTimer) clearTimeout(this.restartTimer)
+    this.restartTimer = null
+    const child = this.proc
     this.proc = null
+    child?.kill()
   }
 }
