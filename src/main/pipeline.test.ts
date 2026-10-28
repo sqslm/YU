@@ -1434,6 +1434,17 @@ describe('opening phrase mode activation', () => {
 
 
 describe('unified voice entry', () => {
+  it('generates cursor code using the file title and inserts plain text without polishing it', async () => {
+    mocks.foregroundWindow.mockReturnValue({ title: 'example.py - Visual Studio Code', className: 'code', appName: 'Code', pid: 42 })
+    mocks.transcribe.mockResolvedValue({ text: '帮我在光标处插入一段冒泡排序带注释', model: 'whisper-1' })
+    const code = '# 冒泡排序\ndef bubble_sort(values):\n    return values'
+    mocks.complete.mockResolvedValue(code)
+    const { pipeline } = harness({ polish: { enabled: false } as Settings['polish'], voiceCommands: { ...DEFAULT_VOICE_COMMANDS, smartRouting: true } })
+    pipeline.start('dictation'); pipeline.pushAudio(tone(1000)); await pipeline.stop()
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('example.py')
+    expect(mocks.insertText.mock.calls[0][0]).toBe(code)
+  })
   it('plays the start cue before muting playback and ignores stale cue acknowledgments', () => {
     vi.useFakeTimers(); mocks.muteOthers.mockReturnValue(true)
     const { pipeline, sent } = harness({ muteWhileRecording: true, playSounds: true })

@@ -49,6 +49,7 @@ import { chainFor, withFailover } from './providers/chain'
 import { generateFromAudio } from './providers/gemini'
 import { askAgent, askFollowUp } from './agent'
 import { directVoiceIntent, isCurrentContentRequest, parseVoiceIntent, VOICE_INTENT_PROMPT } from './voice-intent'
+import { cursorGeneration, cursorGenerationPrompt } from './cursor-generation'
 import type { SelectionTarget } from './selection-editor'
 import { insertOk, insertRich, insertText, verifyInsertion } from './insert'
 import { captureEdit, type LearnedCandidate } from './editCapture'
@@ -1546,15 +1547,16 @@ export class Pipeline {
         final = this.shapeMultimodalTranslation(final, settings)
       }
 
-      const beforeRules = mode === 'dictation' && settings.polish.enabled ? cleanPolishedText(unwrapModelText(final), transcript) : unwrapModelText(final)
-      final = applyReplacements(beforeRules, settings.replacements)
+      const generated = mode === 'dictation' && Boolean(cursorGeneration(transcript))
+      const beforeRules = mode === 'dictation' && settings.polish.enabled && !generated ? cleanPolishedText(unwrapModelText(final), transcript) : unwrapModelText(final)
+      final = generated ? beforeRules : applyReplacements(beforeRules, settings.replacements)
       if (!final.trim()) throw new Error(mt('模型返回了空文本'))
       this.countRuleHits(transcript, settings.replacements)
 
       if (mode === 'ask') {
         this.showAnswer(final, question, sources, token, { tools, actions, retrieval })
       } else {
-        await this.insertInto(final, settings)
+        await this.insertInto(final, generated ? { ...settings, richInsert: false } : settings)
       }
       // A cancel that landed while inserting/sending must not record history.
       if (token !== this.runToken) return null
@@ -1892,6 +1894,12 @@ export class Pipeline {
     // Translation is an independent task type, so it always uses its own
     // translate card: main mode/card and auto-activation never apply to it.
     if (mode === 'translate') return this.translate(settings, transcript, signal, context)
+
+    const generation = mode === 'dictation' ? cursorGeneration(transcript) : null
+    if (generation) return this.llm(settings, {
+      messages: [{ role: 'system', content: cursorGenerationPrompt(generation, context.windowTitle) }, { role: 'user', content: generation }],
+      temperature: 0.2, signal
+    })
 
     if (!settings.polish.enabled) return transcript
 

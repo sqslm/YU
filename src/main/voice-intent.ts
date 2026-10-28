@@ -1,4 +1,5 @@
 import { readAloudCommand } from './read-aloud-command'
+import { cursorGeneration } from './cursor-generation'
 
 /** One decision per completed take. Previews never execute an action. */
 export type VoiceIntent = {
@@ -83,6 +84,7 @@ export function isReminderCreationRequest(value: string): boolean {
 
 export function directVoiceIntent(text: string, hasRecentAnswer = false, operation?: (input: string) => unknown): VoiceIntent | null {
   const value = text.trim()
+  if (cursorGeneration(value)) return { kind: 'dictation' }
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
   // The action inside a reminder is its content, not permission to perform it now.
