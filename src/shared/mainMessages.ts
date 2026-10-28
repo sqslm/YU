@@ -7,6 +7,7 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  '连接测试超时，请检查地址或网络后重试。': 'Connection test timed out. Check the endpoint or network and try again.',
   '当前内容仅读取了部分，摘要可能不完整。': 'Only part of the current content was read; the summary may be incomplete.',
   '浏览器通过辅助功能提供的当前页面正文': 'Current rendered page text provided by browser accessibility',
   '当前地址的公开网页正文': 'Public page text fetched from the current URL',

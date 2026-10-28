@@ -170,7 +170,7 @@ export function ProviderProfiles({ kind, settings, patch, saving, saveError, loc
   const submit = (): void => {
     if (!draft) return
     const profile = { ...draft, id: newProfileId(draft.kind, settings.profiles ?? []), name: uniqueProfileName(draft.name.trim() || draftPreset?.name || i18n.t('我的服务'), settings.profiles ?? []), baseUrl: draft.baseUrl.trim(), apiKey: draft.apiKey.trim(), model: draft.model.trim() }
-    apply(upsertProfile(settings, profile)); setSelectedId(profile.id); setDraft(null)
+    apply(upsertProfile(settings, profile)); setQuery(''); setSelectedId(profile.id); setDraft(null)
   }
   const remove = (): void => {
     if (!selected) return

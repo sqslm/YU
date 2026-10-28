@@ -45,6 +45,7 @@ import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
+import { probeConnection, probeMultimodalConnection } from './providers/connection-probe'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { safeFetch } from './safe-fetch'
 import { appIcon, appUserModelId, repairDevelopmentShortcut } from './app-icon'
@@ -1634,73 +1635,8 @@ function registerIpc(): void {
     ): Promise<ModelListResult> => listModels(input)
   )
 
-  handle(
-    'net:probe',
-    async (
-      _event,
-      input: { baseUrl: string; apiKey: string; extraHeaders?: string }
-    ): Promise<{ ok: boolean; status?: number; message: string }> => {
-      try {
-        const { joinUrl, parseHeaderLines } = await import('./providers/asr')
-        const headers: Record<string, string> = { ...parseHeaderLines(input.extraHeaders) }
-        if (input.apiKey) headers.Authorization = `Bearer ${input.apiKey}`
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 8000)
-        const res = await fetch(joinUrl(input.baseUrl, 'models'), {
-          headers,
-          signal: controller.signal
-        })
-        clearTimeout(timer)
-        const body = (await res.text()).slice(0, 200)
-        return {
-          ok: res.ok,
-          status: res.status,
-          message: res.ok ? `HTTP ${res.status} · ${body}` : `HTTP ${res.status} · ${body}`
-        }
-      } catch (err) {
-        return { ok: false, message: err instanceof Error ? err.message : String(err) }
-      }
-    }
-  )
-
-  handle(
-    'net:probeMultimodal',
-    async (
-      _event,
-      input: { baseUrl: string; apiKey: string; model: string; extraHeaders?: string }
-    ): Promise<{ ok: boolean; status?: number; message: string }> => {
-      try {
-        const { parseHeaderLines } = await import('./providers/asr')
-        const headers: Record<string, string> = {
-          'content-type': 'application/json',
-          ...parseHeaderLines(input.extraHeaders)
-        }
-        // Key travels in a header, not the query string, so proxy logs stay clean.
-        if (input.apiKey) headers['x-goog-api-key'] = input.apiKey
-        const base = input.baseUrl.replace(/\/+$/, '')
-        const url = `${base}/models/${encodeURIComponent(input.model)}:generateContent`
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 12000)
-        const res = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-            generationConfig: { maxOutputTokens: 8, temperature: 0 }
-          }),
-          signal: controller.signal
-        })
-        clearTimeout(timer)
-        const raw = await res.text()
-        const body = raw.slice(0, 200)
-        // A 200 with a blocked prompt still proves the endpoint, key and model
-        // name resolve, which is all this button promises.
-        return { ok: res.ok, status: res.status, message: `HTTP ${res.status} · ${body}` }
-      } catch (err) {
-        return { ok: false, message: err instanceof Error ? err.message : String(err) }
-      }
-    }
-  )
+  handle('net:probe', (_event, input) => probeConnection(input))
+  handle('net:probeMultimodal', (_event, input) => probeMultimodalConnection(input))
 
   // --- bar window <-> pipeline --------------------------------------------
   subscribe('audio:chunk', (_event, payload: Int16Array) => {

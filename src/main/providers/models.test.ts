@@ -135,6 +135,21 @@ describe('requestUserAgent', () => {
 })
 
 describe('listModels', () => {
+  it.each([
+    { apiKey: 'account-b', extraHeaders: 'X-Org: first' },
+    { apiKey: 'account-a', extraHeaders: 'X-Org: second' }
+  ])('does not offer another account or organization models after a failed refresh: %j', async other => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ data: [{ id: 'private-model-a' }] })))
+    await listModels({ baseUrl: 'http://gw/v1', apiKey: 'account-a', extraHeaders: 'X-Org: first' })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('unauthorized', { status: 401 })))
+
+    const result = await listModels({ baseUrl: 'http://gw/v1', ...other, refresh: true })
+
+    expect(result.models).toEqual([])
+    expect(result.cached).toBe(false)
+    expect(result.error).toContain('401')
+  })
+
   it('requests /models with auth, UA and extra headers, then caches the result', async () => {
     const fetchMock = vi.fn(
       async (_url: string, _init?: RequestInit): Promise<Response> => jsonResponse({ data: [RAW_MODEL] })
@@ -171,6 +186,8 @@ describe('listModels', () => {
     expect(cached.baseUrl).toBe('http://127.0.0.1:8787/v1')
     expect(cached.fetchedAt).toBe(result.fetchedAt)
     expect(cached.models.map((m) => m.id)).toEqual(['cn:deepseek-v4.1-flash'])
+    expect(readFileSync(cacheFile as string, 'utf8')).not.toContain('sk-test')
+    expect(readFileSync(cacheFile as string, 'utf8')).not.toContain('acme')
   })
 
   it('replays a fresh cache without touching the network', async () => {

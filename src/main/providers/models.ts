@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { ModelInfo, ModelListResult } from '@shared/types'
 import { joinUrl, parseHeaderLines } from './asr'
@@ -30,9 +31,10 @@ export interface ListModelsInput {
   refresh?: boolean
 }
 
-/** Shape of `models-cache.json`; `baseUrl` scopes the list to one gateway. */
+/** The account and organization scope is hashed; credentials are never cached. */
 export interface ModelsCache {
   baseUrl: string
+  authScope: string
   fetchedAt: number
   models: ModelInfo[]
 }
@@ -203,11 +205,12 @@ export async function readModelsCache(): Promise<ModelsCache | null> {
     const parsed = asRecord(JSON.parse(await fs.readFile(file, 'utf8')))
     if (!parsed) return null
     const baseUrl = readString(parsed.baseUrl)
+    const authScope = readString(parsed.authScope)
     const fetchedAt = typeof parsed.fetchedAt === 'number' ? parsed.fetchedAt : Number.NaN
-    if (!baseUrl || !Number.isFinite(fetchedAt)) return null
+    if (!baseUrl || !authScope || !Number.isFinite(fetchedAt)) return null
     const models = normalizeModels(parsed.models)
     if (models.length === 0) return null
-    return { baseUrl, fetchedAt, models }
+    return { baseUrl, authScope, fetchedAt, models }
   } catch {
     return null
   }
@@ -220,7 +223,7 @@ export async function writeModelsCache(cache: ModelsCache): Promise<void> {
   try {
     await fs.writeFile(
       file,
-      JSON.stringify({ baseUrl: cache.baseUrl, fetchedAt: cache.fetchedAt, models: cache.models }),
+      JSON.stringify(cache),
       'utf8'
     )
   } catch {
@@ -279,14 +282,15 @@ function failed(message: string, cache: ModelsCache | null): ModelListResult {
 /**
  * The IPC-facing entry point.
  *
- * - `refresh !== true` and a fresh cache for the same `baseUrl` -> no network.
+ * - A fresh cache for the same URL, key and headers -> no network unless refreshed.
  * - Success -> cache is rewritten and `cached: false`.
  * - Failure -> last good list + `error` (or an empty result), never a throw.
  */
 export async function listModels(input: ListModelsInput): Promise<ModelListResult> {
   const baseUrl = (input.baseUrl ?? '').trim().replace(/\/+$/, '')
+  const authScope = createHash('sha256').update(JSON.stringify([input.apiKey, flattenExtraHeaders(input.extraHeaders)])).digest('hex')
   const cached = await readModelsCache()
-  const cacheHit = cached && cached.baseUrl === baseUrl ? cached : null
+  const cacheHit = cached && cached.baseUrl === baseUrl && cached.authScope === authScope ? cached : null
 
   if (input.refresh !== true && cacheHit && isFresh(cacheHit.fetchedAt)) {
     return { models: cacheHit.models, fetchedAt: cacheHit.fetchedAt, cached: true }
@@ -296,7 +300,7 @@ export async function listModels(input: ListModelsInput): Promise<ModelListResul
   try {
     const models = await fetchModels(input, baseUrl)
     const fetchedAt = Date.now()
-    await writeModelsCache({ baseUrl, fetchedAt, models })
+    await writeModelsCache({ baseUrl, authScope, fetchedAt, models })
     return { models, fetchedAt, cached: false }
   } catch (error) {
     return failed(describeError(error), cacheHit)
