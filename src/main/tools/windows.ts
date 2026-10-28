@@ -102,7 +102,7 @@ export class WindowsTools {
     if(/^(?:请|帮我)?(?:把|将)?(?:系统|电脑)(?:设为|设置为)?(?:取消静音|静音)[。！!]?$/u.test(input))return {name:'set_system_volume',args:{muted:!input.includes('取消')}}
     if (url) return { name: 'open_url', args: { url: url[1] } }
     const driveFolder = /^(?:请|帮我)?打开\s*([a-z])\s*盘(?:里|中|下面|下)?的?\s*(.+?)\s*(?:文件夹|目录)[。！!]?$/i.exec(input)
-    if (driveFolder && !/[<>:"|?*\x00-\x1f]/.test(driveFolder[2])) return { name: 'open_folder', args: { folder: `${driveFolder[1].toUpperCase()}:\\${driveFolder[2].replace(/\//g, '\\')}` } }
+    if (driveFolder && !/[<>:"|?*\x00-\x1f]/.test(driveFolder[2])) return { name: 'open_folder', args: { folder: `${driveFolder[1].toUpperCase()}:\\${driveFolder[2].replace(/\s*(?:(?:文件夹|目录)(?:下面|里|中|下)的?|(?:下面|下)的)\s*/g, '\\').replace(/\//g, '\\')}` } }
     const absoluteFolder = /^(?:(?:请|帮我)?打开|open(?: the)?(?: folder)?)\s*[“"]?([a-z]:[\\/][^"”\n]*?)[”"]?\s*(?:文件夹|目录)?[。！!]?$/i.exec(input)
     if (absoluteFolder && (!extname(absoluteFolder[1]) || /文件夹|目录|\bfolder\b/i.test(input)) && !/[<>"|?*\x00-\x1f]/.test(absoluteFolder[1])) return { name: 'open_folder', args: { folder: absoluteFolder[1] } }
     const folder = /^(?:请|帮我)?打开(?:我的)?(下载(?:目录|文件夹)?|桌面|文档)(?:目录|文件夹)?[。！!]?$/i.exec(input)
