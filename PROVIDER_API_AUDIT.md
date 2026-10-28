@@ -31,12 +31,13 @@
 - Azure 必须填写真实资源地址、部署名与 API 版本；阿里云地址、业务空间、模型和密钥必须属于同一可用地域。Replicate / fal 使用可用的实际模型或部署。
 - 全部 LLM 预设通过本地传输契约测试；这不证明目录中的每个模型对每个账号均开放，也不证明每家模型都支持工具、流式、思考或温度的全部组合。不支持工具时沿用现有 JSON 意图回退。本轮未把 Chat Completions 重构为 Responses。
 - 密钥只在本机配置；本次未批量开通账号、核验免费额度或消耗所有供应商的真实调用配额。
+- 三家流式适配器里只有阿里云百炼实时识别用了真实账号：2026-10-29 用 16 kHz 单声道 PCM16 的 9.86 秒合成录音回放，返回文本与待识别句子逐字一致，用时 2.99 秒。同一账号的百炼专属地址（`*.maas.aliyuncs.com`）返回 `AllocationQuota.FreeTierOnly`（免费额度已耗尽），而公网 `dashscope.aliyuncs.com` 地址可用，因此预设指向公网地址；这属于账号配额状态，不是协议问题。腾讯云实时识别与火山引擎流式识别只有本地协议测试，未申请账号验证真实返回。
 
 ## 目录与验证覆盖
 
 下面列出全部内置预设。`本地协议测试` 表示使用受控传输或本地 HTTP / WebSocket 服务验证请求和解析；`本地契约测试` 表示通过模拟响应验证聊天传输。两者均不表示真实账号联通验证。文档链接是对应预设的参考入口，无法访问的条目在上方单独说明。
 
-### ASR（26）
+### ASR（30）
 
 | 预设 | 协议 | 覆盖 | 文档 |
 | --- | --- | --- | --- |
@@ -66,6 +67,10 @@
 | 百度短语音识别 | OAuth / Base64 JSON | 本地协议测试 | [官方参考](https://ai.baidu.com/ai-doc/SPEECH/Jk5dll5g2) |
 | Replicate | Bearer / data URI / prediction | 本地协议测试 | [官方参考](https://replicate.com/docs/reference/http) |
 | fal.ai | Key / data URI | 本地协议测试 | [官方参考](https://fal.ai/models/fal-ai/whisper/api) |
+| 阿里云百炼（paraformer-v2 录音文件） | 异步 file_urls / 先上传 | 本地协议测试 | [官方参考](https://help.aliyun.com/zh/model-studio/paraformer-recorded-speech-recognition-api) |
+| 阿里云百炼（实时识别） | WebSocket 二进制帧 / run-task→finish-task | 真实账号联调（2026-10-29，9.86 秒音频回放，输出与预期一致） | [官方参考](https://help.aliyun.com/zh/model-studio/paraformer-real-time-speech-recognition-api) |
+| 腾讯云实时识别 | WebSocket / HMAC-SHA1 查询串签名 | 本地协议测试 | [官方参考](https://cloud.tencent.com/document/product/1093/48982) |
+| 火山引擎豆包流式识别 | WebSocket 二进制帧 / gzip JSON | 本地协议测试 | [官方参考](https://www.volcengine.com/docs/6561/1354869) |
 
 ### LLM（34）
 
@@ -165,3 +170,12 @@
 - 公共条目明确标为 userDefined=false、verified=false，不伪造别名或演员—作品关系，不视为已人工核实知识。公共人物同音候选需要演员、角色、姓名等相关语境；普通旅行中的“延安”不会仅凭公共人名改为“闫桉”。未知场景不将公共整库送入 ASR；已有候选数量和输出保护限制继续生效。
 - 实际下载、导入及检索通过可选网络测试验证；默认测试覆盖恶意/变化文本、来源允许列表、重复与个人状态保留、超限响应、部分下载失败、词频选择及公共人物语境。未使用付费模型重做最终语音纠错率，rc.12 的真实 LLM 鉴权限制仍然适用。
 - 类型检查通过；完整回归 2969 项通过、8 项跳过，可选真实下载测试另行通过。rc.13 安装包的 NSIS 完整性、更新摘要、打包内容一致性、原生模块加载和独立配置启动检查通过。未用真人语音或付费 LLM 证明最终纠错准确率。
+
+### 流式识别适配器（rc.14）
+
+- 新增 `src/main/providers/asr/realtime.ts`，把「只会说 WebSocket」的三家放进同一套工具：握手头、文本/二进制帧、按 100 ms 切分 16 kHz PCM16、倍速发送、超时与错误映射。适配器仍各自拥有报文形状，超时、中止和日志沿用既有适配器接口，没有改动转写主流程。
+- 阿里云百炼实时识别（`dashscope-realtime`）：`wss://dashscope.aliyuncs.com/api-ws/v1/inference`，`Authorization: bearer <key>`；`run-task`（task_group=audio、task=asr、function=recognition、format=pcm、sample_rate=16000）→ `task-started` → 二进制 PCM → `finish-task` → `result-generated`（sentence_end 为终局）→ `task-finished`。结果帧是累积句，只在 sentence_end 时提交，避免把半句当整段。
+- 腾讯云实时识别（`tencent-realtime`）：`wss://asr.cloud.tencent.com/asr/v2/<appid>?secretid&timestamp&expired&nonce&engine_model_type&voice_format=1&signature`，签名 = Base64(HMAC-SHA1(secretKey, "asr.cloud.tencent.com/asr/v2/<appid>?<排序查询串>"))；音频是裸二进制帧，`{"type":"end"}` 收尾，结果在 `{"code":0,"result":{"voice_text_str"}}` 里逐句到达。
+- 火山引擎豆包流式识别（`volcengine-streaming`）：`wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async`，握手头 `X-Api-App-Key` / `X-Api-Access-Key` / `X-Api-Resource-Id` / `X-Api-Request-Id`；4 字节头（version|header size、message type|flags、serialization|compression）+ 可选序号与事件字段，JSON 用 gzip 压缩，音频按 200 ms 一包，最后一包 flags=0b0010。
+- 两处需要说明的选择：百炼把录音文件识别（https）和实时识别（wss）放在同一域名，仅凭主机名无法区分，所以给适配器加了可选的 `schemes` 声明，`aliyun` 只认 http/https，`dashscope-realtime` 只认 ws/wss；预设的 `baseUrl` 一律写 `https://`，由适配器自己升级为 wss，因为连接测试走的是 HTTP 探测。
+- 验证边界：`src/main/providers/asr/realtime.test.ts` 用本地 WebSocket 服务覆盖三家的握手头、帧切分、签名、累积文本与错误映射；类型检查通过；完整回归 2975 项通过，仅 `wake-word-native.test.ts` 两项在干净树上同样失败（离线唤醒引擎环境问题，与本次改动无关）。

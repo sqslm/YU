@@ -63,6 +63,14 @@ export interface AsrAdapterSpec {
    * match (hand-written profiles, restored backups).
    */
   hosts: string[]
+  /**
+   * URL schemes this adapter claims, when a host is shared with another vendor.
+   *
+   * DashScope serves the atomic transcription API over https and the streaming
+   * one over wss on the *same* hostname, so the host alone cannot say which
+   * adapter a profile meant. Empty (the common case) claims every scheme.
+   */
+  schemes?: string[]
   /** Extra fields the vendor needs; merged into the UI by preset id. */
   fields: PresetField[]
   /** Run one transcription. Throw `ProviderError` with a readable sentence. */

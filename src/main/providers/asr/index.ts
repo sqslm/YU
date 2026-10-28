@@ -2,6 +2,7 @@ import type { PresetField, ProviderSettings } from '@shared/types'
 import { presetVendorFields } from '@shared/providerFields'
 import { findPreset } from '@shared/providerPresets'
 import { CN_SPECS } from './cn'
+import { REALTIME_SPECS } from './realtime'
 import { WEST_SPECS } from './west'
 import type { AsrAdapterInput, AsrAdapterSpec } from './types'
 import { field } from './types'
@@ -15,7 +16,7 @@ import { field } from './types'
  * suffix must come before a broader one (`openai.azure.com` before nothing else
  * claims it, and no vendor shares a suffix today).
  */
-export const ASR_ADAPTERS: AsrAdapterSpec[] = [...WEST_SPECS, ...CN_SPECS]
+export const ASR_ADAPTERS: AsrAdapterSpec[] = [...WEST_SPECS, ...CN_SPECS, ...REALTIME_SPECS]
 
 /**
  * What a profile looks like to this module.
@@ -59,15 +60,29 @@ export function resolveAsrAdapter(cfg: ProfileLike): AsrAdapterSpec | null {
 
   const host = hostOf(cfg.baseUrl)
   if (!host) return null
+  const scheme = schemeOf(cfg.baseUrl)
   return (
-    ASR_ADAPTERS.find((spec) => spec.hosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) ??
-    null
+    ASR_ADAPTERS.find(
+      (spec) =>
+        spec.hosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`)) &&
+        // A spec that names its schemes only claims those; one that does not
+        // (the HTTP vendors) claims the host whatever the scheme.
+        (spec.schemes === undefined || spec.schemes.length === 0 || spec.schemes.includes(scheme))
+    ) ?? null
   )
 }
 
 function hostOf(baseUrl: string): string {
   try {
     return new URL(baseUrl).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function schemeOf(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).protocol.replace(/:$/, '').toLowerCase()
   } catch {
     return ''
   }

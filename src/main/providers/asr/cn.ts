@@ -630,6 +630,9 @@ export const CN_SPECS: AsrAdapterSpec[] = [
     id: 'aliyun',
     label: mt('阿里云百炼（录音文件识别）'),
     hosts: ['dashscope.aliyuncs.com'],
+    // The streaming recogniser lives on the same host over wss, so this one
+    // only claims the plain HTTP scheme and leaves the socket to `realtime.ts`.
+    schemes: ['http', 'https'],
     fields: [
       {
         key: 'uploadUrl',

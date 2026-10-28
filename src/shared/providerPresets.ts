@@ -332,8 +332,39 @@ const ASR_PRESETS: ProviderPreset[] = [
     dropIn: true
   },
   {
+    id: 'aliyun-paraformer',
+    get name() { return mt('阿里云百炼（Paraformer 录音文件）') },
+    asrAdapter: 'aliyun',
+    kind: 'asr',
+    protocol: 'openai',
+    baseUrl: 'https://dashscope.aliyuncs.com',
+    model: 'paraformer-v2',
+    models: ['paraformer-v2', 'paraformer-8k-v2', 'paraformer-v1'],
+    keyUrl: 'https://bailian.console.aliyun.com/model/settings/api-key',
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/paraformer-recorded-speech-recognition-restful',
+    get notes() { return mt('异步任务接口只收 file_urls，必须在「上传地址」填一个阿里能回源读取的公网地址（OSS 等），否则这条配置无法使用。') },
+    dropIn: false
+  },
+  {
+    id: 'aliyun-realtime-asr',
+    get name() { return mt('阿里云百炼（实时识别）') },
+    asrAdapter: 'dashscope-realtime',
+    kind: 'asr',
+    protocol: 'openai',
+    // https on purpose: the adapter upgrades the scheme itself, and a `wss://`
+    // base URL would make the connection tester send an HTTP probe that cannot
+    // be answered.
+    baseUrl: 'https://dashscope.aliyuncs.com/api-ws/v1/inference',
+    model: 'paraformer-realtime-v2',
+    models: ['paraformer-realtime-v2', 'paraformer-realtime-v1', 'paraformer-realtime-8k-v2', 'gummy-realtime-v1'],
+    keyUrl: 'https://bailian.console.aliyun.com/model/settings/api-key',
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/paraformer-real-time-speech-recognition-api',
+    get notes() { return mt('WebSocket 流式：run-task → PCM 帧 → finish-task，音频直接上传，不需要 OSS。') },
+    dropIn: true
+  },
+  {
     id: 'tencent-asr',
-    get name() { return mt('腾讯云语音识别') },
+    get name() { return mt('腾讯云（一句话识别）') },
     asrAdapter: 'tencent',
     kind: 'asr',
     protocol: 'openai',
@@ -342,6 +373,33 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://asr.tencentcloudapi.com',
     docsUrl: 'https://cloud.tencent.com/document/product/1093/35646',
     get notes() { return mt('模型留空即可（引擎由这家接口自己决定，16k_zh 已在适配器里定好）；适配器自己算 TC3-HMAC-SHA256 签名。') },
+    dropIn: true
+  },
+  {
+    id: 'tencent-realtime-asr',
+    get name() { return mt('腾讯云（实时语音识别）') },
+    asrAdapter: 'tencent-realtime',
+    kind: 'asr',
+    protocol: 'openai',
+    // The engine (16k_zh …) is a vendor field here, not the model id.
+    model: '',
+    baseUrl: 'https://asr.cloud.tencent.com/asr/v2',
+    keyUrl: 'https://console.cloud.tencent.com/cam/capi',
+    docsUrl: 'https://cloud.tencent.com/document/product/1093/48982',
+    get notes() { return mt('WebSocket 流式：边录边出字，整段录音回放也能用（比一句话识别快、按并发计费）。模型留空即可，引擎在下面的「引擎」字段里填；签名在本地算，需要 SecretId + SecretKey + AppID。') },
+    dropIn: true
+  },
+  {
+    id: 'volcengine-streaming-asr',
+    get name() { return mt('火山引擎（豆包流式识别）') },
+    asrAdapter: 'volcengine-streaming',
+    kind: 'asr',
+    protocol: 'openai',
+    model: '',
+    baseUrl: 'https://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+    keyUrl: 'https://console.volcengine.com/speech/service/16',
+    docsUrl: 'https://www.volcengine.com/docs/6561/1354869',
+    get notes() { return mt('模型留空即可。流式识别 2.0 与 1.0 地址与报文相同，只差 Resource Id：2.0 填 volc.seedasr.sauc.duration，1.0 填 volc.bigasr.sauc.duration。') },
     dropIn: true
   },
   {
