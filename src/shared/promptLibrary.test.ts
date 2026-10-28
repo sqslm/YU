@@ -12,6 +12,7 @@ import {
   pickPromptKind
 } from './promptLibrary'
 import { PROMPT_KINDS } from './promptLibrary'
+import shippedTexts from './builtin-prompts.json'
 
 describe('defaultPromptLibrary', () => {
   it('gives every kind exactly one builtin card and selects it', () => {
@@ -178,17 +179,18 @@ describe('editing and deleting the builtin card', () => {
 })
 
 describe('builtinPrompt text', () => {
-  it('ships five distinct, non-empty prompts of 5–12 lines', () => {
+  it('ships all five supplied prompt documents without truncation', () => {
     const texts = PROMPT_KINDS.map((kind) => builtinPrompt(kind).content)
     expect(new Set(texts).size).toBe(PROMPT_KINDS.length)
     for (const text of texts) {
       expect(text.trim().length).toBeGreaterThan(80)
       // The output contract is the whole point of these prompts.
-      expect(text).toContain('只输出')
       const lines = text.split('\n').filter((line) => line.trim())
       expect(lines.length).toBeGreaterThanOrEqual(5)
-      expect(lines.length).toBeLessThanOrEqual(12)
+      expect(lines.length).toBeGreaterThan(100)
     }
+    for (const kind of PROMPT_KINDS) expect(builtinPromptText(kind)).toBe(shippedTexts[kind])
+    expect(PROMPT_KINDS.map(kind => builtinPrompt(kind).name)).toEqual(['内置协作', '内置润色', '内置翻译', '内置文档', '内置邮件'])
   })
 
   it('keeps builtinPrompt and builtinPromptText in sync', () => {

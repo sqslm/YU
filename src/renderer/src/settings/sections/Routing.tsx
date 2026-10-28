@@ -41,7 +41,7 @@ import { IconInfo } from './General'
 import i18n from '../../i18n'
 
 /**
- * The five categories, with the AI card spelled out — "AI 工具" is what the rule
+ * The five categories, with the AI card spelled out — "agent协作" is what the rule
  * means, while the bare "AI" chip elsewhere stays compact.
  */
 const chipSx = {
@@ -818,7 +818,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
               {i18n.t('文档，微信 / QQ / Slack → 润色。')}
             </li>
             <li>
-              <b>{i18n.t(i18n.t('都没命中 → 润色'))}</b>。想让 DSH 这类自建 Electron 应用进 AI，加一条 `dsh → AI 工具` 即可。
+              <b>{i18n.t(i18n.t('都没命中 → 润色'))}</b>。想让 DSH 这类自建 Electron 应用进 AI，加一条 `dsh → agent协作` 即可。
             </li>
           </Box>
         </Popover>

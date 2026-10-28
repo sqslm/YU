@@ -1,3 +1,4 @@
+import builtinTexts from './builtin-prompts.json'
 import type { AppRule, NamedPrompt, PromptKind, PromptLibrary } from './types'
 import { extractDomain, matchDomain } from './domain'
 
@@ -8,7 +9,7 @@ import { extractDomain, matchDomain } from './domain'
 export const PROMPT_KINDS: PromptKind[] = ['ai', 'polish', 'translate', 'document', 'email']
 
 export const PROMPT_KIND_LABEL: Record<PromptKind, string> = {
-  ai: 'AI 工具',
+  ai: 'agent协作',
   polish: '润色',
   translate: '翻译',
   document: '文档',
@@ -16,7 +17,7 @@ export const PROMPT_KIND_LABEL: Record<PromptKind, string> = {
 }
 
 export const PROMPT_KIND_HINT: Record<PromptKind, string> = {
-  ai: '整理 AI 工具中的语音指令。',
+  ai: '整理 agent 协作中的语音指令。',
   polish: '将口语整理为自然流畅的文字。',
   translate: '将识别结果翻译为目标语言。',
   document: '整理为结构清晰的文档。',
@@ -33,10 +34,9 @@ export const BUILTIN_PROMPT_ID = 'builtin'
  * context-aware builders in `@shared/prompts`, which made it impossible to
  * rewrite. The text now lives on the card itself, so the editor can show it,
  * the user can edit it, and "恢复默认文本" has a factory value to restore.
- * Each prompt is 5–12 lines on purpose: long enough to pin the output contract,
- * short enough that a small model still follows all of it.
+ * Kept only to recognize unchanged defaults during upgrades; edited cards stay intact.
  */
-export const BUILTIN_PROMPT_TEXT: Record<PromptKind, string> = {
+const LEGACY_BUILTIN_PROMPT_TEXT: Record<PromptKind, string> = {
   polish: [
     '你负责把用户口述的短文本整理成可以直接发出去的样子。',
     '',
@@ -103,6 +103,8 @@ export const BUILTIN_PROMPT_TEXT: Record<PromptKind, string> = {
   ].join('\n')
 }
 
+export const BUILTIN_PROMPT_TEXT: Record<PromptKind, string> = builtinTexts
+
 /** Factory text of one built-in card; what "恢复默认文本" restores. */
 export function builtinPromptText(kind: PromptKind): string {
   return BUILTIN_PROMPT_TEXT[kind]
@@ -111,7 +113,7 @@ export function builtinPromptText(kind: PromptKind): string {
 export function builtinPrompt(kind: PromptKind): NamedPrompt {
   return {
     id: BUILTIN_PROMPT_ID,
-    name: `内置${PROMPT_KIND_LABEL[kind]}提示词`,
+    name: kind === 'ai' ? '内置协作' : `内置${PROMPT_KIND_LABEL[kind]}`,
     content: BUILTIN_PROMPT_TEXT[kind],
     builtin: true
   }
@@ -333,6 +335,8 @@ export function normalizePromptLibrary(input: unknown): PromptLibrary {
       const id = typeof source.id === 'string' ? source.id.trim() : ''
       if (!id || cleaned.some((c) => c.id === id)) continue
       const isBuiltin = source.builtin === true
+      const oldText = typeof source.content === 'string' ? source.content : ''
+      const upgrade = isBuiltin && oldText.trim() === LEGACY_BUILTIN_PROMPT_TEXT[kind].trim()
       const temperature =
         typeof source.temperature === 'number' && Number.isFinite(source.temperature)
           ? Math.min(1.5, Math.max(0, Math.round(source.temperature * 100) / 100))
@@ -342,12 +346,12 @@ export function normalizePromptLibrary(input: unknown): PromptLibrary {
         // A builtin card that lost its label falls back to the shipped one; a
         // custom card keeps the generic placeholder.
         name:
-          typeof source.name === 'string' && source.name.trim()
+          isBuiltin && /^内置(?:AI 工具|AI工具|润色|翻译|文档|邮件)提示词$/.test(source.name?.trim() ?? '') ? shipped.name : typeof source.name === 'string' && source.name.trim()
             ? source.name.trim()
             : isBuiltin
               ? shipped.name
               : '未命名提示词',
-        content: typeof source.content === 'string' ? source.content : '',
+        content: upgrade ? shipped.content : oldText,
         ...(isBuiltin ? { builtin: true } : {}),
         ...(temperature === undefined ? {} : { temperature })
       })

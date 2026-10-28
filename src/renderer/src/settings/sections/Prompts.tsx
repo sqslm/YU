@@ -26,7 +26,7 @@ const SECTION_ORDER: PromptKind[] = ['ai', 'polish', 'translate', 'document', 'e
 
 /**
  * Order of the "主模式" dropdown: the four dictation situations first, AI last.
- * Labels come from `PROMPT_KIND_LABEL`; AI reads "AI 工具" there so it does not
+ * Labels come from `PROMPT_KIND_LABEL`; AI reads "agent协作" there so it does not
  * look like a fifth writing style next to 润色/文档.
  */
 const MAIN_KIND_ORDER: PromptKind[] = ['polish', 'translate', 'document', 'email', 'ai']
