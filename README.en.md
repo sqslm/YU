@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.1.0-rc.12**, Windows 10/11 x64, MIT.
+> Current version **1.1.0-rc.13**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -261,7 +261,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.1.0-rc.12`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.1.0-rc.13`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -278,10 +278,13 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) · `licenses/` | Third-party licenses |
 | [src/main/prompts/reminder-refinement.md](src/main/prompts/reminder-refinement.md) | The full prompt used for reminder extraction |
 
+Community dictionaries are available in the term manager: select categories and choose Import / update. Sources are Rime Frost names, internet and computing lists plus the 5,000 most frequent THUOCL IT entries (8,469 total on 2026-10-29). Reimport adds missing entries while preserving personal edits and enabled states; failed downloads do not partially import. Source and license links are shown. Lists are downloaded on demand, not bundled; downloads send no recordings, history or credentials. These lists do not verify actor–work relationships or guarantee coverage of recent names.
+
 Proper-name enhancement is off by default. Open Settings → Voice & input → Recording & language → Speech recognition enhancement, add/import terms, then enable it. Domains/app names select relevant terms automatically; blank domains are common user terms. Related terms may be sent to your configured ASR/LLM. The local entities.sqlite is independent of history retention, is not synced, and never learns private terms automatically. Only verified provider protocols receive ASR context; local SenseVoice uses candidates in existing LLM polishing. Direct-audio mode adds no new ASR/correction request. Full user-supplied factory prompts are bundled without truncation; customized card text is preserved.
 
 ## Changelog
 
+- **1.1.0-rc.13**: community dictionary import/update from reviewed GitHub lists, preserving personal edits and disabled entries; public homophone candidates require relevant context, and unrelated public terms are not preloaded as ASR hints.
 - **1.1.0-rc.12**: embeds five complete supplied writing cards and renames the AI category to agent collaboration. Adds optional local proper-name management, bounded contextual ASR hints for verified protocols, and conservative candidates shared by existing polishing/translation requests. Includes CRUD, domains, aliases, relationships, source metadata and JSON import/export, exact-token protection, and original-transcript retention. See [protocol and validation notes](PROVIDER_API_AUDIT.md).
 
 - **1.1.0-rc.11**: restores today’s data at the top of the overview. Screenshot Cancel/Done stay visible; clicks do not snap windows or create marks, and double-click completes a selection in drawing modes. Cancelled drags restore the prior region. Assistant screenshot capture is disconnected; manual capture, OCR, translation, Ask and QR decoding remain available. Page/document summaries keep using the content reader.

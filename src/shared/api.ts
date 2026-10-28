@@ -61,6 +61,7 @@ export interface TypelessApi {
     save(input: import('./entities').EntityInput, id?: string): Promise<void>
     remove(id: string): Promise<void>
     import(): Promise<number | null>
+    importPublic(ids: import('./entity-sources').EntitySourceId[]): Promise<number>
     export(): Promise<boolean>
   }
   checkAsr(): Promise<void>

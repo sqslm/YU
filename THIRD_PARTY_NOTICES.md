@@ -224,3 +224,10 @@ Native runtime: sherpa-onnx bundles ONNX Runtime 1.28.2 on Windows. Its upstream
 | vfile | 6.0.3 | MIT | [LICENSE](licenses/vfile-6.0.3-license) |
 | vfile-message | 4.0.3 | MIT | [LICENSE](licenses/vfile-message-4.0.3-license) |
 | zwitch | 2.0.4 | MIT | [LICENSE](licenses/zwitch-2.0.4-license) |
+
+## Optional community dictionaries
+
+Dictionary contents are not bundled. On explicit import, the application downloads selected text lists from their maintainers. Entry provenance retains the source URL and declared license; imports do not assert that names or relationships have been independently verified.
+
+- [Rime Frost](https://github.com/gaboolic/rime-frost): name, exthot and computer lists; [GPL-3.0 license](https://github.com/gaboolic/rime-frost/blob/master/LICENSE).
+- [THUOCL](https://github.com/thunlp/THUOCL): the 5,000 most frequent IT entries; [MIT license](https://github.com/thunlp/THUOCL/blob/master/LICENSE).

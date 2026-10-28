@@ -22,6 +22,7 @@ const api: TypelessApi = {
     save: (input, id) => ipcRenderer.invoke('entities:save', input, id),
     remove: id => ipcRenderer.invoke('entities:remove', id),
     import: () => ipcRenderer.invoke('entities:import'),
+    importPublic: ids => ipcRenderer.invoke('entities:import-public', ids),
     export: () => ipcRenderer.invoke('entities:export')
   },
   checkAsr: () => ipcRenderer.invoke('asr:check'),

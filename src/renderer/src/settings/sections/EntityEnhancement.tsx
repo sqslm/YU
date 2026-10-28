@@ -3,6 +3,7 @@ import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, Dia
 import type { Settings } from '@shared/types'
 import { ENTITY_TYPES, type EntityInput, type EntityTerm, type EntityType } from '@shared/entities'
 import { asrEnhancementCapability } from '@shared/asr-enhancement'
+import { ENTITY_SOURCES, type EntitySourceId } from '@shared/entity-sources'
 import { SettingsGroup, SettingsRow } from './General'
 import { registerGameModePreparation } from '../gameModePreparation'
 import i18n from '../../i18n'
@@ -19,6 +20,7 @@ export function EntityEnhancement({ settings, patch }: { settings: Settings; pat
   const [aliases, setAliases] = useState(''), [related, setRelated] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('')
   const [removing, setRemoving] = useState<EntityTerm | null>(null)
+  const [sources, setSources] = useState<EntitySourceId[]>(ENTITY_SOURCES.map(source => source.id))
   useEffect(() => draft ? registerGameModePreparation(async () => false) : undefined, [Boolean(draft)])
   const load = async (): Promise<void> => { setRows(await window.api.entities.list()) }
   const run = async (action: () => Promise<unknown>): Promise<void> => {
@@ -44,6 +46,20 @@ export function EntityEnhancement({ settings, patch }: { settings: Settings; pat
     <Dialog open={open} maxWidth="md" fullWidth onClose={() => { if (!busy) setOpen(false) }} data-entity-library>
       <DialogTitle>{t('专有名词词库')}</DialogTitle>
       <DialogContent>
+        <Box sx={{ bgcolor: 'action.hover', p: 2, borderRadius: 1, mb: 2 }}>
+          <Typography fontWeight={600}>{t('公共词库')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('由开源社区维护，直接下载到本机。再次导入只补充新词，不覆盖你的编辑或启停状态。')}</Typography>
+          {ENTITY_SOURCES.map(source => <Box key={source.id}>
+            <FormControlLabel control={<Checkbox size="small" disabled={busy} checked={sources.includes(source.id)} onChange={event => setSources(previous => event.target.checked ? [...previous, source.id] : previous.filter(id => id !== source.id))} />} label={t(source.name)} />
+            <Typography variant="caption" color="text.secondary">{t(source.description)} · {source.license}</Typography>
+          </Box>)}
+          <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+            <Button variant="contained" size="small" disabled={busy || !sources.length} onClick={() => void run(async () => { const count = await window.api.entities.importPublic(sources); await load(); setNotice(t('公共词库已更新，新增 {{n}} 个词条。', { n: count })) })}>{t(busy ? '处理中…' : '一键导入 / 更新')}</Button>
+            <Button size="small" href="https://github.com/gaboolic/rime-frost" target="_blank" rel="noreferrer">{t('白霜拼音来源与许可证')}</Button>
+            <Button size="small" href="https://github.com/thunlp/THUOCL" target="_blank" rel="noreferrer">{t('清华词库来源与许可证')}</Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">{t('公共词表不保证覆盖最新人名或作品，也不含可靠的演员与作品关联；不会强制按同音词替换。下载时不发送录音、历史或密钥。')}</Typography>
+        </Box>
         <Stack direction="row" spacing={1} sx={{ mb: 2, mt: 1 }}>
           <TextField size="small" fullWidth label={t('搜索名称、别名或领域')} value={query} onChange={event => setQuery(event.target.value)} />
           <Button disabled={busy} onClick={() => edit()}>{t('添加')}</Button>

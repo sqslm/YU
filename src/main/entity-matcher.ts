@@ -28,7 +28,9 @@ export class EntityMatcher {
     const spoken = ' ' + phones(safe) + ' ', context = lower(scene + ' ' + safe), nearSpoken = near(spoken)
     const result: Array<{ row: EntityCandidate; score: number }> = []
     for (const { row, names } of this.indexed) {
-      const relevant = Boolean(row.domain && context.includes(lower(row.domain)) || row.related.some(name => context.includes(lower(name))))
+      const publicScene = !row.userDefined && (row.domain === '人物' && /演员|主演|演技|导演|作家|歌手|角色|人名|姓名|明星|人物/u.test(context)
+        || row.domain === '热点' && /作品|剧名|电视剧|游戏|品牌|公司|电影|动漫|热词|热点/u.test(context))
+      const relevant = Boolean(publicScene || row.domain && context.includes(lower(row.domain)) || row.related.some(name => context.includes(lower(name))))
       for (const name of names) {
         const key = name.key, globalManual = row.userDefined && !row.domain && !row.related.length
         const exact = name.pattern ? name.pattern.test(safe) : safe.includes(key)

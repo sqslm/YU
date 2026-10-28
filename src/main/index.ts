@@ -3,7 +3,7 @@ import { observeGame, gameProcessAlive } from './game-mode-native'
 import type { GameModeStatus } from '@shared/game-mode'
 import { personalCommand } from './tools/personal'
 import { taskDiagnosticSummary } from './task-diagnostics'
-import { app, clipboard, dialog, nativeTheme, Notification, powerMonitor, protocol, session, shell } from 'electron'
+import { app, clipboard, dialog, nativeTheme, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -16,6 +16,7 @@ import { SettingsStore } from './settings'
 import { HistoryStore } from './history'
 import { EntityStore } from './entity-store'
 import { EntityMatcher } from './entity-matcher'
+import { fetchPublicTerms } from './entity-sources'
 import type { EntityInput } from '@shared/entities'
 import { exportHistory } from './history-export'
 import { AccountStore } from './account'
@@ -1229,6 +1230,17 @@ function registerIpc(): void {
     if (event.sender !== settingsWindow?.webContents) throw Error(mt('请从设置管理专有名词'))
   }
   handle('entities:list', event => { entityOwner(event); return entityStore.list() })
+  let importingEntities = false
+  handle('entities:import-public', async (event, ids: unknown) => {
+    entityOwner(event)
+    if (importingEntities) throw Error(mt('公共词库正在下载，请稍候'))
+    importingEntities = true
+    try {
+      const terms = await fetchPublicTerms(ids, (url, options) => net.fetch(url instanceof URL ? url.href : url, options))
+      const added = entityStore.import(terms)
+      refreshEntities(); return added
+    } finally { importingEntities = false }
+  })
   handle('entities:save', (event, input: EntityInput, id?: string) => { entityOwner(event); entityStore.save(input, id); refreshEntities() })
   handle('entities:remove', (event, id: string) => { entityOwner(event); if (typeof id !== 'string') throw Error('Invalid term ID'); entityStore.remove(id); refreshEntities() })
   handle('entities:import', async event => {
