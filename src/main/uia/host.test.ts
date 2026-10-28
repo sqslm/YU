@@ -7,6 +7,15 @@ vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() } }))
 
 describe('context reader reclamation', () => {
   afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
+  it('terminates a reader whose native spawn finishes after stop', () => {
+    let spawned = false
+    const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn(() => spawned) })
+    vi.mocked(utilityProcess.fork).mockReset().mockReturnValue(child as never)
+    const host = new UiaHost(); host.start(); host.warm(); host.stop()
+    expect(child.kill.mock.results.at(-1)?.value).toBe(false)
+    spawned = true; child.emit('spawn')
+    expect(child.kill.mock.results.at(-1)?.value).toBe(true)
+  })
   it('bounds repeated crashes before a reader ever becomes ready', async () => {
     vi.useFakeTimers()
     const children: EventEmitter[] = []

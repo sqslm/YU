@@ -693,6 +693,7 @@ export class LocalAsrHost {
       stdio: 'inherit'
     })
     this.worker = child
+    child.once('spawn', () => { if (this.worker !== child) child.kill() })
     child.on('message', (message: unknown) => {
       if (this.worker === child) this.onMessage(message as ChildMessage)
     })

@@ -95,6 +95,7 @@ export class UiaHost {
         stdio: 'inherit'
       })
       this.proc = child
+      child.once('spawn', () => { if (this.proc !== child || this.stopped) child.kill() })
       child.on('message', (message: unknown) => {
         if (this.proc === child) this.onMessage(message as ChildMessage)
       })

@@ -85,6 +85,8 @@ export class HotkeyHost {
       stdio: 'inherit'
     })
     this.proc = child
+    // kill() can return false before a utility process has a PID.
+    child.once('spawn', () => { if (this.proc !== child || this.stopping) child.kill() })
 
     child.on('message', (message: unknown) => {
       if (this.proc !== child || this.stopping) return

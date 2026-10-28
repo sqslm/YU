@@ -46,6 +46,22 @@ describe('local model memory lifecycle', () => {
   })
   afterEach(() => { host.release(); vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks() })
 
+  it('kills a cancelled model process even when its PID arrives after the release timer', async () => {
+    let spawned = false
+    vi.mocked(utilityProcess.fork).mockImplementationOnce(() => {
+      const worker = new Worker(); worker.holdLoad = true
+      worker.kill.mockImplementation(() => spawned)
+      workers.push(worker); return worker as never
+    })
+    const loading = host.activate()
+    await vi.waitFor(() => expect(workers).toHaveLength(1))
+    host.suspend(); await loading
+    await vi.advanceTimersByTimeAsync(60)
+    expect(workers[0].kill.mock.results.at(-1)?.value).toBe(false)
+    spawned = true; workers[0].emit('spawn')
+    expect(workers[0].kill.mock.results.at(-1)?.value).toBe(true)
+  })
+
   it('unloads for game mode without forgetting the enabled local model', async () => {
     await host.activate()
     host.suspend()

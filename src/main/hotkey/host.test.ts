@@ -9,6 +9,16 @@ import { HotkeyHost } from './host'
 describe('shortcut recording suspension', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
+  it('terminates a utility child that finishes spawning after suspension', () => {
+    let spawned = false
+    const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn(() => spawned) })
+    mock.fork.mockReturnValue(child)
+    const host = new HotkeyHost(vi.fn())
+    host.start(mergeSettings({})); host.stop()
+    expect(child.kill.mock.results.at(-1)?.value).toBe(false)
+    spawned = true; child.emit('spawn')
+    expect(child.kill.mock.results.at(-1)?.value).toBe(true)
+  })
   it('does not acknowledge through a child stopped by the start handler', () => {
     const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
     mock.fork.mockReturnValue(child)

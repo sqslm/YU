@@ -264,7 +264,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 
 ## Changelog
 
-- **1.1.0-rc.5**: automatic game detection, manual game mode and custom game processes. Voice wake, shortcuts and background schedules pause while idle interfaces, the recording bar, keyboard/context workers and local models are released. Previous settings resume after all detected games exit. Drafts are saved before interface reclamation; failed saves retain the interface. Fixes late events from old keyboard workers, context-reader restarts after stop, and unbounded retries when startup failures reset the retry counter.
+- **1.1.0-rc.5**: automatic game detection, manual game mode and custom game processes. Voice wake, shortcuts and background schedules pause while idle interfaces, the recording bar, keyboard/context workers and local models are released. Previous settings resume after all detected games exit. Drafts are saved before interface reclamation; failed saves retain the interface. Fixes late events from old keyboard workers, context-reader restarts after stop, and unbounded retries when startup failures reset the retry counter. A child that finishes spawning after suspension is terminated once its PID is available.
 
 - **1.1.0-rc.4**: redesigns ASR / LLM / TTS settings as a connection list and detail editor; adds current-page, GitHub project and common-document summaries; accepts pauses and full phonetic matches in custom wake phrases without a hidden per-word confidence floor. Fixes connection checks hanging after response headers, model cache reuse across accounts or organizations, and new connections being hidden by an old search filter.
 
