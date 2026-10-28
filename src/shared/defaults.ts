@@ -16,7 +16,7 @@ import { DEFAULT_LOCAL_MODEL, findModel } from './local-asr'
 import { DEFAULT_VOICE_COMMANDS, normalizeVoiceCommands } from './voiceCommands'
 import { DEFAULT_CALENDAR_SETTINGS, MAX_EVENT_LEAD_MINUTES } from './calendar'
 import { DEFAULT_BRIEFING_SETTINGS, normalizeBriefingSettings } from './briefing'
-import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings } from './speech'
+import { DEFAULT_TTS_SETTINGS, normalizeTtsSettings, patchTtsSettings } from './speech'
 import { DEFAULT_BRIEFING_DELIVERY, normalizeBriefingDelivery } from './briefingDelivery'
 import { DEFAULT_ASSISTANT_ACCESS, normalizeAssistantAccess } from './assistantAccess'
 import { normalizeWakeConfidence } from './wake-word'
@@ -48,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
     reminderKeys: { keys: ['LeftCtrl', 'RightShift', 'R'] },
     assistantKeys: { keys: ['LeftCtrl', 'RightShift', 'A'] },
     screenshotKeys: { keys: ['LeftCtrl', 'RightShift', 'X'] },
+    promptCycleKeys: { keys: ['LeftCtrl', 'RightShift', 'P'] },
     // Ctrl+Alt+N: no modifier of the dictation gesture, so a note take can never
     // be mistaken for one and a note chord cannot start a dictation on its way in.
     notesKeys: { keys: ['LeftCtrl', 'LeftAlt', 'N'] },
@@ -203,6 +204,7 @@ export function applySettingsPatch(current: Partial<Settings>, patch: Partial<Se
   for (const key of ['hotkeys', 'asr', 'polish', 'multimodal', 'search', 'localAsr', 'chains', 'reminders', 'voiceCommands', 'wakeWord', 'gameMode', 'calendar', 'briefing', 'tts'] as const) {
     if (patch[key]) next[key] = { ...current[key], ...patch[key] } as never
   }
+  if (patch.tts) next.tts = patchTtsSettings(current.tts ?? DEFAULT_TTS_SETTINGS, patch.tts)
   if (patch.hotkeys?.bindings) {
     next.hotkeys!.bindings = { ...current.hotkeys?.bindings, ...patch.hotkeys.bindings } as Settings['hotkeys']['bindings']
   }
@@ -274,9 +276,9 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     ...Object.values(merged.hotkeys.bindings), merged.hotkeys.pasteLastKeys,
     merged.hotkeys.selectionKeys, input.hotkeys?.notesKeys ?? base.hotkeys.notesKeys,
     input.hotkeys?.selectionTranslateKeys ?? { keys: [] }, input.hotkeys?.reminderKeys ?? { keys: [] },
-    input.hotkeys?.assistantKeys ?? { keys: [] }, input.hotkeys?.screenshotKeys ?? { keys: [] }
+    input.hotkeys?.assistantKeys ?? { keys: [] }, input.hotkeys?.screenshotKeys ?? { keys: [] }, input.hotkeys?.promptCycleKeys ?? { keys: [] }
   ].map(binding => [...(Array.isArray(binding) ? binding : binding.keys ?? [])].sort().join('+'))
-  for (const [field, letters] of [['selectionTranslateKeys', ['T', 'Y', 'F9']], ['reminderKeys', ['R', 'F10', 'F11']], ['assistantKeys', ['A', 'F8', 'F12']], ['screenshotKeys', ['X', 'F7']]] as const) {
+  for (const [field, letters] of [['selectionTranslateKeys', ['T', 'Y', 'F9']], ['reminderKeys', ['R', 'F10', 'F11']], ['assistantKeys', ['A', 'F8', 'F12']], ['screenshotKeys', ['X', 'F7']], ['promptCycleKeys', ['P', 'F6']]] as const) {
     const stored = input.hotkeys?.[field]
     const keys = stored?.keys ?? letters.map(letter => ['LeftCtrl', 'RightShift', letter])
       .find(chord => !used.includes([...chord].sort().join('+'))) ?? []

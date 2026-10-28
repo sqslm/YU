@@ -7,6 +7,16 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "自动路由": "Automatic routing",
+  "后续步骤引用了此步骤，请先修改引用再删除": "A later step references this step. Update the reference before removing it.",
+  "当前没有可提交的语音追问": "No voice follow-up is ready to submit",
+  "语音追问最长 60 秒": "Voice follow-ups are limited to 60 seconds",
+  "无效的录音格式": "Invalid recording format",
+  "没有听到清晰的语音，请重试": "No clear speech was detected. Please try again.",
+  "语音追问不可用": "Voice follow-up is unavailable",
+  "代理 DNS 验证失败，请检查代理网络后重试": "Proxy DNS validation failed. Check your proxy connection and try again.",
+  "已获取链接 {{url}}；无法读取当前网页正文：{{reason}}": "Captured link {{url}}; unable to read the page body: {{reason}}",
+
   "游戏模式": "Game mode",
   "手动保持游戏模式": "Keep game mode on manually",
   "游戏模式已暂停语音功能": "Voice features are paused in game mode",

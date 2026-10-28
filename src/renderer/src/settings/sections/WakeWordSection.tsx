@@ -80,6 +80,9 @@ export function WakeWordSection({ settings, patch }: { settings: Settings; patch
         {status.phase === 'error' && <Button size="small" onClick={() => void window.api.wakeWord.retry().then(setStatus)}>{i18n.t('重试')}</Button>}
       </Stack>
       {/* The fallback itself is correct; only the silence about it was the bug. */}
+      {status.phase === 'listening' && status.lastMatchConfidence !== undefined && status.lastMatchConfidence < confidence && <Typography sx={{ fontSize: 12, color: 'warning.main' }} role="status">
+        {i18n.t('检测到唤醒词候选，置信度 {{score}}%；当前阈值 {{threshold}}%，可调低后重试。', { score: Math.round(status.lastMatchConfidence * 100), threshold: Math.round(confidence * 100) })}
+      </Typography>}
       {status.deviceNotice === 'device-missing' && <Typography sx={{ fontSize: 12, color: 'warning.main' }} role="status">
         {i18n.t('选中的麦克风已不可用，已改用系统默认麦克风；如需指定设备，请在上方重新选择。')}
       </Typography>}

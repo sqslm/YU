@@ -445,6 +445,7 @@ export interface Settings {
     reminderKeys: ShortcutBinding
     assistantKeys: ShortcutBinding
     screenshotKeys: ShortcutBinding
+    promptCycleKeys: ShortcutBinding
     /**
      * Starts and stops a 随记 (voice note) take from anywhere: the hub opens on
      * the notes page and the recorder toggles. Kept out of `bindings` because a

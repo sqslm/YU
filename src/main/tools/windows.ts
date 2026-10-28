@@ -213,7 +213,11 @@ export class WindowsTools {
           if (page.ok && page.text?.trim() && improvesBody) { body = { text: page.text, truncated: page.truncated === true }; partial = false; pageTitle = page.title || title; coverage = mt('当前地址的公开网页正文'); url = page.url ?? url }
           else pageError = page.error ?? ''
         }
-        if (!body.text) return failed(mt('无法读取当前网页正文：{{reason}}', { reason: pageError || mt(options?.allowNetwork === false ? '本次请求禁止联网，浏览器未提供正文' : '浏览器未提供可读文本') }))
+        if (!body.text) {
+          const failure = failed(mt('已获取链接 {{url}}；无法读取当前网页正文：{{reason}}', { url, reason: pageError || mt(options?.allowNetwork === false ? '本次请求禁止联网，浏览器未提供正文' : '浏览器未提供可读文本') }))
+          failure.data.url = url
+          return failure
+        }
         const result = ok(mt('已读取当前网页：{{name}}', { name: pageTitle || url }), { url, title: pageTitle, ...body, truncated: body.truncated || partial, coverage })
         result.sources = [{ title: pageTitle || url, url, snippet: body.text.slice(0, 160) }]
         return result

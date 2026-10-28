@@ -3,6 +3,10 @@ import type { AssistantTurn } from '@shared/assistant'
 import { assistantAnswer } from './assistant-presentation'
 
 const turn = (tools: string[] = []): AssistantTurn => ({ id: 1, question: 'What is this window?', answer: 'Feishu', sources: [], state: 'done', localResults: tools.map(tool => ({ tool, ok: true, summary: 'Real result' })) })
+it('keeps card follow-up actions and failures in the card that submitted them', () => {
+  expect(assistantAnswer(turn(['create_note']), true)).toMatchObject({ answer: 'Feishu', streaming: false })
+  expect(assistantAnswer({ ...turn(), state: 'error', taskState: 'failed', answer: 'Request failed' }, true)).toMatchObject({ answer: 'Request failed' })
+})
 it('keeps recovered file-search results in the answer card, but rejects an unrecovered index failure', () => {
   const failed = { tool: 'search_files_everything', ok: false, fallback: true, summary: 'Index unavailable' }
   expect(assistantAnswer({ ...turn(), localResults: [failed, { tool: 'search_files', ok: true, summary: 'Actual results' }] })).toBeDefined()

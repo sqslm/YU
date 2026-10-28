@@ -67,6 +67,7 @@ export function ShortcutsSection({
     else if (target === 'selectionTranslate') patch({ hotkeys: { ...hotkeys, selectionTranslateKeys: { keys } } })
     else if (target === 'reminder') patch({ hotkeys: { ...hotkeys, reminderKeys: { keys } } })
     else if (target === 'assistant') patch({ hotkeys: { ...hotkeys, assistantKeys: { keys } } })
+    else if (target === 'promptCycle') patch({ hotkeys: { ...hotkeys, promptCycleKeys: { keys } } })
     else if (target === 'screenshot') patch({ hotkeys: { ...hotkeys, screenshotKeys: { keys } } })
     else if (target === 'pasteLast') patch({ hotkeys: { ...hotkeys, pasteLastKeys: { keys } } })
     else if (target === 'notes') patch({ hotkeys: { ...hotkeys, notesKeys: { keys } } })
@@ -194,6 +195,7 @@ export function ShortcutsSection({
         {renderRow('selectionTranslate', '选区翻译', '直接翻译选中文字，沿用已设置的翻译目标', settings.hotkeys.selectionTranslateKeys.keys)}
         {renderRow('reminder', '快速提醒', '录下提醒事项和时间，按现有录音方式开始和结束', settings.hotkeys.reminderKeys.keys)}
         {renderRow('assistant', 'Ask 问答窗口', '打开或收起 Ask 窗口，不会开始录音', settings.hotkeys.assistantKeys.keys)}
+        {renderRow('promptCycle', '轮换润色卡片', '自动路由与所有模式的卡片依次轮换，包括未激活卡片', settings.hotkeys.promptCycleKeys.keys)}
         {renderRow('screenshot', '截图', '框选屏幕、标注、复制、OCR 或翻译；Esc 退出', settings.hotkeys.screenshotKeys.keys)}
         {renderRow(
           'notes',

@@ -34,6 +34,7 @@ export type HotkeyHostEvent =
   | { type: 'selection' | 'selection-translate'; at: number }
   | { type: 'assistant-toggle'; at: number }
   | { type: 'screenshot'; at: number }
+  | { type: 'prompt-cycle'; at: number }
   | { type: 'capture-key'; token: string; down: boolean }
 
 export type HotkeyMessage =
@@ -166,6 +167,7 @@ export class HotkeyHost {
       notes: settings.hotkeys.notesKeys?.keys ?? [],
       assistant: settings.hotkeys.assistantKeys?.keys ?? [],
       screenshot: settings.hotkeys.screenshotKeys?.keys ?? [],
+      promptCycle: settings.hotkeys.promptCycleKeys?.keys ?? [],
       selection: settings.hotkeys.selectionKeys.keys,
       selectionTranslate: settings.hotkeys.selectionTranslateKeys.keys,
       reminder: settings.hotkeys.reminderKeys.keys,

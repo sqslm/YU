@@ -7,6 +7,7 @@ import { isSafeLink } from '@shared/links'
 import { MarkdownView } from './MarkdownView'
 import i18n, { applyUiLanguage } from '../i18n'
 import { answerNote } from './answerNote'
+import { useVoiceQuestion } from './useVoiceQuestion'
 
 /** Entrance/exit timings shared with the bar's own "appear" language. */
 const ENTER_MS = 200
@@ -85,6 +86,8 @@ export function AnswerCard(): JSX.Element | null {
   /** Follow-up question that is waiting for its answer. */
   const [pending, setPending] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [previousAnswer, setPreviousAnswer] = useState<AnswerCardPayload | null>(null)
+  const followUpHeight = useRef(0)
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
   const [sourcePage, setSourcePage] = useState(1)
   const [itemPage, setItemPage] = useState(1)
@@ -107,6 +110,15 @@ export function AnswerCard(): JSX.Element | null {
   const copyTimer = useRef<number | null>(null)
   const enterTimer = useRef<number | null>(null)
   const closeTimer = useRef<number | null>(null)
+  const submitQuestion = useCallback((value: string): void => {
+    const text = value.trim(), current = dataRef.current
+    if (!text || !current || current.streaming) return
+    setPreviousAnswer(current.question ? current : null)
+    followUpHeight.current = cardRef.current?.getBoundingClientRect().height ?? 0
+    setDraft(''); setPending(text)
+    bridge().action?.({ id: 'ask', label: i18n.t('追问'), payload: text })
+  }, [])
+  const voice = useVoiceQuestion(submitQuestion)
 
   useEffect(() => {
     const apply = (settings: Settings): void => { applyUiLanguage(settings.uiLanguage); setSourceSize(settings.listPageSize) }
@@ -119,6 +131,7 @@ export function AnswerCard(): JSX.Element | null {
    * hiding first would cut the exit animation off at frame 0.
    */
   const requestClose = useCallback((): void => {
+    voice.cancel()
     if (closingRef.current) return
     closingRef.current = true
     setClosing(true)
@@ -129,7 +142,7 @@ export function AnswerCard(): JSX.Element | null {
       setEntering(false)
       bridge().hide()
     }, EXIT_MS)
-  }, [])
+  }, [voice.cancel])
 
   useEffect(() => {
     const off = bridge().onData((payload) => {
@@ -168,6 +181,8 @@ export function AnswerCard(): JSX.Element | null {
       closingRef.current = false
       setClosing(false)
       setPinned(false); setDraft(''); setPending(null); setSaved(null); setSaveError('')
+      setPreviousAnswer(null); followUpHeight.current = 0; voice.cancel()
+      voice.clearError()
       dataRef.current = null
     }
     const onVisibility = (): void => { if (document.visibilityState === 'hidden') resetHidden() }
@@ -199,7 +214,7 @@ export function AnswerCard(): JSX.Element | null {
       focusedRef.current = true
     }
     const onBlur = (): void => {
-      if (pinned) return
+      if (pinned || pending !== null || data?.streaming || voice.recording || voice.working) return
       if (!focusedRef.current || document.visibilityState === 'hidden') return
       focusedRef.current = false
       requestClose()
@@ -210,7 +225,7 @@ export function AnswerCard(): JSX.Element | null {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('blur', onBlur)
     }
-  }, [requestClose, pinned])
+  }, [requestClose, pinned, pending, data?.streaming, voice.recording, voice.working])
 
   // The window is sized by the main process, so the card reports the height its
   // content actually needs. `reportHeight` becomes `card:height` in the main
@@ -235,6 +250,7 @@ export function AnswerCard(): JSX.Element | null {
   }, [data, sourcesExpanded])
 
   useEffect(() => {
+    voice.clearError()
     setSourcesExpanded(false)
     setDraft(''); setSaved(null); setSaveError('')
     if (scrollRef.current) scrollRef.current.scrollTop = 0
@@ -313,9 +329,7 @@ export function AnswerCard(): JSX.Element | null {
   const submitFollowUp = (): void => {
     const text = draft.trim()
     if (text === '' || busy) return
-    setDraft('')
-    setPending(text)
-    bridge().action?.({ id: 'ask', label: i18n.t('追问'), payload: text })
+    submitQuestion(text)
   }
 
   return (
@@ -326,6 +340,7 @@ export function AnswerCard(): JSX.Element | null {
         ref={cardRef}
         style={{
           ...card,
+          minHeight: busy && followUpHeight.current ? Math.min(followUpHeight.current, window.innerHeight - STAGE_PADDING * 2) : undefined,
           animation: closing
             ? `cardOut ${EXIT_MS}ms cubic-bezier(.3,0,.6,1) both`
             : entering
@@ -355,6 +370,10 @@ export function AnswerCard(): JSX.Element | null {
           </div>
         </div>
 
+        {previousAnswer && !data.selection && <details data-card-context style={{ padding: '6px 14px', fontSize: 11.5, color: '#aab8d4' }}>
+          <summary>{i18n.t('沿用上下文：{{question}}', { question: previousAnswer.question })}</summary>
+          <div style={{ whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto', marginTop: 6 }}>{previousAnswer.answer}</div>
+        </details>}
         {question !== '' && (
           <div style={questionRow}>
             <MicIcon />
@@ -471,14 +490,15 @@ export function AnswerCard(): JSX.Element | null {
             })}
         </div>
         {saveError && <div role="alert" style={{ padding: '0 14px 8px', fontSize: 12, color: '#ffb4aa' }}>{saveError}</div>}
+        {voice.error && <div role="alert" style={{ padding: '0 14px 8px', fontSize: 12, color: '#ffb4aa' }}>{voice.error}</div>}
 
         {!data.selection && <div style={askRow}>
           <InputBase
             className="card-ask"
             autoFocus={data.assistant && !data.question}
             value={draft}
-            disabled={busy}
-            placeholder={busy ? i18n.t('正在思考…') : data.stopped ? i18n.t('重新提问…') : i18n.t('继续追问…')}
+            disabled={busy || voice.recording || voice.working}
+            placeholder={voice.recording ? i18n.t('正在聆听，点击结束并发送…') : voice.working ? i18n.t('正在识别语音…') : busy ? i18n.t('正在思考…') : data.stopped ? i18n.t('重新提问…') : i18n.t('继续追问…')}
             style={askInput}
             inputProps={{ 'aria-label': i18n.t('追问'), style: askInputInner }}
             onChange={(event) => setDraft(event.target.value)}
@@ -490,10 +510,15 @@ export function AnswerCard(): JSX.Element | null {
               submitFollowUp()
             }}
           />
+          <button type="button" data-card-voice style={{ ...askButton, color: voice.recording ? '#ffb4aa' : '#b9cdff' }}
+            disabled={busy || voice.working} aria-pressed={voice.recording} onClick={voice.toggle}>
+            {i18n.t(voice.recording ? '结束并发送' : voice.working ? '识别中…' : '语音追问')}
+          </button>
+          {(voice.recording || voice.working) && <button type="button" style={askButton} onClick={voice.cancel}>{i18n.t('取消')}</button>}
           <button
             type="button"
             style={{ ...askButton, opacity: busy || draft.trim() === '' ? 0.5 : 1 }}
-            disabled={busy || draft.trim() === ''}
+            disabled={busy || voice.recording || voice.working || draft.trim() === ''}
             onClick={submitFollowUp}
           >
             {i18n.t('追问')}

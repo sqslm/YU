@@ -152,6 +152,7 @@ export interface TypelessApi {
    * settings page or from a sentence.
    */
   workflow: {
+    tools(): Promise<import('./workflow').WorkflowTool[]>
     list(): Promise<import('./workflow').Workflow[]>
     save(input: import('./workflow').WorkflowInput, id?: string): Promise<import('./workflow').Workflow | null>
     manage(id: string, action: 'archive' | 'restore' | 'remove'): Promise<import('./workflow').Workflow[] | null>
@@ -454,6 +455,9 @@ export interface TypelessApi {
   }
   /** Answer card window (Ask Anything results). */
   card: {
+    beginVoice(): Promise<string | null>
+    cancelVoice(id: string): void
+    transcribeVoice(id: string, wav: Uint8Array): Promise<string>
     /** Renderer subscribed and can receive the first payload. */
     ready(): void
     /** `card:data` — one answer at a time, newest wins. */

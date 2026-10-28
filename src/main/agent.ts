@@ -38,7 +38,7 @@ import { DEFAULT_SETTINGS } from '@shared/defaults'
 import { adaptChatBody, chatPath, complete } from './providers/llm'
 import { joinUrl, parseHeaderLines } from './providers/asr'
 import { isWeatherQuery } from './providers/weather'
-import { isCurrentContentRequest } from './voice-intent'
+import { isBareSummaryRequest, isCurrentContentRequest } from './voice-intent'
 import { CURRENT_CONTENT_CHARS } from './document-reader'
 import {
   assessRecency,
@@ -1697,6 +1697,8 @@ async function askTask(
   }
 
   try {
+    if (isBareSummaryRequest(question) && (context.task?.recentExchange || options.reset === false) &&
+        (options.conversation ?? defaultConversation).messages.length) return await plain()
     // Current content is an explicit read, not a web-search decision. In
     // particular it must work without a search provider or a tool-capable model.
     if (isCurrentContentRequest(question) && !/保存|存成|存到|创建|新建|发送|复制|写入|记到|记下来|\b(?:save|create|send|copy|write|remind)\b/iu.test(question)) {

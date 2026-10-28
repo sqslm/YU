@@ -318,6 +318,9 @@ public static class YUWake {
       engine.InitialSilenceTimeout = TimeSpan.Zero;
       engine.EndSilenceTimeout = TimeSpan.FromMilliseconds(1200);
       engine.EndSilenceTimeoutAmbiguous = TimeSpan.FromMilliseconds(1500);
+      // SAPI otherwise rejects candidates internally before our confidence
+      // slider ever sees them. The host owns the only adjustable confidence gate.
+      engine.UpdateRecognizerSetting("CFGConfidenceRejectionThreshold", 0);
       var grammar = new GrammarBuilder { Culture = selected.Culture };
       grammar.Append(spoken);
       engine.LoadGrammar(new Grammar(grammar) { Name = "wake" });
@@ -360,16 +363,22 @@ public static class YUWake {
         }
       } catch { Emit(new { type = "error", error = "microphone" }); return; }
       using (var ended = new ManualResetEvent(false)) {
-        engine.SpeechRecognized += (sender, e) => {
-          if (e.Result.Audio == null) return; // Emulated startup input cannot wake the app.
-          if (MatchText(e.Result.Text) == targetText || targetPhones.Length > 0 && Phones(e.Result.Words) == targetPhones) {
+        Action<RecognitionResult> candidate = result => {
+          if (result == null || result.Audio == null || String.IsNullOrEmpty(result.Text)) return;
+          if (MatchText(result.Text) == targetText || targetPhones.Length > 0 && Phones(result.Words) == targetPhones) {
             float wordConfidence = 1;
-            foreach (var word in e.Result.Words) wordConfidence = Math.Min(wordConfidence, word.Confidence);
-            Emit(new { type = "wake", phrase = phrase, confidence = e.Result.Confidence,
-              wordConfidence = wordConfidence, durationMs = e.Result.Audio.Duration.TotalMilliseconds });
+            foreach (var word in result.Words) wordConfidence = Math.Min(wordConfidence, word.Confidence);
+            Emit(new { type = "wake", phrase = phrase, confidence = result.Confidence,
+              wordConfidence = wordConfidence, durationMs = result.Audio.Duration.TotalMilliseconds });
           }
         };
-        engine.RecognizeCompleted += (sender, e) => ended.Set();
+        engine.SpeechRecognized += (sender, e) => candidate(e.Result);
+        engine.SpeechRecognitionRejected += (sender, e) => candidate(e.Result);
+        engine.RecognizeCompleted += (sender, e) => {
+          // A live input ending unexpectedly is not a healthy listening session.
+          if (String.IsNullOrEmpty(wave)) Emit(new { type = "error", error = "microphone" });
+          ended.Set();
+        };
         Emit(new { type = "ready" });
         engine.RecognizeAsync(RecognizeMode.Multiple);
         // Also release the microphone when main kills us: nothing else stops waveIn,

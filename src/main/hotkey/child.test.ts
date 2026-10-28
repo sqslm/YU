@@ -37,7 +37,7 @@ function configure(): void {
   native.receive!({ data: { type: 'config', bindings: {
     dictation: ['RightAlt'], ask: ['RightAlt', 'Space'], translate: ['RightAlt', 'RightShift']
   }, pasteLast: ['LeftCtrl', 'RightShift', 'V'], selection: ['LeftCtrl', 'RightShift', 'S'],
-    selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], assistant: ['LeftCtrl', 'RightShift', 'A'], screenshot: ['LeftCtrl', 'RightShift', 'X'], notes: [] } })
+    selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], assistant: ['LeftCtrl', 'RightShift', 'A'], screenshot: ['LeftCtrl', 'RightShift', 'X'], promptCycle: ['LeftCtrl', 'RightShift', 'P'], notes: [] } })
   native.post.mockClear()
 }
 function key(vk: number, down: boolean): number {
@@ -50,6 +50,14 @@ function key(vk: number, down: boolean): number {
 function events(type: string): unknown[] {
   return native.post.mock.calls.map(([event]) => event).filter(event => event.type === type)
 }
+
+it('cycles prompts once per released chord, without starting a recording', () => {
+  key(0xa2, true); key(0xa1, true); key(0x50, true); key(0x50, true)
+  expect(events('prompt-cycle')).toHaveLength(0)
+  key(0x50, false); key(0xa2, false); key(0xa1, false)
+  expect(events('prompt-cycle')).toHaveLength(1)
+  expect(events('start')).toHaveLength(0)
+})
 
 it('opens screenshot capture once after all modifiers release and never starts audio', () => {
   key(0xa2, true); key(0xa1, true)

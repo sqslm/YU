@@ -31,11 +31,15 @@ export function isCurrentWindowQuestion(text: string): boolean {
 }
 
 /** Resolve "this page/file" against the original window, never an older answer. */
+export function isBareSummaryRequest(text: string): boolean {
+  return /^(?:(?:请|帮我|请帮我|麻烦|麻烦你|请你|你帮我)\s*)?(?:总结|概括)(?:一下)?(?:吧|啊|呀|好吗)?[。！？!?.\s]*$/u.test(text.trim())
+}
+
 export function isCurrentContentRequest(text: string): boolean {
   if (isDictatedContent(text) || isReminderCreationRequest(text) || isReadOnlySelectionRequest(text) ||
       /(?:不要|不用|无需|别).{0,4}(?:总结|概括|读取|阅读|分析|介绍)|\b(?:do not|don.t|never)\s+(?:read|summari[sz]e|analy[sz]e|explain)\b/iu.test(text) ||
       /剪贴板|\bclipboard\b|刚才|之前|上次|上一个|上一条|\b(?:previous|earlier|last answer)\b/iu.test(text)) return false
-  if (/^(?:(?:请|帮我|请帮我|麻烦|麻烦你|请你|你帮我)\s*)?(?:总结|概括)(?:一下)?(?:吧|啊|呀|好吗)?[。！？!?.\s]*$/u.test(text.trim())) return true
+  if (isBareSummaryRequest(text)) return true
   const target = /(?:这个|这篇|这份|该|当前|正在|打开的|选中的?|屏幕上|浏览器里).{0,24}(?:网页|文章|页面|网站|项目|仓库|文件|文档|表格|幻灯片|PDF|Word|Excel|PPT)|(?:这|当前)(?:个)?(?:网页|文章|文档)|\b(?:this|the (?:current|active|open|opened)|(?:the )?selected)\s+(?:(?:web|browser)\s*)?(?:page|article|website|repository|repo|project|file|document|spreadsheet|presentation|pdf)\b/iu.test(text)
   return target && /总结|概括|介绍|解释|分析|阅读|读一下|主要|内容|讲什么|说什么|干嘛|干什么|做什么|是什么|用途|\b(?:summari[sz]e|explain|describe|analy[sz]e|read|what)\b/iu.test(text)
 }

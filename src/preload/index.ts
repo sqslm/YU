@@ -109,6 +109,7 @@ const api: TypelessApi = {
   },
   workflow: {
     list: () => ipcRenderer.invoke('workflow:list'),
+    tools: () => ipcRenderer.invoke('workflow:tools'),
     save: (input, id) => ipcRenderer.invoke('workflow:save', input, id),
     manage: (id, action) => ipcRenderer.invoke('workflow:manage', id, action),
     onChanged: callback => {
@@ -386,6 +387,9 @@ const api: TypelessApi = {
   // Every renderer shares this one preload, so the card page gets the same
   // bridge — `window.api.card` is what AnswerCard.tsx subscribes to.
   card: {
+    beginVoice: () => ipcRenderer.invoke('card:voice-begin'),
+    cancelVoice: id => ipcRenderer.send('card:voice-cancel', id),
+    transcribeVoice: (id, wav) => ipcRenderer.invoke('card:voice-transcribe', id, wav),
     ready: () => ipcRenderer.send('card:ready'),
     onHidden: callback => {
       const listener = (): void => callback()

@@ -1,6 +1,5 @@
 /**
- * The saved-workflow contract shared by the main process, the store and (later)
- * the UI.
+ * The saved-workflow contract shared by the main process, store and manual editor.
  *
  * A workflow is a user-named, ordered list of tool calls for the "every time I
  * do this, it is the same few steps" case. Running one does not involve a model:
@@ -122,6 +121,29 @@ export interface Workflow {
 export interface WorkflowInput {
   name: string
   steps: WorkflowStep[]
+}
+
+export interface WorkflowTool {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+/** Removing an earlier step must not redirect a later reference to a different result. */
+export function removeWorkflowStep(steps: WorkflowStep[], index: number): WorkflowStep[] {
+  const ref = (value: string): string => {
+    const [number, ...path] = value.split('.')
+    if (Number(number) === index + 1) throw new Error(mt('后续步骤引用了此步骤，请先修改引用再删除'))
+    return [Number(number) > index + 1 ? String(Number(number) - 1) : number, ...path].join('.')
+  }
+  const bind = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(bind)
+    if (isPlainRecord(value)) return Object.hasOwn(value, '$ref') ? { $ref: ref(String(value.$ref)) } : Object.fromEntries(Object.entries(value).map(([key, item]) => [key, bind(item)]))
+    return value
+  }
+  return normalizeWorkflowSteps(steps.filter((_step, at) => at !== index).map(step => ({ ...step, args: bind(step.args),
+    ...(step.when ? { when: { ...step.when, ref: ref(step.when.ref) } } : {}),
+    ...(step.otherwise ? { otherwise: { ...step.otherwise, args: bind(step.otherwise.args) } } : {}) })))
 }
 
 /** Code points, not UTF-16 units: clipping must never split an emoji in a name. */

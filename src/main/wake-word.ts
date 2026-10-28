@@ -147,14 +147,19 @@ export class WakeWordHost {
           // The configured utterance threshold is the confidence gate. A second
           // fixed word-score floor made the sensitivity control ineffective for names.
           else if (event.type === 'wake' && this.status.phase === 'listening' &&
-            event.phrase === this.phrase && event.confidence >= this.confidence &&
-            event.durationMs >= 300 && event.durationMs <= 9000 && Date.now() - this.lastWake >= 5000) {
+            event.phrase === this.phrase && Number.isFinite(event.confidence) &&
+            event.durationMs >= 300 && event.durationMs <= 9000) {
+            if (event.confidence < this.confidence) {
+              this.publish({ ...this.status, lastMatchConfidence: event.confidence })
+              continue
+            }
+            if (Date.now() - this.lastWake < 5000) continue
             this.lastWake = Date.now()
             this.stop(); this.publish({ phase: 'paused' }); this.deps.wake(); return
           } else if (event.type === 'error') failed(['language', 'microphone'].includes(event.error) ? event.error : 'unavailable')
           // The script already fell back to the default input, which is the right
           // behaviour but invisible; surfacing it is the whole point of this branch.
-          else if (event.type === 'log' && event.reason === 'device-missing' && !this.deviceNotice) {
+          else if (event.type === 'log' && ['device-missing', 'device-open-failed', 'device-stream-failed'].includes(event.reason) && !this.deviceNotice) {
             this.deviceNotice = 'device-missing'
             this.publish(this.status)
           }

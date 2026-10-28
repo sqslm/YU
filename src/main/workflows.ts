@@ -88,7 +88,7 @@ function nameKey(name: string): string {
 }
 
 function cloneWorkflow(row: Workflow): Workflow {
-  return { ...row, steps: row.steps.map(step => ({ ...step, args: { ...step.args } })) }
+  return structuredClone(row)
 }
 
 export class WorkflowStore {
@@ -151,9 +151,7 @@ export class WorkflowStore {
       ...(existing?.lastRunAt === undefined ? {} : { lastRunAt: existing.lastRunAt }),
       ...(existing?.archivedAt === undefined ? {} : { archivedAt: existing.archivedAt })
     }
-    if (existing) this.workflows = this.workflows.map(row => row.id === workflow.id ? workflow : row)
-    else this.workflows.push(workflow)
-    this.flush()
+    this.flush(existing ? this.workflows.map(row => row.id === workflow.id ? workflow : row) : [...this.workflows, workflow])
     return cloneWorkflow(workflow)
   }
 
@@ -167,8 +165,7 @@ export class WorkflowStore {
     const row = this.find(id)
     if (!row) throw new Error(mt('工作流不存在'))
     if (row.archivedAt !== undefined) return
-    this.workflows = this.workflows.map(item => item.id === id ? { ...item, archivedAt: this.now() } : item)
-    this.flush()
+    this.flush(this.workflows.map(item => item.id === id ? { ...item, archivedAt: this.now() } : item))
   }
 
   restore(id: string): void {
@@ -178,12 +175,11 @@ export class WorkflowStore {
     if (activeWorkflows(this.workflows).length >= MAX_WORKFLOWS) {
       throw new Error(mt('工作流数量已达上限（{{count}} 个），请先归档不再需要的', { count: MAX_WORKFLOWS }))
     }
-    this.workflows = this.workflows.map(item => {
+    this.flush(this.workflows.map(item => {
       if (item.id !== id) return item
       const { archivedAt: _dropped, ...rest } = item
       return rest
-    })
-    this.flush()
+    }))
   }
 
   /**
@@ -193,9 +189,8 @@ export class WorkflowStore {
    * something by voice can still get it back.
    */
   remove(id: string): void {
-    const before = this.workflows.length
-    this.workflows = this.workflows.filter(row => row.id !== id)
-    if (this.workflows.length !== before) this.flush()
+    const next = this.workflows.filter(row => row.id !== id)
+    if (this.workflows.length !== next.length) this.flush(next)
   }
 
   /**
@@ -210,17 +205,17 @@ export class WorkflowStore {
     const row = this.find(id)
     if (!row) return
     const at = this.now()
-    this.workflows = this.workflows.map(item => item.id === id ? { ...item, runs: item.runs + 1, lastRunAt: at } : item)
-    this.flush()
+    this.flush(this.workflows.map(item => item.id === id ? { ...item, runs: item.runs + 1, lastRunAt: at } : item))
   }
 
   /** Atomic: temp sibling then rename, so a crash cannot truncate the document. */
-  flush(): void {
+  flush(rows = this.workflows): void {
     mkdirSync(dirname(this.file), { recursive: true })
     const temp = `${this.file}.${process.pid}.tmp`
-    const payload: WorkflowFile = { version: VERSION, workflows: this.workflows }
+    const payload: WorkflowFile = { version: VERSION, workflows: rows }
     writeFileSync(temp, JSON.stringify(payload, null, 2), 'utf8')
     renameSync(temp, this.file)
+    this.workflows = rows
   }
 
   private find(id: string): Workflow | undefined {

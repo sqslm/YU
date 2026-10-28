@@ -26,6 +26,11 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('retains the actual answer when an explicit card continuation says only summarize', async () => {
+    session.rememberAnswer('Explain the project', 'Actual prior answer')
+    await session.send('总结一下', undefined, undefined, now, {}, true)
+    expect(JSON.stringify(ask.mock.calls.at(-1)?.[5]?.conversation)).toContain('Actual prior answer')
+  })
   it('resolves a new current document against the new window even when a classifier requests old context', async () => {
     session.rememberAnswer('之前的项目', 'Old unrelated answer')
     await session.send('帮我总结这个打开的文档', undefined, undefined, now, { appName: 'WINWORD', windowHandle: '123', processId: 42 }, true)

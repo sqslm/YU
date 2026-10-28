@@ -42,6 +42,8 @@ export interface SafeFetchOptions {
   fetchImpl?: typeof fetch
   /** Injected in tests; defaults to a real `lookup(host, { all: true })`. */
   resolveHost?: HostResolver
+  /** Independent public DNS validation, only for a proxy's synthetic addresses. */
+  resolvePublicHost?: HostResolver
   /**
    * Skips the address check, keeping only the URL-string check.
    *
@@ -203,6 +205,27 @@ function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 const realResolver: HostResolver = (host) => lookup(host, { all: true })
 
+function isProxyAddress(address: string): boolean {
+  // Mihomo/Clash default fake-IP pools; these remain private everywhere else.
+  return /^198\.(?:18|19)\./.test(address) || bareHost(address).startsWith('fdfe:dcba:9876:')
+}
+
+/** HTTPS authenticates the resolver; never follow a DNS endpoint redirect. */
+const publicResolver: HostResolver = async host => {
+  const signal = AbortSignal.timeout(DEFAULT_DNS_TIMEOUT_MS)
+  const answers = await Promise.all(['A', 'AAAA'].map(async type => {
+    const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`, {
+      headers: { accept: 'application/dns-json' }, redirect: 'error', signal
+    })
+    if (!response.ok) throw new Error('DNS verification failed')
+    const data = await response.json() as { Status?: number; Answer?: Array<{ type: number; data: string }> }
+    if (data.Status !== 0) throw new Error('DNS verification failed')
+    return (data.Answer ?? []).filter(answer => answer.type === 1 || answer.type === 28)
+      .map(answer => ({ address: answer.data }))
+  }))
+  return answers.flat()
+}
+
 /**
  * Refuses a host whose addresses are not all public.
  *
@@ -229,6 +252,17 @@ export async function assertPublicHost(hostname: string, options: SafeFetchOptio
   }
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error(mt('域名解析失败：{{host}}', { host }))
+  }
+  if (answers.some(answer => isProxyAddress(answer.address)) &&
+      answers.every(answer => isProxyAddress(answer.address) || !isPrivateAddress(answer.address))) {
+    // Keep the domain in the actual request so TUN can map it to its proxy route.
+    // A fake-IP by itself is not permission to access a private destination.
+    try {
+      answers = await withDeadline((options.resolvePublicHost ?? publicResolver)(host), timeoutMs)
+    } catch {
+      throw new Error(mt('代理 DNS 验证失败，请检查代理网络后重试'))
+    }
+    if (!answers.length) throw new Error(mt('域名解析失败：{{host}}', { host }))
   }
   for (const answer of answers) {
     if (isPrivateAddress(answer.address)) throw new Error(mt('拒绝访问内网地址'))

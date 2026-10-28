@@ -15,7 +15,7 @@ import { localDayKey } from '@shared/calendar'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
 import { WORKFLOW_TOOLS, type WorkflowTools } from './tools/workflow'
-import { directVoiceIntent, isCurrentContentRequest, isDictatedContent, needsAssistantContext, screenshotNeedsEditor, stopSpeakingRequest, speechPlaybackRequest } from './voice-intent'
+import { directVoiceIntent, isBareSummaryRequest, isCurrentContentRequest, isDictatedContent, needsAssistantContext, screenshotNeedsEditor, stopSpeakingRequest, speechPlaybackRequest } from './voice-intent'
 
 export const ASSISTANT_TOOLS = ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'open_search']
 const SESSION_TTL = 15 * 60_000
@@ -511,7 +511,8 @@ export class AssistantSession {
     // A pointer ("第二个", "刚才那条") is context even when the phrasing rule below
     // does not recognise it: dropping the thread here would make it unanswerable.
     const pointer = resolveReference(input, this.reference)
-    if (!operation && (isCurrentContentRequest(input) || !(useContext ?? (needsAssistantContext(input) || pointer.kind !== 'none')))) {
+    const summarizePrevious = useContext === true && isBareSummaryRequest(input) && this.conversation.messages.length > 0
+    if (!operation && (isCurrentContentRequest(input) && !summarizePrevious || !(useContext ?? (needsAssistantContext(input) || pointer.kind !== 'none')))) {
       this.conversation = { messages: [], toolNotes: '' }
       this.reference = null
     }

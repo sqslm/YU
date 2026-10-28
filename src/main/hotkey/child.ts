@@ -106,7 +106,8 @@ let selectionBinding: Binding | null = null
 let selectionTranslateBinding: Binding | null = null
 let assistantBinding: Binding | null = null
 let screenshotBinding: Binding | null = null
-let actionPending: { type: 'selection' | 'selection-translate' | 'paste-last' | 'assistant-toggle' | 'screenshot'; keys: number[] } | null = null
+let promptCycleBinding: Binding | null = null
+let actionPending: { type: 'selection' | 'selection-translate' | 'paste-last' | 'assistant-toggle' | 'screenshot' | 'prompt-cycle'; keys: number[] } | null = null
 /**
  * True while the answer card is on screen. ESC then belongs to the card — the
  * window is shown inactive, so the card's own keydown handler never fires and
@@ -283,6 +284,7 @@ function boundKey(vk: number): boolean {
   if (selectionTranslateBinding && selectionTranslateBinding.keys.includes(vk)) return true
   if (assistantBinding && assistantBinding.keys.includes(vk)) return true
   if (screenshotBinding && screenshotBinding.keys.includes(vk)) return true
+  if (promptCycleBinding && promptCycleBinding.keys.includes(vk)) return true
   return pasteLast ? pasteLast.keys.includes(vk) : false
 }
 
@@ -353,6 +355,7 @@ function swallowDown(vk: number, injected: boolean): boolean {
   if (selectionTranslateBinding && vk === chordKey(selectionTranslateBinding) && allDown(selectionTranslateBinding.keys)) return true
   if (assistantBinding && vk === chordKey(assistantBinding) && allDown(assistantBinding.keys)) return true
   if (screenshotBinding && vk === chordKey(screenshotBinding) && allDown(screenshotBinding.keys)) return true
+  if (promptCycleBinding && vk === chordKey(promptCycleBinding) && allDown(promptCycleBinding.keys)) return true
   if (notesBinding && vk === chordKey(notesBinding) && allDown(notesBinding.keys)) return true
   const reminder = bindings.find(binding => binding.purpose === 'reminder')
   if (reminder && vk === reminder.primary && allDown(reminder.keys)) return true
@@ -487,6 +490,10 @@ function drive(): void {
       actionPending = { type: 'assistant-toggle', keys: assistantBinding.keys }
       continue
     }
+    if (promptCycleBinding && vk === chordKey(promptCycleBinding) && allDown(promptCycleBinding.keys)) {
+      actionPending = { type: 'prompt-cycle', keys: promptCycleBinding.keys }
+      continue
+    }
     if (screenshotBinding && vk === chordKey(screenshotBinding) && allDown(screenshotBinding.keys)) {
       actionPending = { type: 'screenshot', keys: screenshotBinding.keys }
       continue
@@ -601,6 +608,7 @@ port.on('message', (event: { data: unknown }) => {
         reminder?: string[]
         assistant?: string[]
         screenshot?: string[]
+        promptCycle?: string[]
         activation?: 'hold' | 'toggle'
       }
     | { type: 'enabled'; value: boolean }
@@ -624,6 +632,7 @@ port.on('message', (event: { data: unknown }) => {
     selectionTranslateBinding = data.selectionTranslate?.length ? bindingFrom('dictation', data.selectionTranslate) : null
     assistantBinding = data.assistant?.length ? bindingFrom('dictation', data.assistant) : null
     screenshotBinding = data.screenshot?.length ? bindingFrom('dictation', data.screenshot) : null
+    promptCycleBinding = data.promptCycle?.length ? bindingFrom('dictation', data.promptCycle) : null
     actionPending = null
     notesBinding = data.notes && data.notes.length > 0 ? bindingFrom('dictation', data.notes) : null
     if (data.activation === 'hold' || data.activation === 'toggle') {

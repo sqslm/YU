@@ -1,4 +1,4 @@
-export const MIN_WAKE_CONFIDENCE = 0.5
+export const MIN_WAKE_CONFIDENCE = 0.1
 export const MAX_WAKE_CONFIDENCE = 0.99
 
 export function isShortWakePhrase(phrase: string): boolean {
@@ -23,4 +23,6 @@ export interface WakeWordStatus {
    * instead of silently listening to a different microphone than the one chosen.
    */
   deviceNotice?: 'device-missing'
+  /** Matching phrase rejected by the user's threshold; contains no spoken text/audio. */
+  lastMatchConfidence?: number
 }

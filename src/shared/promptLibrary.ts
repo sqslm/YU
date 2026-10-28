@@ -259,6 +259,17 @@ export interface PromptRoutingSettings {
   appRules: AppRule[]
 }
 
+/** Explicit cycling includes every saved card, independent of the active card per kind. */
+export function nextPromptRoute(settings: PromptRoutingSettings & { promptLibrary: PromptLibrary }): Pick<PromptRoutingSettings, 'autoActivatePrompts' | 'mainPromptKind' | 'mainPromptCardId'> {
+  const choices = (['polish', 'translate', 'document', 'email', 'ai'] as const)
+    .flatMap(kind => settings.promptLibrary.cards[kind].map(card => ({ kind, id: card.id })))
+  const currentId = settings.mainPromptCardId || settings.promptLibrary.active[settings.mainPromptKind]
+  const current = settings.autoActivatePrompts ? -1 : choices.findIndex(row => row.kind === settings.mainPromptKind && row.id === currentId)
+  const next = choices[current + 1]
+  return next ? { autoActivatePrompts: false, mainPromptKind: next.kind, mainPromptCardId: next.id }
+    : { autoActivatePrompts: true, mainPromptKind: settings.mainPromptKind, mainPromptCardId: '' }
+}
+
 /**
  * Which kind to use for a window. Manual rules win over the built-in hint list
  * (that is the whole point of the table: the classifier mislabels an app, the

@@ -194,7 +194,7 @@ export function PromptsSection({
             <Typography
               sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.35, color: 'text.primary' }}
             >
-              {i18n.t('自动激活')}
+              {i18n.t('自动路由')}
             </Typography>
             <Typography
               sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.25, lineHeight: 1.45 }}
@@ -208,7 +208,7 @@ export function PromptsSection({
             size="small"
             checked={autoActivate}
             onChange={(e) => patch({ autoActivatePrompts: e.target.checked })}
-            slotProps={{ input: { 'aria-label': i18n.t('自动激活提示词') } }}
+            slotProps={{ input: { 'aria-label': i18n.t('自动路由提示词') } }}
             sx={{ mt: -0.25 }}
           />
         </Box>

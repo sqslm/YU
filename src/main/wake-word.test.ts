@@ -67,6 +67,12 @@ describe('offline custom wake lifecycle', () => {
     children[0].stdout.write(JSON.stringify({ type: 'wake', phrase: '小杨', confidence: 0.61, wordConfidence: 0.25, durationMs: 600 }) + '\n')
     expect(wake).toHaveBeenCalledOnce()
   })
+  it('accepts a matching low-confidence custom name at the new lowest sensitivity setting', () => {
+    host.update({ enabled: true, phrase: '你好，胡小杨', confidence: 0.1 }, false)
+    children[0].stdout.write('{"type":"ready"}\n')
+    children[0].stdout.write(JSON.stringify({ type: 'wake', phrase: '你好，胡小杨', confidence: 0.22, durationMs: 1300 }) + '\n')
+    expect(wake).toHaveBeenCalledOnce()
+  })
   it('keeps a stricter confidence gate for short phrases', () => {
     host.update({ enabled: true, phrase: '小语' }, false)
     children[0].stdout.write('{"type":"ready"}\n')

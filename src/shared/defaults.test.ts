@@ -10,7 +10,7 @@ describe('mergeSettings', () => {
     expect(wake(undefined, '小语').confidence).toBe(0.94)
     expect(wake(0.91).confidence).toBe(0.91)
     expect(wake(0.745).confidence).toBe(0.75)
-    expect(wake(-1).confidence).toBe(0.5)
+    expect(wake(-1).confidence).toBe(0.1)
     expect(wake(5).confidence).toBe(0.99)
     expect(wake(Number.NaN).confidence).toBe(0.8)
     expect(wake(Infinity).confidence).toBe(0.8)

@@ -31,8 +31,19 @@ export interface TtsSettings {
   speed: number
   /** Saved connections let switching providers retain each provider's own credentials. */
   connections?: Partial<Record<TtsProvider, TtsConnection>>
+  profiles?: TtsProfile[]
+  activeProfileId?: string
 }
 export interface TtsConnection { baseUrl: string; apiKey: string; apiKeyEnc?: string; model: string; apiVoice: string }
+export interface TtsProfile extends TtsConnection {
+  id: string
+  name: string
+  provider: TtsProvider
+  voice?: string
+  rate?: number
+  speed?: number
+  volume?: number
+}
 
 export const TTS_PRESETS = {
   windows: { label: 'Windows', baseUrl: '', model: '', apiVoice: '' },
@@ -92,7 +103,7 @@ export function normalizeTtsSettings(input: unknown): TtsSettings {
       if (Object.hasOwn(TTS_PRESETS, key) && key !== 'windows' && value && typeof value === 'object') connections[key as TtsProvider] = connection(value as Record<string, unknown>)
     }
   }
-  return {
+  const normalized: TtsSettings = {
     // Strict `true`: a stored "false" string must never switch reading on.
     enabled: source.enabled === true,
     voice: typeof source.voice === 'string' ? source.voice.trim() : '',
@@ -103,6 +114,52 @@ export function normalizeTtsSettings(input: unknown): TtsSettings {
     speed: clamp(toNumber(source.speed, 1), 0.5, 2),
     ...(Object.keys(connections).length ? { connections } : {})
   }
+  if (Array.isArray(source.profiles)) {
+    const ids = new Set<string>()
+    const profiles: TtsProfile[] = []
+    for (const raw of source.profiles.slice(0, 50)) {
+      if (!raw || typeof raw !== 'object' || typeof raw.id !== 'string' || !raw.id.trim() || ids.has(raw.id) || !Object.hasOwn(TTS_PRESETS, raw.provider)) continue
+      ids.add(raw.id)
+      profiles.push({ id: raw.id, name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 80) : TTS_PRESETS[raw.provider as TtsProvider].label,
+        provider: raw.provider, ...connection(raw), voice: typeof raw.voice === 'string' ? raw.voice : '',
+        rate: Math.round(clamp(toNumber(raw.rate, 0), -10, 10)), speed: clamp(toNumber(raw.speed, 1), 0.5, 2), volume: Math.round(clamp(toNumber(raw.volume, 100), 0, 100)) })
+    }
+    if (!profiles.length) profiles.push({ id: 'windows', name: 'Windows', provider: 'windows', baseUrl: '', apiKey: '', model: '', apiVoice: '', voice: '', rate: 0, speed: 1, volume: 100 })
+    const selected = profiles.find(profile => profile.id === source.activeProfileId) ?? profiles[0]
+    delete normalized.apiKeyEnc
+    Object.assign(normalized, connection({ ...selected }), { provider: selected.provider, voice: selected.voice, rate: selected.rate, speed: selected.speed, volume: selected.volume,
+      profiles, activeProfileId: selected.id })
+  }
+  return normalized
+}
+
+/** Legacy settings only materialize configured providers; templates are never saved connections. */
+export function ttsProfiles(settings: TtsSettings): TtsProfile[] {
+  if (settings.profiles) return structuredClone(settings.profiles)
+  const profiles: TtsProfile[] = [{ id: 'windows', name: 'Windows', provider: 'windows', baseUrl: '', apiKey: '', model: '', apiVoice: '', voice: settings.voice, rate: settings.rate, speed: 1, volume: settings.volume }]
+  for (const [provider, saved] of Object.entries(settings.connections ?? {}) as Array<[TtsProvider, TtsConnection]>) {
+    if (!saved || provider === 'windows' || !(saved.apiKey || saved.apiKeyEnc || saved.baseUrl || saved.model || saved.apiVoice)) continue
+    profiles.push({ id: `migrated-${provider}`, name: TTS_PRESETS[provider].label, provider, ...saved, speed: settings.speed, volume: settings.volume })
+  }
+  if (settings.provider !== 'windows') {
+    const active = { id: `migrated-${settings.provider}`, name: TTS_PRESETS[settings.provider].label, provider: settings.provider,
+      baseUrl: settings.baseUrl, apiKey: settings.apiKey, ...(settings.apiKeyEnc ? { apiKeyEnc: settings.apiKeyEnc } : {}), model: settings.model, apiVoice: settings.apiVoice, speed: settings.speed, volume: settings.volume }
+    const index = profiles.findIndex(profile => profile.id === active.id)
+    if (index < 0) profiles.push(active); else profiles[index] = active
+  }
+  return profiles
+}
+
+/** Existing voice tools edit the active connection's playback preferences too. */
+export function patchTtsSettings(current: TtsSettings, patch: Partial<TtsSettings>): TtsSettings {
+  const next = { ...current, ...patch }
+  if (!next.profiles || patch.activeProfileId !== undefined && patch.activeProfileId !== current.activeProfileId) return next
+  const changed: Partial<TtsProfile> = {}
+  for (const key of ['baseUrl', 'apiKey', 'model', 'apiVoice', 'voice', 'rate', 'speed', 'volume'] as const) {
+    if (patch[key] !== undefined && patch[key] !== current[key]) (changed as Record<string, unknown>)[key] = patch[key]
+  }
+  next.profiles = next.profiles.map(profile => profile.id === next.activeProfileId ? { ...profile, ...changed } : profile)
+  return next
 }
 
 /** Emoji, skin-tone modifiers and flags. */

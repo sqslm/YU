@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -58,6 +58,21 @@ describe('workflow store', () => {
     expect(workflows.active()).toEqual([])
     expect(workflows.damagedPath()).toBeNull()
     expect(existsSync(file)).toBe(false)
+  })
+
+  it('does not let edits of nested returned arguments mutate the saved workflow', () => {
+    const workflows = store()
+    const saved = workflows.save({ name: 'Nested', steps: [step('create_note', { data: { text: 'original' } })] })
+    ;(saved.steps[0].args.data as { text: string }).text = 'unsaved edit'
+    expect(workflows.get(saved.id)?.steps[0].args.data).toEqual({ text: 'original' })
+  })
+
+  it('leaves the current list unchanged when saving an edit fails', () => {
+    const workflows = store()
+    const saved = workflows.save({ name: 'Original', steps: steps(['get_datetime']) })
+    mkdirSync(`${file}.${process.pid}.tmp`)
+    expect(() => workflows.save({ name: 'Unsaved', steps: steps(['calculate']) }, saved.id)).toThrow()
+    expect(workflows.get(saved.id)?.name).toBe('Original')
   })
 
   it('saves a new workflow that list and get can both see', () => {

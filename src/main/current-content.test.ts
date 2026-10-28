@@ -16,6 +16,15 @@ const dirs: string[] = []
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true }) })
 const make = (native = vi.fn(), access = DEFAULT_ASSISTANT_ACCESS) => new WindowsTools({ native, folders: { downloads: '', desktop: '', documents: '' }, openPath: vi.fn(), openUrl: vi.fn(), access: () => access })
 
+it('retains the captured browser link when fetching the body fails', async () => {
+  const native = vi.fn().mockResolvedValue({ url: 'https://example.com/article' })
+  const fetchImpl = vi.fn().mockResolvedValue(new Response('', { status: 403 }))
+  const result = await make(native).run('read_current_content', {}, undefined, context, { fetchImpl, allowNetwork: true })
+  expect(result.ok).toBe(false)
+  expect(result.data.url).toBe('https://example.com/article')
+  expect(result.summary).toContain('https://example.com/article')
+})
+
 it.each(['总结选中的文字', '总结刚才的回答', '明天提醒我总结当前文档', '给 Agent 写提示词：总结当前网页', '不要总结这个网页', 'How do I summarize documents?', 'Summarize the selected text', 'Do not read this document'])('does not authorize a current-window read from another intent: %s', async question => {
   const native = vi.fn()
   const result = await runTool('read_current_content', {}, { settings: mergeSettings({}), question, windows: make(native), allowedTools: WINDOWS_TOOLS, taskContext: context, log: () => {} })
@@ -190,4 +199,16 @@ it('reports the summary model failure without retrying with an ungrounded plain 
   expect(result.taskState).toBe('failed')
   expect(result.text).toContain('模型未能完成总结')
   expect(mocks.complete).toHaveBeenCalledTimes(1)
+})
+
+it('summarizes the previous answer for a bare card follow-up instead of reading a new window', async () => {
+  mocks.complete.mockClear(); mocks.complete.mockResolvedValueOnce('A short version of the previous answer.')
+  const run = vi.fn()
+  const result = await askAgent(mergeSettings({}), '总结一下', context, undefined, undefined, {
+    reset: false, windows: { run } as unknown as WindowsTools, allowedTools: WINDOWS_TOOLS,
+    conversation: { messages: [{ role: 'user', content: 'Explain this project' }, { role: 'assistant', content: 'Actual prior project explanation' }], toolNotes: '' }
+  })
+  expect(run).not.toHaveBeenCalled()
+  expect(result.text).toContain('short version')
+  expect(JSON.stringify(mocks.complete.mock.calls[0][1].messages)).toContain('Actual prior project explanation')
 })

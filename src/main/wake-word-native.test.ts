@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
@@ -27,7 +27,7 @@ try {
   $synth.SetOutputToWaveFile((Join-Path $OutputRoot 'name.wav'))
   $synth.SpeakSsml('<speak version="1.0" xml:lang="zh-CN">你好<break time="1000ms"/>胡小杨</speak>')
   $synth.SetOutputToNull()
-  $synth.SetOutputToWaveFile((Join-Path $OutputRoot 'homophone.wav'))
+  $synth.SetOutputToWaveFile((Join-Path $OutputRoot 'homophone.wav'), [System.Speech.AudioFormat.SpeechAudioFormatInfo]::new(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono))
   $synth.Speak('你好，胡晓阳。')
   $synth.SetOutputToNull()
   $synth.SetOutputToWaveFile((Join-Path $OutputRoot 'unrelated.wav'))
@@ -36,6 +36,37 @@ try {
 } finally { $synth.Dispose() }
 `)
     if ((await run(['-File', synth, root])).includes('unavailable')) { context.skip(); return }
+    // A recognizer's internal rejection setting must not discard a matching
+    // candidate before the app's user-selected confidence gate can judge it.
+    const rejected = join(root, 'rejected.ps1')
+    const source = await readFile(join(process.cwd(), 'resources/voice-wake.ps1'), 'utf8')
+    await writeFile(rejected, '\uFEFF' + source.replace('engine.RecognizeAsync(RecognizeMode.Multiple);', 'engine.UpdateRecognizerSetting("CFGConfidenceRejectionThreshold", 100); engine.RecognizeAsync(RecognizeMode.Multiple);'))
+    const replay = await run(['-File', rejected], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, 'homophone.wav') })
+    expect(replay.split('\n').some(line => line.includes('"type":"wake"'))).toBe(true)
+    // Exercise the actual microphone Stream.Read implementation too. File-only
+    // recognition bypasses the stream that is used for a selected live device.
+    const streamScript = join(root, 'stream.ps1')
+    await writeFile(streamScript, '\uFEFF' + source.replace('engine.SetInputToWaveFile(wave);', `
+          byte[] pcm = null;
+          using (var reader = new BinaryReader(File.OpenRead(wave))) {
+            reader.ReadBytes(12);
+            while (reader.BaseStream.Position + 8 <= reader.BaseStream.Length) {
+              string id = new string(reader.ReadChars(4)); int size = reader.ReadInt32();
+              if (id == "data") { pcm = reader.ReadBytes(size); break; }
+              reader.BaseStream.Seek(size + (size % 2), SeekOrigin.Current);
+            }
+          }
+          var input = new MicStream();
+          engine.SetInputToAudioStream(input, new SpeechAudioFormatInfo(16000, AudioBitsPerSample.Sixteen, AudioChannel.Mono));
+          ThreadPool.QueueUserWorkItem(ignored => {
+            for (int at = 0; at < pcm.Length; at += 6400) {
+              int count = Math.Min(6400, pcm.Length - at); var part = new byte[count];
+              Buffer.BlockCopy(pcm, at, part, 0, count); input.Push(part, count); Thread.Sleep(10);
+            }
+            input.Finish();
+          });`))
+    const streamed = await run(['-File', streamScript], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, 'homophone.wav') })
+    expect(streamed.split('\n').some(line => line.includes('"type":"wake"'))).toBe(true)
     for (const name of ['name', 'homophone', 'unrelated']) {
       const stdout = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, name + '.wav') })
       const events = stdout.trim().split('\n').map(line => JSON.parse(line.replace(/^\uFEFF/, '')))

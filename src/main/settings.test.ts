@@ -54,6 +54,21 @@ it('saves wake confidence independently and retains it after restart', async () 
   expect(loaded.wakeWord).toEqual({ enabled: true, phrase: '我的唤醒词', deviceId: '2', confidence: 0.72 })
 })
 
+it('encrypts multiple TTS accounts of the same provider and reloads the selected one', async () => {
+  cryptoMock.available = true
+  const file = join(dir, 'settings.json'), store = new SettingsStore(file)
+  await store.load()
+  await store.update({ tts: { profiles: [
+    { id: 'a', name: 'First', provider: 'openai', apiKey: 'first-tts-secret', baseUrl: 'https://first.test', model: 'first', apiVoice: 'a' },
+    { id: 'b', name: 'Second', provider: 'openai', apiKey: 'second-tts-secret', baseUrl: 'https://second.test', model: 'second', apiVoice: 'b' }
+  ], activeProfileId: 'b' } as never })
+  const raw = await readFile(file, 'utf8')
+  expect(raw).not.toContain('first-tts-secret'); expect(raw).not.toContain('second-tts-secret')
+  const reloaded = new SettingsStore(file)
+  expect((await reloaded.load()).tts).toMatchObject({ activeProfileId: 'b', apiKey: 'second-tts-secret', model: 'second' })
+  expect((await reloaded.update({ tts: { activeProfileId: 'a' } as never })).tts).toMatchObject({ apiKey: 'first-tts-secret', model: 'first' })
+})
+
 it('encrypts every search credential on disk and restores pool and legacy provider keys after restart', async () => {
   cryptoMock.available = true
   const file = join(dir, 'settings.json'), store = new SettingsStore(file)

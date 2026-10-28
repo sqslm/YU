@@ -14,6 +14,25 @@ import { inspectUrl as inspectUrlFromTool } from './tools/read-webpage'
 /** 203.0.113.10 and friends: TEST-NET-3, public as far as any routing table cares. */
 const PUBLIC_V4 = '203.0.113.10'
 
+it('validates a TUN fake-IP domain independently and fetches the original hostname', async () => {
+  const fetchImpl = vi.fn().mockResolvedValue(new Response('article'))
+  const resolvePublicHost = vi.fn().mockResolvedValue([{ address: PUBLIC_V4 }])
+  await expect(safeFetch('https://github.com/project', {}, {
+    fetchImpl, resolveHost: async () => [{ address: '198.18.0.6' }], resolvePublicHost
+  })).resolves.toBeInstanceOf(Response)
+  expect(resolvePublicHost).toHaveBeenCalledWith('github.com')
+  expect(fetchImpl).toHaveBeenCalledWith('https://github.com/project', expect.anything())
+})
+
+it.each([['10.0.0.1'], ['198.18.0.3'], [], ['203.0.113.10', '127.0.0.1']])('refuses fake-IP fallback without exclusively public validation: %j', async (...addresses) => {
+  const fetchImpl = vi.fn()
+  await expect(safeFetch('https://example.com/', {}, {
+    fetchImpl, resolveHost: async () => [{ address: '198.18.0.6' }],
+    resolvePublicHost: async () => addresses.flat().map(address => ({ address }))
+  })).rejects.toThrow()
+  expect(fetchImpl).not.toHaveBeenCalled()
+})
+
 function resolverFor(map: Record<string, string[]>): (host: string) => Promise<Array<{ address: string; family?: number }>> {
   return async (host: string) => {
     const addresses = map[host]

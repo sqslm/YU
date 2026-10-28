@@ -175,7 +175,7 @@ export function suggestMatch(candidate: Pick<WindowRouteInfo, 'title' | 'appName
 
 /** Why a row landed in its category, in the user's words. */
 function describeMatch(window: WindowRouteInfo): string {
-  if (window.pinned) return i18n.t('自动激活关闭')
+  if (window.pinned) return i18n.t('自动路由关闭')
   if (window.matchedBy === 'rule') {
     const name = window.matchedRuleLabel || window.matchedRuleId || ''
     return name ? `规则「${name}」` : i18n.t('手动规则')
@@ -727,7 +727,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
               size="small"
               sx={chipSx}
               color={settings.autoActivatePrompts ? 'success' : 'warning'}
-              label={settings.autoActivatePrompts ? i18n.t('自动激活 开') : i18n.t('自动激活 关')}
+              label={settings.autoActivatePrompts ? i18n.t('自动路由 开') : i18n.t('自动路由 关')}
             />
             {!settings.autoActivatePrompts && <>
             <Chip
@@ -770,7 +770,7 @@ export function RoutingSection({ settings, patch }: RoutingSectionProps): JSX.El
               severity="warning"
               sx={{ mt: 1.25, fontSize: 11.5, py: 0.25, borderRadius: '8px' }}
             >
-              {i18n.t('自动激活已关闭：所有窗口固定用「{{kind}}」+ 主卡片，下面的规则和内置分类表都不参与。要按窗口分类，先去「提示词」页打开自动激活。', { kind: i18n.t(PROMPT_KIND_LABEL[settings.mainPromptKind]) })}
+              {i18n.t('自动路由已关闭：所有窗口固定用「{{kind}}」+ 主卡片，下面的规则和内置分类表都不参与。要按窗口分类，先去「提示词」页打开自动路由。', { kind: i18n.t(PROMPT_KIND_LABEL[settings.mainPromptKind]) })}
             </Alert>
           )}
         </Box>

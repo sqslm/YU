@@ -60,6 +60,10 @@ import { SpeechService, createWindowsSpeechRunner } from './speech'
 import { createSpeechPlayback } from './speech-playback'
 import { synthesizeSpeech } from './providers/tts'
 import { WorkflowStore } from './workflows'
+import { CardVoice } from './card-voice'
+import { nextPromptRoute, PROMPT_KIND_LABEL } from '@shared/promptLibrary'
+import { TOOL_DEFINITIONS } from './tools/registry'
+import { WORKFLOW_STEP_TOOLS } from '@shared/workflow'
 import {
   formatEventTime,
   rangeFor,
@@ -161,7 +165,7 @@ function pausePlaybackForRecording(): void {
   if (barWindow && !barWindow.isDestroyed()) void noteAudio.control('pause').catch(error => log(`note audio pause: ${String(error)}`))
 }
 async function openScreenshot(): Promise<boolean> {
-  if (gameMode.snapshot().active || pipeline?.isBusy || notesRecording || assistant.busy || selectionEditor?.isBusy) return false
+  if (gameMode.snapshot().active || pipeline?.isBusy || notesRecording || cardVoice.active || assistant.busy || selectionEditor?.isBusy) return false
   try { await screenshotTool.open(); return true }
   catch (error) {
     log('[screenshot] capture failed')
@@ -543,9 +547,9 @@ const notes = new NotesStore({
  * one object and a field in settings. `onProgress` writes to the settings window
  * only, because that window owns the download bar.
  */
-const localAsr = new LocalAsrHost(() => store.get().localAsr, {
+const localAsr: LocalAsrHost = new LocalAsrHost(() => store.get().localAsr, {
   log: (line) => log(line),
-  isBusy: () => pipeline?.isBusy ?? false,
+  isBusy: () => Boolean(pipeline?.isBusy || cardVoice.active),
   onProgress: (progress) => {
     if (!settingsWindow || settingsWindow.isDestroyed()) return
     settingsWindow.webContents.send('localAsr:progress', progress)
@@ -725,12 +729,18 @@ function applyGameMode(status: GameModeStatus): void {
 }
 
 let notesRecording = false
+const cardVoice: CardVoice = new CardVoice({ settings: () => store.get(), changed: () => refreshHotkeyActivity(), log: message => log(message),
+  local: async (wav, signal) => {
+    if (!localAsr.available()) await localAsr.activate()
+    signal.throwIfAborted()
+    return localAsr.transcribeWav(wav)
+  } })
 let wakeSuspended = false
 let wakeLocked = false
 const wakeWord = new WakeWordHost({
   wake: () => {
     gameMode.poll()
-    if (gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || pipeline?.isBusy || notesRecording || assistant.busy || screenshotTool.isOpen || selectionEditor?.isBusy) return
+    if (gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || pipeline?.isBusy || notesRecording || cardVoice.active || assistant.busy || screenshotTool.isOpen || selectionEditor?.isBusy) return
     // Listening always wins over speaking: the microphone would otherwise record
     // the assistant's own voice, and asking something new means the old answer can
     // stop being read out.
@@ -744,12 +754,12 @@ const wakeWord = new WakeWordHost({
   }
 })
 function refreshWakeWord(screenshotActive = screenshotTool.isOpen, retry = false): void {
-  wakeWord.update(store.get().wakeWord, gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || screenshotActive || notesRecording || Boolean(pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy), retry)
+  wakeWord.update(store.get().wakeWord, gameMode.snapshot().active || quitting || wakeSuspended || wakeLocked || screenshotActive || notesRecording || cardVoice.active || Boolean(pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy), retry)
 }
 
 function refreshHotkeyActivity(): void {
   refreshWakeWord()
-  hotkeys?.setActivity(notesRecording || pipeline?.isRecording ? 'recording' : pipeline?.isBusy ? 'working' : 'idle')
+  hotkeys?.setActivity(notesRecording || cardVoice.active || pipeline?.isRecording ? 'recording' : pipeline?.isBusy ? 'working' : 'idle')
   tray?.refresh()
 }
 
@@ -930,7 +940,7 @@ function navigateHub(page: import('./tools/personal').HubPage, noteId?: string):
 function cancelAssistant(): void { assistant.cancel(); assistantCardActive = false }
 
 function openAsk(): boolean {
-  if (gameMode.snapshot().active || screenshotTool.isOpen || notesRecording || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy) return false
+  if (gameMode.snapshot().active || screenshotTool.isOpen || notesRecording || cardVoice.active || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy) return false
   assistantTarget = foregroundWindow()
   showAnswerCard({ question: '', answer: '', assistant: true })
   const win = cardWindow!
@@ -949,7 +959,7 @@ async function runAssistant(text: string, signal?: AbortSignal, submittedAt?: nu
     signal?.throwIfAborted()
     const turn = assistant.snapshot().turns.at(-1)
     if (!turn || turn.state === 'cancelled') return
-    const answerCard = assistantAnswer(turn)
+    const answerCard = assistantAnswer(turn, fromCard)
     if (!answerCard && (fromCard || lastAnswer?.assistant && cardWindow?.isVisible())) hideCard()
     return { text: turn.answer, failed: turn.state === 'error' || turn.taskState === 'failed', taskState: turn.taskState, answerCard }
   } finally { assistantCardActive = false }
@@ -964,6 +974,7 @@ async function runAssistant(text: string, signal?: AbortSignal, submittedAt?: nu
  * one message: the page decides what "toggle" means once it is mounted.
  */
 async function toggleNotesRecording(): Promise<void> {
+  if (cardVoice.active) return
   const win = ensureSettingsWindow()
   if (win.webContents.isLoading()) {
     await new Promise<void>((resolve) => win.webContents.once('did-finish-load', () => resolve()))
@@ -1025,9 +1036,16 @@ function ensureCardWindow(): BrowserWindow {
   const win = createCardWindow()
   cardWindow = win
   win.on('closed', () => {
+    if (cardWindow !== win) return
+    cardVoice.cancel()
     cardWindow = null
     pendingCard = null
     cardReady = false
+  })
+  win.webContents.on('render-process-gone', () => {
+    if (cardWindow !== win) return
+    cardVoice.cancel()
+    if (assistantCardActive) cancelAssistant()
   })
   win.on('hide', () => {
     win.webContents.send('card:hidden')
@@ -1116,7 +1134,7 @@ async function handleCardAction(action: CardAction): Promise<void> {
     if (!question || !pipeline) return
     if (lastAnswer?.assistant) {
       if (pipeline.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy) return
-      const result = await runAssistant(question, undefined, undefined, undefined, needsAssistantContext(question), true)
+      const result = await runAssistant(question, undefined, undefined, undefined, true, true)
       if (result?.answerCard) showAnswerCard(result.answerCard)
       else if (result?.text) { hideCard(); pipeline.reportTaskResult(result.text, result.failed) }
     } else await pipeline.followUp(question, lastAnswerContext)
@@ -1155,6 +1173,8 @@ function scheduleCardRetire(): void {
 }
 
 function hideCard(cancelSelection = true): void {
+  if (assistantCardActive) cancelAssistant()
+  cardVoice.cancel()
   assistantCardActive = false
   if (cancelSelection) selectionEditor?.cancel()
   pendingCard = null
@@ -1504,6 +1524,8 @@ function registerIpc(): void {
   handle('life:speak', (_event, text: string) => speech?.speak(text) ?? { spoken: 0, skipped: true })
   handle('life:stop-speaking', () => { speech?.stop() })
   handle('workflow:list', () => workflows?.list() ?? [])
+  handle('workflow:tools', () => TOOL_DEFINITIONS.filter(tool => WORKFLOW_STEP_TOOLS.includes(tool.name))
+    .map(({ name, description, parameters }) => ({ name, description, parameters })))
   handle('workflow:save', (_event, input: { name: string; steps: import('@shared/workflow').WorkflowStep[] }, id?: string) => {
     if (!workflows) return null
     const saved = workflows.save(input, id)
@@ -1763,6 +1785,16 @@ function registerIpc(): void {
   })
   subscribe('bar:log', (_event, message: string) => log(`[bar] ${message}`))
   // --- answer card --------------------------------------------------------
+  handle('card:voice-begin', event => {
+    if (event.sender !== cardWindow?.webContents || gameMode.snapshot().active || wakeLocked || wakeSuspended || notesRecording || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy || screenshotTool.isOpen) return null
+    pausePlaybackForRecording()
+    return cardVoice.begin()
+  })
+  subscribe('card:voice-cancel', (event, id: string) => { if (event.sender === cardWindow?.webContents && typeof id === 'string') cardVoice.cancel(id) })
+  handle('card:voice-transcribe', (event, id: string, wav: Uint8Array) => {
+    if (event.sender !== cardWindow?.webContents || gameMode.snapshot().active) throw new Error(mt('语音追问不可用'))
+    return cardVoice.finish(id, wav)
+  })
   // The card's close button / ESC path asks the main process to hide it, so
   // the window object stays warm for the next answer.
   subscribe('card:hide', () => hideCard())
@@ -1811,6 +1843,7 @@ function registerIpc(): void {
 }
 
 function wireHotkeys(): void {
+  let cycling = Promise.resolve()
   hotkeys = new HotkeyHost(
     (event: HotkeyHostEvent) => {
       if (event.type === 'capture-key') {
@@ -1823,6 +1856,14 @@ function wireHotkeys(): void {
       const at = 'at' in event ? ` @${event.at}` : ''
       log(`[hotkey] ${event.type}${detail}${at}`)
       switch (event.type) {
+        case 'prompt-cycle':
+          cycling = cycling.then(async () => {
+            const current = await store.update(nextPromptRoute(store.get()))
+            for (const win of [settingsWindow, barWindow, cardWindow]) if (win && !win.isDestroyed()) win.webContents.send('settings:changed', current)
+            const label = current.autoActivatePrompts ? mt('自动路由') : `${mt(PROMPT_KIND_LABEL[current.mainPromptKind])} · ${current.promptLibrary.cards[current.mainPromptKind].find(card => card.id === current.mainPromptCardId)?.name ?? ''}`
+            if (!gameMode.snapshot().active && !pipeline?.isBusy && !cardVoice.active) pipeline?.showAlert({ kind: 'selection', level: 'info', text: label, actions: [] })
+          }).catch(error => log(`[prompt-cycle] ${String(error)}`))
+          break
         case 'start':
           if (assistant.busy) cancelAssistant()
           // A stale answer card would otherwise float over the next take.
@@ -2055,7 +2096,7 @@ async function bootstrap(): Promise<void> {
    * the schedulers too: a briefing is due whether or not a window is open.
    */
   calendar = new CalendarStore(join(app.getPath('userData'), 'calendar.json'))
-  speech = new SpeechService({ settings: () => gameMode.snapshot().active ? { tts: { ...store.get().tts, enabled: false } } : store.get(),
+  speech = new SpeechService({ settings: () => gameMode.snapshot().active || cardVoice.active ? { tts: { ...store.get().tts, enabled: false } } : store.get(),
     run: createWindowsSpeechRunner(app.isPackaged
       ? join(process.resourcesPath, 'speech.ps1')
       : join(app.getAppPath(), 'resources/speech.ps1')),
