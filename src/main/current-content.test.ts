@@ -210,6 +210,86 @@ it('summarizes actual current content with web search disabled, keeping the arti
   expect(result.text).toContain('实验结果为负')
 })
 
+it('passes the actual page body to the model when real Windows tools also return a source link', async () => {
+  mocks.complete.mockReset(); mocks.complete.mockResolvedValueOnce('LinkSwift 是网盘下载地址获取工具。')
+  const text = 'GitHub navigation. '.repeat(30) + '\n# LinkSwift\nPROJECT_BODY: A JavaScript cloud-drive download address tool.\nENDING: Supports eight cloud drives.'
+  const native = vi.fn().mockResolvedValue({ url: 'https://github.com/hmjz100/LinkSwift', title: 'hmjz100/LinkSwift', text })
+  const fetchImpl = vi.fn()
+  const result = await askAgent(mergeSettings({}), '帮我总结一下我打开的这个项目，这个项目是干什么的？', context, undefined, undefined,
+    { windows: make(native), allowedTools: WINDOWS_TOOLS, fetchImpl })
+  const messages = JSON.stringify(mocks.complete.mock.calls[0][1].messages)
+  expect(messages).toContain('PROJECT_BODY: A JavaScript cloud-drive download address tool.')
+  expect(messages).toContain('ENDING: Supports eight cloud drives.')
+  expect(result.text).toContain('LinkSwift 是网盘下载地址获取工具')
+  expect(fetchImpl).not.toHaveBeenCalled()
+})
+
+it.each([
+  '我目前没有拿到当前页面的内容。如果你打开的是这个仓库，告诉我一声，我就按它展开总结。',
+  '我会先阅读这个项目，整理好总结后再发送给你。',
+  '我总结一下再发送给你。',
+  '我正在整理这个项目，稍后把总结发给你。',
+  '等我总结好，马上发你。',
+  'I will summarize this project and send it to you shortly.'
+])('does not complete a verified page summary with a redundant confirmation or future promise: %s', async bad => {
+  mocks.complete.mockReset(); mocks.complete.mockResolvedValueOnce(bad).mockResolvedValueOnce('LinkSwift 是基于 JavaScript 的网盘下载地址获取工具，支持多个网盘。')
+  const native = vi.fn().mockResolvedValue({ url: 'https://github.com/hmjz100/LinkSwift', title: 'LinkSwift', text: '# LinkSwift\n一个基于 JavaScript 的网盘文件下载地址获取工具，支持八大网盘。' })
+  const result = await askAgent(mergeSettings({}), '帮我总结我打开的这个项目', context, undefined, undefined, { windows: make(native), allowedTools: WINDOWS_TOOLS })
+  expect(result.text).toContain('LinkSwift 是基于 JavaScript')
+  expect(result.text).not.toContain('告诉我一声')
+  expect(result.text).not.toContain('再发送给你')
+  expect(mocks.complete).toHaveBeenCalledTimes(2)
+  expect(native).toHaveBeenCalledOnce()
+})
+
+it('keeps the real body in streamed requests and publishes only the completed summary', async () => {
+  mocks.complete.mockReset()
+  const good = 'LinkSwift 是 JavaScript 网盘下载地址获取工具。'
+  const sse = (text: string) => new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } })
+  const fetchImpl = vi.fn().mockResolvedValueOnce(sse('我会先阅读这个项目，整理好总结后再发送给你。')).mockResolvedValueOnce(sse(good))
+  const onDelta = vi.fn()
+  const native = vi.fn().mockResolvedValue({ url: 'https://github.com/hmjz100/LinkSwift', title: 'LinkSwift', text: 'Navigation '.repeat(50) + 'PROJECT_BODY: LinkSwift 是 JavaScript 网盘下载地址获取工具。' })
+  const result = await askAgent(mergeSettings({}), '帮我总结当前网页', context, undefined, undefined, { windows: make(native), allowedTools: WINDOWS_TOOLS, fetchImpl, onDelta })
+  expect(fetchImpl).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(fetchImpl.mock.calls[0][1].body).messages[0].content).toContain('PROJECT_BODY')
+  expect(onDelta).toHaveBeenCalledExactlyOnceWith(good)
+  expect(result.text).toContain(good)
+  expect(mocks.complete).not.toHaveBeenCalled()
+})
+
+it.each(['总结这个网页并发送给我', '帮我总结当前项目，然后把结果发给我', 'Summarize this page and send it to me'])('treats returning the summary to this user as the same read request: %s', async question => {
+  mocks.complete.mockReset(); mocks.complete.mockResolvedValue('LinkSwift 是网盘下载地址获取工具。')
+  const native = vi.fn().mockResolvedValue({ url: 'https://github.com/hmjz100/LinkSwift', title: 'LinkSwift', text: 'LinkSwift 是一个 JavaScript 网盘下载地址获取工具。' })
+  const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'Here is the project summary.' } }] }), { headers: { 'content-type': 'application/json' } }))
+  await askAgent(mergeSettings({}), question, context, undefined, undefined, { windows: make(native), allowedTools: WINDOWS_TOOLS, fetchImpl })
+  expect(native).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ action: 'current-content' }), expect.any(AbortSignal))
+  expect(mocks.complete).toHaveBeenCalledOnce()
+  expect(fetchImpl).not.toHaveBeenCalled()
+})
+
+it.each([
+  '我先总结一下：LinkSwift 是 JavaScript 网盘下载地址工具，支持多个网盘。',
+  'LinkSwift 提供下载地址获取功能。用户确认下载后，项目会把地址发送给下载工具。',
+  'This project prepares download links and sends them to a download manager when ready.'
+])('accepts an actual summary that describes project behavior: %s', async answer => {
+  mocks.complete.mockReset(); mocks.complete.mockResolvedValueOnce(answer)
+  const native = vi.fn().mockResolvedValue({ url: 'https://github.com/hmjz100/LinkSwift', text: 'LinkSwift README: Download tools.' })
+  const result = await askAgent(mergeSettings({}), '总结这个网页', context, undefined, undefined, { windows: make(native), allowedTools: WINDOWS_TOOLS })
+  expect(result.text).toContain(answer)
+  expect(mocks.complete).toHaveBeenCalledOnce()
+})
+
+it('reports a real completion failure instead of accepting a second future promise', async () => {
+  mocks.complete.mockReset(); mocks.complete.mockResolvedValue('我会先阅读这个项目，整理好总结后再发送给你。')
+  const native = vi.fn().mockResolvedValue({ url: 'https://github.com/hmjz100/LinkSwift', text: 'LinkSwift README: Download tools.' })
+  const result = await askAgent(mergeSettings({}), '总结这个网页', context, undefined, undefined, { windows: make(native), allowedTools: WINDOWS_TOOLS })
+  expect(mocks.complete).toHaveBeenCalledTimes(2)
+  expect(result.taskState).toBe('failed')
+  expect(result.text).not.toContain('再发送给你')
+  expect(result.text).toContain('模型未能完成总结')
+  mocks.complete.mockReset()
+})
+
 it('reports the summary model failure without retrying with an ungrounded plain answer', async () => {
   mocks.complete.mockClear(); mocks.complete.mockRejectedValueOnce(new Error('provider unavailable'))
   const settings = mergeSettings({}); settings.search.enabled = false

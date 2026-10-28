@@ -7,6 +7,9 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "正在总结已读取的正文…": "Summarizing the document…",
+  "正在完成正文总结…": "Completing the document summary…",
+  "模型未返回实际总结": "The model did not return a completed summary",
   "当前目标是语自身，请切到要读取的网页或文档后重新呼出": "The current target is YU. Switch to the page or document and invoke the assistant again.",
   "请说明要朗读哪条随记的标题，或说“朗读最新随记”。": "Name the note to read, or say “read my latest note”.",
   "正在查找随记：{{title}}": "Finding note: {{title}}",

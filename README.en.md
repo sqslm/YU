@@ -126,6 +126,8 @@ Default prompt cycling: Left Ctrl + Right Shift + P, configurable under Voice & 
 
 Custom wake phrases match the complete text or pronunciation, ignoring punctuation and whitespace. Chinese name phrases such as “你好，胡小杨” allow a pause of about one second between the greeting and name, and can match homophonic name spellings. The configured utterance threshold is the confidence gate; no hidden per-word floor overrides it. Pronunciations come from the installed Windows recognizer, without name-specific aliases or cloud audio uploads. A complete wake phrase at the start of a longer utterance is matched at whole-word boundaries instead of requiring the entire utterance to equal the wake phrase. Wait for the recording bar before speaking the task; speech before recording starts is not replayed into the task.
 
+Current-page/document summaries keep the actual body, source URL and coverage together instead of replacing the read with a search snippet. “Send me the summary” returns the result in this response. Confirmation-only or deferred-delivery drafts are corrected once from the same evidence before publication; an unresolved generation failure is reported honestly rather than marked complete.
+
 Explicit read-aloud resolves actual note titles/IDs, completed polish/translation results, the previous answer, briefings, events/to-dos, the current page/document, selection, clipboard or supplied text. Clear sources run without a model rewriting excerpts; missing or ambiguous sources require clarification. Progress identifies the source, long content plays in segments without the previous 1,200-character cutoff, and pause/resume/stop controls remain available. Partial source reads and later playback failures are reported.
 
 Three things worth knowing:
@@ -274,6 +276,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 
 ## Changelog
 
+- **1.1.0-rc.8**: fixes actual page/document bodies being dropped when a read also contains source links. Summaries use the verified content, return their result directly, and do not reconfirm the captured URL. Confirmation-only, contradictory or future-delivery drafts receive one bounded correction before the final result is published.
 - **1.1.0-rc.7**: fixes external content targeting from YU windows and removes unrelated focused-field dialogue from page summaries. Read-aloud resolves real sources directly, reports progress and plays long content in segments. Prompt cycling fires on each main-key press with modifiers held. Fixes live microphone position resets discarding unread audio. Complete wake phrases can match at the start of a longer utterance while retaining word-boundary, confidence and game-mode gates.
 - **1.1.0-rc.6**: fixes custom wake candidates being discarded internally by Windows; confidence can be set as low as 10%. Adds verified Clash Verge / Mihomo TUN fake-IP compatibility and keeps captured page links on read failures. Workflows support manual creation and editing; Ask cards support voice follow-ups, remain expanded while waiting and identify their context. A shortcut cycles automatic routing and all prompt cards. TTS lists user-added configurations, including multiple accounts and voices per provider. Fixes workflow state after failed writes, nested argument mutation and result references after step deletion.
 
