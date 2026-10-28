@@ -399,7 +399,7 @@ const ASR_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
     keyUrl: 'https://console.volcengine.com/speech/service/16',
     docsUrl: 'https://www.volcengine.com/docs/6561/1354869',
-    get notes() { return mt('模型留空即可。流式识别 2.0 与 1.0 地址与报文相同，只差 Resource Id：2.0 填 volc.seedasr.sauc.duration，1.0 填 volc.bigasr.sauc.duration。') },
+    get notes() { return mt('新版控制台只填上面的 API Key，App ID 与 Access Token 留空即可。模型栏填 bigmodel 或留空。流式识别 2.0 与 1.0 地址与报文相同，只差 Resource Id：2.0 填 volc.seedasr.sauc.duration，1.0 填 volc.bigasr.sauc.duration。') },
     dropIn: true
   },
   {

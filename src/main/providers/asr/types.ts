@@ -71,6 +71,13 @@ export interface AsrAdapterSpec {
    * adapter a profile meant. Empty (the common case) claims every scheme.
    */
   schemes?: string[]
+  /**
+   * Model ids this adapter accepts, when the vendor has no list endpoint.
+   *
+   * Socket vendors publish no `/models`, so "获取模型" would answer 404 for a
+   * perfectly usable connection. Listing them here answers the button instead.
+   */
+  models?: string[]
   /** Extra fields the vendor needs; merged into the UI by preset id. */
   fields: PresetField[]
   /** Run one transcription. Throw `ProviderError` with a readable sentence. */

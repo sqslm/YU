@@ -187,11 +187,15 @@ describe('realtime spec table', () => {
     for (const item of REALTIME_SPECS) {
       expect(item.hosts.length).toBeGreaterThan(0)
       expect(item.schemes).toEqual(['ws', 'wss'])
-      // Tencent and Volcengine cannot work without their account fields;
-      // DashScope needs nothing beyond the key, so only they carry a required one.
-      if (item.id !== 'dashscope-realtime') {
+      // Tencent cannot work without its account fields. DashScope needs nothing
+      // beyond the key, and Volcengine's key now fits in the ordinary API Key
+      // field, so both of those carry no required field of their own.
+      if (item.id === 'tencent-realtime') {
         expect(item.fields.some((presetField) => presetField.required === true)).toBe(true)
       }
+      // None of them has a `/models` route, so each lists its model ids for the
+      // "获取模型" button (Tencent uses an engine field instead, hence none).
+      if (item.id !== 'tencent-realtime') expect((item.models ?? []).length).toBeGreaterThan(0)
     }
   })
 
@@ -450,5 +454,39 @@ describe('volcengine streaming (binary envelope + gzip)', () => {
     } finally {
       await server.close()
     }
+  })
+
+  it('sends the new-console API key as X-Api-Key and defaults Resource Id to 2.0', async () => {
+    const take = wav()
+    const server = await listenWs((frame, session) => {
+      if (!frame.binary) return
+      if ((frame.payload[1] >> 4) === 0x1) {
+        session.sendBinary(reply({ result: { text: '' } }, 0x01, 1))
+        return
+      }
+      if ((frame.payload[1] & 0x0f) !== 0x02) return
+      session.sendBinary(reply({ result: { text: '收到了。' } }, 0x03, -2))
+    })
+
+    try {
+      const text = await spec('volcengine-streaming').run(
+        context(`ws://127.0.0.1:${server.port}`, {}, 'api-key-from-new-console'),
+        input(take.bytes, 'bigmodel')
+      )
+      expect(text).toBe('收到了。')
+      expect(server.headers['x-api-key']).toBe('api-key-from-new-console')
+      // The old-console pair must not ride along: the service rejects the mix.
+      expect(server.headers['x-api-app-key']).toBeUndefined()
+      expect(server.headers['x-api-access-key']).toBeUndefined()
+      expect(server.headers['x-api-resource-id']).toBe('volc.seedasr.sauc.duration')
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('says which credential it needs when the profile has neither', async () => {
+    await expect(
+      spec('volcengine-streaming').run(context('ws://127.0.0.1:1', {}), input(wav().bytes))
+    ).rejects.toThrow(/API Key/)
   })
 })

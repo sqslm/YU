@@ -467,6 +467,8 @@ export interface TypelessApi {
       extraHeaders?: string
       /** Ignore the cache and hit the network. */
       refresh?: boolean
+      /** Adapter id, for socket vendors that publish no model list. */
+      asrAdapter?: string
     }): Promise<ModelListResult>
   }
   /** Answer card window (Ask Anything results). */

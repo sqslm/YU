@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { ModelInfo, ModelListResult } from '@shared/types'
 import { joinUrl, parseHeaderLines } from './asr'
+import { REALTIME_SPECS } from './asr/realtime'
 import { mt } from '@shared/mainI18n'
 
 /**
@@ -27,6 +28,8 @@ export interface ListModelsInput {
   baseUrl: string
   apiKey: string
   extraHeaders?: string
+  /** Adapter id, when the profile already knows which one it uses. */
+  asrAdapter?: string
   /** Bypass the cache and hit the network. */
   refresh?: boolean
 }
@@ -287,6 +290,18 @@ function failed(message: string, cache: ModelsCache | null): ModelListResult {
  * - Failure -> last good list + `error` (or an empty result), never a throw.
  */
 export async function listModels(input: ListModelsInput): Promise<ModelListResult> {
+  // A socket session has no `/models` route, so asking one answers 404 and looks
+  // like a broken connection. Answer from the adapter's own table instead.
+  const streaming = REALTIME_SPECS.find((spec) => spec.id === input.asrAdapter)
+  if (streaming) {
+    const models = (streaming.models ?? []).map((id) => ({ id }))
+    return {
+      models,
+      fetchedAt: Date.now(),
+      cached: false,
+      error: models.length === 0 ? mt('这条连接用「引擎」参数而不是模型 ID，模型可以留空') : undefined
+    }
+  }
   const baseUrl = (input.baseUrl ?? '').trim().replace(/\/+$/, '')
   const authScope = createHash('sha256').update(JSON.stringify([input.apiKey, flattenExtraHeaders(input.extraHeaders)])).digest('hex')
   const cached = await readModelsCache()

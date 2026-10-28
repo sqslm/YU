@@ -327,6 +327,7 @@ export const DASHSCOPE_REALTIME_SPEC: AsrAdapterSpec = {
   label: '阿里云百炼实时识别',
   hosts: ['dashscope.aliyuncs.com', 'maas.aliyuncs.com'],
   schemes: ['ws', 'wss'],
+  models: ['paraformer-realtime-v2', 'paraformer-realtime-v1'],
   fields: [
     {
       key: 'workspace',
@@ -614,12 +615,17 @@ const VOLC_LAST = 0x2
 const VOLC_PACKET_MS = 200
 const VOLC_PACKET_BYTES = (SAMPLE_RATE * 2 * VOLC_PACKET_MS) / 1000
 
+/** 2.0 小时版 is what a new account gets free quota on; 1.0 is the legacy id. */
+const VOLC_DEFAULT_RESOURCE = 'volc.seedasr.sauc.duration'
+
 const VOLCENGINE_HINTS: Record<number, string> = {
   45000001: '请求参数错误（检查 resource id 与 model_name）',
   45000002: '没有收到音频（录音可能是空的）',
   45000081: '等包超时（音频发送间隔过长）',
   45000151: '音频格式不对（只发 16 kHz PCM16）',
-  55000031: '服务端过载，稍后重试'
+  55000031: '服务端过载，稍后重试',
+  45000010: 'API Key 无效或未开通该能力',
+  45000030: '该账号没有可用额度（检查是否已开通服务/免费额度是否用完）'
 }
 
 function volcengineUrl(baseUrl: string): string {
@@ -747,25 +753,41 @@ function volcengineFailure(error: { code: number; message: string }): ProviderEr
   )
 }
 
+/**
+ * Volcengine moved to a single `X-Api-Key` header in the new console; the old
+ * console's App ID + Access Token pair still works on the same endpoint. Send
+ * the key when the profile has one, and fall back to the pair otherwise.
+ */
+function volcengineHeaders(ctx: AsrAdapterContext): Record<string, string> {
+  const apiKey = ctx.apiKey.trim()
+  const appKey = field(ctx, 'appId', '').trim()
+  const accessKey = field(ctx, 'accessKey', '').trim()
+  const headers: Record<string, string> = {
+    'X-Api-Resource-Id': field(ctx, 'resourceId', '') || VOLC_DEFAULT_RESOURCE,
+    'X-Api-Request-Id': randomUUID(),
+    'X-Api-Connect-Id': randomUUID(),
+    'X-Api-Sequence': '-1'
+  }
+  if (apiKey !== '') {
+    headers['X-Api-Key'] = apiKey
+    return headers
+  }
+  if (appKey !== '' && accessKey !== '') {
+    headers['X-Api-App-Key'] = appKey
+    headers['X-Api-Access-Key'] = accessKey
+    return headers
+  }
+  throw new ProviderError(
+    mt('火山引擎需要凭证：新版控制台填 API Key，旧版控制台填 App ID + Access Token')
+  )
+}
+
 async function runVolcengineStreaming(ctx: AsrAdapterContext, input: AsrAdapterInput): Promise<string> {
-  const appKey = need(ctx, 'appId', mt('火山引擎 App ID'))
-  const accessKey = need(ctx, 'accessKey', mt('火山引擎 Access Token'))
-  const resourceId = field(ctx, 'resourceId', 'volc.bigasr.sauc.duration')
-  const modelName = field(ctx, 'modelName', 'bigmodel')
+  // The model field in the UI is the SAUC `model_name`; only `bigmodel` exists today.
+  const modelName = (input.model || field(ctx, 'modelName', '')).trim() || 'bigmodel'
   const pcm = pcmBytes(input.wav)
 
-  const { ws, opened } = openSocket(
-    volcengineUrl(ctx.baseUrl),
-    {
-      'X-Api-App-Key': appKey,
-      'X-Api-Access-Key': accessKey,
-      'X-Api-Resource-Id': resourceId,
-      'X-Api-Request-Id': randomUUID(),
-      'X-Api-Connect-Id': randomUUID(),
-      'X-Api-Sequence': '-1'
-    },
-    mt('火山引擎流式识别')
-  )
+  const { ws, opened } = openSocket(volcengineUrl(ctx.baseUrl), volcengineHeaders(ctx), mt('火山引擎流式识别'))
 
   let text = ''
   let failure: Error | null = null
@@ -799,7 +821,7 @@ async function runVolcengineStreaming(ctx: AsrAdapterContext, input: AsrAdapterI
     if ((reply.flags & VOLC_LAST) !== 0) settle()
   })
   ws.addEventListener('error', () => {
-    failure ??= new ProviderError(mt('火山引擎流式识别连接出错（检查 App ID / Access Token / Resource Id）'))
+    failure ??= new ProviderError(mt('火山引擎流式识别连接出错（检查 API Key、App ID/Access Token 与 Resource Id）'))
     ackFail(failure)
     settle()
   })
@@ -836,11 +858,12 @@ async function runVolcengineStreaming(ctx: AsrAdapterContext, input: AsrAdapterI
                 audio: { format: 'pcm', codec: 'raw', rate: SAMPLE_RATE, bits: 16, channel: 1 },
                 request: {
                   model_name: modelName,
+                  // Two-pass: the second pass re-reads each finished sentence, so
+                  // the text that lands on screen is the accurate version.
+                  enable_nonstream: true,
                   enable_itn: true,
                   enable_punc: true,
-                  enable_ddc: true,
-                  show_utterances: false,
-                  result_type: 'full'
+                  show_utterances: true
                 }
               })
             )
@@ -888,36 +911,35 @@ export const VOLCENGINE_STREAMING_SPEC: AsrAdapterSpec = {
   label: '火山引擎豆包流式识别',
   hosts: ['openspeech.bytedance.com'],
   schemes: ['ws', 'wss'],
+  models: ['bigmodel'],
   fields: [
-    {
-      key: 'appId',
-      get label() {
-        return mt('App ID')
-      },
-      required: true,
-      get hint() {
-        return mt('语音技术控制台应用列表里的 App ID')
-      }
-    },
-    {
-      key: 'accessKey',
-      get label() {
-        return mt('Access Token')
-      },
-      required: true,
-      get hint() {
-        return mt('与 App ID 成对的那串 Access Token（不是 API Key）')
-      }
-    },
     {
       key: 'resourceId',
       get label() {
         return mt('Resource Id')
       },
       get hint() {
-        return mt('1.0 填 volc.bigasr.sauc.duration，2.0 填 volc.seedasr.sauc.duration')
+        return mt('留空即 2.0 小时版；并发版填 volc.seedasr.sauc.concurrent，1.0 老账号填 volc.bigasr.sauc.duration')
       },
-      placeholder: 'volc.bigasr.sauc.duration'
+      placeholder: VOLC_DEFAULT_RESOURCE
+    },
+    {
+      key: 'appId',
+      get label() {
+        return mt('App ID（旧版控制台，可选）')
+      },
+      get hint() {
+        return mt('新版控制台只用上面的 API Key，这里留空即可')
+      }
+    },
+    {
+      key: 'accessKey',
+      get label() {
+        return mt('Access Token（旧版控制台，可选）')
+      },
+      get hint() {
+        return mt('与 App ID 成对的那串 Access Token，只有旧版控制台才需要')
+      }
     }
   ],
   run: runVolcengineStreaming

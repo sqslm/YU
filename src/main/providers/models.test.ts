@@ -280,3 +280,28 @@ describe('listModels', () => {
     })
   })
 })
+
+describe('streaming adapters', () => {
+  it('answers from the adapter table instead of asking a socket vendor for /models', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await listModels({
+      baseUrl: 'https://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+      apiKey: 'test-only',
+      asrAdapter: 'volcengine-streaming'
+    })
+    expect(result.models.map((model) => model.id)).toEqual(['bigmodel'])
+    expect(result.error).toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('explains that an engine-based vendor has no model id to fetch', async () => {
+    const result = await listModels({
+      baseUrl: 'https://asr.cloud.tencent.com/asr/v2/1300000000',
+      apiKey: 'test-only',
+      asrAdapter: 'tencent-realtime'
+    })
+    expect(result.models).toEqual([])
+    expect(result.error).toContain('引擎')
+  })
+})

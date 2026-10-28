@@ -339,6 +339,7 @@ const api: TypelessApi = {
       apiKey: string
       extraHeaders?: string
       refresh?: boolean
+      asrAdapter?: string
     }): Promise<import('@shared/types').ModelListResult> =>
       ipcRenderer.invoke('models:list', input)
   },

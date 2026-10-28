@@ -50,7 +50,7 @@ function ProfileFields({ profile, onChange, children }: { profile: ProviderProfi
     const token = ++request.current
     setLoading(true); setNotice(null)
     try {
-      const result = await window.api.models.list({ baseUrl: profile.baseUrl, apiKey: profile.apiKey, extraHeaders: profile.extraHeaders, refresh: true })
+      const result = await window.api.models.list({ baseUrl: profile.baseUrl, apiKey: profile.apiKey, extraHeaders: profile.extraHeaders, refresh: true, asrAdapter: profile.kind === 'asr' ? profile.asrAdapter : undefined })
       if (token !== request.current) return
       setModels(result.models.map(model => model.id))
       setNotice({ error: Boolean(result.error), text: result.error || i18n.t('已获取 {{n}} 个模型，可选择或手动输入。', { n: result.models.length }) })
