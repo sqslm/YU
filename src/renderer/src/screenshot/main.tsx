@@ -3,10 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { Alert, Box, Button, CssBaseline, MenuItem, Paper, Stack, TextField, ThemeProvider, Tooltip, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { CaptureRect, ScreenshotAction, ScrollCaptureProgress } from '@shared/screenshot'
-import { screenshotCrop, captureWindowAt, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
+import { screenshotCrop, CAPTURE_HANDLES, captureHandle, captureHit, resizeCapture, type ResizeHandle } from '@shared/screenshot'
 import { CropSquare, RadioButtonUnchecked, NorthEast, Create, TextFields, GridOn, Mouse, Undo, RestartAlt, SaveAlt, Check, Close, Translate, TextSnippet, SmartToy, UnfoldMore, QrCodeScanner } from '@mui/icons-material'
 import { qrWebUrl } from '@shared/qr'
 import { decodeQr } from './qr'
+import { dragged } from './gesture'
 import { resolveTranslateTargets } from '@shared/translate'
 import { useSettings } from '../settings/useSettings'
 import { makeTheme, resolveThemeMode, onSystemThemeChange } from '../settings/theme'
@@ -16,7 +17,7 @@ import { paintScreenshotTranslation } from './translation'
 
 type Point = { x: number; y: number }
 type Tool = 'select' | 'rect' | 'ellipse' | 'arrow' | 'pen' | 'text' | 'mosaic'
-type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark' | 'mark-resize'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle; bounds?: CaptureRect; snap?: CaptureRect | null }
+type Gesture = { kind: 'select' | 'move' | 'resize' | 'draw' | 'mark' | 'mark-resize'; start: Point; rect: CaptureRect | null; marks: Mark[]; mark?: Mark; index?: number; handle?: ResizeHandle; bounds?: CaptureRect; moved?: boolean }
 const TOOLS: [Tool, string][] = [['select', '鼠标'], ['rect', '矩形'], ['ellipse', '椭圆'], ['arrow', '箭头'], ['pen', '画笔'], ['text', '文字'], ['mosaic', '马赛克']]
 const COLORS = ['#ff4d5b', '#4c8dff', '#ffd54f', '#ffffff', '#202020']
 const TOOL_ICONS = { select: Mouse, rect: CropSquare, ellipse: RadioButtonUnchecked, arrow: NorthEast, pen: Create, text: TextFields, mosaic: GridOn }
@@ -67,8 +68,6 @@ function ScreenshotEditor(): JSX.Element {
   const [view, setView] = useState(() => ({ width: innerWidth, height: innerHeight }))
   const canvas = useRef<HTMLCanvasElement>(null), image = useRef<HTMLCanvasElement | null>(null), gesture = useRef<Gesture | null>(null)
   const [loaded, setLoaded] = useState(false), [selection, setSelection] = useState<CaptureRect | null>(null)
-  const windows = useRef<CaptureRect[]>([])
-  const [hover, setHover] = useState<CaptureRect | null>(null)
   const [tool, setTool] = useState<Tool>('select'), [color, setColor] = useState(COLORS[0])
   const [panel, setPanel] = useState<Tool | 'ocr' | 'translate' | 'ask' | 'qr' | null>(null)
   const [resultKind, setResultKind] = useState<'text' | 'qr'>('text')
@@ -110,7 +109,7 @@ function ScreenshotEditor(): JSX.Element {
       if (!alive) return
       const source = document.createElement('canvas'); source.width = frame.width; source.height = frame.height
       source.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(frame.pixels), frame.width, frame.height), 0, 0)
-      image.current = source; windows.current = frame.windows; setHover(captureWindowAt(frame.cursor, frame.windows)); setLoaded(true)
+      image.current = source; setLoaded(true)
       setAllScreens(frame.allScreens===true)
     }).catch(reportError)
     return () => { alive = false; image.current = null }
@@ -141,7 +140,7 @@ function ScreenshotEditor(): JSX.Element {
       ctx.restore()
     }
     ctx.fillStyle = 'rgba(0,0,0,.48)'; ctx.beginPath(); ctx.rect(0, 0, view.width, view.height)
-    const preview = selection ?? hover
+    const preview = selection
     if (preview) ctx.rect(preview.x, preview.y, preview.width, preview.height)
     ctx.fill('evenodd')
     if (preview && !selection) { ctx.strokeStyle = '#4c8dff'; ctx.lineWidth = 2; ctx.strokeRect(preview.x, preview.y, preview.width, preview.height) }
@@ -153,7 +152,7 @@ function ScreenshotEditor(): JSX.Element {
         for (const id of CAPTURE_HANDLES) { const p = captureHandle(r, id); ctx.fillRect(p.x - 3, p.y - 3, 6, 6) }
       }
     }
-  }, [loaded, selection, hover, marks, draft, view, selectedMark, tool, translated, showOriginal, scrolling])
+  }, [loaded, selection, marks, draft, view, selectedMark, tool, translated, showOriginal, scrolling])
 
   useEffect(() => {
     if (!loaded || !settings) return
@@ -167,12 +166,13 @@ function ScreenshotEditor(): JSX.Element {
   }
   const point = (event: React.PointerEvent): Point => ({ x: Math.max(0, Math.min(view.width, event.clientX)), y: Math.max(0, Math.min(view.height, event.clientY)) })
   const begin = (event: React.PointerEvent<HTMLCanvasElement>): void => {
-    if (event.button !== 0 || busy || !loaded || result || translated || scrolling || longCapture) return
+    if (event.detail >= 2 || event.button !== 0 || busy || !loaded || result || translated || scrolling || longCapture) return
     event.preventDefault()
     const p = point(event); setError(''); commitText()
+    if (selection && tool !== 'select' && !inside(p, selection)) return
     const bounds = tool === 'select' && selectedMark !== null && marks[selectedMark] ? markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null) : null
     const layerEdge = bounds ? captureHit(p, bounds) : null
-    const edge = selection ? captureHit(p, selection) : null
+    const edge = tool === 'select' && selection ? captureHit(p, selection) : null
     const hit = tool === 'select' && selection && inside(p, selection) ? marks.findLastIndex(mark => inside(p, markBounds(mark, canvas.current?.getContext('2d') ?? null))) : -1
     let kind: Gesture['kind'] = 'select'
     if (layerEdge && layerEdge !== 'move') kind = 'mark-resize'
@@ -183,10 +183,10 @@ function ScreenshotEditor(): JSX.Element {
       if (tool === 'select') return
       if (tool === 'text') { setText({ point: p, value: '' }); return }
       kind = 'draw'
-    } else { undoStack.current = []; setMarks([]); setSelectedMark(null); setSelection({ ...p, width: 0, height: 0 }) }
-    const g: Gesture = { kind, start: p, rect: selection, marks, snap: event.altKey ? null : captureWindowAt(p, windows.current), ...(hit >= 0 ? { index: hit } : {}), ...(edge && edge !== 'move' ? { handle: edge } : {}) }
+    } else { setSelectedMark(null) }
+    const g: Gesture = { kind, start: p, rect: selection, marks, ...(hit >= 0 ? { index: hit } : {}), ...(edge && edge !== 'move' ? { handle: edge } : {}) }
     if (kind === 'mark-resize') { g.index = selectedMark!; g.handle = layerEdge as ResizeHandle; g.bounds = bounds! }
-    if (kind === 'draw') { g.mark = { tool: tool as Mark['tool'], color, width: tool === 'mosaic' ? mosaicSize : stroke, points: [p] }; setDraft(g.mark) }
+    if (kind === 'draw') { g.mark = { tool: tool as Mark['tool'], color, width: tool === 'mosaic' ? mosaicSize : stroke, points: [p] } }
     gesture.current = g; event.currentTarget.setPointerCapture(event.pointerId)
   }
   const move = (event: React.PointerEvent<HTMLCanvasElement>): void => {
@@ -194,13 +194,14 @@ function ScreenshotEditor(): JSX.Element {
     const g = gesture.current
     const p = point(event)
     if (!g) {
-      if (!selection) setHover(event.altKey ? null : captureWindowAt(p, windows.current))
-      const edge = selection ? captureHit(p, selection) : null
+      const edge = tool === 'select' && selection ? captureHit(p, selection) : null
       const layerEdge = tool === 'select' && selectedMark !== null && marks[selectedMark] ? captureHit(p, markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null)) : null
       const handle = layerEdge && layerEdge !== 'move' ? layerEdge : edge
       setCursor(handle === 'move' ? 'move' : handle ? `${handle}-resize` : tool === 'select' ? marks.some(mark => inside(p, markBounds(mark, canvas.current?.getContext('2d') ?? null))) ? 'move' : 'default' : 'crosshair')
       return
     }
+    if (!g.moved && !dragged(g.start, p)) return
+    g.moved = true
     if (g.kind === 'select') setSelection(rectBetween(g.start, p))
     else if (g.kind === 'resize') setSelection(resizeCapture(g.rect!, g.handle!, p, view))
     else if (g.kind === 'mark-resize' && g.rect && g.bounds && g.index !== undefined) {
@@ -227,15 +228,18 @@ function ScreenshotEditor(): JSX.Element {
   const end = (event: React.PointerEvent<HTMLCanvasElement>): void => {
     move(event)
     const g = gesture.current, mark = g?.mark
-    if (g?.kind === 'select' && g.snap && Math.hypot(point(event).x - g.start.x, point(event).y - g.start.y) < 4) setSelection(g.snap)
+    if (g?.kind === 'select') {
+      if (!g.moved) setSelection(g.rect)
+      else { undoStack.current = []; setMarks([]) }
+    }
     if (g?.kind === 'move' && g.rect) {
       const p = point(event)
       const dx = Math.max(-g.rect.x, Math.min(view.width - g.rect.x - g.rect.width, p.x - g.start.x))
       const dy = Math.max(-g.rect.y, Math.min(view.height - g.rect.y - g.rect.height, p.y - g.start.y))
       undoStack.current = undoStack.current.map(items => items.map(item => ({ ...item, points: item.points.map(old => ({ x: old.x + dx, y: old.y + dy })) })))
     }
-    if (g?.kind === 'mark' || g?.kind === 'mark-resize') undoStack.current.push(g.marks)
-    if (mark && mark.points.length > 1) setMarks(items => { undoStack.current.push(items); return [...items, mark] })
+    if (g?.moved && (g.kind === 'mark' || g.kind === 'mark-resize')) undoStack.current.push(g.marks)
+    if (g?.moved && mark && mark.points.length > 1) setMarks(items => { undoStack.current.push(items); return [...items, mark] })
     gesture.current = null; setDraft(null)
   }
   const undo = (): void => { const previous = undoStack.current.pop(); if (previous) setMarks(previous); setSelectedMark(null) }
@@ -318,28 +322,29 @@ function ScreenshotEditor(): JSX.Element {
   return <ThemeProvider theme={theme}><CssBaseline />
     <style>{'html, body, #root { background: transparent; overflow: hidden; }'}</style>
     <canvas ref={canvas} width={view.width} height={view.height} data-screenshot-canvas data-screenshot-loaded={loaded || undefined}
-      data-screenshot-snap={!selection && hover ? JSON.stringify(hover) : undefined} data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
+      data-screenshot-selection={selection ? JSON.stringify(selection) : undefined} data-screenshot-layer-count={marks.length}
       data-screenshot-layer-bounds={tool === 'select' && selectedMark !== null && marks[selectedMark] ? JSON.stringify(markBounds(marks[selectedMark], canvas.current?.getContext('2d') ?? null)) : undefined}
       style={{ position: 'fixed', inset: 0, cursor, touchAction: 'none', pointerEvents: scrolling || longCapture ? 'none' : 'auto' }}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={() => {
         const g = gesture.current
-        if (g && g.kind !== 'select') { setSelection(g.rect); setMarks(g.marks) }
+        if (g) { setSelection(g.rect); setMarks(g.marks) }
         gesture.current = null; setDraft(null)
       }}
-      onDoubleClick={() => { if (!translated && !scrolling && !longCapture && tool === 'select' && ready) void run('copy') }}
-      onContextMenu={event => { event.preventDefault(); if (selection) reset(); else void window.api.screenshot.close() }} />
+      onDoubleClick={() => { if (!translated && !scrolling && !longCapture && ready) void run('copy') }}
+      onContextMenu={event => { event.preventDefault(); if (busy) return; if (selection) reset(); else void window.api.screenshot.close() }} />
     {!scrolling&&!longCapture&&!allScreens&&<Button variant="contained" size="small" data-screenshot-action="all-screens" sx={{position:'fixed',top:10,right:10}} onClick={()=>void window.api.screenshot.allScreens().catch(reportError)}>{t('跨屏截图')}</Button>}
     {text && <input autoFocus data-screenshot-text value={text.value} maxLength={160} onChange={event => setText({ ...text, value: event.target.value })}
-      onBlur={commitText} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitText() } }}
+      onBlur={commitText} onDoubleClick={() => { if (!text.value.trim()) void run('copy') }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitText() } }}
       style={{ position: 'fixed', left: Math.min(text.point.x, view.width - 240), top: Math.min(text.point.y, view.height - 40), width: 240, color, background: 'rgba(0,0,0,.7)', border: '1px solid #4c8dff', fontSize }} />}
     {!ready && <Paper sx={{ position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)', p: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={2}><Typography>{t('单击选取窗口 · 拖动自由框选 · Esc 退出')}</Typography>
+      <Stack direction="row" alignItems="center" spacing={2}><Typography>{t('拖动框选 · 双击完成 · Esc 退出')}</Typography>
         <Button onClick={() => window.api.screenshot.close()}>{t('取消')}</Button></Stack>
     </Paper>}
     {ready && !translated && !scrolling && !longCapture && <>
       <Typography variant="caption" sx={{ position: 'fixed', left: selection.x, top: Math.max(0, selection.y - 23), color: 'white', background: '#202020aa', px: .75, borderRadius: 1 }}>{dimensions?.width} × {dimensions?.height}</Typography>
       <Paper data-screenshot-toolbar elevation={4} sx={{ position: 'fixed', top: toolbarTop, left: Math.max(8, Math.min(view.width - toolbarWidth - 8, selection.x)), width: toolbarWidth, p: .5, borderRadius: 2 }}>
-        <Stack direction="row" spacing={.25} alignItems="center" sx={{ overflowX: 'auto', whiteSpace: 'nowrap', '& .MuiButton-root': { minWidth: 32, px: .5, flexShrink: 0 }, '& > span': { display: 'inline-flex' } }}>
+        <Stack direction="row" spacing={.25} alignItems="center" sx={{ whiteSpace: 'nowrap', '& .MuiButton-root': { minWidth: 32, px: .5, flexShrink: 0 }, '& > span': { display: 'inline-flex' } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, overflowX: 'auto' }}>
           {TOOLS.map(([id, label]) => { const Icon = TOOL_ICONS[id]; return <Tooltip key={id} title={t(label)}><span><Button size="small" variant={tool === id ? 'contained' : 'text'} disabled={busy} data-screenshot-tool={id}
             aria-label={t(label)} onClick={() => { commitText(); setSelectedMark(null); setTool(id); setPanel(id === 'select' ? null : panel === id ? null : id) }}><Icon fontSize="small" /></Button></span></Tooltip> })}
           <Box sx={{ width: '1px', height: 22, bgcolor: 'divider', flexShrink: 0, mx: '.5rem !important' }} />
@@ -352,6 +357,7 @@ function ScreenshotEditor(): JSX.Element {
           <Tooltip title={t('重新框选')}><span><Button size="small" aria-label={t('重新框选')} disabled={busy} onClick={reset}><RestartAlt fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('另存为')}><span><Button size="small" aria-label={t('另存为')} disabled={busy} data-screenshot-action="save" onClick={() => run('save')}><SaveAlt fontSize="small" /></Button></span></Tooltip>
           <Tooltip title={t('贴图')}><span><Button size="small" aria-label={t('贴图')} disabled={busy} data-screenshot-action="pin" onClick={()=>run('pin')}>▣</Button></span></Tooltip>
+          </Box>
           <Tooltip title={t('取消')}><Button size="small" aria-label={t('取消')} onClick={() => window.api.screenshot.close()}><Close fontSize="small" /></Button></Tooltip>
           <Tooltip title={t('完成')}><span><Button size="small" aria-label={t('完成')} disabled={busy} color="success" data-screenshot-action="copy" onClick={() => run('copy')}><Check fontSize="small" /></Button></span></Tooltip>
         </Stack>

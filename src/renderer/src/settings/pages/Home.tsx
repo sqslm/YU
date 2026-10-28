@@ -4,14 +4,11 @@ import ArrowForward from '@mui/icons-material/ArrowForward'
 import CalendarMonth from '@mui/icons-material/CalendarMonthOutlined'
 import CheckCircle from '@mui/icons-material/CheckCircleOutline'
 import ExpandMore from '@mui/icons-material/ExpandMore'
-import StickyNote from '@mui/icons-material/StickyNote2Outlined'
-import Screenshot from '@mui/icons-material/ScreenshotMonitorOutlined'
-import AccountTree from '@mui/icons-material/AccountTreeOutlined'
-import History from '@mui/icons-material/History'
 import type { Settings } from '@shared/types'
 import { formatEventTime } from '@shared/calendar'
 import { isOverdue } from '@shared/reminders'
 import { UsageInsights } from './UsageInsights'
+import { todayFromStats, clock } from './overview'
 import { loadHomeData, openTodos, recentActivity, todayAgenda, todoTime, type HomeData } from './homeView'
 import { modeLabel } from './historyView'
 import { useTranslation } from 'react-i18next'
@@ -42,7 +39,6 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote
   const [showUsage, setShowUsage] = useState(false)
   const [actionError, setActionError] = useState('')
   const [completing, setCompleting] = useState<string | null>(null)
-  const [capturing, setCapturing] = useState(false)
   const request = useRef(0)
 
   const reload = useCallback(async (): Promise<void> => {
@@ -77,7 +73,7 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote
   const todos = openTodos(data.todos ?? [], now)
   const overdue = todos.filter(row => isOverdue(row, now)).length
   const activity = recentActivity(data.history ?? [], data.notes ?? [])
-  const workflowCount = data.workflows?.filter(row => !row.archivedAt).length
+  const today = data.stats ? todayFromStats(data.stats, now) : null
   const hasTextModel = settings.profiles.some(profile => profile.enabled && profile.kind === 'llm' && profile.model.trim() && profile.baseUrl.trim())
   const panelSx = { border: '1px solid', borderColor: 'divider', borderRadius: '14px', bgcolor: 'background.paper', p: 2.25, minWidth: 0 }
 
@@ -86,13 +82,6 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote
     try { await window.api.reminders.action(id, 'complete'); await reload() }
     catch (error) { setActionError(error instanceof Error ? error.message : String(error)) }
     finally { setCompleting(null) }
-  }
-
-  const capture = async (): Promise<void> => {
-    setCapturing(true); setActionError('')
-    try { if (!await window.api.screenshot.open()) setActionError(t('截图未能打开，请稍后重试')) }
-    catch (error) { setActionError(error instanceof Error ? error.message : String(error)) }
-    finally { setCapturing(false) }
   }
 
   const empty = (section: keyof HomeData, text: string): ReactNode => loading
@@ -125,20 +114,16 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote
       </Alert>}
       {actionError && <Alert severity="error" onClose={() => setActionError('')} sx={{ mb: 2 }}>{actionError}</Alert>}
 
-        <Box component="section" aria-labelledby="home-tools-title" sx={{ ...panelSx, py: 1.75, mb: 2 }}>
-          <Typography component="h2" id="home-tools-title" sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary', mb: 1 }}>{t('常用工具')}</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: 1 }}>
+      <Box component="section" data-today-stats sx={{ ...panelSx, mb: 2 }}>
+        <Typography component="h2" sx={{ fontSize: 12, fontWeight: 600, mb: 1.5 }}>{t('今日数据')}</Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 2 }}>
           {[
-            { title: '随记', hint: '文字与录音，随手记录', icon: <StickyNote />, action: () => onOpenPage('notes') },
-            { title: '截图工具', hint: '截图、识字与翻译', icon: <Screenshot />, action: () => void capture(), disabled: capturing },
-            { title: '自动化', hint: workflowCount === undefined ? t('管理保存的工作流') : t('{{n}} 个可用工作流', { n: workflowCount }), icon: <AccountTree />, action: () => onOpenSettings('automation') },
-            { title: '历史记录', hint: '找回输入、问答与翻译', icon: <History />, action: () => onOpenHistory() }
-          ].map(tool => <ButtonBase key={tool.title} title={t(tool.hint)} disabled={tool.disabled} onClick={tool.action} sx={{ width: '100%', minWidth: 0, textAlign: 'left', py: 1, px: 0.5, borderRadius: 1.5, gap: 1.25, '&:hover': { bgcolor: 'action.hover' } }}>
-            <Box sx={{ display: 'grid', placeItems: 'center', width: 32, height: 32, borderRadius: 1.5, bgcolor: 'action.hover', color: 'text.secondary', '& svg': { fontSize: 18 } }}>{tool.icon}</Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontSize: 13, fontWeight: 600 }}>{t(tool.title)}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary', ...clipSx }}>{t(tool.hint)}</Typography></Box>
-          </ButtonBase>)}
-          </Box>
+            { label: '今日字数', value: today ? String(today.chars) : '—' },
+            { label: '今日总时长', value: today ? clock(today.spoken) : '—' },
+            { label: '今日语速', value: today && today.spoken > 0 ? `${Math.round(today.chars / (today.spoken / 60000))} ${t('字/分')}` : '—' }
+          ].map(item => <Box key={item.label}><Typography color="text.secondary" sx={{ fontSize: 12 }}>{t(item.label)}</Typography><Typography sx={{ fontSize: 25, fontWeight: 650, mt: .5 }}>{item.value}</Typography></Box>)}
         </Box>
+      </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1.65fr) minmax(235px, 1fr)' }, gap: 2, alignItems: 'start' }}>
         <Box component="section" aria-labelledby="home-today-title" sx={panelSx}>

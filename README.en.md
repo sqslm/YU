@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.1.0-rc.10**, Windows 10/11 x64, MIT.
+> Current version **1.1.0-rc.11**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -23,7 +23,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 | **Events** | Its own page: month grid, day list, create and edit (start, end, location, advance alert), ICS import and export — the page and the assistant write the same data; subscribe to external ICS calendars (including Google / Outlook secret addresses) and sync both ways once you sign in to your own server |
 | **Briefing / read-aloud** | Its own page plus a daily schedule: today's events, due to-dos, overdue items and tomorrow's preview, optionally written as one paragraph by a model (falling back to the template), readable aloud; quiet hours hold delivery back, and the last two weeks stay on this machine |
 | **Automation** | Save a sequence of steps you repeat as a named workflow and replay it with one sentence, with no model in the loop; each step runs with the saved arguments and reports its result |
-| **Screen capture** | Region or window snapping, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR, translation in place, scrolling screenshots, cross-monitor regions and pinned images with copy/save |
+| **Screen capture** | Drag-only region selection, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR, translation in place, scrolling screenshots, cross-monitor regions and pinned images with copy/save |
 | **Wake word** | Optional offline wake word using Windows on-device speech, with a selectable input device and adjustable confidence threshold; nothing is uploaded or stored before it fires |
 | **Updates** | Checks this project's GitHub Releases by default; when a newer build exists the hub shows a pill at the bottom left, and one click downloads and restarts into it |
 | **Sync** | Optional self-hosted server for history, notes, note audio, events, reminders and per-device personal stats; dictation audio stays on the machine that recorded it |
@@ -46,7 +46,7 @@ Screenshot QR scanning: select the entire code, including a clear border, then c
 
 ## Screens
 
-The overview is a personal AI workspace, with quick access to notes, screenshots, workflows, and history. Today's agenda, to-dos, briefing, and recent activity take priority. Complete a to-do directly, see dates on deadlines, and expand Usage statistics for input trends, the heat map, and app usage. Failed reads show their cause and a retry action while keeping loaded content available.
+The overview opens with today’s character count, recording duration and speaking rate. Today's agenda, to-dos, briefing, and recent activity take priority. Complete a to-do directly, see dates on deadlines, and expand Usage statistics for input trends, the heat map, and app usage. Failed reads show their cause and a retry action while keeping loaded content available.
 
 ![Overview](resources/screenshots/hub-home.png)
 
@@ -261,7 +261,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.1.0-rc.10`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.1.0-rc.11`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -279,6 +279,8 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 | [src/main/prompts/reminder-refinement.md](src/main/prompts/reminder-refinement.md) | The full prompt used for reminder extraction |
 
 ## Changelog
+
+- **1.1.0-rc.11**: restores today’s data at the top of the overview. Screenshot Cancel/Done stay visible; clicks do not snap windows or create marks, and double-click completes a selection in drawing modes. Cancelled drags restore the prior region. Assistant screenshot capture is disconnected; manual capture, OCR, translation, Ask and QR decoding remain available. Page/document summaries keep using the content reader.
 
 - **1.1.0-rc.10**: reduces offline wake end-of-speech waits while retaining paused phrases. Spoken drive paths support nested directories. Explicit Chinese cursor-insertion commands generate content through the configured LLM: code uses the original file title to infer language (explicit language wins, Python is the fallback); prose omits window metadata. Generated content uses plain-text insertion without executing code. Existing dictation, translation, Ask and notes routes remain available.
 

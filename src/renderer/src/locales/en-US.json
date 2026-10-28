@@ -1,4 +1,6 @@
 {
+  "拖动框选 · 双击完成 · Esc 退出": "Drag to select · Double-click to finish · Esc to exit",
+  "今日数据": "Today’s data",
   "学习唤醒词": "Learn wake phrase",
   "在安静环境中，用平时的语气录三遍。仅在本机学习识别结果与置信度，不上传或保存原始录音。": "Record three readings in a quiet place, using your normal voice. Recognition patterns and confidence are learned locally. Raw recordings are never uploaded or saved.",
   "已录制 {{count}} / 3 遍": "Recorded {{count}} / 3 readings",
