@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { ChatStore } from './chat-store'
 let root: string, store: ChatStore
@@ -37,4 +38,31 @@ it('recovers interrupted generation and pages newest messages without reversing 
   expect(detail.messages.at(-1)?.state).toBe('cancelled')
   expect(() => store.edit({ action: 'move', id: thread.id, groupId: 'missing' })).toThrow('分组不存在')
   expect(() => store.edit({ action: 'rename', id: thread.id, name: ' ' })).toThrow()
+})
+it('adds the per-conversation model columns to a database written by an older build', () => {
+  store.close()
+  const file = join(root, 'chats.db')
+  const legacy = new DatabaseSync(file)
+  // The shape shipped before profiles existed: no memoryTemporary, no model choice.
+  legacy.exec("CREATE TABLE chat_threads (id TEXT PRIMARY KEY, title TEXT NOT NULL, groupId TEXT, updatedAt INTEGER NOT NULL, manualTitle INTEGER NOT NULL DEFAULT 0); INSERT INTO chat_threads VALUES('old','旧对话',NULL,1,0)")
+  legacy.close()
+  store = new ChatStore(file)
+  expect(store.get('old')).toMatchObject({ title: '旧对话', memoryTemporary: false, profileId: null, effort: null })
+  store.edit({ action: 'model', id: 'old', profileId: 'qa', effort: 'max' })
+  store.close(); store = new ChatStore(file)
+  expect(store.get('old')).toMatchObject({ profileId: 'qa', effort: 'max' })
+})
+it('stores a conversation model and thinking effort, where an empty effort is a choice of its own', () => {
+  const thread = store.create()
+  expect(store.get(thread.id)).toMatchObject({ profileId: null, effort: null })
+  store.edit({ action: 'model', id: thread.id, profileId: 'qa', effort: 'low' })
+  expect(store.list().threads[0]).toMatchObject({ id: thread.id, profileId: 'qa', effort: 'low' })
+  // '' means "let the model decide" and must survive as-is; folding it into null would turn it
+  // back into the thinking-on default.
+  store.edit({ action: 'model', id: thread.id, profileId: null, effort: '' })
+  expect(store.get(thread.id)).toMatchObject({ profileId: null, effort: '' })
+  store.edit({ action: 'model', id: thread.id, profileId: 'qa', effort: 'high' })
+  store.close(); store = new ChatStore(join(root, 'chats.db'))
+  expect(store.get(thread.id)).toMatchObject({ profileId: 'qa', effort: 'high' })
+  expect(() => store.edit({ action: 'model', id: thread.id, profileId: '', effort: 'high' })).toThrow('模型')
 })

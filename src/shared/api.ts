@@ -315,6 +315,8 @@ export interface TypelessApi {
     revealAttachment(id: string, path: string): Promise<void>
     createText(input?: { categoryId?: string; fromClipboard?: boolean; text?: string }): Promise<NoteEntry>
     importAudio(categoryId?: string): Promise<NoteEntry | null>
+    /** 导入 Markdown 文档（多选）。用户取消返回 null；读失败的文件放进 `failed`。 */
+    importMarkdown(categoryId?: string): Promise<{ count: number; ids: string[]; failed: string[] } | null>
     retranscribe(id: string): Promise<NoteEntry | null>
     cancelAudioJob(): Promise<void>
     exportText(ids: string[], format: NoteExportFormat): Promise<{ path: string; count: number } | null>

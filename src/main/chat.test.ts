@@ -3,15 +3,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
+import type { Settings } from '@shared/types'
 import { askAgent } from './agent'
 import { complete } from './providers/llm'
 import { ChatService, chatContext } from './chat'
-vi.mock('./agent', () => ({ askAgent: vi.fn() }))
+// The real source-list helpers stay real (the point is that they run at store time); only the
+// model call is stubbed.
+vi.mock('./agent', async () => ({ ...await vi.importActual<typeof import('./agent')>('./agent'), askAgent: vi.fn() }))
 vi.mock('./providers/llm', () => ({ complete: vi.fn(async () => '项目讨论') }))
-let root: string, service: ChatService
+let root: string, service: ChatService, settings: Settings
 beforeEach(() => {
   vi.clearAllMocks(); root = mkdtempSync(join(tmpdir(), 'yu-chat-service-'))
-  const settings = structuredClone(DEFAULT_SETTINGS)
+  settings = structuredClone(DEFAULT_SETTINGS)
   settings.profiles = [{ ...settings.polish, id: 'qa', name: 'QA', kind: 'llm', preset: '', enabled: true }]
   service = new ChatService(join(root, 'chats.db'), () => settings, () => {})
   vi.mocked(askAgent).mockResolvedValue({ text: '回答', sources: [], searched: false, taskState: 'completed' })
@@ -74,4 +77,39 @@ it('persists attachments and provides them again on follow-up without mixing the
   reopened.edit({ action: 'delete', id: thread.id })
   expect(reopened.store.references(thread.id)).toEqual([])
   reopened.close()
+})
+it('answers with the conversation model and effort, never with the dictation block', async () => {
+  // The dictation block is tuned for speed (no thinking); a conversation must not inherit that.
+  settings.polish.effort = 'off'; settings.polish.model = 'polish-model'
+  settings.profiles.push({ ...settings.polish, id: 'pro', name: 'Pro', kind: 'llm', preset: '', enabled: true, baseUrl: 'https://pro.example/v1', model: 'pro-1', apiKey: 'sk-pro' })
+  const thread = service.create(null)
+  service.edit({ action: 'model', id: thread.id, profileId: 'pro', effort: 'max' })
+  await service.send(thread.id, '你好')
+  expect(vi.mocked(askAgent).mock.calls[0][0].polish).toMatchObject({ baseUrl: 'https://pro.example/v1', model: 'pro-1', apiKey: 'sk-pro', effort: 'max' })
+})
+it('falls back to the first enabled profile and thinking-on when the conversation never chose', async () => {
+  const thread = service.create(null)
+  await service.send(thread.id, '你好')
+  expect(vi.mocked(askAgent).mock.calls[0][0].polish.effort).toBe('high')
+  // '' survives as "let the model decide" instead of collapsing into the 高 default.
+  service.edit({ action: 'model', id: thread.id, profileId: null, effort: '' })
+  await service.send(thread.id, '再来一次')
+  expect(vi.mocked(askAgent).mock.calls[1][0].polish.effort).toBe('')
+})
+it('does not let blank profile fields erase the configured provider fields', async () => {
+  settings.profiles.push({ ...settings.polish, id: 'bare', name: 'Bare', kind: 'llm', preset: '', enabled: true, baseUrl: 'https://bare.example/v1', model: 'bare-1', apiKey: '', requestPath: '  ', extraHeaders: '' })
+  const thread = service.create(null)
+  service.edit({ action: 'model', id: thread.id, profileId: 'bare', effort: 'low' })
+  await service.send(thread.id, '你好')
+  const polish = vi.mocked(askAgent).mock.calls[0][0].polish
+  expect(polish).toMatchObject({ baseUrl: 'https://bare.example/v1', model: 'bare-1', apiKey: settings.polish.apiKey, effort: 'low' })
+  expect(polish.requestPath).toBe(settings.polish.requestPath)
+})
+it('stores the answer without the appended source list and keeps the source cards unique', async () => {
+  vi.mocked(askAgent).mockResolvedValueOnce({ text: '答案正文\n\n## 来源\n- [A](https://a.example/1)', sources: [{ title: 'A', url: 'https://a.example/1', snippet: '' }, { title: 'A 又一次', url: 'https://a.example/1#part', snippet: '' }, { title: 'B', url: 'https://b.example/2', snippet: '' }], searched: true, taskState: 'completed' })
+  const thread = service.create(null)
+  await service.send(thread.id, '查一下')
+  const answer = service.get(thread.id).messages.at(-1)!
+  expect(answer.text).toBe('答案正文')
+  expect(answer.sources.map(source => source.url)).toEqual(['https://a.example/1', 'https://b.example/2'])
 })

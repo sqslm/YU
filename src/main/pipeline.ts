@@ -49,7 +49,7 @@ import { transcribe } from './providers/asr'
 import { complete, unwrapModelText } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
 import { generateFromAudio } from './providers/gemini'
-import { askAgent, askFollowUp } from './agent'
+import { askAgent, askFollowUp, stripAppendedSources } from './agent'
 import { directVoiceIntent, isCurrentContentRequest, parseVoiceIntent, selectionAppendRequested, VOICE_INTENT_PROMPT } from './voice-intent'
 import { cursorGeneration, cursorGenerationPrompt, cursorNeedsResearch, CursorResearchError } from './cursor-generation'
 import { asrTermContext } from '@shared/asr-enhancement'
@@ -212,16 +212,6 @@ export interface PipelineOptions {
 
 /** Where the take is: capturing, being transcribed/answered, or nothing. */
 type Stage = 'idle' | 'recording' | 'working'
-
-/**
- * `answer.ts` already appends a markdown `## 来源` list to the answer text. The
- * card renders that list as its own section, so the duplicate block is dropped
- * from the card body only — the history entry keeps the original text.
- */
-function stripAppendedSources(text: string): string {
-  const match = /\n{2,}##\s*来源\s*\n/.exec(text)
-  return match ? text.slice(0, match.index).trimEnd() : text
-}
 
 /**
  * The dictation pipeline: hold key down -> PCM chunks stream in from the bar
@@ -2287,6 +2277,8 @@ export class Pipeline {
     clipboard.writeText(answer)
     const tools = extras.tools ?? []
     const actions = extras.actions ?? []
+    // The card draws `sources` as its own section, so the `## 来源` list the agent appended to
+    // the text is dropped from the card body only — the clipboard write above keeps it.
     this.pushCard(
       {
         question,

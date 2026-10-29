@@ -1,11 +1,28 @@
 import type { ChatDetail, ChatEdit, ChatEvent, ChatIndex, ChatUpload } from '@shared/chat'
 import { chatAttachmentReference, prepareChatAttachments, validateChatUploads } from './chat-attachments'
-import type { Settings } from '@shared/types'
+import type { ProviderProfile, ProviderSettings, Settings } from '@shared/types'
 import type { ChatMessage as LlmMessage } from './providers/llm'
 import { complete } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
-import { askAgent } from './agent'
+import { askAgent, dedupeSources, stripAppendedSources } from './agent'
 import { ChatStore } from './chat-store'
+
+/**
+ * Only the wire fields a thread's chosen profile owns.
+ *
+ * Copied one by one and skipping blanks, because a profile saved with an empty
+ * `extraHeaders` or `requestPath` must not erase the value the polish block already
+ * carries — an empty overlay would look like a deliberate "no headers".
+ */
+function pickProfileFields(profile: ProviderProfile): Partial<ProviderSettings> {
+  const picked: Partial<ProviderSettings> = {}
+  const copy = (key: keyof ProviderSettings, value: unknown): void => {
+    if (typeof value === 'string' && value.trim()) (picked as Record<string, unknown>)[key] = value
+  }
+  copy('baseUrl', profile.baseUrl); copy('apiKey', profile.apiKey); copy('model', profile.model)
+  copy('extraHeaders', profile.extraHeaders); copy('requestPath', profile.requestPath); copy('authHeader', profile.authHeader)
+  return picked
+}
 
 /** A bounded context built from this thread alone, never from the floating answer card. */
 export function chatContext(detail: ChatDetail): LlmMessage[] {
@@ -46,8 +63,17 @@ export class ChatService {
     question = question.trim() || '请分析这些附件，概括主要内容。'
     if (this.active) throw Error('正在回答，请先停止当前生成')
     const settings = this.settings()
-    if (!chainFor(settings, 'llm').length) throw Error('请先在 AI 与模型中配置 LLM 模型')
-    const detail = this.store.get(id), first = !detail.messages.some(message => message.role === 'assistant' && message.state === 'done'), messages = chatContext(detail)
+    const chain = chainFor(settings, 'llm')
+    if (!chain.length) throw Error('请先在 AI 与模型中配置 LLM 模型')
+    const detail = this.store.get(id)
+    // A conversation answers with the model and thinking effort it was given, not with
+    // `settings.polish`: that block is the dictation one — tuned for speed, `effort: 'off'` —
+    // so reusing it here would make Ask answer without thinking at all. `null` means the
+    // thread never chose, and then the first enabled profile plus thinking-on (高) applies.
+    const picked = detail.profileId ? settings.profiles.find(profile => profile.id === detail.profileId && profile.kind === 'llm') : undefined
+    const profile = picked ?? chain[0]!
+    const effective: Settings = { ...settings, polish: { ...settings.polish, ...pickProfileFields(profile), effort: (detail.effort ?? 'high').trim() } }
+    const first = !detail.messages.some(message => message.role === 'assistant' && message.state === 'done'), messages = chatContext(detail)
     const conversation: import('./agent').AgentConversation = { messages, toolNotes: '', memoryTemporary: Boolean(detail.memoryTemporary) }
     const { userId, answerId } = this.store.begin(id, question.trim())
     const active = { threadId: id, messageId: answerId, text: '', controller: new AbortController() }; this.active = active
@@ -61,7 +87,7 @@ export class ChatService {
         this.store.attach(userId, files); this.changed({ type: 'changed' })
       }
       conversation.reference = chatAttachmentReference(this.store.references(id))
-      const pending = askAgent(settings, question.trim(), {}, active.controller.signal, () => {}, {
+      const pending = askAgent(effective, question.trim(), {}, active.controller.signal, () => {}, {
         reset: false, conversation, allowedTools: ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate'], timeouts: { llm: 90000 },
         onDelta: delta => { active.text += delta; progress() }, onStatus: status => progress(status)
       })
@@ -69,7 +95,9 @@ export class ChatService {
       const result = await pending
       active.controller.signal.throwIfAborted()
       if (this.closing) return
-      this.store.finish(answerId, result.text, result.taskState === 'failed' ? 'error' : 'done', result.sources)
+      // The chat page renders `sources` as its own section, so the appended markdown list is
+      // dropped before storing: otherwise every answer, and every later export, repeats it.
+      this.store.finish(answerId, stripAppendedSources(result.text), result.taskState === 'failed' ? 'error' : 'done', dedupeSources(result.sources))
       if (first && result.taskState !== 'failed') void this.title(id, question, result.text)
     } catch (error) {
       const imageHint = conversation.reference?.images?.length ? '图片回答失败，请确认当前 LLM 支持视觉输入。' : ''

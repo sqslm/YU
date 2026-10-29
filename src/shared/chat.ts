@@ -6,9 +6,20 @@ export const CHAT_FILE_ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,.avif,.txt,.md,.mark
 export interface ChatUpload { name: string; bytes: Uint8Array }
 export interface ChatAttachment { id: string; name: string; size: number; kind: 'image' | 'document'; thumbnail?: string; truncated: boolean }
 export interface ChatGroup { id: string; name: string }
-export interface ChatThread { id: string; title: string; groupId: string | null; updatedAt: number; manualTitle: boolean; memoryTemporary?: boolean }
+export interface ChatThread {
+  id: string; title: string; groupId: string | null; updatedAt: number; manualTitle: boolean; memoryTemporary?: boolean
+  /**
+   * The profile and thinking effort this conversation answers with.
+   *
+   * `null`/absent means "not chosen yet": the main process falls back to the first
+   * enabled LLM profile and a thinking-on effort, never to the dictation block.
+   * `effort: ''` is a choice of its own — "whatever the model defaults to".
+   */
+  profileId?: string | null
+  effort?: string | null
+}
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; state: 'working' | 'done' | 'error' | 'cancelled'; sources: SearchResult[]; createdAt: number; attachments?: ChatAttachment[] }
 export interface ChatDetail extends ChatThread { messages: ChatMessage[]; total: number }
 export interface ChatIndex { threads: ChatThread[]; groups: ChatGroup[]; busyThreadId: string | null }
-export type ChatEdit = { action: 'rename'; id: string; name: string } | { action: 'move'; id: string; groupId: string | null } | { action: 'delete'; id: string } | { action: 'group-create'; name: string } | { action: 'group-rename'; id: string; name: string } | { action: 'group-delete'; id: string }
+export type ChatEdit = { action: 'rename'; id: string; name: string } | { action: 'move'; id: string; groupId: string | null } | { action: 'delete'; id: string } | { action: 'group-create'; name: string } | { action: 'group-rename'; id: string; name: string } | { action: 'group-delete'; id: string } | { action: 'model'; id: string; profileId: string | null; effort: string }
 export type ChatEvent = { type: 'changed' } | { type: 'progress'; threadId: string; messageId: string; text: string; status: string }

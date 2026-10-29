@@ -28,19 +28,24 @@ export class ChatStore {
         CREATE INDEX IF NOT EXISTS chat_attachments_message ON chat_attachments(messageId);
         UPDATE chat_messages SET state='cancelled' WHERE state='working';`)
       this.database = db
-      if (!db.prepare('PRAGMA table_info(chat_threads)').all().some(column => column.name === 'memoryTemporary')) db.exec('ALTER TABLE chat_threads ADD COLUMN memoryTemporary INTEGER NOT NULL DEFAULT 0')
+      const columns = db.prepare('PRAGMA table_info(chat_threads)').all()
+      if (!columns.some(column => column.name === 'memoryTemporary')) db.exec('ALTER TABLE chat_threads ADD COLUMN memoryTemporary INTEGER NOT NULL DEFAULT 0')
+      // A thread's own model and thinking effort. Both are nullable on purpose: a row written
+      // before this feature (or a thread the user never configured) means "follow the default",
+      // which the service resolves — baking a concrete choice into old rows would freeze them.
+      for (const column of ['profileId', 'effort']) if (!columns.some(row => row.name === column)) db.exec(`ALTER TABLE chat_threads ADD COLUMN ${column} TEXT`)
     }
     return this.database
   }
   list(): { threads: ChatThread[]; groups: ChatGroup[] } {
-    return { threads: this.db.prepare('SELECT * FROM chat_threads ORDER BY updatedAt DESC,id').all().map(row => ({ ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary) })) as unknown as ChatThread[], groups: this.db.prepare('SELECT * FROM chat_groups ORDER BY name,id').all() as unknown as ChatGroup[] }
+    return { threads: this.db.prepare('SELECT * FROM chat_threads ORDER BY updatedAt DESC,id').all().map(row => ({ ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), profileId: row.profileId ?? null, effort: row.effort ?? null })) as unknown as ChatThread[], groups: this.db.prepare('SELECT * FROM chat_groups ORDER BY name,id').all() as unknown as ChatGroup[] }
   }
   get(id: string, limit = 100): ChatDetail {
     if (typeof id !== 'string' || !Number.isInteger(limit) || limit < 1 || limit > 10000) throw Error('无效的对话请求')
     const row = this.db.prepare('SELECT * FROM chat_threads WHERE id=?').get(id)
     if (!row) throw Error('对话不存在，请刷新')
     const messages = this.db.prepare('SELECT * FROM (SELECT * FROM chat_messages WHERE threadId=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(id, limit)
-    return { ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), messages: messages.map(message => ({ id: message.id, role: message.role, text: message.text, state: message.state, createdAt: message.createdAt, sources: JSON.parse(String(message.sources)), attachments: this.db.prepare('SELECT id,name,size,kind,thumbnail,truncated FROM chat_attachments WHERE messageId=? ORDER BY rowid').all(String(message.id)).map(file => ({ ...file, truncated: Boolean(file.truncated) })) })) as ChatMessage[], total: Number(this.db.prepare('SELECT COUNT(*) AS n FROM chat_messages WHERE threadId=?').get(id)!.n) } as ChatDetail
+    return { ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), profileId: row.profileId ?? null, effort: row.effort ?? null, messages: messages.map(message => ({ id: message.id, role: message.role, text: message.text, state: message.state, createdAt: message.createdAt, sources: JSON.parse(String(message.sources)), attachments: this.db.prepare('SELECT id,name,size,kind,thumbnail,truncated FROM chat_attachments WHERE messageId=? ORDER BY rowid').all(String(message.id)).map(file => ({ ...file, truncated: Boolean(file.truncated) })) })) as ChatMessage[], total: Number(this.db.prepare('SELECT COUNT(*) AS n FROM chat_messages WHERE threadId=?').get(id)!.n) } as ChatDetail
   }
   create(groupId: string | null = null): ChatDetail {
     this.group(groupId)
@@ -54,6 +59,7 @@ export class ChatStore {
   edit(input: ChatEdit): void {
     if (!input || typeof input !== 'object') throw Error('无效的对话操作')
     if ('id' in input && (typeof input.id !== 'string' || !input.id || input.id.length > 80)) throw Error('无效的对话 ID')
+    if (input.action === 'model' && (input.profileId !== null && (typeof input.profileId !== 'string' || !input.profileId || input.profileId.length > 200))) throw Error('无效的模型选择')
     switch (input.action) {
       case 'rename': this.db.prepare('UPDATE chat_threads SET title=?,manualTitle=1 WHERE id=?').run(name(input.name), input.id); break
       case 'move': this.group(input.groupId); this.db.prepare('UPDATE chat_threads SET groupId=? WHERE id=?').run(input.groupId, input.id); break
@@ -61,6 +67,10 @@ export class ChatStore {
       case 'group-create': this.db.prepare('INSERT INTO chat_groups VALUES(?,?)').run(randomUUID(), name(input.name)); break
       case 'group-rename': this.db.prepare('UPDATE chat_groups SET name=? WHERE id=?').run(name(input.name), input.id); break
       case 'group-delete': this.db.prepare('DELETE FROM chat_groups WHERE id=?').run(input.id); break
+      // `''` is stored as-is on purpose: it means "let the model decide", which is a different
+      // choice from NULL ("no choice made, use the thinking-on default"). Values are vendor
+      // strings, so they are trimmed and bounded rather than validated against a fixed list.
+      case 'model': this.db.prepare('UPDATE chat_threads SET profileId=?,effort=? WHERE id=?').run(input.profileId, String(input.effort ?? '').trim().slice(0, 32), input.id); break
       default: throw Error('无效的对话操作')
     }
   }

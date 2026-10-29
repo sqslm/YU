@@ -3,13 +3,17 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Box,
   CssBaseline,
+  IconButton,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
   ThemeProvider,
+  Tooltip,
   Typography
 } from '@mui/material'
+import ChevronLeftRounded from '@mui/icons-material/ChevronLeftRounded'
+import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded'
 import { makeTheme, palettes, onSystemThemeChange, resolveThemeMode } from './theme'
 import type { ThemeMode } from '@shared/types'
 import { useSettings } from './useSettings'
@@ -57,6 +61,17 @@ export function App(): JSX.Element {
   const { settings, patch, saving, error, flush } = useSettings()
   useEffect(() => window.api.app.onPrepareForGameMode(prepareForGameMode), [])
   const [page, setPage] = useState<Page>('home')
+  /**
+   * The rail collapses the chrome to icons only, so chat and notes get the whole
+   * window. `localStorage` (not settings) because it is a window preference, the
+   * same reason the sidebar width is not synced to the cloud either.
+   */
+  const [rail, setRail] = useState<boolean>(() => { try { return localStorage.getItem(RAIL_KEY) === '1' } catch { return false } })
+  const toggleRail = (): void => setRail((value) => {
+    const next = !value
+    try { localStorage.setItem(RAIL_KEY, next ? '1' : '0') } catch { /* a locked profile keeps the default */ }
+    return next
+  })
   const [chatVisited, setChatVisited] = useState(false)
   useEffect(() => { if (page === 'chat') setChatVisited(true) }, [page])
   const [reminderView, setReminderView] = useState<ReminderView | null>(null)
@@ -208,36 +223,66 @@ export function App(): JSX.Element {
         />
         {/* The native title bar is gone; this strip is the window drag handle. */}
         <Box
+          data-app-sidebar
+          data-rail={rail ? 'on' : 'off'}
           sx={{
-            width: 208,
+            width: rail ? RAIL_WIDTH : 208,
             flex: '0 0 auto',
             bgcolor: t.sidebar,
             borderRight: `1px solid ${t.line}`,
             display: 'flex',
             flexDirection: 'column',
-            pt: '40px'
+            pt: '40px',
+            overflow: 'hidden',
+            // Width, not `display`, so the page beside it slides instead of jumping.
+            transition: 'width .24s cubic-bezier(.4,0,.2,1)',
+            '@media (prefers-reduced-motion: reduce)': { transition: 'none' }
           }}
         >
-          <Box sx={{ px: 2, pb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ px: rail ? 0 : 2, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: 0.5, minHeight: 30 }}>
+            <Box
+              aria-hidden={rail}
+              sx={{ minWidth: 0, overflow: 'hidden', flex: rail ? 0 : 1, opacity: rail ? 0 : 1, transition: 'opacity .16s ease' }}
+            >
               <BrandLogo mode={mode} width={150} />
             </Box>
+            <Tooltip title={translate(rail ? '展开侧边栏' : '收起侧边栏')} placement="right">
+              <IconButton
+                size="small"
+                data-sidebar-toggle
+                aria-label={translate(rail ? '展开侧边栏' : '收起侧边栏')}
+                aria-expanded={!rail}
+                onClick={toggleRail}
+                sx={{ flexShrink: 0, borderRadius: 2, color: t.textDim, '&:hover': { bgcolor: hoverSurface, color: t.text } }}
+              >
+                {rail ? <ChevronRightRounded sx={{ fontSize: 18 }} /> : <ChevronLeftRounded sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </Tooltip>
           </Box>
 
-          <List dense sx={{ px: 1, py: 1 }}>
+          <List dense sx={{ px: rail ? 0 : 1, py: 1 }}>
             {NAV.map((item) => (
-              <ListItemButton
-                key={item.id}
-                selected={page === item.id}
-                onClick={() => setPage(item.id)}
-                sx={{ mb: 0.25, py: 0.75 }}
-              >
-                <ListItemIcon sx={{ minWidth: 30, color: 'inherit' }}>{item.icon}</ListItemIcon>
-                <ListItemText
-                  primary={translate(item.labelKey)}
-                  primaryTypographyProps={{ fontSize: 13, fontWeight: 500 }}
-                />
-              </ListItemButton>
+              <Tooltip key={item.id} title={rail ? translate(item.labelKey) : ''} placement="right">
+                <ListItemButton
+                  selected={page === item.id}
+                  onClick={() => setPage(item.id)}
+                  sx={{
+                    mb: 0.25,
+                    py: 0.75,
+                    px: rail ? 0 : 2,
+                    minWidth: 0,
+                    justifyContent: rail ? 'center' : 'flex-start',
+                    '& .MuiListItemIcon-root': { minWidth: rail ? 0 : 30, justifyContent: 'center' }
+                  }}
+                >
+                  <ListItemIcon sx={{ color: 'inherit' }}>{item.icon}</ListItemIcon>
+                  <ListItemText
+                    primary={translate(item.labelKey)}
+                    sx={{ display: rail ? 'none' : 'block', whiteSpace: 'nowrap' }}
+                    primaryTypographyProps={{ fontSize: 13, fontWeight: 500, noWrap: true }}
+                  />
+                </ListItemButton>
+              </Tooltip>
             ))}
           </List>
 
@@ -248,34 +293,37 @@ export function App(): JSX.Element {
               mt: 'auto',
               flex: '0 0 auto',
               height: 44,
-              px: 1.5,
+              px: rail ? 0 : 1.5,
               display: 'flex',
-              alignItems: 'center'
+              alignItems: 'center',
+              justifyContent: rail ? 'center' : 'flex-start',
+              gap: 0.5,
+              overflow: 'hidden'
             }}
           >
-            <Box
-              role="button"
-              tabIndex={0}
-              data-settings-entry
-              aria-label={translate('nav.settings')}
-              onClick={() => { setSettingsSection('general'); setSettingsOpen(true) }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  setSettingsSection('general')
-                  setSettingsOpen(true)
-                }
-              }}
-              sx={settingsEntrySx(t)}
-            >
-              <IconSettings size={15} />
-              <Box component="span">{translate('nav.settings')}</Box>
-            </Box>
-            {/* Sits in the same footer row as the gear so a published build is
-                discoverable without opening anything, and disappears entirely
-                when the installed version is the newest one. */}
-            <UpdatePill />
-            <QuotaSidebar />
+            <Tooltip title={rail ? translate('nav.settings') : ''} placement="right">
+              <Box
+                role="button"
+                tabIndex={0}
+                data-settings-entry
+                aria-label={translate('nav.settings')}
+                onClick={() => { setSettingsSection('general'); setSettingsOpen(true) }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setSettingsSection('general')
+                    setSettingsOpen(true)
+                  }
+                }}
+                sx={settingsEntrySx(t, rail)}
+              >
+                <IconSettings size={15} />
+                {!rail && <Box component="span">{translate('nav.settings')}</Box>}
+              </Box>
+            </Tooltip>
+            {/* Both badges need room for text, so the rail keeps only the gear. */}
+            {!rail && <UpdatePill />}
+            {!rail && <QuotaSidebar />}
           </Box>
         </Box>
 
@@ -322,16 +370,22 @@ interface FooterTokens {
 
 const hoverSurface = 'rgba(127,127,127,.14)'
 
-/** Gear + label. */
-const settingsEntrySx = (t: FooterTokens) =>
+/** Persisted per machine: the rail is a window preference, not a synced setting. */
+const RAIL_KEY = 'app.sidebar.rail'
+const RAIL_WIDTH = 60
+
+/** Gear + label. Collapsed to a square icon so the rail stays one icon wide. */
+const settingsEntrySx = (t: FooterTokens, rail = false) =>
   ({
     display: 'flex',
     alignItems: 'center',
-    gap: '7px',
+    gap: rail ? 0 : '7px',
     flexShrink: 0,
+    justifyContent: rail ? 'center' : 'flex-start',
     whiteSpace: 'nowrap',
     height: 30,
-    px: '7px',
+    width: rail ? 30 : undefined,
+    px: rail ? 0 : '7px',
     borderRadius: 2,
     color: t.textDim,
     fontSize: 12.5,

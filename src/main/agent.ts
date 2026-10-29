@@ -368,6 +368,37 @@ function sourceKey(url: string): string {
 }
 
 /**
+ * Collapses repeated pages, keeping the first mention.
+ *
+ * Two search queries in one turn happily return the same article, and the card (or
+ * the stored message) then lists it twice — which is exactly what makes a citation
+ * list look machine-generated. Shared so the text list and the source cards agree.
+ */
+export function dedupeSources(results: SearchResult[]): SearchResult[] {
+  const seen = new Set<string>()
+  const list: SearchResult[] = []
+  for (const item of results) {
+    const key = sourceKey(item.url)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    list.push(item)
+  }
+  return list
+}
+
+/**
+ * Removes the markdown `## 来源` list `appendSources` appended to an answer.
+ *
+ * Surfaces that render sources as their own section (the chat page, the answer card)
+ * would otherwise print the same list twice: once as body text and once as cards.
+ * Only the appended block goes — the caller keeps the answer's own prose untouched.
+ */
+export function stripAppendedSources(text: string): string {
+  const match = /\n{2,}##\s*来源\s*\n/.exec(text)
+  return match ? text.slice(0, match.index).trimEnd() : text
+}
+
+/**
  * Appends a deterministic source list so citations never depend on the model.
  *
  * Sources are picked from the `[n]` markers the answer actually used, falling
@@ -394,14 +425,7 @@ export function appendSources(text: string, results: SearchResult[]): string {
       ? mentioned
       : results
 
-  const seen = new Set<string>()
-  const list: SearchResult[] = []
-  for (const item of picked) {
-    const key = sourceKey(item.url)
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    list.push(item)
-  }
+  const list = dedupeSources(picked)
   if (list.length === 0) return text
 
   const lines = list.map((item) => `- [${item.title}](${item.url})`)

@@ -60,7 +60,9 @@ vi.mock('./providers/llm', async () => {
   return { ...actual, complete: mocks.complete }
 })
 vi.mock('./providers/gemini', () => ({ generateFromAudio: mocks.generateFromAudio }))
-vi.mock('./agent', () => ({ askAgent: mocks.askAgent, askFollowUp: mocks.askFollowUp }))
+// `stripAppendedSources` is imported from this same module and must stay real: the Ask card is
+// built with it, and a missing export would turn every answer into a mock error message.
+vi.mock('./agent', async () => ({ ...await vi.importActual<typeof import('./agent')>('./agent'), askAgent: mocks.askAgent, askFollowUp: mocks.askFollowUp }))
 // A pass-through spy: `inferInputAreaType` still runs for real, but the test can
 // prove the pipeline handed it the UIA snapshot instead of guessing.
 vi.mock('@shared/inputArea', async () => {

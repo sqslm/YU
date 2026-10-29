@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-const mock = vi.hoisted(() => ({ serve: null as null | ((request: Request) => Promise<Response>), handlers: new Map<string, (...args: any[]) => any>(), clipboard: vi.fn() }))
-vi.mock('electron', () => ({ clipboard: { readText: mock.clipboard }, dialog: {}, ipcMain: { handle: (key: string, handler: (...args: any[]) => any) => mock.handlers.set(key, handler) }, protocol: { handle: (_scheme: string, handler: typeof mock.serve) => { mock.serve = handler } } }))
+const mock = vi.hoisted(() => ({ serve: null as null | ((request: Request) => Promise<Response>), handlers: new Map<string, (...args: any[]) => any>(), clipboard: vi.fn(), openDialog: vi.fn() }))
+vi.mock('electron', () => ({ clipboard: { readText: mock.clipboard }, dialog: { showOpenDialog: mock.openDialog }, ipcMain: { handle: (key: string, handler: (...args: any[]) => any) => mock.handlers.set(key, handler) }, protocol: { handle: (_scheme: string, handler: typeof mock.serve) => { mock.serve = handler } } }))
 vi.mock('./audio/decode', () => ({ decodeRecording: vi.fn() }))
-import { registerNotesIpc } from './notes-ipc'
+import { markdownDocParts, registerNotesIpc } from './notes-ipc'
 const dirs: string[] = []
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true }); vi.clearAllMocks() })
 
@@ -45,5 +45,45 @@ describe('recording audio ranges', () => {
     expect(await response.text()).toBe('copied picture bytes')
     expect((await mock.serve!(new Request('typeless-audio://attachment/qa/other.pdf'))).status).toBe(404)
     expect((await mock.serve!(new Request('typeless-audio://unknown/qa'))).status).toBe(404)
+  })
+})
+
+describe('markdown import', () => {
+  it('takes the first H1 as the title and strips it from the body', () => {
+    expect(markdownDocParts('\uFEFF# 周会记录\n\n讨论了三件事。\n\n- 一\n', 'notes.md'))
+      .toEqual({ title: '周会记录', body: '讨论了三件事。\n\n- 一' })
+    expect(markdownDocParts('<br>\n\n## 次级标题不能当标题\n', '带前缀.txt'))
+      .toEqual({ title: '带前缀', body: '<br>\n\n## 次级标题不能当标题' })
+  })
+  it('keeps a heading-only file readable instead of creating an empty note', () => {
+    expect(markdownDocParts('# 只有标题\n', 'x.md')).toEqual({ title: '只有标题', body: '# 只有标题' })
+    expect(markdownDocParts('', '空文件.md')).toEqual({ title: '空文件', body: '' })
+  })
+  it('imports every selected file, skipping the unreadable ones', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'typeless-md-')); dirs.push(dir)
+    const ok = join(dir, 'first.md'); await writeFile(ok, '# 一篇\n\n甲')
+    const plain = join(dir, 'second.markdown'); await writeFile(plain, '没有标题的正文')
+    const missing = join(dir, 'gone.md')
+    mock.openDialog.mockResolvedValue({ canceled: false, filePaths: [ok, missing, plain] })
+    let created = 0
+    const createText = vi.fn(async (input: { text: string }) => { created += 1; return { id: `note-${created}`, title: '', text: input.text } })
+    const update = vi.fn()
+    const broadcast = vi.fn()
+    registerNotesIpc({ store: { createText, update } as never, persistDir: vi.fn(), broadcast })
+    const result = await mock.handlers.get('notes:importMarkdown')!(null, undefined)
+    expect(result).toEqual({ count: 2, ids: ['note-1', 'note-2'], failed: ['gone.md'] })
+    expect(createText).toHaveBeenNthCalledWith(1, { text: '甲', categoryId: undefined })
+    expect(createText).toHaveBeenNthCalledWith(2, { text: '没有标题的正文', categoryId: undefined })
+    // 有 H1 的那篇补标题，没有的用文件名
+    expect(update).toHaveBeenCalledWith('note-1', { title: '一篇' })
+    expect(update).toHaveBeenCalledWith('note-2', { title: 'second' })
+    expect(broadcast).toHaveBeenCalledOnce()
+  })
+  it('does nothing when the picker is cancelled', async () => {
+    mock.openDialog.mockResolvedValue({ canceled: true, filePaths: [] })
+    const createText = vi.fn()
+    registerNotesIpc({ store: { createText } as never, persistDir: vi.fn(), broadcast: vi.fn() })
+    expect(await mock.handlers.get('notes:importMarkdown')!(null, undefined)).toBeNull()
+    expect(createText).not.toHaveBeenCalled()
   })
 })

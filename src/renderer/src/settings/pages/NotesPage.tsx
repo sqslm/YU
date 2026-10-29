@@ -36,7 +36,8 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import Replay10Icon from '@mui/icons-material/Replay10'
 import Forward10Icon from '@mui/icons-material/Forward10'
 import { useTranslation } from 'react-i18next'
-import { NoteMarkdown } from './NoteMarkdown'
+import { MarkdownEditor } from './MarkdownEditor'
+import { continuePrefix, insertAt, linkInline, wrapInline, type MarkdownEdit } from './markdownBlocks'
 import { saveNoteEdit } from './notesSave'
 import { noteBodyField } from '@shared/noteBody'
 import { attachmentMarkdown } from '@shared/noteAttachments'
@@ -47,6 +48,7 @@ import { IconMic, IconPlus, IconSearch, IconSparkles, IconTrash } from '../icons
 import {
   ALL_CATEGORIES,
   MAX_TAGS,
+  NOTES_LIST_COLLAPSED_KEY,
   PLAYBACK_RATES,
   TAG_FILTER_LIMIT,
   addTag,
@@ -60,8 +62,10 @@ import {
   formatDuration,
   formatStamp,
   nextSaveState,
+  parseListCollapsed,
   removeTag,
   saveStateKey,
+  serializeListCollapsed,
   summarize,
   toggleTag,
   type NoteSort,
@@ -221,6 +225,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
   const bodyInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [markdownPreview, setMarkdownPreview] = useState(true)
+  /**
+   * 列表侧栏是否收起。跨会话记住（localStorage），因为窄窗口下用户收起一次
+   * 就想一直收着；读失败按展开处理，不让坏值把列表锁死。
+   */
+  const [listCollapsed, setListCollapsed] = useState(() => {
+    try { return parseListCollapsed(window.localStorage.getItem(NOTES_LIST_COLLAPSED_KEY)) } catch { return false }
+  })
+  const [markdownBusy, setMarkdownBusy] = useState(false)
   const [attachmentBusy, setAttachmentBusy] = useState(false)
   const attachmentJobRef = useRef(false)
   const focusNewNoteRef = useRef<string | null>(null)
@@ -421,6 +433,43 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     audioJobRef.current = false
   }, [])
 
+  const toggleList = useCallback((): void => {
+    setListCollapsed(collapsed => {
+      try { window.localStorage.setItem(NOTES_LIST_COLLAPSED_KEY, serializeListCollapsed(!collapsed)) } catch { /* 存不上也不影响本次收起 */ }
+      return !collapsed
+    })
+  }, [])
+
+  /**
+   * 导入 Markdown 文档：主进程弹选择框、逐篇读文件建随记。文件读失败的那些
+   * 只在返回里列出来（partial success），所以这里要把失败条数也说出来。
+   */
+  const importMarkdown = async (): Promise<void> => {
+    if (markdownBusy) return
+    setMoreAt(null)
+    setNotice('')
+    setFlash('')
+    setMarkdownBusy(true)
+    try {
+      await flushNow()
+      if (pendingRef.current) throw new Error(t('notes.createSaveFailed'))
+      const result = await window.api.notes.importMarkdown(categoryId || undefined)
+      if (!result) return
+      await reload()
+      if (result.ids.length) {
+        setSelectedId(result.ids[0])
+        setSelection([])
+        setQueryInput('')
+        setQuery('')
+        setActiveTags([])
+        setKind('all')
+      }
+      setFlash(t('已导入 {{n}} 篇', { n: result.count }))
+      if (result.failed.length) setNotice(t('有 {{n}} 个文件导入失败，已跳过', { n: result.failed.length }))
+    } catch (err) { setNotice(messageOf(err)) }
+    finally { setMarkdownBusy(false) }
+  }
+
   const importAudio = async (): Promise<void> => {
     if (audioJobRef.current) return
     setCreateMenuAt(null)
@@ -497,6 +546,41 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     },
     [flushNow]
   )
+
+  /**
+   * 源码模式 textarea 的 Typora 手感：列表行回车续前缀、Tab 缩进两格、
+   * Ctrl/Cmd+B/I/K 包裹选区。改完等这一帧渲染落地后再把光标放回去。
+   */
+  const sourceEditKeys = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    // TextField 的 onKeyDown 挂在外层 div 上，光标只能从真正的 textarea 取
+    const node = bodyInputRef.current
+    if (!node || event.nativeEvent.isComposing) return
+    const from = node.selectionStart
+    const to = node.selectionEnd
+    const mod = event.ctrlKey || event.metaKey
+    const key = event.key.toLowerCase()
+    let next: MarkdownEdit | null = null
+    if (event.key === 'Enter' && !event.shiftKey && !mod) {
+      const lineStart = primaryDraft.lastIndexOf('\n', Math.max(0, from - 1)) + 1
+      const prefix = continuePrefix(primaryDraft.slice(lineStart, from))
+      // 只有列表/引用行需要代劳续前缀；普通段落交给默认换行
+      if (prefix) next = insertAt(primaryDraft, from, `\n${prefix}`)
+    } else if (event.key === 'Tab' && !event.shiftKey && !mod) next = insertAt(primaryDraft, from, '  ')
+    else if (mod && key === 'b') next = wrapInline(primaryDraft, from, to, '**')
+    else if (mod && key === 'i') next = wrapInline(primaryDraft, from, to, '*')
+    else if (mod && key === 'k') next = linkInline(primaryDraft, from, to)
+    if (!next) return
+    event.preventDefault()
+    editField(primaryField, next.text)
+    const caret = next.caret
+    // 受控输入要等 React 把新值写进 DOM 之后再落光标
+    requestAnimationFrame(() => {
+      const node = bodyInputRef.current
+      if (!node) return
+      node.focus()
+      node.setSelectionRange(caret, caret)
+    })
+  }
 
   // Unmount and window close must not drop a pending edit. `beforeunload` cannot
   // await an IPC round-trip, so the write is fired and left to settle in main.
@@ -1043,6 +1127,24 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
               {recording ? t('notes.recordStop') : t('notes.record')}
             </Button>
             <Button data-notes-more size="small" onClick={event => setMoreAt(event.currentTarget)}>{t('更多')}</Button>
+            {/* 收起/展开列表：放在工具栏最右，收起后也一直看得见、可键盘操作 */}
+            <Tooltip title={t(listCollapsed ? '显示列表' : '隐藏列表')}>
+              <IconButton
+                data-notes-list-toggle
+                data-notes-list-collapsed={listCollapsed ? 'on' : 'off'}
+                size="small"
+                aria-label={t(listCollapsed ? '显示列表' : '隐藏列表')}
+                aria-pressed={!listCollapsed}
+                onClick={toggleList}
+                sx={{ width: 34, height: 34, border: '1px solid', borderColor: 'divider' }}
+              >
+                <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden style={{ display: 'block' }}>
+                  <path d="M3.5 5h17v14h-17z" fill="none" stroke="currentColor" strokeWidth={1.6} />
+                  <path d="M9.5 5v14" stroke="currentColor" strokeWidth={1.6} />
+                  {!listCollapsed && <path d="M3.5 5h6v14h-6z" fill="currentColor" opacity={0.3} />}
+                </svg>
+              </IconButton>
+            </Tooltip>
           </Stack>
         </Stack>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
@@ -1250,20 +1352,35 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
         )}
       </Box>
 
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         <Box
           data-notes-list
           data-notes-visible={visible.length}
+          data-notes-collapsed={listCollapsed ? 'on' : 'off'}
+          aria-hidden={listCollapsed || undefined}
           sx={{
+            // 收起靠 flex-basis/宽度归零 + overflow 裁剪动画，不改变文档流里的其它尺寸
+            position: 'relative',
             width: 320,
+            maxWidth: 320,
             flex: '0 0 320px',
+            minWidth: 0,
             minHeight: 0,
-            overflowY: 'auto',
+            overflow: 'hidden',
             borderTop: '1px solid',
             borderRight: '1px solid',
-            borderColor: 'divider'
+            borderColor: listCollapsed ? 'transparent' : 'divider',
+            transition: 'flex-basis .22s ease, width .22s ease, max-width .22s ease, border-color .22s ease',
+            ...(listCollapsed
+              ? { width: 0, maxWidth: 0, flexBasis: 0, pointerEvents: 'none' as const }
+              : {})
           }}
         >
+          {/* 宽度动画交给外层，内容保持 320 宽，收起途中行文字不会跟着重排 */}
+          <Box
+            data-notes-list-inner
+            sx={{ width: 320, height: '100%', minHeight: 0, overflowY: 'auto' }}
+          >
           {loading && (
             <Typography sx={{ px: 2.5, py: 3, fontSize: 12, color: 'text.disabled' }}>
               {t('common.loading')}
@@ -1386,6 +1503,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 </Box>
               )
             })}</PagedList>
+          </Box>
         </Box>
 
         <Box
@@ -1504,10 +1622,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   <Button data-notes-insert-attachment size="small" disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button>
                   <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{t('支持粘贴或拖入，附件保存到随记目录')}</Typography>
                 </Stack>
-                {markdownPreview ? <NoteMarkdown text={primaryDraft} noteId={selected.id} onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
+                {markdownPreview ? <MarkdownEditor value={primaryDraft} onChange={next => editField(primaryField, next)}
+                  noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
+                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
+                  onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
                 <TextField data-notes-editor={primaryField} inputRef={bodyInputRef} disabled={attachmentBusy || retranscribingId === selected.id}
                   multiline minRows={16} fullWidth value={primaryDraft}
                   onChange={event => editField(primaryField, event.target.value)} onBlur={() => void flushNow()}
+                  onKeyDown={sourceEditKeys}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
                   InputProps={{ sx: { fontSize: 14, lineHeight: 1.8, alignItems: 'flex-start', minHeight: '42vh', fontFamily: 'Consolas, monospace' } }} />}
                 <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
@@ -1683,6 +1805,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
 
       <Menu anchorEl={moreAt} open={Boolean(moreAt)} onClose={() => setMoreAt(null)}>
         <MenuItem data-notes-category-manage onClick={() => { setMoreAt(null); setNotice(''); setCategoryDraft(''); setCategoriesOpen(true) }}>{t('notes.categoryManage')}</MenuItem>
+        <MenuItem data-notes-import-markdown disabled={markdownBusy} onClick={() => void importMarkdown()}>{t('导入 Markdown 文档')}</MenuItem>
         <MenuItem data-notes-export disabled={exportBusy || bulkBusy || loading || !exportIds.length} onClick={() => { const anchor = moreAt!; setMoreAt(null); setExportMenu({ anchor, ids: exportIds, label: t(selection.length ? 'notes.exportSelected' : 'notes.exportFiltered', { count: exportIds.length }) }) }}>{t('notes.export')}</MenuItem>
         <MenuItem data-notes-filter-tags onClick={() => { setMoreAt(null); setTagFiltersOpen(open => !open) }}>{t('notes.tagFilter')}</MenuItem>
         <MenuItem data-notes-prefs-open onClick={() => { setMoreAt(null); setPrefsOpen(true) }}>{t('notes.prefsTitle')}</MenuItem>

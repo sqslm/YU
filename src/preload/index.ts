@@ -246,6 +246,7 @@ const api: TypelessApi = {
     revealAttachment: (id, path) => ipcRenderer.invoke('notes:revealAttachment', id, path),
     createText: (input) => ipcRenderer.invoke('notes:createText', input),
     importAudio: (categoryId) => ipcRenderer.invoke('notes:importAudio', categoryId),
+    importMarkdown: (categoryId) => ipcRenderer.invoke('notes:importMarkdown', categoryId),
     retranscribe: (id) => ipcRenderer.invoke('notes:retranscribe', id),
     cancelAudioJob: () => ipcRenderer.invoke('notes:cancelAudioJob'),
     exportText: (ids, format) => ipcRenderer.invoke('notes:exportText', ids, format),

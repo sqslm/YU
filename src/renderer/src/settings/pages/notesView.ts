@@ -312,6 +312,18 @@ export function removeTag(tags: readonly string[], tag: string): string[] {
   return (tags ?? []).filter((existing) => !sameTag(existing, normalizeTag(tag)))
 }
 
+/** 随记列表侧栏收起状态的偏好键（localStorage）。 */
+export const NOTES_LIST_COLLAPSED_KEY = 'notes.list.collapsed'
+
+/** 解析存的偏好：只有明确存了「收起」才算收起，坏值/没存都按展开处理。 */
+export function parseListCollapsed(raw: string | null): boolean {
+  return raw === '1' || raw === 'true'
+}
+
+export function serializeListCollapsed(collapsed: boolean): string {
+  return collapsed ? '1' : '0'
+}
+
 /** Filter-row chips toggle: present means "must have it". */
 export function toggleTag(tags: readonly string[], tag: string, max = Number.POSITIVE_INFINITY): string[] {
   const current = [...(tags ?? [])]

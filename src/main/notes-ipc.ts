@@ -1,5 +1,6 @@
 import { clipboard, dialog, protocol, shell } from 'electron'
-import { open } from 'node:fs/promises'
+import { readFile, open } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { Readable } from 'node:stream'
 import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
 import type { NotesStore } from './notes'
@@ -33,6 +34,25 @@ function asPcm(value: unknown): Int16Array {
   if (Array.isArray(value)) return Int16Array.from(value as number[])
   if (value instanceof ArrayBuffer) return new Int16Array(value)
   return new Int16Array(0)
+}
+
+const MARKDOWN_H1 = /^#[ \t]+(.+?)[ \t]*#*[ \t]*$/
+
+/**
+ * Splits an imported Markdown file into the note title and its body: the first
+ * `# 标题` line becomes the title (and leaves the body), otherwise the file name
+ * is used. A file that is nothing but a heading keeps the heading as its body,
+ * because an empty note is worse than a duplicated line.
+ */
+export function markdownDocParts(text: string, fileName: string): { title: string; body: string } {
+  const source = text.replace(/^\uFEFF/, '')
+  const fallback = fileName.replace(/\.[^.]+$/, '').trim() || fileName
+  const lines = source.split('\n')
+  const at = lines.findIndex(line => MARKDOWN_H1.test(line))
+  if (at < 0) return { title: fallback, body: source.trim() }
+  const heading = MARKDOWN_H1.exec(lines[at])![1].trim()
+  const rest = lines.slice(0, at).concat(lines.slice(at + 1)).join('\n').trim()
+  return { title: heading || fallback, body: rest || source.trim() }
 }
 
 /**
@@ -86,6 +106,30 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
       if (job.signal.aborted) return null
       throw error
     } finally { if (audioJob === job) audioJob = null }
+  })
+  /**
+   * Imports Markdown files as text notes. Multi-select on purpose: a whole
+   * folder's worth of notes is the usual case. One unreadable file must not
+   * sink the batch, so it is reported in `failed` and the rest go through.
+   */
+  ipcHandle('notes:importMarkdown', async (_event, categoryId?: string) => {
+    const chosen = await dialog.showOpenDialog({ title: mt('导入 Markdown 文档'),
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'txt'] }] })
+    if (chosen.canceled || !chosen.filePaths.length) return null
+    const ids: string[] = []
+    const failed: string[] = []
+    for (const file of chosen.filePaths) {
+      try {
+        // 标题不是 createText 的入参（它只认正文），所以建好之后补一次 update
+        const { title, body } = markdownDocParts(await readFile(file, 'utf8'), basename(file))
+        const note = await store.createText({ text: body, categoryId })
+        if (note.title !== title) await store.update(note.id, { title })
+        ids.push(note.id)
+      } catch { failed.push(basename(file)) }
+    }
+    if (ids.length) broadcast()
+    return { count: ids.length, ids, failed }
   })
   ipcHandle('notes:retranscribe', async (_event, id: string) => {
     if (audioJob) throw new Error(mt('已有录音正在处理'))
