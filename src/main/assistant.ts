@@ -395,6 +395,7 @@ export class AssistantSession {
   private lastUsed = 0
   private nextId = 0
   private task: TaskContext | null = null
+  private trialSession: AssistantSession | null = null
 
   constructor(private readonly deps: {
     settings: () => Settings
@@ -410,7 +411,19 @@ export class AssistantSession {
     analyzeScreenshot?: (context: PromptContext, question: string, ocr: boolean, signal: AbortSignal) => Promise<string>
   }) {}
 
-  get busy(): boolean { return this.controller !== null }
+  get busy(): boolean { return this.controller !== null || this.trialSession !== null }
+  /** An isolated onboarding exchange shares real tools but never the user's thread. */
+  async trial(input: string, signal: AbortSignal): Promise<AssistantTurn> {
+    if (this.busy) throw new Error(mt('助手正在处理，请先停止当前任务'))
+    const session = new AssistantSession({ ...this.deps, changed: () => {} })
+    this.trialSession = session
+    try {
+      await session.send(`临时对话，${input}`, signal)
+      const turn = session.snapshot().turns.at(-1)
+      if (!turn) throw new Error('体验未产生结果，请重试')
+      return turn
+    } finally { session.cancel(); this.trialSession = null }
+  }
   private allowedTools(input: string): string[] {
     return [...ASSISTANT_TOOLS, ...(this.deps.windows ? WINDOWS_TOOLS : []), ...(this.deps.personal ? PERSONAL_TOOLS : []),
       ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []),
@@ -448,6 +461,7 @@ export class AssistantSession {
   }
 
   cancel(): void {
+    this.trialSession?.cancel()
     const controller = this.controller
     if (!controller) return
     this.controller = null

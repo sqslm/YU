@@ -26,6 +26,28 @@ beforeEach(() => {
 })
 
 describe('assistant session', () => {
+  it('keeps onboarding trials temporary and separate from the existing thread', async () => {
+    session.rememberAnswer('已有问题', '已有回答')
+    changed.mockClear()
+    const result = await session.trial('请帮我润色这句话', new AbortController().signal)
+    expect(result.answer).toBe('Actual answer')
+    expect(ask.mock.calls[0][1]).toBe('临时对话，请帮我润色这句话')
+    expect(session.snapshot().turns).toHaveLength(1)
+    expect(session.snapshot().turns[0].question).toBe('已有问题')
+    expect(changed).not.toHaveBeenCalled()
+    expect(session.busy).toBe(false)
+  })
+  it('holds the shared busy guard while a trial is running and propagates cancellation', async () => {
+    let release!: () => void
+    ask.mockImplementationOnce(async (_settings, _text, _context, signal) => { await new Promise<void>(resolve => { release = resolve }); signal?.throwIfAborted(); return { text: 'finished', sources: [], searched: false } })
+    const controller = new AbortController(), trial = session.trial('用一句话解释输入法', controller.signal)
+    await vi.waitFor(() => expect(ask).toHaveBeenCalled())
+    expect(session.busy).toBe(true)
+    await expect(session.send('不能同时执行')).rejects.toThrow()
+    controller.abort(); release()
+    await trial
+    expect(session.busy).toBe(false)
+  })
   it('does not offer screenshot tools when the screenshot integration is disconnected', async () => {
     await session.send('帮我框选截图并分析')
     expect(ask).toHaveBeenCalled()

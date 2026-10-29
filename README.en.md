@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.1.0-rc.18**, Windows 10/11 x64, MIT.
+> Current version **1.2.0-rc.1**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -261,7 +261,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.1.0-rc.18`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.2.0-rc.1`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -333,7 +333,13 @@ Proper-name enhancement is off by default. Open Settings → Voice & input → R
 Finer detail lives in `git log`.
 </details>
 
-## Local long-term memory (rc.18)
+## First-run setup
+
+The skippable guide brings microphone selection and a local level test, ASR / LLM / TTS connections, custom wake-word setup and optional account sign-in into one place. Settings save automatically; reopen the guide from the hub. The level test neither saves nor uploads audio.
+
+Examples appear only for configured capabilities: speech models enable dictation; an LLM enables polishing, translation, reminders, to-dos, events and questions through one input. Review recognized speech before running it. Trials use an isolated conversation without long-term memory, while explicitly executed reminders, to-dos and events create real records. Saving a connection does not verify connectivity; use its connection test.
+
+## Local long-term memory
 
 Open Settings → Assistant & permissions → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.
 

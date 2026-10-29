@@ -17,6 +17,13 @@ ipcRenderer.on('card:data', (_event, payload: AnswerCardPayload) => { lastCard =
 ipcRenderer.on('card:hidden', () => { lastCard = null })
 
 const api: TypelessApi = {
+  onboarding: {
+    beginVoice: () => ipcRenderer.invoke('onboarding:voice-begin'),
+    cancelVoice: id => ipcRenderer.send('onboarding:voice-cancel', id),
+    transcribeVoice: (id, wav) => ipcRenderer.invoke('onboarding:voice-transcribe', id, wav),
+    run: text => ipcRenderer.invoke('onboarding:run', text),
+    cancel: () => ipcRenderer.invoke('onboarding:cancel')
+  },
   memory: {
     status: () => ipcRenderer.invoke('memory:status'),
     download: () => ipcRenderer.invoke('memory:download'),

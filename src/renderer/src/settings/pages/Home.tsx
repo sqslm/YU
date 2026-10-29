@@ -14,6 +14,7 @@ import { modeLabel } from './historyView'
 import { useTranslation } from 'react-i18next'
 
 interface HomeProps {
+  onGuide?: () => void
   settings: Settings
   mode: 'dark' | 'light'
   onOpenHistory: (query?: string) => void
@@ -29,7 +30,7 @@ const SECTION_KEYS: Record<keyof HomeData, string> = {
 const focusSx = { '&:focus-visible, &.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 3 } }
 const clipSx = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const
 
-export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote, onOpenSettings }: HomeProps): JSX.Element {
+export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote, onOpenSettings, onGuide }: HomeProps): JSX.Element {
   const { t, i18n } = useTranslation()
   const language = i18n.resolvedLanguage === 'en' ? 'en' : 'zh'
   const [data, setData] = useState<Partial<HomeData>>({})
@@ -103,6 +104,7 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {!hasTextModel && <Button size="small" variant="contained" onClick={() => onOpenSettings('models')}>{t('配置 AI 与模型')}</Button>}
+          {onGuide && <Button size="small" onClick={onGuide} sx={{ color: 'text.secondary' }}>{t('新手引导')}</Button>}
           <Button size="small" onClick={() => onOpenSettings('shortcuts')} sx={{ color: 'text.secondary' }}>{t('查看快捷键')}</Button>
           <Button size="small" onClick={() => void reload()} sx={{ color: 'text.secondary' }}>{t('刷新状态')}</Button>
         </Box>

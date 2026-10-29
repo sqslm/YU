@@ -1,6 +1,7 @@
 import { MemoryService } from './memory/host'
 import { setMemoryService } from './memory/registry'
 import { memoryIdleCheck } from './memory/idle'
+import { onboardingCapabilities } from '@shared/onboarding'
 import { GameMode } from './game-mode'
 import { observeGame, gameProcessAlive } from './game-mode-native'
 import type { GameModeStatus } from '@shared/game-mode'
@@ -724,6 +725,12 @@ function applyGameMode(status: GameModeStatus): void {
 }
 
 let notesRecording = false
+let onboardingVoiceId: string | null = null
+let onboardingController: AbortController | null = null
+function cancelOnboarding(): void {
+  onboardingController?.abort()
+  if (onboardingVoiceId) { cardVoice.cancel(onboardingVoiceId); onboardingVoiceId = null }
+}
 const cardVoice: CardVoice = new CardVoice({ settings: () => store.get(), changed: () => refreshHotkeyActivity(), log: message => log(message),
   local: async (wav, signal) => {
     if (!localAsr.available()) await localAsr.activate()
@@ -912,6 +919,7 @@ function ensureSettingsWindow(): BrowserWindow {
     win.hide()
   })
   win.on('hide', () => {
+    cancelOnboarding()
     memory.reclaim()
     uia.reclaim()
     if (!notesRecording && !cardVoice.active) localAsr.reclaim()
@@ -932,6 +940,7 @@ function ensureSettingsWindow(): BrowserWindow {
     refreshHotkeyActivity()
   })
   settingsWindow.on('closed', () => {
+    cancelOnboarding()
     wakeSetupMode = null; wakeWord.cancelLearning()
     hotkeys?.setCapturing(false)
     settingsWindow = null
@@ -1239,6 +1248,34 @@ function registerIpc(): void {
   const entityOwner = (event: Electron.IpcMainInvokeEvent): void => {
     if (event.sender !== settingsWindow?.webContents) throw Error(mt('请从设置管理专有名词'))
   }
+  handle('onboarding:voice-begin', event => {
+    entityOwner(event)
+    if (gameMode.snapshot().active || wakeLocked || wakeSuspended || notesRecording || cardVoice.active || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy || screenshotTool.isOpen) return null
+    pausePlaybackForRecording()
+    onboardingVoiceId = cardVoice.begin()
+    return onboardingVoiceId
+  })
+  subscribe('onboarding:voice-cancel', (event, id: string) => {
+    if (event.sender === settingsWindow?.webContents && id === onboardingVoiceId) { cardVoice.cancel(id); onboardingVoiceId = null }
+  })
+  handle('onboarding:voice-transcribe', async (event, id: string, wav: Uint8Array) => {
+    entityOwner(event)
+    if (!onboardingVoiceId || id !== onboardingVoiceId || gameMode.snapshot().active) throw Error(mt('语音追问不可用'))
+    try { return await cardVoice.finish(id, wav) }
+    finally { if (onboardingVoiceId === id) onboardingVoiceId = null }
+  })
+  handle('onboarding:run', async (event, text: unknown) => {
+    entityOwner(event)
+    if (typeof text !== 'string' || !text.trim() || text.length > 2000) throw Error('请输入 1–2000 字的请求')
+    if (gameMode.snapshot().active || notesRecording || cardVoice.active || pipeline?.isBusy || assistant.busy || selectionEditor?.isBusy || onboardingController) throw Error(mt('助手正在处理，请先停止当前任务'))
+    if (!onboardingCapabilities(store.get()).text) throw Error('请先配置并启用 LLM 模型')
+    const controller = new AbortController(); onboardingController = controller
+    const pending = assistant.trial(text.trim(), controller.signal)
+    refreshWakeWord()
+    try { return await pending }
+    finally { if (onboardingController === controller) onboardingController = null; refreshWakeWord() }
+  })
+  handle('onboarding:cancel', event => { entityOwner(event); cancelOnboarding() })
   const memoryKind = (value: unknown): 'assistant' | 'style' => { if (value !== 'assistant' && value !== 'style') throw Error('Invalid memory category'); return value }
   handle('memory:status', event => { entityOwner(event); return memory.status() })
   handle('memory:download', event => { entityOwner(event); return memory.prepareModel() })

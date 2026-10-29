@@ -56,6 +56,13 @@ export interface UpdateState {
 }
 
 export interface TypelessApi {
+  onboarding: {
+    beginVoice(): Promise<string | null>
+    cancelVoice(id: string): void
+    transcribeVoice(id: string, wav: Uint8Array): Promise<string>
+    run(text: string): Promise<import('./assistant').AssistantTurn>
+    cancel(): Promise<void>
+  }
   memory: {
     status(): Promise<import('./memory').MemoryStatus>
     download(): Promise<void>

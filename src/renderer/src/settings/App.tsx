@@ -65,6 +65,7 @@ export function App(): JSX.Element {
   /** Scene name the home page asked to look up; history seeds its search box with it. */
   const [historyQuery, setHistoryQuery] = useState<string | undefined>(undefined)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [replayTour, setReplayTour] = useState(false)
   const [settingsSection, setSettingsSection] = useState('general')
   useEffect(() => {
     const navigate = (): void => { void window.api.assistant.hubView().then(view => {
@@ -89,10 +90,12 @@ export function App(): JSX.Element {
    * The tour lives in settings, not in `localStorage`: clearing the cache must
    * not replay onboarding, and a tester can replay it by flipping one key.
    */
-  const tour = settings ? !settings.onboarded && page === 'home' : false
+  const tour = settings ? (!settings.onboarded || replayTour) && page === 'home' : false
   /** Any exit path (finish or skip) marks the tour done, so it never nags twice. */
-  const dismissTour = (): void => {
-    void patch({ onboarded: true })
+  const dismissTour = async (): Promise<void> => {
+    await flush()
+    await window.api.settings.update({ onboarded: true })
+    setReplayTour(false)
   }
   const { t: translate } = useTranslation()
 
@@ -156,6 +159,7 @@ export function App(): JSX.Element {
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />
     return (
       <HomePage
+        onGuide={() => setReplayTour(true)}
         settings={settings}
         mode={mode}
         onOpenPage={(id) => { if (id === 'notes') setNoteToOpen(undefined); setPage(id) }}
@@ -291,10 +295,8 @@ export function App(): JSX.Element {
       )}
 
       {tour && (
-        <Onboarding
+        <Onboarding settings={settings!} patch={patch} saving={saving} saveError={error} onRetry={() => void flush()}
           onDone={dismissTour}
-          server={settings?.syncServerUrl ?? ''}
-          onServerChange={(value) => void patch({ syncServerUrl: value })}
         />
       )}
     </PaginationSettings.Provider>
