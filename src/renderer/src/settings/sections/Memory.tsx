@@ -41,7 +41,7 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
       <Typography variant="caption" display="block" color="text.secondary">{t('最多暂存 30 条新交互，退出软件会丢弃尚未整理的候选内容。整理后释放模型；查看列表和图谱不加载向量模型。')}</Typography>
       <Typography variant="caption" display="block" color="text.secondary">{t('下载的是本地检索模型；记忆提炼使用已配置的 LLM，不是另一个生成模型。')}</Typography>
       <Typography variant="caption">{t('状态')}：{t(status?.state ?? 'off')}{status?.pending ? ` · ${t('待处理')} ${status.pending}` : ''}</Typography>
-      {status?.error && <Alert severity="warning" sx={{ mt: 1 }}>{t(status.error)}</Alert>}
+      {settings.memory.enabled && status?.error && <Alert severity="warning" sx={{ mt: 1 }} action={status.pending > 0 && settings.memory.autoLearn ? <Button disabled={busy || status.state === 'working' || status.state === 'paused'} onClick={() => void run(() => window.api.memory.retryLearning())}>{t('重试整理')}</Button> : undefined}>{t(status.error)}<Typography variant="caption" display="block">{t('原有记忆仍然保留。提炼使用当前 LLM，不需要重新下载本地检索模型。')}</Typography></Alert>}
       {status?.state === 'downloading' && <><LinearProgress variant="determinate" value={status.progress ?? 0} sx={{ my: 1 }} /><Button onClick={() => void window.api.memory.cancelDownload()}>{t('取消下载')}</Button></>}
       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
         <Button onClick={() => { setOpen(true); void run(() => load()) }}>{t('管理记忆')}</Button>

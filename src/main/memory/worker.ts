@@ -5,7 +5,7 @@ import { readCatalog, readGraph } from './catalog'
 
 const port = (process as unknown as { parentPort: { on(name: string, fn: (event: { data: any }) => void): void; postMessage(data: unknown): void } }).parentPort
 let home = '', modelDir = '', userId = 'local-user', sequence = 0
-const llmPending = new Map<number, { resolve(value: { content: string }): void; reject(error: Error): void }>()
+const llmPending = new Map<number, { kind: 'facts' | 'memory'; resolve(value: { content: string }): void; reject(error: Error): void }>()
 let extractor: any
 let sdk: typeof import('mem0ai/oss')
 const stores = new Map<MemoryKind, InstanceType<typeof import('mem0ai/oss').Memory>>()
@@ -30,9 +30,10 @@ async function store(kind: MemoryKind): Promise<InstanceType<typeof import('mem0
       vectorStore: { provider: 'memory', config: { dimension: 512, dbPath: join(home, `${kind}.db`) } },
       llm: { provider: 'langchain', config: { model: { invoke(messages: any[]) {
         const id = ++sequence
+        const kind = messages.some(message => message.getType() === 'system') ? 'facts' : 'memory'
         return new Promise<{ content: string }>((resolve, reject) => {
-          llmPending.set(id, { resolve, reject })
-          port.postMessage({ type: 'llm', id, messages: messages.map(message => ({ role: message.getType() === 'human' ? 'user' : message.getType() === 'ai' ? 'assistant' : 'system', content: message.content })).concat([{ role: 'system', content: policy }]) })
+          llmPending.set(id, { kind, resolve, reject })
+          port.postMessage({ type: 'llm', id, kind, messages: messages.map(message => ({ role: message.getType() === 'human' ? 'user' : message.getType() === 'ai' ? 'assistant' : 'system', content: message.content })).concat([{ role: 'system', content: policy }]) })
         })
       } } } },
 
@@ -81,7 +82,7 @@ port.on('message', ({ data }) => {
     const pending = llmPending.get(data.id); llmPending.delete(data.id)
     if (data.error) pending?.reject(Error(data.error))
     else {
-      try { pending?.resolve({ content: validateMemoryReply(data.text) }) }
+      try { pending?.resolve({ content: validateMemoryReply(data.text, pending?.kind) }) }
       catch { pending?.reject(Error('记忆模型返回了无效的结构化结果')) }
     }
     return
@@ -90,7 +91,7 @@ port.on('message', ({ data }) => {
     try { port.postMessage({ type: 'result', id: data.id, value: await command(data) }) }
     catch (error) {
       const message = error instanceof Error ? error.message : ''
-      const safe = message.includes('无效的结构化结果') ? '记忆模型返回了无效的结构化结果'
+      const safe = message.includes('无效的结构化结果') ? '记忆提炼未完成：当前 LLM 未返回有效 JSON，请检查连接或更换模型后重试'
         : /LLM|Memory model request failed/u.test(message) ? '记忆模型请求失败，请检查模型连接'
           : '记忆处理失败，请检查模型连接和本地存储'
       port.postMessage({ type: 'result', id: data.id, error: safe })

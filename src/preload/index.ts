@@ -29,6 +29,7 @@ const api: TypelessApi = {
     cancel: () => ipcRenderer.invoke('onboarding:cancel')
   },
   memory: {
+    retryLearning: () => ipcRenderer.invoke('memory:retry-learning'),
     status: () => ipcRenderer.invoke('memory:status'),
     download: () => ipcRenderer.invoke('memory:download'),
     cancelDownload: () => ipcRenderer.invoke('memory:cancel-download'),

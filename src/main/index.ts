@@ -1297,6 +1297,7 @@ function registerIpc(): void {
   handle('onboarding:cancel', event => { entityOwner(event); cancelOnboarding() })
   const memoryKind = (value: unknown): 'assistant' | 'style' => { if (value !== 'assistant' && value !== 'style') throw Error('Invalid memory category'); return value }
   handle('memory:status', event => { entityOwner(event); return memory.status() })
+  handle('memory:retry-learning', event => { entityOwner(event); memory.retryLearning() })
   handle('memory:download', event => { entityOwner(event); return memory.prepareModel() })
   handle('memory:cancel-download', event => { entityOwner(event); memory.cancelDownload() })
   handle('memory:list', (event, kind: unknown) => { entityOwner(event); return memory.list(memoryKind(kind)) })

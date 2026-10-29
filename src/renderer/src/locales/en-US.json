@@ -2423,5 +2423,8 @@
   "正在联网生成内容…": "Researching and generating…",
   "未检索到可核实的实时来源，未插入内容。请检查搜索服务或网络后重试。": "No verifiable current sources were retrieved, so nothing was inserted. Check your search service or network and try again.",
   "已追加到选区末尾": "Appended at the end of the selection",
-  "追加到选区末尾": "Append at selection end"
+  "追加到选区末尾": "Append at selection end",
+  "记忆提炼未完成：当前 LLM 未返回有效 JSON，请检查连接或更换模型后重试": "Memory extraction is incomplete: the current LLM did not return valid JSON. Check the connection or switch models and retry.",
+  "重试整理": "Retry extraction",
+  "原有记忆仍然保留。提炼使用当前 LLM，不需要重新下载本地检索模型。": "Existing memories are preserved. Extraction uses the current LLM; the local retrieval model does not need to be downloaded again."
 }

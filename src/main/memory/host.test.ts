@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 
-const fixture = vi.hoisted(() => ({ children: [] as any[], writes: [] as string[], hanging: false }))
+const fixture = vi.hoisted(() => ({ children: [] as any[], writes: [] as string[], hanging: false, failure: '' }))
 vi.mock('electron', () => ({ utilityProcess: { fork: () => {
   const child = new EventEmitter() as any
   child.killed = false; child.messages = []
@@ -13,6 +13,7 @@ vi.mock('electron', () => ({ utilityProcess: { fork: () => {
     if (fixture.hanging && message.method === 'learn') return
     queueMicrotask(() => {
       if (child.killed) return
+      if (fixture.failure && message.method === 'learn') { child.emit('message', { type: 'result', id: message.id, error: fixture.failure }); return }
       if (message.method === 'add' || message.method === 'learn') fixture.writes.push(message.text)
       if (message.method === 'clear') fixture.writes = []
       child.emit('message', { type: 'result', id: message.id, value: message.method === 'list' ? [...fixture.writes] : [] })
@@ -25,7 +26,7 @@ import { MemoryService } from './host'
 
 let settings: Settings, service: MemoryService, busy = false, idleEnough = true
 beforeEach(async () => {
-  vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false
+  vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false; fixture.failure = ''
   settings = structuredClone(DEFAULT_SETTINGS); settings.memory = { enabled: true, autoLearn: true }; busy = false; idleEnough = true
   service = new MemoryService('release/verification-entities/memory-host-test', () => settings, () => busy, () => {}, () => idleEnough)
   await service.configure()
@@ -37,6 +38,27 @@ it('stays dormant until enabled and explicitly needed', async () => {
   expect(await service.recall('assistant', '我的名字')).toEqual([])
   expect(fixture.children).toHaveLength(0)
   expect(service.status().state).toBe('off')
+})
+it('retains failed learning for explicit retry without looping or restoring it after disabling memory', async () => {
+  fixture.failure = '记忆模型返回了无效的结构化结果'
+  service.enqueueLearning('assistant', '我偏好中文', 'failed-turn')
+  await vi.advanceTimersByTimeAsync(300000)
+  await vi.waitFor(() => expect(service.status().state).toBe('error'))
+  expect(service.status().pending).toBe(1)
+  const count = fixture.children.length
+  service.resume('foreground'); service.reclaim()
+  await vi.advanceTimersByTimeAsync(600000)
+  expect(fixture.children).toHaveLength(count)
+  fixture.failure = ''; service.retryLearning()
+  await vi.waitFor(() => expect(fixture.writes).toEqual(['我偏好中文']))
+  expect(service.status().error).toBeUndefined()
+  expect(service.status().pending).toBe(0)
+  fixture.failure = '记忆模型返回了无效的结构化结果'
+  service.enqueueLearning('assistant', '我住杭州', 'another-failed-turn')
+  await vi.advanceTimersByTimeAsync(300000)
+  await vi.waitFor(() => expect(service.status().state).toBe('error'))
+  settings.memory.enabled = false; await service.configure()
+  expect(service.status()).toMatchObject({ state: 'off', error: undefined, pending: 0 })
 })
 it('serializes management writes and clears pending learning before deletion', async () => {
   service.enqueueLearning('assistant', '我在杭州工作', 'turn-1')

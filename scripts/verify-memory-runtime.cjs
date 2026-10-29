@@ -31,11 +31,12 @@ async function start(catalogOnly = false) {
       llmCalls++
       const oldFact = '用户要求写作使用简短句子', newFact = '用户现在明确要求写作详细展开，替代之前的简短偏好'
       const responses = [
-        { facts: [oldFact] }, { memory: [{ id: '0', text: oldFact, event: 'ADD' }] },
+        { facts: [oldFact] }, { memory: [{ id: '0', text: oldFact, event: 'ADD' }, { id: '1', event: 'NONE' }] },
         { facts: [newFact] }, { memory: [{ id: '0', text: newFact, event: 'UPDATE', old_memory: oldFact }] },
-        { facts: ['用户不再有写作长度偏好'] }, { memory: [{ id: '0', text: newFact, event: 'DELETE' }] }
+        { facts: ['用户不再有写作长度偏好'] }, { memory: [{ id: '0', event: 'DELETE' }] }
       ]
-      const text = JSON.stringify(responses[llmCalls - 1])
+      const json = JSON.stringify(responses[llmCalls - 1])
+      const text = llmCalls === 1 ? '提取结果：\n```json\n' + json + '\n```' : json
       child.postMessage({ type: 'llm-result', id: message.id, text }); return
     }
     const request = pending.get(message.id); pending.delete(message.id)

@@ -7,6 +7,7 @@ import { complete } from '../providers/llm'
 import { chainFor } from '../providers/chain'
 import { downloadMemoryModel, memoryModelReady } from './model'
 import { personalMemoryQuery } from '@shared/memory-policy'
+import { memoryCompletion, MemoryReplyError } from './completion'
 
 export class MemoryService implements MemoryBackend {
   private child: UtilityProcess | null = null
@@ -35,8 +36,8 @@ export class MemoryService implements MemoryBackend {
   learningToken(): number { return this.learningEpoch }
   status(): MemoryStatus { return { ...this.current, state: this.current.state === 'downloading' ? 'downloading' : !this.settings().memory.enabled ? 'off' : this.paused ? 'paused' : this.current.state === 'idle' && this.queue.length ? 'waiting' : this.current.state, pending: this.queue.length } }
   async configure(): Promise<void> {
-    if (!this.settings().memory.enabled) { this.learningEpoch++; this.queue = []; this.stop(); this.download?.abort(); return }
-    if (!this.settings().memory.autoLearn) { this.learningEpoch++; this.queue = []; if (this.working) this.stop() }
+    if (!this.settings().memory.enabled) { this.learningEpoch++; this.queue = []; this.stop(); this.download?.abort(); this.current.error = undefined; this.current.state = 'off'; return }
+    if (!this.settings().memory.autoLearn) { this.learningEpoch++; this.queue = []; if (this.working) this.stop(); if (this.current.modelReady) this.current.error = undefined }
     if (this.download) return
     if (!this.current.modelReady) this.current.modelReady = await memoryModelReady(this.modelDir)
     this.current.state = this.current.modelReady ? 'idle' : 'off'
@@ -72,13 +73,15 @@ export class MemoryService implements MemoryBackend {
       if (this.child !== child) return
       if (message.type === 'llm') {
         const at = performance.now(), signal = this.llmAbort.signal
-        this.log(`[memory] llm_call=${++this.llmCalls} request=${message.id}`)
         const settings = this.settings(), profile = chainFor(settings, 'llm')[0]
         if (!settings.memory.enabled || this.paused || !profile) { child.postMessage({ type: 'llm-result', id: message.id, error: 'Memory learning unavailable' }); return }
-        void complete({ ...settings.polish, ...profile }, { messages: message.messages, signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]), effort: 'off',
-          onUsage: usage => this.log(`[memory] tokens input=${usage.inputTokens} output=${usage.outputTokens}`) })
+        void memoryCompletion(message.messages, message.kind === 'memory' ? 'memory' : 'facts', signal, messages => {
+          this.log(`[memory] llm_call=${++this.llmCalls} request=${message.id}`)
+          return complete({ ...settings.polish, ...profile }, { messages, temperature: 0, signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]), effort: 'off',
+            onUsage: usage => this.log(`[memory] tokens input=${usage.inputTokens} output=${usage.outputTokens}`) })
+        })
           .then(text => { if (this.child === child && !signal.aborted) child.postMessage({ type: 'llm-result', id: message.id, text }) })
-          .catch(() => { if (this.child === child) child.postMessage({ type: 'llm-result', id: message.id, error: 'Memory model request failed' }) })
+          .catch(error => { if (this.child === child) child.postMessage({ type: 'llm-result', id: message.id, error: error instanceof MemoryReplyError ? '记忆模型返回了无效的结构化结果' : 'Memory model request failed' }) })
           .finally(() => this.log(`[memory] llm_ms=${Math.round(performance.now() - at)}`))
         return
       }
@@ -121,15 +124,21 @@ export class MemoryService implements MemoryBackend {
     this.schedule()
   }
   private schedule(): void {
+    if (this.current.state === 'error') return
     if (this.timer) clearTimeout(this.timer)
     this.timer = setTimeout(() => { this.timer = null; void this.learn() }, 30000); this.timer.unref()
+  }
+  retryLearning(): void {
+    if (!this.settings().memory.enabled || !this.settings().memory.autoLearn || this.working || this.mutating) return
+    this.current.error = undefined; this.current.state = this.queue.length ? 'waiting' : 'idle'
+    if (this.queue.length) void this.learn()
   }
   private async learn(): Promise<void> {
     if (!this.queue.length || this.paused || !this.settings().memory.enabled || !this.settings().memory.autoLearn || !this.current.modelReady) return
     if (this.busy() || this.working || this.mutating || !this.idleEnough() || (this.queue.length < 3 && Date.now() - this.queue[0].at < 5 * 60000)) { this.schedule(); return }
     const generation = this.generation, batch = this.queue.splice(0, 3)
     this.learningBatch = batch
-    this.working = true; this.current.state = 'working'
+    this.working = true; this.current.state = 'working'; this.current.error = undefined
     try {
       for (const kind of ['assistant', 'style'] as const) {
         const items = batch.filter(row => row.kind === kind)
@@ -138,8 +147,8 @@ export class MemoryService implements MemoryBackend {
         this.learningBatch = this.learningBatch.filter(row => row.kind !== kind)
       }
       this.current.state = 'idle'; this.current.error = undefined
-    } catch (error) { if (generation === this.generation) { this.current.state = 'error'; this.current.error = error instanceof Error ? error.message : '记忆学习未完成，请检查模型连接' } }
-    finally { this.learningBatch = []; this.working = false; if (generation === this.generation) this.stop(); if (this.queue.length && !this.paused) this.schedule() }
+    } catch (error) { if (generation === this.generation) { this.queue = [...this.learningBatch, ...this.queue].slice(-30); this.current.state = 'error'; this.current.error = error instanceof Error ? error.message : '记忆学习未完成，请检查模型连接' } }
+    finally { this.learningBatch = []; this.working = false; if (generation === this.generation) this.stop(); if (this.queue.length && !this.paused && this.current.state !== 'error') this.schedule() }
   }
   async list(kind: MemoryKind): Promise<MemoryEntry[]> {
     if (!this.current.modelReady) this.current.modelReady = await memoryModelReady(this.modelDir)

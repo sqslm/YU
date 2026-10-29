@@ -68,6 +68,7 @@ export interface TypelessApi {
     cancel(): Promise<void>
   }
   memory: {
+    retryLearning(): Promise<void>
     status(): Promise<import('./memory').MemoryStatus>
     download(): Promise<void>
     cancelDownload(): Promise<void>
