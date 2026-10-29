@@ -1,4 +1,6 @@
 import { MemoryService } from './memory/host'
+import { ChatService } from './chat'
+import { explainSelection } from './explanation'
 import { setMemoryService } from './memory/registry'
 import { memoryIdleCheck } from './memory/idle'
 import { onboardingCapabilities } from '@shared/onboarding'
@@ -86,6 +88,7 @@ import {
   applyHubTheme,
   createBarWindow,
   createCardWindow,
+  setCardExplanationOpen,
   closeLoginWindow,
   createSettingsWindow,
   openLoginWindow,
@@ -147,6 +150,10 @@ let sync: SyncEngine | null = null
 const stats = new StatsStore()
 
 let settingsWindow: BrowserWindow | null = null
+const chats = new ChatService(join(app.getPath('userData'), 'chats.db'), () => store.get(), event => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
+})
+let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
 let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
@@ -690,6 +697,7 @@ async function reclaimGameResources(): Promise<void> {
 function applyGameMode(status: GameModeStatus): void {
   log(`[game-mode] ${status.active ? 'entered' : 'left'} source=${status.source} game=${status.game}`)
   if (status.active) {
+    chats.cancel(); explanationController?.abort()
     hotkeys?.stop()
     refreshWakeWord()
     cancelAssistant()
@@ -1068,6 +1076,7 @@ function ensureCardWindow(): BrowserWindow {
   cardWindow = win
   win.on('closed', () => {
     if (cardWindow !== win) return
+    explanationController?.abort(); explanationController = null
     cardVoice.cancel()
     cardWindow = null
     pendingCard = null
@@ -1079,6 +1088,8 @@ function ensureCardWindow(): BrowserWindow {
     if (assistantCardActive) cancelAssistant()
   })
   win.on('hide', () => {
+    explanationController?.abort(); explanationController = null
+    setCardExplanationOpen(win, false)
     win.webContents.send('card:hidden')
     // Anything queued for a card the user already dismissed is stale; the next
     // answer sends its own payload the moment the window is shown again.
@@ -1254,6 +1265,31 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  const chatOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从语聊天页操作对话') }
+  handle('chat:list', event => { chatOwner(event); return chats.list() })
+  handle('chat:get', (event, id: string, limit?: number) => { chatOwner(event); return chats.get(id, limit) })
+  handle('chat:create', (event, group: string | null) => { chatOwner(event); return chats.create(group) })
+  handle('chat:edit', (event, input: import('@shared/chat').ChatEdit) => { chatOwner(event); return chats.edit(input) })
+  handle('chat:send', async (event, id: string, text: string) => {
+    chatOwner(event)
+    if (gameMode.snapshot().active) throw Error('游戏模式下已暂停聊天生成')
+    return chats.send(id, text)
+  })
+  handle('chat:cancel', event => { chatOwner(event); chats.cancel() })
+  handle('card:explain', async (event, term: string) => {
+    if (event.sender !== cardWindow?.webContents || !lastAnswer || gameMode.snapshot().active) throw Error('请从回答卡片解释选中的内容')
+    explanationController?.abort()
+    const controller = new AbortController(); explanationController = controller
+    const snapshot = lastAnswer
+    if (cardWindow) setCardExplanationOpen(cardWindow, true)
+    try { return await explainSelection(store.get(), term, snapshot.question, snapshot.answer, controller.signal) }
+    finally { if (explanationController === controller) explanationController = null }
+  })
+  subscribe('card:explanation-close', event => {
+    if (event.sender !== cardWindow?.webContents) return
+    explanationController?.abort(); explanationController = null
+    if (cardWindow) setCardExplanationOpen(cardWindow, false)
+  })
   const quota = new QuotaService(() => store.get())
   const quotaOwner = (event: Electron.IpcMainInvokeEvent): void => {
     if (event.sender !== settingsWindow?.webContents) throw Error('请从主界面或设置查询额度')
@@ -2689,6 +2725,7 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    chats.close(); explanationController?.abort()
     quitting = true
     gameMode.stop()
     if (gameResourceTimer) clearInterval(gameResourceTimer)

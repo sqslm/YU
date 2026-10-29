@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, ListSubheader, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { workflowToolGroups } from '@shared/workflow-tool-groups'
 import { MAX_WORKFLOW_NAME, MAX_WORKFLOW_STEPS, normalizeWorkflowName, normalizeWorkflowSteps, removeWorkflowStep, type Workflow, type WorkflowStep, type WorkflowTool } from '@shared/workflow'
 import { registerGameModePreparation } from '../gameModePreparation'
 import i18n from '../../i18n'
@@ -73,7 +74,7 @@ export function WorkflowEditor({ workflow, close, saved }: { workflow: Workflow 
             <Button size="small" disabled={busy || steps.length === 1} onClick={() => { try { setSteps(removeWorkflowStep(values(), index)); setAdvanced({}); setError('') } catch (error) { setError(error instanceof SyntaxError ? i18n.t('高级参数不是有效的 JSON，请检查后保存') : String(error).replace(/^Error: /, '')) } }}>{i18n.t('删除步骤')}</Button></Stack>
           <TextField select size="small" label={i18n.t('操作')} value={step.tool} disabled={busy} onChange={event => { update(index, { tool: event.target.value, args: {}, label: '', when: undefined, otherwise: undefined }); setAdvanced(old => { const next = { ...old }; delete next[index]; return next }) }}>
             {!definition && <MenuItem value={step.tool}>{toolLabel(step.tool)}</MenuItem>}
-            {tools.map(tool => <MenuItem key={tool.name} value={tool.name}>{toolLabel(tool.name)}</MenuItem>)}
+            {workflowToolGroups(tools).flatMap(group => [<ListSubheader key={group.name} sx={{ fontSize: 11, lineHeight: '30px', color: 'text.secondary', bgcolor: 'background.paper' }}>{i18n.t(group.name)}</ListSubheader>, ...group.tools.map(tool => <MenuItem key={tool.name} value={tool.name} sx={{ pl: 3 }}>{toolLabel(tool.name)}</MenuItem>)])}
           </TextField>
           <TextField size="small" label={i18n.t('步骤说明')} value={step.label} disabled={busy} placeholder={toolLabel(step.tool)} onChange={event => update(index, { label: event.target.value })} />
           {advanced[index] === undefined && Object.entries(properties).map(([key, field]) => {

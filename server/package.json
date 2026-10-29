@@ -1,6 +1,6 @@
 {
   "name": "typeless-server",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "license": "MIT",
   "private": true,
   "description": "Self-hosted account, notes-sync and audio server for YU",

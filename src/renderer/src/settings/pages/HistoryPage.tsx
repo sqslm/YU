@@ -66,6 +66,10 @@ import i18n from '../../i18n'
 import { Pager } from '../Pagination'
 import { MarkdownView } from '../../card/MarkdownView'
 import { HistorySources } from './HistorySources'
+import { UsageInsights } from './UsageInsights'
+import type { StatsFile } from '@shared/stats'
+import { DEFAULT_SETTINGS } from '@shared/defaults'
+import { useTheme } from '@mui/material'
 
 /** The tabs above the list, left to right. Captions come from historyView. */
 const FILTERS: HistoryFilterId[] = ['all', 'dictation', 'ask', 'translate']
@@ -128,6 +132,9 @@ interface HistoryPageProps {
 }
 
 export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps = {}): JSX.Element {
+  const themeMode = useTheme().palette.mode
+  const [heatStats, setHeatStats] = useState<StatsFile | null>(null)
+  const [heatError, setHeatError] = useState('')
   const [entries, setEntries] = useState<HistoryEntry[]>([])
   const [filter, setFilter] = useState<'all' | Mode>('all')
   /**
@@ -199,6 +206,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   const inFlight = useRef(false)
   const queuedSearch = useRef<string | null>(null)
   const reload = useCallback(async (search: string) => {
+    void window.api.stats?.get().then(value => { setHeatStats(value); setHeatError('') }).catch(() => setHeatError(i18n.t('活动统计暂时无法读取')))
     queuedSearch.current = search
     if (inFlight.current) return
     inFlight.current = true
@@ -477,6 +485,11 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
 
   return (
     <Box sx={{ px: { xs: 2.5, md: 4 }, py: 4 }}>
+      <Box component="section" aria-label={i18n.t('输入活动热力图')} sx={{ mb: 2.5 }}>
+        <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>{i18n.t('输入活动 · 最近 52 周')}<Box component="span" sx={{ ml: 1, fontSize: 10.5 }}>{i18n.t('累计使用量，不随下方筛选或清空历史改变')}</Box></Typography>
+        {heatStats && <UsageInsights view="heat" settings={settings ?? DEFAULT_SETTINGS} mode={themeMode} stats={heatStats} entries={entries} now={Date.now()} onOpenHistory={() => {}} />}
+        {heatError && <Alert severity="warning">{heatError}</Alert>}
+      </Box>
       {/* Toolbar: actions only. The heading lives in the section header below, so
           the page prints 历史记录 exactly once. */}
       <Box
@@ -836,7 +849,6 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                 <Box
                   key={entry.id}
                   data-history-row={entry.id}
-                  title={providerTitle(entry) ?? undefined}
                   sx={{
                     px: 2,
                     py: 1.5,
@@ -902,6 +914,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                       >
                         {cardCaption}
                       </Typography>
+                      {entry.providerName && <Typography component="span" noWrap title={providerTitle(entry) ?? undefined} sx={{ fontSize: 10.5, color: 'text.secondary', maxWidth: 100 }}>{entry.providerName}</Typography>}
                       {label && tone && (
                         <Chip
                           size="small"
@@ -984,6 +997,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                         size="small"
                         variant="text"
                         aria-label={i18n.t(i18n.t('反馈'))}
+                        title={i18n.t('反馈本条结果的问题，保存到本机日志')}
                         sx={{
                           minWidth: 0,
                           px: 0.9,
@@ -999,6 +1013,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                       <IconButton
                         size="small"
                         aria-label={i18n.t(i18n.t('复制'))}
+                        title={i18n.t('复制本条结果')}
                         disabled={!entry.final}
                         sx={{
                           color: 'text.secondary',
@@ -1019,11 +1034,13 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                         {copiedId === entry.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
                       </IconButton>
                       <Button size="small" data-history-save-note={entry.id} sx={{ minWidth: 0, px: 0.75, fontSize: 11 }}
+                        title={i18n.t('将本条结果保存为随记')}
                         disabled={saveNoteId !== null || savedNoteIds.has(entry.id) || !entry.final.trim() || !!entry.error?.trim() || !['completed', 'archived'].includes(statusOf(entry))}
                         onClick={() => void saveToNotes(entry)}>{i18n.t(saveNoteId === entry.id ? '保存中…' : savedNoteIds.has(entry.id) ? '已保存到随记' : '保存到随记')}</Button>
                       <IconButton
                         size="small"
                         aria-label={archived ? i18n.t('取消归档') : i18n.t('归档')}
+                        title={i18n.t(archived ? '恢复到未归档记录' : '归档后可在筛选中查看，不会删除')}
                         data-history-archive={entry.id}
                         sx={{
                           color: 'text.secondary',
@@ -1040,6 +1057,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                       <IconButton
                         size="small"
                         aria-label={i18n.t(i18n.t('删除'))}
+                        title={i18n.t('删除本条记录和保留的录音')}
                         sx={{
                           color: 'text.secondary',
                           '&:hover': { color: 'error.main', bgcolor: 'action.hover' }

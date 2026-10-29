@@ -4,7 +4,7 @@
  */
 import i18n from '../../i18n'
 import type { HistoryEntry } from '@shared/types'
-import { statsDayKey, type StatsFile } from '@shared/stats'
+import { contributionOf, statsDayKey, type StatsFile } from '@shared/stats'
 import { isUsageEntry } from '@shared/stats'
 import { speakingWpm } from '@shared/count'
 
@@ -118,8 +118,9 @@ export function bucketDays(entries: HistoryEntry[], range: number, now = Date.no
     const bucket = index.get(startOfDay(item.createdAt))
     if (!bucket) continue
     bucket.count += 1
-    bucket.chars += item.final?.length ?? 0
-    bucket.ms += item.durationMs || 0
+    const { totals } = contributionOf(item)
+    bucket.chars += totals.units
+    bucket.ms += totals.usedMs
   }
   return days
 }
@@ -148,7 +149,7 @@ export function bucketFromStats(stats: StatsFile, range: number, now = Date.now(
   return bucketDays([], range, now).map((day) => {
     const cell = stats.days[day.key]
     return cell
-      ? { ...day, count: cell.entries, chars: cell.len, ms: cell.ms }
+      ? { ...day, count: cell.entries, chars: cell.units, ms: cell.usedMs }
       : day
   })
 }

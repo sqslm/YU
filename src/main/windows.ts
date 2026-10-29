@@ -418,7 +418,12 @@ function placeCard(win: BrowserWindow): void {
   if (win.isDestroyed()) return
   const bar = currentBarBounds()
   const [width, height] = win.getSize()
-  const rect = cardRect({ width, height, bar, workArea: workAreaFor(bar) })
+  const area = workAreaFor(bar)
+  const rect = cardRect({ width, height, bar, workArea: area })
+  if (explanationCards.has(win)) {
+    const base = cardRect({ width: CARD_WIDTH, height, bar, workArea: area })
+    rect.x = Math.max(area.x + 8, Math.min(base.x, area.x + area.width - width - 8))
+  }
   win.setPosition(rect.x, rect.y, false)
 }
 
@@ -449,8 +454,9 @@ export function resizeCardToContent(card: BrowserWindow, height: number): void {
   const next = clampCardHeight(height)
   lastCardHeight = next
   const [width, current] = card.getSize()
-  if (width !== CARD_WIDTH || current !== next) {
-    card.setSize(CARD_WIDTH, next, false)
+  const desiredWidth = explanationWidth(card)
+  if (width !== desiredWidth || current !== next) {
+    card.setSize(desiredWidth, next, false)
   }
   placeCard(card)
 }
@@ -466,10 +472,20 @@ export function resizeCardToContent(card: BrowserWindow, height: number): void {
 export function positionCardWindow(win: BrowserWindow): void {
   if (win.isDestroyed()) return
   const [width, height] = win.getSize()
-  if (width !== CARD_WIDTH || height !== lastCardHeight) {
-    win.setSize(CARD_WIDTH, lastCardHeight, false)
+  const desiredWidth = explanationWidth(win)
+  if (width !== desiredWidth || height !== lastCardHeight) {
+    win.setSize(desiredWidth, lastCardHeight, false)
   }
   placeCard(win)
+}
+
+const explanationCards = new WeakSet<BrowserWindow>()
+function explanationWidth(win: BrowserWindow): number { return explanationCards.has(win) ? Math.min(CARD_WIDTH + 312, Math.max(CARD_WIDTH, workAreaFor(currentBarBounds()).width - 16)) : CARD_WIDTH }
+export function setCardExplanationOpen(win: BrowserWindow, open: boolean): void {
+  if (win.isDestroyed()) return
+  if (open) explanationCards.add(win); else explanationCards.delete(win)
+  win.setMaximumSize(open ? CARD_WIDTH + 312 : CARD_WIDTH, CARD_MAX_HEIGHT)
+  positionCardWindow(win)
 }
 
 /**

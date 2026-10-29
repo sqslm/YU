@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.2.0-rc.3**, Windows 10/11 x64, MIT.
+> Current version **1.2.0-rc.4**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -46,7 +46,11 @@ Screenshot QR scanning: select the entire code, including a clear border, then c
 
 ## Screens
 
-The overview opens with today’s character count, recording duration and speaking rate. Today's agenda, to-dos, briefing, and recent activity take priority. Complete a to-do directly, see dates on deadlines, and expand Usage statistics for input trends, the heat map, and app usage. Failed reads show their cause and a retry action while keeping loaded content available.
+Overview remains the default landing page. The top card switches between today's metrics and a 7/30-day bar chart, popular apps sit in the footer, and agenda, to-dos, briefing and recent activity occupy the middle. Common window sizes fit one screen; busy cards scroll internally. The old expandable Usage statistics section is removed. The lifetime input heatmap now appears above History and is unaffected by history filters or deletion.
+
+The new YU navigation entry above Overview opens persistent local chat. Conversations and groups live in the user's `chats.db`, with rename, group moves and deletion; deleting a group ungroups its conversations. The first successful reply triggers one extra LLM call for its title. Naming failures fall back to a short opening-message summary, and manual names always win. Context is isolated per conversation and bounded to ten completed turns / 24,000 characters, plus the current message. Generation can be stopped; errors and interruptions remain visible and recover after restart. Chats reuse configured web search, weather, time and calculation, and the existing Ask memory policy. Other conversations and old history are not scanned. Starting with “temporary chat” disables memory for later messages in that conversation, including after restart; the local chat transcript is still retained. New conversations use the normal memory policy.
+
+Selected answer text has a context menu for copy, select-all, link copy and Explain. Explain opens an attached one-time sidebar with a frozen snapshot of the current question and nearby answer. It invokes no tools and writes neither conversation history nor long-term memory. Changing the answer or closing the sidebar/card cancels its request; the original card width is restored on close. History actions now have individual descriptions, and workflow operations are grouped by purpose.
 
 The top strip separates today's three metrics from lifetime word count, successful records and active days, with a divider and no repeated heading. CJK characters count individually; other words use built-in `Intl.Segmenter` / [ICU word boundaries](https://unicode-org.github.io/icu/userguide/boundaryanalysis/), excluding punctuation. Pace is the sum of raw-ASR units divided by matching recording time, excluding samples under one second. Generated answers never inflate pace. Legacy aggregates without raw samples retain totals but do not produce an estimated pace. Invalid dates and non-finite, negative or fractional counters are rejected.
 
@@ -267,7 +271,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.2.0-rc.3`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.2.0-rc.4`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 

@@ -15,6 +15,8 @@ import type { ThemeMode } from '@shared/types'
 import { useSettings } from './useSettings'
 import { SettingsDialog } from './SettingsDialog'
 import { HomePage } from './pages/Home'
+import { ChatPage } from './pages/ChatPage'
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded'
 import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
 import { RemindersPage } from './pages/RemindersPage'
@@ -37,10 +39,11 @@ import { MissedReminders } from './MissedReminders'
 import { UpdatePill } from './UpdatePill'
 import { QuotaProvider, QuotaSidebar } from './Quota'
 
-type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'briefing' | 'calendar'
+type Page = 'chat' | 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'briefing' | 'calendar'
 
 /** Label keys resolve through i18next; the ids stay stable for routing. */
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
+  { id: 'chat', labelKey: '语', icon: <ChatBubbleOutlineRounded sx={{ fontSize: 18 }} /> },
   { id: 'home', labelKey: 'nav.home', icon: <IconChart /> },
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
@@ -54,6 +57,8 @@ export function App(): JSX.Element {
   const { settings, patch, saving, error, flush } = useSettings()
   useEffect(() => window.api.app.onPrepareForGameMode(prepareForGameMode), [])
   const [page, setPage] = useState<Page>('home')
+  const [chatVisited, setChatVisited] = useState(false)
+  useEffect(() => { if (page === 'chat') setChatVisited(true) }, [page])
   const [reminderView, setReminderView] = useState<ReminderView | null>(null)
   const [noteToOpen, setNoteToOpen] = useState<{ id: string } | undefined>()
   useEffect(() => {
@@ -277,7 +282,10 @@ export function App(): JSX.Element {
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ height: 40, flex: '0 0 auto' }} />
           <MissedReminders />
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{body()}</Box>
+          <Box sx={{ flex: 1, minHeight: 0, overflow: page === 'home' || page === 'chat' ? 'hidden' : 'auto' }}>
+            {page !== 'chat' && body()}
+            {(page === 'chat' || chatVisited) && <Box sx={{ display: page === 'chat' ? 'block' : 'none', height: '100%' }}><ChatPage onModels={() => { setSettingsSection('models'); setSettingsOpen(true) }} /></Box>}
+          </Box>
         </Box>
       </Box>
 

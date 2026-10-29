@@ -26,8 +26,8 @@ function entry(at: number, chars: number, ms: number): HistoryEntry {
     id: `id-${at}`,
     createdAt: at,
     mode: 'dictation',
-    transcript: 'x'.repeat(chars),
-    final: 'x'.repeat(chars),
+    transcript: '字'.repeat(chars),
+    final: '字'.repeat(chars),
     durationMs: ms,
     app: 'Notepad'
   }
@@ -291,11 +291,11 @@ describe('lifetime rollup parity', () => {
     const stats = statsFromEntries(rows)
 
     expect(todayFromStats(stats, NOON)).toEqual({
-      chars: 2,
+      chars: 14,
       spoken: 6000,
       segments: 2,
       average: 3000,
-      pace: 20
+      pace: 140
     })
     expect(bucketFromStats(stats, 7, NOON)).toEqual(bucketDays(rows, 7, NOON))
     expect(heatFromStats(stats, new Date(NOON))).toEqual(heatWeeks(rows, new Date(NOON)))
@@ -306,7 +306,7 @@ describe('lifetime rollup parity', () => {
     const stats = statsFromEntries(rows)
 
     // 清空历史 removes the rows; the rollup is all the page has left.
-    expect(todayFromStats(stats, NOON).chars).toBe(2)
+    expect(todayFromStats(stats, NOON).chars).toBe(14)
     expect(bucketFromStats(stats, 7, NOON).reduce((sum, day) => sum + day.count, 0)).toBe(3)
     expect(heatFromStats(stats, new Date(NOON)).activeDays).toBe(2)
     expect(streakFromStats(stats, NOON).current).toBe(2)

@@ -56,6 +56,15 @@ export interface UpdateState {
 }
 
 export interface TypelessApi {
+  chat: {
+    list(): Promise<import('./chat').ChatIndex>
+    get(id: string, limit?: number): Promise<import('./chat').ChatDetail>
+    create(groupId?: string | null): Promise<import('./chat').ChatDetail>
+    edit(input: import('./chat').ChatEdit): Promise<void>
+    send(id: string, text: string): Promise<void>
+    cancel(): Promise<void>
+    onEvent(callback: (event: import('./chat').ChatEvent) => void): () => void
+  }
   quota: {
     query(target: import('./quota').QuotaTarget): Promise<import('./quota').QuotaResult>
     refresh(): Promise<void>
@@ -497,6 +506,8 @@ export interface TypelessApi {
   }
   /** Answer card window (Ask Anything results). */
   card: {
+    explain(text: string): Promise<string>
+    closeExplanation(): void
     beginVoice(): Promise<string | null>
     cancelVoice(id: string): void
     transcribeVoice(id: string, wav: Uint8Array): Promise<string>

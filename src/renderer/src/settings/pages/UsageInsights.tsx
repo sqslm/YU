@@ -21,6 +21,7 @@ import { appColor, piePercentages } from './pie'
 import i18n, { currentUiLanguage } from '../../i18n'
 
 interface UsageInsightsProps {
+  view?: 'chart' | 'heat' | 'apps'
   settings: Settings
   mode: 'dark' | 'light'
   entries: HistoryEntry[] | undefined
@@ -43,7 +44,7 @@ const METRIC_LABEL: Record<Metric, string> = {
   duration: '时长'
 }
 
-export function UsageInsights({ settings, mode, entries, stats, now, onOpenHistory }: UsageInsightsProps): JSX.Element {
+export function UsageInsights({ settings, mode, entries, stats, now, onOpenHistory, view }: UsageInsightsProps): JSX.Element {
   const t = palettes[mode]
   const [range, setRange] = useState<Range>(7)
   const [metric, setMetric] = useState<Metric>('count')
@@ -187,14 +188,15 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: 1
+        gap: 1,
+        height: view === 'chart' ? '100%' : undefined
       }}
     >
       {/* One strip, four numbers. Four separate tiles made the page read as a
           dashboard of dashboards; the three "today" numbers belong together, and
           the lifetime count answers a different question, so it sits behind a
           divider instead of in a tile of its own. */}
-      <Box
+      {!view && <Box
         data-today-stats
         sx={{ ...card, display: 'flex', alignItems: 'stretch', px: 2, py: 1.15, gap: 2, flexShrink: 0 }}
       >
@@ -282,29 +284,31 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
             {i18n.t('本机存档（上限 {{n}}）', { n: settings.historyLimit })}
           </Typography>
         </Box>
-      </Box>
+      </Box>}
 
 
       {/* Trend and lifetime insights share one band: both answer "how am I
           doing over time", and side by side they cost a row instead of two. */}
-      <Box
+      {(!view || view === 'chart') && <Box
         data-home-trend
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.6fr) minmax(0, 1fr)' },
+          gridTemplateColumns: view ? '1fr' : { xs: '1fr', lg: 'minmax(0, 1.6fr) minmax(0, 1fr)' },
           gap: 1,
-          minHeight: 200,
+          minHeight: view ? 0 : 200,
+          height: view ? '100%' : undefined,
           flexShrink: 0
         }}
       >
         <Box
           sx={{
             ...card,
-            p: 1.5,
+            p: view ? .25 : 1.5,
+            border: view ? 0 : undefined,
             flex: 1,
             // Bars are drawn as a percentage of this card, so a card squeezed
             // to 120 px renders bars shorter than their own labels.
-            minHeight: 186,
+            minHeight: view ? 0 : 186,
             display: 'flex',
             flexDirection: 'column'
           }}
@@ -333,7 +337,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
             </Box>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
+          <Box sx={{ display: view ? 'none' : 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
             <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8 }}>
               {chart.total}
             </Typography>
@@ -349,7 +353,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
               // Grows to fill the card so the chart's baseline lines up with the
               // bottom of the neighbouring list instead of leaving a dead band.
               flex: 1,
-              minHeight: 96,
+              minHeight: view ? 60 : 96,
               display: 'flex',
               alignItems: 'flex-end',
               gap: range === 7 ? 1.75 : 0.4,
@@ -482,7 +486,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
 
         {/* Lifetime numbers, not today's: these are the ones that make the
             habit feel worth keeping. */}
-        <Box sx={{ ...card, px: 1.75, py: 1.25, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {!view && <Box sx={{ ...card, px: 1.75, py: 1.25, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography sx={{ fontSize: 11.5, color: t.textDim }}>{i18n.t(i18n.t('使用洞察'))}</Typography>
             <Button
@@ -561,14 +565,14 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
               </Box>
             ))}
           </Box>
-        </Box>
-      </Box>
+        </Box>}
+      </Box>}
 
       {/* The year in one picture, with no caption: the four numbers above already
           say what period this is, and a 少→多 swatch row only repeated the five
           shades the cells themselves make obvious. Cells are sized to the card so
           the grid fills it edge to edge instead of hugging the left. */}
-      <Box sx={{ ...card, px: 1.5, py: 1.25, flexShrink: 0 }}>
+      {(!view || view === 'heat') && <Box sx={{ ...card, px: 1.5, py: 1.25, flexShrink: 0 }}>
         <Box ref={heatBoxRef} sx={{ display: 'flex', gap: 1, minWidth: 0, overflowX: 'auto' }}>
           <Box
             sx={{
@@ -665,9 +669,9 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
             </Box>
           </Box>
         </Box>
-      </Box>
+      </Box>}
 
-      <Box data-app-scenes sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 22, flexShrink: 0 }}>
+      {(!view || view === 'apps') && <Box data-app-scenes sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 22, flexShrink: 0 }}>
         <Tooltip title={i18n.t('按产生文字的记录统计 · 点击查看')}>
           <Typography data-app-share-hint tabIndex={0} sx={{ fontSize: 10.5, color: t.textDim, flexShrink: 0 }}>{i18n.t('热门场景')}</Typography>
         </Tooltip>
@@ -715,7 +719,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
             '&:hover': { color: t.text, borderColor: t.textFaint, bgcolor: t.surfaceHi } }}>
           <IconChart size={11} />{i18n.t('分布')}
         </Button>
-      </Box>
+      </Box>}
 
       {/* Portalled, so it is declared here and paints over the whole window. */}
       <AppShareDialog

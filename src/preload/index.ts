@@ -17,6 +17,12 @@ ipcRenderer.on('card:data', (_event, payload: AnswerCardPayload) => { lastCard =
 ipcRenderer.on('card:hidden', () => { lastCard = null })
 
 const api: TypelessApi = {
+  chat: {
+    list: () => ipcRenderer.invoke('chat:list'), get: (id, limit) => ipcRenderer.invoke('chat:get', id, limit),
+    create: group => ipcRenderer.invoke('chat:create', group ?? null), edit: input => ipcRenderer.invoke('chat:edit', input),
+    send: (id, text) => ipcRenderer.invoke('chat:send', id, text), cancel: () => ipcRenderer.invoke('chat:cancel'),
+    onEvent: callback => { const listener = (_event: Electron.IpcRendererEvent, event: import('@shared/chat').ChatEvent): void => callback(event); ipcRenderer.on('chat:event', listener); return () => ipcRenderer.removeListener('chat:event', listener) }
+  },
   quota: {
     query: target => ipcRenderer.invoke('quota:query', target),
     refresh: () => ipcRenderer.invoke('quota:refresh')
@@ -435,6 +441,8 @@ const api: TypelessApi = {
   // Every renderer shares this one preload, so the card page gets the same
   // bridge — `window.api.card` is what AnswerCard.tsx subscribes to.
   card: {
+    explain: text => ipcRenderer.invoke('card:explain', text),
+    closeExplanation: () => ipcRenderer.send('card:explanation-close'),
     beginVoice: () => ipcRenderer.invoke('card:voice-begin'),
     cancelVoice: id => ipcRenderer.send('card:voice-cancel', id),
     transcribeVoice: (id, wav) => ipcRenderer.invoke('card:voice-transcribe', id, wav),

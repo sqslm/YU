@@ -8,6 +8,7 @@ import { MarkdownView } from './MarkdownView'
 import i18n, { applyUiLanguage } from '../i18n'
 import { answerNote } from './answerNote'
 import { useVoiceQuestion } from './useVoiceQuestion'
+import { AnswerSelection } from './AnswerSelection'
 
 /** Entrance/exit timings shared with the bar's own "appear" language. */
 const ENTER_MS = 200
@@ -80,6 +81,7 @@ function bridge(): CardBridge {
 export function AnswerCard(): JSX.Element | null {
   useTranslation()
   const [data, setData] = useState<AnswerCardPayload | null>(null)
+  const [explanationOpen, setExplanationOpen] = useState(false)
   const [entering, setEntering] = useState(false)
   const [closing, setClosing] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
@@ -214,7 +216,7 @@ export function AnswerCard(): JSX.Element | null {
       focusedRef.current = true
     }
     const onBlur = (): void => {
-      if (pinned || pending !== null || data?.streaming || voice.recording || voice.working) return
+      if (pinned || explanationOpen || pending !== null || data?.streaming || voice.recording || voice.working) return
       if (!focusedRef.current || document.visibilityState === 'hidden') return
       focusedRef.current = false
       requestClose()
@@ -225,7 +227,7 @@ export function AnswerCard(): JSX.Element | null {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('blur', onBlur)
     }
-  }, [requestClose, pinned, pending, data?.streaming, voice.recording, voice.working])
+  }, [requestClose, pinned, explanationOpen, pending, data?.streaming, voice.recording, voice.working])
 
   // The window is sized by the main process, so the card reports the height its
   // content actually needs. `reportHeight` becomes `card:height` in the main
@@ -340,6 +342,7 @@ export function AnswerCard(): JSX.Element | null {
         ref={cardRef}
         style={{
           ...card,
+          width: explanationOpen ? 'calc(100% - min(312px, 40vw))' : '100%',
           minHeight: busy && followUpHeight.current ? Math.min(followUpHeight.current, window.innerHeight - STAGE_PADDING * 2) : undefined,
           animation: closing
             ? `cardOut ${EXIT_MS}ms cubic-bezier(.3,0,.6,1) both`
@@ -400,8 +403,10 @@ export function AnswerCard(): JSX.Element | null {
             <span style={answerTitle}>{i18n.t(data.selection ? '处理结果' : '回答')}</span>
           </div>
           <div style={answerBody} data-card-body>
+            <AnswerSelection snapshotKey={`${data.taskId ?? ''}:${data.question}:${answer}`} busy={busy} onOpen={setExplanationOpen}>
             <MarkdownView text={answer} streaming={streaming} sources={sourceList} copiedCode={copied}
               onCopyCode={busy ? undefined : (text, key) => runAction({ id: 'copy', label: i18n.t('复制代码'), payload: text }, key)} />
+            </AnswerSelection>
           </div>
           {items.length > 0 && <div data-card-items>
             {items.slice((safeItemPage - 1) * sourceSize, safeItemPage * sourceSize).map((item, index) => <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
