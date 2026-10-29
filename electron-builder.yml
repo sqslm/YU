@@ -15,6 +15,11 @@ files:
   - LICENSE
   - THIRD_PARTY_NOTICES.md
   - licenses/**
+  - '!node_modules/onnxruntime-node/bin/napi-v6/linux/**'
+  - '!node_modules/onnxruntime-node/bin/napi-v6/darwin/**'
+  - '!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**'
+  - '!node_modules/onnxruntime-web/dist/*.wasm'
+  - '!node_modules/onnxruntime-web/dist/*.map'
   - '!node_modules/pdfjs-dist/build/**'
   - '!node_modules/pdfjs-dist/web/**'
   - '!node_modules/pdfjs-dist/legacy/web/**'
@@ -43,6 +48,8 @@ asar: true
 # that lookup working in the installed build, which is what "这个版本没有带本地识别运行时"
 # used to report before they were shipped.
 asarUnpack:
+  - node_modules/better-sqlite3/**
+  - node_modules/onnxruntime-node/bin/napi-v6/win32/x64/**
   - node_modules/sherpa-onnx-node/**
   - node_modules/sherpa-onnx-win-x64/**
   - node_modules/koffi/**

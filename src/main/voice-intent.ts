@@ -87,6 +87,8 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false, operati
   const value = text.trim()
   if (cursorGeneration(value)) return { kind: 'dictation' }
   if (/^(?:(?:请|帮我|请帮我)\s*)?记住[，,:：\s]|^(?:please\s+)?remember\b/iu.test(value)) return { kind: 'assistant' }
+  if (/^(?:临时对话|这次不要记忆|不要记住这次对话|(?:请)?忘记记忆)[，,：:\s]|^(?:请)?(?:记住|忘记)(?:我|我的)/u.test(value)) return { kind: 'assistant' }
+  if (/^(?:temporary chat|private chat|(?:please )?forget)\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
   // The action inside a reminder is its content, not permission to perform it now.
   if (REMIND_ME_PREFIX.test(value) && isReminderCreationRequest(value) && !/然后|并且|同时|[,，;；]\s*(?:打开|帮我|读取|创建|保存)|\b(?:and then|then|also)\b/iu.test(value)) return { kind: 'reminder' }

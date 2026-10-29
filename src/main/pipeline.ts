@@ -1,3 +1,5 @@
+import { memoryService } from './memory/registry'
+import { memoryContext, type MemoryEntry } from '@shared/memory'
 import { withTaskTrace, traceTaskStage, recordTaskStage, finishTaskTrace } from './task-diagnostics'
 import { clipboard, type BrowserWindow } from 'electron'
 import { assistantAppExcluded } from '@shared/assistantAccess'
@@ -709,6 +711,7 @@ export class Pipeline {
     if (this.takePrompt.size > 8) this.takePrompt.clear()
     this.usedProvider = null
     this.stage = 'recording'
+    memoryService()?.pause('recording')
     this.wakeCapture = options.viaWake ? { speechMs: 0, silenceMs: 0, totalMs: 0, pending: [], pendingMs: 0 } : null
     this.stageMode = mode
     this.log(`[pipeline] start ${mode}${options.handsFree ? ' (hands-free)' : ''}`)
@@ -942,6 +945,7 @@ export class Pipeline {
     // before the flush discarded exactly the frames the flush produced — the last
     // syllable of every sentence.
     this.stage = 'working'
+    memoryService()?.resume('recording')
 
     // Playback comes back the moment the microphone closes: the user is reading
     // the result now, and holding their music hostage through a slow model call
@@ -979,6 +983,7 @@ export class Pipeline {
     this.asrCheck = null
     this.wakeCapture = null
     this.stage = 'idle'
+    memoryService()?.resume('recording')
     this.takeVoiceCommands = null
     this.takeSmartRouting = false
     this.chunks = []
@@ -1014,6 +1019,7 @@ export class Pipeline {
     this.asrCheck = null
     this.wakeCapture = null
     this.stage = 'idle'
+    memoryService()?.resume('recording')
     this.takeVoiceCommands = null
     this.takeSmartRouting = false
     const durationMs = Math.round(this.chunks.reduce((sum, chunk) => sum + chunk.length, 0) / SAMPLE_RATE * 1000)
@@ -1057,6 +1063,7 @@ export class Pipeline {
     const controller = nested ? this.abort! : new AbortController()
     this.abort = controller
     this.stage = 'working'
+    memoryService()?.resume('recording')
     this.stageMode = operation === 'translate' ? 'translate' : 'dictation'
     this.usedProvider = null
     const current = this.getSettings()
@@ -1277,6 +1284,7 @@ export class Pipeline {
     submittedAt = Date.now()
   ): Promise<HistoryEntry | null> {
     this.stage = 'working'
+    memoryService()?.resume('recording')
     this.stageMode = mode
     if (token !== this.runToken) {
       this.finishStage(token)
@@ -1339,6 +1347,7 @@ export class Pipeline {
       let tools: string[] = []
       let actions: CardAction[] = []
       let retrieval: AskRetrieval | undefined
+      let memories: MemoryEntry[] = [], memoryTemporary = false
 
       if (commands || smartRouting) {
         transcript = route === 'multimodal'
@@ -1533,6 +1542,7 @@ export class Pipeline {
         tools = outcome.tools ?? []
         actions = outcome.actions ?? []
         retrieval = outcome.retrieval
+        memories = outcome.memories ?? []; memoryTemporary = outcome.memoryTemporary ?? false
       } else if (route === 'multimodal' && !commands && (!smartRouting || mode === 'dictation')) {
         progress(mt('模型直接听写中…'))
         if (spokenMs > settings.multimodal.maxSeconds * 1000) {
@@ -1578,7 +1588,7 @@ export class Pipeline {
       this.countRuleHits(transcript, settings.replacements)
 
       if (mode === 'ask') {
-        this.showAnswer(final, question, sources, token, { tools, actions, retrieval })
+        this.showAnswer(final, question, sources, token, { tools, actions, retrieval, memories, memoryTemporary })
       } else {
         await this.insertInto(final, generated ? { ...settings, richInsert: false } : settings)
       }
@@ -1714,6 +1724,7 @@ export class Pipeline {
     this.tasks.delete(token)
     if (token !== this.runToken) return
     this.stage = 'idle'
+    memoryService()?.resume('recording')
     this.asrCheck = null
     this.wakeCapture = null
     this.encoded = null
@@ -1952,9 +1963,10 @@ export class Pipeline {
     // AI card, everything else the plain polish prompt.
     const kind = this.promptKindFor(settings, context)
     const entityPrompt = this.entityPrompt(settings, transcript, context, kind)
+    const styleMemory = memoryContext(await memoryService()?.recall('style', '用户对润色与写作的语气、语言、长度和格式偏好') ?? [])
     const result = await this.llm(settings, {
       messages: [
-        { role: 'system', content: this.systemPromptFor(kind, settings, context) + entityPrompt },
+        { role: 'system', content: this.systemPromptFor(kind, settings, context) + entityPrompt + styleMemory },
         ...(mode === 'dictation' ? [{ role: 'system' as const, content: POLISH_OUTPUT_RULES }] : []),
         ...(instruction ? [{ role: 'system' as const, content: `Requested edit: ${instruction}` }] : []),
         { role: 'user', content: transcript }
@@ -1962,7 +1974,7 @@ export class Pipeline {
       temperature: this.temperatureFor(kind, settings),
       signal
     })
-    if (entityPrompt) assertEntityOutput(transcript, result)
+    if (entityPrompt || styleMemory) assertEntityOutput(transcript, result)
     return result
   }
 
@@ -2255,7 +2267,7 @@ export class Pipeline {
     question: string,
     sources: SearchResult[],
     token: number,
-    extras: { tools?: string[]; actions?: CardAction[]; retrieval?: AskRetrieval } = {}
+    extras: { tools?: string[]; actions?: CardAction[]; retrieval?: AskRetrieval; memories?: MemoryEntry[]; memoryTemporary?: boolean } = {}
   ): void {
     // A cancel that landed while the request was finishing must neither touch
     // the clipboard nor pop a card.
@@ -2269,6 +2281,7 @@ export class Pipeline {
         answer: stripAppendedSources(answer),
         sources: sources.length > 0 ? sources : undefined,
         retrieval: extras.retrieval,
+        memories: extras.memories, memoryTemporary: extras.memoryTemporary,
         tools: tools.length > 0 ? tools : undefined,
         actions: actions.length > 0 ? actions : undefined
       },
@@ -2334,6 +2347,7 @@ export class Pipeline {
     const controller = new AbortController()
     this.abort = controller
     this.stage = 'working'
+    memoryService()?.resume('recording')
     this.stageMode = 'ask'
 
     const origin = originalContext?.task?.target ?? originalContext
@@ -2368,7 +2382,7 @@ export class Pipeline {
       this.showAnswer(final, text, result.sources, token, {
         tools: result.tools,
         actions: result.actions,
-        retrieval: result.retrieval
+        retrieval: result.retrieval, memories: result.memories, memoryTemporary: result.memoryTemporary
       })
       // The answer is in the card, so the pill drops back to its idle dot: it is
       // the anchor the card hangs off, not a second copy of the answer.

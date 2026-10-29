@@ -629,6 +629,7 @@ export class AssistantSession {
       }
       turn.answer = result.text
       turn.sources = result.sources
+      turn.memories = result.memories; turn.memoryTemporary = result.memoryTemporary; turn.actions = result.actions
       turn.state = 'done'
       task.state = result.taskState ?? (turn.localResults?.some(item => item.status === 'awaiting_confirmation') ? 'awaiting_confirmation' : 'completed'); turn.taskState = task.state
       this.refreshReference()

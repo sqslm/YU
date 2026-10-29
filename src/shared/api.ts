@@ -56,6 +56,16 @@ export interface UpdateState {
 }
 
 export interface TypelessApi {
+  memory: {
+    status(): Promise<import('./memory').MemoryStatus>
+    download(): Promise<void>
+    cancelDownload(): Promise<void>
+    list(kind: import('./memory').MemoryKind): Promise<import('./memory').MemoryEntry[]>
+    add(kind: import('./memory').MemoryKind, text: string): Promise<void>
+    update(kind: import('./memory').MemoryKind, id: string, text: string): Promise<void>
+    delete(kind: import('./memory').MemoryKind, id: string): Promise<void>
+    clear(): Promise<void>
+  }
   entities: {
     list(): Promise<import('./entities').EntityTerm[]>
     save(input: import('./entities').EntityInput, id?: string): Promise<void>

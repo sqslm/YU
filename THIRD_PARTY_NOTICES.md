@@ -225,6 +225,36 @@ Native runtime: sherpa-onnx bundles ONNX Runtime 1.28.2 on Windows. Its upstream
 | vfile-message | 4.0.3 | MIT | [LICENSE](licenses/vfile-message-4.0.3-license) |
 | zwitch | 2.0.4 | MIT | [LICENSE](licenses/zwitch-2.0.4-license) |
 
+## Local memory components
+
+| Component | Version | License |
+| --- | --- | --- |
+| mem0ai OSS SDK | 2.4.6 | [Apache-2.0](licenses/mem0ai-2.4.6-LICENSE) |
+| Transformers.js | 4.3.2 | [Apache-2.0](licenses/transformers-4.3.2-LICENSE) |
+| LangChain Core (model interface only) | 1.3.1 | [MIT](licenses/langchain-core-1.3.1-LICENSE) |
+| better-sqlite3 | 12.11.1 | [MIT](licenses/better-sqlite3-12.11.1-LICENSE) |
+| ONNX Runtime | 1.30.0 | [MIT](licenses/onnxruntime-1.30.0-LICENSE), [upstream third-party notices](licenses/onnxruntime-1.30.0-ThirdPartyNotices.txt) |
+
+Mem0 2.4.6 eagerly imports the following peer clients even when only local storage and the LangChain bridge are selected. They are explicitly pinned so Electron's production dependency collector includes them; no corresponding client transport is enabled. Their upstream license files remain in the packaged `node_modules`.
+
+| Peer client | Version | License |
+| --- | --- | --- |
+| @anthropic-ai/sdk | 0.40.1 | MIT |
+| @azure/identity | 4.14.0 | MIT |
+| @azure/search-documents | 12.2.0 | MIT |
+| @google/genai | 1.52.0 | Apache-2.0 |
+| @mistralai/mistralai | 1.15.1 | Apache-2.0 |
+| @qdrant/js-client-rest | 1.13.0 | Apache-2.0 |
+| @supabase/supabase-js | 2.118.0 | MIT |
+| cloudflare | 4.5.0 | Apache-2.0 |
+| groq-sdk | 0.3.0 | Apache-2.0 |
+| neo4j-driver | 5.28.3 | Apache-2.0 |
+| ollama | 0.5.18 | MIT |
+| pg | 8.11.3 | MIT |
+| redis | 4.7.1 | MIT |
+
+The optional BGE-small-zh-v1.5 weights are downloaded on demand, not bundled. [BAAI model card and MIT declaration](https://huggingface.co/BAAI/bge-small-zh-v1.5); [Xenova ONNX conversion](https://huggingface.co/Xenova/bge-small-zh-v1.5), pinned revision `75c43b069aac4d136ba6bc1122f995fedcfd2781`. SDK telemetry and SDK conversation history capture are disabled. All transitive client libraries retain their upstream licenses; the YU adapter enables only local SQLite, local embeddings and its configured LLM bridge, not their cloud/database transports.
+
 ## Optional community dictionaries
 
 Dictionary contents are not bundled. On explicit import, the application downloads selected text lists from their maintainers. Entry provenance retains the source URL and declared license; imports do not assert that names or relationships have been independently verified.

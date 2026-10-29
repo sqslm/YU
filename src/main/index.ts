@@ -1,3 +1,5 @@
+import { MemoryService } from './memory/host'
+import { setMemoryService } from './memory/registry'
 import { GameMode } from './game-mode'
 import { observeGame, gameProcessAlive } from './game-mode-native'
 import type { GameModeStatus } from '@shared/game-mode'
@@ -145,6 +147,8 @@ let barWindow: BrowserWindow | null = null
 let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
+const memory = new MemoryService(join(app.getPath('userData'), 'memory'), () => store.get(), () => Boolean(pipeline?.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy), line => log(line))
+setMemoryService(memory)
 let reminders: ReminderService | null = null
 /**
  * The four stores behind the assistant's "life" tools. Created in `ready()`, not
@@ -322,7 +326,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   changed: state => {
     const turn = state.turns.at(-1)
     if (state.busy && !assistantCardActive) pipeline?.reportAssistantProgress(state.status)
-    if (assistantCardActive && turn) showAnswerCard({ taskId: turn.taskId, taskState: turn.taskState, question: turn.question, answer: turn.answer, sources: turn.sources, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
+    if (assistantCardActive && turn) showAnswerCard({ taskId: turn.taskId, taskState: turn.taskState, question: turn.question, answer: turn.answer, sources: turn.sources, memories: turn.memories, memoryTemporary: turn.memoryTemporary, actions: turn.actions, assistant: true, localResults: turn.localResults, streaming: state.busy, status: state.status })
     tray?.refresh()
     refreshWakeWord()
   } })
@@ -668,6 +672,7 @@ async function reclaimGameResources(): Promise<void> {
       win.destroy()
     }
     if (!gameMode.snapshot().active) return
+    memory.pause('game')
     localAsr.suspend()
   } finally { reclaimingGameResources = false }
 }
@@ -701,6 +706,7 @@ function applyGameMode(status: GameModeStatus): void {
     if (gameResourceTimer) clearInterval(gameResourceTimer)
     gameResourceTimer = null
     if (!quitting) {
+      memory.resume('game')
       ensureBarWindow()
       uia.start()
       hotkeys?.start(store.get())
@@ -1229,6 +1235,15 @@ function registerIpc(): void {
   const entityOwner = (event: Electron.IpcMainInvokeEvent): void => {
     if (event.sender !== settingsWindow?.webContents) throw Error(mt('请从设置管理专有名词'))
   }
+  const memoryKind = (value: unknown): 'assistant' | 'style' => { if (value !== 'assistant' && value !== 'style') throw Error('Invalid memory category'); return value }
+  handle('memory:status', event => { entityOwner(event); return memory.status() })
+  handle('memory:download', event => { entityOwner(event); return memory.prepareModel() })
+  handle('memory:cancel-download', event => { entityOwner(event); memory.cancelDownload() })
+  handle('memory:list', (event, kind: unknown) => { entityOwner(event); return memory.list(memoryKind(kind)) })
+  handle('memory:add', (event, kind: unknown, text: string) => { entityOwner(event); if (typeof text !== 'string') throw Error('Invalid memory'); return memory.add(memoryKind(kind), text, 'manual') })
+  handle('memory:update', (event, kind: unknown, id: string, text: string) => { entityOwner(event); if (typeof id !== 'string' || typeof text !== 'string') throw Error('Invalid memory'); return memory.update(memoryKind(kind), id, text) })
+  handle('memory:delete', (event, kind: unknown, id: string) => { entityOwner(event); if (typeof id !== 'string') throw Error('Invalid memory'); return memory.delete(memoryKind(kind), id) })
+  handle('memory:clear', event => { entityOwner(event); return memory.clear() })
   handle('entities:list', event => { entityOwner(event); return entityStore.list() })
   let importingEntities = false
   handle('entities:import-public', async (event, ids: unknown) => {
@@ -1279,6 +1294,7 @@ function registerIpc(): void {
   handle('settings:update', async (_event, patch: Partial<Settings>) => {
     const previous = store.get()
     const next = await store.update(patch)
+    if (previous.memory.enabled !== next.memory.enabled || previous.memory.autoLearn !== next.memory.autoLearn) void memory.configure()
     if (!next.tts.enabled) speech?.stop()
     setMainLanguage(next.uiLanguage)
     gameMode.configure(next.gameMode)
@@ -1628,6 +1644,7 @@ function registerIpc(): void {
     if (gamePreparation?.id === id && event.sender === gamePreparation.window.webContents) gamePreparation.finish(ok === true)
   })
   handle('app:releaseResources', async () => {
+    memory.shutdown()
     if (pipeline?.isBusy || localAsr.inUse) throw new Error(mt('录音或识别进行中，请结束后再释放资源'))
     localAsr.reclaim()
     uia.reclaim()
@@ -2172,6 +2189,7 @@ async function bootstrap(): Promise<void> {
    * covers what the reference client reads through its `isLidOpen` native export.
    */
   powerMonitor.on('suspend', () => {
+    memory.pause('suspend')
     reminders?.suspend()
     wakeSuspended = true; refreshWakeWord()
     hideCard()
@@ -2179,16 +2197,19 @@ async function bootstrap(): Promise<void> {
     pipeline?.cancel('suspend')
   })
   powerMonitor.on('lock-screen', () => {
+    memory.pause('lock')
     wakeLocked = true; refreshWakeWord()
     hideCard()
     cancelAssistant()
     pipeline?.cancel('lock')
   })
-  powerMonitor.on('resume', () => { if (gameMode.snapshot().active) { wakeSuspended = false; refreshWakeWord(); return }; wakeSuspended = false; refreshWakeWord(); calendarScheduler?.check(); briefing?.check(); if (reminders?.resume()) ensureSettingsWindow() })
-  powerMonitor.on('unlock-screen', () => { wakeLocked = false; refreshWakeWord(); if (!gameMode.snapshot().active) reminders?.resume() })
+  powerMonitor.on('resume', () => {
+    memory.resume('suspend'); if (gameMode.snapshot().active) { wakeSuspended = false; refreshWakeWord(); return }; wakeSuspended = false; refreshWakeWord(); calendarScheduler?.check(); briefing?.check(); if (reminders?.resume()) ensureSettingsWindow() })
+  powerMonitor.on('unlock-screen', () => { memory.resume('lock'); wakeLocked = false; refreshWakeWord(); if (!gameMode.snapshot().active) reminders?.resume() })
 
   registerIpc()
   setImmediate(refreshEntities)
+  void memory.configure()
   handle('asr:check', () => checkAsrReadiness({ ...store.get(), pipelineMode: 'classic' }, localAsr))
   handle('wake:status', () => wakeWord.snapshot())
   handle('wake:setup', (event, mode: 'recording' | 'testing' | null) => {
@@ -2599,6 +2620,7 @@ if (!gotLock) {
     gamePreparation?.finish(false)
     wakeWord.stop()
     wakeWord.cancelLearning()
+    memory.shutdown()
     entityStore.close()
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()

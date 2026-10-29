@@ -66,6 +66,7 @@ import {
 import { runWithDeadline } from './tools/read-webpage'
 import type { SelectionDeps } from './tools/selection'
 import { mt } from '@shared/mainI18n'
+import { memoryService } from './memory/registry'
 
 /**
  * `complete()` gains an `effort` hint in a sibling change; requesting it here
@@ -74,6 +75,8 @@ import { mt } from '@shared/mainI18n'
 type CompleteRequest = Parameters<typeof complete>[1] & { effort?: string }
 
 export interface AgentResult {
+  memories?: import('@shared/memory').MemoryEntry[]
+  memoryTemporary?: boolean
   taskState?: import('@shared/task').TaskState
   text: string
   sources: SearchResult[]
@@ -469,12 +472,13 @@ export function parseIntent(raw: string): AgentIntent | null {
 // Conversation state
 // ---------------------------------------------------------------------------
 
-export interface AgentConversation { messages: ChatMessage[]; toolNotes: string }
+export interface AgentConversation { messages: ChatMessage[]; toolNotes: string; memoryTemporary?: boolean }
 const defaultConversation: AgentConversation = { messages: [], toolNotes: '' }
 
 export function resetThread(conversation = defaultConversation): void {
   conversation.messages = []
   conversation.toolNotes = ''
+  conversation.memoryTemporary = false
 }
 
 function pushThread(question: string, answer: string, notes?: string, conversation = defaultConversation): void {
@@ -1563,15 +1567,45 @@ function plainAnswer(
  * 5. `search.decideWithModel === false` → skip the router, search directly.
  */
 export async function askAgent(...args: Parameters<typeof askTask>): Promise<AgentResult> {
-  const [settings, text, suppliedContext, signal, log = () => {}, options] = args
+  const [settings, input, suppliedContext, signal, log = () => {}, options] = args
+  const conversation = options?.conversation ?? defaultConversation
+  if (options?.reset) resetThread(conversation)
+  const temporary = /^(?:临时对话|这次不要记忆|不要记住这次对话|temporary chat|private chat)[，,：:\s]*/iu
+  if (temporary.test(input)) conversation.memoryTemporary = true
+  const text = input.replace(temporary, '').trim()
+  const memory = memoryService(), enabled = settings.memory?.enabled && memory
+  if (enabled) memory.pause('foreground')
+  const learningToken = memory?.learningToken()
+  const memories = enabled && !conversation.memoryTemporary && !isCurrentContentRequest(text) && !/^(?:请)?(?:记住|忘记|删除记忆)/u.test(text) ? await memory.recall('assistant', text) : []
   const task = suppliedContext.task ?? createTask('text', suppliedContext, text)
   return withTaskTrace(task, log, async () => {
     try {
-      const result = await askTask(settings, text, attachTask(suppliedContext, task), signal, log, options)
+        signal?.throwIfAborted()
+        const reply = (text: string, actions?: CardAction[]): AgentResult => { task.state = 'completed'; pushThread(input, text, undefined, conversation); return { text, sources: [], searched: false, actions, taskState: 'completed', memoryTemporary: conversation.memoryTemporary } }
+        if (!text && conversation.memoryTemporary) return reply('已进入临时对话，本次会话不会读取或保存长期记忆。')
+        const remember = /^(?:请)?记住[，,：:\s]*(.+)$/su.exec(text) ?? /^(?:please\s+)?remember(?:\s+that)?\s+(.+)$/isu.exec(text)
+        const forgetId = /^忘记记忆 (assistant|style):([a-zA-Z0-9-]+)$/u.exec(text)
+        const forget = /^(?:请)?(?:忘记|删除记忆)[，,：:\s]*(.+)$/su.exec(text) ?? /^(?:please\s+)?forget\s+(.+)$/isu.exec(text)
+        if (remember || forget) {
+          if (conversation.memoryTemporary) return reply('临时对话不会保存或修改长期记忆。')
+          if (!enabled) return reply('请先在设置 → 助手与权限中开启长期记忆。')
+          if (remember) {
+            await memory.add(/润色|写作|风格|行文|\b(?:writing|style|tone)\b/iu.test(remember[1]) ? 'style' : 'assistant', remember[1], task.id)
+            return reply('已记住。你可以在记忆管理中查看、修改或删除。')
+          }
+          if (forgetId) { await memory.delete(forgetId[1] as 'assistant' | 'style', forgetId[2]); return reply('已删除这条记忆。') }
+          const candidates = [...await memory.recall('assistant', `我想忘记的内容：${forget![1]}`), ...await memory.recall('style', forget![1])]
+          return reply(candidates.length ? '请选择要忘记的记忆：\n' + candidates.map((row, i) => `${i + 1}. ${row.text}`).join('\n') : '没有找到相关记忆，可在设置中的记忆管理查看全部条目。', candidates.map((row, i) => ({ id: 'ask', label: `忘记第 ${i + 1} 条`, payload: `忘记记忆 ${row.kind}:${row.id}` })))
+        }
+        const result = await askTask(settings, text, attachTask({ ...suppliedContext, memories }, task), signal, log, { ...options, reset: false, conversation })
+        if (enabled || conversation.memoryTemporary) { result.memories = memories; result.memoryTemporary = conversation.memoryTemporary }
+        if (enabled && memory.learningToken() === learningToken && !conversation.memoryTemporary && result.taskState !== 'failed' && result.taskState !== 'cancelled') {
+          memory.enqueueLearning(/(?:以后|今后|下次).*(?:润色|写作|风格)|(?:润色|写作).*(?:偏好|习惯)/u.test(text) ? 'style' : 'assistant', text, task.id)
+        }
       task.state = result.taskState ?? 'completed'
       return result
     } catch (error) { task.state = signal?.aborted ? 'cancelled' : 'failed'; throw error }
-    finally { if (!suppliedContext.task) finishTaskTrace(task, log) }
+      finally { if (enabled) memory.resume('foreground'); if (!suppliedContext.task) finishTaskTrace(task, log) }
   })
 }
 

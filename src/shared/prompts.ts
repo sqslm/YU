@@ -1,5 +1,6 @@
 import type { InputAreaType, Mode } from './types'
 import type { TaskContext } from './task'
+import { memoryContext, type MemoryEntry } from './memory'
 
 /**
  * Prompt construction for the three voice modes.
@@ -20,6 +21,7 @@ import type { TaskContext } from './task'
  */
 
 export interface PromptContext {
+  memories?: MemoryEntry[]
   /** Shared task metadata; renderContext deliberately renders only its explicit fields. */
   task?: TaskContext
   /** Frozen original HWND, used by explicit native context tools, not prompt text. */
@@ -279,7 +281,8 @@ export function buildAskPrompt(context: PromptContext = {}): string {
     '',
     `今天是 ${formatToday()}。`,
     '',
-    renderContext(context)
+    renderContext(context),
+    memoryContext(context.memories ?? [])
   ]
   return blocks.filter((block) => block !== '').join('\n')
 }

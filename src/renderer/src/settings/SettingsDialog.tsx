@@ -1,3 +1,4 @@
+import { MemorySection } from './sections/Memory'
 import { useState } from 'react'
 import { Box, Button, Dialog, IconButton, Tab, Tabs, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
@@ -240,7 +241,7 @@ export function SettingsDialog({
           {section === 'storage' && <StorageSection settings={settings} patch={patch} />}
           {section === 'life' && <LifeSection settings={settings} patch={patch} />}
           {section === 'reminders' && <ReminderSettingsSection settings={settings} patch={patch} />}
-          {section === 'assistant' && <AssistantSettingsSection settings={settings} patch={patch} />}
+          {section === 'assistant' && <><MemorySection settings={settings} patch={patch} /><AssistantSettingsSection settings={settings} patch={patch} /></>}
           {section === 'automation' && <WorkflowsSection />}
           {section === 'shortcuts' && <ShortcutsSection settings={settings} patch={patch} />}
           {section === 'models' && <ProvidersSection settings={settings} patch={patch} saving={saving} saveError={saveError} />}

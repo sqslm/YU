@@ -433,6 +433,7 @@ export interface BarWindowLayout {
 
 export interface Settings {
   speechEnhancement: boolean
+  memory: import('./memory').MemorySettings
   gameMode: GameModeSettings
   briefingDelivery: import('./briefingDelivery').BriefingDeliverySettings
   assistantAccess: import('./assistantAccess').AssistantAccessSettings
@@ -998,6 +999,8 @@ export interface CardAction {
 
 /** What the answer card renders. Kept in shared because the preload bridges it. */
 export interface AnswerCardPayload {
+  memories?: import('./memory').MemoryEntry[]
+  memoryTemporary?: boolean
   taskId?: string
   taskState?: import('./task').TaskState
   assistant?: boolean

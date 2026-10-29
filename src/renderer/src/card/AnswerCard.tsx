@@ -417,6 +417,8 @@ export function AnswerCard(): JSX.Element | null {
             </div>}
           </div>}
 
+          {data.memoryTemporary && <div style={{ color: '#8b93a4', fontSize: 11, marginTop: 10 }}>{i18n.t('临时对话：不读取或保存长期记忆')}</div>}
+          {Boolean(data.memories?.length) && <details style={{ marginTop: 10, fontSize: 12 }} data-card-memories><summary>{i18n.t('本次使用的记忆')} · {data.memories!.length}</summary>{data.memories!.map(row => <div key={row.id} style={{ marginTop: 8, overflowWrap: 'anywhere' }}>{row.text}</div>)}</details>}
           {sourceList.length > 0 && (
             <div style={sources}>
               <button type="button" style={sourceToggle} aria-expanded={sourcesExpanded} data-card-sources-toggle onClick={() => setSourcesExpanded(value => !value)}>

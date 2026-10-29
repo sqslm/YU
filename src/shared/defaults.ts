@@ -33,6 +33,7 @@ export const HISTORY_RETENTIONS = [-1, 0, 86_400, 604_800, 2_592_000, 31_536_000
 
 export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   speechEnhancement: false,
+  memory: { enabled: false, autoLearn: true },
   hotkeys: {
     enabled: true,
     // Mirrors the vendor defaults discovered on disk so muscle memory carries
@@ -234,6 +235,7 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     ...input,
     version: SETTINGS_VERSION,
     speechEnhancement: input.speechEnhancement === true,
+    memory: { enabled: input.memory?.enabled === true, autoLearn: input.memory?.autoLearn !== false },
     hotkeys: { ...base.hotkeys, ...(input.hotkeys ?? {}) },
     asr: { ...base.asr, ...(input.asr ?? {}) },
     polish: { ...base.polish, ...(input.polish ?? {}) },

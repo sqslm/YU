@@ -10,6 +10,9 @@ export function unresolvedToolFailure(results: readonly AssistantLocalResult[] =
 }
 
 export interface AssistantTurn {
+  memories?: import('./memory').MemoryEntry[]
+  memoryTemporary?: boolean
+  actions?: import('./types').CardAction[]
   taskId?: string
   taskState?: TaskState
   id: number

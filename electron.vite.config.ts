@@ -21,7 +21,8 @@ export default defineConfig({
           // The speech recogniser owns ~230 MB of native weights. Out of
           // process, 释放内存 is a kill instead of a wish, and a faulty model
           // cannot take the UI down with it.
-          'local-asr': resolve('src/main/local-asr/worker.ts')
+          'local-asr': resolve('src/main/local-asr/worker.ts'),
+          memory: resolve('src/main/memory/worker.ts')
         }
       }
     }

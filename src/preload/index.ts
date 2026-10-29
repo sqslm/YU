@@ -17,6 +17,16 @@ ipcRenderer.on('card:data', (_event, payload: AnswerCardPayload) => { lastCard =
 ipcRenderer.on('card:hidden', () => { lastCard = null })
 
 const api: TypelessApi = {
+  memory: {
+    status: () => ipcRenderer.invoke('memory:status'),
+    download: () => ipcRenderer.invoke('memory:download'),
+    cancelDownload: () => ipcRenderer.invoke('memory:cancel-download'),
+    list: kind => ipcRenderer.invoke('memory:list', kind),
+    add: (kind, text) => ipcRenderer.invoke('memory:add', kind, text),
+    update: (kind, id, text) => ipcRenderer.invoke('memory:update', kind, id, text),
+    delete: (kind, id) => ipcRenderer.invoke('memory:delete', kind, id),
+    clear: () => ipcRenderer.invoke('memory:clear')
+  },
   entities: {
     list: () => ipcRenderer.invoke('entities:list'),
     save: (input, id) => ipcRenderer.invoke('entities:save', input, id),

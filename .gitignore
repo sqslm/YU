@@ -31,6 +31,9 @@
 !/scripts/make-icon.py
 !/scripts/release.mjs
 !/scripts/evaluate-entities.mjs
+!/scripts/evaluate-memory.cjs
+!/scripts/verify-memory-runtime.cjs
+!/scripts/benchmark-memory.cjs
 **/node_modules/
 **/data/
 **/.env
