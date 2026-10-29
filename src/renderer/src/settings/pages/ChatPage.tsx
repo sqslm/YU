@@ -24,7 +24,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
   const [remove, setRemove] = useState<{ action: 'delete' | 'group-delete'; id: string; name: string } | null>(null)
   const [moving, setMoving] = useState(false), [saving, setSaving] = useState(false)
   const [limit, setLimit] = useState(100), limitRef = useRef(100), ticket = useRef(0), scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true)
-  const choose = (id: string | null): void => { selectedRef.current = id; setSelected(id); limitRef.current = 100; setLimit(100); nearBottom.current = true }
+  const choose = (id: string | null): void => { setError(''); selectedRef.current = id; setSelected(id); limitRef.current = 100; setLimit(100); nearBottom.current = true }
   const refresh = useCallback(async (): Promise<void> => {
     const request = ++ticket.current
     try {
@@ -34,7 +34,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
       let id = selectedRef.current
       if (id && !next.threads.some(row => row.id === id)) { id = next.threads[0]?.id ?? null; selectedRef.current = id; setSelected(id) }
       const row = id ? await window.api.chat.get(id, limitRef.current) : null
-      if (ticket.current === request) { setDetail(row); setError('') }
+      if (ticket.current === request) setDetail(row)
     } catch (error) { if (ticket.current === request) setError(messageOf(error)) }
     finally { if (ticket.current === request) setLoading(false) }
   }, [])
@@ -53,6 +53,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
   useEffect(() => registerGameModePreparation(async () => !index.busyThreadId && !Object.values(drafts).some(text => text.trim())), [drafts, index.busyThreadId])
   const draftKey = selected ?? 'new', draft = drafts[draftKey] ?? ''
   const create = async (group: string | null = null): Promise<void> => {
+    setError('')
     try { const row = await window.api.chat.create(group); choose(row.id); setDetail(row); await refresh() }
     catch (error) { setError(messageOf(error)) }
   }
@@ -71,6 +72,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
   }
   const saveName = async (): Promise<void> => {
     if (!edit?.name.trim() || saving) return
+    setError('')
     setSaving(true)
     try { await window.api.chat.edit(edit as Parameters<typeof window.api.chat.edit>[0]); setEdit(null); await refresh() }
     catch (error) { setError(messageOf(error)) }
@@ -97,7 +99,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
     </Box>
     <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
       <Stack direction="row" alignItems="center" sx={{ px: 3, py: 1.5, borderBottom: 1, borderColor: 'divider', gap: 1 }}><Typography sx={{ fontSize: 15, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail ? detail.title === '新对话' ? t(detail.title) : detail.title : t('语')}</Typography>{detail?.memoryTemporary && <Typography variant="caption" color="text.secondary">{t('本对话不读写长期记忆')}</Typography>}<Button size="small" onClick={onModels}>{t('模型设置')}</Button></Stack>
-      {error && <Alert severity="error" onClose={() => setError('')} action={<Button color="inherit" size="small" onClick={() => void refresh()}>{t('刷新')}</Button>}>{error.replace(/^Error: /, '')}</Alert>}
+      {error && <Alert severity="error" onClose={() => setError('')} action={<Button color="inherit" size="small" onClick={() => { setError(''); void refresh() }}>{t('刷新')}</Button>}>{error.replace(/^Error: /, '')}</Alert>}
       <Box ref={scroll} onScroll={event => { const el = event.currentTarget; nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 2, lg: 4 }, py: 2.5 }}>
         {detail && detail.total > detail.messages.length && <Button fullWidth size="small" onClick={() => { nearBottom.current = false; limitRef.current += 100; setLimit(limitRef.current) }}>{t('加载更早消息')}</Button>}
         {!detail?.messages.length && <Box sx={{ maxWidth: 560, mx: 'auto', pt: '12vh' }}><Typography sx={{ fontSize: 30, fontWeight: 650, mb: 1.5 }}>{t('和语聊聊')}</Typography><Typography color="text.secondary" sx={{ lineHeight: 1.8, fontSize: 13 }}>{loading ? t('正在读取对话…') : t('提问、梳理想法，或一起解决问题。对话保存在本机，可按分组整理。')}</Typography></Box>}
