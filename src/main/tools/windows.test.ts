@@ -14,6 +14,50 @@ let native: ReturnType<typeof vi.fn<(request: Record<string, unknown>, signal?: 
 let openPath: ReturnType<typeof vi.fn<(path: string) => Promise<string>>>
 let openUrl: ReturnType<typeof vi.fn<(url: string) => Promise<void>>>
 let tools: WindowsTools
+it('repairs each component of a nested spoken folder before opening the actual directory', async () => {
+  const parent = join(root, 'softwares'), target = join(parent, 'dsh')
+  await mkdir(parent); await mkdir(target)
+  try {
+    const result = await tools.run('open_folder', { folder: join(root, 'Software', 'DSH') })
+    expect(result.ok).toBe(true)
+    expect(openPath).toHaveBeenCalledWith(await realpath(target))
+  } finally { await rmdir(target); await rmdir(parent) }
+})
+it.each([['projects', 'proejcts'], ['downloads', 'downlods'], ['pictures', 'pictares'], ['Visual Studio', 'visual-studio'], ['tools', 'tool']])('resolves a unique sibling spelling without a hardcoded folder list: %s/%s', async (actual, spoken) => {
+  const target = join(root, actual); await mkdir(target)
+  try {
+    expect((await tools.run('open_folder', { folder: join(root, spoken) })).ok).toBe(true)
+    expect(openPath).toHaveBeenCalledWith(await realpath(target))
+  } finally { await rmdir(target) }
+})
+it('refuses equally close spellings instead of opening an arbitrary directory', async () => {
+  const names = ['projects', 'projectx']
+  for (const name of names) await mkdir(join(root, name))
+  try {
+    const result = await tools.run('open_folder', { folder: join(root, 'project') })
+    expect(result.ok).toBe(false); expect(result.summary).toContain('多个相近文件夹')
+    expect(openPath).not.toHaveBeenCalled()
+  } finally { for (const name of names) await rmdir(join(root, name)) }
+})
+it('does not repair a year or guess a short acronym', async () => {
+  const names = ['project2025', 'DSH']
+  for (const name of names) await mkdir(join(root, name))
+  try {
+    for (const name of ['project2026', 'DSG']) expect((await tools.run('open_folder', { folder: join(root, name) })).ok).toBe(false)
+    expect(openPath).not.toHaveBeenCalled()
+  } finally { for (const name of names) await rmdir(join(root, name)) }
+})
+it('does not open a repaired parent when its requested child is missing, or bypass directory permissions', async () => {
+  const parent = join(root, 'softwares'), child = join(parent, 'dsh')
+  await mkdir(parent); await mkdir(child)
+  try {
+    expect((await tools.run('open_folder', { folder: join(root, 'software', 'missing-child') })).ok).toBe(false)
+    const guarded = new WindowsTools({ folders: { downloads: root, desktop: root, documents: root }, native, openPath, openUrl,
+      access: () => ({ ...DEFAULT_ASSISTANT_ACCESS, excludedPaths: [parent] }) })
+    expect((await guarded.run('open_folder', { folder: join(root, 'software', 'DSH') })).ok).toBe(false)
+    expect(openPath).not.toHaveBeenCalled()
+  } finally { await rmdir(child); await rmdir(parent) }
+})
 it.each([['AI','A I'],['softwares','Software'],['AI','重复盘符']])('opens a unique actual folder for spoken variation %s/%s',async(actual,spoken)=>{
   const target=join(root,actual);await mkdir(target)
   try{

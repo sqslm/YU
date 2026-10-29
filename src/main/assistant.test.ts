@@ -11,6 +11,7 @@ import type { AssistantState } from '@shared/assistant'
 import type { PersonalTools } from './tools/personal'
 import type { LifeTools } from './tools/life'
 import { WindowsTools } from './tools/windows'
+import type { WorkflowTools } from './tools/workflow'
 
 const settings = mergeSettings({ profiles: [{ id: 'text', kind: 'llm', name: 'Text', enabled: true,
   preset: '', baseUrl: 'https://example.com/v1', apiKey: 'private', model: 'model' }], chains: { llm: ['text'], asr: [], multimodal: [] } })
@@ -23,6 +24,19 @@ beforeEach(() => {
   ask = vi.fn<typeof askAgent>().mockResolvedValue({ text: 'Actual answer', sources: [], searched: false })
   changed = vi.fn()
   session = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), now: () => now })
+})
+
+it.each(['打开软件目录', '运行，打开软件目录', '运行打开软件目录', '请帮我运行工作流“打开软件目录”。'])('runs the named saved workflow without guessing a standard folder: %s', async input => {
+  const saved = { id: 'software-folder', name: '打开软件目录', steps: [{ tool: 'open_folder', args: { folder: 'E:\\softwares\\dsh' }, label: '打开我的目录' }], runs: 0, createdAt: 1, updatedAt: 1 }
+  const workflow: WorkflowTools = { active: () => [saved], list: () => [saved], get: id => id === saved.id ? saved : undefined, save: vi.fn(), archive: vi.fn(), restore: vi.fn(), recordRun: vi.fn() }
+  const windows = new WindowsTools({ folders: { downloads: '.', desktop: '.', documents: '.' }, native: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })
+  const run = vi.spyOn(windows, 'run').mockResolvedValue({ ok: true, summary: '已打开 E:\\softwares\\dsh', data: { ok: true, path: 'E:\\softwares\\dsh' } })
+  const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), windows, workflow })
+  await current.send(input)
+  expect(run).toHaveBeenCalledWith('open_folder', { folder: 'E:\\softwares\\dsh' }, expect.any(AbortSignal), expect.anything())
+  expect(workflow.recordRun).toHaveBeenCalledWith(saved.id)
+  expect(ask).not.toHaveBeenCalled()
+  expect(current.snapshot().turns.at(-1)?.state).toBe('done')
 })
 
 describe('assistant session', () => {

@@ -1,5 +1,6 @@
 import { WindowsTools } from './tools/windows'
 import { personalCommand } from './tools/personal'
+import { workflowCommand } from './tools/workflow'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BarAlert, BarState, HistoryEntry, Settings , ProviderProfile} from '@shared/types'
@@ -1434,6 +1435,18 @@ describe('opening phrase mode activation', () => {
 
 
 describe('unified voice entry', () => {
+  it.each(['打开软件目录', '运行，打开软件目录'])('dispatches a saved workflow from the final transcript without model routing: %s', async text => {
+    const saved = { id: 'software-folder', name: '打开软件目录', steps: [], runs: 0, createdAt: 1, updatedAt: 1 }
+    const onAssistant = vi.fn().mockResolvedValue({ text: 'Actual workflow result' })
+    const h = harness({ voiceCommands: { ...DEFAULT_VOICE_COMMANDS, smartRouting: true } }, {
+      directOperation: input => workflowCommand(input, { active: () => [saved] }), onAssistant })
+    mocks.transcribe.mockResolvedValue({ text })
+    h.pipeline.start('dictation'); h.pipeline.pushAudio(tone(1200))
+    const pending = h.pipeline.stop(); h.pipeline.audioStopped(); await pending
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(onAssistant).toHaveBeenCalledWith(text, expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ task: expect.objectContaining({ route: { kind: 'assistant', via: 'rule' } }) }), undefined)
+    expect(mocks.insertText).not.toHaveBeenCalled()
+  })
   it('does not insert a version corrupted during entity correction and keeps the original ASR text', async () => {
     const original = '用库伯内提斯连接 GPT-5.6。'
     mocks.transcribe.mockResolvedValue({ text: original, model: 'whisper-1' })

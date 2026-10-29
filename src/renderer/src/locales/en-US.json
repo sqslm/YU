@@ -2257,7 +2257,7 @@
   "新建工作流": "New workflow",
   "编辑工作流": "Edit workflow",
   "工作流名称": "Workflow name",
-  "按顺序执行下列步骤。保存后说“运行”加工作流名称即可使用。": "Steps run in order. After saving, say “run” followed by the workflow name.",
+  "按顺序执行下列步骤。保存后说“运行”加工作流名称即可使用。": "Steps run in order. After saving, say the complete workflow name, or “run” followed by its name.",
   "还没有工作流。点击“新建工作流”手动添加，也可以在对话中描述操作来创建。": "No workflows yet. Create one manually, or describe the steps in a conversation.",
   "步骤 {{n}}": "Step {{n}}",
   "删除步骤": "Remove step",

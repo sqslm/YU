@@ -90,6 +90,9 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false, operati
   if (/^(?:临时对话|这次不要记忆|不要记住这次对话|(?:请)?忘记记忆)[，,：:\s]|^(?:请)?(?:记住|忘记)(?:我|我的)/u.test(value)) return { kind: 'assistant' }
   if (/^(?:temporary chat|private chat|(?:please )?forget)\b/iu.test(value)) return { kind: 'assistant' }
   if (isDictatedContent(value)) return { kind: 'dictation' }
+  const direct = operation?.(value)
+  // A matched saved name is one explicit action, even when ASR inserts “运行，…”.
+  if (direct && typeof direct === 'object' && 'name' in direct && direct.name === 'run_workflow') return { kind: 'assistant' }
   // The action inside a reminder is its content, not permission to perform it now.
   if (REMIND_ME_PREFIX.test(value) && isReminderCreationRequest(value) && !/然后|并且|同时|[,，;；]\s*(?:打开|帮我|读取|创建|保存)|\b(?:and then|then|also)\b/iu.test(value)) return { kind: 'reminder' }
   if (stopSpeakingRequest(value)) return { kind: 'assistant' }
@@ -125,7 +128,7 @@ export function directVoiceIntent(text: string, hasRecentAnswer = false, operati
   const note = /^(?:(?:请|帮我|请帮我)\s*)?(?:记到随记(?:里|里面)?|保存(?:到|为)(?:一条)?随记|记一条随记)[\s，,:：]*(.+)$/u.exec(value) ||
     /^(?:please\s+)?(?:save (?:a |this )?note|take a note|note down)[\s,:]*(.+)$/iu.exec(value)
   if (note) return { kind: 'notes', text: note[1].trim() }
-  return operation?.(value) ? { kind: 'assistant' } : null
+  return direct ? { kind: 'assistant' } : null
 }
 
 export const VOICE_INTENT_PROMPT = `Classify ONE voice input for YU, a bilingual Chinese/English desktop assistant. Return ONLY JSON:

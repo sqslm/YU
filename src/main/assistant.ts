@@ -15,7 +15,7 @@ import { localDayKey } from '@shared/calendar'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { readAloudCommand } from './read-aloud-command'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
-import { WORKFLOW_TOOLS, type WorkflowTools } from './tools/workflow'
+import { WORKFLOW_TOOLS, workflowCommand, type WorkflowTools } from './tools/workflow'
 import { directVoiceIntent, isBareSummaryRequest, isCurrentContentRequest, isDictatedContent, needsAssistantContext, screenshotNeedsEditor, stopSpeakingRequest, speechPlaybackRequest } from './voice-intent'
 
 export const ASSISTANT_TOOLS = ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'open_search']
@@ -541,7 +541,7 @@ export class AssistantSession {
       /截|看|分析|反映|提取|识别|解释|总结|什么|\b(?:analyze|extract|read|explain|describe|show|capture|what)\b/iu.test(input) &&
       !/然后|并且|同时|保存|创建|复制|打开|\b(?:then|also|save|create|copy|open)\b/iu.test(input))
     const stopSpeech = this.deps.life ? stopSpeakingRequest(input) : null
-    const direct = operation || (windows ? referenceOperation(input, pointer) : null) || (stopSpeech ? { name: 'stop_speaking', args: stopSpeech } : null) || (this.deps.life ? speechPlaybackRequest(input) : null) || (screenshotRequest ? { name: 'analyze_screenshot', args: { question: input, task: /文字.{0,8}(?:提取|识别)|提取.{0,8}文字|\b(?:OCR|extract text|read text)\b/iu.test(input) ? 'ocr' : 'analyze' } } : null) ||
+    const direct = operation || (this.deps.workflow ? workflowCommand(input, this.deps.workflow) : null) || (windows ? referenceOperation(input, pointer) : null) || (stopSpeech ? { name: 'stop_speaking', args: stopSpeech } : null) || (this.deps.life ? speechPlaybackRequest(input) : null) || (screenshotRequest ? { name: 'analyze_screenshot', args: { question: input, task: /文字.{0,8}(?:提取|识别)|提取.{0,8}文字|\b(?:OCR|extract text|read text)\b/iu.test(input) ? 'ocr' : 'analyze' } } : null) ||
       (this.deps.life && !isDictatedContent(input) ? readAloudCommand(input) : null) || (this.deps.personal ? personalCommand(input) : null) || windows?.command(input.trim())
     const allowedTools = this.allowedTools(input)
     const taskReference = Boolean(this.deps.personal) && directVoiceIntent(input)?.kind === 'assistant' && /提醒|待办|代办|\b(?:reminder|to-?do|task)\b/iu.test(input)

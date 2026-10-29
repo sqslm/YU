@@ -66,6 +66,7 @@ import { SpeechService, createWindowsSpeechRunner } from './speech'
 import { createSpeechPlayback } from './speech-playback'
 import { synthesizeSpeech } from './providers/tts'
 import { WorkflowStore } from './workflows'
+import { workflowCommand } from './tools/workflow'
 import { CardVoice } from './card-voice'
 import { nextPromptRoute, PROMPT_KIND_LABEL } from '@shared/promptLibrary'
 import { TOOL_DEFINITIONS } from './tools/registry'
@@ -2103,7 +2104,7 @@ async function bootstrap(): Promise<void> {
     checkAsr: () => checkAsrReadiness(store.get(), localAsr),
     preserveAudio: async (pcm, signal) => { await notes.create({ pcm, durationMs: Math.round(pcm.length / 16), recovery: true }, signal) },
     captureSelection: (context, signal) => captureSelectionTarget(store.get(), context, signal),
-    directOperation: text => personalCommand(text) ?? windowsTools.command(text),
+    directOperation: text => (workflows ? workflowCommand(text, workflows) : null) ?? personalCommand(text) ?? windowsTools.command(text),
     voiceContext: text => {
       const last = needsAssistantContext(text) ? assistant.snapshot().turns.at(-1) : undefined
       const completion = /已经|做完|完成|检查完|\b(?:finished|completed|done)\b/iu.test(text)

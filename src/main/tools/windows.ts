@@ -380,7 +380,7 @@ export class WindowsTools {
     let root: string
     let corrected=false
     try {
-      const resolved=await resolveSpokenFolder(folders[input as keyof typeof folders] || input)
+      const resolved=await resolveSpokenFolder(folders[input as keyof typeof folders] || input, signal)
       if(!resolved.path){
         const candidates=[] as string[]
         for(const path of resolved.candidates??[])if(await this.pathAllowed(path))candidates.push(path)

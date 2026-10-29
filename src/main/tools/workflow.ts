@@ -42,6 +42,19 @@ export interface WorkflowTools {
   recordRun(id: string): void
 }
 
+/** Match a whole saved name before generic actions; never infer steps from the name. */
+export function workflowCommand(input: string, api: Pick<WorkflowTools, 'active'>): { name: string; args: { id: string } } | null {
+  const key = (value: string): string => value.normalize('NFKC').trim().replace(/[。.!！]+$/u, '').trim().replace(/^[“「"](.+)[”」"]$/u, '$1').replace(/\s+/g, '').toLowerCase()
+  const value = input.trim().replace(/^(?:请帮我|麻烦你|帮我|请)[\s，,:：]*/u, '').replace(/^please\s+/iu, '')
+  const candidates = [key(input), key(value), key(value.replace(/^(?:(?:运行|执行|启动|跑)(?:一下)?[\s，,:：]*(?:工作流[\s，,:：]*)?|(?:run|execute|start)\s+(?:workflow\s+)?)/iu, ''))]
+  const active = api.active()
+  for (const candidate of candidates) {
+    const matches = active.filter(row => row.archivedAt === undefined && key(row.name) === candidate)
+    if (matches.length) return matches.length === 1 ? { name: 'run_workflow', args: { id: matches[0].id } } : null
+  }
+  return null
+}
+
 interface Field {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object'
   description: string

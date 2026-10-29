@@ -3,7 +3,8 @@ import { mergeSettings } from '@shared/defaults'
 import { setMainLanguage } from '@shared/mainI18n'
 import type { Workflow, WorkflowStep } from '@shared/workflow'
 import { runTool, type ToolContext } from './registry'
-import type { WorkflowTools } from './workflow'
+import { workflowCommand, type WorkflowTools } from './workflow'
+import { directVoiceIntent } from '../voice-intent'
 import type { PersonalTools } from './personal'
 import { WindowsTools } from './windows'
 import { mkdtemp, realpath, writeFile, rm } from 'node:fs/promises'
@@ -60,6 +61,29 @@ beforeEach(() => {
 })
 
 afterEach(() => setMainLanguage('zh'))
+
+describe('whole-name workflow routing', () => {
+  it.each(['打开软件目录', '运行，打开软件目录', '请帮我，执行一下工作流：打开软件目录。'])('routes voice input directly before a generic action: %s', input => {
+    vi.mocked(store.active).mockReturnValue([{ ...workflowOf([]), name: '打开软件目录' }])
+    expect(workflowCommand(input, store)).toEqual({ name: 'run_workflow', args: { id: 'wf-1' } })
+    expect(directVoiceIntent(input, false, text => workflowCommand(text, store))).toEqual({ kind: 'assistant' })
+  })
+  it('matches case and spoken spacing, but keeps the exact complete name first', () => {
+    vi.mocked(store.active).mockReturnValue([{ ...workflowOf([]), name: 'Morning Check' }, { ...workflowOf([]), id: 'literal', name: '运行 Morning Check' }])
+    expect(workflowCommand('Please execute workflow MORNING CHECK.', store)?.args.id).toBe('wf-1')
+    expect(workflowCommand('运行 Morning Check', store)?.args.id).toBe('literal')
+  })
+  it.each(['不要运行打开软件目录', '十分钟后提醒我打开软件目录', '帮我润色：打开软件目录', '运行打开软件目录然后打开浏览器', '打开软件目录是什么？'])('does not execute quoted, negated, deferred or compound mentions: %s', input => {
+    vi.mocked(store.active).mockReturnValue([{ ...workflowOf([]), name: '打开软件目录' }])
+    expect(workflowCommand(input, store)).toBeNull()
+  })
+  it('does not directly run archived or ambiguous names', () => {
+    vi.mocked(store.active).mockReturnValue([{ ...workflowOf([]), name: '打开软件目录', archivedAt: NOW }])
+    expect(workflowCommand('打开软件目录', store)).toBeNull()
+    vi.mocked(store.active).mockReturnValue([{ ...workflowOf([]), name: 'A B' }, { ...workflowOf([]), id: 'other', name: 'AB' }])
+    expect(workflowCommand('run ab', store)).toBeNull()
+  })
+})
 
 describe('run_workflow authorizes each step against this round', () => {
   it('replays an explicitly bound real file result without permitting arbitrary same-round opens', async () => {
