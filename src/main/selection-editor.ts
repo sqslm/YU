@@ -35,7 +35,7 @@ export class SelectionEditor {
       session.transforming = false
       if (!result || session.controller.signal.aborted) return
       await target.apply(result.text, append, session.controller.signal)
-      if (!session.controller.signal.aborted) this.deps.status(append ? '已追加到输入框末尾' : '已替换选中文字')
+      if (!session.controller.signal.aborted) this.deps.status(append ? '已追加到选区末尾' : '已替换选中文字')
     } catch (error) {
       if (!session.controller.signal.aborted) this.deps.status(error instanceof Error ? error.message : String(error), true)
     } finally {

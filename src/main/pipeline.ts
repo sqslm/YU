@@ -50,8 +50,8 @@ import { complete, unwrapModelText } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
 import { generateFromAudio } from './providers/gemini'
 import { askAgent, askFollowUp } from './agent'
-import { directVoiceIntent, isCurrentContentRequest, parseVoiceIntent, VOICE_INTENT_PROMPT } from './voice-intent'
-import { cursorGeneration, cursorGenerationPrompt } from './cursor-generation'
+import { directVoiceIntent, isCurrentContentRequest, parseVoiceIntent, selectionAppendRequested, VOICE_INTENT_PROMPT } from './voice-intent'
+import { cursorGeneration, cursorGenerationPrompt, cursorNeedsResearch, CursorResearchError } from './cursor-generation'
 import { asrTermContext } from '@shared/asr-enhancement'
 import { EntityOutputError, assertEntityOutput, entityCandidatePrompt, type EntityCandidate } from '@shared/entities'
 import type { SelectionTarget } from './selection-editor'
@@ -1388,6 +1388,7 @@ export class Pipeline {
           assistantUseContext = intent.kind === 'assistant' ? intent.useContext : undefined
           mode = intent.kind === 'ask' || intent.kind === 'translate' ? intent.kind : 'dictation'
           purpose = intent.kind === 'reminder' || intent.kind === 'notes' || intent.kind === 'assistant' ? intent.kind : undefined
+          const selectionInstruction = transcript
           if (intent.text) transcript = intent.text
           if (intent.target) settings = { ...settings, translateTarget: intent.target, translateTargets: [intent.target] }
           if (intent.kind === 'selection') {
@@ -1408,10 +1409,10 @@ export class Pipeline {
             settings = { ...settings, polish: { ...settings.polish, enabled: true } }
             this.selectTakePrompt(mode, settings, context)
             progress(mt('正在处理选中文字…'))
-            const result = await this.processSelectedText(mode, selection.text, settings, controller.signal, context, transcript)
+            const result = await this.processSelectedText(mode, selection.text, settings, controller.signal, context, selectionInstruction)
             if (token !== this.runToken) return null
             if (!result.trim()) throw new Error(mt('模型返回了空文本'))
-            await selection.apply(result, settings.selectionInsertMode === 'append', controller.signal)
+            await selection.apply(result, selectionAppendRequested(selectionInstruction), controller.signal)
             if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: result, showMode: settings.showModeInBar }, DONE_HIDE_MS)
             return null
           }
@@ -1569,7 +1570,8 @@ export class Pipeline {
         if (token !== this.runToken) return null
         if (!transcript) throw new Error('ASR returned an empty transcript')
 
-        progress(mt('润色中…'))
+        const insertion = mode === 'dictation' ? cursorGeneration(transcript) : null
+        progress(mt(insertion ? cursorNeedsResearch(insertion) ? '正在联网生成内容…' : '正在生成内容…' : mode === 'translate' ? '翻译中…' : '润色中…'))
         final = await this.postProcess(mode, transcript, settings, controller.signal, context)
       }
       if (token !== this.runToken) return null
@@ -1663,6 +1665,7 @@ export class Pipeline {
       // Failures remain visible as alerts and diagnostics, without a history row.
       const classified = classifyError(err)
       const alert = buildBarAlert(classified)
+      if (err instanceof CursorResearchError) alert.text = message
       if (err instanceof EntityOutputError && transcript && !controller.signal.aborted) {
         alert.text = mt(err.message)
         alert.actions = alert.actions?.filter(action => action.id !== 'retry')
@@ -1951,6 +1954,15 @@ export class Pipeline {
     if (mode === 'translate') return this.translate(settings, transcript, signal, context)
 
     const generation = mode === 'dictation' ? cursorGeneration(transcript) : null
+    if (generation && cursorNeedsResearch(generation)) {
+      const research = this.llmSettings(settings)
+      const result = await askAgent({ ...research, polish: { ...research.polish, askPrompt: cursorGenerationPrompt(generation, context.windowTitle, true) } }, generation, {}, signal, this.log,
+        { reset: true, allowedTools: ['web_search', 'read_webpage', 'get_datetime'] })
+      signal.throwIfAborted()
+      if (!result.searched || !result.sources.length) throw new CursorResearchError(mt('未检索到可核实的实时来源，未插入内容。请检查搜索服务或网络后重试。'))
+      const missing = result.sources.filter(source => !result.text.includes(source.url))
+      return missing.length ? `${result.text}\n\n${mt('来源')}：\n${missing.map(source => `${source.title}: ${source.url}`).join('\n')}` : result.text
+    }
     if (generation) return this.llm(settings, {
       messages: [{ role: 'system', content: cursorGenerationPrompt(generation, context.windowTitle) }, { role: 'user', content: generation }],
       temperature: 0.2, signal

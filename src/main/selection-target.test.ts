@@ -3,7 +3,7 @@ import { mergeSettings } from '@shared/defaults'
 
 const mocks = vi.hoisted(() => ({
   foreground: 10, pid: 42, exists: true, restore: true,
-  selected: vi.fn(), insert: vi.fn(), key: vi.fn()
+  selected: vi.fn(), insert: vi.fn(), key: vi.fn(), release: vi.fn()
 }))
 vi.mock('koffi', () => ({ default: {
   address: (handle: number) => handle,
@@ -17,7 +17,7 @@ vi.mock('koffi', () => ({ default: {
 } }))
 vi.mock('./foreground', () => ({ foregroundWindow: () => ({ appName: 'Editor', title: 'Document', pid: 42, appPath: 'editor.exe' }) }))
 vi.mock('./tools/selection', () => ({ getSelection: mocks.selected }))
-vi.mock('./insert', () => ({ insertText: mocks.insert }))
+vi.mock('./insert', () => ({ insertText: mocks.insert, releaseStuckModifiers: mocks.release }))
 import { createTask, attachTask } from './task-context'
 import { captureSelectionTarget, applyAnswerSelection } from './selection-target'
 
@@ -35,10 +35,11 @@ describe('applying a captured selection', () => {
     expect(mocks.insert).toHaveBeenCalledWith('rewritten', expect.objectContaining({ multiline: 'keep' }))
     expect(mocks.key).not.toHaveBeenCalled()
   })
-  it('appends using Ctrl+End, preserving the original selected text', async () => {
+  it('appends at the selected range end, preserving text after that range', async () => {
     const target = await captureSelectionTarget(mergeSettings({}))
     await target.apply('translation', true, new AbortController().signal)
-    expect(mocks.key.mock.calls.map(args => args[0])).toEqual([0x11, 0x23, 0x23, 0x11])
+    expect(mocks.key.mock.calls.map(args => args[0])).toEqual([0x27, 0x27])
+    expect(mocks.release.mock.invocationCallOrder[0]).toBeLessThan(mocks.key.mock.invocationCallOrder[0])
     expect(mocks.insert).toHaveBeenCalledWith('\ntranslation', expect.anything())
   })
   it('does not insert into a changed selection, closed window or different process', async () => {

@@ -1,6 +1,14 @@
 import { readAloudCommand } from './read-aloud-command'
 import { cursorGeneration } from './cursor-generation'
 
+/** Voice selection edits replace by default; only an explicit append instruction preserves the source. */
+export function selectionAppendRequested(text: string): boolean {
+  if (/不要追加|不追加|(?:不要|不用|不|别)保留(?:原文|原内容|选区)|\b(?:do not append|don't append|(?:do not|don't) keep (?:the )?original)\b/iu.test(text)) return false
+  const noReplace = /(?:不要|不用|不|别)(?:覆盖|替换)|\b(?:do not|don't) (?:replace|overwrite)\b/giu
+  if (/覆盖|替换|\b(?:replace|overwrite)\b/iu.test(text.replace(noReplace, ''))) return false
+  return noReplace.test(text) || /追加|附加|保留(?:原文|原内容|选区)|(?:加|放|插)(?:在|到).{0,8}(?:末尾|尾部|后面)|(?:选区|原文)(?:的)?(?:末尾|尾部|后面|之后).{0,8}(?:加|附|插|放)|\b(?:append|add (?:it )?(?:after|at the end)|keep (?:the )?original)\b/iu.test(text)
+}
+
 /** One decision per completed take. Previews never execute an action. */
 export type VoiceIntent = {
   kind: 'dictation' | 'translate' | 'ask' | 'reminder' | 'notes' | 'assistant' | 'selection'
@@ -139,7 +147,7 @@ dictation: ordinary text to insert, articles, quoted commands/examples, messages
 ask: actual questions addressed to YU, including ordinary knowledge, explanation, calculation, time, weather, news, web research, and explicitly selected text questions. Do not restrict Ask to news or fixed phrases. Questions about actual local tasks, notes, history, files, disk capacity or the original active app require assistant tools instead of a general knowledge answer.
 Screenshot capture is manual only. Do not route descriptions of screenshot features, bugs or development requirements into actions. Treat these as dictation; questions about screenshot usage remain ask. Current page and document summaries use the content reader, not screenshots.
 Use assistant for reading, summarizing or explaining the current browser page/article/repository or open document/file/spreadsheet/presentation, including deictic references to content on screen and a standalone summarize request. Read the actual original content with read_current_content before answering; current content always uses useContext=false. If an actual selected passage is provided, its explanation can still use ask. Never substitute a search about the window title for reading the user's current page.
-selection: an explicit request to polish or translate the currently selected text (not supplied dictation). operation must be polish or translate. Replacement/append follows the user's existing selection settings. For explaining/summarizing selected text use ask. For a request to rewrite a previous assistant answer, use assistant instead so the actual answer is the target. Never invent text when no target exists.
+selection: an explicit request to polish or translate the currently selected text (not supplied dictation). operation must be polish or translate. The application replaces by default or appends at the selection end when explicitly requested. For explaining/summarizing selected text use ask. For a request to rewrite a previous assistant answer, use assistant instead so the actual answer is the target. Never invent text when no target exists.
 translate: an explicit request to translate supplied text. text MUST be an exact nonempty substring of the input, containing only the source passage, with no paraphrase. target is an explicitly requested BCP-47 language code (en, zh, ja, etc), otherwise null; do not infer a target from the source language.
 notes: an explicit request to record supplied content in a note; spoken fillers before or inside that request do not change its intent. Recording a software idea is not creating a reminder or executing the feature described in the idea. text MUST be the exact content substring without cleaning or rewriting punctuation; leave null only for references like 'the previous answer' that require the assistant to resolve a target.
 reminder: an explicit instruction to create reminders or todos; retain the entire utterance for the existing reminder parser. Do not calculate timestamps. Missing time must not be guessed. A concrete appointment with an explicit start/end range and meeting/appointment subject is a calendar candidate: use assistant to create or clarify the calendar event. A future date alone is not permission to create a reminder or open its editor.

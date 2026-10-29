@@ -560,6 +560,7 @@ function broadcastNotes(): void {
 }
 let updater: Updater | null = null
 let micDevices: MediaDeviceSummary[] = []
+let deviceListRequest: { promise: Promise<MediaDeviceSummary[]>; finish(devices: MediaDeviceSummary[]): void } | null = null
 /** Answer that arrived before the card renderer finished loading. */
 let pendingCard: AnswerCardPayload | null = null
 let cardReady = false
@@ -649,6 +650,21 @@ let gameResourceTimer: ReturnType<typeof setInterval> | null = null
 let gamePreparation: { id: number; window: BrowserWindow; finish: (ok: boolean) => void } | null = null
 let gamePreparationId = 0
 let reclaimingGameResources = false
+/** Reuse renderer draft/recording guards before retiring either a hidden hub or a game-mode hub. */
+function prepareHubRelease(win: BrowserWindow): Promise<boolean> {
+  if (gamePreparation || win.isDestroyed()) return Promise.resolve(false)
+  return new Promise(resolve => {
+    const id = ++gamePreparationId
+    const finish = (ok: boolean): void => {
+      clearTimeout(timer)
+      if (gamePreparation?.id === id) gamePreparation = null
+      resolve(ok)
+    }
+    const timer = setTimeout(() => finish(false), 10_000)
+    gamePreparation = { id, window: win, finish }
+    win.webContents.send('app:gameMode-prepare', id)
+  })
+}
 const gameMode = new GameMode({ observe: observeGame, alive: gameProcessAlive,
   changed: status => applyGameMode(status), log: message => log(message) })
 
@@ -661,17 +677,7 @@ async function reclaimGameResources(): Promise<void> {
     if (win && !win.isDestroyed()) {
       // An explicit tray open is usable during game mode; do not close a focused editor.
       if (win.isFocused()) return
-      const ready = await new Promise<boolean>(resolve => {
-        const id = ++gamePreparationId
-        const timer = setTimeout(() => finish(false), 10_000)
-        const finish = (ok: boolean): void => {
-          clearTimeout(timer)
-          if (gamePreparation?.id === id) gamePreparation = null
-          resolve(ok)
-        }
-        gamePreparation = { id, window: win, finish }
-        win.webContents.send('app:gameMode-prepare', id)
-      })
+      const ready = await prepareHubRelease(win)
       if (!gameMode.snapshot().active || !ready || win.isDestroyed() || win.isFocused()) return
       win.destroy()
     }
@@ -927,10 +933,11 @@ function ensureSettingsWindow(): BrowserWindow {
     if (!notesRecording && !cardVoice.active) localAsr.reclaim()
     if (wakeSetupMode) { wakeSetupMode = null; wakeWord.cancelLearning(); refreshHotkeyActivity() }
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
-    hubRetireTimer = setTimeout(() => {
+    hubRetireTimer = setTimeout(async () => {
       hubRetireTimer = null
-      if (!win.isDestroyed() && !win.isVisible() && !win.isMinimized() && !notesRecording) win.destroy()
-    }, 60_000)
+      if (win.isDestroyed() || win.isVisible() || win.isMinimized() || notesRecording) return
+      if (await prepareHubRelease(win) && !win.isDestroyed() && !win.isVisible() && !win.isMinimized() && !notesRecording) win.destroy()
+    }, 15_000)
     hubRetireTimer.unref?.()
   })
   win.on('show', () => { if (hubRetireTimer) clearTimeout(hubRetireTimer); hubRetireTimer = null })
@@ -1174,7 +1181,7 @@ async function handleCardAction(action: CardAction): Promise<void> {
  * it a few minutes after the user closes it costs one window creation on the
  * next answer and nothing else.
  */
-const CARD_IDLE_DESTROY_MS = Number(process.env.TYPELESS_CARD_IDLE_MS ?? 5 * 60_000)
+const CARD_IDLE_DESTROY_MS = Number(process.env.TYPELESS_CARD_IDLE_MS ?? 20_000)
 let cardIdleTimer: NodeJS.Timeout | null = null
 
 function clearCardRetire(): void {
@@ -1792,7 +1799,17 @@ function registerIpc(): void {
     }
   })
 
-  handle('media:devices', (): MediaDeviceSummary[] => micDevices)
+  handle('media:devices', async (): Promise<MediaDeviceSummary[]> => {
+    if (gameMode.snapshot().active) return micDevices
+    if (deviceListRequest) return deviceListRequest.promise
+    const win = ensureBarWindow()
+    let finish!: (devices: MediaDeviceSummary[]) => void
+    const promise = new Promise<MediaDeviceSummary[]>(resolve => { finish = resolve })
+    const timer = setTimeout(() => { deviceListRequest = null; finish(micDevices) }, 3000)
+    deviceListRequest = { promise, finish: devices => { clearTimeout(timer); deviceListRequest = null; finish(devices) } }
+    if (!win.webContents.isLoadingMainFrame()) win.webContents.send('media:request-devices')
+    return promise
+  })
 
   /**
    * Saves the share card the hub rendered. The renderer owns the canvas (it has
@@ -1927,8 +1944,10 @@ function registerIpc(): void {
   })
   // Device labels are only readable from a renderer that holds microphone
   // access, so the bar reports them and the settings window reads the cache.
-  subscribe('bar:devices', (_event, devices: MediaDeviceSummary[]) => {
+  subscribe('bar:devices', (event, devices: MediaDeviceSummary[]) => {
+    if (event.sender !== barWindow?.webContents) return
     micDevices = Array.isArray(devices) ? devices : []
+    deviceListRequest?.finish(micDevices)
     log(`[media] ${micDevices.length} input device(s): ${micDevices.map((d) => d.label).join(' | ')}`)
   })
 
@@ -1945,6 +1964,7 @@ function registerIpc(): void {
     if (event.sender !== barWindow?.webContents) return
     setBarCaptionVisible(false)
     pipeline?.replayBarState()
+    if (deviceListRequest) barWindow?.webContents.send('media:request-devices')
   })
   subscribe('bar:start-cue-finished', (event, taskId: string) => {
     if (event.sender === barWindow?.webContents && typeof taskId === 'string') pipeline?.startCueFinished(taskId)

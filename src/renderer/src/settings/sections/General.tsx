@@ -1226,7 +1226,7 @@ export function InputSection({ settings, patch }: {
       </SettingsGroup>
       <SettingsGroup icon={<IconCode />} title={i18n.t('选区处理')}>
         <SettingsRow label={i18n.t('处理结果')} description={i18n.t('选区润色和选区翻译快捷键共用此方式，不再弹出预览窗口。')}>
-          <Segmented value={settings.selectionInsertMode} options={[{ value: 'replace', label: '覆盖选区' }, { value: 'append', label: '追加到末尾' }]}
+          <Segmented value={settings.selectionInsertMode} options={[{ value: 'replace', label: '覆盖选区' }, { value: 'append', label: '追加到选区末尾' }]}
             onChange={value => patch({ selectionInsertMode: value })} />
         </SettingsRow>
       </SettingsGroup>

@@ -368,6 +368,11 @@ const api: TypelessApi = {
   bar: {
     ready: () => ipcRenderer.send('bar:ready'),
     startCueFinished: taskId => ipcRenderer.send('bar:start-cue-finished', taskId),
+    onDevicesRequest: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('media:request-devices', listener)
+      return () => ipcRenderer.removeListener('media:request-devices', listener)
+    },
     onSpeechPlayback: callback => {
       const listener = (_event: unknown, request: import('@shared/speech').SpeechPlaybackRequest): void => callback(request)
       ipcRenderer.on('speech:playback', listener)

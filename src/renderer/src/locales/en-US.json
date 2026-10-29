@@ -2418,5 +2418,10 @@
   "已用": "Used",
   "本地 ASR": "Local ASR",
   "配置尚未保存，保存后查询。": "Configuration has not been saved. Save it before querying.",
-  "缺少可计算的总额度，暂不显示比例。": "A usable total allowance is unavailable, so no percentage is shown."
+  "缺少可计算的总额度，暂不显示比例。": "A usable total allowance is unavailable, so no percentage is shown.",
+  "正在生成内容…": "Generating content…",
+  "正在联网生成内容…": "Researching and generating…",
+  "未检索到可核实的实时来源，未插入内容。请检查搜索服务或网络后重试。": "No verifiable current sources were retrieved, so nothing was inserted. Check your search service or network and try again.",
+  "已追加到选区末尾": "Appended at the end of the selection",
+  "追加到选区末尾": "Append at selection end"
 }

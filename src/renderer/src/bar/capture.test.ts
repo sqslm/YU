@@ -48,6 +48,13 @@ function capture(): { mic: MicCapture; onChunk: ReturnType<typeof vi.fn>; onEnco
 }
 
 describe('recording integrity', () => {
+  it('warms audio without enumerating cameras and unrelated media devices', async () => {
+    const { mic } = capture()
+    await mic.start()
+    expect(mic.isRunning).toBe(true)
+    expect(navigator.mediaDevices.enumerateDevices).not.toHaveBeenCalled()
+    await mic.stop()
+  })
   it('does not reopen the recording gate after cancellation during activation', async () => {
     const { mic } = capture()
     await mic.start()

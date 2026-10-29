@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { directVoiceIntent, parseVoiceIntent, isCurrentWindowQuestion, needsAssistantContext, screenshotNeedsEditor } from './voice-intent'
+import { directVoiceIntent, parseVoiceIntent, isCurrentWindowQuestion, needsAssistantContext, screenshotNeedsEditor, selectionAppendRequested } from './voice-intent'
+
+it.each([['翻译一下选区', false], ['润色选中的文字，追加尾部', true], ['翻译选区，放到后面', true], ['翻译选区，不要覆盖原文', true], ['翻译选区，保留原文', true], ['翻译选区，不要追加，直接覆盖', false], ['Translate the selection and append at the end', true], ["Translate the selection, don't replace the original", true]])('honors the spoken selection destination: %s', (text, expected) => {
+  expect(selectionAppendRequested(text)).toBe(expected)
+})
 
 describe('unified voice decisions', () => {
   it.each(['十分钟后提醒我读取剪贴板', '明天提醒我截图', '提醒我看一下日程'])('treats the operation in a timed reminder as reminder content: %s', text => {

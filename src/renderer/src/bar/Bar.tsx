@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BarState, BarWindowLayout, Mode, Settings } from '@shared/types'
 import { AlertRow, alertOf, alertTone, hasAlertActions } from './AlertRow'
-import { MicCapture } from './capture'
+import { MicCapture, listDevices } from './capture'
 import { disposeCues, playCue } from './cues'
 import { CaptionTicker } from './CaptionTicker'
 import { createNoteAudioPlayer } from './noteAudio'
@@ -158,6 +158,7 @@ export function Bar(): JSX.Element {
       await capture.setActive(false)
       window.api.bar.stopped()
     })
+    const offDevices = window.api.bar.onDevicesRequest(() => { void listDevices().then(devices => window.api.bar.devices(devices)) })
     window.api.bar.ready()
 
     return () => {
@@ -166,6 +167,7 @@ export function Bar(): JSX.Element {
       offCaption()
       offLayout()
       offStop()
+      offDevices()
       disposeCues()
       void capture.stop()
     }

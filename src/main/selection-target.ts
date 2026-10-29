@@ -1,7 +1,7 @@
 import koffi from 'koffi'
 import { getSelection } from './tools/selection'
 import { foregroundWindow } from './foreground'
-import { insertText } from './insert'
+import { insertText, releaseStuckModifiers } from './insert'
 import type { Settings } from '@shared/types'
 import type { SelectionTarget } from './selection-editor'
 import { mt } from '@shared/mainI18n'
@@ -55,8 +55,9 @@ export async function captureSelectionTarget(settings: Settings, original?: Prom
       if (!sameWindow() || !current.ok || current.text !== selected.text) throw new Error(mt('选区已变化，未修改文字；请重新选择'))
       signal.throwIfAborted()
       if (append) {
-        // Ctrl+End collapses selection and places the caret at the field's end.
-        key(0x11, 0, 0, 0); key(0x23, 0, 0, 0); key(0x23, 0, 2, 0); key(0x11, 0, 2, 0)
+        // Right collapses the selected range to its end; Ctrl+End would skip the rest of the document.
+        releaseStuckModifiers()
+        key(0x27, 0, 0, 0); key(0x27, 0, 2, 0)
       }
       await insertText(append ? `\n${text}` : text, {
         method: settings.insertMethod, restoreClipboard: settings.restoreClipboard, multiline: 'keep'

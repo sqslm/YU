@@ -337,6 +337,14 @@ Finer detail lives in `git log`.
 
 ## First-run setup
 
+The history toolbar keeps search, mode tabs and manual refresh visible. Filters expand application, date, order and archive controls; refresh interval, export and cleanup live under More. Destructive cleanup still asks for confirmation.
+
+Cursor insertion shows a generation status. News, live information and explicit web requests reuse read-only Ask research and include retrieved sources. Search must be enabled and configured; no sources means no insertion of unverifiable current claims. Ordinary prose and code still use direct generation.
+
+Spoken selection translation/polish replaces by default. Explicit append/keep-original wording appends at the selected range's end, preserving later document text. Shortcuts retain their saved insert preference. Original-window, selection and cancellation checks still apply.
+
+The warmed microphone is retained, but startup no longer enumerates all media devices. Opening a microphone picker requests enumeration on demand. Hidden hubs attempt guarded retirement after 15 seconds and hidden answer cards after about 20 seconds. An isolated enumeration-only measurement started an additional Chromium video-device service with approximately 76 MiB working set; this is not a full application before/after memory benchmark. The installed older main process alone used about 153 MiB working set, so a 100 MB total with all features active has not been achieved or promised. No forced working-set trimming or disabling voice/hotkeys is used.
+
 The skippable guide brings microphone selection and a local level test, ASR / LLM / TTS connections, custom wake-word setup and optional account sign-in into one place. Settings save automatically; reopen the guide from the hub. The level test neither saves nor uploads audio.
 
 Examples appear only for configured capabilities: speech models enable dictation; an LLM enables polishing, translation, reminders, to-dos, events and questions through one input. Review recognized speech before running it. Trials use an isolated conversation without long-term memory, while explicitly executed reminders, to-dos and events create real records. Saving a connection does not verify connectivity; use its connection test.

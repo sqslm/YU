@@ -384,7 +384,7 @@ export class MicCapture {
         if (DEAF_CONTEXT_STATES.has(context.state)) this.reportLoss(`audio context ${context.state}`)
       }
       navigator.mediaDevices.addEventListener('devicechange', this.onDeviceChange)
-      this.handlers.onDevices?.(await listDevices())
+      // Device enumeration also initializes Chromium's camera service. The picker requests it on demand.
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       this.handlers.onError(`microphone unavailable: ${message}`)

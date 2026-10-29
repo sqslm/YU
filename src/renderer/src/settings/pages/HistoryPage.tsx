@@ -16,6 +16,7 @@ import {
   Typography
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
+import MoreHorizRounded from '@mui/icons-material/MoreHorizRounded'
 import type { HistoryEntry, Mode, Settings } from '@shared/types'
 import { IconBook, IconCheck, IconCopy, IconSearch, IconTrash } from '../icons'
 import {
@@ -120,7 +121,7 @@ interface Notice {
  */
 interface HistoryPageProps {
   settings?: Settings | null
-  /** Optimistic settings writer; the interval chips write through it. */
+  /** Optimistic settings writer for the refresh interval. */
   patch?: (delta: Partial<Settings>) => void
   /** Search text the caller wants applied on arrival (e.g. a 热门场景 chip). */
   initialQuery?: string
@@ -137,6 +138,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   const [appFilter, setAppFilter] = useState<string>(APP_FILTER_ALL)
   const [query, setQuery] = useState(initialQuery ?? '')
   const [period, setPeriod] = useState<HistoryPeriod>('all')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [toolbarMenu, setToolbarMenu] = useState<HTMLElement | null>(null)
   const [dateFrom, setDateFrom] = useState(''), [dateTo, setDateTo] = useState('')
   const [order, setOrder] = useState<'newest' | 'oldest'>('newest')
   const [loadError, setLoadError] = useState('')
@@ -494,72 +497,11 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
             gap: 0.75,
             flexWrap: 'wrap',
             rowGap: 0.75,
-            width: '100%',
+            width: 'auto',
+            order: 2,
             justifyContent: 'flex-end'
           }}
         >
-          {/* Interval chips: 关闭 / 5 秒 / … / 5 分钟. Writing through `patch`
-              keeps the choice in settings.json, so it survives a restart. */}
-          <Box
-            role="group"
-            aria-label={i18n.t(i18n.t('自动刷新间隔'))}
-            data-history-refresh-picker
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.25,
-              height: 26,
-              px: 0.5,
-              borderRadius: 99,
-              border: 1,
-              borderColor: 'divider',
-              bgcolor: 'action.hover'
-            }}
-          >
-            {REFRESH_OPTIONS.map((option) => {
-              const active = refreshSeconds === option.value
-              const writable = Boolean(patch)
-              return (
-                <Box
-                  key={option.value}
-                  role="button"
-                  aria-pressed={active}
-                  data-history-refresh-option={option.value}
-                  title={
-                    writable
-                      ? option.value === 0
-                        ? i18n.t('关闭自动刷新')
-                        : i18n.t('每 {{label}} 自动刷新一次', { label: refreshOptionLabel(option.labelKey) })
-                      : i18n.t('本页没有拿到设置写入权限，间隔无法保存')
-                  }
-                  onClick={() => {
-                    if (!patch) return
-                    patch({ historyRefreshSeconds: option.value })
-                  }}
-                  sx={{
-                    px: 0.9,
-                    height: 20,
-                    display: 'grid',
-                    placeItems: 'center',
-                    borderRadius: 99,
-                    fontSize: 10.5,
-                    whiteSpace: 'nowrap',
-                    cursor: writable ? 'pointer' : 'default',
-                    color: active ? 'text.primary' : 'text.secondary',
-                    bgcolor: active ? 'background.paper' : 'transparent',
-                    border: 1,
-                    borderColor: active ? 'divider' : 'transparent',
-                    fontWeight: active ? 600 : 400,
-                    opacity: writable ? 1 : 0.55,
-                    '&:hover': { color: writable ? 'text.primary' : 'text.secondary' }
-                  }}
-                >
-                  {refreshOptionLabel(option.labelKey)}
-                </Box>
-              )
-            })}
-          </Box>
-
           <Tooltip title={i18n.t(i18n.t('重新读取本机历史记录'))}>
             {/* The span keeps the tooltip readable while the button is disabled
                 mid-refresh (a disabled button swallows pointer events). */}
@@ -592,8 +534,19 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
             {refreshLabel(refreshSeconds)}
           </Typography>
 
+          <Tooltip title={i18n.t('更多操作')}><IconButton size="small" aria-label={i18n.t('更多操作')} onClick={event => setToolbarMenu(event.currentTarget)}><MoreHorizRounded fontSize="small" /></IconButton></Tooltip>
+          <Menu anchorEl={toolbarMenu} open={Boolean(toolbarMenu)} onClose={() => setToolbarMenu(null)}>
+            <Box sx={{ px: 2, py: 1, width: 220 }}><TextField select size="small" fullWidth label={i18n.t('自动刷新间隔')} value={refreshSeconds} disabled={!patch} data-history-refresh-picker
+              onChange={event => patch?.({ historyRefreshSeconds: Number(event.target.value) })}>
+              {REFRESH_OPTIONS.map(option => <MenuItem key={option.value} value={option.value} data-history-refresh-option={option.value}>{refreshOptionLabel(option.labelKey)}</MenuItem>)}
+            </TextField></Box>
+            <MenuItem data-history-export disabled={exportBusy || refreshing || !!loadError || !!dateBounds.error || loadedQuery !== query || !total}
+              onClick={() => { setExportMenu(toolbarMenu); setToolbarMenu(null) }}>{exportBusy ? i18n.t('正在导出…') : i18n.t('导出')}</MenuItem>
+            <MenuItem data-history-clean-abnormal onClick={() => { setToolbarMenu(null); setCleanupNotice(null); setClearAsk('abnormal') }}>{i18n.t('清理旧异常')}</MenuItem>
+            <MenuItem sx={{ color: 'error.main' }} onClick={() => { setToolbarMenu(null); setClearAsk('all') }}>{i18n.t('清空全部历史')}</MenuItem>
+          </Menu>
         </Box>
-        <Box data-history-filter-toolbar sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: '100%', flexWrap: 'wrap' }}>
+        <Box data-history-filter-toolbar sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flex: 1, minWidth: 280, order: 1, flexWrap: 'wrap' }}>
           {/* Search box and 窗口筛选 share one row: the box takes everything it
               can (flex: 1) and the dropdown keeps a fixed 180px cap, so adding
               the filter never squeezes what the user is typing into. */}
@@ -645,6 +598,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
             {/* 窗口筛选: the windows actually present in the loaded list, plus
                 全部. Picking one narrows the tab, the search and the paging
                 together instead of replacing any of them. */}
+            <Button size="small" variant={filtersOpen ? 'outlined' : 'text'} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)} sx={{ flexShrink: 0 }}>{i18n.t('筛选')}{[appFilter !== APP_FILTER_ALL, period !== 'all', order !== 'newest', showArchived].filter(Boolean).length ? ` (${[appFilter !== APP_FILTER_ALL, period !== 'all', order !== 'newest', showArchived].filter(Boolean).length})` : ''}</Button>
+            {filtersOpen && <>
             <TextField
               select
               SelectProps={{ displayEmpty: true }}
@@ -687,35 +642,13 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
             >
               {showArchived ? i18n.t('看全部记录') : i18n.t('已归档')}
             </Button>
+            </>}
           </Box>
-          <Tooltip title={i18n.t('导出当前筛选和排序下的全部正常记录，包含所有分页。')}>
-            <span><Button size="small" data-history-export disabled={exportBusy || refreshing || !!loadError || !!dateBounds.error || loadedQuery !== query || !total}
-              sx={{ fontSize: 12 }} onClick={event => setExportMenu(event.currentTarget)}>
-              {exportBusy ? i18n.t('正在导出…') : i18n.t('导出')}
-            </Button></span>
-          </Tooltip>
           <Menu anchorEl={exportMenu} open={!!exportMenu} onClose={() => setExportMenu(null)}>
             <MenuItem onClick={() => void exportCurrent('markdown')}>Markdown (.md)</MenuItem>
             <MenuItem onClick={() => void exportCurrent('text')}>{i18n.t('纯文本')} (.txt)</MenuItem>
           </Menu>
-          <Button size="small" data-history-clean-abnormal
-            sx={{ fontSize: 12, color: 'text.secondary' }}
-            onClick={() => { setCleanupNotice(null); setClearAsk('abnormal') }}>
-            {i18n.t('清理旧异常')}
-          </Button>
-          <Tooltip title={i18n.t(i18n.t('清空全部历史'))}>
-            <Button
-              size="small"
-              variant="text"
-              sx={{ fontSize: 12, color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-              onClick={() => setClearAsk('all')}
-            >
-              {i18n.t('清空')}
-            </Button>
-          </Tooltip>
-          {/* Wiping history also deletes every kept wav and cannot be undone, so
-              the button asks first. It sits next to the refresh control at 12px,
-              which made an accidental click indistinguishable from a reload. */}
+          {/* Destructive actions remain confirmed even after moving into More. */}
           <Dialog open={clearAsk !== null} onClose={() => setClearAsk(null)}>
             <Box sx={{ p: 2.5, width: 340 }}>
               <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{i18n.t(clearAsk === 'abnormal' ? '清理旧异常记录？' : '清空全部历史？')}</Typography>
@@ -762,6 +695,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
 
       {cleanupNotice && <Typography role="status" data-history-clean-result sx={{ mt: 1, fontSize: 12, color: 'text.secondary' }}>{cleanupNotice}</Typography>}
       {exportNotice && <Typography role="status" data-history-export-result sx={{ mt: 1, fontSize: 12, color: 'text.secondary' }}>{exportNotice}</Typography>}
+      {filtersOpen && <>
       <Box data-history-date-toolbar sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mt: 1.5 }}>
         <TextField select size="small" label={i18n.t('日期范围')} value={period} sx={{ width: 145 }}
           inputProps={{ 'aria-label': i18n.t('日期范围') }} onChange={event => setPeriod(event.target.value as HistoryPeriod)}>
@@ -781,6 +715,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
         {(period !== 'all' || order !== 'newest' || query || appFilter !== APP_FILTER_ALL || filter !== 'all' || showArchived) &&
           <Button size="small" onClick={() => { setPeriod('all'); setDateFrom(''); setDateTo(''); setOrder('newest'); setQuery(''); setAppFilter(APP_FILTER_ALL); setFilter('all'); setShowArchived(false) }}>{i18n.t('重置筛选')}</Button>}
       </Box>
+      </>}
       {dateBounds.error && <Alert severity="warning" sx={{ mt: 1 }}>{i18n.t(dateBounds.error)}</Alert>}
       {loadError && <Alert severity="error" data-history-load-error sx={{ mt: 1 }} action={<Button color="inherit" size="small" onClick={refreshNow}>{i18n.t('刷新')}</Button>}>
         {i18n.t('历史记录读取失败：{{error}}', { error: loadError })}

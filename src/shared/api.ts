@@ -448,6 +448,7 @@ export interface TypelessApi {
   }
   bar: {
     ready(): void
+    onDevicesRequest(callback: () => void): () => void
     startCueFinished(taskId: string): void
     onNoteAudio(callback:(request:import('./noteAudio').NoteAudioRequest)=>void):()=>void
     onSpeechPlayback(callback:(request:import('./speech').SpeechPlaybackRequest)=>void):()=>void
