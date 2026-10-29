@@ -8,7 +8,7 @@ import { Pager, PaginationSettings } from '../Pagination'
 
 const ROLE_LABELS: Record<string, string> = {
   main: '主进程', graphics: '图形服务', interface: '界面', hotkeys: '快捷键',
-  context: '上下文读取', localModel: '本地语音模型', network: '网络服务', media: '媒体服务', other: '辅助进程'
+  context: '上下文读取', localModel: '本地语音模型', memory: '长期记忆', network: '网络服务', media: '媒体服务', other: '辅助进程'
 }
 
 function memory(bytes: number | null): string {

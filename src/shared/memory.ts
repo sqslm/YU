@@ -1,7 +1,8 @@
 export type MemoryKind = 'assistant' | 'style'
 export interface MemoryEntry { id: string; text: string; kind: MemoryKind; sourceId: string; createdAt?: string; updatedAt?: string; score?: number }
 export interface MemorySettings { enabled: boolean; autoLearn: boolean }
-export interface MemoryStatus { state: 'off' | 'idle' | 'working' | 'paused' | 'error' | 'downloading'; pending: number; modelReady: boolean; progress?: number; error?: string }
+export interface MemoryGraph { nodes: MemoryEntry[]; links: Array<{ source: string; target: string; type: 'similar' | 'source'; score: number }>; total: number; limit: number }
+export interface MemoryStatus { state: 'off' | 'idle' | 'waiting' | 'working' | 'paused' | 'error' | 'downloading'; pending: number; modelReady: boolean; progress?: number; error?: string }
 export interface MemoryBackend {
   learningToken(): number
   recall(kind: MemoryKind, query: string): Promise<MemoryEntry[]>

@@ -22,6 +22,7 @@ const api: TypelessApi = {
     download: () => ipcRenderer.invoke('memory:download'),
     cancelDownload: () => ipcRenderer.invoke('memory:cancel-download'),
     list: kind => ipcRenderer.invoke('memory:list', kind),
+    graph: (kind, query = '') => ipcRenderer.invoke('memory:graph', kind, query),
     add: (kind, text) => ipcRenderer.invoke('memory:add', kind, text),
     update: (kind, id, text) => ipcRenderer.invoke('memory:update', kind, id, text),
     delete: (kind, id) => ipcRenderer.invoke('memory:delete', kind, id),

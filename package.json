@@ -1,6 +1,6 @@
 {
   "name": "typeless-rebuild",
-  "version": "1.1.0-rc.17",
+  "version": "1.1.0-rc.18",
   "license": "MIT",
   "author": "YU contributors",
   "private": true,
@@ -44,6 +44,7 @@
     "pdfjs-dist": "6.4.299",
     "pg": "8.11.3",
     "pinyin-pro": "3.29.5",
+    "react-force-graph-2d": "1.29.2",
     "redis": "4.7.1",
     "sherpa-onnx-node": "1.13.8",
     "sherpa-onnx-win-x64": "1.13.8"

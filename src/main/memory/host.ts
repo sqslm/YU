@@ -2,7 +2,7 @@ import { utilityProcess, type UtilityProcess } from 'electron'
 import { join } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import type { Settings } from '@shared/types'
-import type { MemoryBackend, MemoryEntry, MemoryKind, MemoryStatus } from '@shared/memory'
+import type { MemoryBackend, MemoryEntry, MemoryGraph, MemoryKind, MemoryStatus } from '@shared/memory'
 import { complete } from '../providers/llm'
 import { chainFor } from '../providers/chain'
 import { downloadMemoryModel, memoryModelReady } from './model'
@@ -14,8 +14,8 @@ export class MemoryService implements MemoryBackend {
   private pending = new Map<number, { resolve(value: any): void; reject(error: Error): void }>()
   private sequence = 0
   private llmCalls = 0
-  private queue: Array<{ kind: MemoryKind; text: string; sourceId: string }> = []
-  private learningBatch: Array<{ kind: MemoryKind; text: string; sourceId: string }> = []
+  private queue: Array<{ kind: MemoryKind; text: string; sourceId: string; at: number }> = []
+  private learningBatch: typeof this.queue = []
   private timer: ReturnType<typeof setTimeout> | null = null
   private idleTimer: ReturnType<typeof setTimeout> | null = null
   private reasons = new Set<string>()
@@ -24,18 +24,19 @@ export class MemoryService implements MemoryBackend {
   private mutations: Promise<void> = Promise.resolve()
   private mutating = 0
   private generation = 0
+  private learningEpoch = 0
   private download: AbortController | null = null
   private llmAbort = new AbortController()
   private current: MemoryStatus = { state: 'off', pending: 0, modelReady: false }
   readonly modelDir: string
-  constructor(private home: string, private settings: () => Settings, private busy: () => boolean, private log: (line: string) => void) {
+  constructor(private home: string, private settings: () => Settings, private busy: () => boolean, private log: (line: string) => void, private idleEnough: () => boolean = () => true) {
     this.modelDir = join(home, 'model')
   }
-  learningToken(): number { return this.generation }
-  status(): MemoryStatus { return { ...this.current, state: this.current.state === 'downloading' ? 'downloading' : !this.settings().memory.enabled ? 'off' : this.paused ? 'paused' : this.current.state, pending: this.queue.length } }
+  learningToken(): number { return this.learningEpoch }
+  status(): MemoryStatus { return { ...this.current, state: this.current.state === 'downloading' ? 'downloading' : !this.settings().memory.enabled ? 'off' : this.paused ? 'paused' : this.current.state === 'idle' && this.queue.length ? 'waiting' : this.current.state, pending: this.queue.length } }
   async configure(): Promise<void> {
-    if (!this.settings().memory.enabled) { this.queue = []; this.stop(); this.download?.abort(); return }
-    if (!this.settings().memory.autoLearn) { this.queue = []; if (this.working) this.stop() }
+    if (!this.settings().memory.enabled) { this.learningEpoch++; this.queue = []; this.stop(); this.download?.abort(); return }
+    if (!this.settings().memory.autoLearn) { this.learningEpoch++; this.queue = []; if (this.working) this.stop() }
     if (this.download) return
     if (!this.current.modelReady) this.current.modelReady = await memoryModelReady(this.modelDir)
     this.current.state = this.current.modelReady ? 'idle' : 'off'
@@ -95,12 +96,15 @@ export class MemoryService implements MemoryBackend {
   }
   private async request(method: string, payload: Record<string, unknown> = {}, timeout = 30000): Promise<any> {
     let timer: ReturnType<typeof setTimeout> | undefined
+    const generation = this.generation
     try {
       return await Promise.race([this.start().then(() => this.send(method, payload)), new Promise((_, reject) => { timer = setTimeout(() => { if (method !== 'recall') this.stop(); reject(Error('记忆处理超时')) }, timeout) })])
     } finally {
       if (timer) clearTimeout(timer)
-      if (this.idleTimer) clearTimeout(this.idleTimer)
-      this.idleTimer = setTimeout(() => { if (!this.working) this.stop() }, 5 * 60000); this.idleTimer.unref()
+      if (generation === this.generation) {
+        if (this.idleTimer) clearTimeout(this.idleTimer)
+        this.idleTimer = setTimeout(() => { this.idleTimer = null; this.reclaim() }, method === 'list' || method === 'graph' ? 5000 : 30000); this.idleTimer.unref()
+      }
     }
   }
   async recall(kind: MemoryKind, text: string): Promise<MemoryEntry[]> {
@@ -112,16 +116,17 @@ export class MemoryService implements MemoryBackend {
   }
   enqueueLearning(kind: MemoryKind, text: string, sourceId: string): void {
     if (!this.settings().memory.enabled || !this.settings().memory.autoLearn || !text.trim() || /(?:他说|她说|假设|扮演|小说|示例|网页上|文件里|密码|密钥|api.?key|sk-[a-z0-9])/iu.test(text)) return
-    this.queue.push({ kind, text: text.slice(0, 2000), sourceId }); this.queue = this.queue.slice(-3)
+    this.queue.push({ kind, text: text.slice(0, 2000), sourceId, at: Date.now() }); this.queue = this.queue.slice(-30)
+    if (!this.working) this.current.state = 'waiting'
     this.schedule()
   }
   private schedule(): void {
     if (this.timer) clearTimeout(this.timer)
-    this.timer = setTimeout(() => { this.timer = null; void this.learn() }, 10000); this.timer.unref()
+    this.timer = setTimeout(() => { this.timer = null; void this.learn() }, 30000); this.timer.unref()
   }
   private async learn(): Promise<void> {
     if (!this.queue.length || this.paused || !this.settings().memory.enabled || !this.settings().memory.autoLearn || !this.current.modelReady) return
-    if (this.busy() || this.working || this.mutating) { this.schedule(); return }
+    if (this.busy() || this.working || this.mutating || !this.idleEnough() || (this.queue.length < 3 && Date.now() - this.queue[0].at < 5 * 60000)) { this.schedule(); return }
     const generation = this.generation, batch = this.queue.splice(0, 3)
     this.learningBatch = batch
     this.working = true; this.current.state = 'working'
@@ -134,14 +139,29 @@ export class MemoryService implements MemoryBackend {
       }
       this.current.state = 'idle'; this.current.error = undefined
     } catch (error) { if (generation === this.generation) { this.current.state = 'error'; this.current.error = error instanceof Error ? error.message : '记忆学习未完成，请检查模型连接' } }
-    finally { this.learningBatch = []; this.working = false; if (this.queue.length && !this.paused) this.schedule() }
+    finally { this.learningBatch = []; this.working = false; if (generation === this.generation) this.stop(); if (this.queue.length && !this.paused) this.schedule() }
   }
   async list(kind: MemoryKind): Promise<MemoryEntry[]> {
     if (!this.current.modelReady) this.current.modelReady = await memoryModelReady(this.modelDir)
-    return this.request('list', { kind })
+    return this.catalogRequest('list', { kind })
+  }
+  graph(kind?: MemoryKind, query = ''): Promise<MemoryGraph> { return this.catalogRequest('graph', { kind, query: query.slice(0, 200) }) }
+  private async catalogRequest(method: string, payload: Record<string, unknown>): Promise<any> {
+    const interrupted = this.working
+    if (interrupted) this.pause('catalog')
+    try { return await this.request(method, payload) }
+    finally { if (interrupted) this.resume('catalog') }
+  }
+  reclaim(): void {
+    if (this.working || this.mutating || this.pending.size || this.busy()) {
+      if (this.child && !this.idleTimer) { this.idleTimer = setTimeout(() => { this.idleTimer = null; this.reclaim() }, 30000); this.idleTimer.unref() }
+      return
+    }
+    this.stop()
+    if (this.queue.length && !this.paused) this.schedule()
   }
   private mutate(method: string, kind?: MemoryKind, id?: string, text?: string, sourceId = 'manual'): Promise<void> {
-    this.queue = []; this.mutating++
+    this.learningEpoch++; this.queue = []; this.mutating++
     const operation = this.mutations.then(async () => {
       this.queue = []; this.stop()
       if (method === 'add' || method === 'update') {
@@ -150,7 +170,7 @@ export class MemoryService implements MemoryBackend {
       }
       await this.request(method, { kind, memoryId: id, text: text?.trim(), sourceId })
       this.current.error = undefined; this.current.state = 'idle'
-    }).finally(() => { this.mutating-- })
+    }).finally(() => { this.mutating--; if (!this.mutating) this.reclaim() })
     this.mutations = operation.catch(() => {})
     return operation
   }
@@ -161,7 +181,7 @@ export class MemoryService implements MemoryBackend {
   pause(reason = 'manual'): void {
     this.reasons.add(reason)
     if (this.working && this.learningBatch.length) {
-      this.queue = [...this.learningBatch, ...this.queue].slice(-3)
+      this.queue = [...this.learningBatch, ...this.queue].slice(-30)
       this.learningBatch = []
     }
     if ((reason !== 'foreground' && reason !== 'recording') || this.working) this.stop()
@@ -175,6 +195,7 @@ export class MemoryService implements MemoryBackend {
     for (const pending of this.pending.values()) pending.reject(Error('记忆任务已取消'))
     this.pending.clear(); child?.kill()
     if (this.timer) clearTimeout(this.timer); this.timer = null
+    if (this.idleTimer) clearTimeout(this.idleTimer); this.idleTimer = null
   }
-  shutdown(): void { this.queue = []; this.download?.abort(); this.stop(); if (this.idleTimer) clearTimeout(this.idleTimer) }
+  shutdown(): void { this.learningEpoch++; this.queue = []; this.download?.abort(); this.stop() }
 }

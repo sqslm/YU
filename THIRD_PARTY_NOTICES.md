@@ -227,6 +227,8 @@ Native runtime: sherpa-onnx bundles ONNX Runtime 1.28.2 on Windows. Its upstream
 
 ## Local memory components
 
+The optional memory graph uses [react-force-graph-2d](https://github.com/vasturiano/react-force-graph) 1.29.2, MIT; [license](licenses/react-force-graph-2d-1.29.2-LICENSE). Its canvas/d3-based 2D renderer is loaded only when the graph opens. It does not use a cloud graph service or the Mem0/Neo4j graph backend.
+
 | Component | Version | License |
 | --- | --- | --- |
 | mem0ai OSS SDK | 2.4.6 | [Apache-2.0](licenses/mem0ai-2.4.6-LICENSE) |

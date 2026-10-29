@@ -61,6 +61,7 @@ export interface TypelessApi {
     download(): Promise<void>
     cancelDownload(): Promise<void>
     list(kind: import('./memory').MemoryKind): Promise<import('./memory').MemoryEntry[]>
+    graph(kind?: import('./memory').MemoryKind, query?: string): Promise<import('./memory').MemoryGraph>
     add(kind: import('./memory').MemoryKind, text: string): Promise<void>
     update(kind: import('./memory').MemoryKind, id: string, text: string): Promise<void>
     delete(kind: import('./memory').MemoryKind, id: string): Promise<void>

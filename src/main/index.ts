@@ -1,5 +1,6 @@
 import { MemoryService } from './memory/host'
 import { setMemoryService } from './memory/registry'
+import { memoryIdleCheck } from './memory/idle'
 import { GameMode } from './game-mode'
 import { observeGame, gameProcessAlive } from './game-mode-native'
 import type { GameModeStatus } from '@shared/game-mode'
@@ -147,7 +148,7 @@ let barWindow: BrowserWindow | null = null
 let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
-const memory = new MemoryService(join(app.getPath('userData'), 'memory'), () => store.get(), () => Boolean(pipeline?.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy), line => log(line))
+const memory = new MemoryService(join(app.getPath('userData'), 'memory'), () => store.get(), () => Boolean(pipeline?.isBusy || assistant.busy || notesRecording || cardVoice.active || selectionEditor?.isBusy), line => log(line), memoryIdleCheck(() => powerMonitor.getSystemIdleTime()))
 setMemoryService(memory)
 let reminders: ReminderService | null = null
 /**
@@ -911,6 +912,9 @@ function ensureSettingsWindow(): BrowserWindow {
     win.hide()
   })
   win.on('hide', () => {
+    memory.reclaim()
+    uia.reclaim()
+    if (!notesRecording && !cardVoice.active) localAsr.reclaim()
     if (wakeSetupMode) { wakeSetupMode = null; wakeWord.cancelLearning(); refreshHotkeyActivity() }
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     hubRetireTimer = setTimeout(() => {
@@ -1240,6 +1244,7 @@ function registerIpc(): void {
   handle('memory:download', event => { entityOwner(event); return memory.prepareModel() })
   handle('memory:cancel-download', event => { entityOwner(event); memory.cancelDownload() })
   handle('memory:list', (event, kind: unknown) => { entityOwner(event); return memory.list(memoryKind(kind)) })
+  handle('memory:graph', (event, kind: unknown, query: unknown) => { entityOwner(event); if (typeof query !== 'string' || query.length > 200) throw Error('Invalid graph query'); return memory.graph(kind == null ? undefined : memoryKind(kind), query) })
   handle('memory:add', (event, kind: unknown, text: string) => { entityOwner(event); if (typeof text !== 'string') throw Error('Invalid memory'); return memory.add(memoryKind(kind), text, 'manual') })
   handle('memory:update', (event, kind: unknown, id: string, text: string) => { entityOwner(event); if (typeof id !== 'string' || typeof text !== 'string') throw Error('Invalid memory'); return memory.update(memoryKind(kind), id, text) })
   handle('memory:delete', (event, kind: unknown, id: string) => { entityOwner(event); if (typeof id !== 'string') throw Error('Invalid memory'); return memory.delete(memoryKind(kind), id) })

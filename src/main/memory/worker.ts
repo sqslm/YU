@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import type { MemoryEntry, MemoryKind } from '@shared/memory'
 import { validateMemoryReply } from '@shared/memory-reply'
+import { readCatalog, readGraph } from './catalog'
 
 const port = (process as unknown as { parentPort: { on(name: string, fn: (event: { data: any }) => void): void; postMessage(data: unknown): void } }).parentPort
 let home = '', modelDir = '', userId = 'local-user', sequence = 0
@@ -50,6 +51,7 @@ async function command(message: any): Promise<unknown> {
     return true
   }
   const kind = message.kind as MemoryKind
+  if (message.method === 'graph') return readGraph(home, message.kind, message.query)
   if (message.method === 'clear') {
     for (const k of ['assistant', 'style'] as const) {
       const memory = await store(k)
@@ -60,8 +62,8 @@ async function command(message: any): Promise<unknown> {
     return true
   }
   if (kind !== 'assistant' && kind !== 'style') throw Error('Invalid memory kind')
+  if (message.method === 'list') return readCatalog(home, kind).rows
   const memory = await store(kind)
-  if (message.method === 'list') return rows(await memory.getAll({ userId, limit: 10000 }), kind)
   if (message.method === 'recall') return rows(await memory.search(message.text, { userId, limit: kind === 'assistant' ? 5 : 3 }), kind)
   if (message.method === 'add' || message.method === 'learn') {
     await memory.add([{ role: 'user', content: message.text }], { userId, infer: message.method === 'learn', metadata: { sourceId: message.sourceId } })

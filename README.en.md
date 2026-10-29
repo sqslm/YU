@@ -6,7 +6,7 @@ A Windows voice input and local AI assistant: press a hotkey, speak, and the cle
 
 [中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
 
-> Current version **1.1.0-rc.17**, Windows 10/11 x64, MIT.
+> Current version **1.1.0-rc.18**, Windows 10/11 x64, MIT.
 > This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
 
 ![YU / 语](resources/brand/logo-dark.png)
@@ -261,7 +261,7 @@ This project is an independent implementation. It contains no third-party client
 
 ## Project status
 
-Release candidate (`1.1.0-rc.17`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
+Release candidate (`1.1.0-rc.18`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
 
 **Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
 
@@ -333,7 +333,7 @@ Proper-name enhancement is off by default. Open Settings → Voice & input → R
 Finer detail lives in `git log`.
 </details>
 
-## Local long-term memory (rc.17)
+## Local long-term memory (rc.18)
 
 Open Settings → Assistant & permissions → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.
 
@@ -341,7 +341,9 @@ Mem0 **2.4.6** supplies extraction, deduplication, ADD/UPDATE/DELETE, retrieval 
 
 Assistant facts and writing preferences use separate databases under `memory/`. New Ask user statements and explicit writing preferences may be learned; ordinary dictation, older history, notes, webpages, files and clipboard are not automatically imported. Writing receives style preferences only. Say “remember…”, “forget…”, or start an assistant conversation with “temporary chat”. The manager supports search, add, edit, delete and clear, and Ask can show the memory references used.
 
-Personal/project/preference queries retrieve up to five facts; writing uses up to three preferences. The foreground recall budget is 600 ms; a cold lookup may be skipped while loading continues. Capture is deferred for ten idle seconds and bounded to the latest three pending inputs. Recording, foreground tasks, lock and game mode pause learning; game mode and five minutes of idle time release the process. Clearing cancels pending capture; disabling preserves stored memories. Memory storage and history retention are independent.
+Personal/project/preference queries retrieve up to five facts; writing uses up to three preferences. The foreground recall budget is 600 ms; a cold lookup may be skipped while loading continues. Up to 30 candidate inputs are buffered in RAM for this session, keeping the newest on overflow and discarding unprocessed candidates on exit. After three inputs or a five-minute wait, extraction processes at most three inputs/6000 characters per batch, requiring at least 60 seconds of computer idle time, CPU at or below 25%, and free RAM at least 1 GiB and 10% of total. Models are released after each batch or 30 seconds without retrieval. Explicit remember commands still save immediately. Closing the main window reclaims idle memory, context-reader and local ASR processes; recording, foreground work, lock and games pause background learning.
+
+The memory graph supports zoom, pan, category/search filters and node details. Lists and graphs read pinned Mem0 SQLite files without loading the SDK or embedding model; the lightweight reader exits after five idle seconds. Solid links mean shared provenance, dashed links mean vector similarity, not confirmed factual relationships. The view is capped at 200 matching memories and three nearest neighbors per node (cosine at least 0.78). Graph rendering is lazy-loaded and makes no model calls. BGE is the retrieval encoder; the configured LLM extracts facts. This version does not offer alternative encoders or embedding APIs; changing encoders requires re-embedding existing data.
 
 Native lifecycle, protocol fixtures and 65 synthetic Chinese retrieval/update cases were tested. These do not establish real LLM extraction accuracy. Older unused client dependencies retain audit findings; active SDK model output is bounded before validation. See [validation and dependency notes](PROVIDER_API_AUDIT.md#本地长期记忆rc17).
 

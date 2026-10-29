@@ -14,14 +14,15 @@ const root = require('node:url').pathToFileURL(process.env.YU_MEMORY_QA_PACKAGE_
 registerHooks({ resolve(specifier, context, next) {
   const result = next(specifier, context)
   if (result.url.includes('/node_modules/') && !result.url.toLowerCase().startsWith(root)) throw Error('QA rejected external package: ' + result.url)
+  if (process.env.YU_MEMORY_QA_CATALOG_ONLY === '1' && /node_modules.*(?:mem0ai|huggingface|onnxruntime|better-sqlite3)/.test(result.url)) throw Error('Catalog loaded a heavy module: ' + result.url)
   return result
 } })`)
 }
 app.setPath('userData', home)
 let child, nextId = 0, mockLearning = false, llmCalls = 0
 const pending = new Map()
-async function start() {
-  child = utilityProcess.fork(worker, [], { serviceName: 'YU memory QA', stdio: 'pipe', execArgv: packageEnd >= 0 ? ['--require', isolate] : [] })
+async function start(catalogOnly = false) {
+  child = utilityProcess.fork(worker, [], { serviceName: 'YU memory QA', stdio: 'pipe', execArgv: packageEnd >= 0 ? ['--require', isolate] : [], env: { ...process.env, YU_MEMORY_QA_CATALOG_ONLY: catalogOnly ? '1' : '0' } })
   child.stderr.on('data', data => fs.appendFileSync(path.join(verification, 'memory-worker-debug.log'), data))
   child.stdout.on('data', data => fs.appendFileSync(path.join(verification, 'memory-worker-debug.log'), data))
   child.on('message', message => {
@@ -63,10 +64,14 @@ app.whenReady().then(async () => {
     let facts = await send('list', { kind: 'assistant' }), styles = await send('list', { kind: 'style' })
     if (facts.length !== 1 || styles.length !== 1) throw Error('Category isolation failed')
     report.categoryIsolation = true
-    await stop(); await start()
+    await stop(); await start(true)
     facts = await send('list', { kind: 'assistant' })
     if (facts[0]?.text !== '用户的测试项目叫星河') throw Error('Restart persistence failed')
     report.restartPersistence = true
+    const graph = await send('graph', { query: '' })
+    if (graph.nodes.length !== 2 || graph.total !== 2) throw Error('Read-only graph failed')
+    report.catalogWithoutModels = { graphNodes: graph.nodes.length, metric: app.getAppMetrics().find(row => row.pid === child.pid), importsGuarded: packageEnd >= 0 }
+    await stop(); await start()
     await send('update', { kind: 'assistant', memoryId: facts[0].id, text: '用户的测试项目已更名为青禾' })
     const recalled = await send('recall', { kind: 'assistant', text: '我的测试项目叫什么' })
     if (!recalled.some(row => row.text.includes('青禾'))) throw Error('Update retrieval failed')

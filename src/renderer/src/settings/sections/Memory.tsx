@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
 import type { MemoryEntry, MemoryKind, MemoryStatus } from '@shared/memory'
 import { SettingsGroup, SettingsRow } from './General'
 import { registerGameModePreparation } from '../gameModePreparation'
 import i18n from '../../i18n'
+const MemoryGraphDialog = lazy(() => import('./MemoryGraph'))
 
 export function MemorySection({ settings, patch }: { settings: Settings; patch: (delta: Partial<Settings>) => void }): JSX.Element {
   const t = i18n.t.bind(i18n)
@@ -12,6 +13,7 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
   const [kind, setKind] = useState<MemoryKind>('assistant'), [rows, setRows] = useState<MemoryEntry[]>([]), [query, setQuery] = useState('')
   const [draft, setDraft] = useState<{ id?: string; text: string } | null>(null), [removing, setRemoving] = useState<MemoryEntry | 'all' | null>(null)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const [graphOpen, setGraphOpen] = useState(false)
   useEffect(() => {
     let disposed = false
     const refresh = (): void => { void window.api.memory.status().then(value => { if (!disposed) setStatus(value) }).catch(() => {}) }
@@ -30,17 +32,20 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
     <SettingsRow label={t('启用长期记忆')} description={t('记住助手对话中的个人事实和明确的写作偏好。记忆独立于历史保存。')}>
       <Switch size="small" checked={settings.memory.enabled} onChange={event => event.target.checked ? setConsent(true) : patch({ memory: { ...settings.memory, enabled: false } })} inputProps={{ 'aria-label': t('启用长期记忆') }} />
     </SettingsRow>
-    <SettingsRow label={t('自动学习')} description={t('答复后空闲时提取；不自动学习普通听写、网页、文件、剪贴板或旧历史。')}>
+    <SettingsRow label={t('自动学习')} description={t('先暂存候选内容，积满 3 条或等待 5 分钟，再在电脑空闲且资源充足时整理。')}>
       <Switch size="small" checked={settings.memory.autoLearn} disabled={!settings.memory.enabled} onChange={event => patch({ memory: { ...settings.memory, autoLearn: event.target.checked } })} inputProps={{ 'aria-label': t('自动学习') }} />
     </SettingsRow>
     <Box sx={{ px: 2, pb: 2 }}>
       <Typography variant="caption" color="text.secondary">{t('本地存储和向量检索；提取与回答可能把允许的内容发送到当前 LLM，并产生额外调用费用。')}</Typography>
       <Typography variant="body2">{t('可说“记住……”或“忘记……”。以“临时对话”开头，本次会话不读取或保存长期记忆。')}</Typography>
+      <Typography variant="caption" display="block" color="text.secondary">{t('最多暂存 30 条新交互，退出软件会丢弃尚未整理的候选内容。整理后释放模型；查看列表和图谱不加载向量模型。')}</Typography>
+      <Typography variant="caption" display="block" color="text.secondary">{t('下载的是本地检索模型；记忆提炼使用已配置的 LLM，不是另一个生成模型。')}</Typography>
       <Typography variant="caption">{t('状态')}：{t(status?.state ?? 'off')}{status?.pending ? ` · ${t('待处理')} ${status.pending}` : ''}</Typography>
       {status?.error && <Alert severity="warning" sx={{ mt: 1 }}>{t(status.error)}</Alert>}
       {status?.state === 'downloading' && <><LinearProgress variant="determinate" value={status.progress ?? 0} sx={{ my: 1 }} /><Button onClick={() => void window.api.memory.cancelDownload()}>{t('取消下载')}</Button></>}
       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
         <Button onClick={() => { setOpen(true); void run(() => load()) }}>{t('管理记忆')}</Button>
+        <Button onClick={() => setGraphOpen(true)}>{t('记忆关系图')}</Button>
         {!status?.modelReady && status?.state !== 'downloading' && <Button disabled={busy} onClick={download}>{t('下载 / 重试记忆模型')}</Button>}
       </Stack>
     </Box>
@@ -50,6 +55,7 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
         <Typography sx={{ mt: 1 }}>{t('本地存储和向量检索；提取与回答可能把允许的内容发送到当前 LLM，并产生额外调用费用。')}</Typography>
       </DialogContent><DialogActions><Button onClick={() => setConsent(false)}>{t('取消')}</Button><Button variant="contained" onClick={() => { setConsent(false); patch({ memory: { ...settings.memory, enabled: true } }); if (!status?.modelReady) download() }}>{t('开启')}</Button></DialogActions>
     </Dialog>
+    {graphOpen && <Suspense fallback={null}><MemoryGraphDialog onClose={() => setGraphOpen(false)} /></Suspense>}
     <Dialog open={open} onClose={() => { if (!busy) setOpen(false) }} maxWidth="md" fullWidth>
       <DialogTitle>{t('长期记忆')}</DialogTitle><DialogContent>
         <Stack direction="row" spacing={1} sx={{ my: 1 }}>

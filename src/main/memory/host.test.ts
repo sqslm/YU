@@ -23,11 +23,11 @@ vi.mock('electron', () => ({ utilityProcess: { fork: () => {
 vi.mock('./model', () => ({ memoryModelReady: async () => true, downloadMemoryModel: async () => {} }))
 import { MemoryService } from './host'
 
-let settings: Settings, service: MemoryService, busy = false
+let settings: Settings, service: MemoryService, busy = false, idleEnough = true
 beforeEach(async () => {
   vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false
-  settings = structuredClone(DEFAULT_SETTINGS); settings.memory = { enabled: true, autoLearn: true }; busy = false
-  service = new MemoryService('release/verification-entities/memory-host-test', () => settings, () => busy, () => {})
+  settings = structuredClone(DEFAULT_SETTINGS); settings.memory = { enabled: true, autoLearn: true }; busy = false; idleEnough = true
+  service = new MemoryService('release/verification-entities/memory-host-test', () => settings, () => busy, () => {}, () => idleEnough)
   await service.configure()
 })
 afterEach(() => { service.shutdown(); vi.useRealTimers() })
@@ -49,7 +49,7 @@ it('serializes management writes and clears pending learning before deletion', a
 it('kills a learning worker before clearing so the cancelled task cannot write back', async () => {
   fixture.hanging = true
   service.enqueueLearning('assistant', '我习惯使用中文', 'turn-2')
-  await vi.advanceTimersByTimeAsync(10000)
+  await vi.advanceTimersByTimeAsync(300000)
   // Native launch reaches the filesystem asynchronously.
   for (let i = 0; i < 10 && !fixture.children.length; i++) await vi.waitFor(() => expect(fixture.children.length).toBeGreaterThan(0))
   const old = fixture.children[0]
@@ -80,7 +80,7 @@ it('keeps an idle warmed process across recording so each voice question does no
 it('retains interrupted learning for resume but clear discards the retained batch', async () => {
   fixture.hanging = true
   service.enqueueLearning('assistant', '我习惯用中文回答', 'paused-turn')
-  await vi.advanceTimersByTimeAsync(10000)
+  await vi.advanceTimersByTimeAsync(300000)
   await vi.waitFor(() => expect(fixture.children.length).toBeGreaterThan(0))
   service.pause('game')
   expect(service.status().pending).toBe(1)
@@ -94,12 +94,13 @@ it('retains interrupted learning for resume but clear discards the retained batc
 it('resumes the interrupted batch after the game exits', async () => {
   fixture.hanging = true
   service.enqueueLearning('style', '以后写作使用短句', 'resume-turn')
-  await vi.advanceTimersByTimeAsync(10000)
+  await vi.advanceTimersByTimeAsync(300000)
   await vi.waitFor(() => expect(fixture.children.length).toBeGreaterThan(0))
   service.pause('game')
+  await vi.advanceTimersByTimeAsync(0)
   fixture.hanging = false
   service.resume('game')
-  await vi.advanceTimersByTimeAsync(11000)
+  await vi.advanceTimersByTimeAsync(31000)
   await vi.waitFor(() => expect(fixture.writes).toEqual(['以后写作使用短句']))
 })
 it.each([
@@ -112,12 +113,54 @@ it.each([
   service.enqueueLearning('assistant', text, 'independent-negative')
   expect(service.status().pending).toBe(0)
 })
-it('caps learning input and waits ten idle seconds rather than calling an LLM on enqueue', async () => {
-  for (let i = 0; i < 8; i++) service.enqueueLearning('assistant', `我负责项目${i}`, `turn-${i}`)
-  expect(service.status().pending).toBe(3)
+it('buffers up to thirty candidates without loading a model on enqueue', async () => {
+  for (let i = 0; i < 40; i++) service.enqueueLearning('assistant', `我负责项目${i}`, `turn-${i}`)
+  expect(service.status().pending).toBe(30)
   expect(fixture.children).toHaveLength(0)
-  await vi.advanceTimersByTimeAsync(9999)
+  await vi.advanceTimersByTimeAsync(29999)
   expect(fixture.children).toHaveLength(0)
+})
+it('waits for an accumulation threshold and resource availability then releases the worker after learning', async () => {
+  service.enqueueLearning('assistant', '我喜欢中文', 'turn-1')
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(fixture.children).toHaveLength(0)
+  service.enqueueLearning('assistant', '我在杭州', 'turn-2')
+  service.enqueueLearning('assistant', '我做产品设计', 'turn-3')
+  idleEnough = false
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(fixture.children).toHaveLength(0)
+  idleEnough = true
+  await vi.advanceTimersByTimeAsync(30000)
+  await vi.waitFor(() => expect(fixture.writes).toEqual(['我喜欢中文\n我在杭州\n我做产品设计']))
+  expect(fixture.children[0].kill).toHaveBeenCalled()
+})
+it('can release idle resources without invalidating a still-running Ask learning token', async () => {
+  const token = service.learningToken()
+  await service.list('assistant')
+  await vi.advanceTimersByTimeAsync(5100)
+  expect(fixture.children[0].kill).toHaveBeenCalled()
+  expect(service.learningToken()).toBe(token)
+  await service.clear()
+  expect(service.learningToken()).not.toBe(token)
+})
+it('does not release a worker during foreground activity and rechecks when it becomes idle', async () => {
+  await service.list('assistant')
+  busy = true
+  await vi.advanceTimersByTimeAsync(5100)
+  expect(fixture.children[0].kill).not.toHaveBeenCalled()
+  busy = false
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(fixture.children[0].kill).toHaveBeenCalled()
+})
+it('interrupts background extraction to serve the catalog and retains the unfinished candidate', async () => {
+  fixture.hanging = true
+  service.enqueueLearning('assistant', '我喜欢设计', 'catalog-turn')
+  await vi.advanceTimersByTimeAsync(300000)
+  await vi.waitFor(() => expect(fixture.children.length).toBeGreaterThan(0))
+  const old = fixture.children[0]
+  await service.graph()
+  expect(old.kill).toHaveBeenCalled()
+  expect(service.status().pending).toBe(1)
 })
 it('cancels queued work when automatic learning is disabled without disabling recall', async () => {
   service.enqueueLearning('assistant', '我在杭州工作', 'old-turn')

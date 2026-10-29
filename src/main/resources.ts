@@ -51,6 +51,7 @@ function roleOf(metric: Electron.ProcessMetric): string {
   if (name.includes('typeless-hotkey')) return 'hotkeys'
   if (name.includes('typeless-local-asr')) return 'localModel'
   if (name.includes('typeless-uia')) return 'context'
+  if (name.includes('YU memory')) return 'memory'
   if (metric.type === 'Browser') return 'main'
   if (metric.type === 'GPU') return 'graphics'
   if (metric.type === 'Tab') return 'interface'

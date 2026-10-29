@@ -7,6 +7,9 @@ function metric(pid: number, type: string, name?: string): Electron.ProcessMetri
 const model = { loaded: false, autoResume: true }
 
 describe('resource measurement', () => {
+  it('identifies the memory process separately from auxiliary processes', () => {
+    expect(collectResources([metric(7, 'Utility', 'YU memory')], model, () => null).processes[0].role).toBe('memory')
+  })
   it('sums private resident, working set and commit independently across every process', () => {
     const result = collectResources([metric(1, 'Browser'), metric(2, 'GPU'), metric(3, 'Utility', 'typeless-local-asr')], model,
       pid => ({ privateResidentBytes: pid * 10, workingSetBytes: pid * 20, committedBytes: pid * 30 }))
