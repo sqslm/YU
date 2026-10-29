@@ -4,6 +4,7 @@ import CloseRounded from '@mui/icons-material/CloseRounded'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import type { MemoryEntry, MemoryGraph, MemoryKind } from '@shared/memory'
 import i18n from '../../i18n'
+import { dampenNodeDrag } from './memoryGraphDrag'
 
 export default function MemoryGraphDialog({ onClose }: { onClose(): void }): JSX.Element {
   const t = i18n.t.bind(i18n), theme = useTheme(), dark = theme.palette.mode === 'dark'
@@ -12,6 +13,7 @@ export default function MemoryGraphDialog({ onClose }: { onClose(): void }): JSX
   const [selected, setSelected] = useState<string | null>(null), [size, setSize] = useState({ width: 600, height: 440 })
   const container = useRef<HTMLDivElement>(null), graph = useRef<ForceGraphMethods<MemoryEntry>>()
   const fitted = useRef(false)
+  const dragOrigin = useRef<{ id: string; x: number; y: number } | null>(null)
   useEffect(() => {
     let disposed = false
     setLoading(true); setError(''); setSelected(null); fitted.current = false
@@ -60,7 +62,13 @@ export default function MemoryGraphDialog({ onClose }: { onClose(): void }): JSX
             nodeLabel={() => ''} nodeColor={node => color(node.kind)} nodeVal={node => node.id === selected ? 4 : 2}
             linkColor={link => link.type === 'source' ? (dark ? '#717d90' : '#98a9bd') : (dark ? '#394453' : '#ced7e3')}
             linkLineDash={link => link.type === 'similar' ? [3, 3] : []} linkWidth={1}
-            onNodeClick={focus} cooldownTicks={80} onEngineStop={() => { if (!fitted.current) { fitted.current = true; graph.current?.zoomToFit(250, 45) } }}
+            onNodeClick={focus} cooldownTicks={80} d3VelocityDecay={.5}
+            onNodeDrag={(node, delta) => {
+              fitted.current = true
+              if (dragOrigin.current?.id !== node.id) dragOrigin.current = { id: node.id, x: (node.x ?? 0) - delta.x, y: (node.y ?? 0) - delta.y }
+              dampenNodeDrag(node, dragOrigin.current)
+            }} onNodeDragEnd={() => { dragOrigin.current = null }}
+            onEngineStop={() => { if (!fitted.current) { fitted.current = true; graph.current?.zoomToFit(250, 45) } }}
             nodeCanvasObjectMode={() => 'after'} nodeCanvasObject={(node, context, scale) => {
               if (scale < 0.8 && node.id !== selected) return
               context.font = `${11 / scale}px sans-serif`; context.textAlign = 'center'; context.textBaseline = 'top'

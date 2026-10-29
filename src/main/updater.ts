@@ -5,7 +5,7 @@ import { app, net } from 'electron'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import type { ElectronHttpExecutor } from 'electron-updater/out/electronHttpExecutor'
 import { mt } from '@shared/mainI18n'
-import { downloadRanges } from './update-download'
+import { downloadUpdateArtifact } from './update-download'
 
 export interface UpdateInfo {
   version: string
@@ -186,11 +186,12 @@ export class Updater {
         options.cancellationToken.once('cancel', abort)
         if (options.cancellationToken.cancelled) controller.abort()
         let handled: boolean
-        try { handled = await downloadRanges({
+        try { handled = await downloadUpdateArtifact({
           url: url.toString(), destination, sha512: options.sha512,
           cacheDir: join(this.options.userDataPath, 'update-parts'), signal: controller.signal,
           headers: options.headers as Record<string, string> | undefined,
           fetchImpl: net.fetch.bind(net) as typeof fetch,
+          onRoute: route => this.setState({ message: route === 'accelerated' ? mt('备用加速线路') : mt('官方线路') }),
           onProgress: progress => {
             this.setState({ phase: 'downloading', ...progress, percent: Math.floor(progress.percent) })
             this.options.onProgress?.(Math.floor(progress.percent))

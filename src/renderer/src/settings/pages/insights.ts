@@ -117,8 +117,8 @@ export function insightsFromStats(stats: StatsFile, options: InsightOptions = {}
     chars += cell.chars
     spokenMs += cell.usedMs
     measured += cell.measured
-    measuredUnits += cell.measuredUnits
-    measuredMs += cell.measuredMs
+    measuredUnits += cell.inputUnits ?? 0
+    measuredMs += cell.inputMs ?? 0
     savedMs += cell.savedMs
   }
 

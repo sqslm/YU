@@ -3,7 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 
-const fixture = vi.hoisted(() => ({ children: [] as any[], writes: [] as string[], hanging: false, failure: '' }))
+const fixture = vi.hoisted(() => ({ children: [] as any[], writes: [] as string[], hanging: false, failure: '', llm: false }))
+vi.mock('../providers/llm', () => ({ complete: vi.fn(async () => '{"facts":["用户正在制作语的介绍视频"]}') }))
 vi.mock('electron', () => ({ utilityProcess: { fork: () => {
   const child = new EventEmitter() as any
   child.killed = false; child.messages = []
@@ -13,6 +14,15 @@ vi.mock('electron', () => ({ utilityProcess: { fork: () => {
     if (fixture.hanging && message.method === 'learn') return
     queueMicrotask(() => {
       if (child.killed) return
+      if (fixture.llm && message.method === 'add') {
+        child.remember = message.id
+        child.emit('message', { type: 'llm', id: 900, kind: 'facts', messages: [{ role: 'user', content: message.text }] })
+        return
+      }
+      if (message.type === 'llm-result') {
+        child.emit('message', { type: 'result', id: child.remember, value: true, error: message.error })
+        return
+      }
       if (fixture.failure && message.method === 'learn') { child.emit('message', { type: 'result', id: message.id, error: fixture.failure }); return }
       if (message.method === 'add' || message.method === 'learn') fixture.writes.push(message.text)
       if (message.method === 'clear') fixture.writes = []
@@ -26,12 +36,21 @@ import { MemoryService } from './host'
 
 let settings: Settings, service: MemoryService, busy = false, idleEnough = true
 beforeEach(async () => {
-  vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false; fixture.failure = ''
+  vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false; fixture.failure = ''; fixture.llm = false
   settings = structuredClone(DEFAULT_SETTINGS); settings.memory = { enabled: true, autoLearn: true }; busy = false; idleEnough = true
   service = new MemoryService('release/verification-entities/memory-host-test', () => settings, () => busy, () => {}, () => idleEnough)
   await service.configure()
 })
 afterEach(() => { service.shutdown(); vi.useRealTimers() })
+it('allows explicit remember extraction inside the foreground task, while recording and games remain blocked', async () => {
+  fixture.llm = true
+  settings.profiles = [{ ...settings.polish, id: 'qa', name: 'QA', kind: 'llm', preset: '', enabled: true }]
+  service.pause('foreground')
+  await expect(service.add('assistant', '呃，我在制作语的视频', 'voice-turn')).resolves.toBeUndefined()
+  expect(fixture.children.at(-1).messages.find((message: any) => message.type === 'llm-result').text).toContain('用户正在制作')
+  service.pause('recording')
+  await expect(service.add('assistant', '另一个记忆', 'voice-turn-2')).rejects.toThrow('录音或游戏期间暂不整理记忆')
+})
 
 it('stays dormant until enabled and explicitly needed', async () => {
   settings.memory.enabled = false; await service.configure()

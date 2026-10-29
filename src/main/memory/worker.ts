@@ -67,7 +67,9 @@ async function command(message: any): Promise<unknown> {
   const memory = await store(kind)
   if (message.method === 'recall') return rows(await memory.search(message.text, { userId, limit: kind === 'assistant' ? 5 : 3 }), kind)
   if (message.method === 'add' || message.method === 'learn') {
-    await memory.add([{ role: 'user', content: message.text }], { userId, infer: message.method === 'learn', metadata: { sourceId: message.sourceId } })
+    const inferred = message.method === 'learn' || message.sourceId !== 'manual'
+    const result = await memory.add([{ role: 'user', content: message.text }], { userId, infer: inferred, metadata: { sourceId: message.sourceId } })
+    if (message.method === 'add' && inferred && !result.results.some(row => ['ADD', 'UPDATE', 'DELETE'].includes(row.metadata?.event))) throw Error('未提炼出新的可保存事实，已有记忆未改动。')
     return true
   }
   const existing = await memory.get(message.memoryId)
@@ -91,7 +93,7 @@ port.on('message', ({ data }) => {
     try { port.postMessage({ type: 'result', id: data.id, value: await command(data) }) }
     catch (error) {
       const message = error instanceof Error ? error.message : ''
-      const safe = message.includes('无效的结构化结果') ? '记忆提炼未完成：当前 LLM 未返回有效 JSON，请检查连接或更换模型后重试'
+      const safe = message.includes('未提炼出') ? message : message.includes('无效的结构化结果') ? '记忆提炼未完成：当前 LLM 未返回有效 JSON，请检查连接或更换模型后重试'
         : /LLM|Memory model request failed/u.test(message) ? '记忆模型请求失败，请检查模型连接'
           : '记忆处理失败，请检查模型连接和本地存储'
       port.postMessage({ type: 'result', id: data.id, error: safe })

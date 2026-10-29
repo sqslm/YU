@@ -48,6 +48,10 @@ Screenshot QR scanning: select the entire code, including a clear border, then c
 
 The overview opens with today’s character count, recording duration and speaking rate. Today's agenda, to-dos, briefing, and recent activity take priority. Complete a to-do directly, see dates on deadlines, and expand Usage statistics for input trends, the heat map, and app usage. Failed reads show their cause and a retry action while keeping loaded content available.
 
+The top strip separates today's three metrics from lifetime word count, successful records and active days, with a divider and no repeated heading. CJK characters count individually; other words use built-in `Intl.Segmenter` / [ICU word boundaries](https://unicode-org.github.io/icu/userguide/boundaryanalysis/), excluding punctuation. Pace is the sum of raw-ASR units divided by matching recording time, excluding samples under one second. Generated answers never inflate pace. Legacy aggregates without raw samples retain totals but do not produce an estimated pace. Invalid dates and non-finite, negative or fractional counters are rejected.
+
+Updates use up to 32 resumable ranges, sized at approximately 256 KB or larger, reuse the resolved release-CDN URL and retry stalled transfers after 15 seconds without data. If the official route fails, public YU installers alone may use the [GH-Proxy backup](https://gh-proxy.com/docs/github-accelerator); credentials, cookies, signed query strings and custom feeds are not forwarded. Feed metadata stays official and the complete installer must match its SHA-512 digest. The download tooltip identifies the route. Public-network availability and throughput are not guaranteed.
+
 ![Overview](resources/screenshots/hub-home.png)
 
 | The bar while recording | Ask answer card |
@@ -362,6 +366,8 @@ A percentage is drawn only when both a real limit and remaining allowance are av
 Only saved connection IDs cross the query interface. Credentials are read in the main process and sent to matching official HTTPS endpoints, without redirects or model-generation calls. Successes are cached in RAM for five minutes, failures for 30 seconds, with manual refresh and shared in-flight requests for the same account credentials. The list queries at most two entries concurrently and stops queueing when closed/hidden. There is no background polling or persistent billing cache.
 
 ## Local long-term memory
+
+Explicit “remember” requests and automatic learning both use Mem0 extraction before saving: remove spoken fillers, repetitions and self-corrections, preserve names, numbers and constraints, and store concise standalone facts rather than raw transcripts. A save is confirmed only after an actual ADD/UPDATE succeeds. Manual entries and edits remain exactly as entered; existing memories are not rewritten in bulk. Node dragging uses 15% less pointer displacement with slightly higher simulation damping.
 
 Open Settings → Assistant & permissions → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.
 

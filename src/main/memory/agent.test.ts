@@ -39,7 +39,7 @@ it('keeps the whole temporary conversation isolated, including follow-ups and re
 it('saves explicit memories only after the backend succeeds and does not call the answer model', async () => {
   const result = await askAgent(configured(), '记住我的项目叫星河', {}, undefined, undefined, { conversation: conversation() })
   expect(memory.add).toHaveBeenCalledWith('assistant', '我的项目叫星河', expect.any(String))
-  expect(result.text).toContain('已记住'); expect(complete).not.toHaveBeenCalled()
+  expect(result.text).toContain('已整理并更新记忆'); expect(complete).not.toHaveBeenCalled()
   vi.mocked(memory.add).mockRejectedValueOnce(Error('disk error'))
   await expect(askAgent(configured(), '记住我的项目叫星河', {}, undefined, undefined, { conversation: conversation() })).rejects.toThrow('disk error')
 })

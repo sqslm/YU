@@ -69,6 +69,9 @@ export interface DayTotals {
   measuredUnits: number
   /** Duration of those rows. */
   measuredMs: number
+  /** Matched raw-ASR samples, absent on legacy rollups that measured generated output. */
+  inputUnits?: number
+  inputMs?: number
   /** Time saved versus typing, accumulated per row (the formula is not linear). */
   savedMs: number
 }
@@ -100,6 +103,8 @@ export function emptyDayTotals(): DayTotals {
     measured: 0,
     measuredUnits: 0,
     measuredMs: 0,
+    inputUnits: 0,
+    inputMs: 0,
     savedMs: 0
   }
 }
@@ -117,12 +122,13 @@ export function statsDayKey(ts: number): string {
 }
 
 /**
- * Whether a row represents real dictation. A failed take (`error`) or one that
- * produced nothing (`empty`) is not usage; rows written before the field
+ * Whether a row represents completed usage. Failed, empty and dismissed takes
+ * are not usage; archived rows retain their original status. Older rows before the field
  * existed have no `status` and still count as completed.
  */
-export function isUsageEntry(item: Pick<HistoryEntry, 'status'>): boolean {
-  return item.status !== 'error' && item.status !== 'empty'
+export function isUsageEntry(item: Pick<HistoryEntry, 'status' | 'archivedStatus'>): boolean {
+  const status = item.status === 'archived' ? item.archivedStatus : item.status
+  return status == null || status === 'completed'
 }
 
 /**
@@ -157,7 +163,8 @@ export function contributionOf(
   // `final` is what the user kept; `transcript` is the fallback for rows whose
   // cleanup step never ran.
   const counted = countText(item.final || item.transcript || '')
-  const duration = Number.isFinite(item.durationMs) ? Math.max(0, item.durationMs || 0) : 0
+  const spoken = countText(item.transcript || '')
+  const duration = Number.isFinite(item.durationMs) && item.durationMs > 0 && item.durationMs <= 24 * 60 * 60 * 1000 ? item.durationMs : 0
 
   totals.entries = 1
   totals.len = item.final?.length ?? 0
@@ -174,11 +181,13 @@ export function contributionOf(
     totals.usedMs = duration
     totals.units = counted.units
     totals.chars = counted.chars
-    if (duration >= MIN_TAKE_MS) {
+    if (duration >= MIN_TAKE_MS && spoken.units > 0) {
       totals.measured = 1
-      totals.measuredUnits = counted.units
+      totals.measuredUnits = spoken.units
       totals.measuredMs = duration
-      totals.savedMs = timeSavedMs(counted.units, duration, typingWpm)
+      totals.inputUnits = spoken.units
+      totals.inputMs = duration
+      totals.savedMs = item.mode === 'dictation' ? timeSavedMs(spoken.units, duration, typingWpm) : 0
     }
   }
 
@@ -197,6 +206,8 @@ function addInto(target: DayTotals, delta: DayTotals): void {
   target.measured += delta.measured
   target.measuredUnits += delta.measuredUnits
   target.measuredMs += delta.measuredMs
+  target.inputUnits = (target.inputUnits ?? 0) + (delta.inputUnits ?? 0)
+  target.inputMs = (target.inputMs ?? 0) + (delta.inputMs ?? 0)
   target.savedMs += delta.savedMs
 }
 
@@ -206,6 +217,7 @@ function addInto(target: DayTotals, delta: DayTotals): void {
  * callers pass only freshly stored rows.
  */
 export function addToStats(stats: StatsFile, item: HistoryEntry, typingWpm = TYPING_WPM): StatsFile {
+  if (!Number.isFinite(item.createdAt) || item.createdAt <= 0 || !Number.isFinite(new Date(item.createdAt).getTime())) return stats
   const { day, totals, app } = contributionOf(item, typingWpm)
   const bucket = stats.days[day] ?? emptyDayTotals()
   addInto(bucket, totals)
@@ -231,19 +243,19 @@ export function statsFromEntries(
 }
 
 function number(raw: unknown): number {
-  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : 0
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw > 0 ? raw : 0
 }
 
 /** Reads a persisted file, dropping anything a hand-edited one may hold. */
 export function sanitizeStats(raw: unknown): StatsFile {
   const stats = emptyStats()
-  if (!raw || typeof raw !== 'object') return stats
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return stats
   const record = raw as Record<string, unknown>
 
   const days = record.days
   if (days && typeof days === 'object') {
     for (const [key, value] of Object.entries(days as Record<string, unknown>)) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !Number.isFinite(Date.parse(key)) || new Date(key).toISOString().slice(0, 10) !== key) continue
       if (!value || typeof value !== 'object') continue
       const cell = value as Record<string, unknown>
       const totals = emptyDayTotals()
@@ -258,6 +270,9 @@ export function sanitizeStats(raw: unknown): StatsFile {
       totals.measured = number(cell.measured)
       totals.measuredUnits = number(cell.measuredUnits)
       totals.measuredMs = number(cell.measuredMs)
+      totals.inputUnits = number(cell.inputUnits)
+      totals.inputMs = number(cell.inputMs)
+      if (!totals.inputUnits || totals.inputMs < MIN_TAKE_MS) { totals.inputUnits = 0; totals.inputMs = 0 }
       totals.savedMs = number(cell.savedMs)
       if (totals.entries > 0) stats.days[key] = totals
     }

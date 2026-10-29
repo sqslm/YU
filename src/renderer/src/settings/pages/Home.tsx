@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Alert, Box, Button, ButtonBase, Checkbox, Skeleton, Typography } from '@mui/material'
+import { Alert, Box, Button, ButtonBase, Checkbox, Skeleton, Tooltip, Typography } from '@mui/material'
 import ArrowForward from '@mui/icons-material/ArrowForward'
 import CalendarMonth from '@mui/icons-material/CalendarMonthOutlined'
 import CheckCircle from '@mui/icons-material/CheckCircleOutline'
@@ -75,6 +75,7 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote
   const overdue = todos.filter(row => isOverdue(row, now)).length
   const activity = recentActivity(data.history ?? [], data.notes ?? [])
   const today = data.stats ? todayFromStats(data.stats, now) : null
+  const totals = data.stats ? Object.values(data.stats.days).reduce((sum, day) => ({ units: sum.units + day.units, records: sum.records + day.records, days: sum.days + Number(day.records > 0) }), { units: 0, records: 0, days: 0 }) : null
   const hasTextModel = settings.profiles.some(profile => profile.enabled && profile.kind === 'llm' && profile.model.trim() && profile.baseUrl.trim())
   const panelSx = { border: '1px solid', borderColor: 'divider', borderRadius: '14px', bgcolor: 'background.paper', p: 2.25, minWidth: 0 }
 
@@ -116,15 +117,24 @@ export function HomePage({ settings, mode, onOpenHistory, onOpenPage, onOpenNote
       </Alert>}
       {actionError && <Alert severity="error" onClose={() => setActionError('')} sx={{ mb: 2 }}>{actionError}</Alert>}
 
-      <Box component="section" data-today-stats sx={{ ...panelSx, mb: 2 }}>
-        <Typography component="h2" sx={{ fontSize: 12, fontWeight: 600, mb: 1.5 }}>{t('今日数据')}</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 2 }}>
-          {[
-            { label: '今日字数', value: today ? String(today.chars) : '—' },
+      <Box component="section" aria-label={t('使用统计')} data-today-stats sx={{ ...panelSx, mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2.25 }}>
+        {[
+          [
+            { label: '今日字数', value: today ? today.chars.toLocaleString() : '—', hint: '中文按字、其他语言按词计数，不含标点；统计成功输出。' },
             { label: '今日总时长', value: today ? clock(today.spoken) : '—' },
-            { label: '今日语速', value: today && today.spoken > 0 ? `${Math.round(today.chars / (today.spoken / 60000))} ${t('字/分')}` : '—' }
-          ].map(item => <Box key={item.label}><Typography color="text.secondary" sx={{ fontSize: 12 }}>{t(item.label)}</Typography><Typography sx={{ fontSize: 25, fontWeight: 650, mt: .5 }}>{item.value}</Typography></Box>)}
-        </Box>
+            { label: '今日语速', value: today?.pace ? String(today.pace) : '—', unit: today?.pace ? t('字/分') : '', hint: '仅用原始转写与对应录音时长加权计算；旧数据不推测语速。' }
+          ],
+          [
+            { label: '累计字数', value: totals ? totals.units.toLocaleString() : '—' },
+            { label: '累计记录', value: totals ? totals.records.toLocaleString() : '—' },
+            { label: '活跃天数', value: totals ? totals.days.toLocaleString() : '—' }
+          ]
+        ].map((group, index) => <Box key={index} sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 1.5, ...(index ? { borderLeft: { md: 1 }, borderTop: { xs: 1, md: 0 }, borderColor: 'divider', pl: { md: 2.25 }, pt: { xs: 2, md: 0 } } : {}) }}>
+          {group.map(item => <Tooltip key={item.label} title={'hint' in item ? t(item.hint!) : ''}><Box sx={{ minWidth: 0 }}>
+            <Typography color="text.secondary" sx={{ fontSize: 12 }}>{t(item.label)}</Typography>
+            <Typography sx={{ fontSize: 'clamp(18px, 2.1vw, 25px)', fontWeight: 650, mt: 1, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', lineHeight: 1.25 }}>{item.value}{'unit' in item && item.unit && <Box component="span" sx={{ ml: .5, fontSize: 10.5, color: 'text.secondary', whiteSpace: 'nowrap' }}>{item.unit}</Box>}</Typography>
+          </Box></Tooltip>)}
+        </Box>)}
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1.65fr) minmax(235px, 1fr)' }, gap: 2, alignItems: 'start' }}>

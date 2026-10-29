@@ -7,6 +7,8 @@ it('requests the explicit stage schema and normalizes presentation-only wrappers
   expect(await memoryCompletion(messages, 'facts', new AbortController().signal, request)).toBe('{"facts":["用户偏好中文"]}')
   expect(request).toHaveBeenCalledOnce()
   expect(request.mock.calls[0][0].at(-1).content).toContain('"facts"')
+  expect(request.mock.calls[0][0].at(-1).content).toContain('删除“嗯、呃、那个、呢”等口头语')
+  expect(request.mock.calls[0][0].at(-1).content).toContain('不添加信息')
 })
 it('retries invalid formatting once from the original request, not from fabricated model text', async () => {
   const request = vi.fn().mockResolvedValueOnce('模型编造的解释').mockResolvedValueOnce('{"facts":["用户偏好中文"]}')

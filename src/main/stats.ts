@@ -74,9 +74,9 @@ export class StatsStore {
       for (const [day, totals] of Object.entries(source.days)) {
         const target = result.days[day] ?? (result.days[day] = {
           entries: 0, len: 0, ms: 0, used: 0, records: 0, usedMs: 0,
-          chars: 0, units: 0, measured: 0, measuredUnits: 0, measuredMs: 0, savedMs: 0
+          chars: 0, units: 0, measured: 0, measuredUnits: 0, measuredMs: 0, inputUnits: 0, inputMs: 0, savedMs: 0
         })
-        for (const key of Object.keys(target) as Array<keyof typeof target>) target[key] += totals[key]
+        for (const key of Object.keys(target) as Array<keyof typeof target>) target[key] = (target[key] ?? 0) + (totals[key] ?? 0)
       }
       for (const [name, count] of Object.entries(source.apps)) result.apps[name] = (result.apps[name] ?? 0) + count
     }

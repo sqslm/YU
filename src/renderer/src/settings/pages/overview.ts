@@ -6,6 +6,7 @@ import i18n from '../../i18n'
 import type { HistoryEntry } from '@shared/types'
 import { statsDayKey, type StatsFile } from '@shared/stats'
 import { isUsageEntry } from '@shared/stats'
+import { speakingWpm } from '@shared/count'
 
 export interface DayBucket {
   /** Weekday label used under the bar chart: 一…日 */
@@ -130,14 +131,15 @@ export function bucketDays(entries: HistoryEntry[], range: number, now = Date.no
 export function todayFromStats(
   stats: StatsFile,
   now = Date.now()
-): { chars: number; spoken: number; segments: number; average: number } {
+): { chars: number; spoken: number; segments: number; average: number; pace: number } {
   const cell = stats.days[statsDayKey(now)]
-  if (!cell) return { chars: 0, spoken: 0, segments: 0, average: 0 }
+  if (!cell) return { chars: 0, spoken: 0, segments: 0, average: 0, pace: 0 }
   return {
-    chars: cell.len,
-    spoken: cell.ms,
-    segments: cell.entries,
-    average: cell.entries > 0 ? cell.ms / cell.entries : 0
+    chars: cell.units,
+    spoken: cell.usedMs,
+    segments: cell.records,
+    average: cell.records > 0 ? cell.usedMs / cell.records : 0,
+    pace: speakingWpm(cell.inputUnits ?? 0, cell.inputMs ?? 0)
   }
 }
 

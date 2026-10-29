@@ -320,6 +320,8 @@ const settingsEntrySx = (t: FooterTokens) =>
     display: 'flex',
     alignItems: 'center',
     gap: '7px',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
     height: 30,
     px: '7px',
     borderRadius: 2,

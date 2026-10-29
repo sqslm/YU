@@ -2,15 +2,15 @@
  * Text counters shared by the pipeline, history and the insights page.
  *
  * Chinese is counted per character (that is what a user means by "字数"),
- * latin text per whitespace-separated word, and the two are simply added —
+ * other text per ICU word boundary, and the two are simply added —
  * mixed sentences like "AI 很好用" become 1 + 3 = 4 units, which matches how
- * the vendor's own usage stats read.
+ * this app's mixed-language counting convention.
  */
 
 /** Matches one CJK ideograph, kana or hangul syllable. */
-const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/g
-/** Tokens that are not pure punctuation or symbols. */
-const WORD = /[A-Za-z0-9][A-Za-z0-9'’_-]*/g
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu
+/** ICU / Unicode word boundaries, reused from the built-in runtime. */
+const words = new Intl.Segmenter('en', { granularity: 'word' })
 
 export interface TextCount {
   /** Characters of CJK script. */
@@ -27,8 +27,9 @@ export function countText(text: string): TextCount {
   if (!text) return { cjk: 0, words: 0, units: 0, chars: 0 }
   const cjk = text.match(CJK)?.length ?? 0
   const withoutCjk = text.replace(CJK, ' ')
-  const words = withoutCjk.match(WORD)?.length ?? 0
-  return { cjk, words, units: cjk + words, chars: [...text].length }
+  let wordCount = 0
+  for (const segment of words.segment(withoutCjk)) if (segment.isWordLike) wordCount++
+  return { cjk, words: wordCount, units: cjk + wordCount, chars: [...text].length }
 }
 
 /** The single number stored on a history entry (REQ-07). */
@@ -41,7 +42,7 @@ export function countUnits(text: string): number {
  * second, where the ratio is meaningless noise.
  */
 export function speakingWpm(units: number, durationMs: number): number {
-  if (durationMs < 1000 || units <= 0) return 0
+  if (!Number.isFinite(units) || !Number.isFinite(durationMs) || durationMs < 1000 || units <= 0) return 0
   return Math.round((units / durationMs) * 60_000)
 }
 
@@ -53,7 +54,7 @@ export const TYPING_WPM = 40
  * Subtracts the time spent speaking, which is what the user actually paid.
  */
 export function timeSavedMs(units: number, durationMs: number, typingWpm = TYPING_WPM): number {
-  if (units <= 0) return 0
+  if (!Number.isFinite(units) || !Number.isFinite(durationMs) || !Number.isFinite(typingWpm) || units <= 0 || durationMs < 0 || typingWpm <= 0) return 0
   const typingMs = (units / typingWpm) * 60_000
   return Math.max(0, Math.round(typingMs - durationMs))
 }

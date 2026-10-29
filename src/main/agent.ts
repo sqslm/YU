@@ -1591,7 +1591,7 @@ export async function askAgent(...args: Parameters<typeof askTask>): Promise<Age
           if (!enabled) return reply('请先在设置 → 助手与权限中开启长期记忆。')
           if (remember) {
             await memory.add(/润色|写作|风格|行文|\b(?:writing|style|tone)\b/iu.test(remember[1]) ? 'style' : 'assistant', remember[1], task.id)
-            return reply('已记住。你可以在记忆管理中查看、修改或删除。')
+            return reply('已整理并更新记忆。你可以在记忆管理中查看、修改或删除。')
           }
           if (forgetId) { await memory.delete(forgetId[1] as 'assistant' | 'style', forgetId[2]); return reply('已删除这条记忆。') }
           const candidates = [...await memory.recall('assistant', `我想忘记的内容：${forget![1]}`), ...await memory.recall('style', forget![1])]

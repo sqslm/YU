@@ -2,10 +2,10 @@ import { HttpError } from '../http.mjs'
 import { requireUser } from '../session.mjs'
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const DAY_FIELDS = ['entries', 'len', 'ms', 'used', 'records', 'usedMs', 'chars', 'units', 'measured', 'measuredUnits', 'measuredMs', 'savedMs']
+const DAY_FIELDS = ['entries', 'len', 'ms', 'used', 'records', 'usedMs', 'chars', 'units', 'measured', 'measuredUnits', 'measuredMs', 'inputUnits', 'inputMs', 'savedMs']
 
 function count(value, field) {
-  const number = Number(value)
+  const number = typeof value === 'number' ? value : NaN
   if (!Number.isSafeInteger(number) || number < 0) throw new HttpError(400, 'bad_stats', `${field} 不合法`)
   return number
 }
@@ -21,7 +21,7 @@ function cleanStats(raw) {
   const dayEntries = Object.entries(raw.days ?? {})
   if (dayEntries.length > 10000) throw new HttpError(400, 'bad_stats', '日期统计条数过多')
   for (const [day, value] of dayEntries) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !value || typeof value !== 'object' || Array.isArray(value)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(day)) || new Date(day).toISOString().slice(0, 10) !== day || !value || typeof value !== 'object' || Array.isArray(value)) {
       throw new HttpError(400, 'bad_stats', '日期统计格式不合法')
     }
     const totals = {}

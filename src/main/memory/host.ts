@@ -24,6 +24,7 @@ export class MemoryService implements MemoryBackend {
   private working = false
   private mutations: Promise<void> = Promise.resolve()
   private mutating = 0
+  private explicitLearning = false
   private generation = 0
   private learningEpoch = 0
   private download: AbortController | null = null
@@ -74,7 +75,8 @@ export class MemoryService implements MemoryBackend {
       if (message.type === 'llm') {
         const at = performance.now(), signal = this.llmAbort.signal
         const settings = this.settings(), profile = chainFor(settings, 'llm')[0]
-        if (!settings.memory.enabled || this.paused || !profile) { child.postMessage({ type: 'llm-result', id: message.id, error: 'Memory learning unavailable' }); return }
+        const paused = this.paused && !(this.explicitLearning && [...this.reasons].every(reason => reason === 'foreground'))
+        if (!settings.memory.enabled || paused || !profile) { child.postMessage({ type: 'llm-result', id: message.id, error: 'Memory learning unavailable' }); return }
         void memoryCompletion(message.messages, message.kind === 'memory' ? 'memory' : 'facts', signal, messages => {
           this.log(`[memory] llm_call=${++this.llmCalls} request=${message.id}`)
           return complete({ ...settings.polish, ...profile }, { messages, temperature: 0, signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]), effort: 'off',
@@ -172,12 +174,15 @@ export class MemoryService implements MemoryBackend {
   private mutate(method: string, kind?: MemoryKind, id?: string, text?: string, sourceId = 'manual'): Promise<void> {
     this.learningEpoch++; this.queue = []; this.mutating++
     const operation = this.mutations.then(async () => {
+      if (method === 'add' && sourceId !== 'manual' && [...this.reasons].some(reason => reason !== 'foreground')) throw Error('录音或游戏期间暂不整理记忆，请结束后重试')
       this.queue = []; this.stop()
       if (method === 'add' || method === 'update') {
         if (!this.current.modelReady) throw Error('请先下载记忆模型')
         if (!text?.trim() || text.length > 2000) throw Error('记忆内容需为 1–2000 字')
       }
-      await this.request(method, { kind, memoryId: id, text: text?.trim(), sourceId })
+      this.explicitLearning = method === 'add' && sourceId !== 'manual'
+      try { await this.request(method, { kind, memoryId: id, text: text?.trim(), sourceId }, this.explicitLearning ? 90000 : undefined) }
+      finally { this.explicitLearning = false }
       this.current.error = undefined; this.current.state = 'idle'
     }).finally(() => { this.mutating--; if (!this.mutating) this.reclaim() })
     this.mutations = operation.catch(() => {})

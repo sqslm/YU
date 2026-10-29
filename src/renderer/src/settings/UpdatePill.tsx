@@ -69,7 +69,7 @@ export function UpdatePill(): JSX.Element | null {
       : state.phase === 'verifying' ? i18n.t('正在校验安装包，请稍候')
       : state.phase === 'error' ? state.message
       : state.phase === 'downloading'
-        ? `${i18n.t('点击暂停下载')} · ${((state.transferred ?? 0) / 1048576).toFixed(1)} / ${((state.total ?? 0) / 1048576).toFixed(1)} MB · ${((state.bytesPerSecond ?? 0) / 1048576).toFixed(1)} MB/s${state.etaSeconds ? ` · ${state.etaSeconds}s` : ''}`
+        ? `${state.message ? state.message + ' · ' : ''}${i18n.t('点击暂停下载')} · ${((state.transferred ?? 0) / 1048576).toFixed(1)} / ${((state.total ?? 0) / 1048576).toFixed(1)} MB · ${((state.bytesPerSecond ?? 0) / 1048576).toFixed(1)} MB/s${state.etaSeconds ? ` · ${state.etaSeconds}s` : ''}`
         : i18n.t('点击下载这个版本')
 
   return (
@@ -101,6 +101,8 @@ export function UpdatePill(): JSX.Element | null {
           bgcolor: 'rgba(76,141,255,0.12)',
           whiteSpace: 'nowrap',
           maxWidth: 180,
+          minWidth: 0,
+          flex: '0 1 auto',
           overflow: 'hidden',
           '&:hover': { bgcolor: 'rgba(76,141,255,0.2)' }
         }}

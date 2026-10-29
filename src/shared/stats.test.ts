@@ -25,6 +25,17 @@ function entry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
 }
 
 describe('contributionOf', () => {
+  it('measures speech from ASR, never from a long generated answer', () => {
+    const { totals } = contributionOf(entry({ mode: 'ask', transcript: '总结新闻', final: '新闻'.repeat(500), durationMs: 4000 }))
+    expect(totals.measuredUnits).toBe(4)
+    expect(totals.measuredMs).toBe(4000)
+    expect(totals.savedMs).toBe(0)
+  })
+  it('does not roll invalid dates or unbounded durations into usage', () => {
+    const stats = statsFromEntries([entry({ createdAt: NaN }), entry({ durationMs: Infinity })])
+    expect(Object.keys(stats.days)).not.toContain('NaN-NaN-NaN')
+    expect(stats.days['2026-10-19'].usedMs).toBe(0)
+  })
   it('splits one usable take into the counters the page reads', () => {
     const { day, totals, app } = contributionOf(entry())
 
@@ -119,10 +130,20 @@ describe('isUsageEntry', () => {
     expect(isUsageEntry({ status: 'completed' })).toBe(true)
     expect(isUsageEntry({ status: 'error' })).toBe(false)
     expect(isUsageEntry({ status: 'empty' })).toBe(false)
+    expect(isUsageEntry({ status: 'dismissed' })).toBe(false)
+    expect(isUsageEntry({ status: 'archived', archivedStatus: 'error' })).toBe(false)
   })
 })
 
 describe('sanitizeStats', () => {
+  it('rejects impossible dates and non-integer counters and never trusts old output-based pace as ASR', () => {
+    const stats = sanitizeStats({ days: {
+      '2026-02-30': { entries: 1 },
+      '2026-10-29': { entries: 2, units: Infinity, ms: -4, inputUnits: 3.5, inputMs: 4000, measuredUnits: 10000, measuredMs: 1000 }
+    } })
+    expect(Object.keys(stats.days)).toEqual(['2026-10-29'])
+    expect(stats.days['2026-10-29']).toMatchObject({ units: 0, ms: 0, inputUnits: 0, inputMs: 0 })
+  })
   it('keeps real counters and drops hand-edited rubbish', () => {
     const clean = sanitizeStats({
       version: 1,

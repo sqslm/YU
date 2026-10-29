@@ -2426,5 +2426,12 @@
   "追加到选区末尾": "Append at selection end",
   "记忆提炼未完成：当前 LLM 未返回有效 JSON，请检查连接或更换模型后重试": "Memory extraction is incomplete: the current LLM did not return valid JSON. Check the connection or switch models and retry.",
   "重试整理": "Retry extraction",
+  "官方线路": "Official route",
+  "备用加速线路": "Backup accelerated route",
+  "暂无有效语速样本": "No valid speech samples yet",
+  "活跃天数": "Active days",
+  "中文按字、其他语言按词计数，不含标点；统计成功输出。": "Counts successful output: CJK characters and words in other scripts, excluding punctuation.",
+  "仅用原始转写与对应录音时长加权计算；旧数据不推测语速。": "Weighted from raw transcription and matching recording durations. Pace is not inferred for legacy data.",
+  "未提炼出新的可保存事实，已有记忆未改动。": "No new facts were extracted for saving. Existing memories were preserved.",
   "原有记忆仍然保留。提炼使用当前 LLM，不需要重新下载本地检索模型。": "Existing memories are preserved. Extraction uses the current LLM; the local retrieval model does not need to be downloaded again."
 }

@@ -19,7 +19,8 @@ function item(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
     id: `insight-${seq}`,
     createdAt: new Date(2026, 9, 19, 9, 0).getTime(),
     mode: 'dictation',
-    transcript: '',
+    // These dictation fixtures represent unchanged ASR output unless explicitly overridden.
+    transcript: overrides.final ?? '',
     final: '',
     durationMs: 0,
     app: 'Notepad',
@@ -89,6 +90,15 @@ describe('usageInsights: cumulative totals', () => {
 })
 
 describe('usageInsights: speaking rate', () => {
+  it('does not infer ASR speed from generated output or an old aggregate', () => {
+    const row = item({ mode: 'ask', transcript: '总结新闻', final: '新闻'.repeat(500), durationMs: 4000 })
+    expect(usageInsights([row]).wpm).toBe(60)
+    expect(usageInsights([item({ final: '很长的模型回答', transcript: '', durationMs: 1000 })]).wpm).toBe(0)
+    const legacy = statsFromEntries([row])
+    delete Object.values(legacy.days)[0].inputUnits
+    delete Object.values(legacy.days)[0].inputMs
+    expect(insightsFromStats(legacy).wpm).toBe(0)
+  })
   it('weights by total units over total duration, not by averaging per-entry rates', () => {
     const out = usageInsights(
       [

@@ -2,30 +2,58 @@ import { createHash } from 'node:crypto'
 import { mkdir, open, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
+import { setTimeout as wait } from 'node:timers/promises'
 
 export interface DownloadProgress {percent:number;transferred:number;total:number;bytesPerSecond:number;etaSeconds:number}
 export interface RangeDownloadOptions {
   url:string;destination:string;cacheDir:string;sha512:string;signal?:AbortSignal;headers?:Record<string,string>
   fetchImpl?:typeof fetch;onProgress?:(progress:DownloadProgress)=>void;onVerifying?:()=>void
+  onRoute?:(route:'official'|'accelerated')=>void
 }
-/** Fixed four-way ranges. The upstream updater still owns signature checks and installation. */
+/** Only public YU installers may use the backup. Feed metadata and credentials stay official. */
+export function backupUpdateUrl(raw:string):string|null {
+  const url=new URL(raw)
+  if(url.protocol!=='https:'||url.hostname!=='github.com'||url.port||url.username||url.password||url.search||url.hash)return null
+  if(!/^\/sqslm\/YU\/releases\/download\/v[\w.-]+\/YU-[\w.-]+-setup\.exe$/.test(url.pathname))return null
+  return `https://gh-proxy.com/${url.href}`
+}
+export async function downloadUpdateArtifact(options:RangeDownloadOptions):Promise<boolean> {
+  options.onRoute?.('official')
+  try{return await downloadRanges(options)}
+  catch(error){
+    options.signal?.throwIfAborted()
+    const backup=backupUpdateUrl(options.url)
+    if(!backup)throw error
+    options.onRoute?.('accelerated')
+    // Public bytes only. In particular, never forward Authorization/cookies or a signed URL.
+    const handled=await downloadRanges({...options,url:backup,headers:undefined})
+    if(!handled)throw Error('备用更新线路不支持分段下载，请稍后重试')
+    return true
+  }
+}
+export const MAX_UPDATE_CONNECTIONS = 32
+/** Bounded resumable ranges. The upstream updater still owns signature checks and installation. */
 export async function downloadRanges(options:RangeDownloadOptions):Promise<boolean> {
   const {signal}=options,fetchImpl=options.fetchImpl??fetch
   signal?.throwIfAborted()
   const expected=Buffer.from(options.sha512,/^[a-f0-9]{128}$/i.test(options.sha512)?'hex':'base64')
   if(expected.length!==64)throw Error('Invalid update SHA-512')
   const headers=new Headers(options.headers);headers.set('Accept-Encoding','identity');headers.set('Range','bytes=0-0')
-  const probe=await fetchImpl(options.url,{headers,signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30000)])})
+  const probe=await fetchImpl(options.url,{headers,signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(20000)])})
+  // Reuse the resolved release-CDN URL instead of making every range repeat GitHub redirects.
+  // Never persist signed CDN query strings; retry through the original URL if a ticket expires.
+  const artifactUrl=probe.url||options.url
   const range=/^bytes 0-0\/(\d+)$/.exec(probe.headers.get('content-range')??'')
   await probe.body?.cancel()
   if(probe.status===200)return false
   if(probe.status!==206||!range)throw Error(`Update range probe failed (HTTP ${probe.status})`)
   const total=Number(range[1]);if(!Number.isSafeInteger(total)||total<=0)throw Error('Invalid update size')
   const validator=probe.headers.get('etag')??probe.headers.get('last-modified')??''
-  const count=total>=1024*1024?4:1,size=Math.ceil(total/count)
+  const count=Math.min(MAX_UPDATE_CONNECTIONS,Math.ceil(total/(256*1024))),size=Math.ceil(total/count)
   await mkdir(options.cacheDir,{recursive:true})
-  const manifest=join(options.cacheDir,'manifest.json'),parts=Array.from({length:4},(_,index)=>join(options.cacheDir,`${index}.part`))
-  const identity=JSON.stringify({url:options.url,sha512:options.sha512,total,count,validator})
+  const manifest=join(options.cacheDir,'manifest.json'),parts=Array.from({length:MAX_UPDATE_CONNECTIONS},(_,index)=>join(options.cacheDir,`${index}.part`))
+  // The trusted digest identifies bytes across expiring URLs, ETags and route changes.
+  const identity=JSON.stringify({sha512:options.sha512,total,count})
   const clear=async():Promise<void>=>{for(const file of [...parts,manifest])await unlink(file).catch(error=>{if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error})}
   let stored='';try{stored=await readFile(manifest,'utf8')}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
   if(stored!==identity){await clear();await writeFile(manifest,identity)}
@@ -48,17 +76,17 @@ export async function downloadRanges(options:RangeDownloadOptions):Promise<boole
       combined.throwIfAborted()
       let file:Awaited<ReturnType<typeof open>>|undefined
       const requestController=new AbortController()
-      let requestTimer=setTimeout(()=>requestController.abort(Error('Update connection timed out')),30000)
+      let requestTimer=setTimeout(()=>requestController.abort(Error('Update connection timed out')),20000)
       try{
         const request=new Headers(options.headers);request.set('Accept-Encoding','identity');request.set('Range',`bytes=${from}-${end}`)
         if(validator&&!validator.startsWith('W/'))request.set('If-Range',validator)
-        const response=await fetchImpl(options.url,{headers:request,signal:AbortSignal.any([combined,requestController.signal])})
+        const response=await fetchImpl(attempt ? options.url : artifactUrl,{headers:request,signal:AbortSignal.any([combined,requestController.signal])})
         if(response.status!==206||response.headers.get('content-range')!==`bytes ${from}-${end}/${total}`){await response.body?.cancel();throw Error(`Update range rejected (HTTP ${response.status})`)}
         if(!response.body)throw Error('Empty update response')
-        clearTimeout(requestTimer);requestTimer=setTimeout(()=>requestController.abort(Error('Update download stalled')),60000)
+        clearTimeout(requestTimer);requestTimer=setTimeout(()=>requestController.abort(Error('Update download stalled')),15000)
         file=await open(parts[index],'a')
         for await(const chunk of response.body){
-          clearTimeout(requestTimer);requestTimer=setTimeout(()=>requestController.abort(Error('Update download stalled')),60000)
+          clearTimeout(requestTimer);requestTimer=setTimeout(()=>requestController.abort(Error('Update download stalled')),15000)
           combined.throwIfAborted()
           if(lengths[index]+chunk.byteLength>end-index*size+1)throw Error('Update range exceeded expected size')
           await file.writeFile(chunk);lengths[index]+=chunk.byteLength;progress()
@@ -67,6 +95,7 @@ export async function downloadRanges(options:RangeDownloadOptions):Promise<boole
         return
       }catch(error){if(combined.aborted||attempt===2)throw error}
       finally{clearTimeout(requestTimer);await file?.close()}
+      await wait(500*2**attempt,undefined,{signal:combined})
     }
   })().catch(error=>{controller.abort(error);throw error}))
   const settled=await Promise.allSettled(jobs),failed=settled.find(row=>row.status==='rejected')

@@ -183,10 +183,10 @@ describe('heatLevel', () => {
 })
 
 describe('isUsageEntry', () => {
-  it('drops failed and empty takes, keeps completed and pre-status entries', () => {
+  it('drops failed, empty and cancelled takes, keeps completed and pre-status entries', () => {
     expect(isUsageEntry(entry(NOON, 1, 1))).toBe(true)
     expect(isUsageEntry({ ...entry(NOON, 1, 1), status: 'completed' })).toBe(true)
-    expect(isUsageEntry({ ...entry(NOON, 1, 1), status: 'dismissed' })).toBe(true)
+    expect(isUsageEntry({ ...entry(NOON, 1, 1), status: 'dismissed' })).toBe(false)
     expect(isUsageEntry({ ...entry(NOON, 1, 1), status: 'empty' })).toBe(false)
     expect(isUsageEntry({ ...entry(NOON, 1, 1), status: 'error' })).toBe(false)
   })
@@ -291,10 +291,11 @@ describe('lifetime rollup parity', () => {
     const stats = statsFromEntries(rows)
 
     expect(todayFromStats(stats, NOON)).toEqual({
-      chars: 14,
+      chars: 2,
       spoken: 6000,
       segments: 2,
-      average: 3000
+      average: 3000,
+      pace: 20
     })
     expect(bucketFromStats(stats, 7, NOON)).toEqual(bucketDays(rows, 7, NOON))
     expect(heatFromStats(stats, new Date(NOON))).toEqual(heatWeeks(rows, new Date(NOON)))
@@ -305,7 +306,7 @@ describe('lifetime rollup parity', () => {
     const stats = statsFromEntries(rows)
 
     // 清空历史 removes the rows; the rollup is all the page has left.
-    expect(todayFromStats(stats, NOON).chars).toBe(14)
+    expect(todayFromStats(stats, NOON).chars).toBe(2)
     expect(bucketFromStats(stats, 7, NOON).reduce((sum, day) => sum + day.count, 0)).toBe(3)
     expect(heatFromStats(stats, new Date(NOON)).activeDays).toBe(2)
     expect(streakFromStats(stats, NOON).current).toBe(2)

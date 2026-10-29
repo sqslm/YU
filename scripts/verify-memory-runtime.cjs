@@ -46,7 +46,8 @@ async function start(catalogOnly = false) {
 }
 function send(method, params = {}) {
   return new Promise((resolve, reject) => {
-    const id = ++nextId, timer = setTimeout(() => reject(Error('Worker timeout: ' + method)), 10000)
+    // Loose pnpm development trees need longer cold resolution than the flattened app.asar.
+    const id = ++nextId, timer = setTimeout(() => reject(Error('Worker timeout: ' + method)), 60000)
     pending.set(id, { resolve: value => { clearTimeout(timer); resolve(value) }, reject: error => { clearTimeout(timer); reject(error) } })
     child.postMessage({ id, method, ...params })
   })
@@ -60,8 +61,8 @@ app.whenReady().then(async () => {
   const report = {}
   try {
     await start(); await send('clear')
-    await send('add', { kind: 'assistant', text: '用户的测试项目叫星河', sourceId: 'qa-assistant' })
-    await send('add', { kind: 'style', text: '用户明确要求写作使用简短句子', sourceId: 'qa-style' })
+    await send('add', { kind: 'assistant', text: '用户的测试项目叫星河', sourceId: 'manual' })
+    await send('add', { kind: 'style', text: '用户明确要求写作使用简短句子', sourceId: 'manual' })
     let facts = await send('list', { kind: 'assistant' }), styles = await send('list', { kind: 'style' })
     if (facts.length !== 1 || styles.length !== 1) throw Error('Category isolation failed')
     report.categoryIsolation = true
@@ -85,7 +86,7 @@ app.whenReady().then(async () => {
     if ((await send('list', { kind: 'assistant' })).length || (await send('list', { kind: 'style' })).length) throw Error('Clear after restart failed')
     report.clearBothCategoriesAfterRestart = true
     mockLearning = true
-    await send('learn', { kind: 'style', text: '以后写作请使用简短句子', sourceId: 'qa-llm-fixture' })
+    await send('add', { kind: 'style', text: '呃，以后那个，写作请使用简短句子', sourceId: 'qa-llm-fixture' })
     const learned = await send('list', { kind: 'style' })
     if (!learned.some(row => row.text === '用户要求写作使用简短句子')) throw Error('SDK inference bridge failed: calls=' + llmCalls + ' learned=' + JSON.stringify(learned))
     report.sdkInferenceBridge = { mockLlmCalls: llmCalls, saved: true, limitation: 'Protocol fixture, not real LLM extraction accuracy' }

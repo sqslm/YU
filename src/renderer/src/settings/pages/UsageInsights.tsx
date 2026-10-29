@@ -216,8 +216,8 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
             // Pace is the one today-number the old tiles never showed: "average
             // paragraph" only repeated the footnote under the duration.
             label: i18n.t('今日语速'),
-            value: today.spoken > 0 ? String(Math.round(today.chars / (today.spoken / 60000))) : '—',
-            sub: today.spoken > 0 ? i18n.t('字/分') : i18n.t('今天还没有说话')
+            value: today.pace > 0 ? String(today.pace) : '—',
+            sub: today.pace > 0 ? i18n.t('字/分') : i18n.t('暂无有效语速样本')
           }
         ].map((item) => (
           <Box key={item.label} sx={{ flex: 1, minWidth: 0 }}>

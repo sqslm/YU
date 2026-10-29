@@ -17,6 +17,9 @@ import {
  */
 
 describe('countText', () => {
+  it('counts Unicode letters and supplementary Han without counting emoji or combining accents twice', () => {
+    expect(countText('𠮷 café café Привет مرحبا 👨‍👩‍👧‍👦').units).toBe(5)
+  })
   it('counts pure Chinese per character and no words', () => {
     // 我们今天开会 -> 6 ideographs, no latin token.
     expect(countText('我们今天开会')).toEqual({ cjk: 6, words: 0, units: 6, chars: 6 })
