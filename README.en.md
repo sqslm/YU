@@ -273,6 +273,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 | --- | --- |
 | [ASSISTANT_ROADMAP.md](ASSISTANT_ROADMAP.md) | Phased scope, actual progress, item-by-item acceptance records |
 | [PROVIDER_API_AUDIT.md](PROVIDER_API_AUDIT.md) | Per-vendor protocol differences, fixes, unverified items |
+| [docs/asr-api-setup.md](docs/asr-api-setup.md) | How to get and configure speech-to-text API keys (Aliyun, Volcengine, iFlytek, Tencent Cloud), with troubleshooting (Chinese) |
 | [resources/brand/PHILOSOPHY.zh-CN.md](resources/brand/PHILOSOPHY.zh-CN.md) | Design philosophy: why the trade-offs went this way (Chinese) |
 | [server/README.md](server/README.md) · [server/docs/API.md](server/docs/API.md) | Server deployment and HTTP API |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) · `licenses/` | Third-party licenses |

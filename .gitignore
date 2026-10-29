@@ -8,6 +8,9 @@
 !/PROVIDER_API_AUDIT.md
 !/THIRD_PARTY_NOTICES.md
 !/ASSISTANT_ROADMAP.md
+!/docs/
+/docs/*
+!/docs/asr-api-setup.md
 !/package.json
 !/pnpm-lock.yaml
 !/pnpm-workspace.yaml

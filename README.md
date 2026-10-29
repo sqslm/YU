@@ -271,6 +271,7 @@ node_modules\electron\dist\electron.exe .        # 启动前按 README 顶部的
 | --- | --- |
 | [ASSISTANT_ROADMAP.md](ASSISTANT_ROADMAP.md) | 分阶段交付范围、实际进度、逐项验收记录 |
 | [PROVIDER_API_AUDIT.md](PROVIDER_API_AUDIT.md) | 各厂商协议差异、修正记录与未验证项 |
+| [docs/asr-api-setup.md](docs/asr-api-setup.md) | 语音识别 API 申请与配置教程：阿里云/火山引擎/科大讯飞/腾讯云逐家步骤与排错 |
 | [resources/brand/PHILOSOPHY.zh-CN.md](resources/brand/PHILOSOPHY.zh-CN.md) | 设计理念：为什么这样取舍 |
 | [server/README.md](server/README.md) · [server/docs/API.md](server/docs/API.md) | 服务端部署与 HTTP API |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) · `licenses/` | 第三方依赖许可 |
