@@ -19,8 +19,9 @@ ipcRenderer.on('card:hidden', () => { lastCard = null })
 const api: TypelessApi = {
   chat: {
     list: () => ipcRenderer.invoke('chat:list'), get: (id, limit) => ipcRenderer.invoke('chat:get', id, limit),
+    attachment: (id, attachmentId) => ipcRenderer.invoke('chat:attachment', id, attachmentId),
     create: group => ipcRenderer.invoke('chat:create', group ?? null), edit: input => ipcRenderer.invoke('chat:edit', input),
-    send: (id, text) => ipcRenderer.invoke('chat:send', id, text), cancel: () => ipcRenderer.invoke('chat:cancel'),
+    send: (id, text, attachments) => ipcRenderer.invoke('chat:send', id, text, attachments), cancel: () => ipcRenderer.invoke('chat:cancel'),
     onEvent: callback => { const listener = (_event: Electron.IpcRendererEvent, event: import('@shared/chat').ChatEvent): void => callback(event); ipcRenderer.on('chat:event', listener); return () => ipcRenderer.removeListener('chat:event', listener) }
   },
   quota: {

@@ -13,7 +13,7 @@ import { app, clipboard, dialog, nativeTheme, net, Notification, powerMonitor, p
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import os from 'node:os'
 import type { BrowserWindow } from 'electron'
 import type { BarActionId, BarState, CardAction, ModelListResult, Settings } from '@shared/types'
@@ -150,7 +150,7 @@ let sync: SyncEngine | null = null
 const stats = new StatsStore()
 
 let settingsWindow: BrowserWindow | null = null
-const chats = new ChatService(join(app.getPath('userData'), 'chats.db'), () => store.get(), event => {
+const chats = new ChatService(join(app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(), 'data', 'chat', 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
 })
 let explanationController: AbortController | null = null
@@ -1268,12 +1268,13 @@ function registerIpc(): void {
   const chatOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从语聊天页操作对话') }
   handle('chat:list', event => { chatOwner(event); return chats.list() })
   handle('chat:get', (event, id: string, limit?: number) => { chatOwner(event); return chats.get(id, limit) })
+  handle('chat:attachment', (event, id: string, attachmentId: string) => { chatOwner(event); return chats.store.attachment(id, attachmentId) })
   handle('chat:create', (event, group: string | null) => { chatOwner(event); return chats.create(group) })
   handle('chat:edit', (event, input: import('@shared/chat').ChatEdit) => { chatOwner(event); return chats.edit(input) })
-  handle('chat:send', async (event, id: string, text: string) => {
+  handle('chat:send', async (event, id: string, text: string, attachments?: import('@shared/chat').ChatUpload[]) => {
     chatOwner(event)
     if (gameMode.snapshot().active) throw Error('游戏模式下已暂停聊天生成')
-    return chats.send(id, text)
+    return chats.send(id, text, attachments)
   })
   handle('chat:cancel', event => { chatOwner(event); chats.cancel() })
   handle('card:explain', async (event, term: string) => {

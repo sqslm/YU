@@ -257,6 +257,10 @@ Mem0 2.4.6 eagerly imports the following peer clients even when only local stora
 
 The optional BGE-small-zh-v1.5 weights are downloaded on demand, not bundled. [BAAI model card and MIT declaration](https://huggingface.co/BAAI/bge-small-zh-v1.5); [Xenova ONNX conversion](https://huggingface.co/Xenova/bge-small-zh-v1.5), pinned revision `75c43b069aac4d136ba6bc1122f995fedcfd2781`. SDK telemetry and SDK conversation history capture are disabled. All transitive client libraries retain their upstream licenses; the YU adapter enables only local SQLite, local embeddings and its configured LLM bridge, not their cloud/database transports.
 
+## Chat image processing
+
+Chat attachments reuse [sharp 0.35.5](https://github.com/lovell/sharp/tree/v0.35.5) (Apache-2.0) and its existing Windows x64 binary package (Apache-2.0 AND LGPL-3.0-or-later). Licenses and the binary's upstream notice, including linked library source/build information, are in `licenses/sharp-0.35.5-LICENSE`, `licenses/sharp-win32-x64-0.35.5-LICENSE` and `licenses/sharp-win32-x64-0.35.5-NOTICE.md`. Native libraries remain separate and replaceable in `app.asar.unpacked`; YU does not modify them.
+
 ## Optional community dictionaries
 
 Dictionary contents are not bundled. On explicit import, the application downloads selected text lists from their maintainers. Entry provenance retains the source URL and declared license; imports do not assert that names or relationships have been independently verified.

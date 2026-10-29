@@ -7,6 +7,8 @@ import { mt } from '@shared/mainI18n'
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
+  /** Local, validated image data; converted at the HTTP boundary only. */
+  images?: string[]
 }
 
 export interface ChatRequest {
@@ -58,6 +60,11 @@ export function adaptChatBody(
   body: Record<string, unknown>,
   effort = ''
 ): Record<string, unknown> {
+  if (Array.isArray(body.messages)) body.messages = body.messages.map(message => {
+    if (!Array.isArray(message.images) || !message.images.length) return message
+    const { images, ...plain } = message
+    return { ...plain, content: [{ type: 'text', text: message.content }, ...images.map((url: string) => ({ type: 'image_url', image_url: { url } }))] }
+  })
   let host = ''
   try {
     host = new URL(cfg.baseUrl ?? '').hostname.toLowerCase()

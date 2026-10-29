@@ -46,6 +46,7 @@
     "pinyin-pro": "3.29.5",
     "react-force-graph-2d": "1.29.2",
     "redis": "4.7.1",
+    "sharp": "0.35.5",
     "sherpa-onnx-node": "1.13.8",
     "sherpa-onnx-win-x64": "1.13.8"
   },

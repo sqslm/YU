@@ -59,9 +59,10 @@ export interface TypelessApi {
   chat: {
     list(): Promise<import('./chat').ChatIndex>
     get(id: string, limit?: number): Promise<import('./chat').ChatDetail>
+    attachment(id: string, attachmentId: string): Promise<{ name: string; url?: string; text?: string }>
     create(groupId?: string | null): Promise<import('./chat').ChatDetail>
     edit(input: import('./chat').ChatEdit): Promise<void>
-    send(id: string, text: string): Promise<void>
+    send(id: string, text: string, attachments?: import('./chat').ChatUpload[]): Promise<void>
     cancel(): Promise<void>
     onEvent(callback: (event: import('./chat').ChatEvent) => void): () => void
   }

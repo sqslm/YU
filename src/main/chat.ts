@@ -1,4 +1,5 @@
-import type { ChatDetail, ChatEdit, ChatEvent, ChatIndex } from '@shared/chat'
+import type { ChatDetail, ChatEdit, ChatEvent, ChatIndex, ChatUpload } from '@shared/chat'
+import { chatAttachmentReference, prepareChatAttachments, validateChatUploads } from './chat-attachments'
 import type { Settings } from '@shared/types'
 import type { ChatMessage as LlmMessage } from './providers/llm'
 import { complete } from './providers/llm'
@@ -39,18 +40,27 @@ export class ChatService {
     if (input?.action === 'delete' && input.id === this.active?.threadId) this.cancel()
     this.store.edit(input); this.changed({ type: 'changed' })
   }
-  async send(id: string, question: string): Promise<void> {
-    if (typeof question !== 'string' || !question.trim() || question.length > 12000) throw Error('请输入 1–12000 字的消息')
+  async send(id: string, question: string, uploads: ChatUpload[] = []): Promise<void> {
+    validateChatUploads(uploads)
+    if (typeof question !== 'string' || (!question.trim() && !uploads.length) || question.length > 12000) throw Error('请输入 1–12000 字的消息')
+    question = question.trim() || '请分析这些附件，概括主要内容。'
     if (this.active) throw Error('正在回答，请先停止当前生成')
     const settings = this.settings()
     if (!chainFor(settings, 'llm').length) throw Error('请先在 AI 与模型中配置 LLM 模型')
     const detail = this.store.get(id), first = !detail.messages.some(message => message.role === 'assistant' && message.state === 'done'), messages = chatContext(detail)
-    const conversation = { messages, toolNotes: '', memoryTemporary: Boolean(detail.memoryTemporary) }
-    const { answerId } = this.store.begin(id, question.trim())
+    const conversation: import('./agent').AgentConversation = { messages, toolNotes: '', memoryTemporary: Boolean(detail.memoryTemporary) }
+    const { userId, answerId } = this.store.begin(id, question.trim())
     const active = { threadId: id, messageId: answerId, text: '', controller: new AbortController() }; this.active = active
     const progress = (status = ''): void => this.changed({ type: 'progress', threadId: id, messageId: answerId, text: active.text, status })
     this.changed({ type: 'changed' })
     try {
+      if (uploads.length) {
+        progress('正在读取附件…')
+        const files = await prepareChatAttachments(uploads, active.controller.signal)
+        active.controller.signal.throwIfAborted()
+        this.store.attach(userId, files); this.changed({ type: 'changed' })
+      }
+      conversation.reference = chatAttachmentReference(this.store.references(id))
       const pending = askAgent(settings, question.trim(), {}, active.controller.signal, () => {}, {
         reset: false, conversation, allowedTools: ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate'], timeouts: { llm: 90000 },
         onDelta: delta => { active.text += delta; progress() }, onStatus: status => progress(status)
@@ -62,7 +72,8 @@ export class ChatService {
       this.store.finish(answerId, result.text, result.taskState === 'failed' ? 'error' : 'done', result.sources)
       if (first && result.taskState !== 'failed') void this.title(id, question, result.text)
     } catch (error) {
-      if (!this.closing) this.store.finish(answerId, active.text || (active.controller.signal.aborted ? '生成已停止' : error instanceof Error ? error.message : '回答失败，请重试'), active.controller.signal.aborted ? 'cancelled' : 'error')
+      const imageHint = conversation.reference?.images?.length ? '图片回答失败，请确认当前 LLM 支持视觉输入。' : ''
+      if (!this.closing) this.store.finish(answerId, active.text || (active.controller.signal.aborted ? '生成已停止' : imageHint + (error instanceof Error ? error.message : '回答失败，请重试')), active.controller.signal.aborted ? 'cancelled' : 'error')
     } finally { if (this.active === active) this.active = null; if (!this.closing) this.changed({ type: 'changed' }) }
   }
   private async title(id: string, question: string, answer: string): Promise<void> {

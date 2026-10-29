@@ -40,10 +40,15 @@ export async function readDocumentBytes(path: string, maxBytes: number, signal?:
 
 /** Read selected local documents without launching Office, macros or embedded links. */
 export async function readDocument(path: string, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
+  return readDocumentBuffer(path, await readDocumentBytes(path, MAX_BYTES, signal), signal)
+}
+
+/** Browser-selected chat attachments use the same bounded parser without temporary files. */
+export async function readDocumentBuffer(path: string, bytes: Uint8Array, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
   signal?.throwIfAborted()
+  if (bytes.byteLength > MAX_BYTES) throw new Error(mt('只支持不超过 {{size}} MiB 的普通文件', { size: MAX_BYTES / 1024 / 1024 }))
   const ext = extname(path).toLowerCase()
   if (!TEXT.has(ext) && !['.docx', '.xlsx', '.pptx', '.pdf', '.odt', '.ods', '.odp'].includes(ext)) throw new Error(mt('此文件格式暂不支持直接提取正文；请在编辑器中打开后重试，或转换为 PDF、Office 新格式或纯文本'))
-  const bytes = await readDocumentBytes(path, MAX_BYTES, signal)
   let text: string | null
   if (ext === '.pdf') text = await pdfText(bytes, 8000, signal)
   else if (['.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp'].includes(ext)) text = structuredOfficeText(bytes, ext)

@@ -2494,5 +2494,16 @@
   "请输入 1–12000 字的消息": "Enter a message of 1–12000 characters",
   "正在回答，请先停止当前生成": "A reply is in progress. Stop generation first.",
   "请先在 AI 与模型中配置 LLM 模型": "Configure an LLM in AI & models first.",
-  "本对话不读写长期记忆": "Long-term memory is off for this chat"
+  "本对话不读写长期记忆": "Long-term memory is off for this chat",
+  "每条消息最多添加 5 个附件": "Attach up to 5 files per message",
+  "每个附件需为非空文件，且不超过 10 MiB": "Each file must be non-empty and at most 10 MiB",
+  "一条消息的附件总大小不能超过 25 MiB": "Attachments must total no more than 25 MiB per message",
+  "此文件格式暂不支持，请选择图片、PDF、Office 新格式或文本文件": "Unsupported format. Choose an image, PDF, modern Office document or text file.",
+  "添加文件或图片": "Add files or images",
+  "移除附件": "Remove attachment",
+  "部分内容": "Partial content",
+  "发送时提取正文；扫描版或加密文档暂不支持。": "Text is extracted on send. Scanned or encrypted documents are not supported.",
+  "可拖入文件或图片 · 每次 5 个，每个 10 MiB · 图片需视觉模型": "Drop files or images · Up to 5 files, 10 MiB each · Images require a vision model",
+  "对话与附件保存在安装目录，文件内容仅作为本轮参考，不自动记为个人事实。": "Chats and attachments are saved in the installation folder. File contents are reference material, not personal memories.",
+  "正在读取附件…": "Reading attachments…"
 }
