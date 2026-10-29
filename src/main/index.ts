@@ -55,6 +55,7 @@ import { recordingLog } from './recordingLog'
 import { listModels } from './providers/models'
 import { probeSearch } from './providers/search-probe'
 import { probeConnection, probeMultimodalConnection } from './providers/connection-probe'
+import { QuotaService } from './providers/quota'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { safeFetch } from './safe-fetch'
 import { appIcon, appUserModelId, repairDevelopmentShortcut } from './app-icon'
@@ -1246,6 +1247,16 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 }
 
 function registerIpc(): void {
+  const quota = new QuotaService(() => store.get())
+  const quotaOwner = (event: Electron.IpcMainInvokeEvent): void => {
+    if (event.sender !== settingsWindow?.webContents) throw Error('请从主界面或设置查询额度')
+  }
+  handle('quota:query', (event, target: unknown) => {
+    quotaOwner(event)
+    if (!target || typeof target !== 'object' || !('id' in target) || typeof target.id !== 'string' || target.id.length > 100 || !('kind' in target) || !['asr', 'llm', 'multimodal', 'tts', 'local-asr'].includes(String(target.kind))) throw Error('无效的模型连接')
+    return quota.query(target as import('@shared/quota').QuotaTarget)
+  })
+  handle('quota:refresh', event => { quotaOwner(event); quota.clear() })
   const entityOwner = (event: Electron.IpcMainInvokeEvent): void => {
     if (event.sender !== settingsWindow?.webContents) throw Error(mt('请从设置管理专有名词'))
   }

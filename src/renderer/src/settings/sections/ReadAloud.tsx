@@ -9,6 +9,7 @@ import { SettingsNumber } from './General'
 import { ModelAvatar, ModelWorkspace, modelFieldSx, modelSelectedBackground } from './ModelWorkspace'
 import i18n from '../../i18n'
 import { registerGameModePreparation } from '../gameModePreparation'
+import { QuotaButton } from '../Quota'
 
 export function ReadAloudSection({ settings, patch, saving, saveError }: { settings: Settings; patch: (delta: Partial<Settings>) => void; saving: boolean; saveError: string }): JSX.Element {
   const [voices, setVoices] = useState<string[]>([])
@@ -98,6 +99,7 @@ export function ReadAloudSection({ settings, patch, saving, saveError }: { setti
       </TextField>}
       <Stack direction="row" spacing={1} alignItems="center"><Button size="small" variant="contained" disableElevation startIcon={<VolumeUpOutlined sx={{ fontSize: 17 }} />} disabled={busy || !tts.enabled || saving || Boolean(saveError)} onClick={() => void preview()}>{i18n.t(busy ? '正在试听…' : '试听')}</Button>{busy && <Button size="small" onClick={() => void stop()}>{i18n.t('停止朗读')}</Button>}</Stack>
       {notice && <Alert severity={notice.error ? 'error' : 'success'} onClose={() => setNotice(null)} sx={{ fontSize: 12 }}>{notice.text}</Alert>}
+      <Box><QuotaButton target={{ kind: 'tts', id: active.id }} disabled={saving || Boolean(saveError)} /></Box>
       <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 1.75 }}>
         <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 1.5 }}>{i18n.t('播放设置')}</Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 2, '& .MuiFormControl-root': { width: '100%' } }}>

@@ -87,7 +87,7 @@ export function Onboarding({ settings, patch, saving, saveError, onRetry, onDone
           </Stack>}
           {step === 'try' && <Stack spacing={2}>
             <Typography color="text.secondary">{t('选择示例，点击语音输入读出来，或直接编辑文字。识别后先核对，再点击执行，所有功能都走这一个入口。')}</Typography>
-            <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>{examples.map(item => <Chip key={item.id} clickable color={item.id === example?.id ? 'primary' : 'default'} variant={item.id === example?.id ? 'filled' : 'outlined'} label={t(item.title)} onClick={() => { stop(); setExampleId(item.id); setDraft(t(item.text)); setResult(null); setError('') }} />)}</Stack>
+            <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>{examples.map(item => <Chip key={item.id} clickable color={item.id === example?.id ? 'primary' : 'default'} variant={item.id === example?.id ? 'filled' : 'outlined'} label={t(item.title)} onClick={() => { stop(); setExampleId(item.id); setResult(null); setError('') }} />)}</Stack>
             {example && <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}><Typography variant="caption" color="text.secondary">{t('可以这样说')}</Typography><Typography sx={{ mt: 0.5 }}>{t(example.text)}</Typography><Button size="small" onClick={() => { setDraft(t(example.text)); setResult(null) }}>{t('填入这句话')}</Button></Box>}
             {example?.createsData && <Alert severity="info">{t('执行会创建真实的提醒、待办或日程，你可以在对应页面查看、修改或删除。')}</Alert>}
             <TextField multiline minRows={3} fullWidth label={t('统一体验入口')} value={draft} inputProps={{ maxLength: 2000, 'data-onboarding-playground': true }} onChange={event => setDraft(event.target.value)} disabled={working || voice.recording || voice.working} />

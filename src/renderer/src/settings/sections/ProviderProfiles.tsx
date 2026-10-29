@@ -17,6 +17,7 @@ import { isSameOrder, reorderIds } from './providerProfilesView'
 import { SettingsNumber } from './General'
 import { ModelAvatar, ModelWorkspace, modelFieldSx, modelSelectedBackground } from './ModelWorkspace'
 import i18n from '../../i18n'
+import { QuotaButton } from '../Quota'
 
 const KIND_USE: Record<ProviderKind, string> = { asr: '语音识别', llm: '文本处理', multimodal: '音频直达' }
 type Patch = (delta: Partial<Settings>) => void
@@ -133,6 +134,7 @@ function ProfileEditor({ profile, settings, patch, saving, saveError, onRemove }
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
         <Button size="small" variant="contained" disableElevation disabled={test.busy || saving || Boolean(saveError) || !profile.baseUrl.trim()} onClick={() => void runTest()}>{i18n.t(test.busy ? '测试中…' : '测试连接')}</Button>
         <Button size="small" variant="outlined" disabled={primary} onClick={makePrimary}>{i18n.t('设为首选')}</Button>
+        <QuotaButton target={{ kind: profile.kind, id: profile.id }} disabled={saving || Boolean(saveError)} />
       </Stack>
       {test.text && <Alert severity={test.ok ? 'success' : 'error'} data-profile-test-result={profile.id} sx={{ mt: 1.5, fontSize: 12, overflowWrap: 'anywhere' }}>{test.text}</Alert>}
       </ProfileFields>

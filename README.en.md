@@ -341,6 +341,18 @@ The skippable guide brings microphone selection and a local level test, ASR / LL
 
 Examples appear only for configured capabilities: speech models enable dictation; an LLM enables polishing, translation, reminders, to-dos, events and questions through one input. Review recognized speech before running it. Trials use an isolated conversation without long-term memory, while explicitly executed reminders, to-dos and events create real records. Saving a connection does not verify connectivity; use its connection test.
 
+Examples stay outside the input until the user clicks “Fill in this sentence”. Switching examples preserves the current input.
+
+## Model allowances
+
+The sidebar ring initially shows the preferred LLM connection. Click it to see all saved ASR, LLM, multimodal and TTS connections, including disabled ones and enabled local ASR. Any connection can be selected for the ring. Each model connection also has a Check allowance button in settings.
+
+Queries support DeepSeek and Kimi China account balances, SiliconFlow China's user-info endpoint when it returns valid billing data, OpenRouter key spending caps, and ElevenLabs subscription allowances. Unsupported providers, custom gateways, unavailable endpoints, authentication errors and invalid responses are shown explicitly, never as zero balance. SiliconFlow's empty-status zero placeholders are treated as unavailable. These APIs expose shared account/key allowance, not an independent balance for each model; shared amounts are never summed together.
+
+A percentage is drawn only when both a real limit and remaining allowance are available. Balance-only responses and uncapped keys show amounts/usage with an unknown proportion. Dark mode uses white for remaining and deeper gray for used; light mode uses dark and light gray. A dash distinguishes an unknown ratio from an exhausted allowance.
+
+Only saved connection IDs cross the query interface. Credentials are read in the main process and sent to matching official HTTPS endpoints, without redirects or model-generation calls. Successes are cached in RAM for five minutes, failures for 30 seconds, with manual refresh and shared in-flight requests for the same account credentials. The list queries at most two entries concurrently and stops queueing when closed/hidden. There is no background polling or persistent billing cache.
+
 ## Local long-term memory
 
 Open Settings → Assistant & permissions → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.

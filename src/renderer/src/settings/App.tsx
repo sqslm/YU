@@ -35,6 +35,7 @@ import i18n from '../i18n'
 import { BrandLogo } from '../BrandLogo'
 import { MissedReminders } from './MissedReminders'
 import { UpdatePill } from './UpdatePill'
+import { QuotaProvider, QuotaSidebar } from './Quota'
 
 type Page = 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'briefing' | 'calendar'
 
@@ -176,6 +177,7 @@ export function App(): JSX.Element {
   return (
     <ThemeProvider theme={theme}>
     <PaginationSettings.Provider value={{ size: settings?.listPageSize ?? 30, change: size => patch({ listPageSize: size }) }}>
+    <QuotaProvider settings={settings} saving={saving || Boolean(error)}>
       <CssBaseline />
       <Box
         sx={{
@@ -234,10 +236,7 @@ export function App(): JSX.Element {
             ))}
           </List>
 
-          {/* The footer row carries both icons the user was mixing up: the settings
-              entry (gear + label) on the left and the theme switch on the right.
-              The version string moved into the settings sheet, so the hub window
-              no longer shows any build text. */}
+          {/* Settings, update availability and model allowance share the footer. */}
           <Box
             id="sidebar-footer"
             sx={{
@@ -271,6 +270,7 @@ export function App(): JSX.Element {
                 discoverable without opening anything, and disappears entirely
                 when the installed version is the newest one. */}
             <UpdatePill />
+            <QuotaSidebar />
           </Box>
         </Box>
 
@@ -299,6 +299,7 @@ export function App(): JSX.Element {
           onDone={dismissTour}
         />
       )}
+    </QuotaProvider>
     </PaginationSettings.Provider>
     </ThemeProvider>
   )

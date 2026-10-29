@@ -1,5 +1,23 @@
 # 供应商 API 核对
 
+## 模型额度查询（2026-10-29，尚未发布）
+
+| 服务 | 官方公开接口与读取口径 | 依据 |
+| --- | --- | --- |
+| DeepSeek | `GET /user/balance`，普通 Bearer Key；逐币种读取 `total_balance`，不把余额当初始额度 | [查询余额](https://api-docs.deepseek.com/zh-cn/api/get-user-balance/) |
+| Kimi 国内 | `GET /v1/users/me/balance`，普通 Bearer Key；`available_balance` 已含现金和代金券，不再叠加 | [查询余额](https://platform.kimi.com/docs/api/balance) |
+| SiliconFlow 国内 | `GET /v1/user/info`，读取有效用户状态下的 `totalBalance`。历史接口是否仍开放由服务端决定；410、无效数据及空状态零占位显示受限，不冒充真实零余额 | [官方 OpenAPI 源码](https://github.com/siliconflow/siliconcloud/blob/main/openapi.yaml)、[官方接口文档](https://siliconflow.readme.io/reference/user-info) |
+| OpenRouter | `GET /api/v1/key`，普通 Bearer Key；读取 `limit`、`limit_remaining`，周期已用由本周期限额差值获得，不能用累计 `usage` 代替。未设置限额只显示累计用量 | [当前密钥](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key) |
+| ElevenLabs | `GET /v1/user/subscription`，`xi-api-key`；读取 `character_count`、`character_limit` 与下次重置时间。额度为订阅共享，模型实际计费倍率由服务端决定 | [订阅信息](https://elevenlabs.io/docs/api-reference/user/subscription/get) |
+
+上述接口均未提供模型独立余额，不将账户/密钥共享额度复制成独立额度或累计求和。OpenRouter 的账户 credits 接口需要管理密钥，本轮不要求添加额外管理权限，也不尝试用普通推理 Key 访问管理账务接口。未适配提供商、代理地址、云账户 AK/SK 账务 API 和内部控制台接口统一标记不支持，不抓取网页登录态。
+
+仅接受设置窗口传入的连接 ID，由主进程读取当前配置；端点根据实际官方主机匹配，HTTPS、固定账务路径、禁止重定向，预设名称不能把代理密钥转发给官方服务器。不保存响应原文、账户身份或密钥日志；缓存只保留经过解析的数字、状态和查询时间，凭据作用域为内存中的 SHA-256。成功缓存 5 分钟、失败 30 秒，相同查询合并请求；前端列表两项并发，不后台轮询。
+
+验证范围：官方响应夹具、请求方法/鉴权/地址、缓存及凭据变化、共享账户合并、失败不显示零、数值与比例边界、暗/亮模式圆环和本地模型不发请求。未使用真实付费账号验证全部账务接口，不将协议测试视为真实账户联调通过。
+
+## 基础模型调用接口（2026-10-22）
+
 核对版本：0.22.0；日期：2026-10-22。
 
 范围是客户端目录中的 26 个 ASR、34 个 LLM 和 1 个多模态预设。测试检查客户端实际发送的地址、鉴权、表单 / JSON 字段和响应解析；专用适配器测试也覆盖上传、轮询和签名。**协议测试通过不代表已用各家真实账号调用成功**，本次未使用全部供应商的付费密钥。模型开放范围、地域、账号权限、计费和服务端限额仍由供应商决定。自建服务需以部署的实际协议为准。

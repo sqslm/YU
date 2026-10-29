@@ -56,6 +56,10 @@ export interface UpdateState {
 }
 
 export interface TypelessApi {
+  quota: {
+    query(target: import('./quota').QuotaTarget): Promise<import('./quota').QuotaResult>
+    refresh(): Promise<void>
+  }
   onboarding: {
     beginVoice(): Promise<string | null>
     cancelVoice(id: string): void

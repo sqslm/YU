@@ -17,6 +17,10 @@ ipcRenderer.on('card:data', (_event, payload: AnswerCardPayload) => { lastCard =
 ipcRenderer.on('card:hidden', () => { lastCard = null })
 
 const api: TypelessApi = {
+  quota: {
+    query: target => ipcRenderer.invoke('quota:query', target),
+    refresh: () => ipcRenderer.invoke('quota:refresh')
+  },
   onboarding: {
     beginVoice: () => ipcRenderer.invoke('onboarding:voice-begin'),
     cancelVoice: id => ipcRenderer.send('onboarding:voice-cancel', id),
