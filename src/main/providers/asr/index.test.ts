@@ -96,6 +96,59 @@ describe('runAsrAdapter', () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
   })
 
+  it('retries a socket failure once, then falls back to the vendor HTTP route', async () => {
+    let attempts = 0
+    let fallbackModel = ''
+    const fallbackSpec = {
+      id: 'test-fallback',
+      label: 'fallback',
+      hosts: [],
+      fields: [],
+      run: async (_ctx: unknown, input: { model: string }) => { fallbackModel = input.model; return 'from http' }
+    }
+    ASR_ADAPTERS.push(fallbackSpec as never)
+    try {
+      const text = await runAsrAdapter(
+        {
+          id: 'socket-probe',
+          label: 'socket',
+          hosts: [],
+          fields: [],
+          fallback: { adapterId: 'test-fallback', mapModel: (model: string) => model.replace('-realtime', '') },
+          run: async () => { attempts += 1; throw new Error('阿里云实时识别连接出错（检查密钥 / 网络）') }
+        },
+        base() as ProviderSettings,
+        wav(200),
+        { model: 'paraformer-realtime-v2', log: () => undefined }
+      )
+      expect(text).toBe('from http')
+      // One retry on the socket, then the HTTP route answers.
+      expect(attempts).toBe(2)
+      expect(fallbackModel).toBe('paraformer-v2')
+    } finally {
+      const at = ASR_ADAPTERS.indexOf(fallbackSpec as never)
+      if (at >= 0) ASR_ADAPTERS.splice(at, 1)
+    }
+  })
+
+  it('does not retry or fall back on a quota answer', async () => {
+    let attempts = 0
+    await expect(runAsrAdapter(
+      {
+        id: 'socket-quota',
+        label: 'socket',
+        hosts: [],
+        fields: [],
+        fallback: { adapterId: 'aliyun' },
+        run: async () => { attempts += 1; throw new Error('阿里云识别失败（AllocationQuota.FreeTierOnly The free quota has been exhausted.）') }
+      },
+      base() as ProviderSettings,
+      wav(200),
+      { model: 'paraformer-realtime-v2', log: () => undefined }
+    )).rejects.toThrow(/AllocationQuota/)
+    expect(attempts).toBe(1)
+  })
+
   it('derives the duration from the WAV length and passes it through', async () => {
     let seenMs = 0
     const text = await runAsrAdapter(

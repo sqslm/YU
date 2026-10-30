@@ -6,6 +6,8 @@ import { REALTIME_SPECS } from './realtime'
 import { WEST_SPECS } from './west'
 import type { AsrAdapterInput, AsrAdapterSpec } from './types'
 import { field } from './types'
+import { ProviderError } from '../providerError'
+import { mt } from '@shared/mainI18n'
 
 /**
  * Every vendor that does not speak OpenAI multipart, in one place.
@@ -142,7 +144,47 @@ export async function runAsrAdapter(
     log: options.log
   }
   options.log(`[asr] ${spec.label} adapter (${spec.id})`)
-  return spec.run(ctx, input)
+  if (!spec.fallback) return spec.run(ctx, input)
+
+  /*
+    A socket session can fail in ways an HTTP request cannot: a proxy that only
+    tunnels HTTP, a dropped frame, a gateway that closes an idle socket. Before
+    giving up on the take, try the same vendor once more, then through its file
+    API — that one is slower, but it answers.
+  */
+  const describe = (error: unknown): string => error instanceof Error ? error.message : String(error)
+  let lastError: unknown = new ProviderError(mt('{{what}} 连接失败', { what: spec.label }))
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await spec.run(ctx, input)
+    } catch (error) {
+      lastError = error
+      if (!isConnectionFailure(describe(error))) throw error
+      if (attempt === 0) options.log(`[asr] ${spec.id} connection failed (${describe(error)}); retrying once`)
+    }
+  }
+  const fallback = ASR_ADAPTERS.find((candidate) => candidate.id === spec.fallback!.adapterId)
+  if (!fallback) throw lastError
+  const model = spec.fallback.mapModel ? spec.fallback.mapModel(input.model) : input.model
+  options.log(`[asr] ${spec.id} unavailable (${describe(lastError)}); falling back to ${fallback.label}`)
+  try {
+    const text = await fallback.run(ctx, { ...input, model })
+    options.log(`[asr] ${spec.id} fallback succeeded via ${fallback.id}`)
+    return text
+  } catch (error) {
+    throw error instanceof ProviderError ? error : new ProviderError(String(error))
+  }
+}
+
+/**
+ * Whether an error says the connection failed rather than the request.
+ *
+ * Quota and credential answers are never "try another transport": the same key
+ * through HTTP would be refused for the same reason.
+ */
+function isConnectionFailure(message: string): boolean {
+  if (/AllocationQuota|FreeTierOnly|free quota|配额|额度|欠费|invalid.?api.?key|InvalidApiKey|Unauthorized|Forbidden|(?:401|403)/i.test(message)) return false
+  return /连接|网络|socket|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|closed|关闭|断开|握手|超时|timeout/i.test(message)
 }
 
 /** Read one vendor value without importing the helper everywhere. */

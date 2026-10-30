@@ -2,6 +2,7 @@ import { WindowsTools } from './tools/windows'
 import { personalCommand } from './tools/personal'
 import { workflowCommand } from './tools/workflow'
 import type { BrowserWindow } from 'electron'
+import { clipboard } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BarAlert, BarState, HistoryEntry, Settings , ProviderProfile} from '@shared/types'
 import { DEFAULT_VOICE_COMMANDS } from '@shared/voiceCommands'
@@ -302,7 +303,7 @@ describe('Ask card completion', () => {
     await Promise.resolve(); await Promise.resolve()
     expect(pipeline.isRecording).toBe(true); pipeline.cancel()
   })
-  it('preserves audio after ASR fails, without adding an abnormal history entry', async () => {
+  it('preserves audio after ASR fails and still files the take as a failed row', async () => {
     const preserveAudio = vi.fn(async () => {})
     mocks.transcribe.mockRejectedValue(Error('connect ECONNREFUSED'))
     const { pipeline, sent, entries } = harness({}, { preserveAudio })
@@ -310,7 +311,17 @@ describe('Ask card completion', () => {
     await pipeline.stop()
     expect(preserveAudio).toHaveBeenCalledOnce()
     expect(alerts(sent).at(-1)?.alert.text).toContain('录音已保留到随记')
-    expect(entries).toHaveLength(0)
+    // The transcript never arrived, so the row carries the failure itself: the
+    // audio is what can be replayed, and 历史记录 is where the user finds it.
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({
+      status: 'error',
+      transcript: '',
+      final: '',
+      wordCount: 0,
+      focusedWindowTitle: 'Editor'
+    })
+    expect(entries[0].error).toBeTruthy()
   })
   it('submits wake recordings after speech and silence, but never changes normal shortcut recording', async () => {
     const { pipeline } = harness({})
@@ -505,9 +516,9 @@ describe('successful history only', () => {
     expect(store.saveAudio).not.toHaveBeenCalled()
     pipeline.dismissAlert()
   })
-  it.each(['asr', 'llm', 'empty', 'insert'] as const)('keeps %s failures out of history and audio but still reports them', async (failure) => {
+  it.each(['asr', 'llm', 'empty', 'insert'] as const)('files a %s failure as one error row and still reports it', async (failure) => {
     const onRecorded = vi.fn()
-    const { pipeline, store, sent } = harness({ keepAudio: 'always' }, { onRecorded })
+    const { pipeline, store, entries, sent } = harness({ keepAudio: 'always' }, { onRecorded })
     if (failure === 'asr') mocks.transcribe.mockRejectedValueOnce(new Error('ASR offline'))
     if (failure === 'llm') mocks.complete.mockRejectedValueOnce(new Error('LLM offline'))
     if (failure === 'empty') mocks.complete.mockResolvedValueOnce('   ')
@@ -515,9 +526,25 @@ describe('successful history only', () => {
     pipeline.start('dictation'); pipeline.pushAudio(tone(900))
     const done = pipeline.stop(); pipeline.audioStopped()
     expect(await done).toBeNull()
-    expect(store.add).not.toHaveBeenCalled()
+    // One row, and it says what went wrong: a take the user spoke for is never
+    // dropped just because it failed (this is the 04:42 report).
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ status: 'error', durationMs: expect.any(Number) })
+    expect(entries[0].error).toBeTruthy()
+    expect(entries[0].processingMs).toBeTypeOf('number')
+    // Whatever text existed is kept: the polished result for an insert failure,
+    // the transcript for a model failure.
+    if (failure === 'insert') {
+      expect(entries[0]).toMatchObject({ transcript: '你好世界', final: '你好世界', wordCount: 4 })
+    } else if (failure === 'llm' || failure === 'empty') {
+      expect(entries[0].transcript).toBe('你好世界')
+      expect(entries[0].final).toBe('')
+    } else {
+      expect(entries[0]).toMatchObject({ transcript: '', final: '', wordCount: 0 })
+    }
+    // A failed take never keeps audio, and the bar still says what happened.
     expect(store.saveAudio).not.toHaveBeenCalled()
-    expect(onRecorded).not.toHaveBeenCalled()
+    expect(onRecorded).toHaveBeenCalledOnce()
     expect(sent.some(state => state.phase === 'alert')).toBe(true)
     expect(alerts(sent).flatMap(state => state.alert.actions ?? []).some(action => action.id === 'retry')).toBe(false)
   })
@@ -586,6 +613,73 @@ describe('successful history only', () => {
     await vi.waitFor(() => expect(entries.length).toBeGreaterThan(0))
     expect(entries.at(-1)?.processingMs).toBeTypeOf('number')
     expect(entries.at(-1)?.processingMs).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('failed takes are still history rows', () => {
+  it('keeps a take whose text the target control refused, with both texts and the reason', async () => {
+    mocks.transcribe.mockResolvedValue({ text: '今天晚上一起去吃火锅吗？我们七点在楼下集合，记得带伞。', model: 'whisper-1' })
+    mocks.complete.mockResolvedValue('今天晚上一起去吃火锅吗？我们七点在楼下集合，记得带伞。')
+    mocks.verifyInsertion.mockResolvedValueOnce({ ok: false, reason: 'mismatch' })
+    const { pipeline, entries, sent } = harness({})
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped()
+    expect(await done).toBeNull()
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({
+      status: 'error',
+      transcript: '今天晚上一起去吃火锅吗？我们七点在楼下集合，记得带伞。',
+      final: '今天晚上一起去吃火锅吗？我们七点在楼下集合，记得带伞。',
+      focusedWindowTitle: 'Editor',
+      durationMs: expect.any(Number)
+    })
+    expect(entries[0].error).toContain('未能插入')
+    // The row still answers "how long did I wait", and the failure is classified.
+    expect(entries[0].processingMs).toBeTypeOf('number')
+    expect(entries[0].alertKind).toBeTruthy()
+    // The text is one keystroke away on the clipboard as well, and the bar says
+    // so — and that history now holds the take, which is where it is recoverable.
+    expect(clipboard.writeText).toHaveBeenCalledWith(entries[0].final)
+    const failure = sent.find(state => state.phase === 'alert')
+    expect(failure?.phase === 'alert' && failure.alert.text).toContain('文本可能没有插入成功，已复制到剪贴板')
+    expect(failure?.phase === 'alert' && failure.alert.text).toContain('原始转写已保留在历史记录中')
+  })
+
+  it('keeps an ASR failure as an error row with an empty transcript', async () => {
+    mocks.transcribe.mockRejectedValueOnce(new Error('ASR offline'))
+    const { pipeline, entries } = harness({})
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped()
+    expect(await done).toBeNull()
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ status: 'error', transcript: '', final: '', wordCount: 0 })
+    expect(entries[0].error).toContain('ASR offline')
+  })
+
+  it('writes nothing for a take the user cancelled', async () => {
+    const { pipeline, entries, store } = harness({})
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped()
+    pipeline.cancel()
+    expect(await done).toBeNull()
+
+    expect(entries).toEqual([])
+    expect(store.add).not.toHaveBeenCalled()
+  })
+
+  it('leaves an assistant failure to its own card instead of adding a second row', async () => {
+    const onAssistant = vi.fn(async () => {
+      throw new Error('tool failed')
+    })
+    const { pipeline, entries } = harness({}, { onAssistant })
+    pipeline.start('ask', { purpose: 'assistant' }); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped()
+    expect(await done).toBeNull()
+
+    expect(onAssistant).toHaveBeenCalledOnce()
+    expect(entries).toEqual([])
   })
 })
 
@@ -1033,7 +1127,11 @@ describe('prompt label uses the request card', () => {
     mocks.transcribe.mockRejectedValueOnce(new Error('ASR offline'))
     const { pipeline, settings, sent, entries } = harness({ promptLibrary: library() })
     pipeline.start('dictation'); await finish(pipeline)
-    expect(entries).toHaveLength(0)
+    // The failed take is filed, but without a card: the model never ran, so no
+    // prompt produced this text.
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ status: 'error' })
+    expect(entries[0].promptName).toBeUndefined()
     settings.polish.enabled = false
     pipeline.start('dictation')
     expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined })
@@ -1308,17 +1406,23 @@ describe('dedicated voice reminder capture', () => {
     const { pipeline, store } = harness({}, { onReminder })
     pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200)); pipeline.cancel()
     await pipeline.stop(); expect(onReminder).not.toHaveBeenCalled()
+    // A cancelled take is not a take: nothing is filed for it.
+    expect(store.add).not.toHaveBeenCalled()
     mocks.transcribe.mockRejectedValueOnce(new Error('ASR unavailable'))
     pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
     const done = pipeline.stop(); pipeline.audioStopped(); await done
-    expect(onReminder).not.toHaveBeenCalled(); expect(store.add).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(onReminder).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
+    // The failed reminder take is filed instead of vanishing.
+    expect(store.add).toHaveBeenCalledOnce()
   })
   it('does not insert a reminder when its parser fails and returns to normal dictation on the next take', async () => {
     const onReminder = vi.fn(async () => { throw new Error('bad reminder JSON') })
     const { pipeline, store, sent } = harness({ polish: { enabled: false } as Settings['polish'] }, { onReminder })
     pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(1200))
     const first = pipeline.stop(); pipeline.audioStopped(); await first
-    expect(store.add).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
+    expect(mocks.insertText).not.toHaveBeenCalled()
+    // The parser failure is a failed take, so it keeps its transcript in history.
+    expect(store.add).toHaveBeenCalledOnce()
     pipeline.start('dictation'); pipeline.pushAudio(tone(1200))
     expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: undefined })
     const second = pipeline.stop(); pipeline.audioStopped(); await second
@@ -1404,7 +1508,9 @@ describe('opening phrase mode activation', () => {
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(mocks.complete).not.toHaveBeenCalled(); expect(mocks.askAgent).not.toHaveBeenCalled()
     expect(onReminder).not.toHaveBeenCalled(); expect(onVoiceNote).not.toHaveBeenCalled()
-    expect(entries).toHaveLength(0)
+    // A phrase that carries no content is answered in the bar and files nothing;
+    // an empty ASR result is a failed take, so it keeps its error row.
+    expect(entries).toHaveLength(text ? 0 : 1)
     expect(pipeline.isBusy).toBe(false)
     if (text) expect(sent.at(-1)).toMatchObject({ phase: 'alert', alert: { level: 'info', text: '请在关键词后继续说出内容' } })
   })
@@ -1796,7 +1902,11 @@ describe('unified voice entry', () => {
     mocks.transcribe.mockResolvedValue({ text: '今天有什么AI新闻？' }); mocks.complete.mockResolvedValue('invalid')
     h.pipeline.start('dictation'); await finish(h.pipeline)
     expect(onAssistant).not.toHaveBeenCalled(); expect(onReminder).not.toHaveBeenCalled()
-    expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0); expect(h.pipeline.isBusy).toBe(false)
+    expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.pipeline.isBusy).toBe(false)
+    // The cancelled take wrote nothing; the empty ASR and the unusable intent are
+    // failed takes, and both are filed as error rows instead of disappearing.
+    expect(h.entries).toHaveLength(2)
+    expect(h.entries.every(entry => entry.status === 'error')).toBe(true)
   })
   it('does not keep the previous intent or reclassify a take after a settings change', async () => {
     const onReminder = vi.fn().mockResolvedValue({ message: 'saved' }), h = harness({ voiceCommands: smart }, { onReminder })

@@ -228,13 +228,26 @@ export async function insertText(
  * utility process — which keeps every branch unit-testable.
  * ------------------------------------------------------------------------- */
 
-/** How many characters of the inserted text must be visible to call it landed. */
+/** Window size of one piece of inserted text that has to be visible. */
 const VERIFY_TAIL_CHARS = 24
+
+/** Distance between two windows sampled out of the expected text. */
+const VERIFY_SHINGLE_STEP = 8
+
+/** How many windows a long text needs, so one repeated phrase cannot vouch for it. */
+const VERIFY_MIN_SHINGLES = 2
 
 /** First wait before reading back; later attempts double it. */
 const VERIFY_INITIAL_DELAY_MS = 150
 
+/** Floor of the reading budget; `verifyTimeoutMs` scales it by text length. */
 const VERIFY_DEFAULT_TIMEOUT_MS = 1200
+
+/** Upper bound for the length-scaled budget below. */
+const VERIFY_MAX_TIMEOUT_MS = 3000
+
+/** Extra reading time per character of the inserted text. */
+const VERIFY_TIMEOUT_PER_CHAR_MS = 4
 
 const VERIFY_DEFAULT_ATTEMPTS = 3
 
@@ -251,16 +264,86 @@ export interface VerifyInsertionResult {
 }
 
 /**
+ * The comparison form of a piece of text.
+ *
+ * A control is an unreliable copyist: it re-wraps lines, turns the quotes and
+ * dashes we typed into its own, keeps or drops the markdown markers that only
+ * mean something to the editor it is feeding, and truncates at a place of its
+ * choosing. None of that means the text did not land, so the comparison drops
+ * the formatting first and only then asks whether the words are there.
+ *
+ * Punctuation is unified rather than removed: "a,b" and "a。b" are different text
+ * to a reader, but a target that rewrote `，` as `,` has still received it.
+ */
+export function normalizeForVerify(text: string): string {
+  return (text ?? '')
+    // Heading markers only mean something at the start of a line, so they have
+    // to go before the newlines that prove where a line started.
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]*/gm, '')
+    .normalize('NFKC')
+    // Curly quotes and the several dash codepoints survive NFKC; a smart editor
+    // rewrites them on paste, and a rewritten quote is not a failed insert.
+    .replace(/[\u2018\u2019\u201a\u201b\u2032\u2035\u00b4]/g, "'")
+    .replace(/[\u201c\u201d\u201e\u201f\u2033\u2036]/g, '"')
+    .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g, '-')
+    // CJK full stops have no NFKC mapping to the ASCII form.
+    .replace(/[\u3002\uff61\u3001\uff64]/g, '.')
+    // Emphasis and inline-code markers are formatting, not content.
+    .replace(/[*_~`]+/g, '')
+    // Whitespace is layout: a re-wrapped or re-indented control holds the text.
+    .replace(/\s+/g, '')
+}
+
+/**
  * The part of `expected` that has to appear in the control: its last characters,
- * ignoring whitespace, so a re-wrapped or scrolled-to-end control still matches.
+ * already normalised, so a re-wrapped or scrolled-to-end control still matches.
  */
 export function insertionTail(expected: string, maxChars = VERIFY_TAIL_CHARS): string {
-  const compacted = (expected ?? '').replace(/\s+/g, '')
+  const compacted = normalizeForVerify(expected)
   return compacted.length <= maxChars ? compacted : compacted.slice(-maxChars)
 }
 
 /**
- * Reads the focused control back until the inserted tail shows up.
+ * The windows of `expected` that count as evidence of a landed insert.
+ *
+ * Comparing the tail alone used to be the whole test, which failed the moment a
+ * control scrolled, re-wrapped or truncated the text: a 178-character dictation
+ * whose last line the target collapsed read as "not inserted". Overlapping
+ * windows sampled every 8 characters ask the cheaper question — are enough of
+ * these phrases in the control — and the tail stays in the set, because a control
+ * that shows only the end of the text still received it.
+ */
+export function insertionShingles(
+  expected: string,
+  size = VERIFY_TAIL_CHARS,
+  step = VERIFY_SHINGLE_STEP
+): string[] {
+  const text = normalizeForVerify(expected)
+  if (!text) return []
+  if (text.length <= size) return [text]
+  const shingles: string[] = []
+  for (let start = 0; start + size <= text.length; start += step) {
+    shingles.push(text.slice(start, start + size))
+  }
+  const tail = insertionTail(text, size)
+  if (shingles[shingles.length - 1] !== tail) shingles.push(tail)
+  return shingles
+}
+
+/**
+ * How long to keep reading a take back.
+ *
+ * A long insert needs longer than a short one: the target has more to render and
+ * UI Automation more to walk, and a fixed 1.2 s budget declared a 31-second
+ * dictation unverified while the text was still on its way in.
+ */
+export function verifyTimeoutMs(expectedLength: number): number {
+  const extra = VERIFY_TIMEOUT_PER_CHAR_MS * Math.max(0, expectedLength)
+  return Math.min(VERIFY_MAX_TIMEOUT_MS, VERIFY_DEFAULT_TIMEOUT_MS + extra)
+}
+
+/**
+ * Reads the focused control back until the inserted text shows up.
  *
  * Waits 150 ms, then 300 ms, … (exponential), for at most `attempts` reads and
  * `timeoutMs` of wall clock. `readBack` returns the control's full text, or
@@ -271,10 +354,14 @@ export async function verifyInsertion(
   expected: string,
   opts: { timeoutMs?: number; attempts?: number } = {}
 ): Promise<VerifyInsertionResult> {
-  const tail = insertionTail(expected)
-  if (!tail) return { ok: true }
+  const shingles = insertionShingles(expected)
+  if (shingles.length === 0) return { ok: true }
+  const tail = shingles[shingles.length - 1]!
+  // A short insert has one window; a long one needs two, so a single repeated
+  // word cannot pass for a whole paragraph.
+  const needed = shingles.length >= VERIFY_MIN_SHINGLES ? VERIFY_MIN_SHINGLES : 1
 
-  const timeoutMs = Math.max(0, opts.timeoutMs ?? VERIFY_DEFAULT_TIMEOUT_MS)
+  const timeoutMs = Math.max(0, opts.timeoutMs ?? verifyTimeoutMs((expected ?? '').length))
   const attempts = Math.max(1, Math.floor(opts.attempts ?? VERIFY_DEFAULT_ATTEMPTS))
   const deadline = Date.now() + timeoutMs
 
@@ -296,7 +383,13 @@ export async function verifyInsertion(
     }
     if (observed) {
       lastText = observed
-      if (observed.replace(/\s+/g, '').includes(tail)) return { ok: true, observed }
+      const seen = normalizeForVerify(observed)
+      if (seen.includes(tail)) return { ok: true, observed }
+      let hits = 0
+      for (const shingle of shingles) {
+        if (seen.includes(shingle)) hits += 1
+        if (hits >= needed) return { ok: true, observed }
+      }
     }
   }
 

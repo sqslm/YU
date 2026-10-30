@@ -41,6 +41,19 @@ interface Entry {
 
 const entries = new Map<string, Entry>()
 
+/**
+ * Profiles that answered "no" for a reason retrying will not fix (quota, auth).
+ *
+ * The chain still runs them last rather than dropping them: a profile the user
+ * configured must keep the ability to report *why* it failed. But an exhausted
+ * free tier must not cost a round trip at the front of every take for the next
+ * ten minutes either.
+ */
+const unavailable = new Map<string, { until: number; reason: string }>()
+
+/** How long a quota/auth answer keeps a profile at the back of the chain. */
+export const ASR_UNAVAILABLE_MS = 10 * 60_000
+
 function trim(): void {
   // Insertion order is the age order: the oldest profile goes first.
   while (entries.size > MAX_ENTRIES) {
@@ -87,9 +100,26 @@ export function asrSampleCount(profileId: string): number {
   return entries.get(String(profileId ?? '').trim())?.samples ?? 0
 }
 
+/** Remembers a failure that retrying cannot fix, for {@link ASR_UNAVAILABLE_MS}. */
+export function markAsrProfileUnavailable(profileId: string, reason: string, ttlMs = ASR_UNAVAILABLE_MS): void {
+  const id = String(profileId ?? '').trim()
+  if (!id || !Number.isFinite(ttlMs) || ttlMs <= 0) return
+  unavailable.set(id, { until: Date.now() + ttlMs, reason: String(reason || '').slice(0, 200) })
+}
+
+/** Why this profile is currently benched, or `null` when it is not. */
+export function asrUnavailableReason(profileId: string): string | null {
+  const id = String(profileId ?? '').trim()
+  const entry = unavailable.get(id)
+  if (!entry) return null
+  if (entry.until <= Date.now()) { unavailable.delete(id); return null }
+  return entry.reason
+}
+
 /** Test seam and settings-reload seam: forget everything measured so far. */
 export function resetAsrLatency(): void {
   entries.clear()
+  unavailable.clear()
 }
 
 /**
@@ -106,9 +136,14 @@ export function orderAsrProfiles<T extends { id: string }>(profiles: T[]): T[] {
     index,
     latency: asrLatencyFor(profile?.id ?? '')
   }))
-  const measured = ranked
+  // Benched profiles go last, in their configured order: the take should not pay
+  // a round trip for a quota that is already known to be exhausted.
+  const benched = (item: { profile: { id: string } }): boolean => asrUnavailableReason(item.profile?.id ?? '') !== null
+  const live = ranked.filter((item) => !benched(item))
+  const measured = live
     .filter((item) => item.latency !== null)
     .sort((a, b) => (a.latency! - b.latency!) || (a.index - b.index))
-  const unmeasured = ranked.filter((item) => item.latency === null)
-  return [...measured, ...unmeasured].map((item) => item.profile)
+  const unmeasured = live.filter((item) => item.latency === null)
+  const parked = ranked.filter(benched)
+  return [...measured, ...unmeasured, ...parked].map((item) => item.profile)
 }

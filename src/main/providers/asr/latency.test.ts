@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   asrLatencyFor,
   asrSampleCount,
+  asrUnavailableReason,
+  markAsrProfileUnavailable,
   orderAsrProfiles,
   recordAsrLatency,
   resetAsrLatency
@@ -102,5 +104,31 @@ describe('orderAsrProfiles', () => {
     resetAsrLatency()
     expect(asrLatencyFor('p1')).toBeNull()
     expect(asrSampleCount('p1')).toBe(0)
+  })
+})
+
+// A quota or auth answer is not a latency problem: the profile is benched for a
+// while and the chain tries it last, so the take does not pay for it first.
+describe('benched profiles', () => {
+  it('keeps a benched profile in the chain but last', () => {
+    resetAsrLatency()
+    const profiles = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    markAsrProfileUnavailable('a', 'AllocationQuota.FreeTierOnly')
+    expect(orderAsrProfiles(profiles).map((profile) => profile.id)).toEqual(['b', 'c', 'a'])
+    expect(asrUnavailableReason('a')).toContain('AllocationQuota')
+    expect(asrUnavailableReason('b')).toBeNull()
+  })
+
+  it('forgets the bench when its time is up', () => {
+    vi.useFakeTimers()
+    try {
+      resetAsrLatency()
+      markAsrProfileUnavailable('a', 'invalid api key', 1000)
+      expect(asrUnavailableReason('a')).toBeTruthy()
+      vi.advanceTimersByTime(1001)
+      expect(asrUnavailableReason('a')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

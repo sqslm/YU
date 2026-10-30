@@ -1242,6 +1242,63 @@ export class Pipeline {
   }
 
   /**
+   * Files a take that failed as an `error` row in 历史记录.
+   *
+   * Failures used to be visible only as a bar alert, so a 31-second dictation
+   * whose text never reached the target control simply disappeared: the log said
+   * `status=error`, history had no row, and there was nothing to copy or retry.
+   * Everything that survives the two guards below goes through `record()`, the
+   * same funnel a successful take uses, so the row carries the take's clock, card
+   * and provider exactly like any other.
+   *
+   * Still skipped on purpose:
+   * - a user cancel: nothing happened, and that is what the user asked for;
+   * - the assistant purpose: it already answers on its own card, and a second row
+   *   for every spoken question would only be noise.
+   */
+  private async recordFailure(input: {
+    mode: Mode
+    transcript: string
+    final: string
+    error: string
+    alertKind?: BarAlertKind
+    route?: Settings['pipelineMode']
+    durationMs: number
+    target: ForegroundInfo
+    token: number
+    aborted?: boolean
+    purpose?: 'reminder' | 'notes' | 'assistant'
+  }): Promise<HistoryEntry | null> {
+    if (input.aborted || input.purpose === 'assistant') return null
+    try {
+      return await this.record(
+        {
+          mode: input.mode,
+          transcript: input.transcript,
+          final: input.final,
+          durationMs: input.durationMs,
+          app: appLabel(input.target.appName, input.target.title),
+          route: input.route,
+          status: 'error',
+          error: input.error,
+          ...(input.alertKind ? { alertKind: input.alertKind } : {}),
+          // What the user actually dictated: a failed take with a transcript is
+          // still a take, and its length is what the history page counts.
+          wordCount: countUnits(input.final || input.transcript),
+          focusedWindowTitle: input.target.title
+        },
+        // No audio: a failed take keeps its text here, and the wav is preserved
+        // separately for the takes whose transcript never arrived.
+        undefined,
+        input.token
+      )
+    } catch (err) {
+      this.log(`[pipeline] cannot record the failed take: ${describeFailure(err)}`)
+      return null
+    }
+  }
+
+  /**
    * ACC-06: reads the control again a moment after insertion, because that is
    * when the user has corrected the words we got wrong. Detached on purpose —
    * a capture that fails must cost nothing, since the take already finished.
@@ -1377,6 +1434,10 @@ export class Pipeline {
     }
 
     let transcript = ''
+    // Both halves are declared out here so the failure path can file what the
+    // user actually said: a take that never got its polished text still has a
+    // transcript worth keeping in 历史记录.
+    let final = ''
     let noteTranscript = ''
     let assistantUseContext: boolean | undefined
     try {
@@ -1386,7 +1447,6 @@ export class Pipeline {
       if (speech.length !== pcm.length) this.encoded = null
       const wav = encodeWav(speech)
       let question = ''
-      let final = ''
       let sources: SearchResult[] = []
       let tools: string[] = []
       let actions: CardAction[] = []
@@ -1665,7 +1725,28 @@ export class Pipeline {
         // finishing with a silent "done" the user has to notice themselves.
         clipboard.writeText(final)
         const alert = buildBarAlert(classifyError(new Error('insert failed')))
-        this.showAlert({ ...alert, level: 'error', text: mt('文本可能没有插入成功，已复制到剪贴板') })
+        // The text exists — we just could not prove it landed. Throwing it away
+        // is what made "有听写记录没进历史" true, so the take is filed as a failed
+        // row: 历史记录 is where the user copies it from or retries it.
+        const filed = await this.recordFailure({
+          mode,
+          transcript,
+          final,
+          error: mt('文本未能插入目标控件'),
+          alertKind: alert.kind,
+          route,
+          durationMs: spokenMs,
+          target,
+          token
+        })
+        this.showAlert({
+          ...alert,
+          level: 'error',
+          text: mt('文本可能没有插入成功，已复制到剪贴板') +
+            (filed && this.getSettings().historyDurationSeconds !== 0
+              ? '\n' + mt('原始转写已保留在历史记录中')
+              : '')
+        })
         recordingLog.end({ status: 'error', chars: final.length, audioMs: spokenMs, error: mt('文本未能插入目标控件') })
         return null
       }
@@ -1708,24 +1789,39 @@ export class Pipeline {
       const message = err instanceof Error ? err.message : String(err)
       this.log(`[pipeline] failed: ${message}`)
       recordingLog.end({ status: 'error', audioMs: spokenMs, error: message })
-      // Failures remain visible as alerts and diagnostics, without a history row.
       const classified = classifyError(err)
       const alert = buildBarAlert(classified)
       if (err instanceof CursorResearchError) alert.text = message
-      if (err instanceof EntityOutputError && transcript && !controller.signal.aborted) {
+      // A corrupted entity pass is the one failure whose own sentence is the
+      // useful one, and one the user can act on by speaking again.
+      const entityFailure = err instanceof EntityOutputError && Boolean(transcript)
+      if (entityFailure) {
         alert.text = mt(err.message)
         alert.actions = alert.actions?.filter(action => action.id !== 'retry')
-        try {
-          await this.history.add({ mode, transcript, final: '', durationMs: spokenMs, app: appLabel(target.appName, target.title),
-            route, status: 'error', error: message, wordCount: 0, focusedWindowTitle: target.title,
-            // A failed take still answers the question the user asks himself
-            // while staring at the bar: how long did I wait for this.
-            processingMs: this.takeProcessingMs() })
-          if (token !== this.runToken) return null
-          if (this.getSettings().historyDurationSeconds !== 0) alert.text += '\n' + mt('原始转写已保留在历史记录中')
-        } catch {
-          alert.text += '\n' + mt('原始转写保存失败，请检查历史存储')
-        }
+      }
+      // Every failure the user did not ask for is still a take: an ASR outage, an
+      // empty model answer, a refused insert or a dead network all happened to a
+      // recording the user made. Filing them (transcript and/or final included)
+      // is what makes 历史记录 the answer to "where did my dictation go".
+      const filed = await this.recordFailure({
+        mode,
+        transcript,
+        final,
+        error: message,
+        alertKind: classified.kind,
+        route,
+        durationMs: spokenMs,
+        target,
+        token,
+        aborted: controller.signal.aborted,
+        purpose
+      })
+      if (token !== this.runToken) return null
+      // Only worth promising when there is text in the row to go back to.
+      if (filed && (transcript || final) && this.getSettings().historyDurationSeconds !== 0) {
+        alert.text += '\n' + mt('原始转写已保留在历史记录中')
+      } else if (entityFailure && !filed) {
+        alert.text += '\n' + mt('原始转写保存失败，请检查历史存储')
       }
       if (!transcript && !controller.signal.aborted && this.options.preserveAudio) {
         try {

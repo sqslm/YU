@@ -63,6 +63,15 @@ import {
   type RowActionId
 } from './historyView'
 import i18n from '../../i18n'
+import {
+  EMPTY_HISTORY_VIEW,
+  HISTORY_VIEW_KEY,
+  HISTORY_VIEW_VERSION,
+  readPageState,
+  usePageStateWriter,
+  validateHistoryView,
+  type HistoryViewState
+} from './pageState'
 import { Pager } from '../Pagination'
 import { MarkdownView } from '../../card/MarkdownView'
 import { HistorySources } from './HistorySources'
@@ -165,22 +174,29 @@ interface HistoryPageProps {
 
 export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps = {}): JSX.Element {
   const themeMode = useTheme().palette.mode
+  /**
+   * 上次离开本页时的视图。切页会卸载本组件，所以搜索词、时间范围、状态标签页、
+   * 排序和页码只能从 localStorage 拿回来；坏值/旧版本由 `validateHistoryView`
+   * 逐字段清洗后回落到默认。热门场景 chip 带来的 `initialQuery` 优先级更高：
+   * 那是一次明确的导航意图。
+   */
+  const [restoredView] = useState<HistoryViewState>(() => readPageState(HISTORY_VIEW_KEY, EMPTY_HISTORY_VIEW, validateHistoryView))
   const [heatStats, setHeatStats] = useState<StatsFile | null>(null)
   const [heatError, setHeatError] = useState('')
   const [entries, setEntries] = useState<HistoryEntry[]>([])
-  const [filter, setFilter] = useState<'all' | Mode>('all')
+  const [filter, setFilter] = useState<'all' | Mode>(restoredView.filter)
   /**
    * Selected window of the 窗口筛选 dropdown; {@link APP_FILTER_ALL} means
    * "every window". It narrows the mode tab rather than replacing it, so both
    * act on the same list and paging sees only what survived them.
    */
   const [appFilter, setAppFilter] = useState<string>(APP_FILTER_ALL)
-  const [query, setQuery] = useState(initialQuery ?? '')
-  const [period, setPeriod] = useState<HistoryPeriod>('all')
+  const [query, setQuery] = useState(initialQuery ?? restoredView.query)
+  const [period, setPeriod] = useState<HistoryPeriod>(restoredView.period)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [toolbarMenu, setToolbarMenu] = useState<HTMLElement | null>(null)
-  const [dateFrom, setDateFrom] = useState(''), [dateTo, setDateTo] = useState('')
-  const [order, setOrder] = useState<'newest' | 'oldest'>('newest')
+  const [dateFrom, setDateFrom] = useState(restoredView.dateFrom), [dateTo, setDateTo] = useState(restoredView.dateTo)
+  const [order, setOrder] = useState<'newest' | 'oldest'>(restoredView.order)
   const [loadError, setLoadError] = useState('')
   const [saveNoteId, setSaveNoteId] = useState<string | null>(null)
   const [savedNoteIds, setSavedNoteIds] = useState(new Set<string>())
@@ -201,7 +217,13 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   /** Which button of which entry has an IPC call in flight. */
   const [pending, setPending] = useState<{ id: string; action: RowActionId } | null>(null)
   const [notices, setNotices] = useState<Record<string, Notice>>({})
-  /** 1-based page of the filtered list; clamped on read, so it may be stale. */
+  /**
+   * 1-based page of the filtered list; clamped on read, so it may be stale.
+   *
+   * 恢复出来的页码不在这里落地：挂载时列表还是空的，读时钳制会把它按成 1。
+   * 等第一页数据回来（`loadedQuery` 有值）再决定要不要停在原来那页，见下面
+   * 的 restore effect。
+   */
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const pageSize = settings?.listPageSize ?? 30
@@ -261,11 +283,19 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
     }
   }, [])
 
+  // 挂载这一发直接带上恢复出来的搜索词：先读一次空搜索只会让用户看到「全部
+  // 记录」再闪成筛选结果（热门场景 chip 的 initialQuery 同样按这个顺序生效）。
   useEffect(() => {
-    void reload('')
-  }, [reload])
+    void reload(initialQuery ?? restoredView.query)
+  }, [reload, initialQuery, restoredView])
 
+  // 挂载那一发已经读过当前搜索词，这里跳过首次，避免同一句读两遍。
+  const firstSearchSkipped = useRef(false)
   useEffect(() => {
+    if (!firstSearchSkipped.current) {
+      firstSearchSkipped.current = true
+      return
+    }
     const timer = setTimeout(() => void reload(query), 180)
     return () => clearTimeout(timer)
   }, [query, reload])
@@ -406,6 +436,30 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   useEffect(() => {
     if (page !== safePage) setPage(safePage)
   }, [page, safePage])
+
+  /**
+   * 恢复页码。挂载时列表还是空的，读时钳制会把任何页码按成 1，所以这一发要等
+   * 第一页数据回来（`loadedQuery` 有值）才落。超出当前范围就回第 1 页：用户回来
+   * 想看到的是离开时的位置，位置没了就从第一页看起，而不是停在最后一页。
+   */
+  const restoredPageApplied = useRef(false)
+  useEffect(() => {
+    if (restoredPageApplied.current || loadedQuery === null) return
+    restoredPageApplied.current = true
+    const wanted = restoredView.page
+    if (wanted <= 1) return
+    setPage(clampPage(wanted, total, pageSize) === wanted ? wanted : 1)
+  }, [loadedQuery, total, pageSize, restoredView])
+
+  /**
+   * 视图写回（250 ms 合并，切页卸载时 flush）。窗口筛选和归档开关不在快照里：
+   * 前者依赖当前列表实际出现的窗口，后者会让下次打开像「历史空了」。
+   */
+  const viewSnapshot = useMemo<HistoryViewState>(
+    () => ({ version: HISTORY_VIEW_VERSION, query, period, dateFrom, dateTo, order, filter, page }),
+    [query, period, dateFrom, dateTo, order, filter, page]
+  )
+  usePageStateWriter(HISTORY_VIEW_KEY, viewSnapshot)
 
   // A refresh can retire the window the user picked: its last take was deleted,
   // or the new search no longer reaches it. Falling back to 全部 keeps the list

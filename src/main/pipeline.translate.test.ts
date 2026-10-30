@@ -260,7 +260,10 @@ describe('translate branch', () => {
 
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(entry).toBeNull()
-    expect(entries).toHaveLength(0)
+    // A refused translation is still a take: it keeps the spoken text and says
+    // why it failed, so the user can retry it from 历史记录.
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ status: 'error', transcript: '你好世界', final: '' })
     expect(log).toHaveBeenCalledWith('[translate] no target delivered (en,ja)')
     const alert = alertOf(sent, 'llm_failed')!
     expect(alert.level).toBe('error')

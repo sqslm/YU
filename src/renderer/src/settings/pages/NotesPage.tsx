@@ -72,6 +72,15 @@ import {
   type NoteKind,
   type SaveState
 } from './notesView'
+import {
+  EMPTY_NOTES_VIEW,
+  NOTES_VIEW_KEY,
+  NOTES_VIEW_VERSION,
+  readPageState,
+  usePageStateWriter,
+  validateNotesView,
+  type NotesViewState
+} from './pageState'
 
 /** Typing pause before a text edit is written; blur and navigation flush earlier. */
 const SAVE_DEBOUNCE_MS = 600
@@ -163,13 +172,20 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const [notice, setNotice] = useState('')
   const [extractingReminders, setExtractingReminders] = useState(false)
 
-  const [selectedId, setSelectedId] = useState<string | null>(openNote?.id ?? null)
-  const [queryInput, setQueryInput] = useState('')
-  const [query, setQuery] = useState('')
-  const [categoryId, setCategoryId] = useState(ALL_CATEGORIES)
-  const [activeTags, setActiveTags] = useState<string[]>([])
-  const [sort, setSort] = useState<NoteSort>('newest')
-  const [kind, setKind] = useState<NoteKind>('all')
+  /**
+   * 上次离开本页时的视图（搜索词、分类、排序、类型、标签、编辑模式、选中项）。
+   * 切页会卸载本组件，所以这些选择只能从 localStorage 拿回来；坏值/旧版本由
+   * `validateNotesView` 逐字段清洗后回落到默认。
+   */
+  const [restoredView] = useState<NotesViewState>(() => readPageState(NOTES_VIEW_KEY, EMPTY_NOTES_VIEW, validateNotesView))
+
+  const [selectedId, setSelectedId] = useState<string | null>(openNote?.id ?? restoredView.selectedId)
+  const [queryInput, setQueryInput] = useState(restoredView.query)
+  const [query, setQuery] = useState(restoredView.query)
+  const [categoryId, setCategoryId] = useState(restoredView.categoryId)
+  const [activeTags, setActiveTags] = useState<string[]>(restoredView.activeTags)
+  const [sort, setSort] = useState<NoteSort>(restoredView.sort)
+  const [kind, setKind] = useState<NoteKind>(restoredView.kind)
 
   const [titleDraft, setTitleDraft] = useState('')
   const [metadataOpen, setMetadataOpen] = useState(false)
@@ -224,7 +240,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const audioJobRef = useRef(false)
   const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
   const bodyInputRef = useRef<MarkdownSourceHandle | null>(null)
-  const [markdownPreview, setMarkdownPreview] = useState(true)
+  const [markdownPreview, setMarkdownPreview] = useState(restoredView.markdownPreview)
   /**
    * 列表侧栏是否收起。跨会话记住（localStorage），因为窄窗口下用户收起一次
    * 就想一直收着；读失败按展开处理，不让坏值把列表锁死。
@@ -294,6 +310,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   )
   const tagOptions = useMemo(() => collectTags(notes, TAG_FILTER_LIMIT), [notes])
   const selected = useMemo(() => notes.find((note) => note.id === selectedId) ?? null, [notes, selectedId])
+  /**
+   * 选中项在列表里真正落到的那篇（列表回来后才有值）。恢复出来的 selectedId
+   * 在挂载那一刻还没有随记可对应，草稿重置要等这个 id 出现再跑一次，否则
+   * 编辑区会一直是空的。用 id 而不是整个对象做依赖：外部改动会换掉 note 的
+   * 引用，那不该把用户正在打的草稿重置掉。
+   */
+  const selectedNoteId = selected?.id ?? null
   const selectedRef = useRef<NoteEntry | null>(selected)
   selectedRef.current = selected
 
@@ -312,17 +335,58 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
 
   // Keep the selection pointing at a note that still exists; the order comes
   // from the unfiltered list so a filter change never steals the selection.
+  //
+  // 列表还没回来之前不能判「选中的随记不在了」：恢复出来的 selectedId 在挂载
+  // 那一刻面对的是空数组，早判一步就会把它清成 null，页面闪回第一行。等
+  // `loading` 落地后再校验，存在就保持选中（不闪），被删了才落到第一行。
   useEffect(() => {
+    if (loading) return
     if (notes.length === 0) {
       if (selectedId !== null) setSelectedId(null)
       return
     }
     if (selectedId && notes.some((note) => note.id === selectedId)) return
     setSelectedId(ordered[0]?.id ?? null)
-  }, [notes, ordered, selectedId])
+  }, [loading, notes, ordered, selectedId])
+
+  /**
+   * 分类筛选可能指向别的窗口（或上一轮会话）删掉的桶：恢复出来的 id 不在
+   * 列表里就回落到「全部」，否则一进页面就是空列表，还看不出该取消哪个筛选。
+   */
+  useEffect(() => {
+    if (loading || !categoryId) return
+    if (!categories.some((category) => category.id === categoryId)) setCategoryId(ALL_CATEGORIES)
+  }, [loading, categories, categoryId])
+
+  /**
+   * 记过的标签可能已经一条随记都不剩了（在别的窗口删掉/改掉了）。这样的筛选
+   * 在标签行里连 chip 都画不出来，用户看得见的是空列表却取消不掉，所以第一次
+   * 加载完成后清理一次：只删「整个列表都没有这个标签」的那些，一条还在的标签
+   * 仍然按用户的选择保留。之后的会话内变更不动，行为保持不变。
+   */
+  const restoredTagsPruned = useRef(false)
+  useEffect(() => {
+    if (loading || restoredTagsPruned.current) return
+    restoredTagsPruned.current = true
+    if (!activeTags.length) return
+    const alive = new Set(collectTags(notes, 0).map((row) => row.tag.toLowerCase()))
+    if (activeTags.every((tag) => alive.has(tag.toLowerCase()))) return
+    setActiveTags((prev) => prev.filter((tag) => alive.has(tag.toLowerCase())))
+  }, [loading, notes, activeTags])
+
+  /**
+   * 视图写回。节流合并 250 ms，切页卸载时立刻 flush，所以「改完筛选马上切走」
+   * 也存得住；批量选择、录音、草稿一概不在这个快照里。
+   */
+  const viewSnapshot = useMemo<NotesViewState>(
+    () => ({ version: NOTES_VIEW_VERSION, query, categoryId, sort, kind, activeTags, markdownPreview, selectedId }),
+    [query, categoryId, sort, kind, activeTags, markdownPreview, selectedId]
+  )
+  usePageStateWriter(NOTES_VIEW_KEY, viewSnapshot)
 
   // A new selection gets fresh drafts; the previous note was flushed by the
-  // click handler before this ran.
+  // click handler before this ran. 恢复出来的选中项要等列表回来（`selectedNoteId`
+  // 由 null 变成 id）才拿得到内容，所以它也在这个依赖里。
   useEffect(() => {
     const note = notesRef.current.find((item) => item.id === selectedId) ?? null
     setTitleDraft(note?.title ?? '')
@@ -338,7 +402,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       bodyInputRef.current?.focus()
       focusNewNoteRef.current = null
     }
-  }, [selectedId])
+  }, [selectedId, selectedNoteId])
 
   /**
    * A take is stored empty and filled in later: `notes.create` returns the row

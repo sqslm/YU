@@ -241,8 +241,14 @@ async function runDashscopeRealtime(ctx: AsrAdapterContext, input: AsrAdapterInp
       failure ??= new ProviderError(mt('阿里云实时识别连接出错（检查密钥 / 网络）'))
       settle()
     })
-    ws.addEventListener('close', () => {
-      failure ??= new ProviderError(mt('阿里云在返回识别结果前关闭了连接'))
+    ws.addEventListener('close', (event: Event) => {
+      const detail = (event as unknown as { code?: number; reason?: string })
+      const code = typeof detail.code === 'number' ? detail.code : undefined
+      const reason = typeof detail.reason === 'string' ? detail.reason.trim() : ''
+      ctx.log(`[asr] dashscope realtime closed before finishing code=${code ?? '?'}${reason ? ` reason=${reason}` : ''}`)
+      failure ??= new ProviderError(code && reason
+        ? mt('阿里云在返回识别结果前关闭了连接（{{code}} {{reason}}）', { code, reason })
+        : mt('阿里云在返回识别结果前关闭了连接'))
       settle()
     })
   })
@@ -343,7 +349,10 @@ export const DASHSCOPE_REALTIME_SPEC: AsrAdapterSpec = {
       }
     }
   ],
-  run: runDashscopeRealtime
+  run: runDashscopeRealtime,
+  // The file API takes the whole recording and returns the same transcript; it is
+  // the safe route when the socket itself failed (proxy, dropped frame, idle close).
+  fallback: { adapterId: 'aliyun', mapModel: (model: string) => model.replace('-realtime', '') }
 }
 
 // ---------------------------------------------------------------------------

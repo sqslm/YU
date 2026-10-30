@@ -83,6 +83,15 @@ export interface AsrAdapterSpec {
   fields: PresetField[]
   /** Run one transcription. Throw `ProviderError` with a readable sentence. */
   run: (ctx: AsrAdapterContext, input: AsrAdapterInput) => Promise<string>
+  /**
+   * A second, HTTP-only route for the same vendor.
+   *
+   * Socket sessions fail for reasons an HTTP request does not: a proxy that only
+   * tunnels HTTP, a dropped frame, an idle gateway. When the connection itself is
+   * what failed, transcribing the same audio through the vendor's file API is
+   * slower but still answers, which beats losing the take.
+   */
+  fallback?: { adapterId: string; mapModel?: (model: string) => string }
 }
 
 /** Read a vendor field, trimmed, with a fallback. */

@@ -12,12 +12,12 @@ import {
 } from '../audio/wav'
 import { type EncodedAudio, asWav, toOggOpus } from '../audio/transcode'
 import { resolveAsrAdapter, runAsrAdapter } from './asr/index'
-import { recordAsrLatency } from './asr/latency'
+import { markAsrProfileUnavailable, recordAsrLatency } from './asr/latency'
 import { chainFor } from './chain'
 import { egressFetch } from '../net/egress'
 
 /** Re-exported for the pipeline: one import for the take's attempt order. */
-export { orderAsrProfiles, resetAsrLatency, asrLatencyFor, asrSampleCount } from './asr/latency'
+export { orderAsrProfiles, resetAsrLatency, asrLatencyFor, asrSampleCount, markAsrProfileUnavailable, asrUnavailableReason } from './asr/latency'
 
 export interface AsrRequest {
   wav: Uint8Array
@@ -781,6 +781,23 @@ export async function transcribe(
   cfg: ProviderSettings,
   req: AsrRequest
 ): Promise<{ text: string; model: string }> {
+  try {
+    return await transcribeAttempt(cfg, req)
+  } catch (error) {
+    // A quota or auth answer will answer the same way for the next ten minutes;
+    // bench the profile so the chain does not pay a round trip for it first.
+    if (req.profileId && isPermanentAsrFailure(error)) markAsrProfileUnavailable(req.profileId, error instanceof Error ? error.message : String(error))
+    throw error
+  }
+}
+
+/** Quota, billing and credential answers — retrying inside the same minute cannot help. */
+function isPermanentAsrFailure(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error)
+  return /AllocationQuota|FreeTierOnly|free quota|配额|额度|欠费|Arrear|invalid.?api.?key|InvalidApiKey|API\s?Key\s?(?:无效|不正确)|Unauthorized|Forbidden|(?:401|403)/i.test(text)
+}
+
+async function transcribeAttempt(cfg: ProviderSettings, req: AsrRequest): Promise<{ text: string; model: string }> {
   if (req.entityContext && asrEnhancementCapability({ ...cfg, model: req.model || cfg.model }) !== 'none') {
     try { return await transcribeRequest(cfg, req) }
     catch (error) {
