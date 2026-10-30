@@ -1,6 +1,6 @@
 import http from 'node:http'
 import https from 'node:https'
-import type { ProviderSettings } from '@shared/types'
+import type { ProviderSettings, Settings } from '@shared/types'
 import { asrEnhancementCapability } from '@shared/asr-enhancement'
 import {
   SAMPLE_RATE,
@@ -12,6 +12,12 @@ import {
 } from '../audio/wav'
 import { type EncodedAudio, asWav, toOggOpus } from '../audio/transcode'
 import { resolveAsrAdapter, runAsrAdapter } from './asr/index'
+import { recordAsrLatency } from './asr/latency'
+import { chainFor } from './chain'
+import { egressFetch } from '../net/egress'
+
+/** Re-exported for the pipeline: one import for the take's attempt order. */
+export { orderAsrProfiles, resetAsrLatency, asrLatencyFor, asrSampleCount } from './asr/latency'
 
 export interface AsrRequest {
   wav: Uint8Array
@@ -36,6 +42,13 @@ export interface AsrRequest {
   timeoutMs?: number
   /** Skip the keep-warm round trip for this call (tests, batch tooling). */
   warm?: boolean
+  /**
+   * Saved profile id of the provider this attempt is for.
+   *
+   * Only used to attribute a measured take (`./asr/latency.ts`); a caller that
+   * predates profiles records nothing and keeps the stored chain order.
+   */
+  profileId?: string
 }
 
 import { parseHeaderLines } from './headers'
@@ -63,18 +76,66 @@ export function joinUrl(baseUrl: string, path: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Total request budget. 25 s is the ceiling the spec promises (ACC-12 step 2):
- * long enough for a cold model load, short enough that a wedged backend surfaces
- * as a classified alert instead of a pill stuck on 转写中
- * (`TYPELESS_ASR_TIMEOUT_MS` still overrides it).
+ * Attempt budget, per provider, derived from how long the clip is.
+ *
+ * The old constant was 25 s for every take. On a 2 s dictation that means 25 s of
+ * 转写中 before the chain admits the first provider is wedged — and the whole
+ * complaint here is that cloud transcription feels slower than a local model, so
+ * the *failover* wait is part of the latency the user experiences.
+ *
+ * Serving speed is ~1.5× real time even for a cold cloud model, so 6 s of slack
+ * plus 1.5 s per second of audio covers a healthy request and fails a dead one
+ * early. TYPELESS_ASR_TIMEOUT_MS still overrides it for a server that needs more.
  */
-const DEFAULT_TIMEOUT_MS = 25_000
+const ATTEMPT_BASE_MS = 6_000
+const ATTEMPT_PER_AUDIO_MS = 1.5
+/** A cold TLS handshake plus model load needs at least this. */
+const ATTEMPT_MIN_MS = 10_000
+/**
+ * Above this a short clip would wait longer than the old 25 s constant; the
+ * ceiling itself is *higher* than that constant, so a 60 s dictation is no more
+ * likely to be cut off than it was before.
+ */
+const ATTEMPT_MAX_MS = 45_000
+/** 16 kHz mono PCM16 — the pipeline's fixed wire format — is 32 bytes per ms. */
+const PCM_BYTES_PER_MS = 32
+const WAV_HEADER_BYTES = 44
+
+/** Duration of a take in ms, header-accurate, falling back to the fixed format. */
+export function asrDurationMs(wav: Uint8Array): number {
+  if (!wav || wav.byteLength === 0) return 0
+  const precise = wavDurationMs(wav)
+  if (precise > 0) return precise
+  return Math.max(0, Math.round((wav.byteLength - WAV_HEADER_BYTES) / PCM_BYTES_PER_MS))
+}
+
+/**
+ * How long one provider gets, from the length of the audio.
+ *
+ * Pure and exported because the three points that matter (1 s, 10 s, 60 s) are a
+ * test, not a comment: a formula nobody can check is a formula that silently
+ * starts cutting off legitimate requests.
+ */
+export function asrUploadTimeoutMs(durationMs: number): number {
+  const audio = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 0
+  const estimate = ATTEMPT_BASE_MS + audio * ATTEMPT_PER_AUDIO_MS
+  return Math.min(ATTEMPT_MAX_MS, Math.max(ATTEMPT_MIN_MS, Math.round(estimate)))
+}
+
+function timeoutMsFor(req: AsrRequest): number {
+  if (typeof req.timeoutMs === 'number') return req.timeoutMs
+  const forced = envInt('TYPELESS_ASR_TIMEOUT_MS', 0)
+  if (forced > 0) return forced
+  return asrUploadTimeoutMs(asrDurationMs(req.wav))
+}
 /** Idle sockets survive long enough to cover back-to-back dictations. */
 const KEEP_ALIVE_MS = 60_000
 /** Keep the local model resident: `--sleep-idle-seconds` unloads it when idle. */
 const DEFAULT_WARM_INTERVAL_MS = 240_000
 /** How long a warm-up clip is; enough to load weights, cheap to decode. */
 const WARM_AUDIO_MS = 300
+/** The keep-warm round trip is not on the user's path, so it keeps the old ceiling. */
+const KEEP_WARM_TIMEOUT_MS = 25_000
 /** A trim that saves less than this is not worth the extra encode. */
 const MIN_TRIM_MS = 200
 /** Consecutive idle warm-ups before the keep-warm loop stops itself. */
@@ -87,10 +148,6 @@ function envInt(name: string, fallback: number): number {
   if (!raw) return fallback
   const value = Number(raw)
   return Number.isFinite(value) && value >= 0 ? value : fallback
-}
-
-function timeoutMsFor(req: AsrRequest): number {
-  return req.timeoutMs ?? envInt('TYPELESS_ASR_TIMEOUT_MS', DEFAULT_TIMEOUT_MS)
 }
 
 /** 'off' | 'all' | 'local' (default): keep the model warm only on this machine. */
@@ -329,6 +386,32 @@ function prepareUpload(wav: Uint8Array): { wav: Uint8Array; audioMs: number; sav
   return { wav: encodeWav(trimmed, decoded.sampleRate), audioMs, savedMs: originalMs - audioMs }
 }
 
+/**
+ * One prepared copy per take, not one per provider.
+ *
+ * `withFailover` calls `transcribe` once per profile with the *same* `wav` view,
+ * so before this cache a two-provider chain decoded, scanned and re-encoded the
+ * same clip twice — and, with compression on and no captured Opus copy, spawned
+ * ffmpeg twice. Keyed on the byte array identity, which is per take by
+ * construction (`encodeWav` allocates); a new take is a new array, so nothing is
+ * carried across takes. The trim flag is part of the entry because the tests (and
+ * a settings change) flip it under a live buffer.
+ */
+interface PreparedTake {
+  trimFlag: string
+  prepared: { wav: Uint8Array; audioMs: number; savedMs: number }
+}
+const preparedTakes = new WeakMap<Uint8Array, PreparedTake>()
+
+function prepareForTake(wav: Uint8Array): { wav: Uint8Array; audioMs: number; savedMs: number } {
+  const trimFlag = process.env.TYPELESS_ASR_TRIM ?? '1'
+  const cached = preparedTakes.get(wav)
+  if (cached && cached.trimFlag === trimFlag) return cached.prepared
+  const prepared = prepareUpload(wav)
+  preparedTakes.set(wav, { trimFlag, prepared })
+  return prepared
+}
+
 function defaultLog(line: string): void {
   // electron main has no window here; stdout is where the pipeline logs land.
   if (process.env.TYPELESS_ASR_LOG === 'off') return
@@ -383,6 +466,9 @@ function uploadMode(preference: 'wav' | 'opus' | undefined): 'wav' | 'opus' {
   return preference ?? 'wav'
 }
 
+/** One ffmpeg run per take, however many providers end up being tried. */
+const opusForTake = new WeakMap<Uint8Array, { flag: string; pending: ReturnType<typeof toOggOpus> }>()
+
 /**
  * Picks the wire format for one take. The decision is logged because upload size
  * is the one part of ASR latency the client actually controls — but it must never
@@ -415,7 +501,16 @@ async function encodeForUpload(
 
   if (uploadMode(cfg.upload) !== 'opus') return asWav(wav)
 
-  const outcome = await toOggOpus(wav)
+  // Same take, second provider: reuse the subprocess that already ran. ffmpeg is
+  // a 100-300 ms spawn, and paying it once per failed profile is a failover tax
+  // the user sees as "the second provider took just as long as the first".
+  const flag = `${uploadMode(cfg.upload)}:${process.env.TYPELESS_ASR_UPLOAD ?? ''}`
+  let memo = opusForTake.get(wav)
+  if (!memo || memo.flag !== flag) {
+    memo = { flag, pending: toOggOpus(wav) }
+    opusForTake.set(wav, memo)
+  }
+  const outcome = await memo.pending
   if (outcome.ok) {
     const saved = Math.max(0, outcome.bytesBefore - outcome.audio.data.byteLength)
     const pct = outcome.bytesBefore > 0 ? Math.round((saved / outcome.bytesBefore) * 100) : 0
@@ -518,6 +613,165 @@ async function runKeepWarm(ctx: WarmContext): Promise<void> {
   }
   armKeepWarm(ctx)
 }
+
+// ---------------------------------------------------------------------------
+// Warm-on-key
+//
+// Measured on a cold cloud endpoint: DNS + TCP + TLS before the first byte of the
+// POST is ~0.9-2.6 s from a home connection, and it is paid entirely inside the
+// user's "转写中". The take itself is short. So the cheapest win in this file is
+// to have the connection up *before* the audio exists — the key press and the
+// recording are the free window.
+//
+// Three rules keep it from costing anything:
+// - it never sends audio (a HEAD, or the existing keep-warm clip for a local
+//   model whose load is the real cost),
+// - it never delays or fails a take: 1.5 s ceiling, every error swallowed,
+// - it does nothing while a take is already in flight, because on a
+//   `--parallel 1` backend a warm-up in front of real audio is a straight loss.
+// ---------------------------------------------------------------------------
+
+/** Ceiling for the whole warm-up; the take must never wait on it. */
+const WARM_TIMEOUT_MS = 1_500
+
+/**
+ * The URL to reach the vendor on, `wss:` endpoints included.
+ *
+ * A WebSocket vendor (iFlytek, Volcengine, Tencent realtime) shares its host and
+ * TLS stack with https, so a HEAD on the https form warms the same DNS entry and
+ * the same certificate chain.
+ */
+export function warmUrlFor(baseUrl: string): string | null {
+  const raw = String(baseUrl ?? '').trim()
+  if (!raw) return null
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  const swapped = url.protocol === 'wss:' ? 'https:' : url.protocol === 'ws:' ? 'http:' : url.protocol
+  if (swapped !== 'https:' && swapped !== 'http:') return null
+  url.protocol = swapped
+  return url.href
+}
+
+/**
+ * A HEAD over the app's shared egress (Chromium's pool in production).
+ *
+ * Used for the vendor adapters, because those requests go through `egressFetch`
+ * too — warming a different pool would be a measurement, not an optimization.
+ * The status is deliberately ignored: a 401/404 on the origin path still means
+ * DNS resolved and TLS completed, which is all this buys.
+ */
+async function probeEgress(url: string, timeoutMs: number): Promise<number> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(new Error('ASR_WARM_TIMEOUT')), timeoutMs)
+  if (typeof timer.unref === 'function') timer.unref()
+  const started = process.hrtime.bigint()
+  try {
+    const response = await egressFetch(url, {
+      method: 'HEAD',
+      headers: { accept: '*/*' },
+      redirect: 'manual',
+      signal: controller.signal
+    })
+    await response.body?.cancel().catch(() => undefined)
+    return Number(process.hrtime.bigint() - started) / 1e6
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * A HEAD over this module's own keep-alive agent.
+ *
+ * The OpenAI-shaped path speaks `node:http` with {@link agentFor}, so that is the
+ * pool a warm-up has to fill for the next POST to skip its handshake.
+ */
+function probeAgent(target: URL, timeoutMs: number): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const started = process.hrtime.bigint()
+    const isHttps = target.protocol === 'https:'
+    const transport = (isHttps ? https.request : http.request) as typeof http.request
+    const req = transport(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port || (isHttps ? 443 : 80),
+        path: `${target.pathname}${target.search}`,
+        method: 'HEAD',
+        agent: agentFor(target),
+        headers: { accept: '*/*' }
+      },
+      (res) => {
+        // Draining the (empty) response is what returns the socket to the pool.
+        res.resume()
+        clearTimeout(timer)
+        res.on('end', () => resolve(Number(process.hrtime.bigint() - started) / 1e6))
+        res.on('close', () => resolve(Number(process.hrtime.bigint() - started) / 1e6))
+      }
+    )
+    const timer = setTimeout(() => req.destroy(new Error('ASR_WARM_TIMEOUT')), timeoutMs)
+    if (typeof timer.unref === 'function') timer.unref()
+    req.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    req.end()
+  })
+}
+
+/**
+ * Warms the connection to the chain's first provider. Call on key-down.
+ *
+ * Never throws and never rejects: a warm-up that fails is indistinguishable from
+ * one that was skipped, and the real take still runs. The signature is
+ * `(settings, log?)` so the pipeline can hand it its own `[perf]` sink.
+ */
+export async function warmAsr(
+  settings: Settings,
+  log: (line: string) => void = defaultLog
+): Promise<void> {
+  try {
+    const profile = chainFor(settings, 'asr')[0]
+    if (!profile) return
+    // A take is running: the socket pool is busy and, on a serial backend, a
+    // warm-up would queue in front of the user's audio.
+    if (inFlight > 0) return
+    const cfg: ProviderSettings = {
+      ...settings.asr,
+      baseUrl: profile.baseUrl,
+      apiKey: profile.apiKey,
+      model: profile.model,
+      extraHeaders: profile.extraHeaders,
+      authHeader: profile.authHeader,
+      requestPath: profile.requestPath,
+      asrAdapter: profile.asrAdapter,
+      vendor: profile.vendor
+    }
+    const url = warmUrlFor(cfg.baseUrl)
+    if (!url) return
+    const model = cfg.model || settings.asr.model
+    const target = new URL(url)
+    const adapter = resolveAsrAdapter(cfg)
+
+    // A local OpenAI-shaped server: the model load is the latency, and the
+    // existing keep-warm clip is exactly the request that pays it. Reusing it
+    // keeps one mechanism instead of two competing ones.
+    if (!adapter && model && keepWarmEnabled(target)) {
+      const ms = await warmUp(cfg, model, WARM_TIMEOUT_MS)
+      if (ms >= 0) log(`[perf] asr-warm kind=keepalive host=${target.host} ms=${ms.toFixed(0)}`)
+      return
+    }
+
+    const ms = adapter ? await probeEgress(url, WARM_TIMEOUT_MS) : await probeAgent(target, WARM_TIMEOUT_MS)
+    log(`[perf] asr-warm kind=probe host=${target.host} ms=${ms.toFixed(0)}`)
+  } catch {
+    // Silent by contract: warming is an optimization, never a failure path.
+  }
+}
+
 /**
  * Speech-to-text through any OpenAI-compatible `/audio/transcriptions`
  * endpoint (OpenAI, Groq, SiliconFlow, FunASR gateways, faster-whisper servers,
@@ -543,6 +797,14 @@ async function transcribeRequest(cfg: ProviderSettings, req: AsrRequest): Promis
   const model = req.model || cfg.model
 
   const log = req.log ?? defaultLog
+  // One measurement for the whole attempt, whatever the route: the number the
+  // ordering heuristic needs is "how long did this provider take", not "how long
+  // did the socket take". `hrtime`, floored at 1 ms: `Date.now()` rounds a fast
+  // loopback take to 0, which would leave a *local* server unmeasurable.
+  const startedAt = process.hrtime.bigint()
+  const elapsedMs = (): number => Math.max(1, Math.round(Number(process.hrtime.bigint() - startedAt) / 1e6))
+  // Protocol capability, resolved once instead of once per field decision.
+  const capability = asrEnhancementCapability({ ...cfg, model })
 
   /*
     Vendors that are not OpenAI-shaped come first. Nothing below applies to them:
@@ -551,16 +813,18 @@ async function transcribeRequest(cfg: ProviderSettings, req: AsrRequest): Promis
   */
   const adapter = resolveAsrAdapter(cfg)
   if (adapter) {
-    const started = Date.now()
     try {
       const text = await runAsrAdapter(adapter, cfg, req.wav, {
         model,
         language: req.language,
         signal: req.signal,
         log,
-        entityContext: asrEnhancementCapability({ ...cfg, model }) === 'context' ? req.entityContext : undefined
+        entityContext: capability === 'context' ? req.entityContext : undefined
       })
-      log(`[perf] asr ${Date.now() - started}ms`)
+      const elapsed = elapsedMs()
+      log(`[perf] asr ${elapsed}ms`)
+      // Only a provider that really answered earns a sample.
+      if (req.profileId) recordAsrLatency(req.profileId, elapsed)
       return { text: text.trim(), model: model || adapter.id }
     } catch (error) {
       // The adapter already speaks in sentences; wrapping it again would double
@@ -572,15 +836,20 @@ async function transcribeRequest(cfg: ProviderSettings, req: AsrRequest): Promis
   if (!model) throw new ProviderError('ASR model is empty')
 
   const timeoutMs = timeoutMsFor(req)
-  const warmCtx: WarmContext = { cfg, model, timeoutMs, log }
+  // The keep-warm ping is off the user's critical path and only exists to load a
+  // model, so it keeps the old, generous ceiling: a cold local model can take
+  // longer than a short take's attempt budget, and failing that ping would leave
+  // the model cold with nothing in the log.
+  const warmCtx: WarmContext = { cfg, model, timeoutMs: Math.max(timeoutMs, KEEP_WARM_TIMEOUT_MS), log }
   const keepWarmOn = req.warm !== false
 
   // Arming below sends nothing, so a take never waits behind a warm-up request
   // (`--parallel 1` servers would otherwise decode the clip twice).
   inFlight += 1
   try {
-    // One encode for one request: nothing here re-encodes the caller's bytes.
-    const prepared = prepareUpload(req.wav)
+    // One encode for the take: `prepareForTake` keeps the decode/trim/encode if the
+    // chain moves on to the next profile with the same bytes.
+    const prepared = prepareForTake(req.wav)
     const fields: Array<[string, string]> = [
       ['model', model],
       ['response_format', 'json']
@@ -589,7 +858,7 @@ async function transcribeRequest(cfg: ProviderSettings, req: AsrRequest): Promis
     // outright (StepFun does), and every transcription model's default is already
     // greedy decoding, so sending it buys nothing and costs compatibility.
     if (req.language) fields.push(['language', req.language])
-    const entityContext = asrEnhancementCapability({ ...cfg, model }) === 'prompt' ? req.entityContext : undefined
+    const entityContext = capability === 'prompt' ? req.entityContext : undefined
     if (req.prompt || entityContext) fields.push(['prompt', [req.prompt, entityContext].filter(Boolean).join('\n')])
 
     const headers: Record<string, string> = { ...parseHeaderLines(cfg.extraHeaders) }
@@ -632,11 +901,14 @@ async function transcribeRequest(cfg: ProviderSettings, req: AsrRequest): Promis
     }
 
     const rtf = prepared.audioMs > 0 ? result.ms / prepared.audioMs : 0
+    // The detail line stays first (`asr.test.ts` pins its shape); the two lines
+    // after it are the ones a slow take is diagnosed with.
     log(
       `[perf] asr bytes=${upload.data.byteLength} ms=${result.ms.toFixed(0)} rtf=${rtf.toFixed(2)}` +
         ` audio=${prepared.audioMs}ms trim=${prepared.savedMs}ms ttfb=${result.ttfbMs.toFixed(0)}ms` +
         ` conn=${result.reused ? 'reuse' : 'new'} codec=${upload.contentType}`
     )
+    log(`[perf] asr-upload bytes=${upload.data.byteLength} codec=${upload.contentType}`)
 
     if (result.status < 200 || result.status >= 300) {
       throw new ProviderError(`ASR HTTP ${result.status}`, result.status, result.body.slice(0, 500))
@@ -648,6 +920,9 @@ async function transcribeRequest(cfg: ProviderSettings, req: AsrRequest): Promis
       log('[asr] discarded server transcription instruction echo')
       text = text.replace(/^Transcribe audio to text(?: \(language: [\w-]+\))?(?:[.!]?\s*$|\s*\n)/i, '').trim()
     }
+    const elapsed = elapsedMs()
+    log(`[perf] asr ${elapsed}ms`)
+    if (req.profileId) recordAsrLatency(req.profileId, elapsed)
     return { text, model }
   } finally {
     inFlight -= 1

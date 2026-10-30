@@ -62,3 +62,23 @@ describe('filtered history export', () => {
     await expect(exportHistory({ get: () => entry('one') }, ['one'], 'text')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })
+
+describe('task 用时 in the export', () => {
+  beforeEach(() => setMainLanguage('zh'))
+  afterEach(() => setMainLanguage('zh'))
+
+  it('writes the wait between the end of the recording and the finished task', () => {
+    const text = formatHistoryExport([entry('timed', { processingMs: 2400 })], 'text')
+    expect(text).toContain('任务用时：2.4 秒')
+    // The recording length stays its own line: 1.2 s of speech, 2.4 s of waiting.
+    expect(text).toContain('录音时长：1 秒')
+  })
+
+  it('spells out waits over a minute instead of four-digit seconds', () => {
+    expect(formatHistoryExport([entry('slow', { processingMs: 72_000 })], 'markdown')).toContain('任务用时：1 分 12 秒')
+  })
+
+  it('omits the line for rows that never measured it', () => {
+    expect(formatHistoryExport([entry('legacy')], 'markdown')).not.toContain('任务用时')
+  })
+})

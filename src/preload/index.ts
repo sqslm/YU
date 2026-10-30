@@ -316,6 +316,7 @@ const api: TypelessApi = {
     recordingClear: (): Promise<number> => ipcRenderer.invoke('recording:clear'),
     openSettings: (): Promise<void> => ipcRenderer.invoke('app:openSettings'),
     copyText: (text: string): Promise<void> => ipcRenderer.invoke('app:copyText', text),
+    readClipboard: (): Promise<string> => ipcRenderer.invoke('app:readClipboard'),
     version: (): Promise<string> => ipcRenderer.invoke('app:version'),
     resources: () => ipcRenderer.invoke('app:resources'),
     releaseResources: () => ipcRenderer.invoke('app:releaseResources'),

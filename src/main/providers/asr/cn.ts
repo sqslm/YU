@@ -1,6 +1,7 @@
 import { createHash, createHmac } from 'node:crypto'
 import { SAMPLE_RATE, decodeWavPcm16 } from '../../audio/wav'
 import { ProviderError } from '../providerError'
+import { pollForResult } from './poll'
 import {
   type AsrAdapterContext,
   type AsrAdapterInput,
@@ -45,8 +46,6 @@ const BAIDU_TOKEN_URL = 'https://aip.baidubce.com/oauth/2.0/token'
 
 /** DashScope queues the job; this is how long a take may wait for it. */
 const ALIYUN_TASK_BUDGET_MS = 120_000
-/** Poll spacing: DashScope advances a few seconds of audio per interval. */
-const ALIYUN_POLL_MS = 500
 
 /** IAT accepts one JSON frame per 40 ms of audio; faster input is dropped. */
 const XFYUN_FRAME_MS = 40
@@ -160,38 +159,48 @@ async function runAliyun(ctx: AsrAdapterContext, input: AsrAdapterInput): Promis
   const taskId = pickString(submit.json, 'output', 'task_id')
   if (!taskId) throw new ProviderError(mt('DashScope 没有返回 task_id：{{snippet}}', { snippet: snippet(submit.body) }))
 
-  const deadline = Date.now() + ALIYUN_TASK_BUDGET_MS
-  let transcriptionUrl = ''
-  let failure = ''
   let lastStatus = 'PENDING'
-  for (;;) {
-    if (ctx.signal.aborted) throw new ProviderError(mt('等待识别结果时被取消'))
-    const poll = await request(ctx, `${base}/api/v1/tasks/${encodeURIComponent(taskId)}`, { headers: auth }, 20_000)
-    failUnless(httpOk(poll.status), poll.status, poll.body, mt('查询 DashScope 任务'))
-    lastStatus = pickString(poll.json, 'output', 'task_status') || 'PENDING'
-    if (lastStatus === 'SUCCEEDED') {
-      // The task can succeed while one file failed; the per-file verdict is the
-      // one that carries a readable reason.
-      const subtask = pickString(poll.json, 'output', 'results', 0, 'subtask_status')
-      if (subtask === 'FAILED') {
-        failure = pickString(poll.json, 'output', 'results', 0, 'message') || mt('子任务失败')
-        break
-      }
-      transcriptionUrl = pickString(poll.json, 'output', 'results', 0, 'transcription_url')
-      break
-    }
-    if (lastStatus === 'FAILED' || lastStatus === 'CANCELED' || lastStatus === 'UNKNOWN') {
-      failure = pickString(poll.json, 'output', 'message') || lastStatus
-      break
-    }
-    if (Date.now() >= deadline) {
-      throw new ProviderError(
+  // Check at once, then back off (`./poll.ts`). The old fixed 500 ms meant a
+  // paraformer job that finished in 300 ms still cost the user 500 ms of nothing;
+  // the backoff keeps the steady state at 1.5 s, which is *gentler* on DashScope
+  // than the 500 ms cadence it replaces.
+  const polled = await pollForResult<{ transcriptionUrl: string; failure: string }>({
+    budgetMs: ALIYUN_TASK_BUDGET_MS,
+    label: 'DashScope',
+    log: ctx.log,
+    sleep: (ms) => pause(ctx, ms),
+    onTimeout: () =>
+      new ProviderError(
         mt('DashScope 任务 {{task}} 超时（最后状态 {{status}}）', { task: taskId, status: lastStatus })
-      )
+      ),
+    attempt: async () => {
+      if (ctx.signal.aborted) throw new ProviderError(mt('等待识别结果时被取消'))
+      const poll = await request(ctx, `${base}/api/v1/tasks/${encodeURIComponent(taskId)}`, { headers: auth }, 20_000)
+      failUnless(httpOk(poll.status), poll.status, poll.body, mt('查询 DashScope 任务'))
+      lastStatus = pickString(poll.json, 'output', 'task_status') || 'PENDING'
+      if (lastStatus === 'SUCCEEDED') {
+        // The task can succeed while one file failed; the per-file verdict is the
+        // one that carries a readable reason.
+        const subtask = pickString(poll.json, 'output', 'results', 0, 'subtask_status')
+        if (subtask === 'FAILED') {
+          return {
+            transcriptionUrl: '',
+            failure: pickString(poll.json, 'output', 'results', 0, 'message') || mt('子任务失败')
+          }
+        }
+        return {
+          transcriptionUrl: pickString(poll.json, 'output', 'results', 0, 'transcription_url'),
+          failure: ''
+        }
+      }
+      if (lastStatus === 'FAILED' || lastStatus === 'CANCELED' || lastStatus === 'UNKNOWN') {
+        return { transcriptionUrl: '', failure: pickString(poll.json, 'output', 'message') || lastStatus }
+      }
+      return null
     }
-    await pause(ctx, ALIYUN_POLL_MS)
-  }
-  if (failure) throw new ProviderError(mt('DashScope 识别失败：{{failure}}', { failure }))
+  })
+  if (polled.failure) throw new ProviderError(mt('DashScope 识别失败：{{failure}}', { failure: polled.failure }))
+  const transcriptionUrl = polled.transcriptionUrl
   if (!transcriptionUrl) throw new ProviderError(mt('DashScope 任务成功但没有 transcription_url'))
 
   // The result document is a pre-signed object URL: it carries its own auth, so

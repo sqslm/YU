@@ -3,8 +3,21 @@ import https from 'node:https'
 import type { AddressInfo } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { allPresets } from '@shared/providerPresets'
-import type { ProviderSettings } from '@shared/types'
-import { ProviderError, joinUrl, parseHeaderLines, resetAsrRuntime, transcribe } from './asr'
+import type { ProviderProfile, ProviderSettings, Settings } from '@shared/types'
+import {
+  ProviderError,
+  asrDurationMs,
+  asrLatencyFor,
+  asrSampleCount,
+  asrUploadTimeoutMs,
+  joinUrl,
+  parseHeaderLines,
+  resetAsrLatency,
+  resetAsrRuntime,
+  transcribe,
+  warmAsr,
+  warmUrlFor
+} from './asr'
 import { SAMPLE_RATE, encodeWav } from '../audio/wav'
 
 // ---------------------------------------------------------------------------
@@ -253,6 +266,11 @@ describe('transcribe wire format', () => {
       expect(logs[0]).toMatch(
         /^\[perf\] asr bytes=\d+ ms=\d+ rtf=\d+\.\d{2} audio=\d+ms trim=\d+ms ttfb=\d+ms conn=(new|reuse) codec=audio\/wav$/
       )
+      // The two summary lines a slow take is diagnosed with, kept separate so the
+      // upload size is visible even when the request is the slow part.
+      expect(logs.some((line) => /^\[perf\] asr-upload bytes=\d+ codec=audio\/wav$/.test(line))).toBe(true)
+      expect(logs.some((line) => /^\[perf\] asr \d+ms$/.test(line))).toBe(true)
+      expect(logs.join('\n')).not.toMatch(/Bearer|sk-/)
     } finally {
       await server.close()
     }
@@ -544,6 +562,218 @@ describe('keep-warm', () => {
       expect(logs.some((line) => line.startsWith('[perf] asr warm'))).toBe(false)
       // The idle loop gives up instead of hammering a broken endpoint.
       await waitFor(() => calls >= 2)
+    } finally {
+      await server.close()
+    }
+  })
+})
+
+describe('attempt budget from the audio length', () => {
+  it('scales with the clip, with a floor under a cold handshake and a ceiling', () => {
+    // 6 s of slack plus 1.5 s per second of audio.
+    expect(asrUploadTimeoutMs(1_000)).toBe(10_000)
+    expect(asrUploadTimeoutMs(10_000)).toBe(21_000)
+    expect(asrUploadTimeoutMs(60_000)).toBe(45_000)
+  })
+
+  it('never gives a long dictation less than the old flat 25 s', () => {
+    // The old constant was 25 s for everything; the new curve has to stay above
+    // it for every clip long enough to have needed it, or this fix would trade a
+    // slow failover for a false timeout.
+    for (const ms of [13_000, 20_000, 30_000, 60_000, 300_000]) {
+      expect(asrUploadTimeoutMs(ms)).toBeGreaterThanOrEqual(25_000)
+    }
+    expect(asrUploadTimeoutMs(Number.NaN)).toBe(10_000)
+    expect(asrUploadTimeoutMs(-5)).toBe(10_000)
+  })
+
+  it('reads the duration from the wav header, then from the fixed wire format', () => {
+    expect(asrDurationMs(encodeWav(speech(2)))).toBe(2_000)
+    // A header-less buffer: 16 kHz mono PCM16 is 32 bytes per millisecond.
+    expect(asrDurationMs(new Uint8Array(44 + 3_200))).toBe(100)
+    expect(asrDurationMs(new Uint8Array(0))).toBe(0)
+  })
+
+  it('lets TYPELESS_ASR_TIMEOUT_MS and a per-call budget win over the estimate', async () => {
+    const server = await startServer(() => {
+      /* never respond */
+    })
+    try {
+      process.env.TYPELESS_ASR_TIMEOUT_MS = '250'
+      // A 30 s clip would otherwise be budgeted at 45 s.
+      const padded = new Int16Array(SAMPLE_RATE * 30)
+      padded.set(speech(1))
+      await expect(
+        transcribe(settings(server.baseUrl), { wav: encodeWav(padded) })
+      ).rejects.toThrow('ASR timed out after 250 ms')
+    } finally {
+      await server.close()
+    }
+  })
+})
+
+/** The slice of `Settings` this module reads: the ASR block and the profile chain. */
+function settingsOf(profiles: ProviderProfile[], asr: Partial<ProviderSettings> = {}): Settings {
+  return {
+    asr: { baseUrl: '', apiKey: '', model: 'whisper-1', ...asr },
+    profiles,
+    chains: { asr: profiles.map((profile) => profile.id), llm: [], multimodal: [] }
+  } as unknown as Settings
+}
+
+function profile(patch: Partial<ProviderProfile> = {}): ProviderProfile {
+  return {
+    id: 'p1',
+    name: 'cloud',
+    kind: 'asr',
+    preset: '',
+    baseUrl: '',
+    apiKey: 'sk-secret-key',
+    model: 'whisper-1',
+    enabled: true,
+    ...patch
+  }
+}
+
+describe('warmAsr (warm the connection on key-down)', () => {
+  it('does nothing when the chain is empty', async () => {
+    const logs: string[] = []
+    await warmAsr(settingsOf([]), (line) => logs.push(line))
+    expect(logs).toEqual([])
+  })
+
+  it('opens the connection with a HEAD: no audio, no key, no transcript', async () => {
+    const server = await startServer((_item, res) => json(res, { text: 'unused' }))
+    try {
+      const logs: string[] = []
+      await warmAsr(settingsOf([profile({ baseUrl: server.baseUrl })]), (line) => logs.push(line))
+
+      expect(server.captured).toHaveLength(1)
+      const warm = server.captured[0]
+      // A HEAD on the transcription endpoint is enough to resolve DNS and finish
+      // the TLS handshake, which is the 1-3 s a cloud take otherwise pays.
+      expect(warm.headers['content-length']).toBeUndefined()
+      expect(warm.headers.authorization).toBeUndefined()
+      expect(warm.fileBytes).toBe(0)
+      expect(warm.fields).toEqual({})
+      expect(logs).toHaveLength(1)
+      expect(logs[0]).toMatch(/^\[perf\] asr-warm kind=probe host=127\.0\.0\.1:\d+ ms=\d+$/)
+      expect(logs.join('\n')).not.toContain('sk-secret-key')
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('probes the https form of a wss endpoint, because it shares the TLS stack', () => {
+    expect(warmUrlFor('wss://iat-api.xfyun.cn/v2')).toBe('https://iat-api.xfyun.cn/v2')
+    expect(warmUrlFor('ws://127.0.0.1:8080/x')).toBe('http://127.0.0.1:8080/x')
+    expect(warmUrlFor('https://api.example.com/v1')).toBe('https://api.example.com/v1')
+    expect(warmUrlFor('')).toBeNull()
+    expect(warmUrlFor('not a url')).toBeNull()
+  })
+
+  it('uses the existing keep-warm round trip for a local OpenAI-shaped server', async () => {
+    // A local model's cost is the *load*, not the handshake, so the warm-up is the
+    // request that loads it — the same one the idle loop already sends.
+    process.env.TYPELESS_ASR_WARMUP = 'local'
+    const server = await startServer((item, res) => json(res, { text: item.fields.language ? 'take' : 'warm' }))
+    try {
+      const logs: string[] = []
+      await warmAsr(settingsOf([profile({ baseUrl: server.baseUrl })]), (line) => logs.push(line))
+      expect(server.captured).toHaveLength(1)
+      expect(server.captured[0].fields.language).toBeUndefined()
+      expect(server.captured[0].fileBytes).toBeLessThan(20_000) // the ~0.3 s clip
+      expect(logs[0]).toMatch(/^\[perf\] asr-warm kind=keepalive host=127\.0\.0\.1:\d+ ms=\d+$/)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('stays silent when the provider refuses the connection', async () => {
+    const logs: string[] = []
+    // Nothing listens on port 9: the warm-up must fail without surfacing anything.
+    await expect(
+      warmAsr(settingsOf([profile({ baseUrl: 'http://127.0.0.1:9/v1' })]), (line) => logs.push(line))
+    ).resolves.toBeUndefined()
+    expect(logs).toEqual([])
+  })
+})
+
+describe('one encode per take', () => {
+  it('prepares the same bytes once, however many profiles the chain tries', async () => {
+    const first = await startServer((_item, res) => json(res, { text: 'ok' }))
+    const second = await startServer((_item, res) => json(res, { text: 'ok' }))
+    try {
+      const padded = new Int16Array(SAMPLE_RATE * 3)
+      padded.set(speech(1), SAMPLE_RATE)
+      // One buffer for the whole take, exactly what `withFailover` hands each
+      // profile: the trim must be computed once and reused, not redone per profile.
+      const wav = encodeWav(padded)
+      await transcribe(settings(first.baseUrl), { wav })
+      await transcribe(settings(second.baseUrl), { wav })
+
+      expect(first.captured[0].fileBytes).toBeLessThan(wav.byteLength)
+      expect(first.captured[0].file?.equals(second.captured[0].file!)).toBe(true)
+    } finally {
+      await first.close()
+      await second.close()
+    }
+  })
+
+  it('re-prepares when the trim setting changes under the same buffer', async () => {
+    const server = await startServer((_item, res) => json(res, { text: 'ok' }))
+    try {
+      const padded = new Int16Array(SAMPLE_RATE * 3)
+      padded.set(speech(1), SAMPLE_RATE)
+      const wav = encodeWav(padded)
+      await transcribe(settings(server.baseUrl), { wav })
+      expect(server.captured[0].fileBytes).toBeLessThan(wav.byteLength)
+
+      process.env.TYPELESS_ASR_TRIM = '0'
+      await transcribe(settings(server.baseUrl), { wav })
+      // The cache is keyed per take *and* on the trim setting: a stale entry would
+      // upload a trimmed clip while the user asked for the original.
+      expect(server.captured[1].fileBytes).toBe(wav.byteLength)
+    } finally {
+      delete process.env.TYPELESS_ASR_TRIM
+      await server.close()
+    }
+  })
+})
+
+describe('measured latency attribution', () => {
+  it('records a profile only after it really answered, three times', async () => {
+    resetAsrLatency()
+    const server = await startServer((_item, res) => json(res, { text: 'ok' }))
+    try {
+      const cfg = settings(server.baseUrl)
+      for (let take = 0; take < 3; take++) {
+        await transcribe(cfg, { wav: encodeWav(speech()), profileId: 'p1' })
+        expect(asrSampleCount('p1')).toBe(take + 1)
+      }
+      expect(asrLatencyFor('p1')).not.toBeNull()
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('records nothing for a failed take or an unnamed profile', async () => {
+    resetAsrLatency()
+    const server = await startServer((_item, res) => json(res, { error: 'nope' }, 400))
+    try {
+      const cfg = settings(server.baseUrl)
+      await expect(transcribe(cfg, { wav: encodeWav(speech()), profileId: 'p2' })).rejects.toThrow(/HTTP 400/)
+      // A provider that failed spent the user's time; it must not look fast.
+      expect(asrSampleCount('p2')).toBe(0)
+
+      const healthy = await startServer((_item, res) => json(res, { text: 'ok' }))
+      try {
+        // No profile id (an older caller): nothing to attribute the take to.
+        await transcribe(settings(healthy.baseUrl), { wav: encodeWav(speech()) })
+        expect(asrSampleCount('')).toBe(0)
+      } finally {
+        await healthy.close()
+      }
     } finally {
       await server.close()
     }

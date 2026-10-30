@@ -269,8 +269,18 @@ describe('assemblyai', () => {
       json(res, { status: 'completed', text: ' 你好 ' })
     })
 
-    const text = await spec('assemblyai').run(context({ baseUrl: server.origin }), input({ language: 'zh' }))
+    const logs: string[] = []
+    const started = Date.now()
+    const text = await spec('assemblyai').run(context({ baseUrl: server.origin, logs }), input({ language: 'zh' }))
+    const elapsed = Date.now() - started
     expect(text).toBe('你好')
+
+    // One immediate status check plus one 200 ms backoff. The old cadence waited a
+    // flat 1.5 s *before* looking, which is the wait the user felt on every take.
+    expect(elapsed).toBeLessThan(1_000)
+    expect(logs.find((line) => line.startsWith('[perf] asr-poll '))).toMatch(
+      /^\[perf\] asr-poll attempts=2 wait=200ms( what=.+)?$/
+    )
 
     const upload = server.calls[0]
     expect(upload.path).toBe('/v2/upload')
@@ -288,6 +298,30 @@ describe('assemblyai', () => {
 
     const gets = server.calls.filter((call) => call.method === 'GET')
     expect(gets.map((call) => call.path)).toEqual(['/v2/transcript/job1', '/v2/transcript/job1'])
+  })
+
+  it('takes the answer from the first status check when the job is already done', async () => {
+    // The common case for a 2-4 s dictation: the job finished before the POST
+    // returned. No sleep at all must happen between submit and that first GET.
+    const server = await serve((call, res) => {
+      if (call.path === '/v2/upload') {
+        json(res, { upload_url: 'https://cdn.assemblyai.test/audio.wav' })
+        return
+      }
+      if (call.method === 'POST') {
+        json(res, { id: 'job-fast' })
+        return
+      }
+      json(res, { status: 'completed', text: '好了' })
+    })
+    const logs: string[] = []
+    const started = Date.now()
+    const text = await spec('assemblyai').run(context({ baseUrl: server.origin, logs }), input())
+    const elapsed = Date.now() - started
+    expect(text).toBe('好了')
+    // 1.5 s of the old fixed interval would dominate every other number here.
+    expect(elapsed).toBeLessThan(400)
+    expect(logs).toContain('[perf] asr-poll attempts=1 wait=0ms what=AssemblyAI 转写')
   })
 
   it('throws the job error field instead of polling until the budget ends', async () => {

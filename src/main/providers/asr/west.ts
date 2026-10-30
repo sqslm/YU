@@ -12,6 +12,7 @@
  */
 import { ProviderError } from '../providerError'
 import { egressFetch } from '../../net/egress'
+import { pollForResult, pollTimeoutError } from './poll'
 import {
   type AsrAdapterContext,
   type AsrAdapterInput,
@@ -25,14 +26,11 @@ import {
 } from './types'
 import { mt } from '@shared/mainI18n'
 
-/**
- * AssemblyAI, Gladia and Rev.ai use the same ballpark for a job that runs while
- * the user watches: poll often enough to feel responsive, but give up before the
- * take looks hung. Their documented worst case for a short clip is well under
- * two minutes.
- */
-const POLL_INTERVAL_MS = 1_500
-const POLL_BUDGET_MS = 120_000
+// AssemblyAI, Gladia, Rev.ai, Speechmatics and Replicate all hand back a job and
+// expect the caller to look at it. The cadence lives in `./poll.ts`: check once
+// immediately (a short clip is usually already done), then back off. The budget
+// for a job is unchanged — their documented worst case for a short clip is well
+// under two minutes.
 
 /** A poll is a tiny GET; taking longer than this means the socket, not the vendor. */
 const POLL_TIMEOUT_MS = 30_000
@@ -197,20 +195,15 @@ async function pollFor(
   what: string,
   check: () => Promise<string | null>
 ): Promise<string> {
-  const deadline = Date.now() + POLL_BUDGET_MS
-  for (;;) {
-    const text = await check()
-    if (text !== null) return text
-    if (Date.now() >= deadline) {
-      throw new ProviderError(
-        mt('{{what}}超过 {{seconds}} s 还没有结果', {
-          what,
-          seconds: Math.round(POLL_BUDGET_MS / 1000)
-        })
-      )
-    }
-    await pause(ctx, POLL_INTERVAL_MS)
-  }
+  // First look is immediate: the job a short dictation creates is usually
+  // finished before this line runs, and the old 1.5 s wait was paid on every take.
+  return pollForResult<string>({
+    attempt: check,
+    sleep: (ms) => pause(ctx, ms),
+    label: what,
+    log: ctx.log,
+    onTimeout: () => pollTimeoutError(what)
+  })
 }
 
 /**

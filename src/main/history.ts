@@ -86,6 +86,9 @@ export type HistoryAddInput = Pick<
   | 'transcript'
   | 'final'
   | 'durationMs'
+  // Not a fixed column: it rides along in the `extra` JSON, so old databases
+  // gain the field the moment the first new row is written (no migration).
+  | 'processingMs'
   | 'status'
   | 'alertKind'
   | 'attempts'

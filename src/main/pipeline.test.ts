@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BarAlert, BarState, HistoryEntry, Settings , ProviderProfile} from '@shared/types'
 import { DEFAULT_VOICE_COMMANDS } from '@shared/voiceCommands'
 import { mergeSettings } from '@shared/defaults'
+import { encodeWav } from '@shared/audio'
 import type { PipelineOptions } from './pipeline'
 import type { UiaSnapshot } from './uia/reader'
 
@@ -54,7 +55,11 @@ vi.mock('./foreground', () => ({
   appLabel: (_appName: string, title: string) => title,
   foregroundWindow: mocks.foregroundWindow
 }))
-vi.mock('./providers/asr', () => ({ transcribe: mocks.transcribe }))
+vi.mock('./providers/asr', async () => {
+  // Keep the real helpers (latency ordering, warm-up) and fake only the request.
+  const actual = await vi.importActual<typeof import('./providers/asr')>('./providers/asr')
+  return { ...actual, transcribe: mocks.transcribe }
+})
 vi.mock('./providers/llm', async () => {
   const actual = await vi.importActual<typeof import('./providers/llm')>('./providers/llm')
   return { ...actual, complete: mocks.complete }
@@ -523,8 +528,64 @@ describe('successful history only', () => {
     const done = pipeline.stop(); pipeline.audioStopped(); await done
     expect(entries).toHaveLength(1)
     expect(entries[0]).toMatchObject({ status: 'completed', final: '你好世界', promptName: expect.any(String) })
+    // The wait the history page shows is a real measurement, not a placeholder.
+    expect(entries[0].processingMs).toBeTypeOf('number')
+    expect(entries[0].processingMs).toBeGreaterThanOrEqual(0)
     expect(store.saveAudio).toHaveBeenCalledOnce()
     expect(onRecorded).toHaveBeenCalledOnce()
+  })
+
+  it('measures 用时 from letting go of the key to the finished task', async () => {
+    // A stubbed clock is the only way to assert the exact number: the real one
+    // would make this test read "0 ms" on a fast machine and prove nothing.
+    let clock = 1_700_000_000_000
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => clock)
+    try {
+      // The 2.4 s the model takes is inside the window the row must report.
+      mocks.transcribe.mockImplementation(async () => {
+        clock += 2400
+        return { text: '你好世界', model: 'whisper-1' }
+      })
+      const { pipeline, entries } = harness({})
+      pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+      const done = pipeline.stop(); pipeline.audioStopped(); await done
+      expect(entries).toHaveLength(1)
+      expect(entries[0].processingMs).toBe(2400)
+      // Duration is the speech, not the wait: the two must stay separate.
+      expect(entries[0].durationMs).toBeLessThan(1000)
+    } finally {
+      now.mockRestore()
+    }
+  })
+  it('does not carry a previous take’s clock into the next one', async () => {
+    const { pipeline, entries } = harness({})
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(entries).toHaveLength(1)
+    // A take filed its row, so the next press starts from zero again: a stored
+    // run token is not what keeps 用时 honest here, clearing the clock is.
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const again = pipeline.stop(); pipeline.audioStopped(); await again
+    expect(entries).toHaveLength(2)
+    for (const row of entries) {
+      expect(row.processingMs).toBeTypeOf('number')
+      expect(row.processingMs).toBeGreaterThanOrEqual(0)
+      expect(row.processingMs).toBeLessThan(60_000)
+    }
+  })
+  it('stamps a retried take with the wait the retry itself cost', async () => {
+    const { pipeline, store, entries } = harness({})
+    const failed = {
+      id: 'failed-1', createdAt: Date.now(), mode: 'dictation' as const,
+      transcript: '旧的原话', final: '', durationMs: 900, app: '', status: 'error' as const, error: 'ASR offline'
+    }
+    store.get.mockReturnValue(failed)
+    store.readAudio.mockResolvedValue(Buffer.from(encodeWav(tone(900))))
+    const started = await pipeline.retry('failed-1')
+    expect(started.ok).toBe(true)
+    await vi.waitFor(() => expect(entries.length).toBeGreaterThan(0))
+    expect(entries.at(-1)?.processingMs).toBeTypeOf('number')
+    expect(entries.at(-1)?.processingMs).toBeGreaterThanOrEqual(0)
   })
 })
 
@@ -855,18 +916,30 @@ describe('prompt label uses the request card', () => {
     pipeline.pushAudio(tone(900))
     const stopping = pipeline.stop(); pipeline.audioStopped(); await stopping
   }
-  it('shows Smart task during recording and recognition, then the actual card when polishing starts', async () => {
+  it('names the take 智能任务 only while smart routing is enabled', async () => {
+    const off = harness({})
+    off.pipeline.start('dictation')
+    expect(off.sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: undefined })
+    off.pipeline.cancel()
+    off.pipeline.audioStopped()
+    const on = harness({ voiceCommands: { ...DEFAULT_VOICE_COMMANDS, smartRouting: true } })
+    on.pipeline.start('dictation')
+    expect(on.sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '智能任务' })
+    on.pipeline.cancel()
+    on.pipeline.audioStopped()
+  })
+  it('shows no task label while routing is off, then the actual card when polishing starts', async () => {
     let recognized!: (value: { text: string }) => void, polished!: (value: string) => void
     mocks.transcribe.mockReturnValueOnce(new Promise(resolve => { recognized = resolve }))
     mocks.complete.mockReturnValueOnce(new Promise(resolve => { polished = resolve }))
     const { pipeline, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: false,
       mainPromptKind: 'polish', mainPromptCardId: 'manual' })
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '智能任务', promptName: undefined })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: undefined, promptName: undefined })
     pipeline.pushAudio(tone(900))
     const stopping = pipeline.stop(); pipeline.audioStopped()
     await vi.waitFor(() => expect(mocks.transcribe).toHaveBeenCalledOnce())
-    expect(sent.at(-1)).toMatchObject({ phase: 'working', taskLabel: '智能任务', promptName: undefined })
+    expect(sent.at(-1)).toMatchObject({ phase: 'working', taskLabel: undefined, promptName: undefined })
     expect(sent.every(state => !('promptName' in state) || !state.promptName)).toBe(true)
     recognized({ text: '你好' })
     await vi.waitFor(() => expect(mocks.complete).toHaveBeenCalledOnce())
@@ -884,7 +957,7 @@ describe('prompt label uses the request card', () => {
     const { pipeline, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: auto,
       mainPromptKind: 'polish', mainPromptCardId: 'manual', appRules: [{ id: 'rule', match, kind: 'ai' }] })
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined, taskLabel: '智能任务' })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined, taskLabel: undefined })
     expect(mocks.complete).not.toHaveBeenCalled()
     await finish(pipeline)
     expect(mocks.complete).toHaveBeenCalledOnce()
@@ -903,7 +976,7 @@ describe('prompt label uses the request card', () => {
     mocks.foregroundWindow.mockReturnValue({ title: '微信', className: 'WeChat', appName: '', pid: 2 })
     pipeline.pushAudio(tone(500))
     expect(mocks.foregroundWindow).toHaveBeenCalledTimes(reads)
-    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
+    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: undefined })
     await finish(pipeline)
     expect(mocks.complete.mock.calls[0][1].messages[0].content).toContain('CARD_CODE')
   })
@@ -911,7 +984,7 @@ describe('prompt label uses the request card', () => {
     const { pipeline, settings, sent, entries } = harness({ promptLibrary: library(), autoActivatePrompts: false,
       mainPromptKind: 'polish', mainPromptCardId: 'chat' })
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
+    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: undefined })
     settings.mainPromptCardId = 'manual'
     mocks.transcribe.mockImplementationOnce(async () => {
       Object.assign(settings.promptLibrary.cards.polish[1], { name: '随后修改的名字', content: 'LATER_EDIT' })
@@ -951,7 +1024,7 @@ describe('prompt label uses the request card', () => {
     const { pipeline, sent, entries } = harness({ promptLibrary: library(), pipelineMode: 'multimodal',
       polish: { ...mergeSettings({}).polish, enabled: false }, appRules: [{ id: 'r', match: 'code', kind: 'ai' }] })
     pipeline.start('dictation'); await finish(pipeline)
-    expect(sent.find(s => s.phase === 'recording')).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
+    expect(sent.find(s => s.phase === 'recording')).toMatchObject({ promptName: undefined, taskLabel: undefined })
     expect(sent.some(s => s.phase === 'working' && s.promptName === '代码开发')).toBe(true)
     expect(mocks.generateFromAudio.mock.calls[0][1]).toMatchObject({ prompt: expect.stringContaining('CARD_CODE'), temperature: 0.2 })
     expect(entries[0].promptName).toBe('代码开发')
@@ -968,7 +1041,7 @@ describe('prompt label uses the request card', () => {
     settings.polish.enabled = true
     settings.autoActivatePrompts = false; settings.mainPromptKind = 'polish'; settings.mainPromptCardId = 'manual'
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: '智能任务' })
+    expect(sent.at(-1)).toMatchObject({ promptName: undefined, taskLabel: undefined })
     pipeline.discard()
   })
   it('cannot overwrite the next task while an old context read finishes after cancellation', async () => {
@@ -984,7 +1057,7 @@ describe('prompt label uses the request card', () => {
     pipeline.start('dictation')
     release(null)
     expect(await old).toBeNull()
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined, taskLabel: '智能任务' })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', promptName: undefined, taskLabel: undefined })
     expect(mocks.transcribe).not.toHaveBeenCalled()
     expect(mocks.complete).not.toHaveBeenCalled()
     pipeline.discard()
@@ -1247,7 +1320,7 @@ describe('dedicated voice reminder capture', () => {
     const first = pipeline.stop(); pipeline.audioStopped(); await first
     expect(store.add).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
     pipeline.start('dictation'); pipeline.pushAudio(tone(1200))
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: '智能任务' })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', taskLabel: undefined })
     const second = pipeline.stop(); pipeline.audioStopped(); await second
     expect(mocks.insertText).toHaveBeenCalledOnce(); expect(onReminder).toHaveBeenCalledOnce()
   })
@@ -1386,7 +1459,7 @@ describe('opening phrase mode activation', () => {
     expect(entries[0]).toMatchObject({ mode: 'dictation', transcript: '今天一起吃饭' })
     expect(mocks.askAgent).not.toHaveBeenCalled()
     pipeline.start('dictation')
-    expect(sent.at(-1)).toMatchObject({ phase: 'recording', mode: 'dictation', taskLabel: '智能任务' })
+    expect(sent.at(-1)).toMatchObject({ phase: 'recording', mode: 'dictation', taskLabel: undefined })
     pipeline.cancel()
   })
   it('does not treat the beginning of a later sliding caption window as the beginning of the task', async () => {
@@ -1458,6 +1531,9 @@ describe('unified voice entry', () => {
     pipeline.start('dictation'); pipeline.pushAudio(tone(1000)); await pipeline.stop()
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(entries[0]).toMatchObject({ transcript: original, status: 'error' })
+    // A failed take still says how long the user waited for it.
+    expect(entries[0].processingMs).toBeTypeOf('number')
+    expect(entries[0].processingMs).toBeGreaterThanOrEqual(0)
   })
   it.each(['ai', 'polish', 'document', 'email', 'translate'] as const)('shares entity candidates with the %s card without replacing the original transcript or adding a model call', async kind => {
     const original = '使用库伯内提斯部署项目。'

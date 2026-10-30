@@ -11,6 +11,17 @@ function stamp(at: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
+/**
+ * 「2.4 秒」/「1 分 12 秒」 — the same shape the history page shows, so an exported
+ * file and the app cannot disagree about the same take.
+ */
+export function exportProcessingMs(ms: number): string {
+  const seconds = Math.max(0, ms) / 1000
+  if (seconds < 60) return mt('{{n}} 秒', { n: seconds.toFixed(1) })
+  const total = Math.round(seconds)
+  return mt('{{m}} 分 {{s}} 秒', { m: Math.floor(total / 60), s: total % 60 })
+}
+
 /** Export content, without local audio paths, provider credentials or sync bookkeeping. */
 export function formatHistoryExport(entries: readonly HistoryEntry[], format: NoteExportFormat): string {
   const md = format === 'markdown'
@@ -25,7 +36,11 @@ export function formatHistoryExport(entries: readonly HistoryEntry[], format: No
       `${mt('模式')}：${mt(modes[entry.mode])}`,
       ...(entry.app ? [`${mt('应用')}：${literal(entry.app)}`] : []),
       ...(entry.promptName ? [`${mt('卡片')}：${literal(entry.promptName)}`] : []),
-      `${mt('录音时长')}：${mt('{{n}} 秒', { n: Math.round(entry.durationMs / 1000) })}`
+      `${mt('录音时长')}：${mt('{{n}} 秒', { n: Math.round(entry.durationMs / 1000) })}`,
+      // Rows written before the clock existed simply have no line to print.
+      ...(typeof entry.processingMs === 'number'
+        ? [`${mt('任务用时')}：${exportProcessingMs(entry.processingMs)}`]
+        : [])
     ].map(line => md ? `- ${line}` : line).join('\n')
     const sources = (entry.sources ?? []).flatMap((source, index) => isSafeLink(source.url)
       ? [`${index + 1}. ${literal(source.title)} — ${literal(source.url)}`] : [])

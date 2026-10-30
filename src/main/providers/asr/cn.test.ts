@@ -83,13 +83,13 @@ function spec(id: string) {
 function context(
   baseUrl: string,
   fields: Record<string, string>,
-  options: { apiKey?: string; signal?: AbortSignal } = {}
+  options: { apiKey?: string; signal?: AbortSignal; logs?: string[] } = {}
 ): AsrAdapterContext {
   return {
     baseUrl,
     apiKey: options.apiKey ?? '',
     signal: options.signal ?? new AbortController().signal,
-    log: () => {},
+    log: (line) => options.logs?.push(line),
     fields
   }
 }
@@ -173,11 +173,21 @@ describe('aliyun (DashScope async recording)', () => {
     base = server.baseUrl
     try {
       const { bytes } = wav()
+      const logs: string[] = []
+      const started = Date.now()
       const text = await spec('aliyun').run(
-        context(base, { uploadUrl: `${base}/upload.wav`, workspace: 'ws-1' }, { apiKey: 'sk-test' }),
+        context(base, { uploadUrl: `${base}/upload.wav`, workspace: 'ws-1' }, { apiKey: 'sk-test', logs }),
         input(bytes, '', 'zh-CN')
       )
+      const elapsed = Date.now() - started
       expect(text).toBe('今天天气不错')
+
+      // DashScope is a job API: one immediate status check, then one 200 ms
+      // backoff. The old fixed 500 ms interval would have been paid twice here.
+      expect(elapsed).toBeLessThan(1_000)
+      expect(logs.find((line) => line.startsWith('[perf] asr-poll '))).toMatch(
+        /^\[perf\] asr-poll attempts=2 wait=200ms( what=.+)?$/
+      )
 
       const [put, submit] = server.seen
       expect(put.method).toBe('PUT')

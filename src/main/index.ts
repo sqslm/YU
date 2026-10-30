@@ -1792,6 +1792,9 @@ function registerIpc(): void {
   handle('app:copyText', (_event, text: unknown) => {
     if (typeof text === 'string' && text) clipboard.writeText(text)
   })
+  // The note editor's context menu needs the opposite direction; a file:// renderer
+  // has no clipboard grant, so the read goes through the main process too.
+  handle('app:readClipboard', (): string => clipboard.readText())
 
   handle('app:version', (): string => app.getVersion())
 

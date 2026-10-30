@@ -45,7 +45,7 @@ import {
 import type { HistoryStore } from './history'
 import { buildBarAlert, classifyError } from './errors'
 import { concatPcm, decodeWavPcm16, encodeWav, isSilent, pcmDurationMs, SAMPLE_RATE, trimSilencePcm } from './audio/wav'
-import { transcribe } from './providers/asr'
+import { orderAsrProfiles, transcribe, warmAsr } from './providers/asr'
 import { complete, unwrapModelText } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
 import { generateFromAudio } from './providers/gemini'
@@ -229,9 +229,28 @@ export class Pipeline {
   private captions: LiveCaptions | null = null
   private chunks: Int16Array[] = []
   private recording: { mode: Mode; startedAt: number; handsFree?: boolean; target: ForegroundInfo; purpose?: 'reminder' | 'assistant' } | null = null
+  /**
+   * When the user let go of the key — the start of the clock the history page
+   * calls 用时. 0 means "no release to count from" (before a take, after it was
+   * filed, or a synthetic `debugIngest`), which keeps old paths from writing a
+   * meaningless 0 into the row.
+   *
+   * A retried take sets it to the moment the retry started, so the number the
+   * user sees is the wait they actually had to sit through.
+   */
+  private takeReleaseAt = 0
   private takePurpose: 'reminder' | 'notes' | 'assistant' | undefined
   private takeVoiceCommands: VoiceCommandsSettings | null = null
   private takeSmartRouting = false
+  /**
+   * Whether this take started with smart routing on.
+   *
+   * `takeSmartRouting` is cleared in `stop()` (routing only happens while the take
+   * is live), but the pill keeps naming the take afterwards. The label therefore
+   * needs its own snapshot that lives until the take is finished — otherwise the
+   * bar falls back to 智能任务 even with the setting switched off.
+   */
+  private takeSmartLabel = false
   private stage: Stage = 'idle'
   /** Mode of the current or most recent take, for bar labels. */
   private stageMode: Mode = 'dictation'
@@ -432,7 +451,7 @@ export class Pipeline {
     const selected = this.takePrompt.get(this.runToken)
     const promptName = state.phase === 'working' && selected?.applied ? selected.card.name : undefined
     this.latestBarState = live
-      ? { ...state, promptName, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('任务处理') : state.mode === 'dictation' && !promptName ? mt('智能任务') : undefined }
+      ? { ...state, promptName, taskLabel: this.takePurpose === 'reminder' ? mt('快速提醒') : this.takePurpose === 'notes' ? mt('随记') : this.takePurpose === 'assistant' ? mt('任务处理') : this.takeSmartLabel && state.mode === 'dictation' && !promptName ? mt('智能任务') : undefined }
       : state
     this.barPhase = state.phase
     if (!win || win.isDestroyed()) return
@@ -694,6 +713,9 @@ export class Pipeline {
     this.runToken += 1
     this.chunks = []
     this.encoded = null
+    // A fresh press has not been released yet; the previous take's stop time
+    // must not leak into this one's 用时.
+    this.takeReleaseAt = 0
     const opened = options.target ?? foregroundWindow()
     this.takePurpose = options.purpose
     this.recording = { mode, startedAt: Date.now(), handsFree: options.handsFree, target: opened, purpose: options.purpose }
@@ -710,7 +732,11 @@ export class Pipeline {
     // `index.ts` routes `this.log` into it, so every later stage — ASR, routing,
     // insertion verification — lands in the same file without extra plumbing.
     const opening = this.getSettings()
+    // Warm the ASR endpoint while the user is still talking: the TLS handshake costs
+    // a round trip that used to land after the audio was already finished.
+    void warmAsr(opening, this.log)
     this.takeSmartRouting = mode === 'dictation' && !options.purpose && opening.voiceCommands.smartRouting
+    this.takeSmartLabel = this.takeSmartRouting
     this.tasks.set(this.runToken, createTask(options.viaWake ? 'wake' : 'voice', {
       appName: opened.appName || opened.className, windowHandle: opened.handle, processId: opened.pid,
       windowTitle: opened.title, appPath: opened.appPath, windowRect: opened.rect ?? undefined
@@ -792,6 +818,7 @@ export class Pipeline {
     if (!this.recording) return
     this.takeVoiceCommands = null
     this.takeSmartRouting = false
+    this.takeSmartLabel = false
     this.takePurpose = this.recording.purpose
     this.recording.mode = mode
     this.stageMode = mode
@@ -911,6 +938,11 @@ export class Pipeline {
     const active = this.recording
     if (!active) return null
     const submittedAt = Date.now()
+    // The key came up: this is the instant 用时 counts from, taken before the
+    // renderer is even asked to flush, so the grace window is not charged to
+    // the model. It doubles as the reminder anchor below on purpose — both
+    // mean "when the user stopped speaking".
+    this.takeReleaseAt = submittedAt
     this.stopCaptions()
     this.clearSessionCap()
     this.recording = null
@@ -971,6 +1003,7 @@ export class Pipeline {
     this.runToken += 1
     this.clearSessionCap()
     this.recording = null
+    this.takeReleaseAt = 0
     this.asrCheck = null
     this.wakeCapture = null
     this.stage = 'idle'
@@ -1007,6 +1040,9 @@ export class Pipeline {
 
     this.clearSessionCap()
     this.recording = null
+    // A cancelled take writes no row at all, so this clock has nobody to serve;
+    // leaving it set would let a later synthetic path report a bogus 用时.
+    this.takeReleaseAt = 0
     this.asrCheck = null
     this.wakeCapture = null
     this.stage = 'idle'
@@ -1139,9 +1175,22 @@ export class Pipeline {
     if (!decoded) return { ok: false, message: mt('音频格式无法解析') }
     await this.history.update(entry.id, { attempts: (entry.attempts ?? 0) + 1 })
     this.runToken += 1
+    // There is no key release in a retry — the wait starts now, so the row it
+    // writes still answers "how long did this one make me wait".
+    this.takeReleaseAt = Date.now()
     this.log(`[pipeline] retry ${entry.id} (${entry.mode})`)
     void this.complete(entry.mode, decoded.pcm, this.runToken)
     return { ok: true, message: mt('已重新处理') }
+  }
+
+  /**
+   * How long this take has been waiting since the user released the key.
+   *
+   * `undefined` when no release was recorded, which is the honest answer for old
+   * callers and is what keeps a `0` out of the history rows they write.
+   */
+  private takeProcessingMs(): number | undefined {
+    return this.takeReleaseAt > 0 ? Math.max(0, Date.now() - this.takeReleaseAt) : undefined
   }
 
   /**
@@ -1161,8 +1210,12 @@ export class Pipeline {
     const prompt = selected?.applied ? selected : null
     this.takePrompt.delete(token)
     const provider = this.usedProvider
+    const processingMs = this.takeProcessingMs()
     const entry = await this.history.add({
       ...input,
+      // Only stamped when a release (or a retry start) exists: a take that never
+      // had one must not claim it was instant.
+      ...(processingMs === undefined ? {} : { processingMs }),
       ...(prompt
         ? { promptKind: prompt.kind, promptId: prompt.card.id, promptName: prompt.card.name }
         : {}),
@@ -1664,7 +1717,10 @@ export class Pipeline {
         alert.actions = alert.actions?.filter(action => action.id !== 'retry')
         try {
           await this.history.add({ mode, transcript, final: '', durationMs: spokenMs, app: appLabel(target.appName, target.title),
-            route, status: 'error', error: message, wordCount: 0, focusedWindowTitle: target.title })
+            route, status: 'error', error: message, wordCount: 0, focusedWindowTitle: target.title,
+            // A failed take still answers the question the user asks himself
+            // while staring at the bar: how long did I wait for this.
+            processingMs: this.takeProcessingMs() })
           if (token !== this.runToken) return null
           if (this.getSettings().historyDurationSeconds !== 0) alert.text += '\n' + mt('原始转写已保留在历史记录中')
         } catch {
@@ -1720,6 +1776,8 @@ export class Pipeline {
     this.tasks.delete(token)
     if (token !== this.runToken) return
     this.stage = 'idle'
+    // The take is over: its clock must not be reused by whatever writes next.
+    this.takeReleaseAt = 0
     memoryService()?.resume('recording')
     this.asrCheck = null
     this.wakeCapture = null
@@ -1727,6 +1785,7 @@ export class Pipeline {
     this.takePurpose = undefined
     this.takeVoiceCommands = null
     this.takeSmartRouting = false
+    this.takeSmartLabel = false
     this.options.onActivity?.(false, false)
   }
 
@@ -1766,7 +1825,8 @@ export class Pipeline {
       }
     }
     progress(mt('转写中…'))
-    const chain = chainFor(settings, 'asr')
+    // Providers that measured fast recently go first; unknown ones keep the saved order.
+    const chain = orderAsrProfiles(chainFor(settings, 'asr'))
     const { value: asr, profile: asrProfile } = await withFailover(
       chain,
       (profile) =>
@@ -1783,6 +1843,8 @@ export class Pipeline {
             vendor: profile.vendor
           },
           { wav, language: settings.language || undefined, signal, encoded: this.encoded,
+            // Lets the latency memory attribute this attempt to the profile that ran it.
+            profileId: profile.id,
             entityContext: settings.speechEnhancement && task?.id === this.entityTaskId ? asrTermContext(this.takeEntityWords) : undefined }
         ),
       (profile, error, index) => {
@@ -2348,6 +2410,9 @@ export class Pipeline {
     if (!text) return
 
     const settings = this.getSettings()
+    // A follow-up has no key release to count from, so its own start is the
+    // clock — a local one, because the take field belongs to the voice take.
+    const startedAt = Date.now()
     this.abort?.abort()
     this.runToken += 1
     const token = this.runToken
@@ -2401,7 +2466,8 @@ export class Pipeline {
         durationMs: 0,
         app: appLabel(target.appName, target.title),
         sources: result.sources,
-        route: settings.pipelineMode
+        route: settings.pipelineMode,
+        processingMs: Math.max(0, Date.now() - startedAt)
       })
     } catch (err) {
       task.state = controller.signal.aborted ? 'cancelled' : 'failed'
@@ -2423,7 +2489,8 @@ export class Pipeline {
         error: message,
         status: 'error',
         alertKind: classified.kind,
-        route: settings.pipelineMode
+        route: settings.pipelineMode,
+        processingMs: Math.max(0, Date.now() - startedAt)
       })
     } finally {
       // Every early return above still has to close the per-take log, or the

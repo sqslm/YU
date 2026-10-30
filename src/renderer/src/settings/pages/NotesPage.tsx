@@ -1590,10 +1590,12 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 {markdownPreview ? <MarkdownEditor value={primaryDraft} onChange={next => editField(primaryField, next)}
                   noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
+                  onEditSource={() => { void flushNow(); setMarkdownPreview(false) }}
                   onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
                 <MarkdownSourceEditor ref={bodyInputRef} field={primaryField} value={primaryDraft}
                   onChange={next => editField(primaryField, next)}
                   disabled={attachmentBusy || retranscribingId === selected.id}
+                  onEditRich={() => { void flushNow(); setMarkdownPreview(true) }}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')} />}
                 <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
                   <Button data-notes-copy={primaryField} size="small" disabled={!primaryDraft.trim()} onClick={() => void copyDraft(primaryDraft)} sx={{ fontSize: 11.5 }}>

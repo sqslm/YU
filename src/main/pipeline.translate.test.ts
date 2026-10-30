@@ -37,7 +37,11 @@ vi.mock('./foreground', () => ({
   appLabel: (_appName: string, title: string) => title,
   foregroundWindow: () => ({ title: 'Editor', className: 'code', appName: '', pid: 0 })
 }))
-vi.mock('./providers/asr', () => ({ transcribe: mocks.transcribe }))
+vi.mock('./providers/asr', async () => {
+  // Keep the real helpers (latency ordering, warm-up) and fake only the request.
+  const actual = await vi.importActual<typeof import('./providers/asr')>('./providers/asr')
+  return { ...actual, transcribe: mocks.transcribe }
+})
 vi.mock('./providers/llm', async () => {
   const actual = await vi.importActual<typeof import('./providers/llm')>('./providers/llm')
   return { ...actual, complete: mocks.complete }

@@ -389,6 +389,8 @@ export interface TypelessApi {
     recordingClear(): Promise<number>
     /** Copy through the main process: a file:// renderer has no clipboard grant. */
     copyText(text: string): Promise<void>
+    /** Clipboard text, for the note editor's paste menu. Empty when unavailable. */
+    readClipboard(): Promise<string>
     /** Real app version, so the UI never hardcodes a build number. */
     version(): Promise<string>
     resources(): Promise<ResourceUsage>

@@ -1,10 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Box, useTheme } from '@mui/material'
 import { EditorSelection, EditorState, Compartment } from '@codemirror/state'
 import { EditorView, drawSelection, highlightActiveLine, keymap, placeholder as cmPlaceholder } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { markdown } from '@codemirror/lang-markdown'
+import { useTranslation } from 'react-i18next'
+import { NoteContextMenu, type NoteMenuEntry } from './NoteContextMenu'
 
 export interface MarkdownSourceHandle {
   focus(): void
@@ -21,6 +23,8 @@ export interface MarkdownSourceEditorProps {
   disabled?: boolean
   minHeight?: number | string
   placeholder?: string
+  /** Switch the page back to the rich editor (context menu → 切换到富文本编辑). */
+  onEditRich?: () => void
 }
 
 /** Trim a leading marker off one line, returning the lines it should become. */
@@ -118,9 +122,11 @@ function heading(view: EditorView, level: number): void {
  * indentation) and this file only adds Typora's markdown habits on top.
  */
 export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSourceEditorProps>(function MarkdownSourceEditor(
-  { value, onChange, field, disabled = false, minHeight = '42vh', placeholder = '' },
+  { value, onChange, field, disabled = false, minHeight = '42vh', placeholder = '', onEditRich },
   ref
 ) {
+  const { t } = useTranslation()
+  const [menu, setMenu] = useState<{ x: number; y: number; entries: NoteMenuEntry[] } | null>(null)
   const theme = useTheme()
   const host = useRef<HTMLDivElement | null>(null)
   const view = useRef<EditorView | null>(null)
@@ -144,6 +150,30 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
       current.focus()
     }
   }), [])
+
+  /** The markdown source view gets the same right-click menu, scoped to plain text. */
+  const openMenu = (event: React.MouseEvent): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    const current = view.current
+    if (!current || props.current.disabled) return
+    const range = current.state.selection.main
+    const selected = current.state.sliceDoc(range.from, range.to)
+    const copy = (text: string): void => { if (text) void window.api.app.copyText(text) }
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      entries: [
+        { id: 'cut', label: t('剪切'), shortcut: 'Ctrl+X', disabled: range.empty, run: () => { copy(selected); current.dispatch({ changes: { from: range.from, to: range.to, insert: '' } }) } },
+        { id: 'copy', label: t('复制'), shortcut: 'Ctrl+C', disabled: range.empty, run: () => copy(selected) },
+        { id: 'paste', label: t('粘贴'), shortcut: 'Ctrl+V', run: () => { void window.api.app.readClipboard().then((text) => { if (text) current.dispatch(current.state.replaceSelection(text)) }) } },
+        { id: 'select-all', label: t('全选'), shortcut: 'Ctrl+A', run: () => current.dispatch({ selection: { anchor: 0, head: current.state.doc.length } }) },
+        { divider: true },
+        { id: 'copy-all', label: t('复制全文 Markdown'), run: () => copy(current.state.doc.toString()) },
+        ...(onEditRich ? [{ id: 'edit-rich', label: t('切换到富文本编辑'), run: onEditRich }] : [])
+      ]
+    })
+  }
 
   useEffect(() => {
     const parent = host.current
@@ -218,8 +248,11 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
 
   return <Box
     ref={host}
+    onContextMenu={openMenu}
     data-notes-editor={field}
     data-notes-editor-mode="source"
     sx={{ minHeight, border: 1, borderColor: 'divider', borderRadius: 1, p: 2, bgcolor: 'transparent', '& .cm-editor': { minHeight, maxHeight: 'none' }, '& .cm-scroller': { overflow: 'visible' }, '& .cm-placeholder': { color: theme.palette.text.disabled } }}
-  />
+  >
+    <NoteContextMenu anchor={menu ? { x: menu.x, y: menu.y } : null} entries={menu?.entries ?? []} onClose={() => setMenu(null)} />
+  </Box>
 })

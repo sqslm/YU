@@ -1,9 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Box, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import { Crepe } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import { replaceAll } from '@milkdown/kit/utils'
+import { editorViewCtx } from '@milkdown/kit/core'
+import type { EditorView } from '@milkdown/kit/prose/view'
+import { AllSelection } from '@milkdown/kit/prose/state'
+import { setBlockType, toggleMark, wrapIn } from '@milkdown/kit/prose/commands'
 import { noteAttachmentUrl } from '@shared/noteAttachments'
+import { NoteContextMenu, type NoteMenuEntry } from './NoteContextMenu'
 
 export interface MarkdownEditorProps {
   value: string
@@ -14,6 +20,8 @@ export interface MarkdownEditorProps {
   minHeight?: number | string
   /** Read-only while a recording is still being transcribed. */
   disabled?: boolean
+  /** Switch the page to the raw markdown view (context menu → 编辑 Markdown 源码). */
+  onEditSource?: () => void
 }
 
 /** Pause after the last keystroke before the parent hears about a change. */
@@ -22,24 +30,25 @@ const EMIT_MS = 220
 /**
  * Typora-style writing surface for a note body.
  *
- * The hand-rolled block editor this replaces looked like Typora but behaved like a
- * form: every paragraph was its own textarea, Enter split strings instead of
- * paragraphs, and a whole list lived in one field. Milkdown (ProseMirror + remark)
- * is a real rich-text markdown editor: markdown is parsed on mount and serialised
- * back on every change, so typing behaves like a document — selections, IME,
- * undo/redo, nested lists, tables, code blocks and images come from the editor
- * instead of hand-written string surgery.
+ * Milkdown parses the note's markdown on mount and serialises it back on every
+ * change, so typing behaves like a document: IME, undo, nested lists, tables and
+ * code blocks come from the editor instead of hand-written string surgery.
+ * Markdown stays the storage format, so saving, exporting and the source view
+ * keep working unchanged.
  *
- * Markdown stays the storage format: `onChange` receives serialised markdown, so
- * saving, exporting, syncing and the source view keep working unchanged.
+ * What makes it feel like Typora rather than a web form is the part on top: a
+ * markdown-aware right-click menu for text and images, and a selection toolbar
+ * whose labels follow the app's UI language.
  */
-export function MarkdownEditor({ value, onChange, noteId, onAttachment, placeholder = '', minHeight = '42vh', disabled = false }: MarkdownEditorProps): JSX.Element {
+export function MarkdownEditor({ value, onChange, noteId, onAttachment, placeholder = '', minHeight = '42vh', disabled = false, onEditSource }: MarkdownEditorProps): JSX.Element {
   const theme = useTheme()
+  const { t } = useTranslation()
   const host = useRef<HTMLDivElement | null>(null)
   const crepe = useRef<Crepe | null>(null)
   /** The last markdown this component either loaded or emitted. */
   const known = useRef(value)
   const timer = useRef<number | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; entries: NoteMenuEntry[] } | null>(null)
   const props = useRef({ value, onChange, noteId, placeholder, disabled })
   props.current = { value, onChange, noteId, placeholder, disabled }
 
@@ -51,6 +60,114 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     if (markdown === known.current) return
     known.current = markdown
     props.current.onChange(markdown)
+  }
+
+  /** Runs a ProseMirror command on the live view. */
+  const withView = (run: (view: EditorView) => void): void => {
+    const instance = crepe.current
+    if (!instance) return
+    try {
+      instance.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        view.focus()
+        run(view)
+      })
+    } catch { /* the editor is being torn down with the note */ }
+  }
+
+  const selectionText = (view: EditorView): string =>
+    view.state.doc.textBetween(view.state.selection.from, view.state.selection.to, '\n', '\n')
+
+  const copy = (text: string): void => { if (text) void window.api.app.copyText(text) }
+
+  const paste = (): void => {
+    void window.api.app.readClipboard().then((text) => {
+      if (text) withView((view) => view.dispatch(view.state.tr.insertText(text)))
+    })
+  }
+
+  const openMenu = (event: React.MouseEvent): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    const image = (event.target as HTMLElement).closest('img')
+    if (image) {
+      let range: { from: number; to: number } | null = null
+      withView((view) => {
+        const pos = view.posAtDOM(image, 0)
+        const node = view.state.doc.nodeAt(pos)
+        if (node && node.type.name === 'image') range = { from: pos, to: pos + node.nodeSize }
+      })
+      const src = image.getAttribute('src') || ''
+      const relative = src.startsWith('attachments/') ? src : ''
+      setMenu({
+        x: event.clientX,
+        y: event.clientY,
+        entries: [
+          { id: 'image-copy-path', label: t('复制图片地址'), disabled: !relative, run: () => copy(relative) },
+          { id: 'image-reveal', label: t('在文件夹中显示'), disabled: !relative, run: () => { if (relative) onAttachment(relative) } },
+          { divider: true },
+          { id: 'image-delete', label: t('删除图片'), disabled: !range, run: () => withView((view) => { if (range) view.dispatch(view.state.tr.delete(range.from, range.to)) }) }
+        ]
+      })
+      return
+    }
+    const block = (name: string): ((view: EditorView) => void) => (view) => {
+      const node = view.state.schema.nodes[name]
+      if (!node) return
+      setBlockType(node)(view.state, view.dispatch, view)
+    }
+    const heading = (level: number): ((view: EditorView) => void) => (view) => {
+      const node = view.state.schema.nodes.heading
+      if (!node) return
+      setBlockType(node, { level })(view.state, view.dispatch, view)
+    }
+    const wrap = (name: string): ((view: EditorView) => void) => (view) => {
+      const node = view.state.schema.nodes[name]
+      if (!node) return
+      wrapIn(node)(view.state, view.dispatch, view)
+    }
+    const mark = (name: string): ((view: EditorView) => void) => (view) => {
+      const type = view.state.schema.marks[name]
+      if (!type) return
+      toggleMark(type)(view.state, view.dispatch, view)
+    }
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      entries: [
+        { id: 'cut', label: t('剪切'), shortcut: 'Ctrl+X', run: () => withView((view) => { copy(selectionText(view)); view.dispatch(view.state.tr.deleteSelection()) }) },
+        { id: 'copy', label: t('复制'), shortcut: 'Ctrl+C', run: () => withView((view) => copy(selectionText(view))) },
+        { id: 'paste', label: t('粘贴'), shortcut: 'Ctrl+V', run: paste },
+        { id: 'select-all', label: t('全选'), shortcut: 'Ctrl+A', run: () => withView((view) => view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)))) },
+        { divider: true },
+        { id: 'bold', label: t('加粗'), shortcut: 'Ctrl+B', run: () => withView(mark('strong')) },
+        { id: 'italic', label: t('斜体'), shortcut: 'Ctrl+I', run: () => withView(mark('em')) },
+        { id: 'strike', label: t('删除线'), run: () => withView(mark('strikethrough')) },
+        { id: 'code', label: t('行内代码'), shortcut: 'Ctrl+`', run: () => withView(mark('inlineCode')) },
+        { divider: true },
+        { id: 'h1', label: t('标题 1'), shortcut: 'Ctrl+1', run: () => withView(heading(1)) },
+        { id: 'h2', label: t('标题 2'), shortcut: 'Ctrl+2', run: () => withView(heading(2)) },
+        { id: 'h3', label: t('标题 3'), shortcut: 'Ctrl+3', run: () => withView(heading(3)) },
+        { id: 'paragraph', label: t('正文'), shortcut: 'Ctrl+0', run: () => withView(block('paragraph')) },
+        { id: 'quote', label: t('引用'), run: () => withView(wrap('blockquote')) },
+        { id: 'bullet', label: t('无序列表'), run: () => withView(wrap('bullet_list')) },
+        { id: 'ordered', label: t('有序列表'), run: () => withView(wrap('ordered_list')) },
+        { id: 'code-block', label: t('代码块'), run: () => withView(block('code_block')) },
+        { id: 'rule', label: t('分隔线'), run: () => withView((view) => {
+          const rule = view.state.schema.nodes.hr
+          if (rule) view.dispatch(view.state.tr.replaceSelectionWith(rule.create()))
+        }) },
+        { divider: true },
+        { id: 'clear', label: t('清除格式'), run: () => withView((view) => {
+          const paragraph = view.state.schema.nodes.paragraph
+          if (paragraph) setBlockType(paragraph)(view.state, view.dispatch, view)
+          const { from, to } = view.state.selection
+          view.dispatch(view.state.tr.removeMark(from, to))
+        }) },
+        { id: 'copy-markdown', label: t('复制全文 Markdown'), run: () => copy(crepe.current?.getMarkdown() ?? '') },
+        ...(onEditSource ? [{ id: 'edit-source', label: t('编辑 Markdown 源码'), run: () => { flush(); onEditSource() } }] : [])
+      ]
+    })
   }
 
   useEffect(() => {
@@ -74,6 +191,17 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       },
       featureConfigs: {
         [Crepe.Feature.Placeholder]: { text: props.current.placeholder },
+        // The selection toolbar ships English labels; they must follow the UI language
+        // like every other string the app shows.
+        [Crepe.Feature.Toolbar]: {
+          boldLabel: t('加粗'),
+          italicLabel: t('斜体'),
+          strikethroughLabel: t('删除线'),
+          codeLabel: t('行内代码'),
+          linkLabel: t('链接'),
+          latexLabel: t('公式'),
+          aiLabel: t('AI 改写')
+        },
         [Crepe.Feature.ImageBlock]: {
           onUpload: upload,
           blockOnUpload: upload,
@@ -105,6 +233,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     }
     // One editor per note: switching notes remounts instead of reconciling two
     // documents, which is what keeps undo history honest.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId])
 
   // An outside writer (re-transcription, a fresh fetch) replaces the document.
@@ -121,15 +250,12 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     try { instance.setReadonly(disabled) } catch { /* created before the flag applied */ }
   }, [disabled])
 
-  // `onAttachment` stays part of the contract: the page uses it for its own
-  // attachment button, and image links inside the note are opened by the browser.
-  void onAttachment
-
   return (
     <Box
       ref={host}
       data-notes-markdown
       data-notes-editor-mode="rich"
+      onContextMenu={openMenu}
       sx={{
         minHeight,
         p: 0,
@@ -173,8 +299,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         '& .milkdown .ProseMirror h4, & .milkdown .ProseMirror h5, & .milkdown .ProseMirror h6': { fontSize: 16, lineHeight: 1.5, mt: 1.5, mb: 0.6 },
         '& .milkdown .ProseMirror p': { my: 0.85 },
         // Crepe paints list bullets with `--crepe-color-outline` (the divider colour),
-        // which all but disappears on a dark page. Text-secondary keeps markers legible
-        // without making them loud.
+        // which all but disappears on a dark page.
         '& .milkdown .milkdown-list-item-block li .label-wrapper': { color: theme.palette.text.secondary, height: 26 },
         '& .milkdown .milkdown-list-item-block li .label-wrapper svg': { fill: theme.palette.text.secondary },
         '& .milkdown .milkdown-list-item-block li': { gap: '2px' },
@@ -191,10 +316,17 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         '& .milkdown .ProseMirror th, & .milkdown .ProseMirror td': { border: '1px solid', borderColor: theme.palette.divider, p: 1, textAlign: 'left' },
         '& .milkdown .ProseMirror img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
         '& .milkdown .ProseMirror a': { color: theme.palette.primary.main },
-        // The floating toolbar and block handle must not paint over the page chrome.
-        '& .milkdown .milkdown-toolbar': { zIndex: 4 },
+        // The selection toolbar drew its icons with the divider colour — the "all grey,
+        // looks disabled" report — so icons use the body's secondary text colour and the
+        // active state keeps the accent.
+        '& .milkdown .milkdown-toolbar': { zIndex: 4, bgcolor: theme.palette.background.paper, border: '1px solid', borderColor: theme.palette.divider },
+        '& .milkdown .milkdown-toolbar .toolbar-item svg': { color: theme.palette.text.secondary, fill: theme.palette.text.secondary },
+        '& .milkdown .milkdown-toolbar .toolbar-item:hover svg': { color: theme.palette.text.primary, fill: theme.palette.text.primary },
+        '& .milkdown .milkdown-toolbar .toolbar-item.active svg': { color: theme.palette.primary.main, fill: theme.palette.primary.main },
         '& .milkdown .milkdown-block-handle': { zIndex: 4 }
       }}
-    />
+    >
+      <NoteContextMenu anchor={menu ? { x: menu.x, y: menu.y } : null} entries={menu?.entries ?? []} onClose={() => setMenu(null)} />
+    </Box>
   )
 }

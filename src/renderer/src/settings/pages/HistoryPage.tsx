@@ -108,6 +108,38 @@ function timeLabel(ts: number): string {
 }
 
 /**
+ * 「2.4 秒」/「1 分 12 秒」 — the span alone, no prefix.
+ *
+ * One decimal under a minute on purpose: the interesting range for a polished
+ * take is 0.8–5 s, and rounding to whole seconds would erase exactly the
+ * differences the user can feel.
+ */
+export function processingSeconds(processingMs: number): string {
+  const seconds = Math.max(0, processingMs) / 1000
+  if (seconds < 60) return i18n.t('{{n}} 秒', { n: seconds.toFixed(1) })
+  const total = Math.round(seconds)
+  return i18n.t('{{m}} 分 {{s}} 秒', { m: Math.floor(total / 60), s: total % 60 })
+}
+
+/**
+ * Row caption: how long this take ran after the key came up.
+ *
+ * `null` for rows written before the clock existed (and for takes that never had
+ * a release): an old record must keep its old width instead of printing a 0 that
+ * would read as a measurement.
+ */
+export function processingLabel(processingMs?: number): string | null {
+  if (typeof processingMs !== 'number' || !Number.isFinite(processingMs) || processingMs < 0) return null
+  return i18n.t('用时 {{value}}', { value: processingSeconds(processingMs) })
+}
+
+/** Hover text: names both ends of the clock, so the number cannot be misread. */
+export function processingNote(processingMs?: number): string | null {
+  if (typeof processingMs !== 'number' || !Number.isFinite(processingMs) || processingMs < 0) return null
+  return i18n.t('任务用时 {{value}}（录音结束 → 完成）', { value: processingSeconds(processingMs) })
+}
+
+/**
  * Per-row banner for the result of the last action that talked to main. A
  * failed retry must be readable ("重试没有开始：正在处理上一条") instead of the
  * button silently doing nothing.
@@ -845,6 +877,9 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
               // Header captions live in historyView so the wording is testable.
               const cardCaption = cardLabel(entry)
               const cardRecorded = hasCardName(entry)
+              // How long this task took after the key came up: ASR, routing, the
+              // model, search and insertion all happen inside this number.
+              const processing = processingLabel(entry.processingMs)
               return (
                 <Box
                   key={entry.id}
@@ -895,6 +930,25 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                       >
                         {modeLabel(entry.mode)}
                       </Typography>
+                      {/* 录音结束 → 任务完成。Tabular digits keep the column steady
+                          while scanning rows, and the hover text spells out both
+                          ends so "2.4 秒" cannot be read as the recording length.
+                          Rows from before the clock existed render nothing. */}
+                      {processing && (
+                        <Typography
+                          noWrap
+                          title={processingNote(entry.processingMs) ?? undefined}
+                          data-history-processing-ms={entry.processingMs}
+                          sx={{
+                            fontSize: 10.5,
+                            fontVariantNumeric: 'tabular-nums',
+                            color: 'text.disabled',
+                            flexShrink: 0
+                          }}
+                        >
+                          {processing}
+                        </Typography>
+                      )}
                       {/* Which card shaped this text — the answer to "why did this
                           one come out like that". Hover names the kind and the id so
                           a surprising result can be traced without opening logs. A

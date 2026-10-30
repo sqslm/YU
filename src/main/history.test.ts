@@ -335,6 +335,45 @@ describe('HistoryStore entries', () => {
   })
 })
 
+describe('task processing time (录音结束 → 完成)', () => {
+  // `processingMs` is not a fixed column: it rides in the `extra` JSON. These two
+  // tests are the whole migration story — a new row keeps its number, an old row
+  // simply has nothing, and neither case needs a schema change.
+  it('round trips the wait after the recording ended', async () => {
+    const store = makeStore()
+    await store.setRetention(-1)
+    await store.load()
+
+    const added = await store.add({
+      mode: 'dictation',
+      transcript: '帮我润色一下',
+      final: '帮我润色一下。',
+      durationMs: 1800,
+      processingMs: 2400
+    })
+
+    expect(added.processingMs).toBe(2400)
+    const reloaded = makeStore()
+    await reloaded.load()
+    expect(reloaded.list()[0]?.processingMs).toBe(2400)
+    // The recording length is a different number and must not be overwritten.
+    expect(reloaded.list()[0]?.durationMs).toBe(1800)
+  })
+
+  it('leaves rows written before the clock existed with no value to show', async () => {
+    const store = makeStore()
+    await store.setRetention(-1)
+    await store.load()
+    store.migrateFrom([entry('legacy', Date.now())])
+
+    const reloaded = makeStore()
+    await reloaded.load()
+    const [first] = reloaded.list()
+    expect(first?.id).toBe('legacy')
+    expect(first?.processingMs).toBeUndefined()
+  })
+})
+
 describe('provenance survives the store', () => {
   // The card and the provider were passed to `add()` from the first version of
   // REQ-21 and silently dropped by the field whitelist, so every row claimed

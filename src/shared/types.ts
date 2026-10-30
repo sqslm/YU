@@ -787,6 +787,15 @@ export interface HistoryEntry {
   transcript: string
   final: string
   durationMs: number
+  /**
+   * From ending the recording to this task actually being done: ASR, routing,
+   * the model call, search and tools, insertion — everything the user waits for
+   * after letting go of the key.
+   *
+   * Absent on rows written before this existed, and on takes that never had a
+   * release (debug ingest). A retried take counts from the retry it started.
+   */
+  processingMs?: number
   /** Foreground window title that received the text. */
   app: string
   error?: string
