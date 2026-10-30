@@ -35,6 +35,7 @@ import {
   formatToday
 } from '@shared/prompts'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
+import { stripSourceTail } from '@shared/sourceText'
 import { adaptChatBody, chatPath, complete } from './providers/llm'
 import { joinUrl, parseHeaderLines } from './providers/asr'
 import { isWeatherQuery } from './providers/weather'
@@ -387,15 +388,17 @@ export function dedupeSources(results: SearchResult[]): SearchResult[] {
 }
 
 /**
- * Removes the markdown `## 来源` list `appendSources` appended to an answer.
+ * Removes the source list an answer carries in its own text.
  *
- * Surfaces that render sources as their own section (the chat page, the answer card)
- * would otherwise print the same list twice: once as body text and once as cards.
- * Only the appended block goes — the caller keeps the answer's own prose untouched.
+ * Two producers write one: `appendSources` below, and the model itself — the ask
+ * prompt used to require a trailing `## 来源` list, so older answers still have
+ * one with whatever heading level or colon form the model felt like. Surfaces that
+ * render sources as their own section (the chat page, the answer card) would then
+ * print the same list twice. `stripSourceTail` handles both shapes and leaves real
+ * prose alone, so it can run on every answer.
  */
 export function stripAppendedSources(text: string): string {
-  const match = /\n{2,}##\s*来源\s*\n/.exec(text)
-  return match ? text.slice(0, match.index).trimEnd() : text
+  return stripSourceTail(text)
 }
 
 /**

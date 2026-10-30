@@ -33,7 +33,7 @@ export const HISTORY_RETENTIONS = [-1, 0, 86_400, 604_800, 2_592_000, 31_536_000
 
 export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   speechEnhancement: false,
-  memory: { enabled: false, autoLearn: true },
+  memory: { enabled: false, autoLearn: true, profileId: null, effort: 'high' },
   hotkeys: {
     enabled: true,
     // Mirrors the vendor defaults discovered on disk so muscle memory carries
@@ -112,6 +112,12 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
     endpoint: '',
     maxResults: 5,
     decideWithModel: true
+  },
+  network: {
+    // Follow the OS proxy by default: that is what the user already configured for
+    // the rest of the machine, and it is exactly the case that used to fail.
+    mode: 'system',
+    proxyUrl: ''
   },
   localAsr: {
     enabled: false,
@@ -235,12 +241,24 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     ...input,
     version: SETTINGS_VERSION,
     speechEnhancement: input.speechEnhancement === true,
-    memory: { enabled: input.memory?.enabled === true, autoLearn: input.memory?.autoLearn !== false },
+    memory: {
+      enabled: input.memory?.enabled === true,
+      autoLearn: input.memory?.autoLearn !== false,
+      // A pinned extraction model survives reloads; a missing/blank id means "follow
+      // the first LLM profile", which the memory host resolves at call time.
+      profileId: typeof input.memory?.profileId === 'string' && input.memory.profileId.trim() ? input.memory.profileId.trim() : null,
+      // Thinking on by default: extraction quality is what makes the notes worth keeping.
+      effort: typeof input.memory?.effort === 'string' ? input.memory.effort.trim() : 'high'
+    },
     hotkeys: { ...base.hotkeys, ...(input.hotkeys ?? {}) },
     asr: { ...base.asr, ...(input.asr ?? {}) },
     polish: { ...base.polish, ...(input.polish ?? {}) },
     multimodal: { ...base.multimodal, ...(input.multimodal ?? {}) },
     search: { ...base.search, ...(input.search ?? {}) },
+    network: {
+      mode: input.network?.mode === 'direct' || input.network?.mode === 'custom' ? input.network.mode : 'system',
+      proxyUrl: typeof input.network?.proxyUrl === 'string' ? input.network.proxyUrl.trim().slice(0, 200) : ''
+    },
     calendar: { ...base.calendar, ...(input.calendar ?? {}) },
     briefing: { ...base.briefing, ...(input.briefing ?? {}) },
     tts: { ...base.tts, ...(input.tts ?? {}) }

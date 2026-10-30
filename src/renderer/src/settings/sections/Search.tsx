@@ -1,7 +1,8 @@
 import { PagedList } from '../Pagination'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
-import type { SearchConnection, SearchProbeResult, SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
+import type { NetworkSettings, SearchConnection, SearchProbeResult, SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
+import type { EgressDiagnosis } from '@shared/network'
 import {
   SEARCH_PROVIDER_CAVEAT,
   SEARCH_PROVIDER_ENDPOINT_HINT,
@@ -22,6 +23,7 @@ import {
   SettingsHint,
   SettingsRow,
   controlSx,
+  wideControlSx,
 } from './General'
 import i18n from '../../i18n'
 
@@ -63,8 +65,39 @@ export function endpointHelperText(provider: SearchProvider, endpoint: string): 
   return i18n.t('必填：填好这一项后才能检索')
 }
 
+/**
+ * What Chromium is actually running with, in words the page can show.
+ *
+ * Kept separate from the component so the mapping stays assertable without a
+ * DOM, and so "custom but invalid" is visibly *not* reported as custom.
+ */
+export function effectiveModeLabel(mode: EgressDiagnosis['effective']): string {
+  if (mode === 'fixed_servers') return i18n.t('自定义代理')
+  if (mode === 'direct') return i18n.t('直连')
+  return i18n.t('跟随系统')
+}
+
 export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
   const search = settings.search
+  const network = settings.network
+  /**
+   * The proxy address is typed, not saved on every keystroke: a half-typed
+   * `http://127.0.0.1:78` would be pushed into Chromium and break every request
+   * for as long as it takes to finish the port.
+   */
+  const [proxyDraft, setProxyDraft] = useState(network.proxyUrl)
+  useEffect(() => { setProxyDraft(network.proxyUrl) }, [network.proxyUrl])
+  const [networkCheck, setNetworkCheck] = useState<{ busy: boolean; report?: EgressDiagnosis; error?: string }>({ busy: false })
+  const updateNetwork = (delta: Partial<NetworkSettings>): void => patch({ network: { ...network, ...delta } })
+  const checkNetwork = async (): Promise<void> => {
+    if (networkCheck.busy) return
+    setNetworkCheck({ busy: true })
+    try {
+      setNetworkCheck({ busy: false, report: await window.api.net.diagnose() })
+    } catch (error) {
+      setNetworkCheck({ busy: false, error: String(error) })
+    }
+  }
   const [editing, setEditing] = useState<SearchConnection | null>(null)
   const [probe, setProbe] = useState<{ id: string; input: string; busy: boolean; result?: SearchProbeResult } | null>(null)
   const probeInput = (connection: SearchConnection): string => JSON.stringify([connection.provider, connection.apiKey, connection.endpoint])
@@ -284,6 +317,69 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
           {i18n.t('新闻汇总会合并多次检索并去重；来源区显示实际覆盖范围。检索失败会明确标注，不会当作已联网回答。')}
         </SettingsHint>
       </SettingsGroup>
+      {/*
+        Network egress. The app used to speak to the internet with Node's fetch,
+        which ignores the Windows proxy: with Clash Verge's TUN off, every search
+        went direct and timed out. Chromium's stack does read the system proxy and
+        PAC, so "follow the system" is the default, and the custom slot exists for
+        a proxy that was never written into the OS settings.
+      */}
+      <SettingsGroup icon={<IconGlobe />} title={i18n.t('网络代理')}>
+        <SettingsRow
+          label={i18n.t('代理模式')}
+          description={i18n.t('「跟随系统」读取 Windows 的系统代理与 PAC；Clash Verge 关掉 TUN 之后，只有这一层还能把请求送出去。')}
+        >
+          <TextField
+            select
+            sx={controlSx}
+            value={network.mode}
+            data-network-mode
+            onChange={(event) => updateNetwork({ mode: event.target.value as NetworkSettings['mode'] })}
+          >
+            <MenuItem value="system">{i18n.t('跟随系统（推荐）')}</MenuItem>
+            <MenuItem value="direct">{i18n.t('直连')}</MenuItem>
+            <MenuItem value="custom">{i18n.t('自定义')}</MenuItem>
+          </TextField>
+        </SettingsRow>
+        <SettingsRow
+          label={i18n.t('代理地址')}
+          description={i18n.t('仅「自定义」生效，形如 http://127.0.0.1:7897（也认 socks5://127.0.0.1:1080）；失焦保存。')}
+        >
+          <TextField
+            size="small"
+            sx={wideControlSx}
+            value={proxyDraft}
+            placeholder="http://127.0.0.1:7897"
+            data-network-proxy
+            disabled={network.mode !== 'custom'}
+            onChange={(event) => setProxyDraft(event.target.value)}
+            // Saved on blur, not per keystroke: a half-typed port would be pushed
+            // into the session and break every request in the meantime.
+            onBlur={() => {
+              const next = proxyDraft.trim()
+              if (next !== network.proxyUrl) updateNetwork({ proxyUrl: next })
+            }}
+            onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur() }}
+          />
+        </SettingsRow>
+        <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Button variant="outlined" size="small" data-network-check disabled={networkCheck.busy} onClick={() => void checkNetwork()}>
+            {networkCheck.busy ? i18n.t('正在检查…') : i18n.t('检查网络')}
+          </Button>
+          <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+            {i18n.t('用真实请求确认出口：解析到的代理 + 各站点连通性。')}
+          </Typography>
+        </Box>
+        {networkCheck.error && (
+          <Typography role="status" data-network-error sx={{ px: 2, pb: 1.5, fontSize: 11.5, color: 'error.main', overflowWrap: 'anywhere' }}>
+            {i18n.t('检查失败：{{message}}', { message: networkCheck.error })}
+          </Typography>
+        )}
+        {networkCheck.report && <NetworkReport report={networkCheck.report} />}
+        <SettingsHint>
+          {i18n.t('TUN 关掉后只有系统代理还在：应用据此跟随系统代理；代理没写进系统设置时，选「自定义」并填端口即可。')}
+        </SettingsHint>
+      </SettingsGroup>
       <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="sm">
         <DialogTitle>{i18n.t('搜索连接')}</DialogTitle>
         {editing && <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
@@ -308,5 +404,52 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
         </DialogActions>
       </Dialog>
     </Stack>
+  )
+}
+
+/**
+ * The 「检查网络」 answer: what the proxy resolves to, then one line per probe.
+ *
+ * The probe list is the evidence a support answer needs — "DIRECT" plus a failed
+ * Bing probe is the Clash-TUN-off signature, while "PROXY 127.0.0.1:7897" with
+ * everything green means the problem is elsewhere.
+ */
+function NetworkReport({ report }: { report: EgressDiagnosis }): JSX.Element {
+  const envLine = [report.envProxy.https, report.envProxy.http].filter(Boolean).join(' / ')
+  return (
+    <Box data-network-result data-network-mode={report.mode} sx={{ px: 2, pb: 1.5, display: 'grid', gap: 0.5 }}>
+      <Typography
+        data-network-resolved
+        sx={{ fontSize: 11.5, fontFamily: 'monospace', color: 'text.primary', overflowWrap: 'anywhere' }}
+      >
+        {i18n.t('解析结果：{{resolved}}', { resolved: report.resolved })}
+      </Typography>
+      <Typography data-network-effective sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+        {i18n.t('生效模式：{{mode}}', { mode: effectiveModeLabel(report.effective) })}
+      </Typography>
+      <Typography data-network-env sx={{ fontSize: 11.5, color: 'text.secondary', overflowWrap: 'anywhere' }}>
+        {envLine
+          ? i18n.t('环境变量代理：{{value}}', { value: envLine })
+          : i18n.t('环境变量代理：无（GUI 进程不继承终端的代理变量）')}
+      </Typography>
+      {report.probes.map((probe) => (
+        <Typography
+          key={`${probe.label}:${probe.url}`}
+          data-network-probe={probe.label}
+          data-network-ok={probe.ok ? 'true' : 'false'}
+          sx={{ fontSize: 11.5, color: probe.ok ? 'text.secondary' : 'error.main', overflowWrap: 'anywhere' }}
+        >
+          {probe.label} ·{' '}
+          {probe.ok
+            ? i18n.t('已连通 · HTTP {{status}} · {{ms}} ms', { status: probe.status ?? '—', ms: probe.ms })
+            : i18n.t('失败 · {{ms}} ms · {{error}}', { ms: probe.ms, error: probe.error ?? '' })}
+        </Typography>
+      ))}
+      {report.advice.map((line) => (
+        <Typography key={line} data-network-advice sx={{ fontSize: 11.5, color: 'warning.main', overflowWrap: 'anywhere' }}>
+          {line}
+        </Typography>
+      ))}
+    </Box>
   )
 }

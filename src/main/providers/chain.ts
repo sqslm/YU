@@ -7,7 +7,7 @@
  * and the bar says "add one" instead of failing later with a connection error
  * nobody can trace back to a missing setting.
  */
-import type { ProviderKind, ProviderProfile, Settings } from '@shared/types'
+import type { ProviderKind, ProviderProfile, ProviderSettings, Settings } from '@shared/types'
 import { mt } from '@shared/mainI18n'
 
 /**
@@ -36,6 +36,32 @@ export function chainFor(settings: Settings, kind: ProviderKind): ProviderProfil
     if (profile.enabled && !seen.has(id)) ordered.push(profile)
   }
   return ordered
+}
+
+/**
+ * Only the wire fields a profile actually owns.
+ *
+ * Copied one by one and skipping blanks, because a profile saved with an empty
+ * `extraHeaders` or `requestPath` must not erase the value the settings block it
+ * overlays already carries — an empty overlay would look like a deliberate
+ * "no headers" and quietly strip the endpoint the user configured by hand.
+ *
+ * Every caller that runs one job on a user-chosen profile (a chat thread, memory
+ * extraction) needs exactly this: the profile's connection, never its `kind`,
+ * `name` or `enabled` flag.
+ */
+export function profileOverlay(profile: ProviderProfile): Partial<ProviderSettings> {
+  const picked: Partial<ProviderSettings> = {}
+  const copy = (key: keyof ProviderSettings, value: unknown): void => {
+    if (typeof value === 'string' && value.trim()) (picked as Record<string, unknown>)[key] = value
+  }
+  copy('baseUrl', profile.baseUrl)
+  copy('apiKey', profile.apiKey)
+  copy('model', profile.model)
+  copy('extraHeaders', profile.extraHeaders)
+  copy('requestPath', profile.requestPath)
+  copy('authHeader', profile.authHeader)
+  return picked
 }
 
 export interface FailoverResult<T> {

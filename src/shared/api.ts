@@ -419,6 +419,12 @@ export interface TypelessApi {
   }
   net: {
     probeSearch(input: Pick<SearchConnection, 'provider' | 'apiKey' | 'endpoint'>): Promise<SearchProbeResult>
+    /**
+     * The settings page's 「检查网络」: what Chromium resolves the proxy to, the
+     * terminal proxy variables (usually empty in a GUI process, which is the
+     * point), and one reachability probe per relevant host.
+     */
+    diagnose(): Promise<import('./network').EgressDiagnosis>
     probe(input: {
       baseUrl: string
       apiKey: string

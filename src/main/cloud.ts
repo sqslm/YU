@@ -13,6 +13,7 @@ import type {
 } from '@shared/types'
 import type { AccountStore, Session } from './account'
 import { toSyncRow, type HistoryStore } from './history'
+import { egressFetch } from './net/egress'
 import type { RemoteAudio } from './notes'
 import type { CalendarPage, CalendarRemote, CalendarPushResult } from './calendar-sync'
 import type { ReminderPage, ReminderRemote, ReminderPushResult } from './reminders-sync'
@@ -117,7 +118,7 @@ export class CloudClient {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     try {
-      const response = await fetch(url, {
+      const response = await egressFetch(url, {
         method,
         headers: {
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
@@ -435,7 +436,7 @@ export class CloudClient {
       // A Uint8Array is accepted here at runtime; the node typing for `body` does
       // not know the byte-array overload under this tsconfig.
       if (body) init.body = body as unknown as RequestInit['body']
-      const response = await fetch(url, init)
+      const response = await egressFetch(url, init)
       const bytes = new Uint8Array(await response.arrayBuffer())
       return { status: response.status, bytes }
     } catch (err) {

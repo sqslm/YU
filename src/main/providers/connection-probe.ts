@@ -1,4 +1,5 @@
 import { joinUrl, parseHeaderLines } from './asr'
+import { egressFetch } from '../net/egress'
 import { REALTIME_SPECS } from './asr/realtime'
 import { mt } from '@shared/mainI18n'
 
@@ -21,7 +22,7 @@ export async function probeConnection(input: ProbeInput): Promise<ProbeResult> {
   try {
     const headers: Record<string, string> = { ...parseHeaderLines(input.extraHeaders) }
     if (input.apiKey) headers.Authorization = `Bearer ${input.apiKey}`
-    const res = await fetch(joinUrl(input.baseUrl, 'models'), { headers, signal: controller.signal })
+    const res = await egressFetch(joinUrl(input.baseUrl, 'models'), { headers, signal: controller.signal })
     const body = (await res.text()).slice(0, 200)
     return { ok: res.ok, status: res.status, message: `HTTP ${res.status} · ${body}` }
   } catch (error) {
@@ -38,7 +39,7 @@ export async function probeMultimodalConnection(input: ProbeInput & { model: str
     const headers: Record<string, string> = { 'content-type': 'application/json', ...parseHeaderLines(input.extraHeaders) }
     if (input.apiKey) headers['x-goog-api-key'] = input.apiKey
     const base = input.baseUrl.replace(/\/+$/, '')
-    const res = await fetch(`${base}/models/${encodeURIComponent(input.model)}:generateContent`, {
+    const res = await egressFetch(`${base}/models/${encodeURIComponent(input.model)}:generateContent`, {
       method: 'POST', headers,
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }], generationConfig: { maxOutputTokens: 8, temperature: 0 } }),
       signal: controller.signal

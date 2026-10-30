@@ -7,6 +7,12 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "搜索服务": "search service",
+  "常用模型服务": "model service",
+  "网络连通，当前出口正常。": "The network is reachable and the current egress works.",
+  "自定义代理地址无效，已回退为跟随系统：请填形如 http://127.0.0.1:7897 的地址。": "The custom proxy address is invalid, so the system proxy is used instead. Enter an address such as http://127.0.0.1:7897.",
+  "系统当前是直连（DIRECT）：Clash Verge 打开「系统代理」，或在这里选「自定义」并填 http://127.0.0.1:7897。": "The system currently goes direct (DIRECT): turn on the system proxy in Clash Verge, or choose “Custom” here and enter http://127.0.0.1:7897.",
+  "{{count}} 个探测点失败：先确认代理软件正在运行，再打开它的系统代理，或在此填自定义代理地址。": "{{count}} probes failed: make sure the proxy app is running, turn on its system proxy, or enter a custom proxy address here.",
   "模型修改了受保护的版本、标识符或路径，未插入结果，请使用原始转写重试": "The model changed a protected version, identifier or path. Nothing was inserted; retry using the original transcript.",
   "原始转写已保留在历史记录中": "The original transcript was kept in history.",
   "原始转写保存失败，请检查历史存储": "Could not save the original transcript. Check history storage.",

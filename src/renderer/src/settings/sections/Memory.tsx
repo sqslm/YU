@@ -6,6 +6,13 @@ import { SettingsGroup, SettingsRow } from './General'
 import { registerGameModePreparation } from '../gameModePreparation'
 import i18n from '../../i18n'
 const MemoryGraphDialog = lazy(() => import('./MemoryGraph'))
+/**
+ * Thinking-effort choices for memory extraction.
+ *
+ * `''` ("默认") is kept as its own choice: it hands the field to the model, while the
+ * shipped default is `high` because extraction quality is what makes a memory worth keeping.
+ */
+const EXTRACTION_EFFORTS = [{ value: '', label: '默认' }, { value: 'off', label: '关闭' }, { value: 'low', label: '低' }, { value: 'high', label: '高' }, { value: 'max', label: '最高' }] as const
 
 export function MemorySection({ settings, patch }: { settings: Settings; patch: (delta: Partial<Settings>) => void }): JSX.Element {
   const t = i18n.t.bind(i18n)
@@ -27,6 +34,7 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
   }
   const load = async (category = kind): Promise<void> => { setRows(await window.api.memory.list(category)) }
   const found = rows.filter(row => row.text.toLowerCase().includes(query.toLowerCase()))
+  const llmProfiles = settings.profiles.filter(profile => profile.kind === 'llm')
   const download = (): void => { void run(async () => { await window.api.memory.download(); setStatus(await window.api.memory.status()) }) }
   return <SettingsGroup title={t('长期记忆')}>
     <SettingsRow label={t('启用长期记忆')} description={t('记住助手对话中的个人事实和明确的写作偏好。记忆独立于历史保存。')}>
@@ -35,6 +43,20 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
     <SettingsRow label={t('自动学习')} description={t('先暂存候选内容，积满 3 条或等待 5 分钟，再在电脑空闲且资源充足时整理。')}>
       <Switch size="small" checked={settings.memory.autoLearn} disabled={!settings.memory.enabled} onChange={event => patch({ memory: { ...settings.memory, autoLearn: event.target.checked } })} inputProps={{ 'aria-label': t('自动学习') }} />
     </SettingsRow>
+    <SettingsRow label={t('提取模型')} description={t('记忆提炼用它，和「语」对话的模型各自独立：润色与对话的模型再快、再便宜，提炼也能单独挑一个想得更多的模型。')}>
+      <TextField select size="small" SelectProps={{ displayEmpty: true }} value={settings.memory.profileId ?? ''} onChange={event => patch({ memory: { ...settings.memory, profileId: event.target.value || null } })} inputProps={{ 'aria-label': t('提取模型') }} sx={{ minWidth: 220 }}>
+        <MenuItem value="">{t('跟随默认（第一个 LLM）')}</MenuItem>
+        {llmProfiles.map(profile => <MenuItem key={profile.id} value={profile.id}>{profile.model || profile.name}</MenuItem>)}
+      </TextField>
+    </SettingsRow>
+    <SettingsRow label={t('思考强度')} description={t('记忆提炼默认「高」。关闭会更快，但提炼更粗糙；选「默认」则由模型自己决定。')}>
+      <TextField select size="small" value={settings.memory.effort} onChange={event => patch({ memory: { ...settings.memory, effort: event.target.value } })} inputProps={{ 'aria-label': t('思考强度') }} sx={{ minWidth: 160 }}>
+        {EXTRACTION_EFFORTS.map(item => <MenuItem key={item.value} value={item.value}>{t(item.label)}</MenuItem>)}
+      </TextField>
+    </SettingsRow>
+    {!llmProfiles.length && <Box sx={{ px: 2, pb: 1 }}>
+      <Typography variant="caption" color="text.secondary">{t('先到 AI 与模型里添加一条 LLM')}</Typography>
+    </Box>}
     <Box sx={{ px: 2, pb: 2 }}>
       <Typography variant="caption" color="text.secondary">{t('本地存储和向量检索；提取与回答可能把允许的内容发送到当前 LLM，并产生额外调用费用。')}</Typography>
       <Typography variant="body2">{t('可说“记住……”或“忘记……”。以“临时对话”开头，本次会话不读取或保存长期记忆。')}</Typography>

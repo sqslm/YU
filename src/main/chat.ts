@@ -3,25 +3,21 @@ import { chatAttachmentReference, prepareChatAttachments, validateChatUploads } 
 import type { ProviderProfile, ProviderSettings, Settings } from '@shared/types'
 import type { ChatMessage as LlmMessage } from './providers/llm'
 import { complete } from './providers/llm'
-import { chainFor, withFailover } from './providers/chain'
+import { chainFor, profileOverlay, withFailover } from './providers/chain'
 import { askAgent, dedupeSources, stripAppendedSources } from './agent'
+import { egressFetch } from './net/egress'
 import { ChatStore } from './chat-store'
 
 /**
  * Only the wire fields a thread's chosen profile owns.
  *
- * Copied one by one and skipping blanks, because a profile saved with an empty
+ * Delegates to `profileOverlay` so chat and memory extraction share one rule:
+ * copied one by one and skipping blanks, because a profile saved with an empty
  * `extraHeaders` or `requestPath` must not erase the value the polish block already
  * carries — an empty overlay would look like a deliberate "no headers".
  */
 function pickProfileFields(profile: ProviderProfile): Partial<ProviderSettings> {
-  const picked: Partial<ProviderSettings> = {}
-  const copy = (key: keyof ProviderSettings, value: unknown): void => {
-    if (typeof value === 'string' && value.trim()) (picked as Record<string, unknown>)[key] = value
-  }
-  copy('baseUrl', profile.baseUrl); copy('apiKey', profile.apiKey); copy('model', profile.model)
-  copy('extraHeaders', profile.extraHeaders); copy('requestPath', profile.requestPath); copy('authHeader', profile.authHeader)
-  return picked
+  return profileOverlay(profile)
 }
 
 /** A bounded context built from this thread alone, never from the floating answer card. */
@@ -88,7 +84,7 @@ export class ChatService {
       }
       conversation.reference = chatAttachmentReference(this.store.references(id))
       const pending = askAgent(effective, question.trim(), {}, active.controller.signal, () => {}, {
-        reset: false, conversation, allowedTools: ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate'], timeouts: { llm: 90000 },
+        reset: false, conversation, allowedTools: ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate'], timeouts: { llm: 90000 }, fetchImpl: egressFetch,
         onDelta: delta => { active.text += delta; progress() }, onStatus: status => progress(status)
       })
       if (conversation.memoryTemporary) this.store.markTemporary(id)

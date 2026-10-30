@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { assertPublicHost, inspectUrl, isPrivateAddress, safeFetch } from './safe-fetch'
+import { setEgressLog, setEgressNetworkForTests } from './net/egress'
 import { inspectUrl as inspectUrlFromTool } from './tools/read-webpage'
 
 /**
@@ -9,7 +10,14 @@ import { inspectUrl as inspectUrlFromTool } from './tools/read-webpage'
  * A record is 127.0.0.1 — and `redirect: 'follow'` sends the request to the
  * redirect target before anyone can look at it. Every case here injects the
  * resolver and the transport, so no test opens a socket.
+ *
+ * `direct` is the default here so every case below asserts the strict rule. The
+ * one relaxation (a proxy resolves the name, so a local NXDOMAIN is not a
+ * refusal) has its own cases at the bottom.
  */
+beforeEach(() => {
+  setEgressNetworkForTests({ mode: 'direct', proxyUrl: '' })
+})
 
 /** 203.0.113.10 and friends: TEST-NET-3, public as far as any routing table cares. */
 const PUBLIC_V4 = '203.0.113.10'
@@ -292,5 +300,53 @@ describe('safeFetch', () => {
     await expect(
       safeFetch('http://127.0.0.1/c.ics', {}, { fetchImpl: fetchImpl as unknown as typeof fetch, skipAddressCheck: true })
     ).rejects.toThrow('拒绝访问内网地址')
+  })
+})
+
+/**
+ * The one case where "the guard cannot resolve this name" must not mean "refuse".
+ *
+ * Behind a system or custom proxy the *proxy* resolves the name; a local
+ * NXDOMAIN is what a polluted resolver or a fake-IP-less TUN setup returns for a
+ * name the proxy reaches fine. Before this, the SSRF guard turned the proxy into
+ * "everything is unreachable", which is indistinguishable from the bug users
+ * reported. Direct mode keeps the strict answer.
+ */
+describe('proxy egress and a failed local lookup', () => {
+  it('lets the request leave when a proxy resolves names instead of this machine', async () => {
+    setEgressNetworkForTests({ mode: 'system', proxyUrl: '' })
+    const lines: string[] = []
+    setEgressLog(line => lines.push(line))
+    const fetchImpl = vi.fn(async () => htmlResponse('article'))
+
+    const response = await safeFetch('https://feeds.example.com/c.ics', {}, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      resolveHost: resolverFor({})
+    })
+
+    expect(response.status).toBe(200)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(lines.join('\n')).toContain('proxy egress active')
+    setEgressLog(null)
+  })
+
+  it('still refuses the same name in direct mode', async () => {
+    const fetchImpl = vi.fn(async () => htmlResponse('article'))
+    await expect(
+      safeFetch('https://feeds.example.com/c.ics', {}, {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        resolveHost: resolverFor({})
+      })
+    ).rejects.toThrow('域名解析失败')
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('refuses a literal private address even with a proxy in front', async () => {
+    setEgressNetworkForTests({ mode: 'custom', proxyUrl: 'http://127.0.0.1:7897' })
+    const fetchImpl = vi.fn(async () => htmlResponse('secret'))
+    await expect(
+      safeFetch('http://169.254.169.254/latest/meta-data/', {}, { fetchImpl: fetchImpl as unknown as typeof fetch })
+    ).rejects.toThrow('拒绝访问内网地址')
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 })

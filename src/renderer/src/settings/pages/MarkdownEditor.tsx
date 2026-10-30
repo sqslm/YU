@@ -1,20 +1,9 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Box, Typography } from '@mui/material'
-import { useTranslation } from 'react-i18next'
-import { NoteMarkdownBody, noteMarkdownSx } from './NoteMarkdown'
-import {
-  editorBlocks,
-  insertAt,
-  linkInline,
-  mergeWithPrevious,
-  prefixLines,
-  renderedToRaw,
-  replaceBlock,
-  splitBlockAt,
-  wrapInline,
-  type MarkdownBlock,
-  type MarkdownEdit
-} from './markdownBlocks'
+import { useEffect, useRef } from 'react'
+import { Box, useTheme } from '@mui/material'
+import { Crepe } from '@milkdown/crepe'
+import '@milkdown/crepe/theme/common/style.css'
+import { replaceAll } from '@milkdown/kit/utils'
+import { noteAttachmentUrl } from '@shared/noteAttachments'
 
 export interface MarkdownEditorProps {
   value: string
@@ -23,187 +12,189 @@ export interface MarkdownEditorProps {
   onAttachment: (path: string) => void
   placeholder?: string
   minHeight?: number | string
-  /** 只读（例如录音笔记只能看）：渲染照旧，点不进编辑。 */
+  /** Read-only while a recording is still being transcribed. */
   disabled?: boolean
 }
 
-/** 正在原地编辑的那一块；`draft` 是这一块的原始 markdown。 */
-interface Editing {
-  start: number
-  /** 开始编辑时的块内容：外部把它改掉了就放弃草稿，别写回旧内容。 */
-  base: string
-  draft: string
-  /** 待恢复的光标（块内坐标）；程序化改动后用它把插入点放对。 */
-  caret: number | null
-}
+/** Pause after the last keystroke before the parent hears about a change. */
+const EMIT_MS = 220
 
 /**
- * 把「渲染后」的点击位置换回可见字符下标。Chromium 有 caretRangeFromPoint，
- * 拿不到时返回 null（调用方退回块尾，绝不退回块首）。
- */
-function caretFromPoint(el: HTMLElement, x: number, y: number): number | null {
-  const doc = el.ownerDocument
-  const pick = (doc as unknown as { caretRangeFromPoint?: (x: number, y: number) => Range | null }).caretRangeFromPoint
-  const range = pick?.call(doc, x, y)
-  if (!range || !el.contains(range.startContainer)) return null
-  const before = doc.createRange()
-  before.selectNodeContents(el)
-  before.setEnd(range.startContainer, range.startOffset)
-  return before.toString().length
-}
-
-/**
- * 块级即时渲染的 markdown 编辑器。
+ * Typora-style writing surface for a note body.
  *
- * 平时每个块都用 react-markdown 渲染成排版好的样子（和 NoteMarkdown 同一套
- * 样式）；点哪一块，哪一块就变回 textarea 显示它自己的原始 markdown，失焦即
- * 提交。所有改动都通过 `onChange(整篇文本)` 回传，保存去抖仍由 NotesPage 负责。
+ * The hand-rolled block editor this replaces looked like Typora but behaved like a
+ * form: every paragraph was its own textarea, Enter split strings instead of
+ * paragraphs, and a whole list lived in one field. Milkdown (ProseMirror + remark)
+ * is a real rich-text markdown editor: markdown is parsed on mount and serialised
+ * back on every change, so typing behaves like a document — selections, IME,
+ * undo/redo, nested lists, tables, code blocks and images come from the editor
+ * instead of hand-written string surgery.
+ *
+ * Markdown stays the storage format: `onChange` receives serialised markdown, so
+ * saving, exporting, syncing and the source view keep working unchanged.
  */
-export function MarkdownEditor({ value, onChange, noteId, onAttachment, placeholder, minHeight = '42vh', disabled = false }: MarkdownEditorProps): JSX.Element {
-  const { t } = useTranslation()
-  const [editing, setEditing] = useState<Editing | null>(null)
-  const areaRef = useRef<HTMLTextAreaElement | null>(null)
-  const valueRef = useRef(value)
-  valueRef.current = value
-  // 换笔记立刻丢掉编辑态（渲染期改状态，避免旧草稿多活一帧后落到新笔记上）
-  const noteRef = useRef(noteId)
-  if (noteRef.current !== noteId) {
-    noteRef.current = noteId
-    if (editing) setEditing(null)
+export function MarkdownEditor({ value, onChange, noteId, onAttachment, placeholder = '', minHeight = '42vh', disabled = false }: MarkdownEditorProps): JSX.Element {
+  const theme = useTheme()
+  const host = useRef<HTMLDivElement | null>(null)
+  const crepe = useRef<Crepe | null>(null)
+  /** The last markdown this component either loaded or emitted. */
+  const known = useRef(value)
+  const timer = useRef<number | null>(null)
+  const props = useRef({ value, onChange, noteId, placeholder, disabled })
+  props.current = { value, onChange, noteId, placeholder, disabled }
+
+  const flush = (): void => {
+    if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null }
+    const instance = crepe.current
+    if (!instance) return
+    const markdown = instance.getMarkdown()
+    if (markdown === known.current) return
+    known.current = markdown
+    props.current.onChange(markdown)
   }
 
-  // 把正在编辑的草稿贴回整篇文本：其它块的偏移、以及提交给父级的文本都按它算
-  const live = useMemo(() => {
-    if (!editing) return value
-    const block = editorBlocks(value).find(item => item.start === editing.start)
-      ?? { start: editing.start, end: Math.min(value.length, editing.start), text: '' }
-    return replaceBlock(value, block, editing.draft)
-  }, [value, editing])
-  const liveRef = useRef(live)
-  liveRef.current = live
-  const blocks = useMemo(() => editorBlocks(live), [live])
-
-  // 外部（重新加载、切换来源）改掉了这一块：丢弃本地草稿，不让旧内容写回去
-  const external = useRef(value)
-  if (external.current !== value) {
-    external.current = value
-    if (editing) {
-      const block = editorBlocks(value).find(item => item.start === editing.start)
-      if (!block || block.text !== editing.base) setEditing(null)
+  useEffect(() => {
+    const root = host.current
+    if (!root) return
+    let disposed = false
+    const upload = async (file: File): Promise<string> => {
+      const added = await window.api.notes.addAttachment(props.current.noteId, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) })
+      return added.path
     }
-  }
-
-  const commit = useCallback((next?: string): void => {
-    const text = next ?? liveRef.current
-    if (text !== valueRef.current) onChange(text)
-  }, [onChange])
-
-  // textarea 高度随内容长（不出现内部滚动条），顺手恢复程序化改动后的光标
-  useLayoutEffect(() => {
-    const el = areaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-    if (editing?.caret != null) {
-      el.focus()
-      el.setSelectionRange(editing.caret, editing.caret)
-      setEditing(current => (current ? { ...current, caret: null } : current))
-    }
-  })
-
-  const startEdit = (block: MarkdownBlock, caret: number | null): void => {
-    if (disabled) return
-    const at = caret == null ? block.text.length : Math.max(0, Math.min(caret, block.text.length))
-    setEditing({ start: block.start, base: block.text, draft: block.text, caret: at })
-  }
-
-  const onBlockClick = (block: MarkdownBlock, event: React.MouseEvent<HTMLDivElement>): void => {
-    if (disabled) return
-    if ((event.target as HTMLElement).closest('a')) return
-    const shown = caretFromPoint(event.currentTarget, event.clientX, event.clientY)
-    startEdit(block, shown == null ? null : renderedToRaw(block.text, shown))
-  }
-
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (!editing) return
-    // 输入法组字中的回车/Esc 属于输入法，别抢
-    if (event.nativeEvent.isComposing) return
-    const el = event.currentTarget
-    const from = el.selectionStart
-    const to = el.selectionEnd
-    const draft = editing.draft
-    const mod = event.ctrlKey || event.metaKey
-    // 块内改动：只动草稿，等失焦/退出时一次性提交
-    const local = (next: MarkdownEdit): void => {
-      event.preventDefault()
-      setEditing(current => (current ? { ...current, draft: next.text, caret: next.caret } : current))
-    }
-    // 整篇改动（拆块/并块）：立即提交，光标进到落点所在的新块
-    const settle = (next: MarkdownEdit): void => {
-      event.preventDefault()
-      commit(next.text)
-      const list = editorBlocks(next.text)
-      const target = [...list].reverse().find(item => next.caret >= item.start && next.caret <= item.end) ?? list[list.length - 1]
-      if (!target) {
-        setEditing(null)
-        return
+    const instance = new Crepe({
+      root,
+      defaultValue: props.current.value,
+      features: {
+        // No AI rewrite button: it would be a second, unconfigured model behind the
+        // user's back. The note page owns every call this app makes.
+        [Crepe.Feature.AI]: false,
+        // The top bar holds a read-only toggle and a word count, both already present
+        // in the note page's own chrome.
+        [Crepe.Feature.TopBar]: false
+      },
+      featureConfigs: {
+        [Crepe.Feature.Placeholder]: { text: props.current.placeholder },
+        [Crepe.Feature.ImageBlock]: {
+          onUpload: upload,
+          blockOnUpload: upload,
+          inlineOnUpload: upload,
+          // Stored markdown keeps note-relative paths; the renderer resolves them to
+          // the note attachment scheme, the only way an `<img>` may reach a file.
+          proxyDomURL: (url: string) => url.startsWith('attachments/') ? noteAttachmentUrl(props.current.noteId, url) : url
+        }
       }
-      setEditing({ start: target.start, base: target.text, draft: target.text, caret: next.caret - target.start })
+    })
+    instance.on((listener) => {
+      listener.markdownUpdated((_ctx, markdown) => {
+        if (disposed || markdown === known.current) return
+        if (timer.current !== null) window.clearTimeout(timer.current)
+        timer.current = window.setTimeout(() => { timer.current = null; flush() }, EMIT_MS)
+      })
+      listener.blur(() => flush())
+    })
+    crepe.current = instance
+    void instance.create().then(() => { if (!disposed) instance.setReadonly(props.current.disabled) })
+    return () => {
+      // The last keystroke may still be inside the debounce window; emit it before the
+      // editor goes away, otherwise switching notes silently drops those characters.
+      if (timer.current !== null) flush()
+      disposed = true
+      if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null }
+      crepe.current = null
+      void instance.destroy()
     }
+    // One editor per note: switching notes remounts instead of reconciling two
+    // documents, which is what keeps undo history honest.
+  }, [noteId])
 
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      commit()
-      setEditing(null)
-      return
-    }
-    if (event.key === 'Enter' && event.shiftKey) return local(insertAt(draft, from, '\n'))
-    if (event.key === 'Enter' && !mod && !event.altKey) {
-      // 段落回车拆块；列表/引用/代码块续上前缀，仍保持一块
-      return settle(splitBlockAt(liveRef.current, { start: editing.start, end: editing.start + draft.length, text: draft }, editing.start + from))
-    }
-    if (event.key === 'Tab') return local(insertAt(draft, from, '  '))
-    if (event.key === 'Backspace' && from === 0 && to === 0) {
-      const list = editorBlocks(liveRef.current)
-      const index = list.findIndex(item => item.start === editing.start)
-      const merged = index > 0 ? mergeWithPrevious(liveRef.current, list, index) : null
-      if (merged) return settle(merged)
-      return
-    }
-    if (!mod) return
-    const key = event.key.toLowerCase()
-    if (key === 'b') return local(wrapInline(draft, from, to, '**'))
-    if (key === 'i') return local(wrapInline(draft, from, to, '*'))
-    if (key === 'k') return local(linkInline(draft, from, to))
-    if (event.key === '`') return local(wrapInline(draft, from, to, '`'))
-    if (event.shiftKey && (event.key === '7' || event.key === '&')) return local(prefixLines(draft, from, to, 'ordered'))
-    if (event.shiftKey && (event.key === '8' || event.key === '*')) return local(prefixLines(draft, from, to, 'unordered'))
-  }
+  // An outside writer (re-transcription, a fresh fetch) replaces the document.
+  useEffect(() => {
+    const instance = crepe.current
+    if (!instance || value === known.current) return
+    known.current = value
+    try { instance.editor.action(replaceAll(value)) } catch { /* still mounting: it starts from this value */ }
+  }, [value])
 
-  const empty = !editing && blocks.length === 1 && blocks[0].text.trim() === ''
-  return <Box data-notes-markdown data-notes-blocks={blocks.length}
-    sx={{ ...noteMarkdownSx, minHeight, p: 2, border: 1, borderColor: 'divider', borderRadius: 1, cursor: disabled ? 'default' : 'text', opacity: disabled ? .8 : 1 }}>
-    {empty && <Typography data-notes-editor-placeholder onClick={() => startEdit(blocks[0], 0)}
-      sx={{ color: 'text.disabled', fontSize: 14, lineHeight: 1.8, cursor: disabled ? 'default' : 'text' }}>{placeholder ?? ''}</Typography>}
-    {!empty && blocks.map(block => block.start === editing?.start
-      ? <Box key={`edit-${block.start}`} data-notes-block-editor={block.start} sx={{ my: .5 }}>
-        <Box component="textarea" ref={areaRef} value={editing.draft} data-notes-block-field={block.start}
-          aria-label={t('编辑这一块')} spellCheck={false}
-          onChange={event => setEditing(current => (current ? { ...current, draft: event.target.value, caret: null } : current))}
-          onKeyDown={onKeyDown}
-          onBlur={() => { commit(); setEditing(null) }}
-          sx={{ display: 'block', width: '100%', boxSizing: 'border-box', m: 0, p: 0, border: 0, outline: 0, bgcolor: 'transparent', color: 'inherit',
-            font: 'inherit', fontSize: 14, lineHeight: 1.8, resize: 'none', overflow: 'hidden', whiteSpace: 'pre-wrap' }} />
-      </Box>
-      : <Box key={block.start} data-notes-block={block.start} role="button" tabIndex={disabled ? -1 : 0}
-        aria-label={t('编辑这一块')}
-        onClick={event => onBlockClick(block, event)}
-        onKeyDown={event => { if (event.key === 'Enter' && !disabled) { event.preventDefault(); startEdit(block, block.text.length) } }}
-        sx={{ my: .5, borderRadius: .5, cursor: disabled ? 'default' : 'text',
-          '&:hover': { bgcolor: disabled ? 'transparent' : 'action.hover' },
-          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', bgcolor: 'action.hover' },
-          ...(block.text.trim() === '' ? { minHeight: '1.8em' } : {}) }}>
-        {block.text.trim() !== '' && <NoteMarkdownBody text={block.text} noteId={noteId} onAttachment={onAttachment} />}
-      </Box>)}
-  </Box>
+  useEffect(() => {
+    const instance = crepe.current
+    if (!instance) return
+    try { instance.setReadonly(disabled) } catch { /* created before the flag applied */ }
+  }, [disabled])
+
+  // `onAttachment` stays part of the contract: the page uses it for its own
+  // attachment button, and image links inside the note are opened by the browser.
+  void onAttachment
+
+  return (
+    <Box
+      ref={host}
+      data-notes-markdown
+      data-notes-editor-mode="rich"
+      sx={{
+        minHeight,
+        p: 0,
+        border: 0,
+        cursor: disabled ? 'default' : 'text',
+        opacity: disabled ? 0.8 : 1,
+        // Crepe ships a warm Material palette; the app's colours come from MUI, so the
+        // design tokens are re-pointed here instead of importing a second theme file.
+        '--crepe-color-background': 'transparent',
+        '--crepe-color-on-background': theme.palette.text.primary,
+        '--crepe-color-surface': theme.palette.background.paper,
+        '--crepe-color-surface-low': theme.palette.action.hover,
+        '--crepe-color-on-surface': theme.palette.text.primary,
+        '--crepe-color-on-surface-variant': theme.palette.text.secondary,
+        '--crepe-color-outline': theme.palette.divider,
+        '--crepe-color-primary': theme.palette.primary.main,
+        '--crepe-color-secondary': theme.palette.action.selected,
+        '--crepe-color-on-secondary': theme.palette.text.primary,
+        '--crepe-color-inline-code': theme.palette.warning.main,
+        '--crepe-color-error': theme.palette.error.main,
+        '--crepe-color-hover': theme.palette.action.hover,
+        '--crepe-color-selected': theme.palette.action.selected,
+        '--crepe-color-inverse': theme.palette.background.default,
+        '--crepe-color-on-inverse': theme.palette.text.primary,
+        '& .milkdown': { background: 'transparent', color: 'inherit' },
+        '& .milkdown .ProseMirror': {
+          padding: 0,
+          outline: 'none',
+          minHeight,
+          fontFamily: 'inherit',
+          fontSize: 15,
+          lineHeight: 1.85,
+          color: theme.palette.text.primary,
+          overflowWrap: 'anywhere'
+        },
+        '& .milkdown .ProseMirror > :first-child': { mt: 0 },
+        '& .milkdown .ProseMirror > :last-child': { mb: 0 },
+        '& .milkdown .ProseMirror h1': { fontSize: 28, lineHeight: 1.35, mt: 2.4, mb: 1 },
+        '& .milkdown .ProseMirror h2': { fontSize: 23, lineHeight: 1.4, mt: 2, mb: 0.85 },
+        '& .milkdown .ProseMirror h3': { fontSize: 19, lineHeight: 1.45, mt: 1.75, mb: 0.75 },
+        '& .milkdown .ProseMirror h4, & .milkdown .ProseMirror h5, & .milkdown .ProseMirror h6': { fontSize: 16, lineHeight: 1.5, mt: 1.5, mb: 0.6 },
+        '& .milkdown .ProseMirror p': { my: 0.85 },
+        // Crepe paints list bullets with `--crepe-color-outline` (the divider colour),
+        // which all but disappears on a dark page. Text-secondary keeps markers legible
+        // without making them loud.
+        '& .milkdown .milkdown-list-item-block li .label-wrapper': { color: theme.palette.text.secondary, height: 26 },
+        '& .milkdown .milkdown-list-item-block li .label-wrapper svg': { fill: theme.palette.text.secondary },
+        '& .milkdown .milkdown-list-item-block li': { gap: '2px' },
+        // Crepe's list rows carry a 32px marker cell and a paragraph margin, which reads
+        // as a gap between bullets that Typora does not have.
+        '& .milkdown .ProseMirror li': { my: 0.1 },
+        '& .milkdown .ProseMirror li p': { my: 0.1 },
+        '& .milkdown .milkdown-list-item-block li .label-wrapper .label': { height: 26, padding: '2px 0' },
+        '& .milkdown .ProseMirror ul, & .milkdown .ProseMirror ol': { paddingLeft: '0.4em' },
+        '& .milkdown .ProseMirror blockquote': { ml: 0, pl: 2, borderLeft: '3px solid', borderColor: 'divider', color: theme.palette.text.secondary },
+        '& .milkdown .ProseMirror code': { fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: '0.92em' },
+        '& .milkdown .ProseMirror pre': { p: 1.5, borderRadius: 1, bgcolor: theme.palette.action.hover, overflowX: 'auto' },
+        '& .milkdown .ProseMirror table': { borderCollapse: 'collapse', width: '100%' },
+        '& .milkdown .ProseMirror th, & .milkdown .ProseMirror td': { border: '1px solid', borderColor: theme.palette.divider, p: 1, textAlign: 'left' },
+        '& .milkdown .ProseMirror img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
+        '& .milkdown .ProseMirror a': { color: theme.palette.primary.main },
+        // The floating toolbar and block handle must not paint over the page chrome.
+        '& .milkdown .milkdown-toolbar': { zIndex: 4 },
+        '& .milkdown .milkdown-block-handle': { zIndex: 4 }
+      }}
+    />
+  )
 }

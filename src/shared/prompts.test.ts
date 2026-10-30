@@ -109,7 +109,8 @@ describe('mode prompts', () => {
     expect(prompt).toContain('[1] 标题一')
     expect(prompt).toContain('URL: https://b.test')
     expect(prompt).toContain('`[1]`')
-    expect(prompt).toContain('- [标题](URL)')
+    // Sources are rendered by the card, so the prompt must not ask for a text list.
+    expect(prompt).toContain('不要在正文里再写来源列表')
   })
 
   it('search decision prompt constrains output to JSON', () => {
@@ -217,13 +218,13 @@ describe('grounded answer prompt', () => {
     expect(prompt).toContain('用与用户提问相同的语言回答')
   })
 
-  it('keeps result numbering and the source-list contract', () => {
+  it('keeps result numbering while banning a self-written source list', () => {
     expect(prompt).toContain('[1] 标题一')
     expect(prompt).toContain('[2] 标题二')
     expect(prompt).toContain('`[1]`')
-    expect(prompt).toContain('## 来源')
-    expect(prompt).toContain('- [标题](URL)')
-    expect(prompt).toContain('不要重复列同一条')
+    // The card renders its own clickable source section; a model-written list is
+    // exactly the duplicate users reported, so the prompt forbids it.
+    expect(prompt).toContain('不要在正文里再写来源列表')
   })
 })
 

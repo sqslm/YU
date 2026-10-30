@@ -4,7 +4,7 @@ import { mkdir } from 'node:fs/promises'
 import type { Settings } from '@shared/types'
 import type { MemoryBackend, MemoryEntry, MemoryGraph, MemoryKind, MemoryStatus } from '@shared/memory'
 import { complete } from '../providers/llm'
-import { chainFor } from '../providers/chain'
+import { chainFor, profileOverlay } from '../providers/chain'
 import { downloadMemoryModel, memoryModelReady } from './model'
 import { personalMemoryQuery } from '@shared/memory-policy'
 import { memoryCompletion, MemoryReplyError } from './completion'
@@ -74,12 +74,25 @@ export class MemoryService implements MemoryBackend {
       if (this.child !== child) return
       if (message.type === 'llm') {
         const at = performance.now(), signal = this.llmAbort.signal
-        const settings = this.settings(), profile = chainFor(settings, 'llm')[0]
+        const settings = this.settings()
+        // Extraction is its own job. `settings.polish` is the dictation chain — tuned for
+        // speed with `effort: 'off'` — so it supplies only the transport defaults here; the
+        // model and the thinking effort come from the memory settings, never from dictation.
+        // A pinned profile wins even after it is switched off (the user asked for that model
+        // explicitly); only a deleted one falls back to the first enabled LLM, exactly like a
+        // chat thread resolves its own model.
+        const pinned = settings.memory.profileId
+          ? settings.profiles.find(profile => profile.id === settings.memory.profileId && profile.kind === 'llm')
+          : undefined
+        const profile = pinned ?? chainFor(settings, 'llm')[0]
+        // Blank means "whatever the model defaults to"; the default ('high') is applied by
+        // `mergeSettings`, so an older settings object still thinks before extracting.
+        const effort = (settings.memory.effort ?? 'high').trim()
         const paused = this.paused && !(this.explicitLearning && [...this.reasons].every(reason => reason === 'foreground'))
         if (!settings.memory.enabled || paused || !profile) { child.postMessage({ type: 'llm-result', id: message.id, error: 'Memory learning unavailable' }); return }
         void memoryCompletion(message.messages, message.kind === 'memory' ? 'memory' : 'facts', signal, messages => {
           this.log(`[memory] llm_call=${++this.llmCalls} request=${message.id}`)
-          return complete({ ...settings.polish, ...profile }, { messages, temperature: 0, signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]), effort: 'off',
+          return complete({ ...settings.polish, ...profileOverlay(profile), effort }, { messages, temperature: 0, signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]),
             onUsage: usage => this.log(`[memory] tokens input=${usage.inputTokens} output=${usage.outputTokens}`) })
         })
           .then(text => { if (this.child === child && !signal.aborted) child.postMessage({ type: 'llm-result', id: message.id, text }) })

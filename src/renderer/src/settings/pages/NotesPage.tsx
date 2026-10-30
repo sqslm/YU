@@ -37,7 +37,7 @@ import Replay10Icon from '@mui/icons-material/Replay10'
 import Forward10Icon from '@mui/icons-material/Forward10'
 import { useTranslation } from 'react-i18next'
 import { MarkdownEditor } from './MarkdownEditor'
-import { continuePrefix, insertAt, linkInline, wrapInline, type MarkdownEdit } from './markdownBlocks'
+import { MarkdownSourceEditor, type MarkdownSourceHandle } from './MarkdownSourceEditor'
 import { saveNoteEdit } from './notesSave'
 import { noteBodyField } from '@shared/noteBody'
 import { attachmentMarkdown } from '@shared/noteAttachments'
@@ -223,7 +223,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const [retranscribingId, setRetranscribingId] = useState<string | null>(null)
   const audioJobRef = useRef(false)
   const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
-  const bodyInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const bodyInputRef = useRef<MarkdownSourceHandle | null>(null)
   const [markdownPreview, setMarkdownPreview] = useState(true)
   /**
    * 列表侧栏是否收起。跨会话记住（localStorage），因为窄窗口下用户收起一次
@@ -547,41 +547,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     [flushNow]
   )
 
-  /**
-   * 源码模式 textarea 的 Typora 手感：列表行回车续前缀、Tab 缩进两格、
-   * Ctrl/Cmd+B/I/K 包裹选区。改完等这一帧渲染落地后再把光标放回去。
-   */
-  const sourceEditKeys = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    // TextField 的 onKeyDown 挂在外层 div 上，光标只能从真正的 textarea 取
-    const node = bodyInputRef.current
-    if (!node || event.nativeEvent.isComposing) return
-    const from = node.selectionStart
-    const to = node.selectionEnd
-    const mod = event.ctrlKey || event.metaKey
-    const key = event.key.toLowerCase()
-    let next: MarkdownEdit | null = null
-    if (event.key === 'Enter' && !event.shiftKey && !mod) {
-      const lineStart = primaryDraft.lastIndexOf('\n', Math.max(0, from - 1)) + 1
-      const prefix = continuePrefix(primaryDraft.slice(lineStart, from))
-      // 只有列表/引用行需要代劳续前缀；普通段落交给默认换行
-      if (prefix) next = insertAt(primaryDraft, from, `\n${prefix}`)
-    } else if (event.key === 'Tab' && !event.shiftKey && !mod) next = insertAt(primaryDraft, from, '  ')
-    else if (mod && key === 'b') next = wrapInline(primaryDraft, from, to, '**')
-    else if (mod && key === 'i') next = wrapInline(primaryDraft, from, to, '*')
-    else if (mod && key === 'k') next = linkInline(primaryDraft, from, to)
-    if (!next) return
-    event.preventDefault()
-    editField(primaryField, next.text)
-    const caret = next.caret
-    // 受控输入要等 React 把新值写进 DOM 之后再落光标
-    requestAnimationFrame(() => {
-      const node = bodyInputRef.current
-      if (!node) return
-      node.focus()
-      node.setSelectionRange(caret, caret)
-    })
-  }
-
   // Unmount and window close must not drop a pending edit. `beforeunload` cannot
   // await an IPC round-trip, so the write is fired and left to settle in main.
   useEffect(() => {
@@ -627,8 +592,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     if (!note || attachmentJobRef.current) return
     const field = primaryField
     const text = primaryDraft
-    const editor = bodyInputRef.current
-    const start = editor?.selectionStart, end = editor?.selectionEnd
+    const selection = bodyInputRef.current?.selection()
+    const start = selection?.from, end = selection?.to
     attachmentJobRef.current = true; setAttachmentBusy(true); setNotice('')
     try {
       await flushNow()
@@ -1616,7 +1581,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap', gap: .5 }}>
                   <ButtonGroup size="small" disabled={attachmentBusy}>
-                    <Button data-notes-mode="preview" variant={markdownPreview ? 'contained' : 'outlined'} onClick={() => { void flushNow(); setMarkdownPreview(true) }}>{t('预览')}</Button>
+                    <Button data-notes-mode="preview" variant={markdownPreview ? 'contained' : 'outlined'} onClick={() => { void flushNow(); setMarkdownPreview(true) }}>{t('编辑')}</Button>
                     <Button data-notes-mode="source" variant={!markdownPreview ? 'contained' : 'outlined'} onClick={() => setMarkdownPreview(false)}>Markdown {t('源码')}</Button>
                   </ButtonGroup>
                   <Button data-notes-insert-attachment size="small" disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button>
@@ -1626,12 +1591,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
                   onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
-                <TextField data-notes-editor={primaryField} inputRef={bodyInputRef} disabled={attachmentBusy || retranscribingId === selected.id}
-                  multiline minRows={16} fullWidth value={primaryDraft}
-                  onChange={event => editField(primaryField, event.target.value)} onBlur={() => void flushNow()}
-                  onKeyDown={sourceEditKeys}
-                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
-                  InputProps={{ sx: { fontSize: 14, lineHeight: 1.8, alignItems: 'flex-start', minHeight: '42vh', fontFamily: 'Consolas, monospace' } }} />}
+                <MarkdownSourceEditor ref={bodyInputRef} field={primaryField} value={primaryDraft}
+                  onChange={next => editField(primaryField, next)}
+                  disabled={attachmentBusy || retranscribingId === selected.id}
+                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')} />}
                 <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
                   <Button data-notes-copy={primaryField} size="small" disabled={!primaryDraft.trim()} onClick={() => void copyDraft(primaryDraft)} sx={{ fontSize: 11.5 }}>
                     {t(primaryField === 'polished' ? 'notes.copyPolished' : '复制内容')}

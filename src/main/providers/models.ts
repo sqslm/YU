@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { egressFetch } from '../net/egress'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { ModelInfo, ModelListResult } from '@shared/types'
@@ -241,7 +242,7 @@ async function fetchModels(input: ListModelsInput, baseUrl: string): Promise<Mod
   Object.assign(headers, flattenExtraHeaders(input.extraHeaders))
   if (input.apiKey) headers.Authorization = `Bearer ${input.apiKey}`
 
-  const res = await fetch(modelsUrl(baseUrl), {
+  const res = await egressFetch(modelsUrl(baseUrl), {
     method: 'GET',
     headers,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)

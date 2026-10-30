@@ -1,4 +1,5 @@
 import type { SearchResult, SearchSettings } from '@shared/types'
+import { egressFetch } from '../net/egress'
 import { runWithDeadline } from '../tools/read-webpage'
 import { mt } from '@shared/mainI18n'
 
@@ -172,7 +173,7 @@ function limit(results: SearchResult[], max: number): SearchResult[] {
 }
 
 async function get(url: string, init: RequestInit = {}): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await egressFetch(url, {
     ...init,
     headers: { 'User-Agent': UA, ...(init.headers ?? {}) }
   })
@@ -498,7 +499,7 @@ export async function searchTavily(
     payload.time_range = query.freshness
   }
   if (query.kind === 'news') payload.topic = 'news'
-  const res = await fetch(cfg.endpoint || DEFAULTS.tavily, {
+  const res = await egressFetch(cfg.endpoint || DEFAULTS.tavily, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify(payload),
@@ -669,7 +670,7 @@ async function postJson(
   headers: Record<string, string>,
   signal: AbortSignal | undefined
 ): Promise<Response> {
-  return fetch(url, {
+  return egressFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers },
     body: JSON.stringify(body),

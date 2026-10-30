@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { egressFetch } from '../net/egress'
 import { mkdir, readFile, rename, rm, open } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 
@@ -29,15 +30,26 @@ export async function downloadMemoryModel(root: string, signal: AbortSignal, pro
     if (await validModelFile(root, file)) { received += file[1]; progress(received / total * 100); continue }
     const target = join(root, file[0]), part = target + '.part'
     await mkdir(dirname(target), { recursive: true })
-    const response = await fetch(`https://huggingface.co/Xenova/bge-small-zh-v1.5/resolve/${MEMORY_MODEL_REVISION}/${file[0]}`, { signal, credentials: 'omit' })
+    const response = await egressFetch(`https://huggingface.co/Xenova/bge-small-zh-v1.5/resolve/${MEMORY_MODEL_REVISION}/${file[0]}`, { signal, credentials: 'omit' })
     if (!response.ok || !response.body) throw Error(`记忆模型下载失败：HTTP ${response.status}`)
     const handle = await open(part, 'w'); let bytes = 0
     try {
       try {
-        for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
-          signal.throwIfAborted(); bytes += chunk.length
-          if (bytes > file[1]) throw Error('记忆模型文件大小不符')
-          await handle.write(chunk); progress((received + bytes) / total * 100)
+        // Read the web stream explicitly instead of `for await`: the transport is
+        // Chromium's (net.fetch) rather than undici, and a reader works on any
+        // ReadableStream regardless of whether the runtime made it async-iterable.
+        const reader = response.body.getReader()
+        try {
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            signal.throwIfAborted(); bytes += value.byteLength
+            if (bytes > file[1]) throw Error('记忆模型文件大小不符')
+            await handle.write(value); progress((received + bytes) / total * 100)
+          }
+        } catch (error) {
+          await reader.cancel().catch(() => undefined)
+          throw error
         }
       } finally { await handle.close() }
     } catch (error) { await rm(part, { force: true }); throw error }

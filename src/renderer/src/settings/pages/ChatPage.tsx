@@ -16,6 +16,7 @@ import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import type { ChatDetail, ChatGroup, ChatIndex, ChatThread } from '@shared/chat'
 import { CHAT_ATTACHMENT_BYTES, CHAT_ATTACHMENT_LIMIT, CHAT_ATTACHMENT_TOTAL, CHAT_FILE_ACCEPT } from '@shared/chat'
 import type { Settings } from '@shared/types'
+import { stripSourceTail } from '@shared/sourceText'
 import { MarkdownView } from '../../card/MarkdownView'
 import i18n from '../../i18n'
 import { registerGameModePreparation } from '../gameModePreparation'
@@ -231,7 +232,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
             <Typography variant="caption" noWrap sx={{ maxWidth: '100%' }}>{file.name}</Typography><Typography variant="caption" color="text.secondary">{Math.max(1, Math.round(file.size / 1024))} KB{file.truncated ? ` · ${t('部分内容')}` : ''}</Typography>
           </Button>)}</Stack>}
           {message.role === 'user' ? <Box sx={{ bgcolor: 'action.hover', borderRadius: '12px 12px 3px 12px', p: '10px 14px', maxWidth: '90%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 13 }}>{message.text}</Box>
-            : <Box sx={{ fontSize: 13, lineHeight: 1.8, overflowWrap: 'anywhere', '& [data-card-markdown]': { color: 'text.primary' }, '& [data-card-markdown] :not(a):not(button)': { color: 'inherit' } }}><MarkdownView text={message.text || t('正在思考…')} sources={message.sources} streaming={message.state === 'working'} onCopyCode={text => { void window.api.app.copyText(text) }} /></Box>}
+            : <Box sx={{ fontSize: 13, lineHeight: 1.8, overflowWrap: 'anywhere', '& [data-card-markdown]': { color: 'text.primary' }, '& [data-card-markdown] :not(a):not(button)': { color: 'inherit' } }}><MarkdownView text={(message.sources?.length ? stripSourceTail(message.text) : message.text) || t('正在思考…')} sources={message.sources} streaming={message.state === 'working'} onCopyCode={text => { void window.api.app.copyText(text) }} /></Box>}
           {message.state === 'error' && <Typography color="error" variant="caption">{t('本轮回答失败，可重新发送')}</Typography>}
           {message.state === 'cancelled' && <Typography color="text.secondary" variant="caption">{t('生成已停止')}</Typography>}
           {message.role === 'assistant' && message.state === 'done' && <Button size="small" sx={{ alignSelf: 'flex-start', fontSize: 11, color: 'text.secondary', px: 0 }} onClick={() => void window.api.app.copyText(message.text)}>{t('复制回答')}</Button>}

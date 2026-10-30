@@ -1,4 +1,5 @@
 import { mt } from '@shared/mainI18n'
+import { egressFetch } from './net/egress'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import type { BriefingDeliveryReceipt, BriefingDeliverySettings, DeliveryChannel } from '@shared/briefingDelivery'
@@ -7,7 +8,7 @@ import type { BriefingDeliveryReceipt, BriefingDeliverySettings, DeliveryChannel
 export class BriefingDeliveryService {
   private rows:BriefingDeliveryReceipt[]=[]
   private controller=new AbortController()
-  constructor(private readonly file:string,private settings:()=>BriefingDeliverySettings,private changed:()=>void,private fetchImpl:typeof fetch=fetch){
+  constructor(private readonly file:string,private settings:()=>BriefingDeliverySettings,private changed:()=>void,private fetchImpl:typeof fetch=egressFetch){
     try{const rows=JSON.parse(readFileSync(file,'utf8'));if(Array.isArray(rows))this.rows=rows.slice(-60).map(row=>row.status==='sending'?{...row,status:'unknown',error:mt('进程退出前没有收到服务回执，送达状态未知')}:row)}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
   }
   history():BriefingDeliveryReceipt[]{return structuredClone(this.rows)}

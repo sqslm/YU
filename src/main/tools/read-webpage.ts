@@ -15,6 +15,7 @@
  * the article body", and "roughly" is all an answer needs.
  */
 import { mt } from '@shared/mainI18n'
+import { egressFetch } from '../net/egress'
 import {
   MAX_SAFE_REDIRECTS,
   inspectUrl,
@@ -228,7 +229,7 @@ export async function readWebpage(
   if (!check.ok || !check.url) return { ok: false, error: check.error ?? 'URL 不合法' }
   const target = check.url.toString()
 
-  const doFetch = options.fetchImpl ?? globalThis.fetch
+  const doFetch = options.fetchImpl ?? egressFetch
   if (typeof doFetch !== 'function') return { ok: false, error: '当前环境不支持网络请求' }
 
   const timeoutMs = options.timeoutMs ?? DEFAULT_READ_TIMEOUT_MS

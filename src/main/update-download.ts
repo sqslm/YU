@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { egressFetch } from './net/egress'
 import { mkdir, open, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
@@ -34,7 +35,7 @@ export async function downloadUpdateArtifact(options:RangeDownloadOptions):Promi
 export const MAX_UPDATE_CONNECTIONS = 32
 /** Bounded resumable ranges. The upstream updater still owns signature checks and installation. */
 export async function downloadRanges(options:RangeDownloadOptions):Promise<boolean> {
-  const {signal}=options,fetchImpl=options.fetchImpl??fetch
+  const {signal}=options,fetchImpl=options.fetchImpl??egressFetch
   signal?.throwIfAborted()
   const expected=Buffer.from(options.sha512,/^[a-f0-9]{128}$/i.test(options.sha512)?'hex':'base64')
   if(expected.length!==64)throw Error('Invalid update SHA-512')
@@ -42,7 +43,10 @@ export async function downloadRanges(options:RangeDownloadOptions):Promise<boole
   const probe=await fetchImpl(options.url,{headers,signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(20000)])})
   // Reuse the resolved release-CDN URL instead of making every range repeat GitHub redirects.
   // Never persist signed CDN query strings; retry through the original URL if a ticket expires.
-  const artifactUrl=probe.url||options.url
+  // Chromium's `net.fetch` reports `response.url` as unreliable, so an unusable value has to fall
+  // back to the URL we know instead of sending every range to a bogus destination.
+  const resolved=probe.url
+  const artifactUrl=/^https?:\/\//i.test(resolved??'')?resolved:options.url
   const range=/^bytes 0-0\/(\d+)$/.exec(probe.headers.get('content-range')??'')
   await probe.body?.cancel()
   if(probe.status===200)return false

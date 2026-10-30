@@ -11,6 +11,7 @@
 import type { SearchResult, Settings } from '@shared/types'
 import type { PromptContext } from '@shared/prompts'
 import { askAgent, type AgentOptions } from './agent'
+import { egressFetch } from './net/egress'
 
 export interface AskOutcome {
   text: string
@@ -56,7 +57,9 @@ export async function answerWithSearch(
 ): Promise<AskOutcome> {
   const result = await askAgent(settings, transcript, context, signal, log, {
     ...options,
-    reset: true
+    reset: true,
+    // Node's fetch ignores the Windows proxy; the agent must use the egress path.
+    fetchImpl: options.fetchImpl ?? egressFetch
   })
   const outcome: AskOutcome = {
     text: result.text,

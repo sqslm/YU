@@ -60,6 +60,7 @@ import { probeConnection, probeMultimodalConnection } from './providers/connecti
 import { QuotaService } from './providers/quota'
 import { CalendarStore, CalendarScheduler } from './calendar'
 import { safeFetch } from './safe-fetch'
+import { applyEgress, diagnoseEgress, egressFetch, setEgressLog } from './net/egress'
 import { appIcon, appUserModelId, repairDevelopmentShortcut } from './app-icon'
 import { handle, subscribe } from './ipc-trust'
 import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
@@ -831,7 +832,7 @@ async function probeProviders(settings: Settings): Promise<string[]> {
     const host = safeHost(url)
     const started = Date.now()
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(2500) })
+      const response = await egressFetch(url, { signal: AbortSignal.timeout(2500) })
       out.push(`${name}: GET ${host} -> ${response.status} (${Date.now() - started}ms)`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -1386,6 +1387,12 @@ function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0] ?? null
   })
   handle('net:probe-search', (_event, input) => probeSearch(input))
+  // Only the settings window may run the diagnosis: it reads the configured
+  // base URLs and can spend a request, and no other window owns this page.
+  handle('net:diagnose', event => {
+    if (event.sender !== settingsWindow?.webContents) throw Error(mt('请从设置页检查网络'))
+    return diagnoseEgress(store.get())
+  })
   handle('settings:capture-shortcut', (event, active: boolean) => {
     if (event.sender === settingsWindow?.webContents) hotkeys?.setCapturing(active === true)
   })
@@ -1426,6 +1433,10 @@ function registerIpc(): void {
     }
     if (barWindow && !barWindow.isDestroyed()) barWindow.webContents.send('settings:changed', next)
     if (next.uiLanguage !== previous.uiLanguage && cardWindow && !cardWindow.isDestroyed()) cardWindow.webContents.send('settings:changed', next)
+    // A network change has to reach Chromium before the next request: the mode is
+    // applied to the session here, not on the next launch, and the resolved proxy
+    // is logged so "I changed it" and "it took effect" stay distinguishable.
+    if (patch.network) void applyEgress(next)
     // A new server URL, a new interval or a switch turning sync on/off all change
     // what the timer should do. `reconfigure()` is idempotent and cheap.
     if (next.syncEnabled !== previous.syncEnabled ||
@@ -2140,6 +2151,10 @@ async function bootstrap(): Promise<void> {
     if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('recording:changed')
   })
   const settings = await store.load()
+  // Chromium's network stack is the only transport that reads the OS proxy/PAC,
+  // so the mode is pushed in before any window exists and before any request.
+  setEgressLog(log)
+  await applyEgress(settings)
   // Restore the persisted session only after Electron's OS encryption is ready,
   // and before sync or the account UI reads it.
   accounts.load()

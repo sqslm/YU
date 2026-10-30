@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { AnswerCardPayload } from '@shared/api'
 import type { CardAction, Settings } from '@shared/types'
 import { isSafeLink } from '@shared/links'
+import { stripSourceTail } from '@shared/sourceText'
 import { MarkdownView } from './MarkdownView'
 import i18n, { applyUiLanguage } from '../i18n'
 import { answerNote } from './answerNote'
@@ -90,7 +91,12 @@ export function AnswerCard(): JSX.Element | null {
   const [draft, setDraft] = useState('')
   const [previousAnswer, setPreviousAnswer] = useState<AnswerCardPayload | null>(null)
   const followUpHeight = useRef(0)
-  const [sourcesExpanded, setSourcesExpanded] = useState(false)
+  /**
+   * Sources start open: they are the only place a searched answer can be verified,
+   * and the card is the surface people read them on. Hiding them behind a toggle
+   * made "where did this come from" a second click away.
+   */
+  const [sourcesExpanded, setSourcesExpanded] = useState(true)
   const [sourcePage, setSourcePage] = useState(1)
   const [itemPage, setItemPage] = useState(1)
   const [sourceSize, setSourceSize] = useState(30)
@@ -272,13 +278,16 @@ export function AnswerCard(): JSX.Element | null {
   if (!data) return null
 
   const question = data.question.trim()
-  const answer = data.answer ?? ''
+  const sourceList = data.sources ?? []
+  // The card draws its own clickable source section below the answer, so a source
+  // list the answer carries in its text would show the same links twice. Strip it
+  // only when cards exist: with no cards the text is the only way to reach them.
+  const answer = sourceList.length ? stripSourceTail(data.answer ?? '') : data.answer ?? ''
   const tools = data.tools ?? []
   const actions = data.actions ?? []
   const busy = pending !== null || data.streaming === true
   const statusLine = pending !== null ? i18n.t('正在思考…') : (data.status ?? '').trim() || (data.taskState === 'awaiting_confirmation' ? i18n.t('等待确认') : null)
   const streaming = data.streaming === true
-  const sourceList = data.sources ?? []
   const items = data.localResults?.flatMap(result => result.items ?? []) ?? []
   const itemPages = Math.max(1, Math.ceil(items.length / sourceSize))
   const safeItemPage = Math.min(itemPage, itemPages)
@@ -438,11 +447,12 @@ export function AnswerCard(): JSX.Element | null {
                 const index = (safeSourcePage - 1) * sourceSize + localIndex
                 return (
                 <a data-card-source
+                  data-card-source-open={index + 1}
                   key={`${item.url}-${index}`}
                   href={isSafeLink(item.url) ? item.url : undefined}
                   target="_blank" rel="noopener noreferrer"
                   style={sourceLink}
-                  title={`${item.title || item.url}\n${item.url}`}
+                  title={`${i18n.t('在默认浏览器打开')}：${item.title || item.url}\n${item.url}`}
                 >
                   <span style={sourceNumber}>{index + 1}</span>
                   <span style={{ minWidth: 0 }}>

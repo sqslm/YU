@@ -16,6 +16,7 @@ import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/per
 import { readAloudCommand } from './read-aloud-command'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
 import { WORKFLOW_TOOLS, workflowCommand, type WorkflowTools } from './tools/workflow'
+import { egressFetch } from './net/egress'
 import { directVoiceIntent, isBareSummaryRequest, isCurrentContentRequest, isDictatedContent, needsAssistantContext, screenshotNeedsEditor, stopSpeakingRequest, speechPlaybackRequest } from './voice-intent'
 
 export const ASSISTANT_TOOLS = ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate', 'open_search']
@@ -574,6 +575,8 @@ export class AssistantSession {
     }
     try {
       const options: AgentOptions = {
+        // Model traffic goes through Chromium's stack so it honours the system proxy.
+        fetchImpl: egressFetch,
         toolAccess: () => this.deps.settings().assistantAccess,
         analyzeScreenshot: this.deps.analyzeScreenshot ? (question, ocr) => this.deps.analyzeScreenshot!(context, question, ocr, taskSignal) : undefined,
         readSelection: this.deps.readSelection ? () => this.deps.readSelection!(context, taskSignal) : undefined,

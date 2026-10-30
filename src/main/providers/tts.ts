@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { egressFetch } from '../net/egress'
 import type { SpeechAudio, TtsSettings } from '@shared/speech'
 import { mt } from '@shared/mainI18n'
 
@@ -79,7 +80,7 @@ export async function synthesizeSpeech(settings: TtsSettings, text: string, sign
   const timeout = AbortSignal.timeout(120_000)
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
   const fetchBytes = async (target: string, options: RequestInit): Promise<{ bytes: Buffer; mime: string }> => {
-    const response = await fetch(target, { ...options, signal: requestSignal, redirect: 'error' })
+    const response = await egressFetch(target, { ...options, signal: requestSignal, redirect: 'error' })
     const bytes = await read(response)
     if (!response.ok) {
       const message = bytes.toString('utf8').slice(0, 500)

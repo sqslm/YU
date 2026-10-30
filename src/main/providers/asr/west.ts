@@ -11,6 +11,7 @@
  * shape here and the caller only has to pick a spec.
  */
 import { ProviderError } from '../providerError'
+import { egressFetch } from '../../net/egress'
 import {
   type AsrAdapterContext,
   type AsrAdapterInput,
@@ -231,7 +232,7 @@ async function requestWithHeaders(
   ctx.signal.addEventListener('abort', forward, { once: true })
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal })
+    const response = await egressFetch(url, { ...init, signal: controller.signal })
     const body = await response.text()
     let json: unknown = null
     try {

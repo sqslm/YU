@@ -1,4 +1,5 @@
 import { traceTaskStage } from '../task-diagnostics'
+import { egressFetch } from '../net/egress'
 import type { MultimodalSettings } from '@shared/types'
 import { ProviderError, joinUrl, parseHeaderLines } from './asr'
 import { mt } from '@shared/mainI18n'
@@ -76,7 +77,7 @@ async function generateInlineMedia(cfg: MultimodalSettings, req: { prompt: strin
 
   const jsonBody = JSON.stringify(body)
   if (Buffer.byteLength(jsonBody) > 20 * 1024 * 1024) throw new ProviderError(mt('多模态音频请求超过 20 MB，请缩短录音'))
-  const res = await fetch(url, {
+  const res = await egressFetch(url, {
     method: 'POST',
     headers,
     body: jsonBody,

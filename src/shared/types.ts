@@ -279,6 +279,22 @@ export interface SearchProbeResult {
   message?: string
 }
 
+/**
+ * How the main process reaches the internet.
+ *
+ * Node's `fetch` (undici) ignores the Windows proxy settings, so an install that
+ * relied on Clash Verge's system proxy went direct and looked offline the moment
+ * TUN mode was switched off. Every outbound request now goes through Electron's
+ * network stack, which does honour this block:
+ * - `system`: whatever Windows/the OS reports (system proxy or PAC) — the default;
+ * - `direct`: never proxy, for a machine that really is online without one;
+ * - `custom`: an explicit proxy such as `http://127.0.0.1:7897`.
+ */
+export interface NetworkSettings {
+  mode: 'system' | 'direct' | 'custom'
+  proxyUrl: string
+}
+
 export interface SearchSettings {
   enabled: boolean
   strategy: 'single' | 'fallback' | 'aggregate'
@@ -478,6 +494,8 @@ export interface Settings {
   pipelineMode: PipelineMode
   multimodal: MultimodalSettings
   search: SearchSettings
+  /** Outbound HTTP proxy policy for every main-process request. */
+  network: NetworkSettings
   /** Built-in local recogniser; see `LocalAsrSettings`. */
   localAsr: LocalAsrSettings
   /** Hold-to-talk or press-to-toggle. */

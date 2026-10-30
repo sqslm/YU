@@ -6,6 +6,7 @@
  * is what makes a sentence like "今天安阳 12 到 19 度，多云" possible at all.
  */
 import type { SearchResult } from '@shared/types'
+import { egressFetch } from '../net/egress'
 import { mt } from '@shared/mainI18n'
 
 /** Split so the self-test can point both endpoints at the local stub. */
@@ -141,7 +142,7 @@ async function geocode(
   signal?: AbortSignal
 ): Promise<GeoHit | null> {
   const url = `${geocodingBase()}/search?name=${encodeURIComponent(place)}&count=5&language=zh&format=json`
-  const res = await fetch(url, { signal })
+  const res = await egressFetch(url, { signal })
   if (!res.ok) return null
   const body = (await res.json()) as {
     results?: Array<{
@@ -204,7 +205,7 @@ export async function fetchWeather(
     timezone: 'auto',
     forecast_days: FORECAST_WORDS.test(text) ? '4' : '2'
   })
-  const res = await fetch(`${forecastBase()}/forecast?${params.toString()}`, { signal })
+  const res = await egressFetch(`${forecastBase()}/forecast?${params.toString()}`, { signal })
   if (!res.ok) return null
   const body = (await res.json()) as ForecastBody
   const current = body.current ?? {}

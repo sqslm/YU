@@ -1,4 +1,5 @@
 import { traceTaskStage } from '../task-diagnostics'
+import { egressFetch } from '../net/egress'
 import type { PolishSettings } from '@shared/types'
 import { ProviderError, joinUrl, parseHeaderLines } from './asr'
 import { requestUserAgent } from './models'
@@ -160,7 +161,7 @@ async function completeRequest(
     else headers.Authorization = `Bearer ${cfg.apiKey}`
   }
 
-  const res = await fetch(joinUrl(cfg.baseUrl, chatPath(cfg)), {
+  const res = await egressFetch(joinUrl(cfg.baseUrl, chatPath(cfg)), {
     method: 'POST',
     headers,
     body: JSON.stringify(chatRequestBody(cfg, req)),

@@ -1,4 +1,5 @@
 import type { PresetField } from '@shared/types'
+import { egressFetch } from '../../net/egress'
 import { parseHeaderLines } from '../headers'
 import { ProviderError } from '../providerError'
 import { mt } from '@shared/mainI18n'
@@ -125,7 +126,7 @@ export async function request(
   ctx.signal.addEventListener('abort', forward, { once: true })
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal })
+    const response = await egressFetch(url, { ...init, signal: controller.signal })
     const text = await response.text()
     let json: unknown = null
     try {

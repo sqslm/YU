@@ -11,10 +11,19 @@
  * only on the URL the caller started with.
  *
  * Nothing in this file trusts its input: an unresolvable host is refused, because
- * "cannot judge" has to mean "do not connect".
+ * "cannot judge" has to mean "do not connect" — with one deliberate exception.
+ * When the app is going out through a proxy, the *proxy* resolves the name, and a
+ * local NXDOMAIN is exactly what a polluted or split-horizon resolver returns for
+ * a name the proxy can reach. Refusing there would have turned "the guard cannot
+ * see the address" into "the feature is broken", so a failed lookup is allowed
+ * through only while a proxy is the transport (`proxyEgressActive`). Literal
+ * private addresses, `localhost`, numeric IP aliases and names that *do* resolve
+ * into a private range stay refused in every mode: the exception is about who
+ * resolves the name, never about where the request may land.
  */
 import { lookup } from 'node:dns/promises'
 import { mt } from '@shared/mainI18n'
+import { egressFetch, logEgress, proxyEgressActive } from './net/egress'
 
 /** Redirects followed by hand, so every hop is checked before it is requested. */
 export const MAX_SAFE_REDIRECTS = 5
@@ -214,7 +223,7 @@ function isProxyAddress(address: string): boolean {
 const publicResolver: HostResolver = async host => {
   const signal = AbortSignal.timeout(DEFAULT_DNS_TIMEOUT_MS)
   const answers = await Promise.all(['A', 'AAAA'].map(async type => {
-    const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`, {
+    const response = await egressFetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`, {
       headers: { accept: 'application/dns-json' }, redirect: 'error', signal
     })
     if (!response.ok) throw new Error('DNS verification failed')
@@ -245,12 +254,22 @@ export async function assertPublicHost(hostname: string, options: SafeFetchOptio
   let answers: Array<{ address: string; family?: number }>
   try {
     answers = await withDeadline(resolve(host), timeoutMs)
-  } catch {
-    // No answer, a timeout or SERVFAIL all mean the same thing here: we cannot say
-    // where this name points, so we do not send the request.
+  } catch (err) {
+    // No answer, a timeout or SERVFAIL all mean the same thing here: this machine
+    // cannot say where the name points. Behind a proxy that is not a refusal —
+    // the proxy resolves it — so the request is allowed to leave and the reason is
+    // recorded. Direct mode keeps the old, strict answer.
+    if (proxyEgressActive()) {
+      logEgress(`[net] dns ${host} unresolved locally (${describe(err)}); proxy egress active, letting the proxy resolve it`)
+      return
+    }
     throw new Error(mt('域名解析失败：{{host}}', { host }))
   }
   if (!Array.isArray(answers) || answers.length === 0) {
+    if (proxyEgressActive()) {
+      logEgress(`[net] dns ${host} returned no addresses; proxy egress active, letting the proxy resolve it`)
+      return
+    }
     throw new Error(mt('域名解析失败：{{host}}', { host }))
   }
   if (answers.some(answer => isProxyAddress(answer.address)) &&
@@ -287,7 +306,7 @@ export async function safeFetch(
   init: RequestInit = {},
   options: SafeFetchOptions = {}
 ): Promise<Response> {
-  const doFetch = options.fetchImpl ?? globalThis.fetch
+  const doFetch = options.fetchImpl ?? egressFetch
   if (typeof doFetch !== 'function') throw new Error(mt('当前环境不支持网络请求'))
   const maxRedirects = options.maxRedirects ?? MAX_SAFE_REDIRECTS
   let target = String(url ?? '').trim()

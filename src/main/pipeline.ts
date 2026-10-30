@@ -50,6 +50,7 @@ import { complete, unwrapModelText } from './providers/llm'
 import { chainFor, withFailover } from './providers/chain'
 import { generateFromAudio } from './providers/gemini'
 import { askAgent, askFollowUp, stripAppendedSources } from './agent'
+import { egressFetch } from './net/egress'
 import { directVoiceIntent, isCurrentContentRequest, parseVoiceIntent, selectionAppendRequested, VOICE_INTENT_PROMPT } from './voice-intent'
 import { cursorGeneration, cursorGenerationPrompt, cursorNeedsResearch, CursorResearchError } from './cursor-generation'
 import { asrTermContext } from '@shared/asr-enhancement'
@@ -1522,6 +1523,8 @@ export class Pipeline {
               if (!explicitSelection) throw new Error(mt('本次请求未授权读取选区'))
               this.assertSelectionTarget(target)
             } : undefined,
+            // Chromium's network stack, so a system proxy also carries model traffic.
+            fetchImpl: egressFetch,
             onStatus: (status) => {
               this.pushCard({ question, answer: '', status, streaming: true }, token)
             },
@@ -1947,7 +1950,7 @@ export class Pipeline {
     if (generation && cursorNeedsResearch(generation)) {
       const research = this.llmSettings(settings)
       const result = await askAgent({ ...research, polish: { ...research.polish, askPrompt: cursorGenerationPrompt(generation, context.windowTitle, true) } }, generation, {}, signal, this.log,
-        { reset: true, allowedTools: ['web_search', 'read_webpage', 'get_datetime'] })
+        { reset: true, allowedTools: ['web_search', 'read_webpage', 'get_datetime'], fetchImpl: egressFetch })
       signal.throwIfAborted()
       if (!result.searched || !result.sources.length) throw new CursorResearchError(mt('未检索到可核实的实时来源，未插入内容。请检查搜索服务或网络后重试。'))
       const missing = result.sources.filter(source => !result.text.includes(source.url))

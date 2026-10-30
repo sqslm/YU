@@ -33,11 +33,15 @@ vi.mock('electron', () => ({ utilityProcess: { fork: () => {
 } } }))
 vi.mock('./model', () => ({ memoryModelReady: async () => true, downloadMemoryModel: async () => {} }))
 import { MemoryService } from './host'
+import { complete } from '../providers/llm'
+
+const llmComplete = vi.mocked(complete)
 
 let settings: Settings, service: MemoryService, busy = false, idleEnough = true
 beforeEach(async () => {
   vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false; fixture.failure = ''; fixture.llm = false
-  settings = structuredClone(DEFAULT_SETTINGS); settings.memory = { enabled: true, autoLearn: true }; busy = false; idleEnough = true
+  llmComplete.mockClear()
+  settings = structuredClone(DEFAULT_SETTINGS); settings.memory = { enabled: true, autoLearn: true, profileId: null, effort: 'high' }; busy = false; idleEnough = true
   service = new MemoryService('release/verification-entities/memory-host-test', () => settings, () => busy, () => {}, () => idleEnough)
   await service.configure()
 })
@@ -50,6 +54,30 @@ it('allows explicit remember extraction inside the foreground task, while record
   expect(fixture.children.at(-1).messages.find((message: any) => message.type === 'llm-result').text).toContain('用户正在制作')
   service.pause('recording')
   await expect(service.add('assistant', '另一个记忆', 'voice-turn-2')).rejects.toThrow('录音或游戏期间暂不整理记忆')
+})
+it('extracts with the LLM profile pinned for memory instead of the first chain entry', async () => {
+  fixture.llm = true
+  settings.profiles = [
+    { ...settings.polish, id: 'fast', name: '快模型', kind: 'llm', preset: '', enabled: true, baseUrl: 'https://fast.local/v1', apiKey: 'fast-key', model: 'fast-mini' },
+    { ...settings.polish, id: 'deep', name: '深模型', kind: 'llm', preset: '', enabled: true, baseUrl: 'https://deep.local/v1', apiKey: 'deep-key', model: 'deep-max' }
+  ]
+  settings.memory = { ...settings.memory, profileId: 'deep' }
+  await expect(service.add('assistant', '我在杭州做产品设计', 'voice-turn')).resolves.toBeUndefined()
+  const [cfg, request] = llmComplete.mock.calls.at(-1)!
+  // The pinned profile owns the whole connection: endpoint and model both come from it.
+  expect(cfg).toMatchObject({ baseUrl: 'https://deep.local/v1', apiKey: 'deep-key', model: 'deep-max' })
+  expect(request.effort).toBeUndefined()
+})
+it('extracts at the memory thinking effort instead of the dictation chain’s off', async () => {
+  fixture.llm = true
+  settings.profiles = [{ ...settings.polish, id: 'qa', name: 'QA', kind: 'llm', preset: '', enabled: true, model: 'qa-model' }]
+  settings.memory = { ...settings.memory, effort: 'low' }
+  await expect(service.add('assistant', '我在杭州做产品设计', 'voice-turn')).resolves.toBeUndefined()
+  const [cfg, request] = llmComplete.mock.calls.at(-1)!
+  // `settings.polish` still carries the dictation effort; extraction must override it.
+  expect(settings.polish.effort).not.toBe('low')
+  expect(cfg.effort).toBe('low')
+  expect(request.effort).toBeUndefined()
 })
 
 it('stays dormant until enabled and explicitly needed', async () => {

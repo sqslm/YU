@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SearchProvider } from '@shared/types'
 import { SEARCH_PROVIDER_NEEDS_ENDPOINT, SEARCH_PROVIDER_NEEDS_KEY, SEARCH_PROVIDERS } from '@shared/searchProviders'
-import { apiKeyHelperText, endpointHelperText, keyFieldDisabled } from './Search'
+import { apiKeyHelperText, effectiveModeLabel, endpointHelperText, keyFieldDisabled } from './Search'
 
 describe('API-key field editability', () => {
   it('never locks a selectable provider, optional or required', () => {
@@ -67,5 +67,15 @@ describe('endpoint validation copy', () => {
     expect(endpointHelperText('tavily', '')).toBeUndefined()
     expect(endpointHelperText('brave', '')).toBeUndefined()
     expect(endpointHelperText('duckduckgo', '')).toBeUndefined()
+  })
+})
+
+describe('network egress copy', () => {
+  it('names the mode Chromium is really running with', () => {
+    // "custom but the address did not parse" is reported by main as system; the
+    // page must not claim a custom proxy in that case.
+    expect(effectiveModeLabel('system')).toBe('跟随系统')
+    expect(effectiveModeLabel('direct')).toBe('直连')
+    expect(effectiveModeLabel('fixed_servers')).toBe('自定义代理')
   })
 })

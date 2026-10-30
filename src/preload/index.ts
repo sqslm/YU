@@ -342,6 +342,7 @@ const api: TypelessApi = {
   },
   net: {
     probeSearch: input => ipcRenderer.invoke('net:probe-search', input),
+    diagnose: (): Promise<import('@shared/network').EgressDiagnosis> => ipcRenderer.invoke('net:diagnose'),
     probe: (input: {
       baseUrl: string
       apiKey: string

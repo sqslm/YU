@@ -1,6 +1,19 @@
 export type MemoryKind = 'assistant' | 'style'
 export interface MemoryEntry { id: string; text: string; kind: MemoryKind; sourceId: string; createdAt?: string; updatedAt?: string; score?: number }
-export interface MemorySettings { enabled: boolean; autoLearn: boolean }
+export interface MemorySettings {
+  enabled: boolean
+  autoLearn: boolean
+  /**
+   * Which LLM profile extracts memories, and how hard it thinks.
+   *
+   * Extraction is its own job — a cheap fast model is often the right call even
+   * when chat runs on a frontier model — so it never inherits the chat choice.
+   * `profileId: null` means "the first enabled LLM profile"; `effort` defaults to
+   * `high` rather than the polish block's thinking-off value.
+   */
+  profileId: string | null
+  effort: string
+}
 export interface MemoryGraph { nodes: MemoryEntry[]; links: Array<{ source: string; target: string; type: 'similar' | 'source'; score: number }>; total: number; limit: number }
 export interface MemoryStatus { state: 'off' | 'idle' | 'waiting' | 'working' | 'paused' | 'error' | 'downloading'; pending: number; modelReady: boolean; progress?: number; error?: string }
 export interface MemoryBackend {
