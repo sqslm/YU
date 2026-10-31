@@ -38,7 +38,7 @@ Current-document reading supports opened Word, Excel and PowerPoint documents (i
 
 The [complete capability inventory and operating conditions](ASSISTANT_ROADMAP.md#统一入口功能清单) lists the supported operations for writing your own tests. rc.14 connects note audio control, actual prompt provenance, per-note sync failures, frozen selection preview/apply, hardware and system volume, PDF content, real download/recent records, permissions, monthly/yearly and finite reminders, workflow branches/result bindings, cross-monitor capture/pins, and email/mobile briefing delivery.
 
-External delivery is off by default. Configure Resend email or ntfy mobile push in Schedule & reminders → Calendar & briefing, then enable the channel. Keys use OS encryption; receipts distinguish provider acceptance, failure and unknown delivery. Everything port/CLI, file access, tool permissions and exclusions are in Assistant & permissions. External ICS subscriptions remain read-only; two-way sync refers to local data through the self-hosted server.
+External delivery is off by default. Configure Resend email or ntfy mobile push in Schedule & reminders → Briefing delivery, then enable the channel. Keys use OS encryption; receipts distinguish provider acceptance, failure and unknown delivery. Everything port/CLI, file access, tool permissions and exclusions are in Assistant & automation → Assistant & permissions. External ICS subscriptions remain read-only; two-way sync refers to local data through the self-hosted server.
 
 Wake learning: enable Voice & input → Wake word, then choose Learn wake phrase and record three natural readings. The local recognizer learns consistent pronunciation/recognition variants and calibrates the visible confidence threshold; it does not train a new speaker model. Only recognized variants are saved; raw audio stays in memory and is never uploaded or saved. Test the phrase directly after learning without starting a task. Changing the phrase invalidates the old profile; clearing and re-recording are supported. Device name and input level help verify the actual input.
 
@@ -47,6 +47,10 @@ Screenshot QR scanning: select the entire code, including a clear border, then c
 ## Screens
 
 The interface pairs warm white / graphite surfaces with jade accents and supports light, dark and system appearance. The collapsible sidebar groups navigation into Workspace, Everyday and Library. Overview, chat, notes, calendar, to-dos, briefing, history and settings share the same visual language; the floating bar and answer card use graphite and jade while retaining warning and error colours.
+
+Notes uses a list and a wide editor. Search, type, category, tags and sorting live in the list pane; category and sorting expand on demand. Export and re-transcription are under More, and the list can collapse for focused editing.
+
+![Notes](resources/screenshots/hub-notes.png)
 
 Design tokens live in `src/renderer/src/settings/theme.ts`: light canvas/paper/accent are `#f5f5f0` / `#fdfdf9` / `#28664c`; dark equivalents are `#191c1a` / `#202421` / `#9bd6bb`. Local Segoe UI Variable and Microsoft YaHei UI avoid network font requests. Type scales through 12/14/18/24/30/34 px, spacing uses MUI's 8 px base with 4 px half steps, and cards use 12–16 px radii. Controls include hover, selected, disabled and keyboard focus states and respect reduced motion.
 
@@ -78,7 +82,7 @@ Updates use up to 32 resumable ranges, sized at approximately 256 KB or larger, 
 | --- | --- |
 | ![Schedule & briefing](resources/screenshots/prefs-life.png) | ![Automation](resources/screenshots/prefs-automation.png) |
 
-![AI & models](resources/screenshots/prefs-models.png)
+![Models & intelligence](resources/screenshots/prefs-models.png)
 
 A fresh install has no working connections: this is where you add a recognition and a text connection — address, key, model — let it save automatically, then test the connection. Records shown in these screenshots are demo content.
 
@@ -105,7 +109,7 @@ Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue   # see Known
 node_modules\electron\dist\electron.exe .
 ```
 
-For development use `pnpm dev`. A fresh install has no model connections: open **Settings → AI & models**, add an ASR connection and a text connection, fill in address, key and model, let it save automatically, then test the connection. With the fake backend, point the address at `http://127.0.0.1:8787/v1` (starting the mock does not change your settings).
+For development use `pnpm dev`. A fresh install has no model connections: open **Settings → Models & intelligence**, add an ASR connection and a text connection, fill in address, key and model, let it save automatically, then test the connection. With the fake backend, point the address at `http://127.0.0.1:8787/v1` (starting the mock does not change your settings).
 
 Building the installer:
 
@@ -130,7 +134,7 @@ pnpm package          # -> release\YU-<version>-setup.exe (unsigned)
 
 After Right Alt starts a task, the bar first shows Smart task. Prompt cards stay hidden during recording and recognition, then appear when the selected card is actually used for polishing or translation.
 
-Settings group wake words, voice commands, text insertion, read-aloud and shortcuts under Voice & input. Assistant & permissions owns file access, tool permissions and local search; Schedule & reminders owns calendar, briefing and reminder notifications; Data & performance owns storage, retention and resource policies. Wake confidence is adjustable from 10% to 99% in Voice & input → Voice wake, saved automatically and applied locally without restarting the microphone. Lower thresholds wake more easily; higher thresholds reduce false activations. Older settings retain their previous defaults, including stricter matching for short phrases.
+Settings has six sidebar groups and 24 individual pages: Preferences & shortcuts, Voice & input, Models & intelligence, Assistant & automation, Schedule & reminders, and Data & application. Search by page name or keyword; `Ctrl + K` focuses search. Labels, controls and live status stay visible, with supplementary explanations on hover. Briefing delivery uses an explicit Save button. Wake confidence is adjustable from 10% to 99% in Voice & input → Voice wake, saved automatically and applied locally without restarting the microphone. Lower thresholds wake more easily; higher thresholds reduce false activations. Older settings retain their previous defaults, including stricter matching for short phrases.
 
 Ask cards support voice follow-ups: click Voice follow-up, speak, then Finish and send (up to 60 seconds). They use the configured input microphone and local/cloud ASR or audio-direct model. Cancellation, closing and game mode release the recording resources. The card stays expanded while a follow-up is pending, identifies the previous question, and keeps action results and failures in the same card.
 
@@ -170,12 +174,12 @@ Scrolling screenshots: select the content area and choose Scrolling screenshot. 
 - **Insertion and newlines**: insertion method (auto / SendInput / clipboard), multi-line handling (space / Shift+Enter / real newline), and whether to restore the clipboard after pasting.
 - **Prompts**: five card types (AI, polish, translation, document, email) with editable built-in cards and per-card temperature. "Auto activate" picks a card from the foreground app, and the Window classification page lets you add manual rules and preview which rule wins.
 
-- **Schedule & reminders**: calendar and briefing options hold default advance alerts, calendar subscriptions (https / webcal only), delivery time and quiet hours. Reminder notifications and snooze duration have their own tab. System voice, cloud TTS and playback settings are under AI & models → Models → TTS.
+- **Schedule & reminders**: calendar and briefing options hold default advance alerts, calendar subscriptions (https / webcal only), delivery time and quiet hours. Calendar, briefing, delivery and reminder notifications have separate pages. System voice, cloud TTS and playback settings are under Models & intelligence → TTS models.
 - **Wake word**: pick the input device explicitly. If it disappears the app falls back to the system default and logs a line in diagnostics instead of failing silently.
-- **Game mode**: under Settings → Data & performance → Resources, automatic detection is enabled by default. Settings and the tray also offer manual game mode. Detection uses known game processes, Unity / Unreal game windows and Windows exclusive 3D full-screen; ordinary browser full-screen and presentations alone do not trigger it. Add unrecognized windowed games by process name or full exe path, one per line. Game mode stops wake words, voice shortcuts, the recording bar and related workers, unloads the local model and pauses sync, calendar, briefing and reminder scheduling. Alt+Tab keeps it active; previous settings resume after all detected games exit, with the local model loaded on demand. Drafts are saved before their interface is reclaimed. Failed saves, necessary saving work, explicitly opened interfaces and unsaved screenshots are retained. Missed reminders remain recorded. Detection does not inject into games or change Windows settings.
+- **Game mode**: under Settings → Data & application → Resources, automatic detection is enabled by default. Settings and the tray also offer manual game mode. Detection uses known game processes, Unity / Unreal game windows and Windows exclusive 3D full-screen; ordinary browser full-screen and presentations alone do not trigger it. Add unrecognized windowed games by process name or full exe path, one per line. Game mode stops wake words, voice shortcuts, the recording bar and related workers, unloads the local model and pauses sync, calendar, briefing and reminder scheduling. Alt+Tab keeps it active; previous settings resume after all detected games exit, with the local model loaded on demand. Drafts are saved before their interface is reclaimed. Failed saves, necessary saving work, explicitly opened interfaces and unsaved screenshots are retained. Missed reminders remain recorded. Detection does not inject into games or change Windows settings.
 - **Updates**: checked against GitHub Releases by default; point `update-feed.txt` or an environment variable at your own feed if you prefer, or turn update checks off entirely.
 
-All settings save automatically; if a save fails, the pending change is kept with a retry entry point.
+Settings save automatically except for briefing delivery, which uses Save; if a save fails, the pending change is kept with a retry entry point.
 
 ## Sync and self-hosting
 
@@ -295,7 +299,7 @@ Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integra
 
 Community dictionaries are available in the term manager: select categories and choose Import / update. Sources are Rime Frost names, internet and computing lists plus the 5,000 most frequent THUOCL IT entries (8,469 total on 2026-10-29). Reimport adds missing entries while preserving personal edits and enabled states; failed downloads do not partially import. Source and license links are shown. Lists are downloaded on demand, not bundled; downloads send no recordings, history or credentials. These lists do not verify actor–work relationships or guarantee coverage of recent names.
 
-Proper-name enhancement is off by default. Open Settings → Voice & input → Recording & language → Speech recognition enhancement, add/import terms, then enable it. Domains/app names select relevant terms automatically; blank domains are common user terms. Related terms may be sent to your configured ASR/LLM. The local entities.sqlite is independent of history retention, is not synced, and never learns private terms automatically. Only verified provider protocols receive ASR context; local SenseVoice uses candidates in existing LLM polishing. Direct-audio mode adds no new ASR/correction request. Full user-supplied factory prompts are bundled without truncation; customized card text is preserved.
+Proper-name enhancement is off by default. Open Settings → Voice & input → Vocabulary enhancement, add/import terms, then enable it. Domains/app names select relevant terms automatically; blank domains are common user terms. Related terms may be sent to your configured ASR/LLM. The local entities.sqlite is independent of history retention, is not synced, and never learns private terms automatically. Only verified provider protocols receive ASR context; local SenseVoice uses candidates in existing LLM polishing. Direct-audio mode adds no new ASR/correction request. Full user-supplied factory prompts are bundled without truncation; customized card text is preserved.
 
 ## Changelog
 
@@ -378,7 +382,7 @@ Only saved connection IDs cross the query interface. Credentials are read in the
 
 Explicit “remember” requests and automatic learning both use Mem0 extraction before saving: remove spoken fillers, repetitions and self-corrections, preserve names, numbers and constraints, and store concise standalone facts rather than raw transcripts. A save is confirmed only after an actual ADD/UPDATE succeeds. Manual entries and edits remain exactly as entered; existing memories are not rewritten in bulk. Node dragging uses 15% less pointer displacement with slightly higher simulation damping.
 
-Open Settings → Assistant & permissions → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.
+Open Settings → Assistant & automation → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.
 
 Mem0 **2.4.6** supplies extraction, deduplication, ADD/UPDATE/DELETE, retrieval and SQLite persistence. Version 3.3.1 was evaluated but its additive capture does not replace conflicting old facts. The SDK runs in an on-demand Electron utility process; no Python, Docker or database server is required. LLM requests reuse the selected connection in the main process. Local storage does not make cloud-configured LLM calls offline.
 

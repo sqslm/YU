@@ -36,7 +36,7 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
   const found = rows.filter(row => row.text.toLowerCase().includes(query.toLowerCase()))
   const llmProfiles = settings.profiles.filter(profile => profile.kind === 'llm')
   const download = (): void => { void run(async () => { await window.api.memory.download(); setStatus(await window.api.memory.status()) }) }
-  return <SettingsGroup title={t('长期记忆')}>
+  return <SettingsGroup title={t('长期记忆')} hint={t('可说“记住……”或“忘记……”。以“临时对话”开头，本次会话不读取或保存长期记忆。')}>
     <SettingsRow label={t('启用长期记忆')} description={t('记住助手对话中的个人事实和明确的写作偏好。记忆独立于历史保存。')}>
       <Switch size="small" checked={settings.memory.enabled} onChange={event => event.target.checked ? setConsent(true) : patch({ memory: { ...settings.memory, enabled: false } })} inputProps={{ 'aria-label': t('启用长期记忆') }} />
     </SettingsRow>
@@ -55,13 +55,9 @@ export function MemorySection({ settings, patch }: { settings: Settings; patch: 
       </TextField>
     </SettingsRow>
     {!llmProfiles.length && <Box sx={{ px: 2, pb: 1 }}>
-      <Typography variant="caption" color="text.secondary">{t('先到 AI 与模型里添加一条 LLM')}</Typography>
+      <Typography variant="caption" color="text.secondary">{t('请先在“模型与智能 → LLM模型”添加连接。')}</Typography>
     </Box>}
     <Box sx={{ px: 2, pb: 2 }}>
-      <Typography variant="caption" color="text.secondary">{t('本地存储和向量检索；提取与回答可能把允许的内容发送到当前 LLM，并产生额外调用费用。')}</Typography>
-      <Typography variant="body2">{t('可说“记住……”或“忘记……”。以“临时对话”开头，本次会话不读取或保存长期记忆。')}</Typography>
-      <Typography variant="caption" display="block" color="text.secondary">{t('最多暂存 30 条新交互，退出软件会丢弃尚未整理的候选内容。整理后释放模型；查看列表和图谱不加载向量模型。')}</Typography>
-      <Typography variant="caption" display="block" color="text.secondary">{t('下载的是本地检索模型；记忆提炼使用已配置的 LLM，不是另一个生成模型。')}</Typography>
       <Typography variant="caption">{t('状态')}：{t(status?.state ?? 'off')}{status?.pending ? ` · ${t('待处理')} ${status.pending}` : ''}</Typography>
       {settings.memory.enabled && status?.error && <Alert severity="warning" sx={{ mt: 1 }} action={status.pending > 0 && settings.memory.autoLearn ? <Button disabled={busy || status.state === 'working' || status.state === 'paused'} onClick={() => void run(() => window.api.memory.retryLearning())}>{t('重试整理')}</Button> : undefined}>{t(status.error)}<Typography variant="caption" display="block">{t('原有记忆仍然保留。提炼使用当前 LLM，不需要重新下载本地检索模型。')}</Typography></Alert>}
       {status?.state === 'downloading' && <><LinearProgress variant="determinate" value={status.progress ?? 0} sx={{ my: 1 }} /><Button onClick={() => void window.api.memory.cancelDownload()}>{t('取消下载')}</Button></>}

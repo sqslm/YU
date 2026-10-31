@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
-import { Autocomplete, Box, Button, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
+import { Autocomplete, Box, Button, MenuItem, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
 import { MAX_TRANSLATE_TARGETS } from '@shared/defaults'
 import { MicTest } from './MicTest'
@@ -254,16 +254,11 @@ export function SettingsGroup({
 
   const head = (
     <>
-      {icon && <Box sx={{ display: 'grid', placeItems: 'center', color: 'text.secondary' }}>{icon}</Box>}
+      {icon && <Box sx={{ display: 'grid', placeItems: 'center', color: 'primary.main', bgcolor: 'action.selected', width: 30, height: 30, borderRadius: '9px', flexShrink: 0 }}>{icon}</Box>}
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography component="h3" sx={{ fontSize: 13, fontWeight: 650, lineHeight: 1.5, color: 'text.primary', m: 0 }}>
+        <Typography component="h3" title={hint} sx={{ fontSize: 14, fontWeight: 650, lineHeight: 1.5, color: 'text.primary', m: 0 }}>
           {title}
         </Typography>
-        {hint && (
-          <Typography sx={{ fontSize: 11.5, lineHeight: 1.5, color: 'text.secondary', mt: 0.25, overflowWrap: 'anywhere' }}>
-            {hint}
-          </Typography>
-        )}
       </Box>
       {collapsible && (
         <Box component="span" aria-hidden sx={{ display: 'grid', placeItems: 'center', width: 20, height: 20, color: 'text.secondary', transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 120ms' }}>
@@ -278,7 +273,7 @@ export function SettingsGroup({
       sx={{
         border: 1,
         borderColor: 'divider',
-        borderRadius: '12px',
+        borderRadius: '14px',
         bgcolor: 'background.paper',
         // Not `hidden`: the Slider inside a group paints its value label 26px
         // above the track, i.e. outside the card, and clipping turned "10" into a
@@ -351,37 +346,25 @@ export function SettingsGroup({
 interface SettingsRowProps {
   label: string
   description?: string
+  detail?: string
   children?: ReactNode
 }
 
-/** Label + hint on the left, a width-constrained control on the right. */
-export function SettingsRow({ label, description, children }: SettingsRowProps): JSX.Element {
+/** Explanations are available on hover; only actual values use a second line. */
+export function SettingsRow({ label, description, detail, children }: SettingsRowProps): JSX.Element {
   const labelId = useId()
   return (
-    <Box role="group" aria-labelledby={labelId} sx={{ display: 'flex', alignItems: 'center', flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 2, px: 2.5, py: 2.25, minHeight: 76 }}>
+    <Box role="group" aria-labelledby={labelId} aria-description={description} sx={{ display: 'flex', alignItems: 'center', flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 3, px: 2.5, py: 1.5, minHeight: 62,
+      '@container (max-width: 680px)': { flexWrap: 'wrap', gap: 1.5, '& > [data-settings-control]': { maxWidth: '100%', flexWrap: 'wrap', justifyContent: 'flex-start', '& .MuiStack-root': { flexWrap: 'wrap', rowGap: 1 }, '& .MuiFormControl-root': { maxWidth: '100%' } } } }}>
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography id={labelId} sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'text.primary' }}>
+        <Tooltip title={description ?? ''} describeChild placement="top-start"><Typography id={labelId} sx={{ fontSize: 13, fontWeight: 550, lineHeight: 1.5, color: 'text.primary' }}>
           {label}
-        </Typography>
-        {description && (
-          <Typography
-            // Paths like /text/chatcompletion_v2 have no break opportunity: at
-            // the 780px window the text column is barely 120px wide, so they
-            // would spill under the card's clipped edge without this.
-            sx={{
-              fontSize: 11.5,
-              color: 'text.secondary',
-              mt: 0.25,
-              lineHeight: 1.45,
-              overflowWrap: 'anywhere'
-            }}
-          >
-            {description}
-          </Typography>
-        )}
+        </Typography></Tooltip>
+        {detail && <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: .5, lineHeight: 1.5, overflowWrap: 'anywhere' }}>{detail}</Typography>}
       </Box>
       {children && (
         <Box
+          data-settings-control
           sx={{
             flex: '0 0 auto',
             display: 'flex',
@@ -408,28 +391,9 @@ export function SettingsField({ label, description, children }: SettingsFieldPro
   const labelId = useId()
   return (
     <Box role="group" aria-labelledby={labelId} sx={{ px: 2, py: 1.75 }}>
-      <Typography id={labelId} sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'text.primary' }}>
+      <Tooltip title={description ?? ''} describeChild placement="top-start"><Typography id={labelId} sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'text.primary' }}>
         {label}
-      </Typography>
-      {description && (
-        <Typography
-          sx={{
-            fontSize: 11.5,
-            color: 'text.secondary',
-            mt: 0.25,
-            lineHeight: 1.45,
-            overflowWrap: 'anywhere'
-          }}
-        >
-          {description}
-        </Typography>
-      )}
-      {/*
-        The gap lives on the control, not on the description: fields without a
-        description (Base URL, 模型) used to glue the input straight onto the
-        label while fields with one got 8px, so two neighbours in the same body
-        had different rhythm.
-      */}
+      </Typography></Tooltip>
       <Box sx={{ mt: 1 }}>{children}</Box>
     </Box>
   )
@@ -1257,7 +1221,7 @@ export function AssistantSettingsSection({ settings, patch }: { settings: Settin
   return <Stack spacing={3}>
     <AssistantAccessSection settings={settings} patch={patch} />
     <SettingsGroup icon={<IconFolder />} title={i18n.t('助手文件搜索')}>
-      <SettingsRow label={i18n.t('下载目录')} description={settings.assistantDownloadFolder || i18n.t('使用 Windows 下载目录；浏览器另设目录时可在这里指定')}>
+      <SettingsRow label={i18n.t('下载目录')} detail={settings.assistantDownloadFolder || i18n.t('使用 Windows 下载目录；浏览器另设目录时可在这里指定')}>
         <Stack direction="row" spacing={1}>
           {settings.assistantDownloadFolder && <Button size="small" onClick={() => patch({ assistantDownloadFolder: '' })}>{i18n.t('恢复默认')}</Button>}
           <Button size="small" variant="outlined" onClick={() => void window.api.app.chooseDownloadFolder().then(path => { if (path) patch({ assistantDownloadFolder: path }) })}>{i18n.t('选择目录')}</Button>

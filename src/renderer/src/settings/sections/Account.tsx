@@ -119,7 +119,7 @@ export function AccountSection({ settings, patch }: SectionProps): JSX.Element {
       <SettingsGroup icon={<IconUser />} title={i18n.t('登录状态')}>
         <SettingsRow
           label={signedIn ? i18n.t('当前账户') : i18n.t('未登录')}
-          description={signedIn ? view.email : view?.needsSignIn ? i18n.t('登录已过期，请重新登录。') : i18n.t('登录后可跨设备同步历史、随记、录音和个人统计。')}
+          detail={signedIn ? view.email : view?.needsSignIn ? i18n.t('登录已过期，请重新登录。') : undefined}
         >
           {signedIn ? (
             <Button variant="outlined" data-account-signout disabled={busy !== '' || syncing} onClick={() => void signOut()}>{i18n.t('退出登录')}</Button>
@@ -140,7 +140,7 @@ export function AccountSection({ settings, patch }: SectionProps): JSX.Element {
             ))}
           </TextField>
         </SettingsRow>
-        <SettingsRow label={i18n.t('同步状态')} description={status?.lastError || (status?.lastSyncAt ? i18n.t('上次同步：{{time}}', { time: new Date(status.lastSyncAt).toLocaleString() }) : i18n.t('尚未完成首次同步'))}>
+        <SettingsRow label={i18n.t('同步状态')} detail={status?.lastError || (status?.lastSyncAt ? i18n.t('上次同步：{{time}}', { time: new Date(status.lastSyncAt).toLocaleString() }) : i18n.t('尚未完成首次同步'))}>
           <Typography data-sync-state sx={{ fontSize: 12, color: status?.lastError ? 'error.main' : 'text.secondary' }}>{stateLabel}</Typography>
         </SettingsRow>
         <Box sx={{ px: 2, py: 1.75 }}>
@@ -155,7 +155,7 @@ export function AccountSection({ settings, patch }: SectionProps): JSX.Element {
           {subscription && <SettingsRow label={i18n.t('当前计划')} description={i18n.t('到期：{{date}}', { date: dayOf(subscription.plan === 'trial' ? subscription.trialEndsAt : subscription.currentPeriodEnd) })}>
             <Typography data-plan sx={{ fontSize: 12.5 }}>{planLabel(subscription)}</Typography>
           </SettingsRow>}
-          <SettingsRow label={i18n.t('存储用量')} description={view.storage ? i18n.t('随记 {{notes}} 条 · 录音 {{audio}} 个', { notes: view.storage.noteCount, audio: view.storage.audioCount }) : i18n.t('正在读取云端用量…')}>
+          <SettingsRow label={i18n.t('存储用量')} detail={view.storage ? i18n.t('随记 {{notes}} 条 · 录音 {{audio}} 个', { notes: view.storage.noteCount, audio: view.storage.audioCount }) : i18n.t('正在读取云端用量…')}>
             <Typography data-storage sx={{ fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{view.storage ? `${size(view.storage.usedBytes)} / ${size(view.storage.quotaBytes)}` : '—'}</Typography>
           </SettingsRow>
           {view.remoteCount >= 0 && <SettingsRow label={i18n.t('云端听写历史')}><Typography sx={{ fontSize: 12.5 }}>{i18n.t('{{n}} 条', { n: view.remoteCount })}</Typography></SettingsRow>}

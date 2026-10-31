@@ -12,7 +12,6 @@ import { MAX_BRIEFING_HISTORY, isWithinQuietHours, nextAllowedAt, normalizeBrief
 import { MAX_EVENT_LEAD_MINUTES } from '@shared/calendar'
 import { SettingsGroup, SettingsHint, SettingsRow, controlSx, narrowControlSx } from './General'
 import i18n from '../../i18n'
-import { BriefingDeliverySection } from './BriefingDelivery'
 
 /**
  * The local calendar, the daily briefing and read-aloud.
@@ -74,9 +73,10 @@ function dayLabel(event: CalendarEvent, language: 'zh' | 'en'): string {
   return `${prefix} ${formatEventTime(event, language)}`
 }
 
-export function LifeSection({ settings, patch }: {
+export function LifeSection({ settings, patch, view }: {
   settings: Settings
   patch: (patch: Partial<Settings>) => void
+  view: 'calendar' | 'briefing'
 }): JSX.Element {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [range, setRange] = useState<CalendarRange>('upcoming')
@@ -170,12 +170,16 @@ export function LifeSection({ settings, patch }: {
     try { setEvents(await window.api.life.events(next)) } catch (error) { setNotice({ error: true, text: String(error) }) }
   }, [])
 
-  useEffect(() => { void loadEvents(range) }, [loadEvents, range])
-  useEffect(() => { void loadFeeds() }, [loadFeeds])
+  useEffect(() => { if (view === 'calendar') void loadEvents(range) }, [loadEvents, range, view])
+  useEffect(() => { if (view === 'calendar') void loadFeeds() }, [loadFeeds, view])
   // The hub calendar page and the assistant write the same store, so the list has
   // to follow their edits instead of showing what was true when the tab opened.
-  useEffect(() => window.api.life.onChanged(() => { void loadEvents(range) }), [loadEvents, range])
   useEffect(() => {
+    if (view !== 'calendar') return
+    return window.api.life.onChanged(() => { void loadEvents(range); void loadFeeds() })
+  }, [loadEvents, loadFeeds, range, view])
+  useEffect(() => {
+    if (view !== 'briefing') return
     let alive = true
     void window.api.life.briefing().then(
       (value) => { if (alive) setBriefing(value) },
@@ -183,7 +187,7 @@ export function LifeSection({ settings, patch }: {
     )
     void loadHistory()
     return () => { alive = false }
-  }, [loadHistory])
+  }, [loadHistory, view])
 
   const cancelEvent = async (id: string, action: 'cancel' | 'restore'): Promise<void> => {
     try { await window.api.life.cancelEvent(id, action); await loadEvents(range) } catch (error) { setNotice({ error: true, text: String(error) }) }
@@ -203,6 +207,7 @@ export function LifeSection({ settings, patch }: {
     <Stack spacing={2}>
       {notice && <Alert severity={notice.error ? 'error' : 'success'} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
+      {view === 'calendar' && <>
       <SettingsGroup icon={<CalendarMonthOutlined fontSize="small"/>} title={i18n.t('本地日程')}>
         <SettingsRow label={i18n.t('启用日程与提醒')} description={i18n.t('日程独立于提醒：日程有起止时间，到点前按这里的提前量提示。')}>
           <Switch size="small" checked={settings.calendar.enabled}
@@ -218,15 +223,17 @@ export function LifeSection({ settings, patch }: {
             ))}
           </TextField>
         </SettingsRow>
+      </SettingsGroup>
+      <SettingsGroup title={i18n.t('日程预览')} collapsible defaultOpen={false}>
         <SettingsRow label={i18n.t('查看范围')}>
           <TextField select size="small" sx={{ width: 140 }} value={range} onChange={e => setRange(e.target.value as CalendarRange)}>
             {RANGES.map(item => <MenuItem key={item.value} value={item.value}>{i18n.t(item.label)}</MenuItem>)}
           </TextField>
         </SettingsRow>
-        {events.length === 0 && <SettingsHint>{i18n.t('这个范围里没有日程。对语说「明天下午三点到四点安排项目讨论」就会出现在这里。')}</SettingsHint>}
+        {events.length === 0 && <SettingsHint>{i18n.t('暂无日程')}</SettingsHint>}
         {events.map(row => (
           <SettingsRow key={row.id} label={row.title}
-            description={`${dayLabel(row, i18n.language === 'en' ? 'en' : 'zh')}${row.location ? ` · ${row.location}` : ''}${row.status === 'cancelled' ? ` · ${i18n.t('已取消')}` : ''}`}>
+            detail={`${dayLabel(row, i18n.language === 'en' ? 'en' : 'zh')}${row.location ? ` · ${row.location}` : ''}${row.status === 'cancelled' ? ` · ${i18n.t('已取消')}` : ''}`}>
             {row.status === 'cancelled'
               ? <Button size="small" onClick={() => void cancelEvent(row.id, 'restore')}>{i18n.t('恢复')}</Button>
               : <Button size="small" onClick={() => void cancelEvent(row.id, 'cancel')}>{i18n.t('取消')}</Button>}
@@ -235,10 +242,10 @@ export function LifeSection({ settings, patch }: {
       </SettingsGroup>
 
       <SettingsGroup icon={<LinkOutlined fontSize="small"/>} title={i18n.t('订阅日历')}>
-        <SettingsHint>{i18n.t('把别人分享的 ICS 地址填进来，日程会合并到本地：订阅是只读的，这里的改动不会回写。')}</SettingsHint>
+        <SettingsHint>{i18n.t('订阅为只读，不回写外部日历。')}</SettingsHint>
         {feeds.map(feed => (
           <SettingsRow key={feed.id} label={feed.name}
-            description={`${feed.url}${feed.lastFetchedAt ? ` · ${i18n.t('上次拉取：{{time}}', { time: historyDayText(
+            detail={`${feed.url}${feed.lastFetchedAt ? ` · ${i18n.t('上次拉取：{{time}}', { time: historyDayText(
               new Date(feed.lastFetchedAt).toISOString().slice(0, 10), language) })}` : ` · ${i18n.t('还没拉取过')}`}`}>
             <Stack direction="row" spacing={1} alignItems="center">
               <Switch size="small" checked={feed.enabled} onChange={e => void toggleFeed(feed, e.target.checked)} />
@@ -262,6 +269,8 @@ export function LifeSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
 
+      </>}
+      {view === 'briefing' && <>
       <SettingsGroup icon={<WbSunnyOutlined fontSize="small"/>} title={i18n.t('每日简报')}>
         <SettingsRow label={i18n.t('每天定时生成简报')} description={i18n.t('汇总今天的日程、到期待办、已经过期的事和明天的预览。')}>
           <Switch size="small" checked={settings.briefing.enabled}
@@ -283,7 +292,7 @@ export function LifeSection({ settings, patch }: {
           <Switch size="small" checked={settings.briefing.notify}
             onChange={e => patch({ briefing: { ...settings.briefing, notify: e.target.checked } })} />
         </SettingsRow>
-        <SettingsRow label={i18n.t('同时朗读')} description={i18n.t('请先在「AI 与模型 → TTS模型」中启用朗读。')}>
+        <SettingsRow label={i18n.t('同时朗读')} description={i18n.t('先在“模型与智能 → TTS模型”启用朗读。')}>
           <Switch size="small" checked={settings.briefing.speak} disabled={!settings.tts.enabled}
             onChange={e => patch({ briefing: { ...settings.briefing, speak: e.target.checked } })} />
         </SettingsRow>
@@ -326,10 +335,9 @@ export function LifeSection({ settings, patch }: {
         </SettingsRow>
       </SettingsGroup>
 
-      <BriefingDeliverySection settings={settings} patch={patch}/>
       <SettingsGroup icon={<HistoryOutlined fontSize="small"/>} title={i18n.t('最近的简报')}
-        hint={i18n.t('只读。最多保留最近 {{n}} 份。', { n: MAX_BRIEFING_HISTORY })}>
-        {recent.length === 0 && <SettingsHint>{i18n.t('还没有生成过简报。开启后每天会在这里留一份，方便回看。')}</SettingsHint>}
+        hint={i18n.t('只读。最多保留最近 {{n}} 份。', { n: MAX_BRIEFING_HISTORY })} collapsible defaultOpen={false}>
+        {recent.length === 0 && <SettingsHint>{i18n.t('还没有生成过简报。')}</SettingsHint>}
         {recent.map(record => (
           <Box key={record.dayKey} sx={{ px: 2, py: 1.25 }}>
             <Box
@@ -356,6 +364,7 @@ export function LifeSection({ settings, patch }: {
           </Box>
         ))}
       </SettingsGroup>
+      </>}
     </Stack>
   )
 }

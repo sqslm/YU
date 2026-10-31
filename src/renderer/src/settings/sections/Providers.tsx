@@ -14,15 +14,16 @@ const SERVICES: Array<{ kind: ModelService; label: string; hint: string }> = [
   { kind: 'tts', label: 'TTS模型', hint: '将文字转换为语音' }
 ]
 
-export function ProvidersSection({ settings, patch, saving, saveError }: { settings: Settings; patch: (delta: Partial<Settings>) => void; saving: boolean; saveError: string }): JSX.Element {
-  const [service, setService] = useState<ModelService>(settings.pipelineMode === 'multimodal' ? 'llm' : 'asr')
+export function ProvidersSection({ settings, patch, saving, saveError, service: destination }: { settings: Settings; patch: (delta: Partial<Settings>) => void; saving: boolean; saveError: string; service?: ModelService }): JSX.Element {
+  const [chosenService, setService] = useState<ModelService>(settings.pipelineMode === 'multimodal' ? 'llm' : 'asr')
+  const service = destination ?? chosenService
   return <Stack spacing={1.75} data-models-redesign>
-    <Tabs value={service} onChange={(_event, next: ModelService) => setService(next)} variant="fullWidth" aria-label={i18n.t('模型用途')}
+    {!destination && <Tabs value={service} onChange={(_event, next: ModelService) => setService(next)} variant="fullWidth" aria-label={i18n.t('模型用途')}
       sx={{ minHeight: 62, border: 1, borderColor: 'divider', borderRadius: '9px', bgcolor: 'background.paper', '& .MuiTabs-indicator': { display: 'none' } }}>
       {SERVICES.map(item => <Tab key={item.kind} value={item.kind} aria-label={i18n.t(item.label)} data-model-service={item.kind}
         label={<Box><Typography component="span" sx={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{i18n.t(item.label)}</Typography><Typography component="span" sx={{ display: 'block', mt: 0.35, fontSize: 11, color: 'text.secondary' }}>{i18n.t(item.hint)}</Typography></Box>}
         sx={{ minHeight: 62, minWidth: 0, px: 1, py: 1, border: 1, borderColor: 'transparent', borderRadius: '8px', color: 'text.secondary', '&.Mui-selected': { borderColor: 'primary.main', bgcolor: modelSelectedBackground, color: 'primary.main' } }} />)}
-    </Tabs>
+    </Tabs>}
     {service !== 'tts' && <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
       <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{i18n.t('处理方式')}</Typography>
       <TextField select size="small" value={settings.pipelineMode} inputProps={{ 'aria-label': i18n.t('语音处理流程') }} sx={{ width: 146 }}

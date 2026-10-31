@@ -21,6 +21,7 @@ import {
   Menu,
   MenuItem,
   Slider,
+  Skeleton,
   Stack,
   Switch,
   Tabs,
@@ -29,6 +30,11 @@ import {
   Tooltip,
   Typography
 } from '@mui/material'
+import TuneRounded from '@mui/icons-material/TuneRounded'
+import MoreHorizRounded from '@mui/icons-material/MoreHorizRounded'
+import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
+import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined'
+import AttachFileRounded from '@mui/icons-material/AttachFileRounded'
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayIcon from '@mui/icons-material/PlayArrow'
 import DownloadIcon from '@mui/icons-material/Download'
@@ -191,6 +197,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const [metadataOpen, setMetadataOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [tagFiltersOpen, setTagFiltersOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(Boolean(restoredView.categoryId || restoredView.activeTags.length || restoredView.sort !== 'newest'))
   const [moreAt, setMoreAt] = useState<HTMLElement | null>(null)
   const [transcriptDraft, setTranscriptDraft] = useState('')
   const [polishedDraft, setPolishedDraft] = useState('')
@@ -1123,14 +1130,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     <Box data-notes-page sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box
         data-notes-toolbar
-        sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 2, display: 'flex', flexDirection: 'column', gap: 1.5, flex: '0 0 auto' }}
+        sx={{ px: { xs: 2, lg: 4 }, pt: 2.5, pb: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5, flex: '0 0 auto' }}
       >
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography component="h1" variant="h5">{t('随记')}</Typography>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{notes.length}</Typography>
+        <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} alignItems="center"><Typography component="h1" variant="h5">{t('随记')}</Typography><Typography sx={{ fontSize: 11.5, color: 'text.secondary', bgcolor: 'action.hover', px: 1, borderRadius: 1 }}>{notes.length}</Typography></Stack></Box>
           <Box sx={{ flex: 1 }} />
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
-            <ButtonGroup size="small" variant="outlined" disabled={creatingText || importing || !!retranscribingId || loading || recording || starting || busy || bulkBusy || exportBusy} sx={{ height: 34 }}>
+            <ButtonGroup size="small" variant="contained" disabled={creatingText || importing || !!retranscribingId || loading || recording || starting || busy || bulkBusy || exportBusy} sx={{ height: 34 }}>
               <Button data-notes-new-text title={t('notes.newTextShortcut')} aria-keyshortcuts="Control+N" onClick={() => void createTextNote()} startIcon={<IconPlus size={14} />} sx={{ fontSize: 12 }}>
                 {creatingText ? t('notes.creatingText') : t('notes.newText')}
               </Button>
@@ -1167,8 +1173,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 >
                   {formatClock(recordedMs)}
                 </Typography>
-                <Button data-notes-more size="small" onClick={event => setMoreAt(event.currentTarget)}>{t('更多')}</Button>
-          </Stack>
+              </Stack>
             )}
 
 
@@ -1185,7 +1190,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
             >
               {recording ? t('notes.recordStop') : t('notes.record')}
             </Button>
-            <Button data-notes-more size="small" onClick={event => setMoreAt(event.currentTarget)}>{t('更多')}</Button>
+            <Tooltip title={t('更多')}><IconButton data-notes-more size="small" aria-label={t('更多')} onClick={event => setMoreAt(event.currentTarget)}><MoreHorizRounded sx={{ fontSize: 20 }} /></IconButton></Tooltip>
             {/* 收起/展开列表：放在工具栏最右，收起后也一直看得见、可键盘操作 */}
             <Tooltip title={t(listCollapsed ? '显示列表' : '隐藏列表')}>
               <IconButton
@@ -1206,110 +1211,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
             </Tooltip>
           </Stack>
         </Stack>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-          <Box
-            data-notes-search
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              height: 34,
-              px: 1.25,
-              flex: 1,
-              minWidth: 180,
-              borderRadius: '8px',
-              bgcolor: 'action.hover'
-            }}
-          >
-            <Box sx={{ display: 'flex', color: 'text.disabled' }}>
-              <IconSearch size={14} />
-            </Box>
-            <InputBase
-              value={queryInput}
-              onChange={(event) => setQueryInput(event.target.value)}
-              placeholder={t('notes.searchPlaceholder')}
-              sx={{ flex: 1, fontSize: 12.5 }}
-              inputProps={{ 'aria-label': t('notes.searchPlaceholder') }}
-            />
-          </Box>
-
-          <TextField
-            data-notes-category-filter
-            select
-            SelectProps={{ displayEmpty: true }}
-            size="small"
-            value={categoryId}
-            onChange={(event) => setCategoryId(event.target.value)}
-            sx={{ width: 136, '& .MuiInputBase-input': { fontSize: 12.5 } }}
-            aria-label={t('notes.categoryFilter')}
-          >
-            <MenuItem value={ALL_CATEGORIES}>{t('notes.allCategories')}</MenuItem>
-            {categories.map((category) => (
-              <MenuItem key={category.id} value={category.id}>
-                {category.name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField select size="small" value={sort}
-            data-notes-sort={sort}
-            onChange={event => setSort(event.target.value as NoteSort)}
-            aria-label={t('notes.sortLabel')}
-            sx={{ width: 142, '& .MuiInputBase-input': { fontSize: 12.5 } }}>
-            <MenuItem value="newest">{t('notes.sortNewest')}</MenuItem>
-            <MenuItem value="oldest">{t('notes.sortOldest')}</MenuItem>
-            <MenuItem value="updated">{t('notes.sortUpdated')}</MenuItem>
-          </TextField>
-
-          <Box sx={{ flex: 1 }} />
-
-
-        </Stack>
-
-        <Tabs data-notes-kind-filter value={kind} onChange={(_event, value) => setKind(value)} sx={{ minHeight: 34, '& .MuiTab-root': { minHeight: 34, py: .5, fontSize: 12 } }}>
-          {(['all', 'text', 'audio', 'failed'] as const).map(value => <Tab key={value} value={value} label={t(`notes.kind_${value}`)} />)}
-        </Tabs>
         {(importing || retranscribingId) && <Stack data-notes-audio-job role="status" direction="row" spacing={1} alignItems="center">
           <CircularProgress size={13} />
           <Typography sx={{ fontSize: 11.5 }}>{t(importing ? 'notes.importingAudio' : 'notes.retranscribing')}</Typography>
           <Button data-notes-cancel-audio-job size="small" onClick={() => { audioJobRef.current = false; void window.api.notes.cancelAudioJob().catch(err => setNotice(messageOf(err))) }}>{t('common.cancel')}</Button>
         </Stack>}
-
-        {tagOptions.length > 0 && (tagFiltersOpen || activeTags.length > 0) && (
-          <Stack
-            data-notes-tag-filter-row
-            direction="row"
-            spacing={0.75}
-            sx={{ flexWrap: 'wrap', rowGap: 0.75, alignItems: 'center' }}
-          >
-            {tagOptions.map(({ tag, count }) => {
-              const active = activeTags.some((value) => value === tag)
-              return (
-                <Box
-                  key={tag}
-                  role="button"
-                  tabIndex={0}
-                  data-notes-tag-filter={tag}
-                  data-notes-tag-active={active ? 'on' : 'off'}
-                  aria-pressed={active}
-                  onClick={() => setActiveTags((prev) => toggleTag(prev, tag))}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      setActiveTags((prev) => toggleTag(prev, tag))
-                    }
-                  }}
-                  sx={pillSx(active)}
-                >
-                  #{tag}
-                  <Box component="span" sx={{ opacity: 0.55 }}>
-                    {count}
-                  </Box>
-                </Box>
-              )
-            })}
-          </Stack>
-        )}
 
         {selection.length > 0 && (
           <Stack
@@ -1405,13 +1311,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
           </Typography>
         )}
         {loadError && (
-          <Typography data-notes-load-error sx={{ fontSize: 11.5, color: 'error.main' }}>
-            {loadError}
-          </Typography>
+          <Alert data-notes-load-error severity="error" action={<Button color="inherit" size="small" onClick={() => void reload()}>{t('重试')}</Button>}>{loadError}</Alert>
         )}
       </Box>
 
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+      <Box data-notes-workspace sx={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden', mx: { xs: 2, lg: 4 }, mb: 2.5, border: 1, borderColor: 'divider', borderRadius: '16px', bgcolor: 'background.paper' }}>
         <Box
           data-notes-list
           data-notes-visible={visible.length}
@@ -1419,32 +1323,133 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
           aria-hidden={listCollapsed || undefined}
           sx={{
             // 收起靠 flex-basis/宽度归零 + overflow 裁剪动画，不改变文档流里的其它尺寸
+            visibility: listCollapsed ? 'hidden' : 'visible',
             position: 'relative',
-            width: 320,
-            maxWidth: 320,
-            flex: '0 0 320px',
+            width: { xs: 260, lg: 300 },
+            maxWidth: { xs: 260, lg: 300 },
+            flex: { xs: '0 0 260px', lg: '0 0 300px' },
+            display: 'flex', flexDirection: 'column',
             minWidth: 0,
             minHeight: 0,
             overflow: 'hidden',
-            borderTop: '1px solid',
             borderRight: '1px solid',
             borderColor: listCollapsed ? 'transparent' : 'divider',
-            bgcolor: 'background.paper',
+            bgcolor: 'background.default',
             transition: 'flex-basis .22s ease, width .22s ease, max-width .22s ease, border-color .22s ease',
             ...(listCollapsed
               ? { width: 0, maxWidth: 0, flexBasis: 0, pointerEvents: 'none' as const }
               : {})
           }}
         >
-          {/* 宽度动画交给外层，内容保持 320 宽，收起途中行文字不会跟着重排 */}
+          <Box data-notes-filters sx={{ p: 2, pb: 1.25, flexShrink: 0, borderBottom: 1, borderColor: 'divider' }}>
+            <Stack direction="row" spacing={.75} alignItems="center" sx={{ mb: 1.25 }}>
+          <Box
+            data-notes-search
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              height: 34,
+              px: 1.25,
+              flex: 1,
+              minWidth: 0,
+              borderRadius: '8px',
+              bgcolor: 'background.paper',
+              border: 1, borderColor: 'divider'
+            }}
+          >
+            <Box sx={{ display: 'flex', color: 'text.secondary' }}>
+              <IconSearch size={14} />
+            </Box>
+            <InputBase
+              value={queryInput}
+              onChange={(event) => setQueryInput(event.target.value)}
+              placeholder={t('notes.searchPlaceholder')}
+              sx={{ flex: 1, fontSize: 12.5 }}
+              inputProps={{ 'aria-label': t('notes.searchPlaceholder') }}
+            />
+          </Box>
+
+              <Tooltip title={t('筛选随记')}><IconButton size="small" data-notes-filters-toggle aria-label={t('筛选随记')} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} sx={{ color: filtersOpen || categoryId || activeTags.length ? 'primary.main' : 'text.secondary', bgcolor: filtersOpen ? 'action.selected' : 'transparent' }}><TuneRounded sx={{ fontSize: 18 }} /></IconButton></Tooltip>
+            </Stack>
+        <Tabs data-notes-kind-filter value={kind} onChange={(_event, value) => setKind(value)} sx={{ minHeight: 32, '& .MuiTab-root': { minHeight: 32, minWidth: 0, flex: 1, px: .5, py: .5, fontSize: 11.5 } }}>
+          {(['all', 'text', 'audio', 'failed'] as const).map(value => <Tab key={value} value={value} label={t(`notes.kind_${value}`)} />)}
+        </Tabs>
+            {filtersOpen && <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mt: 1.25 }}>
+          <TextField
+            data-notes-category-filter
+            select
+            SelectProps={{ displayEmpty: true }}
+            size="small"
+            value={categoryId}
+            onChange={(event) => setCategoryId(event.target.value)}
+            sx={{ width: '100%', '& .MuiInputBase-input': { fontSize: 12.5 } }}
+            aria-label={t('notes.categoryFilter')}
+          >
+            <MenuItem value={ALL_CATEGORIES}>{t('notes.allCategories')}</MenuItem>
+            {categories.map((category) => (
+              <MenuItem key={category.id} value={category.id}>
+                {category.name}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField select size="small" value={sort}
+            data-notes-sort={sort}
+            onChange={event => setSort(event.target.value as NoteSort)}
+            aria-label={t('notes.sortLabel')}
+            sx={{ width: '100%', '& .MuiInputBase-input': { fontSize: 12.5 } }}>
+            <MenuItem value="newest">{t('notes.sortNewest')}</MenuItem>
+            <MenuItem value="oldest">{t('notes.sortOldest')}</MenuItem>
+            <MenuItem value="updated">{t('notes.sortUpdated')}</MenuItem>
+          </TextField>
+
+            </Box>}
+        {tagOptions.length > 0 && (filtersOpen || tagFiltersOpen || activeTags.length > 0) && (
+          <Stack
+            data-notes-tag-filter-row
+            direction="row"
+            spacing={0.75}
+            sx={{ flexWrap: 'wrap', rowGap: 0.75, alignItems: 'center' }}
+          >
+            {tagOptions.map(({ tag, count }) => {
+              const active = activeTags.some((value) => value === tag)
+              return (
+                <Box
+                  key={tag}
+                  role="button"
+                  tabIndex={0}
+                  data-notes-tag-filter={tag}
+                  data-notes-tag-active={active ? 'on' : 'off'}
+                  aria-pressed={active}
+                  onClick={() => setActiveTags((prev) => toggleTag(prev, tag))}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setActiveTags((prev) => toggleTag(prev, tag))
+                    }
+                  }}
+                  sx={pillSx(active)}
+                >
+                  #{tag}
+                  <Box component="span" sx={{ opacity: 0.55 }}>
+                    {count}
+                  </Box>
+                </Box>
+              )
+            })}
+          </Stack>
+        )}
+
+            {(categoryId || activeTags.length > 0 || sort !== 'newest') && <Button size="small" onClick={() => { setCategoryId(ALL_CATEGORIES); setActiveTags([]); setSort('newest') }} sx={{ fontSize: 11, px: 0, mt: .5 }}>{t('清除筛选')}</Button>}
+          </Box>
+          {/* The list scrolls independently from its search and filters. */}
           <Box
             data-notes-list-inner
-            sx={{ width: 320, height: '100%', minHeight: 0, overflowY: 'auto' }}
+            sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 1.25, py: 1.5 }}
           >
           {loading && (
-            <Typography sx={{ px: 2.5, py: 3, fontSize: 12, color: 'text.disabled' }}>
-              {t('common.loading')}
-            </Typography>
+            <Box role="status" aria-label={t('common.loading')} sx={{ px: .5 }}>{[0, 1, 2].map(value => <Skeleton key={value} variant="rounded" height={100} sx={{ mb: 1 }} />)}</Box>
           )}
 
           {!loading && emptyKind !== 'none' && (
@@ -1475,91 +1480,47 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   aria-pressed={active}
                   onClick={() => selectNote(note.id)}
                   onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault()
                       selectNote(note.id)
                     }
                   }}
                   sx={{
-                    px: 2,
-                    py: 1.25,
+                    px: 1.5,
+                    py: 1.5,
+                    mb: .75,
+                    borderRadius: '10px',
                     cursor: 'pointer',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
+                    border: '1px solid',
+                    borderColor: active ? 'divider' : 'transparent',
                     bgcolor: picked ? 'action.selected' : active ? 'action.selected' : 'transparent',
-                    // A 2px rail marks the ticked rows without shifting the text:
+                    // A 2px rail marks the active or selected rows without shifting the text:
                     // the colour changes, the width stays.
                     borderLeft: '2px solid',
-                    borderLeftColor: picked ? 'primary.main' : 'transparent',
+                    borderLeftColor: picked || active ? 'primary.main' : 'transparent',
+                    '&:hover .MuiCheckbox-root, &:focus-within .MuiCheckbox-root': { opacity: 1 },
                     '&:hover': { bgcolor: picked || active ? 'action.selected' : 'action.hover' },
                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 }
                   }}
                 >
-                  <Stack direction="row" spacing={1} alignItems="baseline">
-                    <Checkbox
-                      data-notes-row-select={note.id}
-                      size="small"
-                      checked={picked}
-                      disableRipple
-                      tabIndex={-1}
-                      onChange={() => toggleSelected(note.id)}
-                      onClick={(event) => event.stopPropagation()}
-                      sx={{ p: 0.25, ml: -0.5, mr: -0.25, alignSelf: 'center' }}
-                      inputProps={{ 'aria-label': t('notes.bulkPick') }}
-                    />
-                    <Typography
-                      data-notes-row-time
-                      sx={{ fontSize: 11.5, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {stamp.time}
-                    </Typography>
-                    <Typography sx={{ fontSize: 10.5, color: 'text.disabled' }}>{stamp.day}</Typography>
-                    <Box sx={{ flex: 1 }} />
-                    <Typography
-                      data-notes-row-duration
-                      sx={{ fontSize: 10.5, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {note.durationMs === 0 && !note.audioPath ? t('notes.textNote') : formatDuration(note.durationMs)}
-                    </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: .75 }}>
+                    {note.durationMs === 0 && !note.audioPath ? <DescriptionOutlined sx={{ fontSize: 16, color: 'text.secondary' }} /> : <Box sx={{ display: 'flex', color: 'primary.main' }}><IconMic size={16} /></Box>}
+                    <Typography data-notes-row-summary sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: active ? 650 : 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{note.title || summarize(note, 80) || t('notes.untitled')}</Typography>
+                    <Checkbox data-notes-row-select={note.id} size="small" checked={picked} disableRipple
+                      onChange={() => toggleSelected(note.id)} onClick={event => event.stopPropagation()}
+                      sx={{ p: .25, opacity: picked ? 1 : 0, '.Mui-focusVisible &': { opacity: 1 } }} inputProps={{ 'aria-label': t('notes.bulkPick') }} />
                   </Stack>
-                  <Typography
-                    data-notes-row-summary
-                    sx={{
-                      fontSize: 12.5,
-                      fontWeight: note.title ? 600 : 400,
-                      lineHeight: 1.45,
-                      mt: 0.25,
-                      color: 'text.primary',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                      wordBreak: 'break-word'
-                    }}
-                  >
-                    {summarize(note, 120) || t('notes.untitled')}
-                  </Typography>
-                  {(category || note.tags.length > 0) && (
-                    <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, flexWrap: 'wrap', rowGap: 0.5 }}>
-                      {category && (
-                        <Chip
-                          data-notes-row-category={category}
-                          size="small"
-                          label={category}
-                          sx={{ height: 18, fontSize: 10, borderRadius: '99px' }}
-                        />
-                      )}
-                      {note.tags.slice(0, 3).map((tag) => (
-                        <Chip
-                          key={tag}
-                          data-notes-row-tag={tag}
-                          size="small"
-                          label={`#${tag}`}
-                          sx={{ height: 18, fontSize: 10, borderRadius: '99px' }}
-                        />
-                      ))}
-                    </Stack>
-                  )}
+                  {note.title && <Typography sx={{ fontSize: 11.5, lineHeight: 1.8, color: 'text.secondary', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere', mb: 1 }}>{summarize({ ...note, title: '', polished: (note.polished || note.transcript).split(/\n\s*\n/)[0] ?? '' }, 110) || t('notes.untitled')}</Typography>}
+                  <Stack direction="row" spacing={.75} alignItems="center" sx={{ minWidth: 0 }}>
+                    <Typography data-notes-row-time title={stamp.full} sx={{ fontSize: 10.5, color: 'text.secondary', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{stamp.day} · {stamp.time}</Typography>
+                    <Box sx={{ flex: 1 }} />
+                    <Typography data-notes-row-duration sx={{ fontSize: 10, color: 'text.secondary', whiteSpace: 'nowrap' }}>{note.durationMs === 0 && !note.audioPath ? t('notes.textNote') : formatDuration(note.durationMs)}</Typography>
+                  </Stack>
+                  {(category || note.tags.length > 0) && <Stack direction="row" spacing={.5} sx={{ mt: 1, flexWrap: 'wrap', rowGap: .5 }}>
+                    {category && <Chip data-notes-row-category={category} size="small" label={category} sx={{ height: 19, fontSize: 10, borderRadius: '5px' }} />}
+                    {note.tags.slice(0, 2).map(tag => <Typography key={tag} data-notes-row-tag={tag} sx={{ fontSize: 10, color: 'text.secondary', px: .5 }}>#{tag}</Typography>)}
+                  </Stack>}
                 </Box>
               )
             })}</PagedList>
@@ -1573,22 +1534,23 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
             minWidth: 0,
             minHeight: 0,
             overflowY: 'auto',
-            borderTop: '1px solid',
-            borderColor: 'divider'
+            bgcolor: 'background.paper'
           }}
         >
           {!selected && (
-            <Box data-notes-detail-empty sx={{ px: 3, py: 5, textAlign: 'center' }}>
-              <Typography sx={{ fontSize: 12.5, color: 'text.disabled' }}>{t('notes.selectPrompt')}</Typography>
+            <Box data-notes-detail-empty sx={{ px: 3, py: '12vh', textAlign: 'center', maxWidth: 420, mx: 'auto' }}>
+              <Box sx={{ width: 64, height: 64, borderRadius: '20px', bgcolor: 'action.selected', color: 'primary.main', display: 'grid', placeItems: 'center', mx: 'auto', mb: 3 }}><DescriptionOutlined sx={{ fontSize: 28 }} /></Box>
+              {notes.length > 0 && <Typography sx={{ fontSize: 14, color: 'text.secondary', mb: 3 }}>{t('notes.selectPrompt')}</Typography>}
+              <Button variant="outlined" disabled={creatingText || loading} startIcon={<IconPlus size={15} />} onClick={() => void createTextNote()}>{t('notes.newText')}</Button>
             </Box>
           )}
 
           {selected && (
-            <Box data-notes-detail={selected.id} sx={{ px: { xs: 2.5, lg: 5 }, py: 3, maxWidth: 1000, mx: 'auto' }}>
+            <Box data-notes-detail={selected.id} sx={{ px: { xs: 3, lg: 5 }, py: 3.5, maxWidth: 880, mx: 'auto' }}>
               <TextField data-notes-title fullWidth variant="standard" value={titleDraft}
                 placeholder={t('notes.titlePlaceholder')} onChange={event => editField('title', event.target.value)}
                 onBlur={() => void flushNow()} inputProps={{ maxLength: 200, 'aria-label': t('notes.titleLabel') }}
-                InputProps={{ disableUnderline: true, sx: { fontSize: 19, fontWeight: 600, mb: .75 } }} />
+                InputProps={{ disableUnderline: true, sx: { fontSize: { xs: 24, lg: 30 }, fontWeight: 650, letterSpacing: -.6, lineHeight: 1.4, mb: 1.25 } }} />
               <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.75 }}>
                 <Typography
                   data-notes-detail-time
@@ -1606,14 +1568,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 <Typography data-notes-save-state={saveState} sx={{ fontSize: 11, color: SAVE_TONE[saveState] }}>
                   {saveKey ? t(saveKey) : ''}
                 </Typography>
-                <Tooltip title={t('notes.delete')}>
-                  <IconButton data-notes-delete size="small" onClick={() => setDeleteOpen(true)}>
-                    <IconTrash size={15} />
-                  </IconButton>
-                </Tooltip>
+                <Tooltip title={t('更多操作')}><IconButton data-notes-tools-toggle aria-label={t('更多操作')} aria-expanded={toolsOpen} size="small" onClick={() => setToolsOpen(open => !open)}><MoreHorizRounded sx={{ fontSize: 19 }} /></IconButton></Tooltip>
               </Stack>
 
-              <Button data-notes-metadata-toggle size="small" aria-expanded={metadataOpen} onClick={() => setMetadataOpen(open => !open)} sx={{ mt: .5, fontSize: 12 }}>{t('分类与标签')}</Button>
+              <Stack direction="row" alignItems="center" useFlexGap sx={{ gap: .75, flexWrap: 'wrap', mt: 1.5 }}>
+                <Button data-notes-metadata-toggle size="small" startIcon={<LocalOfferOutlined sx={{ fontSize: 14 }} />} aria-expanded={metadataOpen} onClick={() => setMetadataOpen(open => !open)} sx={{ fontSize: 11, color: 'text.secondary', px: .75 }}>{t('分类与标签')}</Button>
+                {!metadataOpen && categoryNameOf(categories, selected.categoryId) && <Chip size="small" label={categoryNameOf(categories, selected.categoryId)} sx={{ height: 22, fontSize: 10.5 }} />}
+                {!metadataOpen && selected.tags.map(tag => <Typography key={tag} sx={{ fontSize: 11, color: 'text.secondary' }}>#{tag}</Typography>)}
+              </Stack>
               {metadataOpen && <Box data-notes-metadata>
               <Stack direction="row" spacing={1.5} sx={{ mt: 1.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <TextField
@@ -1667,52 +1629,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
               </Stack>
 
               </Box>}
-              <Box data-notes-primary sx={{ mt: 2.25 }}
-                onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
-                onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.dataTransfer.files)) } }}
-                onPaste={event => { if (event.clipboardData.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.clipboardData.files)) } }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary', mb: 1 }}>
-                  {t(primaryField === 'polished' ? 'notes.polishedLabel' : 'notes.bodyLabel')}
-                </Typography>
-                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap', gap: .5 }}>
-                  <ButtonGroup size="small" disabled={attachmentBusy}>
-                    <Button data-notes-mode="preview" variant={markdownPreview ? 'contained' : 'outlined'} onClick={() => { void flushNow(); setMarkdownPreview(true) }}>{t('编辑')}</Button>
-                    <Button data-notes-mode="source" variant={!markdownPreview ? 'contained' : 'outlined'} onClick={() => setMarkdownPreview(false)}>Markdown {t('源码')}</Button>
-                  </ButtonGroup>
-                  <Button data-notes-insert-attachment size="small" disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button>
-                  <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{t('支持粘贴或拖入，附件保存到随记目录')}</Typography>
-                </Stack>
-                {/* key 按笔记重建编辑器：旧实例的 DOM 与 undo 历史属于上一条随记，
-                    绝不能沿用到这一条上（这就是切笔记后 Ctrl+Z 串写的来源）。 */}
-                {markdownPreview ? <MarkdownEditor key={`rich-${selected.id}`} value={primaryValue}
-                  onChange={next => commitDraft(selected.id, primaryField, next)}
-                  noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
-                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
-                  onEditSource={() => { void flushNow(); setMarkdownPreview(false) }}
-                  onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
-                <MarkdownSourceEditor key={`source-${selected.id}:${primaryField}`} ref={bodyInputRef} field={primaryField} noteId={selected.id} value={primaryValue}
-                  onChange={next => commitDraft(selected.id, primaryField, next)}
-                  disabled={attachmentBusy || retranscribingId === selected.id}
-                  onEditRich={() => { void flushNow(); setMarkdownPreview(true) }}
-                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')} />}
-                <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
-                  <Button data-notes-copy={primaryField} size="small" disabled={!primaryDraft.trim()} onClick={() => void copyDraft(primaryDraft)} sx={{ fontSize: 11.5 }}>
-                    {t(primaryField === 'polished' ? 'notes.copyPolished' : '复制内容')}
-                  </Button>
-                  {hasOriginal && <Button data-notes-toggle-original size="small" aria-expanded={originalOpen} aria-controls="notes-original"
-                    onClick={() => setOriginalOpen(open => !open)} sx={{ fontSize: 11.5 }}>{t(originalOpen ? '隐藏原始转写' : '查看原始转写')}</Button>}
-                </Stack>
-              </Box>
-              {hasOriginal && originalOpen && <Box id="notes-original" data-notes-original sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}>
-                <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1 }}>{t('notes.transcriptLabel')}</Typography>
-                <TextField data-notes-editor="original" disabled={retranscribingId === selected.id} multiline minRows={3} fullWidth value={transcriptDraft}
-                  onChange={event => editField('transcript', event.target.value)} onBlur={() => void flushNow()}
-                  InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }} />
-                <Button data-notes-copy="original" size="small" disabled={!transcriptDraft.trim()} onClick={() => void copyDraft(transcriptDraft)} sx={{ mt: .5, fontSize: 11.5 }}>{t('notes.copyOriginal')}</Button>
-              </Box>}
-
-              <Button data-notes-tools-toggle size="small" aria-expanded={toolsOpen} onClick={() => setToolsOpen(open => !open)} sx={{ mt: 1, fontSize: 12 }}>{t('更多操作')}</Button>
-              {toolsOpen && <Box data-notes-tools>
+              {toolsOpen && <Box data-notes-tools sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5, flexWrap: 'wrap' }}>
                 <Button
                   data-notes-export-current
@@ -1750,9 +1667,50 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                     {t('notes.processingFailed')}
                   </Typography>
                 )}
+                <Button data-notes-delete size="small" color="error" startIcon={<IconTrash size={14} />} onClick={() => setDeleteOpen(true)}>{t('notes.delete')}</Button>
               </Stack>
-
               </Box>}
+              <Box data-notes-primary sx={{ mt: 2.5, pt: 2, borderTop: 1, borderColor: 'divider' }}
+                onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
+                onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.dataTransfer.files)) } }}
+                onPaste={event => { if (event.clipboardData.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.clipboardData.files)) } }}>
+                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap', gap: .5 }}>
+                  <ButtonGroup size="small" disabled={attachmentBusy}>
+                    <Button data-notes-mode="preview" variant={markdownPreview ? 'contained' : 'outlined'} onClick={() => { void flushNow(); setMarkdownPreview(true) }}>{t('编辑')}</Button>
+                    <Button data-notes-mode="source" variant={!markdownPreview ? 'contained' : 'outlined'} onClick={() => setMarkdownPreview(false)}>Markdown {t('源码')}</Button>
+                  </ButtonGroup>
+                                    <Box sx={{ flex: 1 }} />
+                  <Tooltip title={t('支持粘贴或拖入，附件保存到随记目录')}><span><Button data-notes-insert-attachment size="small" startIcon={<AttachFileRounded sx={{ fontSize: 15 }} />} disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()} sx={{ fontSize: 11, color: 'text.secondary' }}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button></span></Tooltip>
+                </Stack>
+                {/* key 按笔记重建编辑器：旧实例的 DOM 与 undo 历史属于上一条随记，
+                    绝不能沿用到这一条上（这就是切笔记后 Ctrl+Z 串写的来源）。 */}
+                {markdownPreview ? <MarkdownEditor key={`rich-${selected.id}`} value={primaryValue}
+                  onChange={next => commitDraft(selected.id, primaryField, next)}
+                  noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
+                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
+                  onEditSource={() => { void flushNow(); setMarkdownPreview(false) }}
+                  onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
+                <MarkdownSourceEditor key={`source-${selected.id}:${primaryField}`} ref={bodyInputRef} field={primaryField} noteId={selected.id} value={primaryValue}
+                  onChange={next => commitDraft(selected.id, primaryField, next)}
+                  disabled={attachmentBusy || retranscribingId === selected.id}
+                  onEditRich={() => { void flushNow(); setMarkdownPreview(true) }}
+                  placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')} />}
+                <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
+                  <Button data-notes-copy={primaryField} size="small" disabled={!primaryDraft.trim()} onClick={() => void copyDraft(primaryDraft)} sx={{ fontSize: 11.5 }}>
+                    {t(primaryField === 'polished' ? 'notes.copyPolished' : '复制内容')}
+                  </Button>
+                  {hasOriginal && <Button data-notes-toggle-original size="small" aria-expanded={originalOpen} aria-controls="notes-original"
+                    onClick={() => setOriginalOpen(open => !open)} sx={{ fontSize: 11.5 }}>{t(originalOpen ? '隐藏原始转写' : '查看原始转写')}</Button>}
+                </Stack>
+              </Box>
+              {hasOriginal && originalOpen && <Box id="notes-original" data-notes-original sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}>
+                <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1 }}>{t('notes.transcriptLabel')}</Typography>
+                <TextField data-notes-editor="original" disabled={retranscribingId === selected.id} multiline minRows={3} fullWidth value={transcriptDraft}
+                  onChange={event => editField('transcript', event.target.value)} onBlur={() => void flushNow()}
+                  InputProps={{ sx: { fontSize: 13, lineHeight: 1.65 } }} />
+                <Button data-notes-copy="original" size="small" disabled={!transcriptDraft.trim()} onClick={() => void copyDraft(transcriptDraft)} sx={{ mt: .5, fontSize: 11.5 }}>{t('notes.copyOriginal')}</Button>
+              </Box>}
+
               {audioKey ? <Box
                 data-notes-player
                 sx={{
@@ -1764,7 +1722,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   bgcolor: 'background.paper'
                 }}
               >
-                <Stack direction="row" spacing={1.25} alignItems="center">
+                <Stack direction="row" spacing={1.25} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
                   <Tooltip title={t('notes.skipBack')}>
                     <IconButton data-notes-skip="back" size="small" aria-label={t('notes.skipBack')}
                       disabled={durationMs <= 0} onClick={() => skipAudio(-10)}><Replay10Icon sx={{ fontSize: 20 }} /></IconButton>
@@ -1804,7 +1762,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                     disabled={!audioKey}
                     onChange={(_event, value) => setScrubMs(Array.isArray(value) ? value[0] : value)}
                     onChangeCommitted={(_event, value) => commitSeek(value)}
-                    sx={{ flex: 1 }}
+                    sx={{ flex: 1, minWidth: 100 }}
                   />
                   <Typography
                     data-notes-clock="total"
@@ -1837,7 +1795,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                     </span>
                   </Tooltip>
                 </Stack>
-              </Box> : <Typography data-notes-no-audio sx={{ mt: 2, fontSize: 11.5, color: 'text.disabled' }}>{t('notes.noLocalAudio')}</Typography>}
+              </Box> : selected.durationMs > 0 ? <Typography data-notes-no-audio sx={{ mt: 2, fontSize: 11.5, color: 'text.secondary' }}>{t('notes.noLocalAudio')}</Typography> : null}
             </Box>
           )}
         </Box>

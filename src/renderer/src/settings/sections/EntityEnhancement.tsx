@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material'
 import type { Settings } from '@shared/types'
 import { ENTITY_TYPES, type EntityInput, type EntityTerm, type EntityType } from '@shared/entities'
-import { asrEnhancementCapability } from '@shared/asr-enhancement'
 import { ENTITY_SOURCES, type EntitySourceId } from '@shared/entity-sources'
 import { SettingsGroup, SettingsRow } from './General'
 import { registerGameModePreparation } from '../gameModePreparation'
@@ -28,19 +27,13 @@ export function EntityEnhancement({ settings, patch }: { settings: Settings; pat
     try { await action() } catch (error) { setError(t(message(error))) } finally { setBusy(false) }
   }
   const edit = (row?: EntityTerm): void => { setDraft(row ? { ...row } : blank()); setId(row?.id); setAliases(row?.aliases.join('，') ?? ''); setRelated(row?.related.join('，') ?? '') }
-  const profiles = settings.chains.asr.map(id => settings.profiles.find(profile => profile.id === id)).filter(profile => profile?.enabled)
   const found = rows.filter(row => [row.canonical, row.domain, ...row.aliases].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase()))
   return <SettingsGroup title={t('语音识别增强')}>
     <SettingsRow label={t('智能专有名词增强')} description={t('根据当前场景选取少量词条；候选交给现有模型判断，不作为全局替换规则。')}>
       <Switch size="small" checked={settings.speechEnhancement} onChange={event => patch({ speechEnhancement: event.target.checked })} inputProps={{ 'aria-label': t('智能专有名词增强') }} />
     </SettingsRow>
     <Box sx={{ px: 2, pb: 2 }}>
-      <Typography variant="caption" color="text.secondary">{t('启用后，相关词条可能发送给当前配置的 ASR 或 LLM；不自动采集私人历史，不建立长期记忆。')}</Typography>
-      {settings.pipelineMode === 'multimodal' ? <Typography variant="body2">{t('音频直达模式沿用现有请求，不增加 ASR 或纠错调用。')}</Typography> : <>
-        {settings.localAsr.enabled && <Typography variant="body2">{t('内置本地 ASR：当前不支持原生热词；可在已有 LLM 润色中提供候选。')}</Typography>}
-        {profiles.map(profile => profile && <Typography key={profile.id} variant="body2">{profile.name} · {t(['dashscope-realtime', 'xfyun-rta'].includes(profile.asrAdapter ?? '') ? '支持服务端热词；本地词库尚未自动上传，仅提供 LLM 候选' : ['volcengine-streaming', 'tencent-realtime'].includes(profile.asrAdapter ?? '') ? '支持请求级热词；当前未直传本地词库，仅提供 LLM 候选' : asrEnhancementCapability(profile) === 'none' ? '原生增强未验证，仅提供 LLM 候选' : '支持 ASR 上下文与 LLM 候选')}</Typography>)}
-        {!settings.localAsr.enabled && !profiles.length && <Typography variant="body2">{t('请先配置 ASR 模型')}</Typography>}
-      </>}
+      <Typography variant="caption" color="text.secondary">{t('词条可能发送给当前 ASR / LLM。')}</Typography>
       <Button size="small" sx={{ mt: 1 }} onClick={() => { setOpen(true); void run(load) }}>{t('管理专有名词词库')}</Button>
     </Box>
     <Dialog open={open} maxWidth="md" fullWidth onClose={() => { if (!busy) setOpen(false) }} data-entity-library>
@@ -83,7 +76,7 @@ export function EntityEnhancement({ settings, patch }: { settings: Settings; pat
         <TextField label={t('标准名称')} value={draft.canonical} onChange={event => setDraft({ ...draft, canonical: event.target.value })} inputProps={{ maxLength: 80 }} />
         <TextField select label={t('类别')} value={draft.type} onChange={event => setDraft({ ...draft, type: event.target.value as EntityType })}>{ENTITY_TYPES.map(type => <MenuItem key={type} value={type}>{t(LABELS[type])}</MenuItem>)}</TextField>
         <TextField label={t('别名或常见误写（逗号分隔）')} value={aliases} onChange={event => setAliases(event.target.value)} multiline maxRows={4} />
-        <TextField label={t('领域（留空表示常用词）')} helperText={t('可填“技术”“编程”或相关应用名称；只有匹配场景时才作为 ASR 预先热词。')} value={draft.domain} onChange={event => setDraft({ ...draft, domain: event.target.value })} inputProps={{ maxLength: 80 }} />
+        <TextField label={t('领域（留空表示常用词）')} value={draft.domain} onChange={event => setDraft({ ...draft, domain: event.target.value })} inputProps={{ maxLength: 80 }} />
         <TextField label={t('关联名称（逗号分隔）')} value={related} onChange={event => setRelated(event.target.value)} />
         <TextField label={t('来源或核实依据')} value={draft.source} onChange={event => setDraft({ ...draft, source: event.target.value })} inputProps={{ maxLength: 300 }} />
         <FormControlLabel control={<Checkbox checked={draft.verified} onChange={event => setDraft({ ...draft, verified: event.target.checked })} />} label={t('已核实名称与关联')} />

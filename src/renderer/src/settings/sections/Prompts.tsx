@@ -232,7 +232,6 @@ export function PromptsSection({
                 // A card id from the old kind would dangle, so reset the pair.
                 patch({ mainPromptKind: event.target.value as PromptKind, mainPromptCardId: '' })
               }}
-              helperText={i18n.t(i18n.t('所有窗口都按这个类型出提示词'))}
               slotProps={{ inputLabel: { shrink: true } }}
             >
               {MAIN_KIND_ORDER.map((kind) => (
@@ -251,11 +250,6 @@ export function PromptsSection({
               value={mainCardValue}
               disabled={autoActivate}
               onChange={(event) => patch({ mainPromptCardId: event.target.value })}
-              helperText={
-                mainCardValue
-                  ? i18n.t('固定用这张卡，类型内切换激活卡不影响它')
-                  : i18n.t('跟随该类型当前激活的那张卡')
-              }
               slotProps={{ inputLabel: { shrink: true } }}
             >
               <MenuItem value="">{i18n.t(i18n.t('跟随该类型的当前卡片'))}</MenuItem>

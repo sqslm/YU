@@ -64,9 +64,8 @@ export function WakeWordSection({ settings, patch, saving }: { settings: Setting
         onChange={event => setDraft(event.target.value)} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter') commit() }}
         helperText={invalid ? i18n.t('唤醒词需要 2–40 个字符') : undefined} />
     </SettingsRow>
-    <SettingsRow label={i18n.t('输入设备')} description={devices && devices.length === 0
-      ? i18n.t('没有找到可用的麦克风，将使用系统默认输入设备。')
-      : i18n.t('选择用于离线唤醒的麦克风；选定的设备不存在时自动回到系统默认设备。')}>
+    <SettingsRow label={i18n.t('输入设备')} detail={devices && devices.length === 0 ? i18n.t('没有找到可用的麦克风，将使用系统默认输入设备。') : undefined}
+      description={i18n.t('选择用于离线唤醒的麦克风；选定的设备不存在时自动回到系统默认设备。')}>
       <TextField select SelectProps={{ native: true }} size="small" sx={{ width: 220 }} value={deviceId}
         onChange={event => chooseDevice(event.target.value)} inputProps={{ 'aria-label': i18n.t('输入设备') }}>
         <option value="">{i18n.t('系统默认麦克风')}</option>

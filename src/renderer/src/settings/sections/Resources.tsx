@@ -90,7 +90,7 @@ export function ResourcesSection({ settings, patch }: {
             void window.api.app.setGameMode(usage?.gameMode?.source !== 'manual').then(() => refresh(), error => setNotice({ error: true, text: String(error) })).finally(() => setBusy(false))
           }}>{i18n.t(usage?.gameMode?.source === 'manual' ? '结束手动模式' : '手动保持游戏模式')}</Button>
         </Box>
-        <SettingsHint>{i18n.t('暂停语音唤醒与所有语音快捷键，关闭录音条，释放本地模型和空闲界面，暂停同步与提醒调度。未保存成功的草稿和截图会保留；退出后恢复原设置。')}</SettingsHint>
+        <SettingsHint>{i18n.t('游戏模式会暂停语音、同步与提醒，退出后恢复。')}</SettingsHint>
       </SettingsGroup>
       <SettingsGroup icon={<IconCpu />} title={i18n.t('资源占用')}>
         <SettingsRow label={i18n.t('当前驻留内存')} description={privateAvailable
@@ -113,7 +113,6 @@ export function ResourcesSection({ settings, patch }: {
           <Button data-resource-copy variant="outlined" disabled={!usage || busy} onClick={() => void window.api.app.copyText(JSON.stringify(usage, null, 2)).then(() => setNotice({ error: false, text: i18n.t('占用信息已复制') }), (error) => setNotice({ error: true, text: String(error) }))}>{i18n.t('复制占用信息')}</Button>
           <Button disabled={busy} onClick={() => void refresh()}>{i18n.t('刷新')}</Button>
         </Box>
-        <SettingsHint>{i18n.t('读数包含当前窗口；关闭主窗口会释放界面进程，听写和同步继续运行。')}</SettingsHint>
       </SettingsGroup>
       {notice && <Alert severity={notice.error ? 'error' : 'success'} onClose={() => setNotice(null)} sx={{ fontSize: 12, overflowWrap: 'anywhere' }}>{notice.text}</Alert>}
       <SettingsGroup title={i18n.t('后台策略')}>
@@ -122,7 +121,6 @@ export function ResourcesSection({ settings, patch }: {
             {intervals.map((value) => <MenuItem key={value} value={value}>{value === 0 ? i18n.t('保持加载') : i18n.t('{{n}} 分钟', { n: value })}</MenuItem>)}
           </TextField>
         </SettingsRow>
-        <SettingsHint>{i18n.t('开机启动时仅驻留托盘；录音和识别过程中不会自动卸载模型。')}</SettingsHint>
       </SettingsGroup>
       <SettingsGroup title={i18n.t('进程详情')} hint={usage ? i18n.t('{{n}} 个进程', { n: usage.processes.length }) : undefined} collapsible defaultOpen={false}>
         {pager}

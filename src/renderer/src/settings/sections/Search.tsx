@@ -422,9 +422,6 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
             onChange={(event) => update({ decideWithModel: event.target.checked })}
           />
         </SettingsRow>
-        <SettingsHint>
-          {i18n.t('新闻汇总会合并多次检索并去重；来源区显示实际覆盖范围。检索失败会明确标注，不会当作已联网回答。')}
-        </SettingsHint>
       </SettingsGroup>
       {/*
         Network egress. The app used to speak to the internet with Node's fetch,
@@ -475,9 +472,6 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
           <Button variant="outlined" size="small" data-network-check disabled={networkCheck.busy} onClick={() => void checkNetwork()}>
             {networkCheck.busy ? i18n.t('正在检查…') : i18n.t('检查网络')}
           </Button>
-          <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
-            {i18n.t('用真实请求确认出口：解析到的代理 + 各站点连通性。')}
-          </Typography>
         </Box>
         {networkCheck.error && (
           <Typography role="status" data-network-error sx={{ px: 2, pb: 1.5, fontSize: 11.5, color: 'error.main', overflowWrap: 'anywhere' }}>
@@ -485,9 +479,6 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
           </Typography>
         )}
         {networkCheck.report && <NetworkReport report={networkCheck.report} />}
-        <SettingsHint>
-          {i18n.t('TUN 关掉后只有系统代理还在：应用据此跟随系统代理；代理没写进系统设置时，选「自定义」并填端口即可。')}
-        </SettingsHint>
       </SettingsGroup>
       <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="sm">
         <DialogTitle>{i18n.t('搜索连接')}</DialogTitle>

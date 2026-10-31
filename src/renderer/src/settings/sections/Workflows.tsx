@@ -2,7 +2,7 @@ import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined'
 import { useCallback, useEffect, useState } from 'react'
 import { Box, Button, Stack, Typography } from '@mui/material'
 import type { Workflow } from '@shared/workflow'
-import { SettingsGroup, SettingsHint } from './General'
+import { SettingsGroup } from './General'
 import i18n from '../../i18n'
 import { WorkflowEditor } from './WorkflowEditor'
 
@@ -44,15 +44,12 @@ export function WorkflowsSection(): JSX.Element {
       <Box sx={{ px: 2, py: 1.5 }}>
         <Stack spacing={1}>
           <Button variant="outlined" sx={{ alignSelf: 'flex-start' }} onClick={() => setEditing(null)}>{i18n.t('新建工作流')}</Button>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.6 }}>
-            {i18n.t('对语说「以后我说早间检查，就依次查今天的日程、生成简报、读出来」，它会把这几步存成工作流。重放时每一步都按保存的参数执行，结果逐条汇报。')}
-          </Typography>
           {notice && (
             <Typography sx={{ fontSize: 12, color: notice.error ? 'error.main' : 'text.secondary' }}>{notice.text}</Typography>
           )}
           {rows.length === 0 && (
             <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.6 }}>
-              {i18n.t('还没有工作流。点击“新建工作流”手动添加，也可以在对话中描述操作来创建。')}
+              {i18n.t('暂无工作流')}
             </Typography>
           )}
           {rows.map(row => (
@@ -71,9 +68,6 @@ export function WorkflowsSection(): JSX.Element {
           ))}
         </Stack>
       </Box>
-      <SettingsHint>
-        {i18n.t('运行方式：在对话框里说「运行早间检查」，或直接问「我有哪些工作流」。归档只是从列表里收起来，随时能恢复。')}
-      </SettingsHint>
       {editing !== undefined && <WorkflowEditor workflow={editing} close={() => setEditing(undefined)} saved={() => { setEditing(undefined); void load() }} />}
     </SettingsGroup>
   )

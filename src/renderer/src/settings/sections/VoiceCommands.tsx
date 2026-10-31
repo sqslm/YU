@@ -34,7 +34,7 @@ export function VoiceCommandsSection({ settings, patch }: { settings: Settings; 
       <Switch size="small" checked={commands.smartRouting} inputProps={{ 'aria-label': t('智能识别语音意图') }} data-smart-routing-toggle
         onChange={event => patch({ voiceCommands: { smartRouting: event.target.checked } as VoiceCommandsSettings })} />
     </SettingsRow>
-    <SettingsHint>{t('默认开启。明确的模式快捷键和自定义关键词优先。意图判断使用现有文本模型，可能增加一次调用；多模态入口需要先转写。关闭后恢复纯听写。')}</SettingsHint>
+    <SettingsHint>{t('意图识别可能增加一次 LLM 调用。')}</SettingsHint>
   </SettingsGroup><SettingsGroup icon={<IconSparkle />} title={t('语音关键词切换模式')}>
     <SettingsRow label={t('启用关键词切换')} description={t('用听写快捷键开麦，先说关键词，再说正文；其他模式快捷键保持原样。')}>
       <Switch size="small" checked={commands.enabled} inputProps={{ 'aria-label': t('启用关键词切换') }} data-voice-commands-toggle
@@ -43,8 +43,7 @@ export function VoiceCommandsSection({ settings, patch }: { settings: Settings; 
     {commands.enabled && <>
       {VOICE_COMMAND_MODES.map(mode => <KeywordRow key={mode} mode={mode} settings={commands}
         save={keywords => patch({ voiceCommands: { keywords: { [mode]: keywords } } as VoiceCommandsSettings })} />)}
-      <SettingsHint>{t('仅识别开头关键词，不做模糊匹配。用分号或换行分隔，留空停用该模式；失焦后保存。')}</SettingsHint>
-      <SettingsHint>{t('识别到关键词后语音条实时更新模式，结束后以完整转写确认。关闭字幕时仍识别开头短片段，可能增加 ASR 调用。多模态录音先转写，再使用文本模型处理。')}</SettingsHint>
+      <SettingsHint>{t('关键词用分号或换行分隔，留空停用；可能增加 ASR 调用。')}</SettingsHint>
     </>}
   </SettingsGroup></>
 }
