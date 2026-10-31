@@ -105,6 +105,7 @@ import { createTray } from './tray'
 import { releaseStuckModifiers } from './insert'
 import { foregroundWindow, listRoutedWindows, type ForegroundInfo } from './foreground'
 import { encodeWav, trimSilencePcm, isSilent, pcmDurationMs } from './audio/wav'
+import { countUnits } from '@shared/count'
 import type { PromptContext } from '@shared/prompts'
 import { BriefingDeliveryService } from './briefing-delivery'
 import { assistantAppExcluded } from '@shared/assistantAccess'
@@ -2251,7 +2252,32 @@ async function bootstrap(): Promise<void> {
     transform: (text, operation, context) => pipeline!.transformSelection(text, operation, context),
     busy: () => pipeline!.isBusy,
     cancel: () => { pipeline?.cancel('selection') },
-    status: (text, error) => pipeline?.showAlert({ kind: 'selection', level: error ? 'error' : 'info', text: mt(text) })
+    status: (text, error) => pipeline?.showAlert({ kind: 'selection', level: error ? 'error' : 'info', text: mt(text) }),
+    /**
+     * 需求5: a selection edit that replaced/added text is a history row of its
+     * own — 润色 under 润色, 翻译 under 翻译. `mode` stays the route the work ran
+     * through, so every reader that only knows `mode` still behaves.
+     */
+    record: async ({ operation, original, result, app, promptName, promptId, promptKind, providerId, providerName, processingMs }) => {
+      await history.add({
+        mode: operation === 'translate' ? 'translate' : 'dictation',
+        category: operation === 'translate' ? 'translate' : 'polish',
+        transcript: original,
+        final: result,
+        // A selection has no recording: a duration here would read as "0.0 秒 of
+        // speech" on the history page.
+        durationMs: 0,
+        app,
+        status: 'completed',
+        wordCount: countUnits(result),
+        ...(promptName ? { promptName } : {}),
+        ...(promptId ? { promptId } : {}),
+        ...(promptKind ? { promptKind } : {}),
+        ...(providerId ? { providerId } : {}),
+        ...(providerName ? { providerName } : {}),
+        ...(processingMs === undefined ? {} : { processingMs })
+      })
+    }
   })
   wireHotkeys()
 

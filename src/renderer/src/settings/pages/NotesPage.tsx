@@ -323,6 +323,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const audioKey = selected?.audioPath ?? ''
   const primaryField = selected ? noteBodyField(selected) : 'transcript'
   const primaryDraft = primaryField === 'polished' ? polishedDraft : transcriptDraft
+  /**
+   * 草稿属于哪条随记（由切换时的重置 effect 盖章）。切换的那一帧草稿还是上一条
+   * 的，编辑器要是拿它去建文档，就会带着别人的正文出生——所以这一帧喂给它的是
+   * 这条随记自己存着的正文，等草稿归位（同一次 effect 会触发重渲染）再交给草稿。
+   */
+  const draftOwnerRef = useRef<string | null>(selectedNoteId)
+  const primaryValue = draftOwnerRef.current === selectedNoteId ? primaryDraft : (selected?.[primaryField] ?? '')
   const draftTextRef = useRef({ transcript: transcriptDraft, polished: polishedDraft })
   draftTextRef.current = { transcript: transcriptDraft, polished: polishedDraft }
   const hasOriginal = Boolean(selected && (selected.durationMs > 0 || audioKey || selected.polished.trim()))
@@ -396,6 +403,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     setOriginalOpen(false)
     setPolishedDraft(note?.polished ?? '')
     draftBaseRef.current = { id: note?.id ?? null, title: note?.title ?? '', transcript: note?.transcript ?? '', polished: note?.polished ?? '' }
+    // 这一拍之后，草稿才属于这条随记。编辑器在切换的那一帧会先用旧草稿渲染一次，
+    // 靠这个标记喂它笔记自己的正文，绝不让它带着上一条的内容出生。
+    draftOwnerRef.current = note?.id ?? null
     setTagInput('')
     setSaveState(nextSaveState('idle', 'reset'))
     if (focusNewNoteRef.current === selectedId) {
@@ -609,6 +619,26 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       }, SAVE_DEBOUNCE_MS)
     },
     [flushNow]
+  )
+
+  /**
+   * 编辑器交稿绑死它所属的那条随记。
+   *
+   * 切换笔记时旧编辑器会先拆掉，它在拆之前（或延迟去抖到点）仍会把最后一段
+   * markdown 交回来一次。此刻「当前选中」已经是另一条了：这条回调必须拿着自己
+   * 的 noteId 决定写到哪里——同一条走原来的草稿+去抖，不是同一条就直接写回它
+   * 自己，绝不碰当前草稿（否则 A 的正文会盖到 B 上，B 的内容就没了）。
+   */
+  const commitDraft = useCallback(
+    (id: string, field: 'title' | 'transcript' | 'polished', value: string): void => {
+      if (selectedRef.current?.id === id) { editField(field, value); return }
+      const note = notesRef.current.find((item) => item.id === id)
+      if (!note || (note[field] ?? '') === value) return
+      void window.api.notes.update(id, { [field]: value })
+        .then((updated) => { if (updated) patchEntry(updated) })
+        .catch(() => undefined)
+    },
+    [editField, patchEntry]
   )
 
   // Unmount and window close must not drop a pending edit. `beforeunload` cannot
@@ -1651,13 +1681,16 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   <Button data-notes-insert-attachment size="small" disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button>
                   <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{t('支持粘贴或拖入，附件保存到随记目录')}</Typography>
                 </Stack>
-                {markdownPreview ? <MarkdownEditor value={primaryDraft} onChange={next => editField(primaryField, next)}
+                {/* key 按笔记重建编辑器：旧实例的 DOM 与 undo 历史属于上一条随记，
+                    绝不能沿用到这一条上（这就是切笔记后 Ctrl+Z 串写的来源）。 */}
+                {markdownPreview ? <MarkdownEditor key={`rich-${selected.id}`} value={primaryValue}
+                  onChange={next => commitDraft(selected.id, primaryField, next)}
                   noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
                   onEditSource={() => { void flushNow(); setMarkdownPreview(false) }}
                   onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
-                <MarkdownSourceEditor ref={bodyInputRef} field={primaryField} value={primaryDraft}
-                  onChange={next => editField(primaryField, next)}
+                <MarkdownSourceEditor key={`source-${selected.id}:${primaryField}`} ref={bodyInputRef} field={primaryField} noteId={selected.id} value={primaryValue}
+                  onChange={next => commitDraft(selected.id, primaryField, next)}
                   disabled={attachmentBusy || retranscribingId === selected.id}
                   onEditRich={() => { void flushNow(); setMarkdownPreview(true) }}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')} />}

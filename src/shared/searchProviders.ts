@@ -255,10 +255,21 @@ export function defaultSearchProviders(): Record<SearchProvider, SearchProviderE
   return providers
 }
 
+/**
+ * 单次检索最多要多少条。
+ *
+ * `0` 是合法值，意思是「不限」：由模型自己决定要几条，主进程按各服务商允许的
+ * 上限去取（Bing 50、Serper 100……）。所以这里不再有 1 的下界，只有上界。
+ */
+export const SEARCH_MAX_RESULTS = 50
+
+/** `0` 就是「不限」；和 {@link SEARCH_MAX_RESULTS} 一起构成 legal range。 */
+export const SEARCH_UNLIMITED_RESULTS = 0
+
 function clampResults(value: unknown, fallback: number): number {
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed)) return fallback
-  return Math.min(10, Math.max(1, Math.round(parsed)))
+  return Math.min(SEARCH_MAX_RESULTS, Math.max(SEARCH_UNLIMITED_RESULTS, Math.round(parsed)))
 }
 
 function text(value: unknown, fallback = ''): string {

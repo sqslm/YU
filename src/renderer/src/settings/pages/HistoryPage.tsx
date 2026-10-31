@@ -17,11 +17,12 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import MoreHorizRounded from '@mui/icons-material/MoreHorizRounded'
-import type { HistoryEntry, Mode, Settings } from '@shared/types'
+import type { HistoryEntry, Settings } from '@shared/types'
 import { IconBook, IconCheck, IconCopy, IconSearch, IconTrash } from '../icons'
 import {
   APP_FILTER_ALL,
   APP_FILTER_ALL_LABEL,
+  HISTORY_CATEGORIES,
   REFRESH_OPTIONS,
   appFilterLabel,
   appFilterStillValid,
@@ -39,7 +40,9 @@ import {
   countLabel,
   emptyStateCopy,
   emptyStateKind,
+  entryCategoryLabel,
   filterByApp,
+  filterByCategory,
   filterLabel,
   formatAttempts,
   hasCardName,
@@ -47,7 +50,6 @@ import {
   historyDateBounds,
   historyDateView,
   historyNote,
-  modeLabel,
   normalizeRefreshSeconds,
   providerTitle,
   refreshEnabled,
@@ -80,8 +82,12 @@ import type { StatsFile } from '@shared/stats'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import { useTheme } from '@mui/material'
 
-/** The tabs above the list, left to right. Captions come from historyView. */
-const FILTERS: HistoryFilterId[] = ['all', 'dictation', 'ask', 'translate']
+/**
+ * The tabs above the list, left to right: 全部, then one per category. 任务 holds
+ * everything that is not 听写 / 翻译 / 润色 / 问答. The order lives in historyView,
+ * so the tabs and the per-row captions cannot drift apart.
+ */
+const FILTERS: HistoryFilterId[] = ['all', ...HISTORY_CATEGORIES]
 
 function pad2(value: number): string {
   return value < 10 ? `0${value}` : String(value)
@@ -184,7 +190,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   const [heatStats, setHeatStats] = useState<StatsFile | null>(null)
   const [heatError, setHeatError] = useState('')
   const [entries, setEntries] = useState<HistoryEntry[]>([])
-  const [filter, setFilter] = useState<'all' | Mode>(restoredView.filter)
+  const [filter, setFilter] = useState<HistoryFilterId>(restoredView.filter)
   /**
    * Selected window of the 窗口筛选 dropdown; {@link APP_FILTER_ALL} means
    * "every window". It narrows the mode tab rather than replacing it, so both
@@ -398,9 +404,10 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   const dateBounds = historyDateBounds(period, dateFrom, dateTo)
   const visible = useMemo(() => {
     const byArchive = entries.filter((item) => (item.status === 'archived') === showArchived)
-    const byMode =
-      filter === 'all' ? byArchive : byArchive.filter((item) => item.mode === filter)
-    return historyDateView(filterByApp(byMode, appFilter), dateBounds, order)
+    // Filed by category, not by mode: a 任务 ran through dictation/ask and a
+    // 润色 has no mode of its own, so `item.mode` would put both in 听写.
+    const byCategory = filterByCategory(byArchive, filter)
+    return historyDateView(filterByApp(byCategory, appFilter), dateBounds, order)
   }, [entries, filter, appFilter, showArchived, dateBounds.start, dateBounds.end, order])
   const total = visible.length
   const exportCurrent = async (format: 'markdown' | 'text'): Promise<void> => {
@@ -982,7 +989,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
                         noWrap
                         sx={{ fontSize: 10.5, color: 'text.secondary', flexShrink: 0 }}
                       >
-                        {modeLabel(entry.mode)}
+                        {entryCategoryLabel(entry)}
                       </Typography>
                       {/* 录音结束 → 任务完成。Tabular digits keep the column steady
                           while scanning rows, and the hover text spells out both
@@ -1365,7 +1372,7 @@ function FeedbackDialog({
             {i18n.t('反馈')}
           </Typography>
           <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.5 }}>
-            {entry ? `${timeLabel(entry.createdAt)} · ${modeLabel(entry.mode)}` : ''}
+            {entry ? `${timeLabel(entry.createdAt)} · ${entryCategoryLabel(entry)}` : ''}
             {summary ? ` · ${summary.slice(0, 40)}${summary.length > 40 ? '…' : ''}` : ''}
           </Typography>
         </Box>

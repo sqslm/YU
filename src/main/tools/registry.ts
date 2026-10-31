@@ -139,7 +139,13 @@ export interface ToolRun {
   error?: string
 }
 
-const MAX_SEARCH_RESULTS = 10
+/** The settings allow up to 50 results per search; the tool must not clamp below that. */
+const MAX_SEARCH_RESULTS = 50
+/**
+ * A roundup fetches one page per planned topic. Ten is the page size the prompt was
+ * tuned against, so raising the user-facing maximum does not change digest cost.
+ */
+const DIGEST_MAX_RESULTS = 10
 
 /**
  * Every tool that leaves the machine (or costs a provider call) gets a ceiling.
@@ -274,11 +280,17 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
   // because the primary coverage of anything global is not in Chinese.
   const plan = planSearch(ctx.question || query, query)
   const now = new Date()
-  const limit = Math.min(Math.max(1, ctx.settings.search.maxResults || 5), MAX_SEARCH_RESULTS)
+  /*
+    `0` means "no local cap": the provider's own maximum (already limited to 50 by
+    the settings and the adapter) is what the model gets to see. A positive value is
+    the user's page size, clamped to the same 50 the settings allow.
+  */
+  const configured = ctx.settings.search.maxResults
+  const limit = configured === 0 ? undefined : Math.min(Math.max(1, configured || 5), MAX_SEARCH_RESULTS)
   // Roundups request a full page per topic, then keep the whole deduped union.
   // Ordinary lookup settings remain unchanged, including the saved provider entry.
-  const searchSettings = plan.digest ? { ...ctx.settings.search, maxResults: MAX_SEARCH_RESULTS } : ctx.settings.search
-  const rankOptions = { now, maxAgeHours: hoursForFreshness(explicitFreshness ?? plan.freshness), ...(plan.digest || ctx.settings.search.strategy === 'aggregate' ? {} : { limit }) }
+  const searchSettings = plan.digest ? { ...ctx.settings.search, maxResults: DIGEST_MAX_RESULTS } : ctx.settings.search
+  const rankOptions = { now, maxAgeHours: hoursForFreshness(explicitFreshness ?? plan.freshness), ...(plan.digest || ctx.settings.search.strategy === 'aggregate' || limit === undefined ? {} : { limit }) }
   if (explicitFreshness) {
     plan.freshness = explicitFreshness
     for (const planned of plan.queries) planned.freshness = explicitFreshness
@@ -306,7 +318,7 @@ async function runWebSearch(args: Record<string, unknown>, ctx: ToolContext): Pr
       // Keep the three-argument call when no ceiling was overridden: callers and
       // tests treat a provider call as `(cfg, input, signal)`.
       const results = searchTimeout
-        ? await searchWeb(searchSettings, input, ctx.signal, { timeoutMs: searchTimeout, ...(plan.digest ? { maxResults: MAX_SEARCH_RESULTS } : {}) })
+        ? await searchWeb(searchSettings, input, ctx.signal, { timeoutMs: searchTimeout, ...(plan.digest ? { maxResults: DIGEST_MAX_RESULTS } : {}) })
         : await searchWeb(searchSettings, input, ctx.signal)
       rounds[index] = { query: planned, results }
     } catch (err) {

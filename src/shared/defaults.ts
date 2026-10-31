@@ -11,7 +11,7 @@ import type {
 import { normalizeDomain } from './domain'
 import { buildAskPrompt, buildDictationPrompt, buildTranslatePrompt } from './prompts'
 import { PROMPT_KINDS, defaultPromptLibrary, normalizePromptLibrary } from './promptLibrary'
-import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders, normalizeSearchConnections } from './searchProviders'
+import { defaultSearchProviders, isSearchProvider, normalizeSearchProviders, normalizeSearchConnections, SEARCH_MAX_RESULTS, SEARCH_UNLIMITED_RESULTS } from './searchProviders'
 import { DEFAULT_LOCAL_MODEL, findModel } from './local-asr'
 import { DEFAULT_VOICE_COMMANDS, normalizeVoiceCommands } from './voiceCommands'
 import { DEFAULT_CALENDAR_SETTINGS, MAX_EVENT_LEAD_MINUTES } from './calendar'
@@ -456,7 +456,15 @@ export function mergeSettings(input: Partial<Settings>): Settings {
     typeof input.autoActivatePrompts === 'boolean'
       ? input.autoActivatePrompts
       : base.autoActivatePrompts
-  merged.search.maxResults = clampNumber(input.search?.maxResults, 1, 10, base.search.maxResults)
+  // 0 是「不限」：主进程按各服务商允许的上限去取。上界 50 必须和
+  // `searchProviders.clampResults` 一致——下面第 472 行还会用 activeEntry 的
+  // 值覆盖这里，真正的钳制在那边，两处不同界就会「改了没用」。
+  merged.search.maxResults = clampNumber(
+    input.search?.maxResults,
+    SEARCH_UNLIMITED_RESULTS,
+    SEARCH_MAX_RESULTS,
+    base.search.maxResults
+  )
   merged.search.provider = isSearchProvider(input.search?.provider)
     ? input.search.provider
     : base.search.provider

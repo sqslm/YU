@@ -481,7 +481,6 @@
   "上移 {{name}}": "Move {{name}} up",
   "下移 {{name}}": "Move {{name}} down",
   "单次搜索条数": "Results per search",
-  "普通查询每次取回的网页数；新闻汇总会自动分主题扩展，不受此总数限制。": "Page size for ordinary searches. News roundups expand across topics and are not capped at this total.",
   "新闻汇总会合并多次检索并去重；来源区显示实际覆盖范围。检索失败会明确标注，不会当作已联网回答。": "News roundups merge and deduplicate several searches. Sources show actual coverage, and failed retrieval is clearly marked.",
   "已联网": "Web sources",
   "未联网": "No web retrieval",
@@ -2579,5 +2578,11 @@
   "删除图片": "Delete image",
   "链接": "Link",
   "公式": "Formula",
-  "AI 改写": "AI rewrite"
+  "AI 改写": "AI rewrite",
+  "拖动左侧手柄调整优先顺序：顺序备用按这个次序尝试，合并来源按这个次序查询。": "Drag the grip to reorder: sequential fallback tries connections in this order, and merged sources queries them in this order.",
+  "0 表示不限，由模型决定": "0 means unlimited — the model decides",
+  "普通查询每次取回的网页数；0 表示不限，由模型自行决定；新闻汇总会自动分主题扩展，不受此总数限制。": "Page size for ordinary searches. 0 means unlimited (the model decides). News roundups expand across topics and are not capped at this total.",
+  "润色": "Polish",
+  "任务": "Task",
+  "分类": "Category"
 }

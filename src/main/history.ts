@@ -83,6 +83,8 @@ CREATE INDEX IF NOT EXISTS history_deleted_at ON history_deleted (deletedAt);
 export type HistoryAddInput = Pick<
   HistoryEntry,
   | 'mode'
+  // Also extra-only, like `processingMs`: a 历史记录 tab, not a column.
+  | 'category'
   | 'transcript'
   | 'final'
   | 'durationMs'
@@ -188,16 +190,20 @@ function entryToRow(entry: HistoryEntry): Row {
  * Fields that travel between machines.
  *
  * Deliberately not "the whole row": `audioPath` points at a wav that exists only
- * on this disk (syncing a megabyte per take is a different feature), and every
- * key in `extra` is client-local metadata that the other machine has no use for.
- * An allowlist also means a malicious server cannot smuggle unknown keys into a
- * row and have them believed next launch.
+ * on this disk (syncing a megabyte per take is a different feature), and most
+ * keys in `extra` are local measurements (`processingMs`) the other machine can
+ * neither use nor verify. An allowlist also means a malicious server cannot
+ * smuggle unknown keys into a row and have them believed next launch.
+ *
+ * `category` is on the list because it is what the row *is*, not how this machine
+ * measured it: dropping it would file a synced 润色 row under 听写.
  */
 const SYNC_FIELDS = [
   'id',
   'createdAt',
   'updatedAt',
   'mode',
+  'category',
   'status',
   'app',
   'transcript',
@@ -257,6 +263,12 @@ export function fromSyncRow(raw: unknown): HistoryEntry | null {
     entry.updatedAt = item.updatedAt
   }
   if (typeof item.status === 'string') entry.status = item.status as HistoryStatus
+  // A category the peer invented is worse than none: the reader then falls back
+  // to `mode` and still shows something honest.
+  if (item.category === 'dictation' || item.category === 'translate' || item.category === 'polish'
+    || item.category === 'ask' || item.category === 'task') {
+    entry.category = item.category
+  }
   if (typeof item.wordCount === 'number') entry.wordCount = item.wordCount
   if (typeof item.error === 'string') entry.error = item.error
   if (typeof item.alertKind === 'string') entry.alertKind = item.alertKind

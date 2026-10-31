@@ -1,4 +1,5 @@
 import type { SearchResult, SearchSettings } from '@shared/types'
+import { SEARCH_MAX_RESULTS } from '@shared/searchProviders'
 import { egressFetch } from '../net/egress'
 import { runWithDeadline } from '../tools/read-webpage'
 import { mt } from '@shared/mainI18n'
@@ -137,6 +138,56 @@ function codePointToString(code: number): string {
 /** Fallback page size when a caller passes a nonsense `maxResults`. */
 const DEFAULT_LIMIT = 5
 
+/**
+ * What one request may ask a vendor for.
+ *
+ * These are the vendors' own ceilings, not preferences of ours: Brave and Tavily
+ * reject anything past 20, Google CSE tops out at 10, Bing/百度/DeepSeek cap at
+ * 50, Exa and Serper go to 100. Clipping here turns "the user asked for 50 from
+ * a 10-per-page API" into ten hits instead of a 400 that reads like a broken
+ * provider.
+ */
+const VENDOR_LIMIT = {
+  brave: 20,
+  tavily: 20,
+  exa: 100,
+  serper: 100,
+  bing: 50,
+  googleCse: 10,
+  baidu: 50,
+  deepseek: 50
+} as const
+
+/**
+ * 请求参数里该写多少条。
+ *
+ * `0`（不限）向厂商要它允许的最大值——那才是「让 AI 自行决定」；1–50 原样，
+ * 超过 50 收成 50；最后再按该厂商的上限压一次。非法值（NaN/Infinity）只在
+ * 这里回落到 {@link DEFAULT_LIMIT}：它是「设置读坏了」的兜底，不是对 0 的解释。
+ *
+ * 纯函数，导出给 `search.test.ts` 钉住 0/1/50/51/NaN 五档。
+ */
+export function requestCount(value: number, vendorMax: number): number {
+  const ceiling = Number.isFinite(vendorMax) && vendorMax > 0 ? Math.floor(vendorMax) : DEFAULT_LIMIT
+  if (!Number.isFinite(value)) return Math.min(DEFAULT_LIMIT, ceiling)
+  const wanted = Math.floor(value)
+  if (wanted <= 0) return ceiling
+  return Math.min(wanted, SEARCH_MAX_RESULTS, ceiling)
+}
+
+/**
+ * 本地去重/截断的上界。
+ *
+ * `0` = 不限：厂商给了多少就留多少（去重后），因为「不限」不该在这里被再截一刀。
+ * 负数和非数字是坏值，照旧回落 {@link DEFAULT_LIMIT}。
+ */
+function resultCap(max: number): number {
+  if (!Number.isFinite(max)) return DEFAULT_LIMIT
+  if (max === 0) return Number.POSITIVE_INFINITY
+  if (max < 0) return DEFAULT_LIMIT
+  return Math.min(SEARCH_MAX_RESULTS, Math.max(1, Math.floor(max)))
+}
+
 /** Dedupe key: same page even if the trailing slash or the fragment differs. */
 function sourceKey(url: string): string {
   try {
@@ -149,7 +200,7 @@ function sourceKey(url: string): string {
 }
 
 function limit(results: SearchResult[], max: number): SearchResult[] {
-  const cap = Number.isFinite(max) && max > 0 ? Math.floor(max) : DEFAULT_LIMIT
+  const cap = resultCap(max)
   const seen = new Set<string>()
   const out: SearchResult[] = []
   for (const item of results) {
@@ -169,7 +220,8 @@ function limit(results: SearchResult[], max: number): SearchResult[] {
     if (out.length >= cap) break
   }
   // Belt and braces: the caller's cap always wins, even if the list was short.
-  return out.slice(0, cap)
+  // `0`／不限 时 cap 是 Infinity，这里原样返回去重后的完整列表。
+  return out.length > cap ? out.slice(0, cap) : out
 }
 
 async function get(url: string, init: RequestInit = {}): Promise<Response> {
@@ -423,7 +475,7 @@ interface BraveHit {
 function braveParams(query: SearchQuery, cfg: SearchSettings): string {
   const params = new URLSearchParams({
     q: query.text,
-    count: String(Number.isFinite(cfg.maxResults) && cfg.maxResults > 0 ? cfg.maxResults : DEFAULT_LIMIT)
+    count: String(requestCount(cfg.maxResults, VENDOR_LIMIT.brave))
   })
   if (query.lang) params.set('search_lang', query.lang.toLowerCase())
   if (query.country) params.set('country', query.country.toUpperCase())
@@ -490,7 +542,7 @@ export async function searchTavily(
   if (!cfg.apiKey) throw new SearchError(mt('Tavily 需要 API Key'))
   const payload: Record<string, unknown> = {
     query: query.text,
-    max_results: cfg.maxResults,
+    max_results: requestCount(cfg.maxResults, VENDOR_LIMIT.tavily),
     include_answer: false,
     include_published_date: true,
     search_depth: 'basic'
@@ -694,7 +746,7 @@ export async function searchExa(
     cfg.endpoint || DEFAULTS.exa,
     {
       query: query.text,
-      numResults: Math.min(100, Math.max(1, Math.round(cfg.maxResults) || DEFAULT_LIMIT)),
+      numResults: requestCount(cfg.maxResults, VENDOR_LIMIT.exa),
       // 2000 characters is enough for a lede plus numbers, and keeps the take's
       // context budget predictable.
       contents: { text: { maxCharacters: 2000 } }
@@ -726,7 +778,7 @@ export async function searchSerper(
   if (!cfg.apiKey) throw new SearchError(mt('Serper 需要 API Key'))
   const res = await postJson(
     cfg.endpoint || DEFAULTS.serper,
-    { q: query.text, num: Math.min(100, Math.max(1, Math.round(cfg.maxResults) || DEFAULT_LIMIT)) },
+    { q: query.text, num: requestCount(cfg.maxResults, VENDOR_LIMIT.serper) },
     // Not `Authorization`: Serper reads its own header name.
     { 'X-API-KEY': cfg.apiKey },
     signal
@@ -750,7 +802,7 @@ export async function searchBing(
   if (!cfg.apiKey) throw new SearchError(mt('Bing 需要订阅密钥'))
   const url = withQuery(cfg.endpoint || DEFAULTS.bing, {
     q: query.text,
-    count: String(Math.min(50, Math.max(1, Math.round(cfg.maxResults) || DEFAULT_LIMIT)))
+    count: String(requestCount(cfg.maxResults, VENDOR_LIMIT.bing))
   })
   const res = await get(url, {
     headers: { Accept: 'application/json', 'Ocp-Apim-Subscription-Key': cfg.apiKey },
@@ -798,7 +850,7 @@ export async function searchGoogleCse(
     key: cfg.apiKey,
     cx,
     q: query.text,
-    num: String(Math.min(10, Math.max(1, Math.round(cfg.maxResults) || DEFAULT_LIMIT)))
+    num: String(requestCount(cfg.maxResults, VENDOR_LIMIT.googleCse))
   })
   const res = await get(url, { headers: { Accept: 'application/json' }, signal })
   const { json } = await readBody(res)
@@ -1001,7 +1053,7 @@ export async function searchBaidu(
   const url = withQuery(cfg.endpoint || DEFAULTS.baidu, {
     wd: query.text,
     ie: 'utf-8',
-    rn: String(Math.min(50, Math.max(1, Math.round(cfg.maxResults) || DEFAULT_LIMIT)))
+    rn: String(requestCount(cfg.maxResults, VENDOR_LIMIT.baidu))
   })
   const res = await get(url, {
     headers: { Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'zh-CN,zh;q=0.9' },
@@ -1079,7 +1131,7 @@ export async function searchDeepSeek(
   const query = normalizeQuery(input)
   if (!query.text) return []
   if (!cfg.apiKey) throw new SearchError(mt('DeepSeek 搜索需要 API Key'))
-  const count = Math.min(50, Math.max(1, Math.round(cfg.maxResults) || DEFAULT_LIMIT))
+  const count = requestCount(cfg.maxResults, VENDOR_LIMIT.deepseek)
   const payload: Record<string, unknown> = {
     query: query.text,
     count,

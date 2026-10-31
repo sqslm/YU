@@ -61,6 +61,19 @@ it('keeps temporary memory mode across later messages and reopening a conversati
   expect(vi.mocked(askAgent).mock.calls[1][5]?.conversation?.memoryTemporary).toBe(true)
   expect(service.create(null).memoryTemporary).toBe(false)
 })
+it('answers a current-page summary without spending the search quota', async () => {
+  const thread = service.create(null)
+  await service.send(thread.id, '总结一下这个网页的主要内容')
+  const options = vi.mocked(askAgent).mock.calls.at(-1)?.[5]
+  expect(options?.allowedTools).not.toContain('web_search')
+  // 「语」 answers as itself in the chat page.
+  expect(options?.identity).toContain('「语」')
+})
+it('keeps the web tools when the request explicitly asks to search', async () => {
+  const thread = service.create(null)
+  await service.send(thread.id, '搜索并总结这个网页')
+  expect(vi.mocked(askAgent).mock.calls.at(-1)?.[5]?.allowedTools).toContain('web_search')
+})
 it('persists attachments and provides them again on follow-up without mixing them into user learning text', async () => {
   const thread = service.create(null)
   await service.send(thread.id, '概括这个文档', [{ name: 'notes.txt', bytes: Buffer.from('文档中的人物喜欢长句。') }])

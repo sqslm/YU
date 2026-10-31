@@ -48,6 +48,13 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
   /** The last markdown this component either loaded or emitted. */
   const known = useRef(value)
   const timer = useRef<number | null>(null)
+  /**
+   * Who this editor instance speaks for. Set when the instance is created and
+   * cleared when it is torn down, so a late timer/blur from the previous note can
+   * never hand text to the current one: the callback and the note id travel
+   * together instead of reading whatever `props` happens to hold now.
+   */
+  const sink = useRef<{ noteId: string; send: (markdown: string) => void } | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; entries: NoteMenuEntry[] } | null>(null)
   const props = useRef({ value, onChange, noteId, placeholder, disabled })
   props.current = { value, onChange, noteId, placeholder, disabled }
@@ -55,11 +62,15 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
   const flush = (): void => {
     if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null }
     const instance = crepe.current
-    if (!instance) return
-    const markdown = instance.getMarkdown()
+    const owner = sink.current
+    if (!instance || !owner) return
+    let markdown = ''
+    // A teardown can run while `create()` is still in flight; a throw here would
+    // abort the unmount and leave the editor attached.
+    try { markdown = instance.getMarkdown() } catch { return }
     if (markdown === known.current) return
     known.current = markdown
-    props.current.onChange(markdown)
+    owner.send(markdown)
   }
 
   /** Runs a ProseMirror command on the live view. */
@@ -174,12 +185,22 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     const root = host.current
     if (!root) return
     let disposed = false
+    // Everything below is a snapshot of *this* note. Reading it back from `props`
+    // later is how a teardown flush used to write note A's text into note B.
+    const owner = { noteId: props.current.noteId, send: props.current.onChange }
+    const noteOwner = owner.noteId
     const upload = async (file: File): Promise<string> => {
-      const added = await window.api.notes.addAttachment(props.current.noteId, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) })
+      const added = await window.api.notes.addAttachment(noteOwner, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) })
       return added.path
     }
+    // A child node per instance: the previous editor's DOM (and its ProseMirror
+    // view, which owns the undo history) lives in its own subtree, so the async
+    // `destroy()` can only ever clear leftovers we are throwing away, never the
+    // document the user is now looking at.
+    const mount = document.createElement('div')
+    root.appendChild(mount)
     const instance = new Crepe({
-      root,
+      root: mount,
       defaultValue: props.current.value,
       features: {
         // No AI rewrite button: it would be a second, unconfigured model behind the
@@ -208,27 +229,47 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
           inlineOnUpload: upload,
           // Stored markdown keeps note-relative paths; the renderer resolves them to
           // the note attachment scheme, the only way an `<img>` may reach a file.
-          proxyDomURL: (url: string) => url.startsWith('attachments/') ? noteAttachmentUrl(props.current.noteId, url) : url
+          proxyDomURL: (url: string) => url.startsWith('attachments/') ? noteAttachmentUrl(noteOwner, url) : url
         }
       }
     })
     instance.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
-        if (disposed || markdown === known.current) return
+        // Only the live instance may speak: a view left over from the previous
+        // note can still deliver updates while it is being torn down.
+        if (disposed || crepe.current !== instance || markdown === known.current) return
         if (timer.current !== null) window.clearTimeout(timer.current)
         timer.current = window.setTimeout(() => { timer.current = null; flush() }, EMIT_MS)
       })
-      listener.blur(() => flush())
+      listener.blur(() => { if (crepe.current === instance) flush() })
     })
+    known.current = props.current.value
+    sink.current = owner
     crepe.current = instance
-    void instance.create().then(() => { if (!disposed) instance.setReadonly(props.current.disabled) })
+    void instance.create().then(() => {
+      if (disposed) return
+      instance.setReadonly(props.current.disabled)
+      // The first render after a switch can still hand us the *previous* note's
+      // draft (the page resets the drafts one tick later), so the document this
+      // editor was born with may be somebody else's text. Reconcile once the
+      // context is ready: here `replaceAll` cannot be swallowed by a mounting
+      // editor, which is what used to leave note A's body inside note B.
+      const live = props.current.value
+      if (live === known.current) return
+      try {
+        instance.editor.action(replaceAll(live))
+        known.current = live
+      } catch { /* the teardown already started */ }
+    })
     return () => {
-      // The last keystroke may still be inside the debounce window; emit it before the
-      // editor goes away, otherwise switching notes silently drops those characters.
+      // The last keystroke may still be inside the debounce window; emit it — to *this*
+      // note, through the callback captured above — before the editor goes away.
       if (timer.current !== null) flush()
       disposed = true
       if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null }
+      sink.current = null
       crepe.current = null
+      mount.remove()
       void instance.destroy()
     }
     // One editor per note: switching notes remounts instead of reconciling two
@@ -240,8 +281,13 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
   useEffect(() => {
     const instance = crepe.current
     if (!instance || value === known.current) return
-    known.current = value
-    try { instance.editor.action(replaceAll(value)) } catch { /* still mounting: it starts from this value */ }
+    try {
+      instance.editor.action(replaceAll(value))
+      // Only remember the value once it really landed: a replace issued while
+      // `create()` is still running throws, and forgetting that would leave the
+      // editor showing the wrong note's text with no further correction.
+      known.current = value
+    } catch { /* still mounting: create() reconciles the live value when it resolves */ }
   }, [value])
 
   useEffect(() => {

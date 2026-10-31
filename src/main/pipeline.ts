@@ -10,6 +10,7 @@ import type {
   BarAlertKind,
   BarState,
   CardAction,
+  HistoryCategory,
   HistoryEntry,
   Mode,
   NamedPrompt,
@@ -124,6 +125,23 @@ const ASK_TRANSCRIBE_PROMPT =
   '把这段音频逐字转写成纯文本，保留说话人的原话与语序。只输出转写结果，不要回答、不要总结、不要解释。'
 
 type BarSink = () => BrowserWindow | null
+
+/**
+ * Which 历史记录 tab a row belongs to (需求4).
+ *
+ * `Mode` says how the pipeline ran; the category says what the user filed it
+ * under. They differ for the tasks that borrow a mode — 随记 / 快速提醒 / 助手 run
+ * through dictation (or ask) but read as 任务 — so the purpose wins over the mode.
+ */
+function categoryFor(
+  mode: Mode,
+  purpose: 'reminder' | 'notes' | 'assistant' | undefined
+): HistoryCategory {
+  if (purpose) return 'task'
+  if (mode === 'ask') return 'ask'
+  if (mode === 'translate') return 'translate'
+  return 'dictation'
+}
 
 /** One-line error text for a failover log line: status first, then the reason. */
 function describeFailure(error: unknown): string {
@@ -1213,6 +1231,9 @@ export class Pipeline {
     const processingMs = this.takeProcessingMs()
     const entry = await this.history.add({
       ...input,
+      // Which tab the row lands under. A retry of an old row has no purpose — it
+      // re-runs the take, not the task it was filed as, so it reads as dictation.
+      category: input.category ?? categoryFor(input.mode, this.takePurpose),
       // Only stamped when a release (or a retry start) exists: a take that never
       // had one must not claim it was instant.
       ...(processingMs === undefined ? {} : { processingMs }),
@@ -1279,6 +1300,9 @@ export class Pipeline {
           durationMs: input.durationMs,
           app: appLabel(input.target.appName, input.target.title),
           route: input.route,
+          // A failed task is still a task: the category follows the route that
+          // produced the take, not whether it succeeded.
+          category: categoryFor(input.mode, input.purpose),
           status: 'error',
           error: input.error,
           ...(input.alertKind ? { alertKind: input.alertKind } : {}),
@@ -1294,6 +1318,47 @@ export class Pipeline {
       )
     } catch (err) {
       this.log(`[pipeline] cannot record the failed take: ${describeFailure(err)}`)
+      return null
+    }
+  }
+
+  /**
+   * A task that succeeded still belongs in 历史记录.
+   *
+   * Reminders, notes and assistant actions return to the user only as a pill or a
+   * card, so before the 任务 category existed there was nothing to look back at —
+   * "what did I ask it to do yesterday" had no answer. The row carries the spoken
+   * request and the outcome summary, not the tool payload.
+   */
+  private async recordTask(input: {
+    mode: Mode
+    target: ForegroundInfo
+    transcript: string
+    final: string
+    token: number
+    durationMs: number
+    category?: import('@shared/types').HistoryCategory
+    status?: HistoryEntry['status']
+  }): Promise<HistoryEntry | null> {
+    try {
+      return await this.record(
+        {
+          mode: input.mode,
+          transcript: input.transcript,
+          final: input.final,
+          durationMs: input.durationMs,
+          app: appLabel(input.target.appName, input.target.title),
+          category: input.category ?? 'task',
+          status: input.status ?? 'completed',
+          wordCount: countUnits(input.final || input.transcript),
+          focusedWindowTitle: input.target.title
+        },
+        undefined,
+        input.token
+      )
+    } catch (err) {
+      // The action already happened; a history failure must not turn it into an error.
+      this.log(`[pipeline] cannot record the task: ${describeFailure(err)}`)
       return null
     }
   }
@@ -1541,7 +1606,10 @@ export class Pipeline {
           ? await this.multimodalTranscript(settings, wav, spokenMs, controller.signal, progress)
           : await this.asrTranscript(settings, wav, controller.signal, progress))
         await this.options.onVoiceNote(pcm, original, controller.signal, context)
-        if (token === this.runToken) this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), feedback: {}, taskLabel: mt('随记'), showMode: settings.showModeInBar }, 10_000, { force: true })
+        if (token === this.runToken) {
+          void this.recordTask({ mode, target, transcript: original, final: original, token, durationMs: spokenMs })
+          this.setBarState({ phase: 'done', mode, text: mt('随记已保存'), feedback: {}, taskLabel: mt('随记'), showMode: settings.showModeInBar }, 10_000, { force: true })
+        }
         return null
       }
 
@@ -1574,6 +1642,17 @@ export class Pipeline {
             this.setBarState({ phase: 'done', mode: 'ask', text: '', showMode: settings.showModeInBar }, DONE_HIDE_MS)
           } else if (result?.text) this.reportTaskResult(result.text, result.failed)
           else this.setBarState({ phase: 'idle' }, DONE_HIDE_MS)
+          // A plain answer is 问答; anything the assistant actually did is 任务.
+          void this.recordTask({
+            mode,
+            target,
+            transcript,
+            final: result?.answerCard?.answer ?? result?.text ?? '',
+            token,
+            durationMs: spokenMs,
+            category: result?.answerCard ? 'ask' : 'task',
+            ...(result?.failed ? { status: 'error' as const } : {})
+          })
         }
         return null
       }
@@ -1592,6 +1671,15 @@ export class Pipeline {
         if (token !== this.runToken) return null
         this.showAlert({ kind: 'reminder', level: 'info', text: result.message,
           actions: result.undo ? [{ id: 'undo-reminder', label: mt('撤销') }] : [] })
+        void this.recordTask({
+          mode,
+          target,
+          transcript,
+          final: result.message,
+          token,
+          durationMs: spokenMs,
+          ...(result.ok === false ? { status: 'error' as const } : {})
+        })
         return null
       }
       if (mode === 'ask') {
@@ -2557,6 +2645,7 @@ export class Pipeline {
       this.setBarState({ phase: 'idle' }, 1400)
       await this.history.add({
         mode: 'ask',
+        category: 'ask',
         transcript: text,
         final,
         durationMs: 0,
@@ -2578,6 +2667,7 @@ export class Pipeline {
       this.setBarState({ phase: 'error', message, alert }, this.alertLifetime())
       await this.history.add({
         mode: 'ask',
+        category: 'ask',
         transcript: text,
         final: '',
         durationMs: 0,

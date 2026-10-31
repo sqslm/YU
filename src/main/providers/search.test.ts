@@ -21,6 +21,7 @@ import {
   planSearch,
   rankSources,
   registrableDomain,
+  requestCount,
   scoreSource,
   searchBaidu,
   searchBing,
@@ -868,5 +869,81 @@ describe('api-backed search adapters', () => {
     it('returns an empty list for a page with no organic results', () => {
       expect(parseBaiduHtml('<html><body><p>没有找到相关结果</p></body></html>', 5)).toEqual([])
     })
+  })
+})
+
+/**
+ * 条数放宽到 0–50 之后的两条不变量：0 表示「向厂商要它允许的最大值」，而不是
+ * 退回旧的 5；用户数值永远不超过厂商自己的上限（超了就是 400，读起来像服务坏了）。
+ */
+describe('result count: 0 means "as many as the vendor allows"', () => {
+  it('0 asks each vendor for its documented ceiling', async () => {
+    await searchBrave(cfg({ maxResults: 0 }), { text: 'q' })
+    expect(new URL(calls[0].url).searchParams.get('count')).toBe('20')
+    await searchBing(cfg({ provider: 'bing', maxResults: 0 }), { text: 'q' })
+    expect(new URL(calls[1].url).searchParams.get('count')).toBe('50')
+    await searchGoogleCse(cfg({ provider: 'google-cse', endpoint: 'cx=abc', maxResults: 0 }), { text: 'q' })
+    expect(new URL(calls[2].url).searchParams.get('num')).toBe('10')
+    await searchTavily(cfg({ provider: 'tavily', maxResults: 0 }), { text: 'q' })
+    expect(JSON.parse(calls[3].body).max_results).toBe(20)
+  })
+
+  it('never asks a vendor past what it accepts', async () => {
+    await searchBrave(cfg({ maxResults: 50 }), { text: 'q' })
+    expect(new URL(calls[0].url).searchParams.get('count')).toBe('20')
+    await searchBing(cfg({ provider: 'bing', maxResults: 50 }), { text: 'q' })
+    expect(new URL(calls[1].url).searchParams.get('count')).toBe('50')
+  })
+
+  it('passes a normal request through unchanged', async () => {
+    await searchBing(cfg({ provider: 'bing', maxResults: 7 }), { text: 'q' })
+    expect(new URL(calls[0].url).searchParams.get('count')).toBe('7')
+  })
+
+  it('0 keeps every hit the vendor returned instead of the old 5-row default', async () => {
+    const hits = Array.from({ length: 12 }, (_, index) => ({ title: `t${index}`, url: `https://example.test/${index}`, description: `s${index}` }))
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ web: { results: hits } }))
+    const kept = await searchBrave(cfg({ maxResults: 0 }), { text: 'q' })
+    expect(kept).toHaveLength(12)
+  })
+
+  it('a finite value still trims locally', async () => {
+    const hits = Array.from({ length: 12 }, (_, index) => ({ title: `t${index}`, url: `https://example.test/${index}`, description: `s${index}` }))
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ web: { results: hits } }))
+    const kept = await searchBrave(cfg({ maxResults: 5 }), { text: 'q' })
+    expect(kept).toHaveLength(5)
+  })
+})
+
+describe('requestCount', () => {
+  it('reads 0 as "use the vendor ceiling"', () => {
+    expect(requestCount(0, 50)).toBe(50)
+    expect(requestCount(0, 20)).toBe(20)
+    expect(requestCount(0, 100)).toBe(100)
+    expect(requestCount(0, 10)).toBe(10)
+    // 负数来自手改的配置文件，和 0 一样当作「不限」，不放大成 1。
+    expect(requestCount(-3, 20)).toBe(20)
+  })
+
+  it('passes 1–50 through, clipped by the vendor', () => {
+    expect(requestCount(1, 100)).toBe(1)
+    expect(requestCount(7, 20)).toBe(7)
+    expect(requestCount(20, 20)).toBe(20)
+    expect(requestCount(50, 100)).toBe(50)
+    expect(requestCount(50, 20)).toBe(20)
+    expect(requestCount(50, 10)).toBe(10)
+  })
+
+  it('caps above 50 at 50', () => {
+    expect(requestCount(51, 100)).toBe(50)
+    expect(requestCount(999, 100)).toBe(50)
+  })
+
+  it('falls back to the default 5 only for nonsense', () => {
+    expect(requestCount(Number.NaN, 50)).toBe(5)
+    expect(requestCount(Number.POSITIVE_INFINITY, 50)).toBe(5)
+    // 厂商上界本身坏掉时也不能发出 0 或负数。
+    expect(requestCount(0, Number.NaN)).toBe(5)
+    expect(requestCount(0, 0)).toBe(5)
   })
 })

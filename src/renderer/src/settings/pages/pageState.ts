@@ -270,7 +270,18 @@ export const HISTORY_VIEW_KEY = 'history.view.v1'
 export const HISTORY_VIEW_VERSION = 1
 
 export const HISTORY_PERIODS: readonly HistoryPeriod[] = ['all', 'today', 'week', 'month', 'custom']
-export const HISTORY_FILTERS: readonly HistoryFilterId[] = ['all', 'dictation', 'ask', 'translate']
+/**
+ * Every tab the history page offers. Must list the categories, not the modes: a
+ * saved 润色 / 任务 tab has to survive a reload instead of being reset to 全部.
+ */
+export const HISTORY_FILTERS: readonly HistoryFilterId[] = [
+  'all',
+  'dictation',
+  'translate',
+  'polish',
+  'ask',
+  'task'
+]
 
 /**
  * 历史页要记住的视图：搜索词、时间范围（含自定义起止日期）、状态标签页、

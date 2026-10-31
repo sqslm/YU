@@ -220,6 +220,18 @@ describe('mergeSettings', () => {
     )
   })
 
+  it('keeps 0 as "unlimited" and tops out at 50 instead of the old 1–10 window', () => {
+    // 0 used to be pulled up to 1 here (and to 5 by the adapters), which is exactly
+    // the "I asked for no cap and got five rows" bug.
+    const providers = defaultSearchProviders()
+    providers.bing = { apiKey: 'bing', endpoint: '', maxResults: 0 }
+    providers.serper = { apiKey: 'serper', endpoint: '', maxResults: 50 }
+    providers.tavily = { apiKey: 'tvly', endpoint: '', maxResults: 999 }
+    expect(mergeSettings({ search: { providers, provider: 'bing' } as never }).search.maxResults).toBe(0)
+    expect(mergeSettings({ search: { providers, provider: 'serper' } as never }).search.maxResults).toBe(50)
+    expect(mergeSettings({ search: { providers, provider: 'tavily' } as never }).search.maxResults).toBe(50)
+  })
+
   it('collapses a legacy built-in Ask prompt and keeps real extra instructions', () => {
     const legacyEn = mergeSettings({
       polish: { askPrompt: 'You are a helpful assistant answering a spoken question.' } as never

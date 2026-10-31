@@ -6,6 +6,8 @@ import { complete } from './providers/llm'
 import { chainFor, profileOverlay, withFailover } from './providers/chain'
 import { askAgent, dedupeSources, stripAppendedSources } from './agent'
 import { egressFetch } from './net/egress'
+import { isCurrentContentRequest } from './voice-intent'
+import { CHAT_IDENTITY_PROMPT } from '@shared/prompts'
 import { ChatStore } from './chat-store'
 
 /**
@@ -83,8 +85,18 @@ export class ChatService {
         this.store.attach(userId, files); this.changed({ type: 'changed' })
       }
       conversation.reference = chatAttachmentReference(this.store.references(id))
+      /*
+        A request to summarise the page/document the user is looking at is answered
+        from its actual body, never from a web search: searching here would spend
+        search quota on text the user already has open. Only an explicit "search
+        the web" keeps the web tools for such a request.
+      */
+      const summarizing = isCurrentContentRequest(question.trim()) && !/搜索|检索|联网|上网|\b(?:search|browse|look up)\b/iu.test(question)
+      const allowedTools = summarizing ? ['get_weather', 'get_datetime', 'calculate'] : ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate']
       const pending = askAgent(effective, question.trim(), {}, active.controller.signal, () => {}, {
-        reset: false, conversation, allowedTools: ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate'], timeouts: { llm: 90000 }, fetchImpl: egressFetch,
+        reset: false, conversation, allowedTools, timeouts: { llm: 90000 }, fetchImpl: egressFetch,
+        // 「语」 answers as itself in the chat page; the voice bar stays generic.
+        identity: CHAT_IDENTITY_PROMPT,
         onDelta: delta => { active.text += delta; progress() }, onStatus: status => progress(status)
       })
       if (conversation.memoryTemporary) this.store.markTemporary(id)

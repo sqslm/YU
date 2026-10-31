@@ -1,6 +1,12 @@
 import type { GameModeSettings, GameModeStatus } from './game-mode'
 import type { TtsSettings } from './speech'
 export type Mode = 'dictation' | 'translate' | 'ask'
+/**
+ * 历史记录 files every row under one of these. Deliberately not `Mode`: the
+ * things the user calls 任务 (随记 / 快速提醒 / 助手) run through the dictation or
+ * ask mode but are not dictation, and a 选区润色 has no mode of its own at all.
+ */
+export type HistoryCategory = 'dictation' | 'translate' | 'polish' | 'ask' | 'task'
 export type VoiceCommandMode = Mode | 'reminder' | 'notes'
 export interface VoiceCommandsSettings {
   enabled: boolean
@@ -784,6 +790,16 @@ export interface HistoryEntry {
    */
   updatedAt?: number
   mode: Mode
+  /**
+   * Which 历史记录 tab this row belongs to. Absent on rows written before the
+   * category existed, and on rows another writer (an old client, a synced peer)
+   * produced without it: readers must fall back to `mode` and treat a dictation
+   * row as 听写.
+   *
+   * Not a fixed column — it rides along in the `extra` JSON, so old databases
+   * gain it the moment the first new row is written (no migration).
+   */
+  category?: HistoryCategory
   transcript: string
   final: string
   durationMs: number

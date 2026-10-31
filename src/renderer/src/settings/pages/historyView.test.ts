@@ -6,6 +6,7 @@ import {
   APP_FILTER_MAX,
   CARD_MISSING_LABEL,
   CARD_UNKNOWN_TITLE,
+  HISTORY_CATEGORIES,
   NO_AUDIO_REASON,
   PAGE_SIZE,
   REFRESH_MAX_SECONDS,
@@ -16,6 +17,9 @@ import {
   appOptions,
   autoRefreshBlocked,
   bodyOf,
+  categoryLabel,
+  categoryOf,
+  entryCategoryLabel,
   originalMatchesResult,
   originalText,
   canDownloadAudio,
@@ -30,11 +34,13 @@ import {
   emptyStateCopy,
   emptyStateKind,
   filterByApp,
+  filterByCategory,
   filterLabel,
   formatAttempts,
   hasAudio,
   hasCardName,
   hintText,
+  matchesFilter,
   modeLabel,
   normalizeRefreshSeconds,
   pageCount,
@@ -513,11 +519,13 @@ describe('autoRefreshBlocked', () => {
 })
 
 describe('filterLabel / countLabel', () => {
-  it('captions the four tabs with the same words the rows use', () => {
+  it('captions the six tabs with the same words the rows use', () => {
     expect(filterLabel('all')).toBe('全部')
     expect(filterLabel('dictation')).toBe('听写')
-    expect(filterLabel('ask')).toBe('问答')
     expect(filterLabel('translate')).toBe('翻译')
+    expect(filterLabel('polish')).toBe('润色')
+    expect(filterLabel('ask')).toBe('问答')
+    expect(filterLabel('task')).toBe('任务')
     expect(filterLabel('dictation')).toBe(modeLabel('dictation'))
   })
 
@@ -525,12 +533,70 @@ describe('filterLabel / countLabel', () => {
     expect(countLabel('dictation', 42)).toBe('听写 42 条')
     expect(countLabel('all', 0)).toBe('全部 0 条')
     expect(countLabel('ask', 1)).toBe('问答 1 条')
+    expect(countLabel('task', 3)).toBe('任务 3 条')
   })
 
   it('never prints a negative or fractional count', () => {
     expect(countLabel('all', -3)).toBe('全部 0 条')
     expect(countLabel('all', 4.6)).toBe('全部 4 条')
     expect(countLabel('all', Number.NaN)).toBe('全部 0 条')
+  })
+})
+
+describe('category (需求4)', () => {
+  it('names every category the tabs offer, in tab order', () => {
+    expect(HISTORY_CATEGORIES).toEqual(['dictation', 'translate', 'polish', 'ask', 'task'])
+    expect(categoryLabel('dictation')).toBe('听写')
+    expect(categoryLabel('translate')).toBe('翻译')
+    expect(categoryLabel('polish')).toBe('润色')
+    expect(categoryLabel('ask')).toBe('问答')
+    expect(categoryLabel('task')).toBe('任务')
+  })
+
+  it('reads the recorded category, including the two a mode cannot express', () => {
+    expect(categoryOf(entry({ mode: 'dictation', category: 'task' }))).toBe('task')
+    expect(categoryOf(entry({ mode: 'dictation', category: 'polish' }))).toBe('polish')
+    expect(categoryOf(entry({ mode: 'ask', category: 'ask' }))).toBe('ask')
+  })
+
+  it('falls back to the mode for rows written before the category existed', () => {
+    const legacy = { id: 'old', createdAt: 0, mode: 'ask' as const, transcript: '', final: '', durationMs: 0, app: '' }
+    expect(categoryOf(legacy)).toBe('ask')
+    expect(entryCategoryLabel(legacy)).toBe('问答')
+    expect(categoryOf({ ...legacy, mode: 'translate' })).toBe('translate')
+    expect(categoryOf({ ...legacy, mode: 'dictation' })).toBe('dictation')
+  })
+
+  it('ignores an unknown category instead of printing it', () => {
+    expect(categoryOf(entry({ mode: 'translate', category: 'mystery' as never }))).toBe('translate')
+    expect(entryCategoryLabel(entry({ mode: 'dictation', category: 'mystery' as never }))).toBe('听写')
+  })
+
+  it('labels a row by its category, not by the mode it ran through', () => {
+    expect(entryCategoryLabel(entry({ mode: 'dictation', category: 'task' }))).toBe('任务')
+    expect(entryCategoryLabel(entry({ mode: 'dictation', category: 'polish' }))).toBe('润色')
+  })
+
+  it('matches one tab against the category and never mutates the list', () => {
+    const rows = [
+      entry({ id: 'd', mode: 'dictation', category: 'dictation' }),
+      entry({ id: 't', mode: 'dictation', category: 'task' }),
+      entry({ id: 'p', mode: 'dictation', category: 'polish' }),
+      entry({ id: 'x', mode: 'translate', category: 'translate' }),
+      entry({ id: 'q', mode: 'ask', category: 'ask' }),
+      entry({ id: 'legacy-ask', mode: 'ask' })
+    ]
+    const snapshot = structuredClone(rows)
+    expect(filterByCategory(rows, 'all').map(row => row.id)).toEqual(['d', 't', 'p', 'x', 'q', 'legacy-ask'])
+    expect(filterByCategory(rows, 'task').map(row => row.id)).toEqual(['t'])
+    expect(filterByCategory(rows, 'polish').map(row => row.id)).toEqual(['p'])
+    expect(filterByCategory(rows, 'translate').map(row => row.id)).toEqual(['x'])
+    expect(filterByCategory(rows, 'ask').map(row => row.id)).toEqual(['q', 'legacy-ask'])
+    expect(filterByCategory(rows, 'dictation').map(row => row.id)).toEqual(['d'])
+    expect(rows).toEqual(snapshot)
+    expect(matchesFilter(rows[1]!, 'dictation')).toBe(false)
+    expect(matchesFilter(rows[1]!, 'task')).toBe(true)
+    expect(matchesFilter(rows[1]!, 'all')).toBe(true)
   })
 })
 

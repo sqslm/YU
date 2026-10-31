@@ -303,6 +303,19 @@ describe('web_search', () => {
     expect(outcome.ok).toBe(false)
     expect(outcome.error).toContain('429')
   })
+
+  it('keeps every provider result when the page size is 0 (unlimited)', async () => {
+    // Distinct publishers and headlines: the ranker collapses syndicated copies, and
+    // this test is about the page size, not about deduplication.
+    const names = ['Cedar', 'Maple', 'Willow', 'Birch', 'Aspen', 'Elm', 'Juniper', 'Larch']
+    const results = names.map((name, index) => ({ title: `${name} hardware review`, url: `https://${name.toLowerCase()}.test/review`, snippet: `snippet ${index}` }))
+    mocks.searchWeb.mockResolvedValue(results)
+    const unlimited = await runTool('web_search', { query: 'comparison query' }, makeContext({ question: 'comparison query', settings: makeSettings({ maxResults: 0, strategy: 'single' }) }))
+    expect(unlimited.ok).toBe(true)
+    expect(unlimited.sources).toHaveLength(8)
+    const capped = await runTool('web_search', { query: 'comparison query' }, makeContext({ question: 'comparison query', settings: makeSettings({ maxResults: 3, strategy: 'single' }) }))
+    expect(capped.sources).toHaveLength(3)
+  })
 })
 
 describe('calculate / get_datetime', () => {

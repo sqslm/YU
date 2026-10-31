@@ -188,6 +188,15 @@ describe('validateHistoryView', () => {
     expect(value?.order).toBe('newest')
   })
 
+  it('记住了所有分类标签页，包括没有对应 mode 的润色和任务', () => {
+    // 润色 / 任务 不是 Mode 的取值：校验只认「已知分类」，否则刷新一次就被打回全部。
+    for (const filter of ['dictation', 'translate', 'polish', 'ask', 'task', 'all'] as const) {
+      expect(validateHistoryView({ ...EMPTY_HISTORY_VIEW, filter })?.filter).toBe(filter)
+    }
+    expect(validateHistoryView({ ...EMPTY_HISTORY_VIEW, filter: 'polished' })?.filter).toBe('all')
+    expect(validateHistoryView({ ...EMPTY_HISTORY_VIEW, filter: 7 })?.filter).toBe('all')
+  })
+
   it('自定义范围保留合法日期，非自定义范围丢掉日期', () => {
     const custom = validateHistoryView({ ...EMPTY_HISTORY_VIEW, period: 'custom', dateFrom: '2026-10-01', dateTo: '2026-10-31' })
     expect(custom).toMatchObject({ period: 'custom', dateFrom: '2026-10-01', dateTo: '2026-10-31' })

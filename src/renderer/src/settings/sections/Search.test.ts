@@ -7,9 +7,9 @@
  * without a DOM.
  */
 import { describe, expect, it } from 'vitest'
-import type { SearchProvider } from '@shared/types'
+import type { SearchConnection, SearchProvider } from '@shared/types'
 import { SEARCH_PROVIDER_NEEDS_ENDPOINT, SEARCH_PROVIDER_NEEDS_KEY, SEARCH_PROVIDERS } from '@shared/searchProviders'
-import { apiKeyHelperText, effectiveModeLabel, endpointHelperText, keyFieldDisabled } from './Search'
+import { apiKeyHelperText, clampMaxResults, effectiveModeLabel, endpointHelperText, keyFieldDisabled, moveConnection, resultsLabel } from './Search'
 
 describe('API-key field editability', () => {
   it('never locks a selectable provider, optional or required', () => {
@@ -77,5 +77,79 @@ describe('network egress copy', () => {
     expect(effectiveModeLabel('system')).toBe('跟随系统')
     expect(effectiveModeLabel('direct')).toBe('直连')
     expect(effectiveModeLabel('fixed_servers')).toBe('自定义代理')
+  })
+})
+
+/** Four saved connections in a fixed order; the array order *is* the call order. */
+function listOf(...ids: string[]): SearchConnection[] {
+  return ids.map(id => ({ id, name: id.toUpperCase(), provider: 'tavily' as const, apiKey: '', endpoint: '', maxResults: 5, enabled: true }))
+}
+
+const idsOf = (rows: SearchConnection[]): string[] => rows.map(row => row.id)
+
+describe('connection drag ordering', () => {
+  const list = listOf('a', 'b', 'c', 'd')
+
+  it('drops above the target when the pointer is in its top half', () => {
+    expect(idsOf(moveConnection(list, 'd', 'b', false))).toEqual(['a', 'd', 'b', 'c'])
+  })
+
+  it('drops below the target when the pointer is in its bottom half', () => {
+    expect(idsOf(moveConnection(list, 'a', 'c', true))).toEqual(['b', 'c', 'a', 'd'])
+  })
+
+  it('counts the index after removing the dragged row, so downward drags land one short', () => {
+    // The classic off-by-one: 'a' dropped right below 'b' must replace its own slot,
+    // not skip past 'b' to sit after 'c'.
+    expect(idsOf(moveConnection(list, 'a', 'b', true))).toEqual(['b', 'a', 'c', 'd'])
+    expect(idsOf(moveConnection(list, 'b', 'c', false))).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('leaves the order alone when a row is dropped on itself', () => {
+    expect(idsOf(moveConnection(list, 'b', 'b', true))).toEqual(['a', 'b', 'c', 'd'])
+    expect(idsOf(moveConnection(list, 'b', 'b', false))).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('leaves the order alone for ids that are gone (deleted in another window)', () => {
+    expect(idsOf(moveConnection(list, 'ghost', 'b', true))).toEqual(['a', 'b', 'c', 'd'])
+    expect(idsOf(moveConnection(list, 'a', 'ghost', true))).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('moves the very same objects instead of rebuilding them', () => {
+    // Only the order may change: a rebuilt row would drop `apiKeyEnc` and the
+    // probe cache keyed on it.
+    const moved = moveConnection(list, 'a', 'd', true)
+    expect(moved[3]).toBe(list[0])
+    expect(moved).toHaveLength(list.length)
+  })
+})
+
+describe('result count input', () => {
+  it('keeps 0 as "unlimited" instead of the old 1 floor', () => {
+    expect(clampMaxResults(0)).toBe(0)
+    expect(clampMaxResults(-4)).toBe(0)
+    expect(clampMaxResults('0')).toBe(0)
+  })
+
+  it('tops out at 50', () => {
+    expect(clampMaxResults(50)).toBe(50)
+    expect(clampMaxResults(51)).toBe(50)
+    expect(clampMaxResults(999)).toBe(50)
+  })
+
+  it('rounds to a whole row count and repairs junk with the old default', () => {
+    expect(clampMaxResults(2.6)).toBe(3)
+    expect(clampMaxResults('7')).toBe(7)
+    expect(clampMaxResults('')).toBe(5)
+    expect(clampMaxResults('  ')).toBe(5)
+    expect(clampMaxResults('many')).toBe(5)
+    expect(clampMaxResults(undefined)).toBe(5)
+    expect(clampMaxResults(Number.NaN)).toBe(5)
+  })
+
+  it('labels 0 as 不限 and everything else as the number itself', () => {
+    expect(resultsLabel(0)).toBe('不限')
+    expect(resultsLabel(5)).toBe('5')
+    expect(resultsLabel(51)).toBe('50')
   })
 })

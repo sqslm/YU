@@ -7,6 +7,8 @@
  * the prompts sent to a model are deliberately absent: they are not UI copy.
  */
 export const MAIN_MESSAGES: Record<string, string> = {
+  "润色": "Polish",
+  "任务": "Task",
   "任务用时": "Task time",
   "搜索服务": "search service",
   "常用模型服务": "model service",

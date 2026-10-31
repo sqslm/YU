@@ -11,7 +11,7 @@
  * (grey, the user cancelled). Entries written before v0.9 carry no `status`;
  * the only signal they have is `error`, so that is what they fall back to.
  */
-import type { HistoryEntry, HistoryStatus, Mode, SearchResult } from '@shared/types'
+import type { HistoryCategory, HistoryEntry, HistoryStatus, Mode, SearchResult } from '@shared/types'
 import { isSafeLink } from '@shared/links'
 import { PROMPT_KIND_LABEL } from '@shared/promptLibrary'
 import i18n from '../../i18n'
@@ -267,6 +267,80 @@ export function modeLabel(mode: Mode): string {
     default:
       return i18n.t('听写')
   }
+}
+
+/** Every category the history page can file a row under, in tab order. */
+export const HISTORY_CATEGORIES: readonly HistoryCategory[] = [
+  'dictation',
+  'translate',
+  'polish',
+  'ask',
+  'task'
+]
+
+function knownCategory(value: unknown): HistoryCategory | null {
+  return typeof value === 'string' && (HISTORY_CATEGORIES as readonly string[]).includes(value)
+    ? (value as HistoryCategory)
+    : null
+}
+
+/**
+ * Which category a row belongs to.
+ *
+ * Rows written before the category existed (and rows another writer produced
+ * without it) only carry `mode`, so the mode is the fallback: a dictation row is
+ * 听写. A task recorded before the category existed is indistinguishable from a
+ * plain dictation and reads as 听写 — the honest answer, since nothing on the row
+ * says otherwise.
+ */
+export function categoryOf(entry: Pick<HistoryEntry, 'mode' | 'category'>): HistoryCategory {
+  return knownCategory(entry.category) ?? modeLabelToCategory(entry.mode)
+}
+
+function modeLabelToCategory(mode: Mode): HistoryCategory {
+  if (mode === 'ask') return 'ask'
+  if (mode === 'translate') return 'translate'
+  return 'dictation'
+}
+
+/**
+ * Chinese caption for a category. The raw enum never reaches the screen, and an
+ * unknown value degrades to 听写 instead of printing the enum.
+ */
+export function categoryLabel(category: HistoryCategory): string {
+  switch (category) {
+    case 'ask':
+      return i18n.t('问答')
+    case 'translate':
+      return i18n.t('翻译')
+    case 'polish':
+      return i18n.t('润色')
+    case 'task':
+      return i18n.t('任务')
+    default:
+      return i18n.t('听写')
+  }
+}
+
+/** Caption for one row: its category, whatever mode it happened to run through. */
+export function entryCategoryLabel(entry: Pick<HistoryEntry, 'mode' | 'category'>): string {
+  return categoryLabel(categoryOf(entry))
+}
+
+/** Does this row show under `filterId`? `all` shows everything. */
+export function matchesFilter(
+  entry: Pick<HistoryEntry, 'mode' | 'category'>,
+  filterId: HistoryFilterId
+): boolean {
+  return filterId === 'all' || categoryOf(entry) === filterId
+}
+
+/** The tab's rows, in the order they arrived. Never mutates the input. */
+export function filterByCategory<T extends Pick<HistoryEntry, 'mode' | 'category'>>(
+  rows: readonly T[],
+  filterId: HistoryFilterId
+): T[] {
+  return filterId === 'all' ? [...rows] : rows.filter((row) => categoryOf(row) === filterId)
 }
 
 function trimmed(value: string | undefined | null): string {
@@ -591,15 +665,20 @@ export function autoRefreshBlocked(context: AutoRefreshContext): AutoRefreshBloc
 // Section header — one tab's caption and the row count next to it
 // ---------------------------------------------------------------------------
 
-/** The tabs above the list: "every mode" plus one per dictation mode. */
-export type HistoryFilterId = 'all' | Mode
+/**
+ * The tabs above the list: "every category" plus one per {@link HistoryCategory}.
+ *
+ * Bigger than `Mode`: 润色 and 任务 have no mode of their own, so the tab set can
+ * no longer be derived from the enums the pipeline runs through.
+ */
+export type HistoryFilterId = 'all' | HistoryCategory
 
 /**
- * Tab caption. Same wording as {@link modeLabel}, so the chip a row prints and
- * the tab that selected it can never drift apart.
+ * Tab caption. Same wording as {@link categoryLabel}, so the chip a row prints
+ * and the tab that selected it can never drift apart.
  */
 export function filterLabel(filterId: HistoryFilterId): string {
-  return filterId === 'all' ? i18n.t('全部') : modeLabel(filterId)
+  return filterId === 'all' ? i18n.t('全部') : categoryLabel(filterId)
 }
 
 /**
@@ -710,7 +789,7 @@ export function historyNote(entry: HistoryEntry): string {
   const literal = (text: string): string => text.replace(/[\r\n]+/g, ' ').replace(/[\\`*_{}\[\]<>#!|]/g, '\\$&')
   const sources = historySources(entry.sources ?? [])
   return [
-    `## ${i18n.t('模式')} · ${modeLabel(entry.mode)}`,
+    `## ${i18n.t('分类')} · ${entryCategoryLabel(entry)}`,
     ...(entry.promptName ? [`${i18n.t('卡片')}：${literal(entry.promptName)}`] : []),
     `### ${i18n.t('原始转写')}`, entry.transcript,
     `### ${i18n.t('识别结果')}`, entry.final,

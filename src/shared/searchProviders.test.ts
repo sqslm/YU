@@ -12,6 +12,8 @@ import {
   activeSearchEntry,
   defaultSearchEntry,
   defaultSearchProviders,
+  SEARCH_MAX_RESULTS,
+  SEARCH_UNLIMITED_RESULTS,
   isSearchProvider,
   normalizeSearchProviders,
   normalizeSearchConnections
@@ -29,7 +31,7 @@ describe('search connection migration', () => {
       { id: 'two', provider: 'brave' }, { id: '', provider: 'tavily' }, { id: 'bad', provider: 'unknown' }
     ])
     expect(connections).toHaveLength(2)
-    expect(connections[0]).toMatchObject({ id: 'one', provider: 'tavily', apiKey: 'one', maxResults: 10, enabled: true })
+    expect(connections[0]).toMatchObject({ id: 'one', provider: 'tavily', apiKey: 'one', maxResults: SEARCH_MAX_RESULTS, enabled: true })
     expect(connections[1]).toMatchObject({ id: 'two', name: 'Secondary', apiKeyEnc: 'encrypted', enabled: false, maxResults: 2 })
     expect(normalizeSearchConnections(undefined)).toEqual([])
   })
@@ -148,8 +150,9 @@ describe('search provider storage', () => {
     })
     expect(providers.exa.apiKey).toBe('')
     expect(providers.exa.endpoint).toBe('')
-    expect(providers.exa.maxResults).toBe(10)
-    expect(providers.bing.maxResults).toBe(1)
+    // 99 收成上界 50；0 是合法值（不限），不再被抬成 1。
+    expect(providers.exa.maxResults).toBe(SEARCH_MAX_RESULTS)
+    expect(providers.bing.maxResults).toBe(SEARCH_UNLIMITED_RESULTS)
     expect(normalizeSearchProviders(undefined).jina).toEqual(defaultSearchEntry('jina'))
   })
 

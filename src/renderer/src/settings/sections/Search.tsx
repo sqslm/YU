@@ -1,9 +1,11 @@
 import { PagedList } from '../Pagination'
 import { useEffect, useState } from 'react'
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, Switch, TextField, Typography } from '@mui/material'
+import DragIndicator from '@mui/icons-material/DragIndicator'
 import type { NetworkSettings, SearchConnection, SearchProbeResult, SearchProvider, SearchProviderEntry, SearchSettings, Settings } from '@shared/types'
 import type { EgressDiagnosis } from '@shared/network'
 import {
+  SEARCH_MAX_RESULTS,
   SEARCH_PROVIDER_CAVEAT,
   SEARCH_PROVIDER_ENDPOINT_HINT,
   SEARCH_PROVIDER_KEY_HINT,
@@ -12,6 +14,7 @@ import {
   SEARCH_PROVIDER_NEEDS_ENDPOINT,
   SEARCH_PROVIDER_NEEDS_KEY,
   SEARCH_PROVIDERS,
+  SEARCH_UNLIMITED_RESULTS,
   activeSearchEntry
 } from '@shared/searchProviders'
 import {
@@ -25,6 +28,7 @@ import {
   controlSx,
   wideControlSx,
 } from './General'
+import { isSameOrder, reorderIds } from './providerProfilesView'
 import i18n from '../../i18n'
 
 interface SectionProps {
@@ -77,6 +81,52 @@ export function effectiveModeLabel(mode: EgressDiagnosis['effective']): string {
   return i18n.t('跟随系统')
 }
 
+/**
+ * 拖拽落点：把 `fromId` 挪到 `toId` 的前/后。
+ *
+ * 顺序数学与 ASR／模型配置共用 `reorderIds`（先摘除自己再读目标下标，所以往下
+ * 拖不会因为自己那格还没消失而错一位）。这里只负责把 id 序映射回连接对象：
+ * 找不到 id、拖到自己身上都会原样返回，调用方据此跳过一次多余的设置写入。
+ *
+ * 数组顺序就是「顺序备用／合并来源」策略下的调用顺序，改完直接存回
+ * `search.connections`，不需要第二份排序字段。
+ */
+export function moveConnection(
+  connections: readonly SearchConnection[],
+  fromId: string,
+  toId: string,
+  after: boolean
+): SearchConnection[] {
+  const order = reorderIds(connections.map(connection => connection.id), fromId, toId, after)
+  const byId = new Map(connections.map(connection => [connection.id, connection] as const))
+  return order.flatMap(id => {
+    const found = byId.get(id)
+    return found ? [found] : []
+  })
+}
+
+/**
+ * 条数输入的清洗：0–50 的整数，`0` 是「不限」。
+ *
+ * 非数字（空输入、粘进一段文字）回落默认 5，而不是 0——否则清空输入框重打的
+ * 那一刻会悄悄变成「不限」，用户还没决定就已经不设上限了。
+ */
+export function clampMaxResults(value: unknown): number {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? Number(value)
+      : Number.NaN
+  if (!Number.isFinite(parsed)) return 5
+  return Math.min(SEARCH_MAX_RESULTS, Math.max(SEARCH_UNLIMITED_RESULTS, Math.round(parsed)))
+}
+
+/** 滑杆右侧的读数：0 读作「不限」，其余就是数字本身。 */
+export function resultsLabel(maxResults: unknown): string {
+  const count = clampMaxResults(maxResults)
+  return count === SEARCH_UNLIMITED_RESULTS ? i18n.t('不限') : String(count)
+}
+
 export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
   const search = settings.search
   const network = settings.network
@@ -99,6 +149,11 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
     }
   }
   const [editing, setEditing] = useState<SearchConnection | null>(null)
+  /**
+   * 正在拖的连接和当前悬停的落点。`after` 以行中线为界：指针过线就是「插到
+   * 这行下面」。与 ASR／模型配置同一套手势，只是键不同。
+   */
+  const [drag, setDrag] = useState<{ id: string; over: string; after: boolean } | null>(null)
   const [probe, setProbe] = useState<{ id: string; input: string; busy: boolean; result?: SearchProbeResult } | null>(null)
   const probeInput = (connection: SearchConnection): string => JSON.stringify([connection.provider, connection.apiKey, connection.endpoint])
   const testConnection = async (connection: SearchConnection): Promise<void> => {
@@ -194,15 +249,64 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
       </SettingsGroup>
 
       {search.strategy && search.strategy !== 'single' && <SettingsGroup icon={<IconMagnifier />} title={i18n.t('搜索连接')}>
-        <PagedList name="Search-connections">{connections.map((connection, index) => <Box key={connection.id} data-search-connection={connection.id} title={connection.name} sx={{ '& p': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }}><SettingsRow label={connection.name} description={SEARCH_PROVIDER_LABEL[connection.provider]}>
+        <PagedList name="Search-connections">{connections.map((connection, index) => <Box
+          key={connection.id}
+          data-search-connection={connection.id}
+          data-search-connection-over={drag?.over === connection.id && drag.id !== connection.id ? (drag.after ? 'after' : 'before') : undefined}
+          title={connection.name}
+          // 拖放的目标是整行：手柄只是「可拖起」的那一小块，落点按行中线分前后。
+          onDragOver={event => {
+            if (!drag || drag.id === connection.id) return
+            event.preventDefault()
+            const bounds = event.currentTarget.getBoundingClientRect()
+            const after = event.clientY > bounds.top + bounds.height / 2
+            if (drag.over === connection.id && drag.after === after) return
+            setDrag({ ...drag, over: connection.id, after })
+          }}
+          onDrop={event => {
+            event.preventDefault()
+            const moved = drag
+            setDrag(null)
+            if (!moved || moved.id === connection.id) return
+            const next = moveConnection(connections, moved.id, connection.id, moved.after)
+            // 同一个位置就不写设置：一次多余的 patch 会触发一次无谓的落盘。
+            if (!isSameOrder(connections.map(item => item.id), next.map(item => item.id))) update({ connections: next })
+          }}
+          sx={{
+            position: 'relative',
+            borderTop: '2px solid transparent',
+            borderBottom: '2px solid transparent',
+            ...(drag?.over === connection.id && drag.id !== connection.id
+              ? drag.after ? { borderBottomColor: 'primary.main' } : { borderTopColor: 'primary.main' }
+              : {}),
+            opacity: drag?.id === connection.id ? 0.5 : 1,
+            '& p': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+          }}
+        ><SettingsRow label={connection.name} description={SEARCH_PROVIDER_LABEL[connection.provider]}>
+          <Box
+            component="span"
+            data-search-connection-drag={connection.id}
+            draggable
+            onClick={event => event.stopPropagation()}
+            onDragStart={event => {
+              event.dataTransfer.effectAllowed = 'move'
+              event.dataTransfer.setData('application/x-typeless-search-connection', connection.id)
+              setDrag({ id: connection.id, over: connection.id, after: false })
+            }}
+            onDragEnd={() => setDrag(null)}
+            title={i18n.t('拖动调整顺序')}
+            sx={{ display: 'flex', cursor: 'grab', color: 'text.disabled', mr: -1, '&:hover': { color: 'text.secondary' }, '&:active': { cursor: 'grabbing' } }}
+          ><DragIndicator sx={{ fontSize: 15 }} /></Box>
           <Switch size="small" checked={connection.enabled} inputProps={{ 'aria-label': i18n.t('启用 {{name}}', { name: connection.name }) }} onChange={(_, enabled) => updateConnection(connection.id, { enabled })} />
           <Button size="small" sx={{ minWidth: 40 }} data-search-test={connection.id} aria-label={i18n.t('测试 {{name}}', { name: connection.name })} disabled={probe?.busy} onClick={() => void testConnection(connection)}>{i18n.t('测试')}</Button>
           <Button size="small" sx={{ minWidth: 40 }} onClick={() => setEditing({ ...connection })}>{i18n.t('编辑')}</Button>
+          {/* ↑/↓ 留着：键盘和触屏拖不动，但仍要能调顺序。 */}
           <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('上移 {{name}}', { name: connection.name })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
           <Button size="small" sx={{ minWidth: 28 }} aria-label={i18n.t('下移 {{name}}', { name: connection.name })} disabled={index === connections.length - 1} onClick={() => move(index, 1)}>↓</Button>
           <Button size="small" color="error" onClick={() => update({ connections: connections.filter(item => item.id !== connection.id) })}>{i18n.t('删除')}</Button>
         </SettingsRow>{probeStatus(connection)}</Box>)}</PagedList>
         {!connections.length && <SettingsHint>{i18n.t('添加已授权的搜索连接，可保存同一服务的多把密钥。')}</SettingsHint>}
+        {connections.length > 1 && <SettingsHint>{i18n.t('拖动左侧手柄调整优先顺序：顺序备用按这个次序尝试，合并来源按这个次序查询。')}</SettingsHint>}
         <Box sx={{ px: 2, py: 1.5 }}><Button variant="outlined" size="small" data-search-add onClick={() => setEditing({ id: crypto.randomUUID(), name: '', provider: 'tavily', apiKey: '', endpoint: '', maxResults: 5, enabled: true })}>{i18n.t('添加搜索连接')}</Button></Box>
         <SettingsHint>{i18n.t('测试会发送一次真实搜索请求，可能计入服务额度；不会切换到备用连接。')}</SettingsHint>
       </SettingsGroup>}
@@ -278,28 +382,33 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
       </>}
 
       <SettingsGroup icon={<IconSliders />} title={i18n.t('结果与判定')}>
-        {(!search.strategy || search.strategy === 'single') && <SettingsRow label={i18n.t('单次搜索条数')} description={i18n.t('普通查询每次取回的网页数；新闻汇总会自动分主题扩展，不受此总数限制。')}>
+        {(!search.strategy || search.strategy === 'single') && <SettingsRow label={i18n.t('单次搜索条数')} description={i18n.t('普通查询每次取回的网页数；0 表示不限，由模型自行决定；新闻汇总会自动分主题扩展，不受此总数限制。')}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: controlSx.width, px: 0.5 }}>
             <Slider
               size="small"
-              min={1}
-              max={10}
+              min={SEARCH_UNLIMITED_RESULTS}
+              max={SEARCH_MAX_RESULTS}
               step={1}
-              marks
-              value={entry.maxResults}
+              // 每格都画 mark 会糊成一条线：只在两端和中点留刻度。
+              marks={[{ value: SEARCH_UNLIMITED_RESULTS }, { value: 25 }, { value: SEARCH_MAX_RESULTS }]}
+              value={clampMaxResults(entry.maxResults)}
               valueLabelDisplay="off"
-              onChange={(_event, value) => updateEntry({ maxResults: value as number })}
+              getAriaLabel={() => i18n.t('单次搜索条数')}
+              getAriaValueText={value => resultsLabel(value)}
+              onChange={(_event, value) => updateEntry({ maxResults: clampMaxResults(value) })}
             />
             <Typography
+              data-search-results-label
               sx={{
                 fontSize: 11.5,
                 color: 'text.secondary',
-                width: 28,
+                minWidth: 34,
                 textAlign: 'right',
+                whiteSpace: 'nowrap',
                 fontVariantNumeric: 'tabular-nums'
               }}
             >
-              {entry.maxResults}
+              {resultsLabel(entry.maxResults)}
             </Typography>
           </Box>
         </SettingsRow>}
@@ -391,7 +500,19 @@ export function SearchSection({ settings, patch }: SectionProps): JSX.Element {
             <TextField size="small" label="API Key" type="password" value={editing.apiKey} autoComplete="off" onChange={event => setEditing({ ...editing, apiKey: event.target.value })} helperText={apiKeyHelperText(editing.provider, editing.apiKey)} />
             <TextField size="small" label={i18n.t('自定义地址')} value={editing.endpoint} onChange={event => setEditing({ ...editing, endpoint: event.target.value })} helperText={SEARCH_PROVIDER_ENDPOINT_HINT[editing.provider]} />
           </>}
-          <TextField size="small" label={i18n.t('单次搜索条数')} type="number" inputProps={{ min: 1, max: 10 }} value={editing.maxResults} onChange={event => setEditing({ ...editing, maxResults: Math.min(10, Math.max(1, Number(event.target.value) || 1)) })} />
+          <TextField
+            size="small"
+            label={i18n.t('单次搜索条数')}
+            type="number"
+            inputProps={{ min: SEARCH_UNLIMITED_RESULTS, max: SEARCH_MAX_RESULTS, step: 1 }}
+            value={editing.maxResults}
+            helperText={i18n.t('0 表示不限，由模型决定')}
+            // 清空输入框时先不动：让用户把数字打完，而不是在空串那一刻锁成「不限」。
+            onChange={event => {
+              if (!event.target.value.trim()) return
+              setEditing({ ...editing, maxResults: clampMaxResults(event.target.value) })
+            }}
+          />
         </Stack><Box sx={{ mt: 2 }}>{probeStatus(editing)}</Box></DialogContent>}
         <DialogActions><Button onClick={() => setEditing(null)}>{i18n.t('取消')}</Button>
           <Button data-search-test-draft disabled={!editing || probe?.busy || !!apiKeyHelperText(editing.provider, editing.apiKey) || !!endpointHelperText(editing.provider, editing.endpoint)} onClick={() => { if (editing) void testConnection(editing) }}>{i18n.t('测试连接')}</Button>

@@ -22,6 +22,30 @@ export function exportProcessingMs(ms: number): string {
   return mt('{{m}} 分 {{s}} 秒', { m: Math.floor(total / 60), s: total % 60 })
 }
 
+/**
+ * Caption for the 分类 line.
+ *
+ * Exported rows carry the category the history page filed them under, not the
+ * mode the pipeline ran: a 任务 or a 选区润色 has no mode of its own, and printing
+ * "听写" for one would contradict the app. Rows without the field (written before
+ * it existed) fall back to their mode.
+ */
+function categoryLabel(entry: HistoryEntry): string {
+  const category = entry.category
+  if (category === 'ask') return mt('问答')
+  if (category === 'translate') return mt('翻译')
+  if (category === 'polish') return mt('润色')
+  if (category === 'task') return mt('任务')
+  switch (entry.mode) {
+    case 'ask':
+      return mt('问答')
+    case 'translate':
+      return mt('翻译')
+    default:
+      return mt('听写')
+  }
+}
+
 /** Export content, without local audio paths, provider credentials or sync bookkeeping. */
 export function formatHistoryExport(entries: readonly HistoryEntry[], format: NoteExportFormat): string {
   const md = format === 'markdown'
@@ -30,13 +54,16 @@ export function formatHistoryExport(entries: readonly HistoryEntry[], format: No
     const line = text.replace(/[\r\n]+/g, ' ')
     return md ? line.replace(/[\\`*_{}\[\]<>#!|]/g, '\\$&') : line
   }
-  const modes = { dictation: '听写', ask: '问答', translate: '翻译' }
   const sections = entries.map(entry => {
     const metadata = [
-      `${mt('模式')}：${mt(modes[entry.mode])}`,
+      `${mt('分类')}：${categoryLabel(entry)}`,
       ...(entry.app ? [`${mt('应用')}：${literal(entry.app)}`] : []),
       ...(entry.promptName ? [`${mt('卡片')}：${literal(entry.promptName)}`] : []),
-      `${mt('录音时长')}：${mt('{{n}} 秒', { n: Math.round(entry.durationMs / 1000) })}`,
+      // A selection polish/translate has no recording behind it: "录音时长：0 秒"
+      // would read as a take that captured nothing.
+      ...(entry.durationMs > 0
+        ? [`${mt('录音时长')}：${mt('{{n}} 秒', { n: Math.round(entry.durationMs / 1000) })}`]
+        : []),
       // Rows written before the clock existed simply have no line to print.
       ...(typeof entry.processingMs === 'number'
         ? [`${mt('任务用时')}：${exportProcessingMs(entry.processingMs)}`]

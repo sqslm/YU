@@ -63,6 +63,30 @@ describe('filtered history export', () => {
   })
 })
 
+describe('分类 in the export (需求4)', () => {
+  beforeEach(() => setMainLanguage('zh'))
+  afterEach(() => setMainLanguage('zh'))
+
+  it('writes the category the history page filed the row under', () => {
+    expect(formatHistoryExport([entry('task', { category: 'task' })], 'text')).toContain('分类：任务')
+    expect(formatHistoryExport([entry('polish', { category: 'polish' })], 'text')).toContain('分类：润色')
+    expect(formatHistoryExport([entry('tr', { mode: 'translate', category: 'translate' })], 'text')).toContain('分类：翻译')
+  })
+
+  it('falls back to the mode for rows written before the category existed', () => {
+    expect(formatHistoryExport([entry('ask')], 'text')).toContain('分类：问答')
+    expect(formatHistoryExport([entry('plain', { mode: 'dictation' })], 'text')).toContain('分类：听写')
+    // A row that is a task but only says dictation cannot claim to be one.
+    expect(formatHistoryExport([entry('legacy-task', { mode: 'dictation' })], 'text')).not.toContain('任务')
+  })
+  it('leaves out the recording length for a selection edit, which had no recording', () => {
+    const text = formatHistoryExport([entry('selection', { category: 'polish', durationMs: 0, processingMs: 900 })], 'text')
+    expect(text).toContain('分类：润色')
+    expect(text).toContain('任务用时：0.9 秒')
+    expect(text).not.toContain('录音时长')
+  })
+})
+
 describe('task 用时 in the export', () => {
   beforeEach(() => setMainLanguage('zh'))
   afterEach(() => setMainLanguage('zh'))

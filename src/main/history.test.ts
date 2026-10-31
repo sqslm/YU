@@ -374,6 +374,43 @@ describe('task processing time (录音结束 → 完成)', () => {
   })
 })
 
+describe('分类 survives the store (需求4)', () => {
+  // `category` is extra-only like `processingMs`: a new row keeps it, an old row
+  // has nothing and falls back to its mode in the UI.
+  it('round trips the category the row was filed under', async () => {
+    const store = makeStore()
+    await store.setRetention(-1)
+    await store.load()
+
+    const added = await store.add({
+      mode: 'dictation',
+      category: 'task',
+      transcript: '二十分钟后提醒我',
+      final: '',
+      durationMs: 1200,
+      status: 'error'
+    })
+
+    expect(added.category).toBe('task')
+    const reloaded = makeStore()
+    await reloaded.load()
+    expect(reloaded.list()[0]?.category).toBe('task')
+    // The mode is still the route it ran through, not the category.
+    expect(reloaded.list()[0]?.mode).toBe('dictation')
+  })
+
+  it('leaves rows written before the category existed without one', async () => {
+    const store = makeStore()
+    await store.setRetention(-1)
+    await store.load()
+    store.migrateFrom([entry('legacy-category', Date.now())])
+
+    const reloaded = makeStore()
+    await reloaded.load()
+    expect(reloaded.list()[0]?.category).toBeUndefined()
+  })
+})
+
 describe('provenance survives the store', () => {
   // The card and the provider were passed to `add()` from the first version of
   // REQ-21 and silently dropped by the field whitelist, so every row claimed
@@ -541,6 +578,22 @@ describe('sync cursors', () => {
     })
     expect(toSyncRow(added).audioPath).toBeUndefined()
     expect(toSyncRow(added).final).toBe('b')
+  })
+
+  it('carries the category to the other machine and refuses an invented one', async () => {
+    const store = makeStore()
+    await store.load()
+    const added = await store.add({ mode: 'dictation', category: 'polish', transcript: 'a', final: 'b', durationMs: 10 })
+    expect(toSyncRow(added).category).toBe('polish')
+    // A peer that sends something else must not be believed: the row falls back
+    // to its mode, which is at least a real tab.
+    await store.applyRemote(
+      [{ id: 'peer', createdAt: Date.now(), mode: 'translate', transcript: 'x', final: 'y', durationMs: 1, status: 'completed', app: '', category: 'mystery', updatedAt: Date.now() + 1000 }],
+      []
+    )
+    const peer = store.list().find(row => row.id === 'peer')
+    expect(peer?.mode).toBe('translate')
+    expect(peer?.category).toBeUndefined()
   })
 
   it('applies a newer remote row and keeps the local wav', async () => {

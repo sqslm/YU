@@ -165,6 +165,17 @@ function makeSettings(overrides: Partial<Settings>): Settings {
   })
 }
 
+
+/**
+ * A purpose take (reminder / note / assistant action) now leaves exactly one
+ * 任务 row: the action happened, so `历史记录` must be able to answer "what did I
+ * ask it to do" later. It must not leave a dictation row as well.
+ */
+function expectTaskRow(entries: HistoryEntry[]): void {
+  expect(entries).toHaveLength(1)
+  expect(entries[0]).toMatchObject({ category: 'task', status: 'completed' })
+}
+
 function harness(
   overrides: Partial<Settings>,
   options: PipelineOptions = {},
@@ -683,6 +694,72 @@ describe('failed takes are still history rows', () => {
   })
 })
 
+describe('history category (需求4)', () => {
+  it('files a plain dictation under 听写', async () => {
+    const { pipeline, entries } = harness({})
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(entries[0]).toMatchObject({ mode: 'dictation', category: 'dictation' })
+  })
+
+  it('files a translation under 翻译 instead of its dictation-like mode', async () => {
+    mocks.complete.mockResolvedValue('Hello world')
+    const { pipeline, entries } = harness({ translateTargets: ['en'], translateTarget: 'en' })
+    pipeline.start('translate'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(entries[0]).toMatchObject({ mode: 'translate', category: 'translate' })
+  })
+
+  it('files an Ask answer under 问答', async () => {
+    mocks.askAgent.mockResolvedValue({ text: '散射的原因。', sources: [], searched: false })
+    const { pipeline, entries } = harness({})
+    pipeline.start('ask'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(entries[0]).toMatchObject({ mode: 'ask', category: 'ask', final: '散射的原因。' })
+  })
+
+  it('files a failed reminder take under 任务, not under the dictation it ran through', async () => {
+    // A reminder runs through the dictation mode and writes no row when it
+    // succeeds; when it fails the row must say 任务, or the history page claims
+    // the user dictated something they did not.
+    mocks.transcribe.mockRejectedValueOnce(new Error('ASR offline'))
+    const onReminder = vi.fn()
+    const { pipeline, entries } = harness({}, { onReminder })
+    pipeline.start('dictation', { purpose: 'reminder' }); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(onReminder).not.toHaveBeenCalled()
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ status: 'error', mode: 'dictation', category: 'task' })
+  })
+
+  it('files a failed voice note as 任务 as well', async () => {
+    // Notes are reached through the voice command, not through `start()`'s
+    // purpose (a note take is never opened by its own shortcut).
+    mocks.transcribe.mockResolvedValue({ text: '指令笔记：记一下这个想法', model: 'whisper-1' })
+    const onVoiceNote = vi.fn(async () => {
+      throw new Error('notes store is locked')
+    })
+    const { pipeline, entries } = harness(
+      { voiceCommands: { ...DEFAULT_VOICE_COMMANDS, enabled: true, smartRouting: false } },
+      { onVoiceNote }
+    )
+    pipeline.start('dictation'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(onVoiceNote).toHaveBeenCalledOnce()
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ status: 'error', category: 'task' })
+  })
+
+  it('keeps the category of a take whose text never landed', async () => {
+    mocks.verifyInsertion.mockResolvedValueOnce({ ok: false, reason: 'mismatch' })
+    mocks.complete.mockResolvedValue('Hello world')
+    const { pipeline, entries } = harness({ translateTargets: ['en'], translateTarget: 'en' })
+    pipeline.start('translate'); pipeline.pushAudio(tone(900))
+    const done = pipeline.stop(); pipeline.audioStopped(); await done
+    expect(entries[0]).toMatchObject({ status: 'error', mode: 'translate', category: 'translate' })
+  })
+})
+
 describe('reportCaptureError()', () => {
   it('never creates history or audio for a capture failure', async () => {
     const { pipeline, store } = harness({ keepAudio: 'always' })
@@ -754,7 +831,7 @@ describe('surrounding-text injection', () => {
     const stopping = h.pipeline.stop(); h.pipeline.audioStopped(); await stopping
     expect(h.sent.at(-1)).toMatchObject({ phase: 'done', text: '已打开官方网站', feedback: { failed: false }, taskLabel: '任务结果' })
     expect(onAnswer).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled()
-    expect(h.entries).toEqual([])
+    expectTaskRow(h.entries)
   })
 
   it('delivers assistant voice through the existing ASR without UIA, polish, insertion, cards or voice history', async () => {
@@ -771,7 +848,7 @@ describe('surrounding-text injection', () => {
     expect(mocks.askAgent).not.toHaveBeenCalled()
     expect(mocks.insertText).not.toHaveBeenCalled()
     expect(onAnswer).not.toHaveBeenCalled()
-    expect(entries).toEqual([])
+    expectTaskRow(entries)
   })
 
   it('does not deliver a cancelled assistant recording or a failed ASR result', async () => {
@@ -1397,7 +1474,8 @@ describe('dedicated voice reminder capture', () => {
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(onReminder).toHaveBeenCalledWith('你好世界', expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.complete).not.toHaveBeenCalled(); expect(mocks.insertText).not.toHaveBeenCalled(); expect(mocks.askAgent).not.toHaveBeenCalled()
-    expect(store.add).not.toHaveBeenCalled()
+    // The reminder action happened, so it leaves one 任务 row (never a dictation row).
+    expect(store.add).toHaveBeenCalledOnce(); expect(store.add.mock.calls[0][0]).toMatchObject({ category: 'task', status: 'completed' })
     expect(sent.some(state => state.phase === 'recording' && state.taskLabel === '快速提醒' && !state.promptName)).toBe(true)
     expect(sent.at(-1)).toMatchObject({ phase: 'alert', alert: { kind: 'reminder', actions: [{ id: 'undo-reminder', label: '撤销' }] } })
   })
@@ -1463,7 +1541,7 @@ describe('opening phrase mode activation', () => {
     expect(onReminder).toHaveBeenCalledWith('20分钟后提醒我打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(mocks.insertText).not.toHaveBeenCalled()
-    expect(entries).toHaveLength(0)
+    expectTaskRow(entries)
   })
   it('hands notes the same full audio and unmodified ASR transcript without insertion or voice history', async () => {
     mocks.transcribe.mockResolvedValue({ text: '指令笔记：这是灵感' })
@@ -1473,7 +1551,7 @@ describe('opening phrase mode activation', () => {
     expect(onVoiceNote).toHaveBeenCalledWith(pcm, '指令笔记：这是灵感', expect.any(AbortSignal), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.transcribe).toHaveBeenCalledOnce()
     expect(mocks.insertText).not.toHaveBeenCalled()
-    expect(entries).toHaveLength(0)
+    expectTaskRow(entries)
   })
   it.each(['普通正文里提到指令问答', '“指令翻译”是什么意思？', '指令输入，保留正文里的指令翻译'])('does not reroute words inside the content: %s', async text => {
     mocks.transcribe.mockResolvedValue({ text })
@@ -1545,7 +1623,7 @@ describe('opening phrase mode activation', () => {
     expect(onReminder).toHaveBeenCalledWith('二十分钟后打扫卫生', expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     const wav = mocks.transcribe.mock.calls.at(-1)![1].wav
     expect(wav.length).toBeLessThan(44 + 16000 * 4 * 2)
-    expect(entries).toHaveLength(0)
+    expectTaskRow(entries)
   })
   it.each([['指令提醒', '快速提醒'], ['指令笔记', '随记']])('shows %s as the live task label without a fake polishing card', async (phrase, label) => {
     vi.useFakeTimers()
@@ -1820,7 +1898,7 @@ describe('unified voice entry', () => {
     h.pipeline.start('dictation'); await finish(h.pipeline)
     expect(onAssistant.mock.calls[0][4]).toBe(useContext)
     expect(mocks.complete).toHaveBeenCalledOnce(); expect(mocks.transcribe).toHaveBeenCalledOnce()
-    expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.entries).toEqual([])
+    expect(mocks.insertText).not.toHaveBeenCalled(); expectTaskRow(h.entries)
   })
   it.each(['明天提醒我上午十点去银行办一张银行卡。', 'Remind me in twenty minutes to clean up.'])('reuses reminder parsing, audio and cancellation without inserting a command: %s', async text => {
     mocks.transcribe.mockResolvedValue({ text })
@@ -1829,7 +1907,7 @@ describe('unified voice entry', () => {
     h.pipeline.start('dictation'); await finish(h.pipeline)
     expect(onReminder).toHaveBeenCalledWith(text, expect.any(AbortSignal), expect.any(Function), expect.any(Number), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
     expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled()
-    expect(mocks.insertText).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0)
+    expect(mocks.insertText).not.toHaveBeenCalled(); expectTaskRow(h.entries)
     expect(h.sent.at(-1)).toMatchObject({ phase: 'alert', alert: { actions: [{ id: 'undo-reminder', label: '撤销' }] } })
     expect(h.sent).toEqual(expect.arrayContaining([expect.objectContaining({ phase: 'working', taskLabel: '快速提醒' })]))
   })
@@ -1850,7 +1928,7 @@ describe('unified voice entry', () => {
     h.pipeline.start('dictation'); await finish(h.pipeline)
     expect(onAssistant).toHaveBeenCalledWith('帮我打开卡巴斯基的官方网站', expect.any(AbortSignal), expect.any(Number), expect.objectContaining({ appName: 'code', windowTitle: 'Editor' }), undefined)
     expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.insertText).not.toHaveBeenCalled()
-    expect(h.entries).toHaveLength(0); expect(h.pipeline.isBusy).toBe(false)
+    expectTaskRow(h.entries); expect(h.pipeline.isBusy).toBe(false)
   })
   it('translates only the content and never persists a spoken target language', async () => {
     mocks.transcribe.mockResolvedValue({ text: '帮我翻译成英语，今天晚上我们一起去吃烧烤吧。' })
@@ -1868,7 +1946,7 @@ describe('unified voice entry', () => {
     const onVoiceNote = vi.fn().mockResolvedValue(undefined), h = harness({ voiceCommands: smart }, { onVoiceNote })
     h.pipeline.start('dictation'); await finish(h.pipeline)
     expect(onVoiceNote).toHaveBeenCalledWith(expect.any(Int16Array), '帮我保存到随记：明天研究这个问题。', expect.any(AbortSignal), expect.objectContaining({task:expect.objectContaining({source:'voice'})}))
-    expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled(); expect(h.entries).toHaveLength(0)
+    expect(mocks.transcribe).toHaveBeenCalledOnce(); expect(mocks.complete).not.toHaveBeenCalled(); expectTaskRow(h.entries)
   })
   it('keeps development requirements on the opening-window prompt route even after switching apps', async () => {
     const text = '给 Agent 写提示词：帮我打开下载目录，然后创建一个提醒。'

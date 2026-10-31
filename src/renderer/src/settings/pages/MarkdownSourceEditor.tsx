@@ -20,6 +20,13 @@ export interface MarkdownSourceEditorProps {
   onChange: (next: string) => void
   /** `polished` / `transcript`: keeps the DOM contract the page and tests rely on. */
   field: string
+  /**
+   * Which note this view belongs to. CodeMirror keeps one undo history per
+   * `EditorView`, and two notes usually share the same `field`, so the view is
+   * rebuilt when the note changes — otherwise Ctrl+Z after switching notes walks
+   * back into the previous document.
+   */
+  noteId?: string
   disabled?: boolean
   minHeight?: number | string
   placeholder?: string
@@ -122,7 +129,7 @@ function heading(view: EditorView, level: number): void {
  * indentation) and this file only adds Typora's markdown habits on top.
  */
 export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSourceEditorProps>(function MarkdownSourceEditor(
-  { value, onChange, field, disabled = false, minHeight = '42vh', placeholder = '', onEditRich },
+  { value, onChange, field, noteId, disabled = false, minHeight = '42vh', placeholder = '', onEditRich },
   ref
 ) {
   const { t } = useTranslation()
@@ -178,6 +185,11 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
   useEffect(() => {
     const parent = host.current
     if (!parent) return
+    // Own the callback for the lifetime of this view: a keystroke or undo that
+    // lands while the note is switching must go back to the note this view was
+    // built for, not to whatever the page has selected by then.
+    const emit = props.current.onChange
+    known.current = props.current.value
     const state = EditorState.create({
       doc: props.current.value,
       extensions: [
@@ -225,14 +237,14 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
           const next = update.state.doc.toString()
           if (next === known.current) return
           known.current = next
-          props.current.onChange(next)
+          emit(next)
         })
       ]
     })
     const instance = new EditorView({ state, parent })
     view.current = instance
     return () => { view.current = null; instance.destroy() }
-  }, [field])
+  }, [field, noteId])
 
   // An outside writer (re-transcription, a fresh fetch) replaces the document.
   useEffect(() => {
