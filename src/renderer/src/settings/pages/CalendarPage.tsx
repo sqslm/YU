@@ -266,9 +266,9 @@ export function CalendarPage(): JSX.Element {
     // The page fills the content area: a month grid that stops halfway leaves a
     // dead band under the cards, and rows that cannot grow waste the height a
     // calendar is best at showing.
-    <Box sx={{ p: 3, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }} data-calendar-page>
-      <Stack direction="row" alignItems="center" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
-        <Typography variant="h6" sx={{ fontWeight: 650, mr: 1 }}>{i18n.t('日程')}</Typography>
+    <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 3, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }} data-calendar-page>
+      <Stack direction="row" alignItems="center" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2.5 }}>
+        <Typography component="h1" variant="h5" sx={{ mr: 2 }}>{i18n.t('日程')}</Typography>
         <Tooltip title={i18n.t('上一周')}>
           <IconButton size="small" disabled={busy} aria-label={i18n.t('上一周')} onClick={() => select(shiftDayKey(selected, -7))}>
             <ChevronLeft fontSize="small" />
@@ -295,9 +295,9 @@ export function CalendarPage(): JSX.Element {
         <Alert severity={notice.severity} sx={{ mb: 1.5 }} onClose={() => setNotice(null)}>{notice.text}</Alert>
       )}
 
-      <Box sx={{ flex: 1, minHeight: 0, display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.55fr) minmax(280px, .8fr)' } }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.55fr) minmax(260px, .8fr)' } }}>
         {view === 'month' ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, border: 1, borderColor: 'divider', borderRadius: '10px', bgcolor: 'background.paper', p: 1.25 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, border: 1, borderColor: 'divider', borderRadius: '16px', bgcolor: 'background.paper', p: 2 }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 0.5, mb: 0.75 }}>
               <Typography sx={{ fontSize: 14, fontWeight: 650 }}>{`${cursor.year} ${i18n.t('年')} ${cursor.month} ${i18n.t('月')}`}</Typography>
               <Box>
@@ -351,8 +351,8 @@ export function CalendarPage(): JSX.Element {
                       borderRadius: '10px',
                       border: 1,
                       borderColor: isSelected ? 'primary.main' : 'divider',
-                      bgcolor: isSelected ? 'primary.main' : 'transparent',
-                      color: isSelected ? '#fff' : inMonth ? 'text.primary' : 'text.disabled',
+                      bgcolor: isSelected ? 'action.selected' : 'transparent',
+                      color: inMonth ? 'text.primary' : 'text.secondary',
                       transition: 'background-color .12s, border-color .12s',
                       '&:hover': { borderColor: 'primary.main' },
                       '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 }
@@ -364,10 +364,12 @@ export function CalendarPage(): JSX.Element {
                       width: 21,
                       height: 21,
                       borderRadius: '50%',
+                      bgcolor: isToday ? 'primary.main' : 'transparent',
+                      color: isToday ? 'primary.contrastText' : 'inherit',
                       fontSize: 12.5,
                       fontWeight: isToday || isSelected ? 650 : 500,
                       border: isToday ? '1px solid' : 'none',
-                      borderColor: isSelected ? 'rgba(255,255,255,.75)' : 'primary.main'
+                      borderColor: 'primary.main'
                     }}>{date.getDate()}</Box>
                     <Stack direction="row" spacing={0.25} sx={{ pl: 0.5, height: 5 }}>
                       {Array.from({ length: count }, (_, index) => (
@@ -375,7 +377,7 @@ export function CalendarPage(): JSX.Element {
                           width: 4,
                           height: 4,
                           borderRadius: '50%',
-                          bgcolor: isSelected ? 'rgba(255,255,255,.8)' : 'primary.main'
+                          bgcolor: 'primary.main'
                         }} />
                       ))}
                     </Stack>

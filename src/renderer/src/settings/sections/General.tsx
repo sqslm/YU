@@ -256,7 +256,7 @@ export function SettingsGroup({
     <>
       {icon && <Box sx={{ display: 'grid', placeItems: 'center', color: 'text.secondary' }}>{icon}</Box>}
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography component="h3" sx={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: 'text.primary', m: 0 }}>
+        <Typography component="h3" sx={{ fontSize: 13, fontWeight: 650, lineHeight: 1.5, color: 'text.primary', m: 0 }}>
           {title}
         </Typography>
         {hint && (
@@ -278,7 +278,7 @@ export function SettingsGroup({
       sx={{
         border: 1,
         borderColor: 'divider',
-        borderRadius: '10px',
+        borderRadius: '12px',
         bgcolor: 'background.paper',
         // Not `hidden`: the Slider inside a group paints its value label 26px
         // above the track, i.e. outside the card, and clipping turned "10" into a
@@ -358,7 +358,7 @@ interface SettingsRowProps {
 export function SettingsRow({ label, description, children }: SettingsRowProps): JSX.Element {
   const labelId = useId()
   return (
-    <Box role="group" aria-labelledby={labelId} sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 1.75, minHeight: 64 }}>
+    <Box role="group" aria-labelledby={labelId} sx={{ display: 'flex', alignItems: 'center', flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 2, px: 2.5, py: 2.25, minHeight: 76 }}>
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography id={labelId} sx={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'text.primary' }}>
           {label}

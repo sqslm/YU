@@ -1123,10 +1123,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     <Box data-notes-page sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box
         data-notes-toolbar
-        sx={{ px: 3, pt: 2, pb: 1, display: 'flex', flexDirection: 'column', gap: 1, flex: '0 0 auto' }}
+        sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 2, display: 'flex', flexDirection: 'column', gap: 1.5, flex: '0 0 auto' }}
       >
         <Stack direction="row" spacing={1} alignItems="center">
-          <Typography sx={{ fontSize: 18, fontWeight: 600 }}>{t('随记')}</Typography>
+          <Typography component="h1" variant="h5">{t('随记')}</Typography>
           <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{notes.length}</Typography>
           <Box sx={{ flex: 1 }} />
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
@@ -1429,6 +1429,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
             borderTop: '1px solid',
             borderRight: '1px solid',
             borderColor: listCollapsed ? 'transparent' : 'divider',
+            bgcolor: 'background.paper',
             transition: 'flex-basis .22s ease, width .22s ease, max-width .22s ease, border-color .22s ease',
             ...(listCollapsed
               ? { width: 0, maxWidth: 0, flexBasis: 0, pointerEvents: 'none' as const }
@@ -1583,7 +1584,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
           )}
 
           {selected && (
-            <Box data-notes-detail={selected.id} sx={{ px: 3, py: 2.5 }}>
+            <Box data-notes-detail={selected.id} sx={{ px: { xs: 2.5, lg: 5 }, py: 3, maxWidth: 1000, mx: 'auto' }}>
               <TextField data-notes-title fullWidth variant="standard" value={titleDraft}
                 placeholder={t('notes.titlePlaceholder')} onChange={event => editField('title', event.target.value)}
                 onBlur={() => void flushNow()} inputProps={{ maxLength: 200, 'aria-label': t('notes.titleLabel') }}

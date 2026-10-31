@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { alpha } from '@mui/material/styles'
 import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material'
 import type { HistoryEntry, Settings } from '@shared/types'
 import type { StatsFile } from '@shared/stats'
@@ -459,7 +460,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
                           value > 0
                             ? active
                               ? t.accent
-                              : t.textFaint
+                              : alpha(t.accent, .6)
                             : t.line,
                         // A 2px lift and a slightly brighter body: enough to feel
                         // alive under the pointer, small enough not to move the axis.
@@ -651,10 +652,10 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
                         borderRadius: '3px',
                         bgcolor:
                           level === 0
-                            ? 'rgba(127,127,127,.12)'
-                            : `rgba(76,141,255,${0.25 + level * 0.19})`,
+                            ? t.accentSoft
+                            : alpha(t.accent, 0.25 + level * 0.19),
                         // Hover deepens what is already there: a used cell keeps its
-                        // own blue and gets a few shades darker, an empty one just
+                        // own accent and gets a few shades darker, an empty one just
                         // gains a bit more grey. Nothing jumps to a shared colour.
                         transition: 'filter .12s ease, background-color .12s ease',
                         '&:hover':

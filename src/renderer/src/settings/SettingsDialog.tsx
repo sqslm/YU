@@ -84,16 +84,17 @@ export function SettingsDialog({
     <Dialog
       open={open}
       onClose={onClose}
+      aria-labelledby="settings-heading"
       maxWidth={false}
       slotProps={{
         paper: {
           sx: {
             width: 1080,
-            maxWidth: '92vw',
-            height: 740,
-            maxHeight: '88vh',
+            maxWidth: '94vw',
+            height: 780,
+            maxHeight: '90vh',
             m: 0,
-            borderRadius: '12px',
+            borderRadius: '18px',
             overflow: 'hidden',
             position: 'relative',
             display: 'flex',
@@ -126,14 +127,14 @@ export function SettingsDialog({
 
       <Box
         sx={{
-          width: 176,
+          width: { xs: 156, md: 204 },
           flex: '0 0 auto',
           borderRight: 1,
           borderColor: 'divider',
-          bgcolor: 'background.default',
-          pt: 1.5,
-          pb: 1.5,
-          px: 1,
+          bgcolor: 'action.hover',
+          pt: 3,
+          pb: 2.5,
+          px: 1.5,
           display: 'flex',
           flexDirection: 'column'
         }}
@@ -141,16 +142,16 @@ export function SettingsDialog({
         <Typography
           sx={{
             px: 1.25,
-            pb: 1.25,
-            fontSize: 10.5,
+            pb: 2.5,
+            fontSize: 11,
             fontWeight: 600,
             letterSpacing: 0.8,
-            color: 'text.disabled'
+            color: 'text.secondary'
           }}
         >
           {t('settings.title')}
         </Typography>
-        <Box component="nav" aria-label={t('settings.title')} sx={{ display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto', minHeight: 0, pb: 1 }}>
+        <Box component="nav" aria-label={t('settings.title')} sx={{ display: 'flex', flexDirection: 'column', gap: '5px', overflowY: 'auto', minHeight: 0, pb: 1 }}>
           {SECTIONS.map((item) => {
             const selected = item.pages.includes(section)
             return (
@@ -168,18 +169,18 @@ export function SettingsDialog({
                   textAlign: 'left',
                   alignItems: 'center',
                   gap: 1.25,
-                  minHeight: 32,
+                  minHeight: 40,
                   flexShrink: 0,
                   px: 1.25,
-                  borderRadius: '7px',
+                  borderRadius: '9px',
                   fontSize: 12.5,
                   cursor: 'pointer',
-                  color: selected ? 'text.primary' : 'text.secondary',
+                  color: selected ? 'primary.main' : 'text.secondary',
                   fontWeight: selected ? 600 : 400,
-                  bgcolor: selected ? 'rgba(127,127,127,.14)' : 'transparent',
+                  bgcolor: selected ? 'action.selected' : 'transparent',
                   '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
                   '&:hover': {
-                    bgcolor: selected ? 'rgba(127,127,127,.14)' : 'rgba(127,127,127,.08)',
+                    bgcolor: selected ? 'action.selected' : 'action.hover',
                     color: 'text.primary'
                   }
                 }}
@@ -194,21 +195,21 @@ export function SettingsDialog({
         </Box>
         {/* The version now lives only inside the sheet: pinned to the bottom of
             this nav column so it is visible from every section. */}
-        <Typography sx={{ mt: 'auto', px: 1.25, fontSize: 11, color: 'text.disabled' }}>
+        <Typography sx={{ mt: 'auto', px: 1.25, pt: 2, fontSize: 11, color: 'text.secondary' }}>
           {version}
         </Typography>
-        <Typography role="status" sx={{ px: 1.25, pt: 0.5, fontSize: 10.5, color: saveError ? 'error.main' : 'text.disabled' }}>
+        <Typography role="status" sx={{ px: 1.25, pt: 0.5, fontSize: 10.5, color: saveError ? 'error.main' : 'text.secondary' }}>
           {saveError ? t('settings.saveFailed') : saving ? t('settings.saving') : t('settings.autosave')}
         </Typography>
         {saveError && <Button size="small" onClick={onRetry}>{t('settings.retrySave')}</Button>}
       </Box>
 
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ px: 3, pt: 2.25, pb: 1.5, flex: '0 0 auto', pr: 6 }}>
-          <Typography sx={{ fontSize: 17, fontWeight: 600, letterSpacing: -0.2 }}>
+        <Box sx={{ px: { xs: 2.5, md: 4 }, pt: 3.5, pb: 2.5, flex: '0 0 auto', pr: 6 }}>
+          <Typography component="h2" id="settings-heading" sx={{ fontSize: 25, fontWeight: 650, letterSpacing: -.7 }}>
             {t(active.labelKey)}
           </Typography>
-          <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.5, lineHeight: 1.5 }}>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: .75, lineHeight: 1.7 }}>
             {t(active.hintKey)}
           </Typography>
         </Box>
@@ -223,8 +224,9 @@ export function SettingsDialog({
             minHeight: 0,
             overflowY: 'auto',
             overflowX: 'hidden',
-            px: 3,
-            pb: 3,
+            px: { xs: 2.5, md: 4 },
+            pt: 1,
+            pb: 4,
             // One place to keep every control in this sheet on the 8px grid.
             '& .MuiOutlinedInput-root': { borderRadius: '8px' },
             '& .MuiInputBase-input': { fontSize: 12.5 },

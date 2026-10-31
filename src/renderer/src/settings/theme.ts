@@ -1,11 +1,7 @@
 import { alpha, createTheme, type Theme } from '@mui/material/styles'
 import type { ThemeMode } from '@shared/types'
 
-/**
- * Palette sampled from the reference app: a mid-dark grey canvas (not
- * near-black), one step darker sidebar, cards that lift by ~8% white, and a
- * single blue accent used only for primary actions and the active nav pill.
- */
+/** Warm neutral surfaces and jade accents shared by the desktop renderers. */
 export interface Tokens {
   canvas: string
   sidebar: string
@@ -23,32 +19,32 @@ export interface Tokens {
 
 export const palettes: Record<'dark' | 'light', Tokens> = {
   dark: {
-    canvas: '#232323',
-    sidebar: '#1c1c1c',
-    surface: '#2b2b2b',
-    surfaceHi: '#343434',
-    line: 'rgba(255,255,255,.08)',
-    text: '#f1f1f1',
-    textDim: '#a6a6a6',
-    textFaint: '#7b7b7b',
-    accent: '#4c8dff',
-    accentSoft: 'rgba(76,141,255,.16)',
-    danger: '#f06a6a',
-    shadow: '0 12px 32px rgba(0,0,0,.45)'
+    canvas: '#191c1a',
+    sidebar: '#141715',
+    surface: '#202421',
+    surfaceHi: '#2a302c',
+    line: 'rgba(224,235,224,.10)',
+    text: '#eef1e9',
+    textDim: '#abb5ac',
+    textFaint: '#909d92',
+    accent: '#9bd6bb',
+    accentSoft: 'rgba(155,214,187,.11)',
+    danger: '#f0948c',
+    shadow: '0 20px 64px rgba(0,0,0,.32)'
   },
   light: {
-    canvas: '#f6f6f8',
-    sidebar: '#eeeef0',
-    surface: '#ffffff',
-    surfaceHi: '#f1f1f3',
-    line: 'rgba(0,0,0,.08)',
-    text: '#1b1b1d',
-    textDim: '#5d5d63',
-    textFaint: '#8b8b91',
-    accent: '#2f6bff',
-    accentSoft: 'rgba(47,107,255,.12)',
-    danger: '#d14444',
-    shadow: '0 12px 32px rgba(15,15,20,.16)'
+    canvas: '#f5f5f0',
+    sidebar: '#eeefe8',
+    surface: '#fdfdf9',
+    surfaceHi: '#e9ece4',
+    line: 'rgba(35,53,42,.11)',
+    text: '#25352b',
+    textDim: '#616e62',
+    textFaint: '#64705f',
+    accent: '#28664c',
+    accentSoft: 'rgba(40,102,76,.09)',
+    danger: '#b3443b',
+    shadow: '0 20px 64px rgba(35,53,42,.13)'
   }
 }
 
@@ -86,26 +82,38 @@ export function makeTheme(mode: 'dark' | 'light'): Theme {
     palette: {
       mode: resolved,
       background: { default: t.canvas, paper: t.surface },
-      primary: { main: t.accent },
-      secondary: { main: '#8f7cff' },
+      primary: { main: t.accent, contrastText: resolved === 'dark' ? '#14271d' : '#ffffff' },
+      secondary: { main: resolved === 'dark' ? '#c6bc9f' : '#76633f' },
       text: { primary: t.text, secondary: t.textDim },
       divider: t.line,
-      error: { main: t.danger }
+      error: { main: t.danger },
+      success: { main: t.accent },
+      warning: { main: resolved === 'dark' ? '#dfbc79' : '#8a621f' },
+      info: { main: resolved === 'dark' ? '#a0c9cf' : '#426b77' },
+      action: { active: t.textDim, hover: alpha(t.accent, 0.06), selected: t.accentSoft, focus: alpha(t.accent, 0.14) }
     },
-    shape: { borderRadius: 10 },
+    shape: { borderRadius: 12 },
     typography: {
       fontFamily:
-        '"Inter", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif',
-      fontSize: 13.5,
-      h4: { fontSize: 30, fontWeight: 600, letterSpacing: -0.4 },
-      h5: { fontSize: 20, fontWeight: 600, letterSpacing: -0.2 },
-      h6: { fontSize: 15, fontWeight: 600 },
-      button: { textTransform: 'none', fontWeight: 500 }
+        '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif',
+      fontSize: 14,
+      h4: { fontSize: 30, fontWeight: 650, letterSpacing: -0.9, lineHeight: 1.3 },
+      h5: { fontSize: 24, fontWeight: 650, letterSpacing: -0.6, lineHeight: 1.4 },
+      h6: { fontSize: 18, fontWeight: 650, letterSpacing: -0.3, lineHeight: 1.5 },
+      body1: { lineHeight: 1.7 },
+      body2: { lineHeight: 1.7 },
+      button: { textTransform: 'none', fontWeight: 600, letterSpacing: 0 }
     },
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          body: { background: t.canvas, color: t.text },
+          ':root': { colorScheme: resolved },
+          body: { background: t.canvas, color: t.text, WebkitFontSmoothing: 'antialiased' },
+          '::selection': { background: alpha(t.accent, 0.23), color: t.text },
+          ':focus-visible': { outline: `2px solid ${t.accent}`, outlineOffset: 3 },
+          '@media (prefers-reduced-motion: reduce)': {
+            '*, *::before, *::after': { animationDuration: '0.01ms !important', animationIterationCount: '1 !important', transitionDuration: '0.01ms !important', scrollBehavior: 'auto !important' }
+          },
           '::-webkit-scrollbar': { width: 10, height: 10 },
           '::-webkit-scrollbar-thumb': {
             background: resolved === 'dark' ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.18)',
@@ -128,27 +136,47 @@ export function makeTheme(mode: 'dark' | 'light'): Theme {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
-          root: { borderRadius: 8, paddingInline: 14 },
-          containedPrimary: { color: '#fff' }
+          root: { borderRadius: 9, padding: '7px 16px', transition: 'background-color 160ms ease, border-color 160ms ease', fontSize: 13 },
+          sizeSmall: { padding: '5px 12px', fontSize: 12 },
+          outlinedPrimary: { borderColor: t.line, color: t.text, '&:hover': { borderColor: alpha(t.accent, .4), backgroundColor: t.accentSoft } }
         }
       },
+      MuiButtonBase: { styleOverrides: { root: { '&.Mui-focusVisible': { outline: `2px solid ${t.accent}`, outlineOffset: 2 } } } },
+      MuiIconButton: { styleOverrides: { root: { borderRadius: 9, '&:hover': { backgroundColor: t.accentSoft } } } },
       MuiTextField: { defaultProps: { size: 'small', fullWidth: true } },
       MuiFormControl: { defaultProps: { size: 'small', fullWidth: true } },
+      MuiOutlinedInput: { styleOverrides: { root: {
+        borderRadius: 9, backgroundColor: alpha(t.surface, .7), fontSize: 13,
+        '& .MuiOutlinedInput-notchedOutline': { borderColor: t.line },
+        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: alpha(t.accent, .45) },
+        '&.Mui-focused': { boxShadow: `0 0 0 3px ${t.accentSoft}` }
+      } } },
+      MuiTabs: { styleOverrides: { root: { minHeight: 36 }, indicator: { height: 2, borderRadius: 2 } } },
+      MuiTab: { styleOverrides: { root: { minHeight: 36, fontSize: 12.5, fontWeight: 500, '&.Mui-selected': { fontWeight: 650 } } } },
+      MuiToggleButton: { styleOverrides: { root: { borderColor: t.line, textTransform: 'none', '&.Mui-selected': { backgroundColor: t.accentSoft, color: t.accent, '&:hover': { backgroundColor: alpha(t.accent, .16) } } } } },
+      MuiChip: { styleOverrides: { root: { borderRadius: 6, fontSize: 11.5 }, outlined: { borderColor: t.line } } },
+      MuiDialog: { styleOverrides: { paper: { borderRadius: 18, boxShadow: t.shadow } } },
+      MuiBackdrop: { styleOverrides: { root: { backgroundColor: 'rgba(13,23,17,.48)' } } },
+      MuiMenu: { styleOverrides: { paper: { borderRadius: 12, boxShadow: t.shadow, padding: 4 } } },
+      MuiMenuItem: { styleOverrides: { root: { fontSize: 13, borderRadius: 6, minHeight: 36 } } },
+      MuiAlert: { styleOverrides: { root: { borderRadius: 10, fontSize: 12.5 } } },
       MuiListItemButton: {
         styleOverrides: {
           root: {
-            borderRadius: 8,
+            borderRadius: 9,
+            color: t.textDim,
             '&.Mui-selected': {
-              backgroundColor: alpha(resolved === 'dark' ? '#ffffff' : '#000000', 0.08),
+              color: t.accent,
+              backgroundColor: t.accentSoft,
               '&:hover': {
-                backgroundColor: alpha(resolved === 'dark' ? '#ffffff' : '#000000', 0.11)
+                backgroundColor: alpha(t.accent, 0.15)
               }
             }
           }
         }
       },
       MuiTooltip: {
-        styleOverrides: { tooltip: { backgroundColor: t.surfaceHi, fontSize: 12 } }
+        styleOverrides: { tooltip: { backgroundColor: t.surfaceHi, color: t.text, border: `1px solid ${t.line}`, borderRadius: 7, fontSize: 11.5, padding: '6px 10px', boxShadow: t.shadow } }
       }
     }
   })

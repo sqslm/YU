@@ -49,11 +49,11 @@ type Page = 'chat' | 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' |
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'chat', labelKey: '语', icon: <ChatBubbleOutlineRounded sx={{ fontSize: 18 }} /> },
   { id: 'home', labelKey: 'nav.home', icon: <IconChart /> },
-  { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
   { id: 'reminders', labelKey: '提醒与待办', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
-  { id: 'briefing', labelKey: '简报', icon: <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} /> },
   { id: 'calendar', labelKey: '日程', icon: <CalendarMonthIcon sx={{ fontSize: 18 }} /> },
+  { id: 'briefing', labelKey: '简报', icon: <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} /> },
+  { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> }
 ]
 
@@ -223,10 +223,11 @@ export function App(): JSX.Element {
         />
         {/* The native title bar is gone; this strip is the window drag handle. */}
         <Box
+          component="aside"
           data-app-sidebar
           data-rail={rail ? 'on' : 'off'}
           sx={{
-            width: rail ? RAIL_WIDTH : 208,
+            width: rail ? RAIL_WIDTH : 216,
             flex: '0 0 auto',
             bgcolor: t.sidebar,
             borderRight: `1px solid ${t.line}`,
@@ -239,12 +240,12 @@ export function App(): JSX.Element {
             '@media (prefers-reduced-motion: reduce)': { transition: 'none' }
           }}
         >
-          <Box sx={{ px: rail ? 0 : 2, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: 0.5, minHeight: 30 }}>
+          <Box sx={{ px: rail ? 0 : 2.75, pt: 1, pb: 3, display: 'flex', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: 0.5, minHeight: 60 }}>
             <Box
               aria-hidden={rail}
               sx={{ minWidth: 0, overflow: 'hidden', flex: rail ? 0 : 1, opacity: rail ? 0 : 1, transition: 'opacity .16s ease' }}
             >
-              <BrandLogo mode={mode} width={150} />
+              <Box sx={{ filter: 'grayscale(1)' }}><BrandLogo mode={mode} width={112} /></Box>
             </Box>
             <Tooltip title={translate(rail ? '展开侧边栏' : '收起侧边栏')} placement="right">
               <IconButton
@@ -260,17 +261,24 @@ export function App(): JSX.Element {
             </Tooltip>
           </Box>
 
-          <List dense sx={{ px: rail ? 0 : 1, py: 1 }}>
+          <List component="nav" aria-label={translate('工作空间')} dense sx={{ px: rail ? 1 : 1.5, py: 0, overflowY: 'auto', minHeight: 0 }}>
             {NAV.map((item) => (
-              <Tooltip key={item.id} title={rail ? translate(item.labelKey) : ''} placement="right">
+              <Box key={item.id}>
+              {['chat', 'notes', 'history'].includes(item.id) && !rail && <Typography component="div" sx={{ px: 1.5, pt: item.id === 'chat' ? 0 : 2.5, pb: 1, fontSize: 10, letterSpacing: 1.2, color: t.textFaint, fontWeight: 600 }}>{translate(item.id === 'chat' ? '工作空间' : item.id === 'notes' ? '日常' : '资料库')}</Typography>}
+              {rail && ['notes', 'history'].includes(item.id) && <Box sx={{ mx: 1, my: 1.5, borderTop: `1px solid ${t.line}` }} />}
+              <Tooltip title={rail ? translate(item.labelKey) : ''} placement="right">
                 <ListItemButton
+                  aria-current={page === item.id ? 'page' : undefined}
                   selected={page === item.id}
                   onClick={() => setPage(item.id)}
                   sx={{
-                    mb: 0.25,
-                    py: 0.75,
-                    px: rail ? 0 : 2,
+                    mb: 0.5,
+                    py: 1,
+                    px: rail ? 0 : 1.5,
+                    minHeight: 40,
                     minWidth: 0,
+                    position: 'relative',
+                    '&.Mui-selected::before': { content: '""', position: 'absolute', left: 0, top: 13, bottom: 13, width: 3, bgcolor: t.accent, borderRadius: 2 },
                     justifyContent: rail ? 'center' : 'flex-start',
                     '& .MuiListItemIcon-root': { minWidth: rail ? 0 : 30, justifyContent: 'center' }
                   }}
@@ -279,10 +287,11 @@ export function App(): JSX.Element {
                   <ListItemText
                     primary={translate(item.labelKey)}
                     sx={{ display: rail ? 'none' : 'block', whiteSpace: 'nowrap' }}
-                    primaryTypographyProps={{ fontSize: 13, fontWeight: 500, noWrap: true }}
+                    primaryTypographyProps={{ fontSize: 13, fontWeight: page === item.id ? 650 : 450, noWrap: true }}
                   />
                 </ListItemButton>
               </Tooltip>
+              </Box>
             ))}
           </List>
 
@@ -292,12 +301,13 @@ export function App(): JSX.Element {
             sx={{
               mt: 'auto',
               flex: '0 0 auto',
-              height: 44,
+              minHeight: 64,
               px: rail ? 0 : 1.5,
               display: 'flex',
               alignItems: 'center',
               justifyContent: rail ? 'center' : 'flex-start',
               gap: 0.5,
+              borderTop: `1px solid ${t.line}`,
               overflow: 'hidden'
             }}
           >

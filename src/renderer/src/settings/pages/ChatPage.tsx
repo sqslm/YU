@@ -12,6 +12,7 @@ import StopRounded from '@mui/icons-material/StopRounded'
 import SearchRounded from '@mui/icons-material/SearchRounded'
 import AttachFileRounded from '@mui/icons-material/AttachFileRounded'
 import CloseRounded from '@mui/icons-material/CloseRounded'
+import GraphicEqRounded from '@mui/icons-material/GraphicEqRounded'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import type { ChatDetail, ChatGroup, ChatIndex, ChatThread } from '@shared/chat'
 import { CHAT_ATTACHMENT_BYTES, CHAT_ATTACHMENT_LIMIT, CHAT_ATTACHMENT_TOTAL, CHAT_FILE_ACCEPT } from '@shared/chat'
@@ -174,12 +175,12 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
   const matches = (thread: ChatThread): boolean => thread.title.toLocaleLowerCase().includes(needle)
   const shown = index.threads.filter(matches)
   return <Box data-chat-page sx={{ display: 'flex', height: '100%', minHeight: 0, overflow: 'hidden', borderTop: 1, borderColor: 'divider' }}>
-    <Box component="nav" aria-label={t('对话与分组')} aria-hidden={!navOpen} sx={{ width: navOpen ? { xs: 180, lg: 230 } : 0, flexShrink: 0, overflow: 'hidden', borderRight: 1, borderColor: navOpen ? 'divider' : 'transparent', transition: 'width .22s ease' }}>
+    <Box component="nav" aria-label={t('对话与分组')} aria-hidden={!navOpen} sx={{ width: navOpen ? { xs: 180, lg: 230 } : 0, flexShrink: 0, bgcolor: 'background.paper', overflow: 'hidden', borderRight: 1, borderColor: navOpen ? 'divider' : 'transparent', transition: 'width .22s ease' }}>
       {/* Fixed-width inner column so the rail slides instead of reflowing its contents; hidden it
           also leaves the tab order, which is why visibility rather than opacity is used. */}
-      <Box sx={{ width: { xs: 180, lg: 230 }, height: '100%', display: 'flex', flexDirection: 'column', p: 1.5, gap: 1, visibility: navOpen ? 'visible' : 'hidden' }}>
+      <Box sx={{ width: { xs: 180, lg: 230 }, height: '100%', display: 'flex', flexDirection: 'column', p: 2, gap: 2, visibility: navOpen ? 'visible' : 'hidden' }}>
         <Stack direction="row" alignItems="center" gap={.5}>
-          <Button variant="outlined" startIcon={<AddRounded sx={{ fontSize: 18 }} />} onClick={() => void create()} sx={{ flex: 1, minWidth: 0, justifyContent: 'flex-start', borderRadius: 2, fontSize: 12.5, fontWeight: 600, py: .5, textTransform: 'none' }}>{t('新对话')}</Button>
+          <Button variant="contained" startIcon={<AddRounded sx={{ fontSize: 18 }} />} onClick={() => void create()} sx={{ flex: 1, minWidth: 0, justifyContent: 'flex-start', borderRadius: 2, fontSize: 12.5, fontWeight: 600, py: 1, textTransform: 'none' }}>{t('新对话')}</Button>
           <Tooltip title={t('新建分组')}><span><IconButton size="small" aria-label={t('新建分组')} onClick={() => setEdit({ action: 'group-create', name: '' })}><CreateNewFolderOutlined sx={{ fontSize: 18 }} /></IconButton></span></Tooltip>
         </Stack>
         <TextField size="small" placeholder={t('搜索对话')} value={query} onChange={event => setQuery(event.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><SearchRounded sx={{ fontSize: 17 }} /></InputAdornment> }} />
@@ -214,7 +215,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
     <Box onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDragging(true) } }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false) }} onDrop={event => { event.preventDefault(); setDragging(false); addFiles(Array.from(event.dataTransfer.files)) }} sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', outline: dragging ? '2px dashed' : 'none', outlineColor: 'primary.main', outlineOffset: -3 }}>
       {/* The rail toggle sits in the content header, not in the rail — otherwise collapsing it would
           take away the only control that brings it back. */}
-      <Stack direction="row" alignItems="center" sx={{ px: { xs: 1.5, lg: 2.5 }, py: 1.25, borderBottom: 1, borderColor: 'divider', gap: .75 }}>
+      <Stack direction="row" alignItems="center" sx={{ px: { xs: 1.5, lg: 3 }, py: 1.5, borderBottom: 1, borderColor: 'divider', gap: 1 }}>
         <Tooltip title={t(navOpen ? '收起对话列表' : '展开对话列表')}><IconButton size="small" aria-label={t(navOpen ? '收起对话列表' : '展开对话列表')} aria-expanded={navOpen} onClick={toggleNav}>{navOpen ? <MenuOpenRounded fontSize="small" /> : <MenuRounded fontSize="small" />}</IconButton></Tooltip>
         <Typography sx={{ fontSize: 15, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail ? detail.title === '新对话' ? t(detail.title) : detail.title : t('语')}</Typography>
         {detail?.memoryTemporary && <Typography variant="caption" color="text.secondary">{t('本对话不读写长期记忆')}</Typography>}
@@ -224,21 +225,25 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
       {error && <Alert severity="error" onClose={() => setError('')} action={<Button color="inherit" size="small" onClick={() => { setError(''); void refresh() }}>{t('刷新')}</Button>}>{error.replace(/^Error: /, '')}</Alert>}
       <Box ref={scroll} onScroll={event => { const el = event.currentTarget; nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 2, lg: 4 }, py: 2.5 }}>
         {detail && detail.total > detail.messages.length && <Button fullWidth size="small" onClick={() => { nearBottom.current = false; limitRef.current += 100; setLimit(limitRef.current) }}>{t('加载更早消息')}</Button>}
-        {!detail?.messages.length && <Box sx={{ maxWidth: 560, mx: 'auto', pt: '12vh' }}><Typography sx={{ fontSize: 30, fontWeight: 650, mb: 1.5 }}>{t('和语聊聊')}</Typography><Typography color="text.secondary" sx={{ lineHeight: 1.8, fontSize: 13 }}>{loading ? t('正在读取对话…') : t('提问、梳理想法，或一起解决问题。对话保存在本机，可按分组整理。')}</Typography></Box>}
+        {!detail?.messages.length && <Box sx={{ maxWidth: 460, mx: 'auto', pt: { xs: '5vh', lg: '9vh' }, textAlign: 'center' }}>
+          <Box aria-hidden sx={{ width: 64, height: 64, mx: 'auto', mb: 3, display: 'grid', placeItems: 'center', color: 'primary.main', bgcolor: 'action.selected', border: 1, borderColor: 'divider', borderRadius: '20px' }}><GraphicEqRounded sx={{ fontSize: 30 }} /></Box>
+          <Typography component="h1" sx={{ fontSize: { xs: 28, lg: 36 }, fontWeight: 500, letterSpacing: -1, mb: 1.5 }}>{t('和语聊聊')}<Box component="span" sx={{ color: 'primary.main' }}>.</Box></Typography>
+          <Typography color="text.secondary" role={loading ? 'status' : undefined} sx={{ lineHeight: 2, fontSize: 13, maxWidth: 350, mx: 'auto' }}>{loading ? t('正在读取对话…') : t('提问、梳理想法，或一起解决问题。对话保存在本机，可按分组整理。')}</Typography>
+        </Box>}
         {detail?.messages.map(message => <Box key={message.id} data-chat-message={message.role} sx={{ maxWidth: 760, mx: 'auto', mb: 3, display: 'flex', flexDirection: 'column', alignItems: message.role === 'user' ? 'flex-end' : 'stretch' }}>
           <Typography sx={{ fontSize: 10.5, color: 'text.secondary', mb: .8 }}>{t(message.role === 'user' ? '你' : '语')}</Typography>
           {!!message.attachments?.length && <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 1 }}>{message.attachments.map(file => <Button key={file.id} variant="outlined" size="small" title={file.name} onClick={() => { void window.api.chat.attachment(detail.id, file.id).then(setPreview).catch(error => setError(messageOf(error))) }} sx={{ textTransform: 'none', maxWidth: 220, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: .5 }}>
             {file.thumbnail && <Box component="img" src={file.thumbnail} alt={file.name} sx={{ height: 65, maxWidth: 160, objectFit: 'contain' }} />}
             <Typography variant="caption" noWrap sx={{ maxWidth: '100%' }}>{file.name}</Typography><Typography variant="caption" color="text.secondary">{Math.max(1, Math.round(file.size / 1024))} KB{file.truncated ? ` · ${t('部分内容')}` : ''}</Typography>
           </Button>)}</Stack>}
-          {message.role === 'user' ? <Box sx={{ bgcolor: 'action.hover', borderRadius: '12px 12px 3px 12px', p: '10px 14px', maxWidth: '90%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 13 }}>{message.text}</Box>
-            : <Box sx={{ fontSize: 13, lineHeight: 1.8, overflowWrap: 'anywhere', '& [data-card-markdown]': { color: 'text.primary' }, '& [data-card-markdown] :not(a):not(button)': { color: 'inherit' } }}><MarkdownView text={(message.sources?.length ? stripSourceTail(message.text) : message.text) || t('正在思考…')} sources={message.sources} streaming={message.state === 'working'} onCopyCode={text => { void window.api.app.copyText(text) }} /></Box>}
+          {message.role === 'user' ? <Box sx={{ bgcolor: 'action.selected', border: 1, borderColor: 'divider', borderRadius: '16px 16px 4px 16px', p: '12px 18px', maxWidth: '90%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 14 }}>{message.text}</Box>
+            : <Box sx={theme => ({ fontSize: 14, lineHeight: 1.9, overflowWrap: 'anywhere', '--answer-text': theme.palette.text.primary, '--answer-muted': theme.palette.text.secondary, '--answer-accent': theme.palette.primary.main, '--answer-line': theme.palette.divider, '--answer-fill': theme.palette.action.hover })}><MarkdownView text={(message.sources?.length ? stripSourceTail(message.text) : message.text) || t('正在思考…')} sources={message.sources} streaming={message.state === 'working'} onCopyCode={text => { void window.api.app.copyText(text) }} /></Box>}
           {message.state === 'error' && <Typography color="error" variant="caption">{t('本轮回答失败，可重新发送')}</Typography>}
           {message.state === 'cancelled' && <Typography color="text.secondary" variant="caption">{t('生成已停止')}</Typography>}
           {message.role === 'assistant' && message.state === 'done' && <Button size="small" sx={{ alignSelf: 'flex-start', fontSize: 11, color: 'text.secondary', px: 0 }} onClick={() => void window.api.app.copyText(message.text)}>{t('复制回答')}</Button>}
         </Box>)}
       </Box>
-      <Box sx={{ px: { xs: 2, lg: 4 }, pb: 2, pt: 1 }}>
+      <Box sx={{ px: { xs: 2, lg: 4 }, pb: 2.5, pt: 1, width: '100%', maxWidth: 840, mx: 'auto' }}>
         {!!pendingFiles.length && <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 1 }}>{pendingFiles.map(item => <Stack key={item.id} direction="row" alignItems="center" sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: .5, maxWidth: 220 }}>
           <Button size="small" title={item.file.name} onClick={() => { if (item.preview) setPreview({ name: item.file.name, url: item.preview }); else void item.file.slice(0, 20000).text().then(text => setPreview({ name: item.file.name, text: /\.(?:pdf|docx|xlsx|pptx|odt|ods|odp)$/i.test(item.file.name) ? t('发送时提取正文；扫描版或加密文档暂不支持。') : text })) }} sx={{ minWidth: 0, textTransform: 'none', gap: .75 }}>
             {item.preview ? <Box component="img" src={item.preview} alt="" sx={{ width: 36, height: 36, objectFit: 'cover', borderRadius: .5 }} /> : <DescriptionOutlined fontSize="small" />}<Typography variant="caption" noWrap sx={{ maxWidth: 120 }}>{item.file.name}</Typography>
@@ -246,14 +251,14 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
         </Stack>)}</Stack>}
         {status && index.busyThreadId === selected && <Typography variant="caption" color="text.secondary">{status}</Typography>}
         {index.busyThreadId && index.busyThreadId !== selected && <Button size="small" onClick={() => choose(index.busyThreadId)}>{t('另一个对话正在生成，点击查看')}</Button>}
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, p: 1, bgcolor: 'background.paper', display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: '16px', p: 1.5, bgcolor: 'background.paper', display: 'flex', alignItems: 'flex-end', gap: 1, boxShadow: '0 4px 20px rgba(20,40,28,.04)', transition: 'border-color .16s ease, box-shadow .16s ease', '&:focus-within': { borderColor: 'primary.main', boxShadow: theme => `0 0 0 3px ${theme.palette.action.selected}` } }}>
           <input ref={picker} type="file" accept={CHAT_FILE_ACCEPT} multiple hidden onChange={event => { addFiles(Array.from(event.target.files ?? [])); event.target.value = '' }} />
           <Tooltip title={t('添加文件或图片')}><span><IconButton aria-label={t('添加文件或图片')} disabled={saving} onClick={() => picker.current?.click()}><AttachFileRounded /></IconButton></span></Tooltip>
           <TextField fullWidth multiline maxRows={5} variant="standard" placeholder={t('和语说点什么…')} value={draft} inputProps={{ maxLength: 12000 }} InputProps={{ disableUnderline: true }}
             onChange={event => setDrafts(previous => ({ ...previous, [draftKey]: event.target.value }))}
             onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send() } }} sx={{ px: 1, '& textarea': { fontSize: 13 } }} />
           {index.busyThreadId ? <Tooltip title={t('停止生成')}><IconButton aria-label={t('停止生成')} onClick={() => void window.api.chat.cancel()}><StopRounded /></IconButton></Tooltip>
-            : <Tooltip title={t('发送消息')}><span><IconButton color="primary" aria-label={t('发送消息')} disabled={(!draft.trim() && !pendingFiles.length) || saving} onClick={() => void send()}><SendRounded /></IconButton></span></Tooltip>}
+            : <Tooltip title={t('发送消息')}><span><IconButton color="primary" aria-label={t('发送消息')} disabled={(!draft.trim() && !pendingFiles.length) || saving} onClick={() => void send()} sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark', color: 'primary.contrastText' }, '&.Mui-disabled': { bgcolor: 'action.hover', color: 'text.disabled' } }}><SendRounded sx={{ fontSize: 20 }} /></IconButton></span></Tooltip>}
         </Box><Typography sx={{ fontSize: 10, color: 'text.secondary', mt: .75 }}>{t('可拖入文件或图片 · 每次 5 个，每个 10 MiB · 图片需视觉模型')}</Typography><Typography sx={{ fontSize: 10, color: 'text.secondary', mt: .25 }} title={t('对话与附件保存在安装目录，文件内容仅作为本轮参考，不自动记为个人事实。')}>{t('Enter 发送 · Shift+Enter 换行 · 新对话互不串联')}</Typography>
       </Box>
     </Box>

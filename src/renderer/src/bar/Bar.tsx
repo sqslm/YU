@@ -224,11 +224,11 @@ export function Bar(): JSX.Element {
         @keyframes barpulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
         @keyframes caption-enter { from { opacity: 0; max-width: 0; transform: translate(7px,5px) scale(.9) } to { opacity: 1; max-width: 2em; transform: translate(0,0) scale(1) } }
         @keyframes caption-launch { from { opacity: 0; transform: translateY(var(--caption-launch-y)) scale(.35,.3) } to { opacity: 1; transform: translateY(0) scale(1) } }
-        @media (prefers-reduced-motion: reduce) { [data-caption-glyph], [data-caption-bubble] { animation: none !important } }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
         .bar-alert-action { transition: filter .12s ease, transform .08s ease }
         .bar-alert-action:hover { filter: brightness(1.32) }
         .bar-alert-action:active { transform: translateY(.5px) }
-        .bar-alert-action:focus-visible { outline: none }
+        button:focus-visible, .bar-alert-action:focus-visible { outline: 2px solid #9bd6bb; outline-offset: 2px }
       `}</style>
 
       <div data-bar-strip style={{ position: 'absolute', left: 0, top: layout.barTop, width: 340, height: 60,
@@ -244,7 +244,7 @@ export function Bar(): JSX.Element {
         <span aria-hidden="true" style={{ position: 'absolute', left: 'calc(50% - 4.5px)',
           ...(layout.captionSide === 'above' ? { bottom: -5, borderRight: '1px solid rgba(255,255,255,.12)', borderBottom: '1px solid rgba(255,255,255,.12)' }
             : { top: -5, borderLeft: '1px solid rgba(255,255,255,.12)', borderTop: '1px solid rgba(255,255,255,.12)' }),
-          width: 9, height: 9, transform: 'rotate(45deg)', background: '#202228' }} />
+          width: 9, height: 9, transform: 'rotate(45deg)', background: '#202421' }} />
       </div>}
       {phase === 'idle' && <div style={idlePill} />}
 
@@ -285,7 +285,7 @@ export function Bar(): JSX.Element {
                         width: 2.5,
                         height,
                         borderRadius: 2,
-                        background: '#c9d4ff',
+                        background: '#c4e8d5',
                         animation: `barwave ${0.7 + (index % 5) * 0.09}s ease-in-out infinite`
                       }}
                     />
@@ -300,7 +300,7 @@ export function Bar(): JSX.Element {
 
           {phase === 'working' && (
             <>
-              <span style={{ ...dot, background: '#8f9bd6' }} />
+              <span style={{ ...dot, background: '#9bd6bb' }} />
               <span style={{ ...label, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{state.hint ?? i18n.t('处理中…')}</span>
             </>
           )}
@@ -344,19 +344,19 @@ function truncate(text: string): string {
 const stage: React.CSSProperties = {
   height: '100%',
   position: 'relative',
-  fontFamily: '"Inter", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif',
+  fontFamily: '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif',
   WebkitAppRegion: 'drag'
 } as React.CSSProperties
 
 const captionBubble: React.CSSProperties = {
   position: 'absolute', left: -14, width: 'calc(100% + 28px)', maxWidth: 324, height: 42,
   display: 'flex', alignItems: 'center', padding: '0 16px', borderRadius: 12,
-  color: '#eef1f7', background: '#202228', border: '1px solid rgba(255,255,255,.12)',
+  color: '#eef1e9', background: '#202421', border: '1px solid rgba(255,255,255,.12)',
   boxShadow: '0 3px 10px rgba(0,0,0,.12)', animation: 'caption-launch .24s cubic-bezier(.2,.8,.25,1) both'
 }
 
 const feedbackButton: React.CSSProperties = {
-  flexShrink: 0, border: 'none', borderRadius: 6, background: 'rgba(127,157,255,.16)', color: '#b8c9ff',
+  flexShrink: 0, border: 'none', borderRadius: 6, background: 'rgba(155,214,187,.16)', color: '#bce5cf',
   padding: '4px 7px', fontSize: 11, cursor: 'pointer', WebkitAppRegion: 'no-drag'
 } as React.CSSProperties
 
@@ -380,13 +380,13 @@ const pill: React.CSSProperties = {
   maxWidth: 300,
   padding: '0 14px',
   borderRadius: 99,
-  background: 'rgba(18,19,23,.94)',
+  background: 'rgba(20,23,21,.96)',
   // Only the recording state keeps a hairline border; everything else is
   // borderless so the pill melts into the desktop.
   border: '1px solid transparent',
   boxShadow: 'none',
   backdropFilter: 'blur(14px)',
-  color: '#eef1f7',
+  color: '#eef1e9',
   fontSize: 12,
   overflow: 'hidden'
 }
@@ -395,7 +395,7 @@ const dot: React.CSSProperties = {
   width: 7,
   height: 7,
   borderRadius: 99,
-  background: '#7f96ff',
+  background: '#9bd6bb',
   flex: '0 0 auto'
 }
 
@@ -409,19 +409,19 @@ const wave: React.CSSProperties = {
 
 const label: React.CSSProperties = {
   fontSize: 11.5,
-  color: '#b6bdcb',
+  color: '#bbc9bd',
   whiteSpace: 'nowrap'
 }
 
 const timer: React.CSSProperties = {
   fontVariantNumeric: 'tabular-nums',
   fontSize: 11,
-  color: '#7f8593'
+  color: '#909d92'
 }
 
 const promptTag: React.CSSProperties = {
-  fontSize: 10.5, lineHeight: '18px', color: '#bbc5e7', background: 'rgba(127,150,255,.08)',
-  border: '1px solid rgba(127,150,255,.18)', borderRadius: 5, padding: '0 6px',
+  fontSize: 10.5, lineHeight: '18px', color: '#bce5cf', background: 'rgba(155,214,187,.08)',
+  border: '1px solid rgba(155,214,187,.18)', borderRadius: 5, padding: '0 6px',
   minWidth: 0, maxWidth: 80, flex: '0 1 auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
 }
 
@@ -437,7 +437,7 @@ const modeTag: React.CSSProperties = {
   fontSize: 11,
   letterSpacing: '.02em',
   opacity: 0.72,
-  color: '#9aa3b5',
+  color: '#abb5ac',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -448,7 +448,7 @@ const modeTag: React.CSSProperties = {
 
 const result: React.CSSProperties = {
   fontSize: 11.5,
-  color: '#c8cdd8',
+  color: '#d3ddd3',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis'

@@ -9,7 +9,7 @@ import i18n from '../i18n'
  * Turns the card's answer text into readable prose.
  *
  * Typography rules of thumb, all measured on a 14 px base:
- * - body 14 / 1.72, dimmed to `#e8ebf2` so bold labels can be brighter;
+ * - body 14 / 1.72, dimmed to `#eef1e9` so bold labels can be brighter;
  * - headings get air *above* and almost none below, so they read as labels for
  *   the block that follows rather than as their own paragraph;
  * - lists hang: the marker sits in a fixed 16 px gutter, so wrapped lines align
@@ -20,7 +20,7 @@ import i18n from '../i18n'
 const BODY: CSSProperties = {
   fontSize: 14,
   lineHeight: 1.72,
-  color: '#e8ebf2',
+  color: 'var(--answer-text, #eef1e9)',
   wordBreak: 'break-word'
 }
 
@@ -39,7 +39,7 @@ function headingStyle(level: number): CSSProperties {
     fontWeight: 650,
     lineHeight: 1.5,
     letterSpacing: 0.1,
-    color: '#f2f5fb',
+    color: 'var(--answer-text, #f4f6ef)',
     margin: '12px 0 6px'
   }
 }
@@ -59,10 +59,10 @@ const listItemStyle: CSSProperties = {
 
 const quoteStyle: CSSProperties = {
   ...BODY,
-  color: '#c3c9d6',
+  color: 'var(--answer-muted, #bbc9bd)',
   margin: '0 0 8px',
   paddingLeft: 10,
-  borderLeft: '2px solid rgba(127,150,255,.45)',
+  borderLeft: '2px solid var(--answer-accent, rgba(155,214,187,.45))',
   whiteSpace: 'pre-wrap'
 }
 
@@ -70,11 +70,11 @@ const codeStyle: CSSProperties = {
   margin: '0 0 8px',
   padding: '8px 10px',
   borderRadius: 8,
-  background: 'rgba(255,255,255,.05)',
-  border: '1px solid rgba(255,255,255,.06)',
+  background: 'var(--answer-fill, rgba(255,255,255,.05))',
+  border: '1px solid var(--answer-line, rgba(255,255,255,.06))',
   fontSize: 12.5,
   lineHeight: 1.6,
-  color: '#dfe4ef',
+  color: 'var(--answer-text, #d3ddd3)',
   overflowX: 'auto',
   whiteSpace: 'pre'
 }
@@ -83,13 +83,13 @@ const ruleStyle: CSSProperties = {
   height: 0,
   margin: '10px 0',
   border: 'none',
-  borderTop: '1px solid rgba(255,255,255,.10)'
+  borderTop: '1px solid var(--answer-line, rgba(255,255,255,.10))'
 }
 
 const inlineCodeStyle: CSSProperties = {
   padding: '1px 5px',
   borderRadius: 5,
-  background: 'rgba(255,255,255,.07)',
+  background: 'var(--answer-fill, rgba(255,255,255,.07))',
   fontSize: '0.92em',
   // `box-shadow` must not break at its hyphen: a code span split across two
   // lines reads as two tokens, and the card is narrow enough for that to happen
@@ -98,14 +98,14 @@ const inlineCodeStyle: CSSProperties = {
 }
 
 const linkStyle: CSSProperties = {
-  color: '#8fb4ff',
+  color: 'var(--answer-accent, #9bd6bb)',
   textDecoration: 'none',
-  borderBottom: '1px solid rgba(143,180,255,.35)'
+  borderBottom: '1px solid var(--answer-line, rgba(155,214,187,.35))'
 }
 
 const citeStyle: CSSProperties = {
   fontSize: '0.78em',
-  color: '#8fa3ff',
+  color: 'var(--answer-accent, #9bd6bb)',
   paddingLeft: 1,
   verticalAlign: 'super',
   lineHeight: 0
@@ -118,7 +118,7 @@ const caretStyle: CSSProperties = {
   marginLeft: 2,
   verticalAlign: '-2px',
   borderRadius: 1,
-  background: '#8fa3ff',
+  background: 'var(--answer-accent, #9bd6bb)',
   animation: 'cardCaret 1.05s steps(1, end) infinite'
 }
 
@@ -128,13 +128,13 @@ function renderInline(inlines: Inline[], keyBase: string, sources: SearchResult[
     switch (inline.kind) {
       case 'strong':
         return (
-          <strong key={key} style={{ fontWeight: 650, color: '#f4f7ff' }}>
+          <strong key={key} style={{ fontWeight: 650, color: 'var(--answer-text, #f4f6ef)' }}>
             {inline.text}
           </strong>
         )
       case 'em':
         return (
-          <em key={key} style={{ fontStyle: 'italic', color: '#d8dded' }}>
+          <em key={key} style={{ fontStyle: 'italic', color: 'var(--answer-text, #d3ddd3)' }}>
             {inline.text}
           </em>
         )
@@ -234,9 +234,9 @@ export function MarkdownView({
           case 'code':
             return (
               <div key={key}>
-              {onCopyCode && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', fontSize: 11, color: '#9aa2b1' }}>
+              {onCopyCode && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', fontSize: 11, color: 'var(--answer-muted, #abb5ac)' }}>
                 <span>{block.lang || i18n.t('代码')}</span>
-                <button type="button" data-copy-code style={{ border: 'none', background: 'transparent', color: '#8fb4ff', cursor: 'pointer', fontSize: 11, padding: '3px 6px' }}
+                <button type="button" data-copy-code style={{ border: 'none', background: 'transparent', color: 'var(--answer-accent, #9bd6bb)', cursor: 'pointer', fontSize: 11, padding: '3px 6px' }}
                   onClick={() => onCopyCode(block.text, key)}>{i18n.t(copiedCode === key ? '已复制' : '复制代码')}</button>
               </div>}
               <pre style={codeStyle} data-lang={block.lang || undefined}>
@@ -250,8 +250,8 @@ export function MarkdownView({
           case 'table':
             return <div key={key} style={{ overflowX: 'auto', marginBottom: 10 }} data-card-table>
               <table style={{ ...BODY, width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                <thead><tr>{block.headers.map((cell, column) => <th key={column} style={{ textAlign: block.align[column], padding: '7px 9px', borderBottom: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.05)', whiteSpace: 'nowrap' }}>{renderInline(cell, `${key}-h${column}`, sources)}</th>)}</tr></thead>
-                <tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, column) => <td key={column} style={{ textAlign: block.align[column], padding: '7px 9px', borderBottom: '1px solid rgba(255,255,255,.08)', minWidth: 80 }}>{renderInline(cell, `${key}-${rowIndex}-${column}`, sources)}</td>)}</tr>)}</tbody>
+                <thead><tr>{block.headers.map((cell, column) => <th key={column} style={{ textAlign: block.align[column], padding: '7px 9px', borderBottom: '1px solid var(--answer-line, rgba(255,255,255,.18))', background: 'var(--answer-fill, rgba(255,255,255,.05))', whiteSpace: 'nowrap' }}>{renderInline(cell, `${key}-h${column}`, sources)}</th>)}</tr></thead>
+                <tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, column) => <td key={column} style={{ textAlign: block.align[column], padding: '7px 9px', borderBottom: '1px solid var(--answer-line, rgba(255,255,255,.08))', minWidth: 80 }}>{renderInline(cell, `${key}-${rowIndex}-${column}`, sources)}</td>)}</tr>)}</tbody>
               </table>{withCaret}
             </div>
           default:

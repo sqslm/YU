@@ -109,9 +109,9 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
     if (form.deadline && new Date(form.deadline).getTime() <= Date.now()) form.deadline = ''
     setRowMenu(null); setError(''); setEditor({ form, source: 'manual', noteId: row.noteId, duplicate: true })
   }
-  return <Box sx={{ p: 3 }} data-reminders-page>
-    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
-      <Typography variant="h6" sx={{ fontWeight: 650 }}>{t('提醒与待办')}</Typography>
+  return <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 4 }} data-reminders-page>
+    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
+      <Typography component="h1" variant="h5">{t('提醒与待办')}</Typography>
       <ButtonGroup variant="contained" size="small" disableElevation>
         <Button startIcon={<Add />} data-reminder-new onClick={() => create('todo')}>{t('新建')}</Button>
         <Button data-reminder-create-menu aria-label={t('选择新建类型')} aria-haspopup="menu" aria-expanded={Boolean(createMenu)} onClick={e => setCreateMenu(e.currentTarget)} sx={{ px: .5, minWidth: '30px !important' }}><ArrowDropDown fontSize="small" /></Button>

@@ -417,13 +417,13 @@ export function DictionaryPage({ settings, patch }: DictionaryProps): JSX.Elemen
         : i18n.t('还没有词汇')
 
   return (
-    <Box sx={{ px: 4, py: 4 }}>
+    <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 4 }}>
       {/*
         The 20px title and the 11.5px capacity counter are one text pair, so they
         share a baseline; the tab pills are controls and centre themselves.
       */}
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: -0.3 }}>{i18n.t(i18n.t('纠正规则'))}</Typography>
+        <Typography component="h1" variant="h5">{i18n.t(i18n.t('纠正规则'))}</Typography>
         <Typography
           sx={{ fontSize: 11.5, color: full ? 'warning.main' : 'text.secondary' }}
           aria-label={i18n.t(i18n.t('纠正规则数量'))}

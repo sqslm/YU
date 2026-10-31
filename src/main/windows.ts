@@ -64,15 +64,15 @@ interface Chrome {
  * otherwise Windows paints a dark canvas while the page is still light.
  */
 const HUB_CHROME: Record<'dark' | 'light', Chrome> = {
-  dark: { color: '#232323', symbolColor: '#f1f1f1', symbolDim: '#6b6b6b' },
-  light: { color: '#f6f6f8', symbolColor: '#1b1b1d', symbolDim: '#9a9aa2' }
+  dark: { color: '#191c1a', symbolColor: '#eef1e9', symbolDim: '#687168' },
+  light: { color: '#f5f5f0', symbolColor: '#25352b', symbolDim: '#929a8f' }
 }
 
 /**
  * The overlay is transparent and the renderer paints the 40px strip itself.
  *
  * An opaque overlay is a band the app cannot dim: opening a dialog darkens the
- * page to near-black while the native strip keeps `#232323` and its bright
+ * page to near-black while the native strip keeps the canvas colour and bright
  * glyphs, which reads as three buttons glowing on a black window. Transparent
  * lets the page (and its modal backdrop) show through, and `symbolDim` takes the
  * glyphs down with it — see `applyHubTheme`.

@@ -577,7 +577,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
   }, [feedbackBusy, feedbackFor, feedbackText])
 
   return (
-    <Box sx={{ px: { xs: 2.5, md: 4 }, py: 4 }}>
+    <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 4 }}>
       <Box component="section" aria-label={i18n.t('输入活动热力图')} sx={{ mb: 2.5 }}>
         <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>{i18n.t('输入活动 · 最近 52 周')}<Box component="span" sx={{ ml: 1, fontSize: 10.5 }}>{i18n.t('累计使用量，不随下方筛选或清空历史改变')}</Box></Typography>
         {heatStats && <UsageInsights view="heat" settings={settings ?? DEFAULT_SETTINGS} mode={themeMode} stats={heatStats} entries={entries} now={Date.now()} onOpenHistory={() => {}} />}
@@ -842,7 +842,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
           borderColor: 'divider'
         }}
       >
-        <Typography sx={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.1 }}>
+        <Typography component="h1" variant="h5">
           {i18n.t('历史记录')}
         </Typography>
         <Typography

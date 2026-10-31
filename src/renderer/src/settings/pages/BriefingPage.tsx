@@ -78,9 +78,9 @@ export function BriefingPage({ settings, onOpenSettings }: { settings: Settings;
   const empty = isEmptyHistory(records)
 
   return (
-    <Box sx={{ p: 3, maxWidth: 820 }} data-briefing-page>
-      <Stack direction="row" alignItems="center" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 0.75 }}>
-        <Typography variant="h6" sx={{ fontWeight: 650, mr: 1 }}>{formatBriefingDay(today, language)}</Typography>
+    <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 4, maxWidth: 1040, mx: 'auto' }} data-briefing-page>
+      <Stack direction="row" alignItems="center" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+        <Typography component="h1" variant="h5" sx={{ mr: 2 }}>{formatBriefingDay(today, language)}</Typography>
         <Button size="small" variant="contained" disabled={busy} data-briefing-refresh onClick={() => void refresh()}>
           {busy ? i18n.t('正在生成…') : i18n.t('立即生成')}
         </Button>
@@ -112,7 +112,7 @@ export function BriefingPage({ settings, onOpenSettings }: { settings: Settings;
 
       {error && <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setError('')}>{error}</Alert>}
 
-      <Box sx={{ border: 1, borderColor: 'divider', borderRadius: '10px', bgcolor: 'background.paper', p: 1.75, mb: 2 }}>
+      <Box sx={{ border: 1, borderColor: 'divider', borderRadius: '16px', bgcolor: 'background.paper', p: { xs: 2.5, md: 4 }, mb: 3 }}>
         {loading && <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>{i18n.t('读取中…')}</Typography>}
         {!loading && !briefing && <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>{i18n.t('还没有今天的简报，点「立即生成」看看。')}</Typography>}
         {briefing && (
