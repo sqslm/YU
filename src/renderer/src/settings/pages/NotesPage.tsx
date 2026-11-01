@@ -401,6 +401,35 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     pane.scrollTop += rect.top - paneRect.top - paneRect.height / 2 + rect.height / 2
     showMarker(target)
   }
+  /**
+   * Switching between the rich view and the markdown view rebuilds the editor, and
+   * for a frame the pane's content collapses while the new one mounts — which
+   * clamps `scrollTop` to 0 and drops the reader back at the top of the note. The
+   * offset is captured before the swap and restored once the new editor has
+   * measured itself.
+   */
+  const keepScroll = useRef(0)
+  const switchMode = (source: boolean): void => {
+    const pane = document.querySelector<HTMLElement>('[data-notes-detail-pane]')
+    keepScroll.current = pane?.scrollTop ?? 0
+    if (source) setMarkdownPreview(false)
+    else { void flushNow(); setMarkdownPreview(true) }
+  }
+  useEffect(() => {
+    const offset = keepScroll.current
+    if (offset <= 0) return
+    keepScroll.current = 0
+    const pane = document.querySelector<HTMLElement>('[data-notes-detail-pane]')
+    if (!pane) return
+    const restore = (): void => {
+      pane.scrollTop = Math.max(0, Math.min(offset, pane.scrollHeight - pane.clientHeight))
+    }
+    restore()
+    // CodeMirror builds its view in an effect of its own and ProseMirror lays out
+    // after the first frame, so one late pass is what makes the restore stick.
+    const id = window.setTimeout(restore, 140)
+    return () => window.clearTimeout(id)
+  }, [markdownPreview])
   const draftTextRef = useRef({ transcript: transcriptDraft, polished: polishedDraft })
   draftTextRef.current = { transcript: transcriptDraft, polished: polishedDraft }
   const hasOriginal = Boolean(selected && (selected.durationMs > 0 || audioKey || selected.polished.trim()))
@@ -1864,7 +1893,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                     variant={markdownPreview ? 'outlined' : 'contained'}
                     startIcon={<CodeRounded sx={{ fontSize: 15 }} />}
                     disabled={attachmentBusy}
-                    onClick={() => { if (markdownPreview) setMarkdownPreview(false); else { void flushNow(); setMarkdownPreview(true) } }}
+                    onClick={() => switchMode(markdownPreview)}
                     sx={{ fontSize: 11.5 }}
                   >{t(markdownPreview ? '源码' : '退出源码')}</Button>
                                     <Box sx={{ flex: 1 }} />
@@ -1876,13 +1905,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   onChange={next => commitDraft(selected.id, primaryField, next)}
                   noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
-                  onEditSource={() => { void flushNow(); setMarkdownPreview(false) }}
+                  onEditSource={() => switchMode(true)}
                   onError={setNotice}
                   onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
                 <MarkdownSourceEditor key={`source-${selected.id}:${primaryField}`} ref={bodyInputRef} field={primaryField} noteId={selected.id} value={primaryValue}
                   onChange={next => commitDraft(selected.id, primaryField, next)}
                   disabled={attachmentBusy || retranscribingId === selected.id}
-                  onEditRich={() => { void flushNow(); setMarkdownPreview(true) }}
+                  onEditRich={() => switchMode(false)}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')} />}
                 <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
                   <Button data-notes-copy={primaryField} size="small" disabled={!primaryDraft.trim()} onClick={() => void copyDraft(primaryDraft)} sx={{ fontSize: 11.5 }}>

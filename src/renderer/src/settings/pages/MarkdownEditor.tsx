@@ -28,6 +28,11 @@ export interface MarkdownEditorProps {
   onError?: (message: string) => void
 }
 
+/** True for both node shapes that carry a picture: Crepe's block atom and the inline image. */
+function isImageNode(node: { type: { name: string } } | null | undefined): boolean {
+  return node?.type.name === 'image' || node?.type.name === 'image-block'
+}
+
 /** Pause after the last keystroke before the parent hears about a change. */
 const EMIT_MS = 220
 
@@ -243,6 +248,43 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     } catch { /* the attachment store refused; the page reports its own error */ }
   }
 
+  /**
+   * The image node under the pointer.
+   *
+   * Neither the DOM alone nor the model alone is enough: Crepe wraps a block image
+   * in `.milkdown-image-block` and the picture is that wrapper's child, while the
+   * `src` attribute in the DOM is the proxied `typeless-attachment://` URL rather
+   * than the stored `attachments/…` path. Coordinates are tried first (the click
+   * landed on the picture), then the DOM node and its ancestors.
+   */
+  const locateImage = (element: HTMLElement, event: React.MouseEvent): { pos: number; from: number; to: number; attrs: Record<string, unknown> } | null => {
+    const holder: { at: { pos: number; from: number; to: number; attrs: Record<string, unknown> } | null } = { at: null }
+    readView((view) => {
+      const consider = (pos: number | null | undefined): boolean => {
+        if (pos == null || pos < 0 || pos > view.state.doc.content.size) return false
+        const node = view.state.doc.nodeAt(pos)
+        if (!node) return false
+        // Crepe's block image is the atom node `image-block` (its DOM *is* the
+        // `<img>`); a plain `image` is an inline picture inside a paragraph.
+        if (isImageNode(node)) {
+          holder.at = { pos, from: pos, to: pos + node.nodeSize, attrs: { ...node.attrs } }
+          return true
+        }
+        if (isImageNode(node.firstChild)) {
+          holder.at = { pos: pos + 1, from: pos, to: pos + node.nodeSize, attrs: { ...node.firstChild!.attrs } }
+          return true
+        }
+        return false
+      }
+      const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
+      if (coords && (consider(coords.pos) || consider(coords.inside))) return
+      for (let dom: HTMLElement | null = element; dom && dom !== view.dom; dom = dom.parentElement) {
+        try { if (consider(view.posAtDOM(dom, 0))) return } catch { /* this DOM node has no document position */ }
+      }
+    })
+    return holder.at
+  }
+
   const openMenu = (event: React.MouseEvent): void => {
     event.preventDefault()
     event.stopPropagation()
@@ -251,34 +293,20 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     // caption sits on top of the picture: match the wrapper too, otherwise an
     // image right-click fell through to the text menu.
     const target = (event.target as HTMLElement).closest('img, .milkdown-image-block, .milkdown-image-inline')
-    if (target) {
-      /**
-       * Where the image node itself lives. Crepe wraps a block image in a
-       * `milkdown-image-block` node, so the picture is the wrapper's child and
-       * every edit (ratio, delete) has to address that inner node. The holder
-       * object keeps the value readable after `readView`'s callback returns.
-       */
-      const found: { at: { pos: number; from: number; to: number; attrs: Record<string, unknown> } | null } = { at: null }
-      readView((view) => {
-        try {
-          const pos = view.posAtDOM(target, 0)
-          const wrapper = view.state.doc.nodeAt(pos)
-          if (wrapper?.type.name === 'image') found.at = { pos, from: pos, to: pos + wrapper.nodeSize, attrs: { ...wrapper.attrs } }
-          else if (wrapper?.firstChild?.type.name === 'image') {
-            found.at = { pos: pos + 1, from: pos, to: pos + wrapper.nodeSize, attrs: { ...wrapper.firstChild.attrs } }
-          }
-        } catch { /* the click landed between nodes */ }
-      })
-      const element = target instanceof HTMLImageElement ? target : target.querySelector('img')
-      const src = element?.getAttribute('src') || ''
-      const relative = src.startsWith('attachments/') ? src : ''
+    if (target instanceof HTMLElement) {
+      const image = locateImage(target, event)
+      // The stored path lives on the node (`attachments/…`); the DOM attribute is
+      // the proxied `typeless-attachment://` URL, which is what made every entry
+      // grey the first time round.
+      const stored = typeof image?.attrs.src === 'string' ? image.attrs.src : ''
+      const relative = stored.startsWith('attachments/') ? stored : ''
       const owner = sink.current?.noteId ?? ''
-      const ratio = Number(found.at?.attrs.ratio ?? 1)
+      const ratio = Number(image?.attrs.ratio ?? 1)
       const setRatio = (next: number): (() => void) => () => withView((view) => {
-        if (!found.at) return
-        const node = view.state.doc.nodeAt(found.at.pos)
-        if (node?.type.name !== 'image') return
-        view.dispatch(view.state.tr.setNodeMarkup(found.at.pos, undefined, { ...node.attrs, ratio: next }))
+        if (!image) return
+        const node = view.state.doc.nodeAt(image.pos)
+        if (!node || !isImageNode(node)) return
+        view.dispatch(view.state.tr.setNodeMarkup(image.pos, undefined, { ...node.attrs, ratio: next }))
       })
       const attachment = (run: (path: string) => Promise<unknown>): (() => void) => () => {
         if (!relative || !owner) return
@@ -294,7 +322,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
           {
             id: 'image-scale',
             label: t('缩放'),
-            disabled: !found.at,
+            disabled: !image,
             children: [
               { id: 'image-scale-50', label: '50%', checked: ratio === 0.5, run: setRatio(0.5) },
               { id: 'image-scale-75', label: '75%', checked: ratio === 0.75, run: setRatio(0.75) },
@@ -305,7 +333,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
           },
           { id: 'image-reveal', label: t('打开所在文件夹'), disabled: !relative, run: () => { if (relative) onAttachment(relative) } },
           { divider: true },
-          { id: 'image-delete', label: t('删除图片'), disabled: !found.at, run: () => withView((view) => { if (found.at) view.dispatch(view.state.tr.delete(found.at.from, found.at.to)) }) }
+          { id: 'image-delete', label: t('删除图片'), disabled: !image, run: () => withView((view) => { if (image) view.dispatch(view.state.tr.delete(image.from, image.to)) }) }
         ]
       })
       return
