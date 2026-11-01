@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Drawer,
   FormControlLabel,
   IconButton,
   InputBase,
@@ -35,6 +36,9 @@ import MoreHorizRounded from '@mui/icons-material/MoreHorizRounded'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined'
 import AttachFileRounded from '@mui/icons-material/AttachFileRounded'
+import CodeRounded from '@mui/icons-material/CodeRounded'
+import TocRounded from '@mui/icons-material/TocRounded'
+import CloseRounded from '@mui/icons-material/CloseRounded'
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayIcon from '@mui/icons-material/PlayArrow'
 import DownloadIcon from '@mui/icons-material/Download'
@@ -45,6 +49,7 @@ import { useTranslation } from 'react-i18next'
 import { MarkdownEditor } from './MarkdownEditor'
 import { MarkdownSourceEditor, type MarkdownSourceHandle } from './MarkdownSourceEditor'
 import { saveNoteEdit } from './notesSave'
+import { noteHeadings } from './noteOutline'
 import { noteBodyField } from '@shared/noteBody'
 import { attachmentMarkdown } from '@shared/noteAttachments'
 import type { NoteAttachment } from '@shared/noteAttachments'
@@ -248,6 +253,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
   const bodyInputRef = useRef<MarkdownSourceHandle | null>(null)
   const [markdownPreview, setMarkdownPreview] = useState(restoredView.markdownPreview)
+  /** 目录 drawer: the headings of the body as it stands right now. */
+  const [outlineOpen, setOutlineOpen] = useState(false)
   /**
    * 列表侧栏是否收起。跨会话记住（localStorage），因为窄窗口下用户收起一次
    * 就想一直收着；读失败按展开处理，不让坏值把列表锁死。
@@ -337,6 +344,24 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
    */
   const draftOwnerRef = useRef<string | null>(selectedNoteId)
   const primaryValue = draftOwnerRef.current === selectedNoteId ? primaryDraft : (selected?.[primaryField] ?? '')
+  const headings = useMemo(() => noteHeadings(primaryValue), [primaryValue])
+  /**
+   * Jumps the view to one heading of the body.
+   *
+   * The source view owns its document, so it gets the markdown offset and does
+   * its own scroll. The rich view is ProseMirror; its heading elements come out
+   * in document order, which is the order the outline was parsed in, so the index
+   * is enough — and scrolling the element needs no editor handle.
+   */
+  const revealHeading = (index: number): void => {
+    const heading = headings[index]
+    if (!heading) return
+    if (!markdownPreview) { bodyInputRef.current?.reveal(heading.offset); return }
+    const nodes = document.querySelectorAll<HTMLElement>(
+      '[data-notes-detail] .milkdown .ProseMirror h1, [data-notes-detail] .milkdown .ProseMirror h2, [data-notes-detail] .milkdown .ProseMirror h3, [data-notes-detail] .milkdown .ProseMirror h4, [data-notes-detail] .milkdown .ProseMirror h5, [data-notes-detail] .milkdown .ProseMirror h6'
+    )
+    nodes[index]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
   const draftTextRef = useRef({ transcript: transcriptDraft, polished: polishedDraft })
   draftTextRef.current = { transcript: transcriptDraft, polished: polishedDraft }
   const hasOriginal = Boolean(selected && (selected.durationMs > 0 || audioKey || selected.polished.trim()))
@@ -1684,10 +1709,30 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.dataTransfer.files)) } }}
                 onPaste={event => { if (event.clipboardData.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.clipboardData.files)) } }}>
                 <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap', gap: .5 }}>
-                  <ButtonGroup size="small" disabled={attachmentBusy}>
-                    <Button data-notes-mode="preview" variant={markdownPreview ? 'contained' : 'outlined'} onClick={() => { void flushNow(); setMarkdownPreview(true) }}>{t('编辑')}</Button>
-                    <Button data-notes-mode="source" variant={!markdownPreview ? 'contained' : 'outlined'} onClick={() => setMarkdownPreview(false)}>Markdown {t('源码')}</Button>
-                  </ButtonGroup>
+                  {/* One switch instead of a two-button group: in the rich view it
+                      says 源码 and dives into the markdown, in the source view it
+                      says 退出源码 and comes back. The icon stays the same so the
+                      position of the control never moves under the pointer. */}
+                  <Button
+                    data-notes-mode={markdownPreview ? 'source' : 'preview'}
+                    size="small"
+                    variant={markdownPreview ? 'outlined' : 'contained'}
+                    startIcon={<CodeRounded sx={{ fontSize: 15 }} />}
+                    disabled={attachmentBusy}
+                    onClick={() => { if (markdownPreview) setMarkdownPreview(false); else { void flushNow(); setMarkdownPreview(true) } }}
+                    sx={{ fontSize: 11.5 }}
+                  >{t(markdownPreview ? '源码' : '退出源码')}</Button>
+                  <Tooltip title={t('章节目录')}>
+                    <span><Button
+                      data-notes-outline-toggle
+                      size="small"
+                      variant="outlined"
+                      startIcon={<TocRounded sx={{ fontSize: 15 }} />}
+                      disabled={attachmentBusy || !headings.length}
+                      onClick={() => setOutlineOpen(true)}
+                      sx={{ fontSize: 11.5 }}
+                    >{t('目录')}</Button></span>
+                  </Tooltip>
                                     <Box sx={{ flex: 1 }} />
                   <Tooltip title={t('支持粘贴或拖入，附件保存到随记目录')}><span><Button data-notes-insert-attachment size="small" startIcon={<AttachFileRounded sx={{ fontSize: 15 }} />} disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()} sx={{ fontSize: 11, color: 'text.secondary' }}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button></span></Tooltip>
                 </Stack>
@@ -1811,6 +1856,55 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       </Box>
 
 
+
+      {/* 目录: the headings of the body, parsed from the markdown, so the same list
+          serves the rich view and the source view. Clicking a row closes the
+          drawer and takes the reader there. */}
+      <Drawer
+        anchor="left"
+        open={outlineOpen}
+        onClose={() => setOutlineOpen(false)}
+        data-notes-outline
+        slotProps={{ paper: { sx: { width: 288, p: 1.25 } } }}
+      >
+        <Stack direction="row" alignItems="center" sx={{ px: .5, pb: 1, mb: .5, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography sx={{ flex: 1, fontSize: 13, fontWeight: 650 }}>{t('章节目录')}</Typography>
+          <IconButton size="small" aria-label={t('关闭')} onClick={() => setOutlineOpen(false)}><CloseRounded sx={{ fontSize: 17 }} /></IconButton>
+        </Stack>
+        {headings.length === 0
+          ? <Typography sx={{ px: .75, py: 1.5, fontSize: 12, color: 'text.secondary' }}>{t('这篇随记还没有标题。')}</Typography>
+          : headings.map((heading, index) => (
+            <Box
+              key={`${heading.offset}-${index}`}
+              component="button"
+              type="button"
+              data-notes-outline-item={index}
+              onClick={() => { revealHeading(index); setOutlineOpen(false) }}
+              sx={{
+                display: 'block',
+                width: '100%',
+                border: 0,
+                bgcolor: 'transparent',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                font: 'inherit',
+                py: .6,
+                pr: .75,
+                // Depth is the only thing that has to be visible at a glance; the
+                // size drop is what makes the tree readable without a rail.
+                pl: .75 + (heading.level - 1) * 1.25,
+                fontSize: heading.level <= 2 ? 12.8 : 12,
+                fontWeight: heading.level <= 2 ? 600 : 500,
+                color: heading.level <= 2 ? 'text.primary' : 'text.secondary',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+            >{heading.text}</Box>
+          ))}
+      </Drawer>
 
       <Menu anchorEl={createMenuAt} open={Boolean(createMenuAt)} onClose={() => setCreateMenuAt(null)}>
         <MenuItem data-notes-create-blank onClick={() => void createTextNote()} sx={{ fontSize: 12.5 }}>{t('notes.newBlankText')}</MenuItem>

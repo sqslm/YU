@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Box, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { Crepe } from '@milkdown/crepe'
+import { EditorView as CodeMirrorView } from '@codemirror/view'
 import '@milkdown/crepe/theme/common/style.css'
 import { replaceAll } from '@milkdown/kit/utils'
 import { editorViewCtx } from '@milkdown/kit/core'
@@ -44,6 +45,27 @@ const EMIT_MS = 220
 export function MarkdownEditor({ value, onChange, noteId, onAttachment, placeholder = '', minHeight = '42vh', disabled = false, onEditSource }: MarkdownEditorProps): JSX.Element {
   const theme = useTheme()
   const { t } = useTranslation()
+  /**
+   * The CodeMirror theme handed to Crepe's code blocks.
+   *
+   * Crepe's own default is `@codemirror/theme-one-dark`, so on a light pack the
+   * block drew a dark editor's colours on the porcelain sheet: light-grey code,
+   * a charcoal active-line chip in the gutter. Light packs get the app's own
+   * colours instead; dark packs keep One Dark, which already fits them. Syntax
+   * colours come from CodeMirror's default highlight style that Crepe's
+   * `basicSetup` installs, so this only has to own surfaces and ink.
+   */
+  const codeTheme = theme.palette.mode === 'dark'
+    ? {}
+    : {
+      theme: [CodeMirrorView.theme({
+        '&': { backgroundColor: 'transparent', color: theme.palette.text.primary },
+        '.cm-content': { caretColor: theme.palette.primary.main, fontFamily: 'Consolas, "Cascadia Mono", monospace' },
+        '.cm-gutters': { backgroundColor: 'transparent', color: theme.palette.text.disabled, border: 'none' },
+        '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },
+        '.cm-selectionBackground, ::selection': { backgroundColor: theme.palette.action.selected }
+      }, { dark: false })]
+    }
   const host = useRef<HTMLDivElement | null>(null)
   const crepe = useRef<Crepe | null>(null)
   /** The last markdown this component either loaded or emitted. */
@@ -400,7 +422,13 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
           // Stored markdown keeps note-relative paths; the renderer resolves them to
           // the note attachment scheme, the only way an `<img>` may reach a file.
           proxyDomURL: (url: string) => url.startsWith('attachments/') ? noteAttachmentUrl(noteOwner, url) : url
-        }
+        },
+        // Crepe hard-wires One Dark into its code blocks, so a light note got a
+        // dark editor's light-grey text on porcelain plus a charcoal
+        // active-line chip — the "代码块显示异常" report. Light packs get a
+        // CodeMirror theme built from the same palette; dark packs keep One
+        // Dark, which is already the right palette there.
+        [Crepe.Feature.CodeMirror]: codeTheme
       }
     })
     instance.on((listener) => {
@@ -532,6 +560,27 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         '& .milkdown .ProseMirror blockquote': { ml: 0, pl: 2, borderLeft: '3px solid', borderColor: 'divider', color: theme.palette.text.secondary },
         '& .milkdown .ProseMirror code': { fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: '0.92em' },
         '& .milkdown .ProseMirror pre': { p: 1.5, borderRadius: 1, bgcolor: theme.palette.action.hover, overflowX: 'auto' },
+        // Crepe's code block is `--crepe-color-surface` (the page's own paper), so on
+        // the porcelain sheet the block read as an empty white band with a stray dark
+        // line-number chip. Tint it, outline it, and paint the CodeMirror gutters with
+        // the same tokens as the rest of the app.
+        '& .milkdown .milkdown-code-block': {
+          bgcolor: theme.palette.action.hover,
+          border: '1px solid',
+          borderColor: theme.palette.divider,
+          borderRadius: '8px',
+          px: 1.5,
+          pt: 0.75,
+          pb: 1,
+          my: 1
+        },
+        '& .milkdown .milkdown-code-block .cm-editor, & .milkdown .milkdown-code-block .cm-gutters': { bgcolor: 'transparent' },
+        '& .milkdown .milkdown-code-block .cm-activeLine, & .milkdown .milkdown-code-block .cm-activeLineGutter': { bgcolor: 'transparent' },
+        '& .milkdown .milkdown-code-block .cm-gutterElement': { color: theme.palette.text.disabled },
+        // Crepe fades the language chip out until hover, which leaves the block's
+        // whole first row blank on screen. Keep it visible: it names the language
+        // and is the only way to change it.
+        '& .milkdown .milkdown-code-block .tools .language-button': { color: theme.palette.text.secondary, opacity: 1 },
         '& .milkdown .ProseMirror table': { borderCollapse: 'collapse', width: '100%' },
         '& .milkdown .ProseMirror th, & .milkdown .ProseMirror td': { border: '1px solid', borderColor: theme.palette.divider, p: 1, textAlign: 'left' },
         '& .milkdown .ProseMirror img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },

@@ -13,6 +13,8 @@ export interface MarkdownSourceHandle {
   selection(): { from: number; to: number } | null
   /** Replaces the current selection (used by the attachment button). */
   insert(text: string): void
+  /** Puts the caret on a document offset and scrolls it into view (目录 drawer). */
+  reveal(offset: number): void
 }
 
 export interface MarkdownSourceEditorProps {
@@ -154,6 +156,16 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
       const current = view.current
       if (!current) return
       current.dispatch(current.state.replaceSelection(text))
+      current.focus()
+    },
+    reveal: (offset: number) => {
+      const current = view.current
+      if (!current) return
+      const pos = Math.max(0, Math.min(offset, current.state.doc.length))
+      current.dispatch({
+        selection: EditorSelection.cursor(pos),
+        effects: EditorView.scrollIntoView(pos, { y: 'center' })
+      })
       current.focus()
     }
   }), [])

@@ -25,11 +25,9 @@ import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
 import { RemindersPage } from './pages/RemindersPage'
 import { CalendarPage } from './pages/CalendarPage'
-import { BriefingPage } from './pages/BriefingPage'
 import type { ReminderView } from '@shared/reminders'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
-import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 import { DictionaryPage } from './pages/Dictionary'
 import { IconBook, IconChart, IconClock, IconSettings } from './icons'
 import { Onboarding } from './pages/Onboarding'
@@ -43,7 +41,7 @@ import { MissedReminders } from './MissedReminders'
 import { UpdatePill } from './UpdatePill'
 import { QuotaProvider, QuotaSidebar } from './Quota'
 
-type Page = 'chat' | 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'briefing' | 'calendar'
+type Page = 'chat' | 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'calendar'
 
 /** Label keys resolve through i18next; the ids stay stable for routing. */
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
@@ -52,7 +50,6 @@ const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
   { id: 'reminders', labelKey: '提醒与待办', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
   { id: 'calendar', labelKey: '日程', icon: <CalendarMonthIcon sx={{ fontSize: 18 }} /> },
-  { id: 'briefing', labelKey: '简报', icon: <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} /> },
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
   { id: 'dictionary', labelKey: 'nav.dictionary', icon: <IconBook /> }
 ]
@@ -85,6 +82,12 @@ export function App(): JSX.Element {
   }, [])
   /** Scene name the home page asked to look up; history seeds its search box with it. */
   const [historyQuery, setHistoryQuery] = useState<string | undefined>(undefined)
+  /**
+   * 简报 lives inside 日程 now, so the calendar owns which of the two panes is
+   * showing. It is held here because the assistant still navigates to the
+   * briefing by name (`hubView().page === 'briefing'`).
+   */
+  const [calendarTab, setCalendarTab] = useState<'schedule' | 'briefing'>('schedule')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [replayTour, setReplayTour] = useState(false)
   const [settingsSection, setSettingsSection] = useState('general')
@@ -94,7 +97,9 @@ export function App(): JSX.Element {
       if (view.page === 'settings') setSettingsSection('general')
       setSettingsOpen(view.page === 'settings')
       if (view.page === 'notes') setNoteToOpen(view.noteId ? { id: view.noteId } : undefined)
-      if (view.page !== 'settings') setPage(view.page === 'overview' ? 'home' : view.page === 'corrections' ? 'dictionary' : view.page)
+      // 简报 is a pane of 日程 now: the assistant's "打开简报" lands on it.
+      if (view.page === 'briefing') setCalendarTab('briefing')
+      if (view.page !== 'settings') setPage(view.page === 'overview' ? 'home' : view.page === 'corrections' ? 'dictionary' : view.page === 'briefing' ? 'calendar' : view.page)
     }) }
     const off = window.api.assistant.onNavigate(navigate)
     navigate()
@@ -180,8 +185,14 @@ export function App(): JSX.Element {
     }
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} openNote={noteToOpen} />
     if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen({ id }); setPage('notes') }} />
-    if (page === 'briefing') return <BriefingPage settings={settings} onOpenSettings={() => { setSettingsSection('life'); setSettingsOpen(true) }} />
-    if (page === 'calendar') return <CalendarPage />
+    if (page === 'calendar') return (
+      <CalendarPage
+        settings={settings}
+        tab={calendarTab}
+        onTab={setCalendarTab}
+        onOpenSettings={() => { setSettingsSection('life'); setSettingsOpen(true) }}
+      />
+    )
     if (page === 'dictionary') return <DictionaryPage settings={settings} patch={patch} />
     return (
       <HomePage

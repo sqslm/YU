@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Box, Divider, ListItemText, Menu, MenuItem, Typography } from '@mui/material'
+import { createPortal } from 'react-dom'
+import { Box, Divider, ListItemText, Menu, MenuItem, Paper, Typography, useTheme } from '@mui/material'
 import CheckRounded from '@mui/icons-material/CheckRounded'
 import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded'
 
@@ -25,6 +26,23 @@ export interface NoteContextMenuProps {
 /** Grace period before a hovered submenu closes, so the diagonal move survives. */
 const SUBMENU_CLOSE_MS = 180
 
+/** Width the submenu needs before it opens to the left of its row instead. */
+const SUBMENU_WIDTH = 220
+
+/** A row is 30 px and the panel pads 4 px top and bottom; used to keep it on screen. */
+const ROW_HEIGHT = 30
+const PANEL_PADDING = 8
+
+interface SubmenuState {
+  id: string
+  entries: NoteMenuEntry[]
+  /** Viewport position of the panel, already flipped and clamped. */
+  left: number
+  top: number
+  /** Whether the panel sits left of its row (no room on the right). */
+  flip: boolean
+}
+
 /**
  * The right-click menu of a note body.
  *
@@ -35,20 +53,52 @@ const SUBMENU_CLOSE_MS = 180
  * platform default, which is what the user asked for.
  *
  * Submenus open on **hover**, the way Typora's menu does: reaching 标题 or 列表
- * should not require a click first. A click still works (keyboard, touch, and
- * anyone who expects it), and the close is delayed so moving diagonally into the
- * submenu does not dismiss it.
+ * 与块 should not require a click first. A click still works (keyboard, touch,
+ * and anyone who expects it).
+ *
+ * The submenu is *not* a second `Menu`. A second MUI menu is a second modal layer
+ * with its own full-screen backdrop, sitting on top of the first: the row under
+ * the pointer reported `mouseleave` the moment the panel appeared, the close timer
+ * dropped the panel, the row reported `mouseenter` again, and the pair oscillated
+ * several times a second ("二级菜单一直闪"). A plain positioned `Paper` rendered
+ * into a portal has no modal layer of its own, so the pointer simply travels from
+ * the row into the panel and the hover stays alive. The pointer-position guard
+ * below is the belt to that braces: nothing closes while the pointer is still over
+ * the row or the panel.
  */
 export function NoteContextMenu({ anchor, entries, onClose }: NoteContextMenuProps): JSX.Element {
-  const [submenu, setSubmenu] = useState<{ id: string; anchor: HTMLElement; entries: NoteMenuEntry[] } | null>(null)
+  const theme = useTheme()
+  const [submenu, setSubmenu] = useState<SubmenuState | null>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** The row whose submenu is open, in viewport coordinates. */
+  const anchorRow = useRef<HTMLElement | null>(null)
+  /** Live pointer position: the modal layer makes the enter/leave stream lie. */
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+  const panel = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const track = (event: MouseEvent): void => { pointer.current = { x: event.clientX, y: event.clientY } }
+    document.addEventListener('mousemove', track, true)
+    return () => document.removeEventListener('mousemove', track, true)
+  }, [])
 
   const cancelClose = (): void => {
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null }
   }
+  /** True while the pointer still sits in `element`; 2 px of slack for the edge. */
+  const pointerInside = (element: HTMLElement | null | undefined): boolean => {
+    const point = pointer.current
+    if (!element || !point) return false
+    const rect = element.getBoundingClientRect()
+    return point.x >= rect.left - 2 && point.x <= rect.right + 2 && point.y >= rect.top - 2 && point.y <= rect.bottom + 2
+  }
   const scheduleClose = (): void => {
     cancelClose()
-    closeTimer.current = setTimeout(() => setSubmenu(null), SUBMENU_CLOSE_MS)
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null
+      if (pointerInside(anchorRow.current) || pointerInside(panel.current)) return
+      setSubmenu(null)
+    }, SUBMENU_CLOSE_MS)
   }
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
 
@@ -60,7 +110,20 @@ export function NoteContextMenu({ anchor, entries, onClose }: NoteContextMenuPro
       const open = submenu?.id === entry.id
       const show = (element: HTMLElement): void => {
         cancelClose()
-        setSubmenu({ id: entry.id, anchor: element, entries: entry.children })
+        anchorRow.current = element
+        const rowRect = element.getBoundingClientRect()
+        // Open towards the editor when the panel would not fit on the right — the
+        // note pane puts the menu close to the window edge, and a panel clamped
+        // back over its own row is what the flicker used to look like.
+        const flip = rowRect.right + SUBMENU_WIDTH + 8 > window.innerWidth
+        const height = entry.children.length * ROW_HEIGHT + PANEL_PADDING
+        setSubmenu({
+          id: entry.id,
+          entries: entry.children,
+          flip,
+          left: Math.round(flip ? rowRect.left - SUBMENU_WIDTH - 4 : rowRect.right + 4),
+          top: Math.round(Math.max(8, Math.min(rowRect.top, window.innerHeight - height - 8)))
+        })
       }
       return (
         <MenuItem
@@ -71,7 +134,6 @@ export function NoteContextMenu({ anchor, entries, onClose }: NoteContextMenuPro
           aria-expanded={open}
           selected={open}
           onMouseEnter={(event) => show(event.currentTarget)}
-          onMouseLeave={scheduleClose}
           onClick={(event) => show(event.currentTarget)}
           sx={{ gap: 1, py: 0.5, minHeight: 30 }}
         >
@@ -87,6 +149,9 @@ export function NoteContextMenu({ anchor, entries, onClose }: NoteContextMenuPro
         data-note-menu-item={entry.id}
         data-note-menu-checked={entry.checked ? 'on' : undefined}
         disabled={entry.disabled}
+        // Hovering a plain entry means the open panel no longer belongs to the row
+        // the pointer just left; the guard above still protects 标题/列表与块.
+        onMouseEnter={scheduleClose}
         onClick={() => { entry.run(); close() }}
         sx={{ gap: 2, py: 0.5, minHeight: 30 }}
       >
@@ -112,20 +177,31 @@ export function NoteContextMenu({ anchor, entries, onClose }: NoteContextMenuPro
         {entries.map((entry, index) => row(entry, `root-${index}`))}
         {!entries.length && <Typography sx={{ px: 2, py: 1, fontSize: 12, color: 'text.disabled' }}>—</Typography>}
       </Menu>
-      <Menu
-        open={Boolean(submenu)}
-        onClose={() => setSubmenu(null)}
-        anchorEl={submenu?.anchor ?? null}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-        data-note-context-submenu
-        // `disableRestoreFocus` keeps the editor's DOM focus where the selection
-        // lives while the pointer travels between the two papers.
-        disableRestoreFocus
-        slotProps={{ paper: { sx: { minWidth: 196, py: 0.5, ml: 0.5 }, onMouseEnter: cancelClose, onMouseLeave: scheduleClose } }}
-      >
-        {submenu?.entries.map((entry, index) => row(entry, `sub-${index}`))}
-      </Menu>
+      {submenu && createPortal(
+        <Paper
+          ref={panel}
+          elevation={8}
+          data-note-context-submenu
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+          sx={{
+            position: 'fixed',
+            left: submenu.left,
+            top: submenu.top,
+            zIndex: theme.zIndex.modal + 1,
+            width: SUBMENU_WIDTH,
+            py: 0.5,
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 1
+          }}
+        >
+          <Box component="ul" role="menu" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+            {submenu.entries.map((entry, index) => row(entry, `sub-${index}`))}
+          </Box>
+        </Paper>,
+        document.body
+      )}
     </>
   )
 }

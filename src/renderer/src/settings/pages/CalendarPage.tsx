@@ -12,6 +12,8 @@ import {
   MenuItem,
   Stack,
   Switch,
+  Tab,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -22,15 +24,20 @@ import Add from '@mui/icons-material/Add'
 import ChevronLeft from '@mui/icons-material/ChevronLeft'
 import ChevronRight from '@mui/icons-material/ChevronRight'
 import type { CalendarEvent } from '@shared/calendar'
+import type { Settings } from '@shared/types'
 import { MAX_EVENT_LEAD_MINUTES, MAX_EVENT_NOTES, MAX_EVENT_TITLE, formatEventTime } from '@shared/calendar'
 import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
 import { emptyForm, formOf, toInput, withStartDate, type CalendarForm as Form } from './calendarForm'
 import { DateTimeField } from './DateTimeField'
+import { BriefingPage } from './BriefingPage'
 import i18n from '../../i18n'
 
 /**
  * The hub's 日程 page: a month grid on the left, the selected day's plan on the
- * right, and the same event rows in both the month and the list view.
+ * right, and the same event rows in both the month and the list view. The second
+ * tab is 简报: it is entirely about today's schedule (events, due todos, overdue
+ * items, tomorrow), so it reads as a view of the calendar rather than a page of
+ * its own — the sidebar no longer carries a separate 简报 entry.
  *
  * Two things shape the code more than the layout does. First, the store is owned
  * by the main process and the assistant writes to it too, so every mutation is
@@ -120,7 +127,14 @@ function EventRow({ row, language, busy, onEdit, onSettle }: {
   )
 }
 
-export function CalendarPage(): JSX.Element {
+export type CalendarTab = 'schedule' | 'briefing'
+
+export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
+  settings: Settings
+  tab: CalendarTab
+  onTab: (next: CalendarTab) => void
+  onOpenSettings?: () => void
+}): JSX.Element {
   const language: 'zh' | 'en' = i18n.resolvedLanguage === 'en' ? 'en' : 'zh'
   /** Recomputed per render: the page can sit open past midnight. */
   const today = dayKeyOf(Date.now())
@@ -267,9 +281,22 @@ export function CalendarPage(): JSX.Element {
     // The page fills the content area: a month grid that stops halfway leaves a
     // dead band under the cards, and rows that cannot grow waste the height a
     // calendar is best at showing.
-    <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 3, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }} data-calendar-page>
+    <Box sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }} data-calendar-page>
+      <Box sx={{ flex: '0 0 auto', px: { xs: 2.5, md: 4, lg: 5 }, pt: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tab} onChange={(_event, next) => onTab(next === 'briefing' ? 'briefing' : 'schedule')} data-calendar-tabs>
+          <Tab value="schedule" label={i18n.t('日程')} sx={{ minHeight: 38, fontSize: 13 }} />
+          <Tab value="briefing" label={i18n.t('简报')} sx={{ minHeight: 38, fontSize: 13 }} />
+        </Tabs>
+      </Box>
+      {tab === 'briefing' ? (
+        // 简报 already draws its own header and padding, so the pane only owns
+        // the scrolling.
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }} data-calendar-briefing>
+          <BriefingPage settings={settings} onOpenSettings={onOpenSettings} />
+        </Box>
+      ) : (
+      <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2, pb: 3, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Stack direction="row" alignItems="center" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2.5 }}>
-        <Typography component="h1" variant="h5" sx={{ mr: 2 }}>{i18n.t('日程')}</Typography>
         <Tooltip title={i18n.t('上一周')}>
           <IconButton size="small" disabled={busy} aria-label={i18n.t('上一周')} onClick={() => select(shiftDayKey(selected, -7))}>
             <ChevronLeft fontSize="small" />
@@ -484,6 +511,8 @@ export function CalendarPage(): JSX.Element {
           <Button variant="contained" disabled={busy} onClick={() => void save()}>{i18n.t('保存')}</Button>
         </DialogActions>
       </Dialog>
+      </Box>
+      )}
     </Box>
   )
 }
