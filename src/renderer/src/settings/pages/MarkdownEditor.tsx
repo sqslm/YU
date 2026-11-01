@@ -10,6 +10,7 @@ import { AllSelection, TextSelection, type Command } from '@milkdown/kit/prose/s
 import { lift, setBlockType, toggleMark, wrapIn } from '@milkdown/kit/prose/commands'
 import { noteAttachmentUrl } from '@shared/noteAttachments'
 import { NoteContextMenu, type NoteMenuEntry } from './NoteContextMenu'
+import { guardEditorSelectionDrag } from './editorDragGuard'
 
 export interface MarkdownEditorProps {
   value: string
@@ -346,6 +347,13 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
   useEffect(() => {
     const root = host.current
     if (!root) return
+    // Pressing inside an existing selection must extend it, not drag it: without
+    // this the browser starts an HTML5 drag of the selected text, ProseMirror
+    // treats the drop as a move, and the paragraph splits in two under the
+    // cursor ("选中文字会突然跳一下" / "重新选字时把整段字拖走了").
+    const releaseDragGuard = guardEditorSelectionDrag(root, () => {
+      try { return crepe.current?.editor.action(ctx => ctx.get(editorViewCtx)) ?? null } catch { return null }
+    })
     let disposed = false
     // Everything below is a snapshot of *this* note. Reading it back from `props`
     // later is how a teardown flush used to write note A's text into note B.
@@ -431,6 +439,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null }
       sink.current = null
       crepe.current = null
+      releaseDragGuard()
       mount.remove()
       void instance.destroy()
     }
@@ -534,12 +543,36 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         '& .milkdown .milkdown-toolbar .toolbar-item svg': { color: theme.palette.text.secondary, fill: theme.palette.text.secondary },
         '& .milkdown .milkdown-toolbar .toolbar-item:hover svg': { color: theme.palette.text.primary, fill: theme.palette.text.primary },
         '& .milkdown .milkdown-toolbar .toolbar-item.active svg': { color: theme.palette.primary.main, fill: theme.palette.primary.main },
-        '& .milkdown .milkdown-block-handle': { zIndex: 4 },
+        // The handle is drawn in the gutter the note page reserves for it. Crepe
+        // paints its two icons with `--crepe-color-outline`, i.e. the 11 %-ink
+        // divider, so the ＋ and the grip all but vanished on the porcelain field
+        // ("太淡了"). Icons now use the secondary text colour with a themed hover
+        // pad, so every pack — 青瓷, 苹果风, 粗野 — gets a handle you can see and
+        // aim at, and only the opacity animates: transitioning `all` made the
+        // handle slide in from its previous spot the first time it appeared.
+        '& .milkdown .milkdown-block-handle': { zIndex: 4, gap: '2px', transition: 'opacity .15s ease' },
         // The handle is drawn outside the block it belongs to; 26 px items plus
         // the gutter NotesPage reserves for it keep it inside the pane instead
         // of being clipped in half.
-        '& .milkdown .milkdown-block-handle .operation-item': { width: 26, height: 26, padding: '3px' },
-        '& .milkdown .milkdown-block-handle .operation-item svg': { width: 18, height: 18 }
+        '& .milkdown .milkdown-block-handle .operation-item': {
+          width: 26,
+          height: 26,
+          padding: '3px',
+          borderRadius: '6px',
+          transition: 'background-color .15s ease'
+        },
+        '& .milkdown .milkdown-block-handle .operation-item svg': {
+          width: 18,
+          height: 18,
+          fill: theme.palette.text.secondary,
+          color: theme.palette.text.secondary
+        },
+        '& .milkdown .milkdown-block-handle .operation-item:hover': { bgcolor: theme.palette.action.hover },
+        '& .milkdown .milkdown-block-handle .operation-item:hover svg': {
+          fill: theme.palette.text.primary,
+          color: theme.palette.text.primary
+        },
+        '& .milkdown .milkdown-block-handle .operation-item.active': { bgcolor: theme.palette.action.selected }
       }}
     >
       <NoteContextMenu anchor={menu ? { x: menu.x, y: menu.y } : null} entries={menu?.entries ?? []} onClose={() => setMenu(null)} />
