@@ -2661,5 +2661,7 @@
   "图片另存为": "Save image as",
   "缩放": "Scale",
   "原始大小": "Original size",
-  "打开所在文件夹": "Open containing folder"
+  "打开所在文件夹": "Open containing folder",
+  "回到顶部": "Back to top",
+  "回到底部": "Back to bottom"
 }

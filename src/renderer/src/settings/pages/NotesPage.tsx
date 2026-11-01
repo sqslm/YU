@@ -36,6 +36,8 @@ import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined'
 import AttachFileRounded from '@mui/icons-material/AttachFileRounded'
 import CodeRounded from '@mui/icons-material/CodeRounded'
+import ArrowUpwardRounded from '@mui/icons-material/ArrowUpwardRounded'
+import ArrowDownwardRounded from '@mui/icons-material/ArrowDownwardRounded'
 import TocRounded from '@mui/icons-material/TocRounded'
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayIcon from '@mui/icons-material/PlayArrow'
@@ -127,6 +129,19 @@ const pillSx = (active: boolean) => ({
   '&:hover': { bgcolor: active ? 'action.selected' : 'action.hover' },
   '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 }
 })
+
+/** The floating jump buttons: a paper chip that reads as an overlay on any pack. */
+const floatingButtonSx = {
+  width: 36,
+  height: 36,
+  bgcolor: 'background.paper',
+  border: '1px solid',
+  borderColor: 'divider',
+  boxShadow: 2,
+  color: 'text.secondary',
+  '&:hover': { color: 'text.primary', bgcolor: 'background.paper' },
+  '&.Mui-disabled': { bgcolor: 'background.paper', opacity: 0.4 }
+}
 
 /** Compact text button for the batch bar; five of them share one row. */
 const bulkButtonSx = {
@@ -415,6 +430,31 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     if (source) setMarkdownPreview(false)
     else { void flushNow(); setMarkdownPreview(true) }
   }
+  /** Scrolling pane of the reading area: the floating buttons jump it, not the window. */
+  const detailPaneRef = useRef<HTMLDivElement | null>(null)
+  /** Whether the pane is already at an end, so the matching button can grey out. */
+  const [atEdge, setAtEdge] = useState({ top: true, bottom: true })
+  const scrollPane = (to: 'top' | 'bottom'): void => {
+    const pane = detailPaneRef.current
+    if (!pane) return
+    pane.scrollTo({ top: to === 'top' ? 0 : pane.scrollHeight, behavior: 'smooth' })
+  }
+  // Re-measured on scroll and whenever the body's height can change: the note, the
+  // view (rich/source) and the pane's own size all move the two ends.
+  useEffect(() => {
+    const pane = detailPaneRef.current
+    if (!pane) return
+    const measure = (): void => {
+      const max = pane.scrollHeight - pane.clientHeight
+      const next = { top: pane.scrollTop <= 2, bottom: max <= 2 || pane.scrollTop >= max - 2 }
+      setAtEdge((prev) => (prev.top === next.top && prev.bottom === next.bottom ? prev : next))
+    }
+    measure()
+    pane.addEventListener('scroll', measure, { passive: true })
+    const observer = new ResizeObserver(measure)
+    observer.observe(pane)
+    return () => { pane.removeEventListener('scroll', measure); observer.disconnect() }
+  }, [markdownPreview, selectedNoteId])
   useEffect(() => {
     const offset = keepScroll.current
     if (offset <= 0) return
@@ -1682,6 +1722,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
         </Box>
 
         <Box
+          ref={detailPaneRef}
           data-notes-detail-pane
           sx={{
             flex: 1,
@@ -1857,10 +1898,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 <Button data-notes-delete size="small" color="error" startIcon={<IconTrash size={14} />} onClick={() => setDeleteOpen(true)}>{t('notes.delete')}</Button>
               </Stack>
               </Box>}
-              {/* The note's operations stay reachable while reading a long body: the
-                  row sticks to the top of the detail pane, so 源码 / 插入图片 do not
-                  require scrolling back to the head of the note. The background has
-                  to be opaque — text scrolls underneath it. */}
+              {/* Attachments are the one action that stays on the head of the body; the
+                  view switch and the two jumps live in the floating group at the foot of
+                  the page, where they follow the reader. */}
               <Box data-notes-primary sx={{ mt: 2.5, pt: 2, borderTop: 1, borderColor: 'divider' }}
                 onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
                 onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.dataTransfer.files)) } }}
@@ -1883,19 +1923,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                     borderColor: 'divider'
                   }}
                 >
-                  {/* One switch instead of a two-button group: in the rich view it
-                      says 源码 and dives into the markdown, in the source view it
-                      says 退出源码 and comes back. The icon stays the same so the
-                      position of the control never moves under the pointer. */}
-                  <Button
-                    data-notes-mode={markdownPreview ? 'source' : 'preview'}
-                    size="small"
-                    variant={markdownPreview ? 'outlined' : 'contained'}
-                    startIcon={<CodeRounded sx={{ fontSize: 15 }} />}
-                    disabled={attachmentBusy}
-                    onClick={() => switchMode(markdownPreview)}
-                    sx={{ fontSize: 11.5 }}
-                  >{t(markdownPreview ? '源码' : '退出源码')}</Button>
                                     <Box sx={{ flex: 1 }} />
                   <Tooltip title={t('支持粘贴或拖入，附件保存到随记目录')}><span><Button data-notes-insert-attachment size="small" startIcon={<AttachFileRounded sx={{ fontSize: 15 }} />} disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()} sx={{ fontSize: 11, color: 'text.secondary' }}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button></span></Tooltip>
                 </Stack>
@@ -2020,6 +2047,46 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       </Box>
 
 
+
+      {/* 回到顶部 / 回到底部 / 查看源码: pinned to the window's lower right, so they follow
+          the reader instead of sitting at the head of the note. The scroll ones grey out
+          at the end they would jump to; the source switch keeps the scroll position. */}
+      {selected && (
+        <Stack data-notes-floating direction="column" spacing={0.75} sx={{ position: 'fixed', right: { xs: 14, sm: 44 }, bottom: { xs: 14, sm: 34 }, zIndex: 4 }}>
+          <Tooltip title={t('回到顶部')} placement="left">
+            <span>
+              <IconButton data-notes-scroll="top" aria-label={t('回到顶部')} disabled={atEdge.top} onClick={() => scrollPane('top')} sx={floatingButtonSx}>
+                <ArrowUpwardRounded sx={{ fontSize: 19 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('回到底部')} placement="left">
+            <span>
+              <IconButton data-notes-scroll="bottom" aria-label={t('回到底部')} disabled={atEdge.bottom} onClick={() => scrollPane('bottom')} sx={floatingButtonSx}>
+                <ArrowDownwardRounded sx={{ fontSize: 19 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t(markdownPreview ? '源码' : '退出源码')} placement="left">
+            <span>
+              <IconButton
+                data-notes-mode={markdownPreview ? 'source' : 'preview'}
+                data-notes-source-toggle
+                aria-label={t(markdownPreview ? '源码' : '退出源码')}
+                aria-pressed={!markdownPreview}
+                disabled={attachmentBusy}
+                onClick={() => switchMode(markdownPreview)}
+                sx={{
+                  ...floatingButtonSx,
+                  ...(markdownPreview ? {} : { color: 'primary.main', borderColor: 'primary.main', bgcolor: 'action.selected' })
+                }}
+              >
+                <CodeRounded sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+      )}
 
       <Menu anchorEl={createMenuAt} open={Boolean(createMenuAt)} onClose={() => setCreateMenuAt(null)}>
         <MenuItem data-notes-create-blank onClick={() => void createTextNote()} sx={{ fontSize: 12.5 }}>{t('notes.newBlankText')}</MenuItem>
