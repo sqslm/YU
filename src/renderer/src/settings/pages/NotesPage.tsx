@@ -1446,7 +1446,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
           {/* The list scrolls independently from its search and filters. */}
           <Box
             data-notes-list-inner
-            sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 1.25, py: 1.5 }}
+            sx={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarGutter: 'stable', px: 1.25, py: 1.5 }}
           >
           {loading && (
             <Box role="status" aria-label={t('common.loading')} sx={{ px: .5 }}>{[0, 1, 2].map(value => <Skeleton key={value} variant="rounded" height={100} sx={{ mb: 1 }} />)}</Box>
@@ -1534,6 +1534,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
             minWidth: 0,
             minHeight: 0,
             overflowY: 'auto',
+            // Reserve the scrollbar gutter permanently. Entering edit mode changes
+            // the body's height, and without this the pane's scrollbar appeared and
+            // disappeared — every toggle shifted the text ~10 px sideways, which is
+            // the "jump" the editor kept reporting.
+            scrollbarGutter: 'stable',
             bgcolor: 'background.paper'
           }}
         >
@@ -1546,7 +1551,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
           )}
 
           {selected && (
-            <Box data-notes-detail={selected.id} sx={{ px: { xs: 3, lg: 5 }, py: 3.5, maxWidth: 880, mx: 'auto' }}>
+            <Box data-notes-detail={selected.id} sx={{ pl: { xs: 3, md: 9 }, pr: { xs: 3, md: 5 }, py: 3.5, maxWidth: 880, mx: 'auto' }}>
+              {/* The left gutter is real padding, not a negative offset: the block
+                  handle (＋ and grip) is drawn ~66 px to the left of the block and
+                  the pane clips its overflow, so the handle needs that much empty
+                  space inside the pane or it is cut in half. */}
               <TextField data-notes-title fullWidth variant="standard" value={titleDraft}
                 placeholder={t('notes.titlePlaceholder')} onChange={event => editField('title', event.target.value)}
                 onBlur={() => void flushNow()} inputProps={{ maxLength: 200, 'aria-label': t('notes.titleLabel') }}

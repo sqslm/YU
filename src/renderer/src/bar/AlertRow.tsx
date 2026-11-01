@@ -1,4 +1,4 @@
-import type { BarAlert, BarAlertLevel, BarState } from '@shared/types'
+import type { BarAlert, BarAlertLevel, BarState, ThemePack } from '@shared/types'
 
 /**
  * One level's worth of colour, kept in a single place so the dot, the copy, the
@@ -7,6 +7,10 @@ import type { BarAlert, BarAlertLevel, BarState } from '@shared/types'
  * The bar sits on top of the user's desktop with a near-black glass pill, so
  * every tone is a *light* accent tinted toward its hue: readable at 11.5px on
  * `rgba(18,19,23,.94)` without turning the pill into a traffic light.
+ *
+ * That reasoning is what makes the tones pack-specific: the Apple pack paints a
+ * *white* sheet in light mode, where those pale tints would disappear, so it
+ * carries its own set below.
  */
 export interface AlertTone {
   /** Dot and button foreground. */
@@ -19,7 +23,9 @@ export interface AlertTone {
   border: string
 }
 
-const TONES: Record<BarAlertLevel, AlertTone> = {
+export type AlertTones = Record<BarAlertLevel, AlertTone>
+
+const CLASSIC_TONES: AlertTones = {
   // info — blue
   info: {
     accent: '#7f9dff',
@@ -44,13 +50,65 @@ const TONES: Record<BarAlertLevel, AlertTone> = {
 }
 
 /**
+ * Apple's system status colours, at the two weights the material needs.
+ *
+ * On the dark glass the copy is a *lightened* tint, exactly like the classic
+ * set; on the light sheet it is a darkened one, because pale blue on white is
+ * unreadable at 11.5px. Fills stay a 10–18% wash of the same hue in both.
+ */
+const APPLE_TONES: Record<'dark' | 'light', AlertTones> = {
+  dark: {
+    info: { accent: '#0a84ff', text: '#9fc6ff', tint: 'rgba(10,132,255,.18)', border: 'rgba(10,132,255,.42)' },
+    warn: { accent: '#ffd60a', text: '#ffe9a8', tint: 'rgba(255,214,10,.16)', border: 'rgba(255,214,10,.44)' },
+    error: { accent: '#ff453a', text: '#ffb4ae', tint: 'rgba(255,69,58,.18)', border: 'rgba(255,69,58,.48)' }
+  },
+  light: {
+    info: { accent: '#0071e3', text: '#0055a4', tint: 'rgba(0,113,227,.10)', border: 'rgba(0,113,227,.38)' },
+    warn: { accent: '#b25000', text: '#8a3d00', tint: 'rgba(255,159,10,.14)', border: 'rgba(178,80,0,.34)' },
+    error: { accent: '#d70015', text: '#b00012', tint: 'rgba(215,0,21,.10)', border: 'rgba(215,0,21,.38)' }
+  }
+}
+
+/**
+ * Brutalist tones.
+ *
+ * This pack is the reason the tone set had to become pack- *and* mode-aware:
+ * its capsule is opaque bone paper in light mode and coal in dark mode, so the
+ * shipped pale-on-dark tints vanish on the light capsule — which is exactly the
+ * "the text is invisible" report for the prompt-card switcher. Light keeps
+ * darkened ink on paper, dark keeps lifted tints on coal.
+ */
+const BRUTAL_TONES: Record<'dark' | 'light', AlertTones> = {
+  dark: {
+    info: { accent: '#8ab4ff', text: '#cddaff', tint: 'rgba(138,180,255,.16)', border: 'rgba(138,180,255,.45)' },
+    warn: { accent: '#ffd400', text: '#ffe9a8', tint: 'rgba(255,212,0,.16)', border: 'rgba(255,212,0,.45)' },
+    error: { accent: '#ff5f56', text: '#ffc6c6', tint: 'rgba(255,95,86,.18)', border: 'rgba(255,95,86,.5)' }
+  },
+  light: {
+    info: { accent: '#0047ff', text: '#002ba8', tint: 'rgba(0,71,255,.10)', border: 'rgba(0,71,255,.42)' },
+    warn: { accent: '#8a4b00', text: '#6b3a00', tint: 'rgba(255,159,10,.16)', border: 'rgba(138,75,0,.42)' },
+    error: { accent: '#b3120b', text: '#8f0f09', tint: 'rgba(179,18,11,.10)', border: 'rgba(179,18,11,.45)' }
+  }
+}
+
+/** The tone set a pack paints with; anything unknown keeps the shipped one. */
+export function alertTonesFor(pack: ThemePack | undefined, mode: 'dark' | 'light'): AlertTones {
+  if (pack === 'apple') return APPLE_TONES[mode]
+  if (pack === 'brutal') return BRUTAL_TONES[mode]
+  return CLASSIC_TONES
+}
+
+/**
  * Tone for a level. A main process that ships an unknown level must not get an
  * invisible alert, so anything unrecognised falls back to `info` (blue).
+ *
+ * `tones` defaults to the shipped set, so a caller that predates theme packs —
+ * and the existing unit tests — keep the original colours.
  */
-export function alertTone(level: BarAlertLevel | string | undefined): AlertTone {
-  if (level === 'warn') return TONES.warn
-  if (level === 'error') return TONES.error
-  return TONES.info
+export function alertTone(level: BarAlertLevel | string | undefined, tones: AlertTones = CLASSIC_TONES): AlertTone {
+  if (level === 'warn') return tones.warn
+  if (level === 'error') return tones.error
+  return tones.info
 }
 
 /**
@@ -82,6 +140,8 @@ export interface AlertRowProps {
   alert: BarAlert
   /** Hover copy; the error phase passes its untruncated message here. */
   title?: string
+  /** Level colours for the active theme pack; defaults to the shipped set. */
+  tones?: AlertTones
 }
 
 /**
@@ -93,8 +153,8 @@ export interface AlertRowProps {
  * padding and the 38px pill there are ~22px of vertical room, so the copy is
  * clamped to two 15px lines and the buttons stay a single 22px row.
  */
-export function AlertRow({ alert, title }: AlertRowProps): JSX.Element {
-  const tone = alertTone(alert.level)
+export function AlertRow({ alert, title, tones }: AlertRowProps): JSX.Element {
+  const tone = alertTone(alert.level, tones)
   return (
     <>
       <span style={{ ...dotStyle, background: tone.accent, opacity: 1 }} />

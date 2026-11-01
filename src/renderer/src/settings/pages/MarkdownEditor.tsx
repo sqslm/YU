@@ -6,7 +6,7 @@ import '@milkdown/crepe/theme/common/style.css'
 import { replaceAll } from '@milkdown/kit/utils'
 import { editorViewCtx } from '@milkdown/kit/core'
 import type { EditorView } from '@milkdown/kit/prose/view'
-import { AllSelection } from '@milkdown/kit/prose/state'
+import { AllSelection, TextSelection, type Command } from '@milkdown/kit/prose/state'
 import { setBlockType, toggleMark, wrapIn } from '@milkdown/kit/prose/commands'
 import { noteAttachmentUrl } from '@shared/noteAttachments'
 import { NoteContextMenu, type NoteMenuEntry } from './NoteContextMenu'
@@ -56,6 +56,16 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
    */
   const sink = useRef<{ noteId: string; send: (markdown: string) => void } | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; entries: NoteMenuEntry[] } | null>(null)
+  /**
+   * The selection the menu was opened on.
+   *
+   * Clicking a menu item moves DOM focus to the menu, and a right-click can
+   * collapse ProseMirror's selection to the click point. Both are why the
+   * format commands used to do nothing visible: they ran against an empty
+   * range. The range is captured when the menu opens and restored before a
+   * command runs.
+   */
+  const menuRange = useRef<{ from: number; to: number } | null>(null)
   const props = useRef({ value, onChange, noteId, placeholder, disabled })
   props.current = { value, onChange, noteId, placeholder, disabled }
 
@@ -73,17 +83,34 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     owner.send(markdown)
   }
 
-  /** Runs a ProseMirror command on the live view. */
-  const withView = (run: (view: EditorView) => void): void => {
+  /** Reads the live view without moving focus: a right-click must not move the caret. */
+  const readView = (run: (view: EditorView) => void): void => {
     const instance = crepe.current
     if (!instance) return
-    try {
-      instance.editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx)
-        view.focus()
-        run(view)
-      })
-    } catch { /* the editor is being torn down with the note */ }
+    try { instance.editor.action((ctx) => run(ctx.get(editorViewCtx))) } catch { /* the editor is being torn down with the note */ }
+  }
+
+  /** Runs a ProseMirror command on the live view. */
+  const withView = (run: (view: EditorView) => void): void => readView((view) => { view.focus(); run(view) })
+
+  /**
+   * Runs a `Command` with the dispatch it expects.
+   *
+   * Two bugs made every format entry in the context menu look dead:
+   *  1. `command(state, view.dispatch)` passes an unbound method — ProseMirror
+   *     calls it as a bare function, `this` is lost, it throws, and the throw
+   *     was swallowed by `withView`'s catch. Binding it fixes 斜体/删除线/标题.
+   *  2. Opening the menu collapses the selection (menu focus, right-click on a
+   *     caret), so the command ran over an empty range. The range captured when
+   *     the menu opened is restored first.
+   */
+  const apply = (command: Command): ((view: EditorView) => void) => (view) => {
+    const range = menuRange.current
+    if (range && range.from !== range.to) {
+      const { from, to } = view.state.selection
+      if (from === to) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, range.from, range.to)))
+    }
+    command(view.state, view.dispatch.bind(view), view)
   }
 
   const selectionText = (view: EditorView): string =>
@@ -100,21 +127,31 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
   const openMenu = (event: React.MouseEvent): void => {
     event.preventDefault()
     event.stopPropagation()
-    const image = (event.target as HTMLElement).closest('img')
-    if (image) {
+    readView((view) => { menuRange.current = { from: view.state.selection.from, to: view.state.selection.to } })
+    // `img` may be wrapped by Crepe's image block, and the overlay that draws the
+    // caption sits on top of the picture: match the wrapper too, otherwise an
+    // image right-click fell through to the text menu.
+    const target = (event.target as HTMLElement).closest('img, .milkdown-image-block, .milkdown-image-inline')
+    if (target) {
       let range: { from: number; to: number } | null = null
-      withView((view) => {
-        const pos = view.posAtDOM(image, 0)
-        const node = view.state.doc.nodeAt(pos)
-        if (node && node.type.name === 'image') range = { from: pos, to: pos + node.nodeSize }
+      readView((view) => {
+        try {
+          const pos = view.posAtDOM(target, 0)
+          const node = view.state.doc.nodeAt(pos)
+          if (node?.type.name === 'image') range = { from: pos, to: pos + node.nodeSize }
+          else if (node?.firstChild?.type.name === 'image') range = { from: pos + 1, to: pos + node.nodeSize - 1 }
+        } catch { /* the click landed between nodes */ }
       })
-      const src = image.getAttribute('src') || ''
+      const image = target instanceof HTMLImageElement ? target : target.querySelector('img')
+      const src = image?.getAttribute('src') || ''
       const relative = src.startsWith('attachments/') ? src : ''
+      const address = relative || src
       setMenu({
         x: event.clientX,
         y: event.clientY,
         entries: [
-          { id: 'image-copy-path', label: t('复制图片地址'), disabled: !relative, run: () => copy(relative) },
+          { id: 'image-copy-path', label: t('复制图片地址'), disabled: !address, run: () => copy(address) },
+          { id: 'image-copy-markdown', label: t('复制为 Markdown 图片'), disabled: !address, run: () => copy(`![](${address})`) },
           { id: 'image-reveal', label: t('在文件夹中显示'), disabled: !relative, run: () => { if (relative) onAttachment(relative) } },
           { divider: true },
           { id: 'image-delete', label: t('删除图片'), disabled: !range, run: () => withView((view) => { if (range) view.dispatch(view.state.tr.delete(range.from, range.to)) }) }
@@ -122,26 +159,22 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       })
       return
     }
-    const block = (name: string): ((view: EditorView) => void) => (view) => {
-      const node = view.state.schema.nodes[name]
-      if (!node) return
-      setBlockType(node)(view.state, view.dispatch, view)
-    }
-    const heading = (level: number): ((view: EditorView) => void) => (view) => {
-      const node = view.state.schema.nodes.heading
-      if (!node) return
-      setBlockType(node, { level })(view.state, view.dispatch, view)
-    }
-    const wrap = (name: string): ((view: EditorView) => void) => (view) => {
-      const node = view.state.schema.nodes[name]
-      if (!node) return
-      wrapIn(node)(view.state, view.dispatch, view)
-    }
-    const mark = (name: string): ((view: EditorView) => void) => (view) => {
-      const type = view.state.schema.marks[name]
-      if (!type) return
-      toggleMark(type)(view.state, view.dispatch, view)
-    }
+    const block = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+      const node = state.schema.nodes[name]
+      return node ? setBlockType(node)(state, dispatch, view) : false
+    })
+    const heading = (level: number): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+      const node = state.schema.nodes.heading
+      return node ? setBlockType(node, { level })(state, dispatch, view) : false
+    })
+    const wrap = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+      const node = state.schema.nodes[name]
+      return node ? wrapIn(node)(state, dispatch, view) : false
+    })
+    const mark = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+      const type = state.schema.marks[name]
+      return type ? toggleMark(type)(state, dispatch, view) : false
+    })
     setMenu({
       x: event.clientX,
       y: event.clientY,
@@ -171,9 +204,11 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         { divider: true },
         { id: 'clear', label: t('清除格式'), run: () => withView((view) => {
           const paragraph = view.state.schema.nodes.paragraph
-          if (paragraph) setBlockType(paragraph)(view.state, view.dispatch, view)
-          const { from, to } = view.state.selection
-          view.dispatch(view.state.tr.removeMark(from, to))
+          if (paragraph) apply(setBlockType(paragraph))(view)
+          // The range the menu was opened on, not the (possibly collapsed) one
+          // the click left behind.
+          const range = menuRange.current ?? view.state.selection
+          view.dispatch(view.state.tr.removeMark(range.from, range.to))
         }) },
         { id: 'copy-markdown', label: t('复制全文 Markdown'), run: () => copy(crepe.current?.getMarkdown() ?? '') },
         ...(onEditSource ? [{ id: 'edit-source', label: t('编辑 Markdown 源码'), run: () => { flush(); onEditSource() } }] : [])
@@ -326,7 +361,10 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         '--crepe-color-selected': theme.palette.action.selected,
         '--crepe-color-inverse': theme.palette.background.default,
         '--crepe-color-on-inverse': theme.palette.text.primary,
-        '& .milkdown': { background: 'transparent', color: 'inherit' },
+        // `minHeight` on the wrapper too: the editor's own box is the drop target
+        // for a dragged block, so the empty area under the last line has to belong
+        // to the editor instead of to the card behind it.
+        '& .milkdown': { background: 'transparent', color: 'inherit', minHeight },
         '& .milkdown .ProseMirror': {
           padding: 0,
           outline: 'none',
@@ -369,7 +407,12 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         '& .milkdown .milkdown-toolbar .toolbar-item svg': { color: theme.palette.text.secondary, fill: theme.palette.text.secondary },
         '& .milkdown .milkdown-toolbar .toolbar-item:hover svg': { color: theme.palette.text.primary, fill: theme.palette.text.primary },
         '& .milkdown .milkdown-toolbar .toolbar-item.active svg': { color: theme.palette.primary.main, fill: theme.palette.primary.main },
-        '& .milkdown .milkdown-block-handle': { zIndex: 4 }
+        '& .milkdown .milkdown-block-handle': { zIndex: 4 },
+        // The handle is drawn outside the block it belongs to; 26 px items plus
+        // the gutter NotesPage reserves for it keep it inside the pane instead
+        // of being clipped in half.
+        '& .milkdown .milkdown-block-handle .operation-item': { width: 26, height: 26, padding: '3px' },
+        '& .milkdown .milkdown-block-handle .operation-item svg': { width: 18, height: 18 }
       }}
     >
       <NoteContextMenu anchor={menu ? { x: menu.x, y: menu.y } : null} entries={menu?.entries ?? []} onClose={() => setMenu(null)} />

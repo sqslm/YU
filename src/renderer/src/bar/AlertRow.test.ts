@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BarAlert, BarState } from '@shared/types'
-import { alertOf, alertTone, hasAlertActions } from './AlertRow'
+import { alertOf, alertTone, alertTonesFor, hasAlertActions } from './AlertRow'
 
 const busy: BarAlert = {
   kind: 'busy',
@@ -42,8 +42,7 @@ describe('alertTone', () => {
 
   it('falls back to the info tone for a level it does not know', () => {
     expect(alertTone('fatal' as never)).toEqual(alertTone('info'))
-    expect(alertTone(undefined)).toEqual(alertTone('info'))
-  })
+    expect(alertTone(undefined)).toEqual(alertTone('info'))  })
 })
 
 describe('alertOf', () => {
@@ -88,5 +87,42 @@ describe('hasAlertActions', () => {
     expect(hasAlertActions({ phase: 'recording', mode: 'dictation', since: 0 })).toBe(false)
     expect(hasAlertActions({ phase: 'working', mode: 'dictation' })).toBe(false)
     expect(hasAlertActions({ phase: 'done', mode: 'dictation', text: 'x' })).toBe(false)
+  })
+})
+
+describe('alertTonesFor', () => {
+  /**
+   * The bar's capsule fill decides which way the copy has to run. Getting this
+   * wrong is not a subtle contrast miss: the prompt-card switcher printed
+   * classic's pale tint on the brutalist bone capsule and the notice was
+   * unreadable, which is the report this guards.
+   */
+  it('puts dark copy on the light brutalist capsule and light copy on the dark one', () => {
+    const bone = alertTonesFor('brutal', 'light')
+    const coal = alertTonesFor('brutal', 'dark')
+    expect(bone.info.text).toBe('#002ba8')
+    expect(coal.info.text).toBe('#cddaff')
+    // Not the shipped set, whose tints assume a near-black pill in every mode.
+    expect(bone.info.text).not.toBe(alertTone('info').text)
+    expect(coal.info.text).not.toBe(alertTone('info').text)
+  })
+
+  it('keeps three distinct levels in every pack and appearance', () => {
+    for (const pack of ['classic', 'apple', 'brutal'] as const) {
+      for (const mode of ['dark', 'light'] as const) {
+        const tones = alertTonesFor(pack, mode)
+        expect(new Set([tones.info.accent, tones.warn.accent, tones.error.accent]).size).toBe(3)
+        for (const tone of [tones.info, tones.warn, tones.error]) {
+          expect(tone.text).toMatch(/^#/)
+          expect(tone.tint).toMatch(/^rgba\(/)
+          expect(tone.border).toMatch(/^rgba\(/)
+        }
+      }
+    }
+  })
+
+  it('keeps the shipped set for an unknown pack', () => {
+    expect(alertTonesFor(undefined, 'light')).toEqual(alertTonesFor('classic', 'light'))
+    expect(alertTonesFor('nord' as never, 'dark')).toEqual(alertTonesFor('classic', 'dark'))
   })
 })
