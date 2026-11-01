@@ -26,7 +26,7 @@ import ChevronRight from '@mui/icons-material/ChevronRight'
 import type { CalendarEvent } from '@shared/calendar'
 import type { Settings } from '@shared/types'
 import { MAX_EVENT_LEAD_MINUTES, MAX_EVENT_NOTES, MAX_EVENT_TITLE, formatEventTime } from '@shared/calendar'
-import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
+import { dayKeyOf, dayPreview, dayStart, eventClock, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
 import { emptyForm, formOf, toInput, withStartDate, type CalendarForm as Form } from './calendarForm'
 import { DateTimeField } from './DateTimeField'
 import { BriefingPage } from './BriefingPage'
@@ -186,7 +186,6 @@ export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
   }, [cursor.year, cursor.month, reload])
 
   const byDay = useMemo(() => groupByDay(rows), [rows])
-  const dots = useMemo(() => dotDays(rows), [rows])
   const grid = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor])
   const dayRows = byDay.get(selected) ?? []
   const listKeys = useMemo(() => [...byDay.keys()].sort(), [byDay])
@@ -350,14 +349,14 @@ export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
                 <Typography key={`${label}-${index}`} data-calendar-weekday={label} color="text.secondary" sx={{ textAlign: 'center', fontSize: 11, py: 0.5 }}>{label}</Typography>
               ))}
             </Box>
-            <Box sx={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridTemplateRows: 'repeat(6, minmax(54px, 1fr))', gap: 0.5 }}>
+            <Box sx={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridTemplateRows: 'repeat(6, minmax(66px, 1fr))', gap: 0.5 }}>
               {grid.flat().map(cell => {
                 const key = dayKeyOf(cell)
                 const date = new Date(cell)
                 const inMonth = date.getMonth() + 1 === cursor.month
                 const isToday = key === today
                 const isSelected = key === selected
-                const count = dots.has(key) ? Math.min(3, (byDay.get(key) ?? []).filter(row => row.status === 'confirmed').length) : 0
+                const preview = dayPreview(byDay.get(key) ?? [])
                 return (
                   <Box
                     key={key}
@@ -372,8 +371,9 @@ export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
                       flexDirection: 'column',
                       alignItems: 'flex-start',
                       gap: 0.25,
-                      minHeight: 54,
+                      minHeight: 66,
                       p: 0.5,
+                      overflow: 'hidden',
                       font: 'inherit',
                       cursor: 'pointer',
                       borderRadius: '10px',
@@ -399,15 +399,22 @@ export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
                       border: isToday ? '1px solid' : 'none',
                       borderColor: 'primary.main'
                     }}>{date.getDate()}</Box>
-                    <Stack direction="row" spacing={0.25} sx={{ pl: 0.5, height: 5 }}>
-                      {Array.from({ length: count }, (_, index) => (
-                        <Box key={index} sx={{
-                          width: 4,
-                          height: 4,
-                          borderRadius: '50%',
-                          bgcolor: 'primary.main'
-                        }} />
+                    {/* A summary, not a dot: two rows with the hour and the title, then
+                        a count for the rest. A dot told the reader nothing about the day. */}
+                    <Stack spacing={0.25} sx={{ width: '100%', minWidth: 0, mt: 0.25 }}>
+                      {preview.shown.map(row => (
+                        <Box key={row.id} data-calendar-cell-event={row.id} sx={{ display: 'flex', gap: 0.5, minWidth: 0, fontSize: 10, lineHeight: 1.4 }}>
+                          <Box component="span" sx={{ flexShrink: 0, color: row.allDay ? 'secondary.main' : 'primary.main', fontVariantNumeric: 'tabular-nums' }}>
+                            {eventClock(row, language)}
+                          </Box>
+                          <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.secondary' }}>
+                            {row.title}
+                          </Box>
+                        </Box>
                       ))}
+                      {preview.more > 0 && (
+                        <Box component="span" data-calendar-cell-more={preview.more} sx={{ pl: 0.25, fontSize: 9.5, color: 'text.disabled' }}>{`+${preview.more}`}</Box>
+                      )}
                     </Stack>
                   </Box>
                 )

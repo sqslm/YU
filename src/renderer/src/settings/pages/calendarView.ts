@@ -136,24 +136,25 @@ export function groupByDay(events: readonly CalendarEvent[]): Map<string, Calend
   return days
 }
 
+/** All-day rows have no clock; a month cell prints 全天 for them instead. */
+export function eventClock(event: Pick<CalendarEvent, 'start' | 'allDay'>, language: UiLanguage): string {
+  if (event.allDay) return language === 'zh' ? '全天' : 'All day'
+  const date = new Date(event.start)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
 /**
- * Days that deserve a dot under their number.
+ * What a month cell prints under its date.
  *
- * A cancelled-only day stays blank: advertising it would make the month look
- * busier than the day list, which shows the same row greyed out. `limit` is the
- * number of dots one cell can draw, so counting stops there — the caller cannot
- * show more, and a 40-event day is not worth 40 counts.
+ * The cell used to draw up to three dots, which says "something happens today"
+ * and nothing else. The first `limit` events are returned instead — a cell has
+ * room for a couple of lines, and a reader scrolling a month gets the plan
+ * without opening the day. Cancelled rows stay out: they are no longer on the
+ * plan, and the day list already shows them struck through.
  */
-export function dotDays(events: readonly CalendarEvent[], limit = 3): Set<string> {
-  const seen = new Map<string, number>()
-  for (const event of events) {
-    if (event.status !== 'confirmed') continue
-    const key = localDayKey(event.start)
-    const count = seen.get(key) ?? 0
-    if (count >= Math.max(1, limit)) continue
-    seen.set(key, count + 1)
-  }
-  return new Set(seen.keys())
+export function dayPreview(rows: readonly CalendarEvent[], limit = 2): { shown: CalendarEvent[]; more: number } {
+  const live = rows.filter((row) => row.status === 'confirmed')
+  return { shown: live.slice(0, Math.max(0, limit)), more: Math.max(0, live.length - Math.max(0, limit)) }
 }
 
 /** Whole days between a day key and the local day of `now`; DST-safe via rounding. */

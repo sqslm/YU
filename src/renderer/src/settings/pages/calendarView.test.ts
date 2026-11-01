@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarEvent } from '@shared/calendar'
 import { localDayKey } from '@shared/calendar'
-import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
+import { dayKeyOf, dayPreview, dayStart, eventClock, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
 
 /** Fixed "now" so the relative prefixes never depend on the machine clock. */
 const NOW = new Date(2026, 9, 25, 10, 30).getTime()
@@ -114,16 +114,24 @@ describe('groupByDay', () => {
   })
 })
 
-describe('dotDays', () => {
-  it('marks a day once no matter how many events it holds', () => {
-    const rows = [event('a', at(10, 25, 9)), event('b', at(10, 25, 11)), event('c', at(10, 26, 9))]
-    expect(dotDays(rows)).toEqual(new Set(['2026-10-25', '2026-10-26']))
+describe('month cell summary', () => {
+  it('shows the first rows of the day and counts the rest', () => {
+    const rows = [event('a', at(10, 25, 9)), event('b', at(10, 25, 11)), event('c', at(10, 25, 14))]
+    const preview = dayPreview(rows, 2)
+    expect(preview.shown.map(row => row.id)).toEqual(['a', 'b'])
+    expect(preview.more).toBe(1)
   })
 
-  it('leaves a day blank when every row on it was cancelled', () => {
-    const rows = [event('gone', at(10, 25, 9), { status: 'cancelled' }), event('live', at(10, 27, 9))]
-    expect(dotDays(rows)).toEqual(new Set(['2026-10-27']))
-    expect(dotDays([]).size).toBe(0)
+  it('leaves cancelled rows out of the cell', () => {
+    const rows = [event('gone', at(10, 25, 9), { status: 'cancelled' }), event('live', at(10, 25, 11))]
+    expect(dayPreview(rows).shown.map(row => row.id)).toEqual(['live'])
+    expect(dayPreview([]).more).toBe(0)
+  })
+
+  it('prints the clock, or 全天 for an all-day row', () => {
+    expect(eventClock(event('a', at(10, 25, 9, 5)), 'zh')).toBe('09:05')
+    expect(eventClock(event('b', at(10, 25, 9), { allDay: true }), 'zh')).toBe('全天')
+    expect(eventClock(event('b', at(10, 25, 9), { allDay: true }), 'en')).toBe('All day')
   })
 })
 
