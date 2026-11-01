@@ -2656,5 +2656,10 @@
   "深色与浅色在每套主题包里都有，主题和外观各自独立。": "Every pack ships a light and a dark palette; pack and appearance are independent.",
   "退出源码": "Leave source",
   "章节目录": "Outline",
-  "这篇随记还没有标题。": "This note has no headings yet."
+  "这篇随记还没有标题。": "This note has no headings yet.",
+  "大纲": "Outline",
+  "图片另存为": "Save image as",
+  "缩放": "Scale",
+  "原始大小": "Original size",
+  "打开所在文件夹": "Open containing folder"
 }

@@ -313,6 +313,10 @@ export interface TypelessApi {
     importAttachments(id: string): Promise<import('./noteAttachments').NoteAttachment[]>
     addAttachment(id: string, input: { name: string; bytes: Uint8Array }): Promise<import('./noteAttachments').NoteAttachment>
     revealAttachment(id: string, path: string): Promise<void>
+    /** Copies an image attachment to the clipboard (main owns the clipboard). */
+    copyAttachment(id: string, path: string): Promise<void>
+    /** 图片另存为 for an attachment; null when the save dialog was cancelled. */
+    saveAttachmentAs(id: string, path: string): Promise<string | null>
     createText(input?: { categoryId?: string; fromClipboard?: boolean; text?: string }): Promise<NoteEntry>
     importAudio(categoryId?: string): Promise<NoteEntry | null>
     /** 导入 Markdown 文档（多选）。用户取消返回 null；读失败的文件放进 `failed`。 */
@@ -391,6 +395,11 @@ export interface TypelessApi {
     copyText(text: string): Promise<void>
     /** Clipboard text, for the note editor's paste menu. Empty when unavailable. */
     readClipboard(): Promise<string>
+    /**
+     * Opens a link from note content in the default browser. Non-web schemes are
+     * refused in main, the same gate every other outbound link uses.
+     */
+    openExternal(url: string): Promise<void>
     /** Real app version, so the UI never hardcodes a build number. */
     version(): Promise<string>
     resources(): Promise<ResourceUsage>

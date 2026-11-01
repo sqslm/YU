@@ -24,10 +24,19 @@ export interface MarkdownEditorProps {
   disabled?: boolean
   /** Switch the page to the raw markdown view (context menu → 编辑 Markdown 源码). */
   onEditSource?: () => void
+  /** Reports a failed image action (clipboard copy, 另存为) to the page's notice line. */
+  onError?: (message: string) => void
 }
 
 /** Pause after the last keystroke before the parent hears about a change. */
 const EMIT_MS = 220
+
+/** Strips Electron's `Error invoking remote method …` wrapper for a readable message. */
+function messageOf(error: unknown): string {
+  return error instanceof Error
+    ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    : String(error)
+}
 
 /**
  * Typora-style writing surface for a note body.
@@ -42,7 +51,7 @@ const EMIT_MS = 220
  * markdown-aware right-click menu for text and images, and a selection toolbar
  * whose labels follow the app's UI language.
  */
-export function MarkdownEditor({ value, onChange, noteId, onAttachment, placeholder = '', minHeight = '42vh', disabled = false, onEditSource }: MarkdownEditorProps): JSX.Element {
+export function MarkdownEditor({ value, onChange, noteId, onAttachment, placeholder = '', minHeight = '42vh', disabled = false, onEditSource, onError }: MarkdownEditorProps): JSX.Element {
   const theme = useTheme()
   const { t } = useTranslation()
   /**
@@ -91,8 +100,8 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
   const menuRange = useRef<{ from: number; to: number } | null>(null)
   /** Hidden picker behind 插入 → 图像. */
   const pickImage = useRef<HTMLInputElement | null>(null)
-  const props = useRef({ value, onChange, noteId, placeholder, disabled })
-  props.current = { value, onChange, noteId, placeholder, disabled }
+  const props = useRef({ value, onChange, noteId, placeholder, disabled, onError })
+  props.current = { value, onChange, noteId, placeholder, disabled, onError }
 
   const flush = (): void => {
     if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null }
@@ -188,6 +197,26 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
 
   const copy = (text: string): void => { if (text) void window.api.app.copyText(text) }
 
+  /** Surfaces a failed menu action on the page's notice line. */
+  const fail = (message: string): void => { props.current.onError?.(message) }
+
+  /**
+   * Ctrl/Cmd+click on a link.
+   *
+   * A plain click has to stay inert: the note body is an editor, and letting the
+   * renderer follow a link would replace the whole window. With the modifier the
+   * URL goes to main, which runs the same safe-link gate as every other
+   * outbound link, so `javascript:` and `file:` stay refused.
+   */
+  const openLink = (event: React.MouseEvent): void => {
+    const anchor = (event.target as HTMLElement).closest('a[href]')
+    if (!anchor) return
+    event.preventDefault()
+    if (!(event.ctrlKey || event.metaKey)) return
+    const href = anchor.getAttribute('href') ?? ''
+    if (href) void window.api.app.openExternal(href)
+  }
+
   const paste = (): void => {
     void window.api.app.readClipboard().then((text) => {
       if (text) withView((view) => view.dispatch(view.state.tr.insertText(text)))
@@ -223,28 +252,60 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     // image right-click fell through to the text menu.
     const target = (event.target as HTMLElement).closest('img, .milkdown-image-block, .milkdown-image-inline')
     if (target) {
-      let range: { from: number; to: number } | null = null
+      /**
+       * Where the image node itself lives. Crepe wraps a block image in a
+       * `milkdown-image-block` node, so the picture is the wrapper's child and
+       * every edit (ratio, delete) has to address that inner node. The holder
+       * object keeps the value readable after `readView`'s callback returns.
+       */
+      const found: { at: { pos: number; from: number; to: number; attrs: Record<string, unknown> } | null } = { at: null }
       readView((view) => {
         try {
           const pos = view.posAtDOM(target, 0)
-          const node = view.state.doc.nodeAt(pos)
-          if (node?.type.name === 'image') range = { from: pos, to: pos + node.nodeSize }
-          else if (node?.firstChild?.type.name === 'image') range = { from: pos + 1, to: pos + node.nodeSize - 1 }
+          const wrapper = view.state.doc.nodeAt(pos)
+          if (wrapper?.type.name === 'image') found.at = { pos, from: pos, to: pos + wrapper.nodeSize, attrs: { ...wrapper.attrs } }
+          else if (wrapper?.firstChild?.type.name === 'image') {
+            found.at = { pos: pos + 1, from: pos, to: pos + wrapper.nodeSize, attrs: { ...wrapper.firstChild.attrs } }
+          }
         } catch { /* the click landed between nodes */ }
       })
-      const image = target instanceof HTMLImageElement ? target : target.querySelector('img')
-      const src = image?.getAttribute('src') || ''
+      const element = target instanceof HTMLImageElement ? target : target.querySelector('img')
+      const src = element?.getAttribute('src') || ''
       const relative = src.startsWith('attachments/') ? src : ''
-      const address = relative || src
+      const owner = sink.current?.noteId ?? ''
+      const ratio = Number(found.at?.attrs.ratio ?? 1)
+      const setRatio = (next: number): (() => void) => () => withView((view) => {
+        if (!found.at) return
+        const node = view.state.doc.nodeAt(found.at.pos)
+        if (node?.type.name !== 'image') return
+        view.dispatch(view.state.tr.setNodeMarkup(found.at.pos, undefined, { ...node.attrs, ratio: next }))
+      })
+      const attachment = (run: (path: string) => Promise<unknown>): (() => void) => () => {
+        if (!relative || !owner) return
+        void run(relative).catch((error: unknown) => fail(messageOf(error)))
+      }
       setMenu({
         x: event.clientX,
         y: event.clientY,
         entries: [
-          { id: 'image-copy-path', label: t('复制图片地址'), disabled: !address, run: () => copy(address) },
-          { id: 'image-copy-markdown', label: t('复制为 Markdown 图片'), disabled: !address, run: () => copy(`![](${address})`) },
-          { id: 'image-reveal', label: t('在文件夹中显示'), disabled: !relative, run: () => { if (relative) onAttachment(relative) } },
+          { id: 'image-copy', label: t('复制图片'), disabled: !relative, run: attachment(path => window.api.notes.copyAttachment(owner, path)) },
+          { id: 'image-save-as', label: t('图片另存为'), disabled: !relative, run: attachment(path => window.api.notes.saveAttachmentAs(owner, path)) },
           { divider: true },
-          { id: 'image-delete', label: t('删除图片'), disabled: !range, run: () => withView((view) => { if (range) view.dispatch(view.state.tr.delete(range.from, range.to)) }) }
+          {
+            id: 'image-scale',
+            label: t('缩放'),
+            disabled: !found.at,
+            children: [
+              { id: 'image-scale-50', label: '50%', checked: ratio === 0.5, run: setRatio(0.5) },
+              { id: 'image-scale-75', label: '75%', checked: ratio === 0.75, run: setRatio(0.75) },
+              { id: 'image-scale-100', label: t('原始大小'), checked: ratio === 1, run: setRatio(1) },
+              { id: 'image-scale-125', label: '125%', checked: ratio === 1.25, run: setRatio(1.25) },
+              { id: 'image-scale-150', label: '150%', checked: ratio === 1.5, run: setRatio(1.5) }
+            ]
+          },
+          { id: 'image-reveal', label: t('打开所在文件夹'), disabled: !relative, run: () => { if (relative) onAttachment(relative) } },
+          { divider: true },
+          { id: 'image-delete', label: t('删除图片'), disabled: !found.at, run: () => withView((view) => { if (found.at) view.dispatch(view.state.tr.delete(found.at.from, found.at.to)) }) }
         ]
       })
       return
@@ -501,6 +562,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       data-notes-markdown
       data-notes-editor-mode="rich"
       onContextMenu={openMenu}
+      onClick={openLink}
       sx={{
         minHeight,
         p: 0,

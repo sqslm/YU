@@ -15,7 +15,6 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Drawer,
   FormControlLabel,
   IconButton,
   InputBase,
@@ -38,7 +37,6 @@ import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined'
 import AttachFileRounded from '@mui/icons-material/AttachFileRounded'
 import CodeRounded from '@mui/icons-material/CodeRounded'
 import TocRounded from '@mui/icons-material/TocRounded'
-import CloseRounded from '@mui/icons-material/CloseRounded'
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayIcon from '@mui/icons-material/PlayArrow'
 import DownloadIcon from '@mui/icons-material/Download'
@@ -142,6 +140,16 @@ const bulkButtonSx = {
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+/**
+ * Headings of the rich editor in document order — the same order `noteHeadings`
+ * parses the markdown into, which is what lets an outline row address one by index.
+ */
+function headingElements(): NodeListOf<HTMLElement> {
+  return document.querySelectorAll<HTMLElement>(
+    '[data-notes-detail] .milkdown .ProseMirror h1, [data-notes-detail] .milkdown .ProseMirror h2, [data-notes-detail] .milkdown .ProseMirror h3, [data-notes-detail] .milkdown .ProseMirror h4, [data-notes-detail] .milkdown .ProseMirror h5, [data-notes-detail] .milkdown .ProseMirror h6'
+  )
 }
 
 export interface NotesPageProps {
@@ -253,8 +261,12 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const [createMenuAt, setCreateMenuAt] = useState<HTMLElement | null>(null)
   const bodyInputRef = useRef<MarkdownSourceHandle | null>(null)
   const [markdownPreview, setMarkdownPreview] = useState(restoredView.markdownPreview)
-  /** 目录 drawer: the headings of the body as it stands right now. */
-  const [outlineOpen, setOutlineOpen] = useState(false)
+  /**
+   * Which pane the sidebar shows: the note list, or the 大纲 of the open note.
+   * The filters above stay mounted either way — they belong to the list, and
+   * flipping to 大纲 must not touch them.
+   */
+  const [sideTab, setSideTab] = useState<'list' | 'outline'>('list')
   /**
    * 列表侧栏是否收起。跨会话记住（localStorage），因为窄窗口下用户收起一次
    * 就想一直收着；读失败按展开处理，不让坏值把列表锁死。
@@ -346,21 +358,48 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const primaryValue = draftOwnerRef.current === selectedNoteId ? primaryDraft : (selected?.[primaryField] ?? '')
   const headings = useMemo(() => noteHeadings(primaryValue), [primaryValue])
   /**
-   * Jumps the view to one heading of the body.
+   * The 目录 highlight is an overlay the page owns, not an attribute inside the
+   * editor: ProseMirror watches its own DOM, so the first foreign attribute on a
+   * heading made it re-render that node — the mark survived one frame and then
+   * vanished with the element. A positioned box over the heading scrolls with the
+   * content, fades by CSS and cannot be dropped by the editor.
+   */
+  const [marker, setMarker] = useState<{ top: number; height: number; nonce: number } | null>(null)
+  const markerTimer = useRef<number | null>(null)
+  const showMarker = (target: HTMLElement): void => {
+    const detail = document.querySelector<HTMLElement>('[data-notes-detail]')
+    if (!detail) return
+    const box = detail.getBoundingClientRect()
+    const rect = target.getBoundingClientRect()
+    if (markerTimer.current !== null) window.clearTimeout(markerTimer.current)
+    // A nonce restarts the CSS animation when the same heading is picked twice.
+    setMarker({ top: rect.top - box.top, height: rect.height, nonce: Date.now() })
+    markerTimer.current = window.setTimeout(() => { setMarker(null); markerTimer.current = null }, 1200)
+  }
+  useEffect(() => () => { if (markerTimer.current !== null) window.clearTimeout(markerTimer.current) }, [])
+  /**
+   * Jumps the view to one heading of the body and lights it in the accent colour.
    *
-   * The source view owns its document, so it gets the markdown offset and does
-   * its own scroll. The rich view is ProseMirror; its heading elements come out
-   * in document order, which is the order the outline was parsed in, so the index
-   * is enough — and scrolling the element needs no editor handle.
+   * The source view owns its document, so it gets the markdown offset and does its
+   * own scroll and highlight. The rich view is ProseMirror: its heading elements
+   * come out in document order, which is the order the outline was parsed in, so
+   * the index is enough.
+   *
+   * The scroll is written on the pane instead of `scrollIntoView`, because the
+   * latter also scrolls the ancestors (the page behind the pane moved on the first
+   * try).
    */
   const revealHeading = (index: number): void => {
     const heading = headings[index]
     if (!heading) return
     if (!markdownPreview) { bodyInputRef.current?.reveal(heading.offset); return }
-    const nodes = document.querySelectorAll<HTMLElement>(
-      '[data-notes-detail] .milkdown .ProseMirror h1, [data-notes-detail] .milkdown .ProseMirror h2, [data-notes-detail] .milkdown .ProseMirror h3, [data-notes-detail] .milkdown .ProseMirror h4, [data-notes-detail] .milkdown .ProseMirror h5, [data-notes-detail] .milkdown .ProseMirror h6'
-    )
-    nodes[index]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    const pane = document.querySelector<HTMLElement>('[data-notes-detail-pane]')
+    const target = headingElements()[index]
+    if (!pane || !target) return
+    const paneRect = pane.getBoundingClientRect()
+    const rect = target.getBoundingClientRect()
+    pane.scrollTop += rect.top - paneRect.top - paneRect.height / 2 + rect.height / 2
+    showMarker(target)
   }
   const draftTextRef = useRef({ transcript: transcriptDraft, polished: polishedDraft })
   draftTextRef.current = { transcript: transcriptDraft, polished: polishedDraft }
@@ -1158,6 +1197,26 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
         sx={{ px: { xs: 2, lg: 4 }, pt: 2.5, pb: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5, flex: '0 0 auto' }}
       >
         <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+          {/* 收起/展开列表 sits on the left, next to the page title: it acts on the
+              pane immediately beside it, and it stays in place when the list is
+              collapsed — the right end of a 1500 px toolbar was the wrong anchor. */}
+          <Tooltip title={t(listCollapsed ? '显示列表' : '隐藏列表')}>
+            <IconButton
+              data-notes-list-toggle
+              data-notes-list-collapsed={listCollapsed ? 'on' : 'off'}
+              size="small"
+              aria-label={t(listCollapsed ? '显示列表' : '隐藏列表')}
+              aria-pressed={!listCollapsed}
+              onClick={toggleList}
+              sx={{ width: 34, height: 34, flexShrink: 0, border: '1px solid', borderColor: 'divider' }}
+            >
+              <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden style={{ display: 'block' }}>
+                <path d="M3.5 5h17v14h-17z" fill="none" stroke="currentColor" strokeWidth={1.6} />
+                <path d="M9.5 5v14" stroke="currentColor" strokeWidth={1.6} />
+                {!listCollapsed && <path d="M3.5 5h6v14h-6z" fill="currentColor" opacity={0.3} />}
+              </svg>
+            </IconButton>
+          </Tooltip>
           <Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} alignItems="center"><Typography component="h1" variant="h5">{t('随记')}</Typography><Typography sx={{ fontSize: 11.5, color: 'text.secondary', bgcolor: 'action.hover', px: 1, borderRadius: 1 }}>{notes.length}</Typography></Stack></Box>
           <Box sx={{ flex: 1 }} />
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: 'auto' }}>
@@ -1216,24 +1275,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
               {recording ? t('notes.recordStop') : t('notes.record')}
             </Button>
             <Tooltip title={t('更多')}><IconButton data-notes-more size="small" aria-label={t('更多')} onClick={event => setMoreAt(event.currentTarget)}><MoreHorizRounded sx={{ fontSize: 20 }} /></IconButton></Tooltip>
-            {/* 收起/展开列表：放在工具栏最右，收起后也一直看得见、可键盘操作 */}
-            <Tooltip title={t(listCollapsed ? '显示列表' : '隐藏列表')}>
-              <IconButton
-                data-notes-list-toggle
-                data-notes-list-collapsed={listCollapsed ? 'on' : 'off'}
-                size="small"
-                aria-label={t(listCollapsed ? '显示列表' : '隐藏列表')}
-                aria-pressed={!listCollapsed}
-                onClick={toggleList}
-                sx={{ width: 34, height: 34, border: '1px solid', borderColor: 'divider' }}
-              >
-                <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden style={{ display: 'block' }}>
-                  <path d="M3.5 5h17v14h-17z" fill="none" stroke="currentColor" strokeWidth={1.6} />
-                  <path d="M9.5 5v14" stroke="currentColor" strokeWidth={1.6} />
-                  {!listCollapsed && <path d="M3.5 5h6v14h-6z" fill="currentColor" opacity={0.3} />}
-                </svg>
-              </IconButton>
-            </Tooltip>
           </Stack>
         </Stack>
         {(importing || retranscribingId) && <Stack data-notes-audio-job role="status" direction="row" spacing={1} alignItems="center">
@@ -1468,7 +1509,65 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
 
             {(categoryId || activeTags.length > 0 || sort !== 'newest') && <Button size="small" onClick={() => { setCategoryId(ALL_CATEGORIES); setActiveTags([]); setSort('newest') }} sx={{ fontSize: 11, px: 0, mt: .5 }}>{t('清除筛选')}</Button>}
           </Box>
-          {/* The list scrolls independently from its search and filters. */}
+          {/* 随记 / 大纲. The filters above belong to the list and stay mounted, so
+              flipping panes never disturbs a category or tag selection. */}
+          <Box data-notes-side-tabs sx={{ flexShrink: 0, px: 1.25, pt: .5, borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs
+              value={sideTab}
+              onChange={(_event, next) => setSideTab(next === 'outline' ? 'outline' : 'list')}
+              sx={{ minHeight: 32, '& .MuiTab-root': { minHeight: 32, minWidth: 0, flex: 1, px: 1, py: .5, fontSize: 12, gap: .25 } }}
+            >
+              <Tab value="list" data-notes-side-tab="list" label={t('随记')} />
+              <Tab value="outline" data-notes-side-tab="outline" label={t('大纲')} icon={<TocRounded sx={{ fontSize: 15 }} />} iconPosition="start" />
+            </Tabs>
+          </Box>
+          {sideTab === 'outline' ? (
+            // Comfortably spaced rows: the sidebar is the place the outline is read,
+            // and 30 px text with no breathing room is what made the drawer feel
+            // cramped at the default window size.
+            <Box data-notes-outline sx={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarGutter: 'stable', px: 1.25, py: 1.25 }}>
+              {headings.length === 0 ? (
+                <Typography sx={{ px: 1, py: 2, fontSize: 12, lineHeight: 1.7, color: 'text.secondary' }}>
+                  {t('这篇随记还没有标题。')}
+                </Typography>
+              ) : headings.map((heading, index) => (
+                <Box
+                  key={`${heading.offset}-${index}`}
+                  component="button"
+                  type="button"
+                  data-notes-outline-item={index}
+                  data-notes-outline-level={heading.level}
+                  onClick={() => revealHeading(index)}
+                  sx={{
+                    display: 'block',
+                    width: '100%',
+                    border: 0,
+                    bgcolor: 'transparent',
+                    borderRadius: '7px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    font: 'inherit',
+                    py: 1,
+                    pr: 1.25,
+                    mb: .25,
+                    // Depth is the only thing that has to read at a glance; the size
+                    // and weight drop is what makes the tree legible without a rail.
+                    pl: 1.25 + (heading.level - 1) * 1.5,
+                    fontSize: heading.level <= 2 ? 13 : 12.5,
+                    lineHeight: 1.5,
+                    fontWeight: heading.level <= 2 ? 600 : 500,
+                    color: heading.level <= 2 ? 'text.primary' : 'text.secondary',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    '&:hover': { bgcolor: 'action.hover' },
+                    '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 }
+                  }}
+                >{heading.text}</Box>
+              ))}
+            </Box>
+          ) : (
+          // The list scrolls independently from its search and filters.
           <Box
             data-notes-list-inner
             sx={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarGutter: 'stable', px: 1.25, py: 1.5 }}
@@ -1550,6 +1649,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
               )
             })}</PagedList>
           </Box>
+          )}
         </Box>
 
         <Box
@@ -1576,7 +1676,31 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
           )}
 
           {selected && (
-            <Box data-notes-detail={selected.id} sx={{ pl: { xs: 3, md: 9 }, pr: { xs: 3, md: 5 }, py: 3.5, maxWidth: 880, mx: 'auto' }}>
+            <Box data-notes-detail={selected.id} sx={{ position: 'relative', pl: { xs: 3, md: 9 }, pr: { xs: 3, md: 5 }, py: 3.5, maxWidth: 880, mx: 'auto' }}>
+              {marker && (
+                <Box
+                  key={marker.nonce}
+                  aria-hidden
+                  data-notes-highlight
+                  sx={{
+                    position: 'absolute',
+                    left: { xs: 8, md: 24 },
+                    right: { xs: 8, md: 16 },
+                    top: marker.top,
+                    height: marker.height,
+                    borderRadius: '6px',
+                    bgcolor: 'primary.main',
+                    opacity: 0.18,
+                    pointerEvents: 'none',
+                    zIndex: 0,
+                    animation: 'notesHighlightFade 1.2s ease-out forwards',
+                    '@keyframes notesHighlightFade': {
+                      '0%, 60%': { opacity: 0.18 },
+                      '100%': { opacity: 0 }
+                    }
+                  }}
+                />
+              )}
               {/* The left gutter is real padding, not a negative offset: the block
                   handle (＋ and grip) is drawn ~66 px to the left of the block and
                   the pane clips its overflow, so the handle needs that much empty
@@ -1704,11 +1828,32 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 <Button data-notes-delete size="small" color="error" startIcon={<IconTrash size={14} />} onClick={() => setDeleteOpen(true)}>{t('notes.delete')}</Button>
               </Stack>
               </Box>}
+              {/* The note's operations stay reachable while reading a long body: the
+                  row sticks to the top of the detail pane, so 源码 / 插入图片 do not
+                  require scrolling back to the head of the note. The background has
+                  to be opaque — text scrolls underneath it. */}
               <Box data-notes-primary sx={{ mt: 2.5, pt: 2, borderTop: 1, borderColor: 'divider' }}
                 onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
                 onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.dataTransfer.files)) } }}
                 onPaste={event => { if (event.clipboardData.files.length) { event.preventDefault(); void insertAttachments(Array.from(event.clipboardData.files)) } }}>
-                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap', gap: .5 }}>
+                <Stack
+                  data-notes-primary-actions
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 3,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: .5,
+                    py: .75,
+                    mb: 1,
+                    bgcolor: 'background.paper',
+                    borderBottom: 1,
+                    borderColor: 'divider'
+                  }}
+                >
                   {/* One switch instead of a two-button group: in the rich view it
                       says 源码 and dives into the markdown, in the source view it
                       says 退出源码 and comes back. The icon stays the same so the
@@ -1722,17 +1867,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                     onClick={() => { if (markdownPreview) setMarkdownPreview(false); else { void flushNow(); setMarkdownPreview(true) } }}
                     sx={{ fontSize: 11.5 }}
                   >{t(markdownPreview ? '源码' : '退出源码')}</Button>
-                  <Tooltip title={t('章节目录')}>
-                    <span><Button
-                      data-notes-outline-toggle
-                      size="small"
-                      variant="outlined"
-                      startIcon={<TocRounded sx={{ fontSize: 15 }} />}
-                      disabled={attachmentBusy || !headings.length}
-                      onClick={() => setOutlineOpen(true)}
-                      sx={{ fontSize: 11.5 }}
-                    >{t('目录')}</Button></span>
-                  </Tooltip>
                                     <Box sx={{ flex: 1 }} />
                   <Tooltip title={t('支持粘贴或拖入，附件保存到随记目录')}><span><Button data-notes-insert-attachment size="small" startIcon={<AttachFileRounded sx={{ fontSize: 15 }} />} disabled={attachmentBusy || retranscribingId === selected.id} onClick={() => void insertAttachments()} sx={{ fontSize: 11, color: 'text.secondary' }}>{t(attachmentBusy ? '正在保存附件…' : '插入图片 / 附件')}</Button></span></Tooltip>
                 </Stack>
@@ -1743,6 +1877,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   noteId={selected.id} disabled={attachmentBusy || retranscribingId === selected.id}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')}
                   onEditSource={() => { void flushNow(); setMarkdownPreview(false) }}
+                  onError={setNotice}
                   onAttachment={path => { void window.api.notes.revealAttachment(selected.id, path).catch(error => setNotice(messageOf(error))) }} /> :
                 <MarkdownSourceEditor key={`source-${selected.id}:${primaryField}`} ref={bodyInputRef} field={primaryField} noteId={selected.id} value={primaryValue}
                   onChange={next => commitDraft(selected.id, primaryField, next)}
@@ -1856,55 +1991,6 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
       </Box>
 
 
-
-      {/* 目录: the headings of the body, parsed from the markdown, so the same list
-          serves the rich view and the source view. Clicking a row closes the
-          drawer and takes the reader there. */}
-      <Drawer
-        anchor="left"
-        open={outlineOpen}
-        onClose={() => setOutlineOpen(false)}
-        data-notes-outline
-        slotProps={{ paper: { sx: { width: 288, p: 1.25 } } }}
-      >
-        <Stack direction="row" alignItems="center" sx={{ px: .5, pb: 1, mb: .5, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography sx={{ flex: 1, fontSize: 13, fontWeight: 650 }}>{t('章节目录')}</Typography>
-          <IconButton size="small" aria-label={t('关闭')} onClick={() => setOutlineOpen(false)}><CloseRounded sx={{ fontSize: 17 }} /></IconButton>
-        </Stack>
-        {headings.length === 0
-          ? <Typography sx={{ px: .75, py: 1.5, fontSize: 12, color: 'text.secondary' }}>{t('这篇随记还没有标题。')}</Typography>
-          : headings.map((heading, index) => (
-            <Box
-              key={`${heading.offset}-${index}`}
-              component="button"
-              type="button"
-              data-notes-outline-item={index}
-              onClick={() => { revealHeading(index); setOutlineOpen(false) }}
-              sx={{
-                display: 'block',
-                width: '100%',
-                border: 0,
-                bgcolor: 'transparent',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                font: 'inherit',
-                py: .6,
-                pr: .75,
-                // Depth is the only thing that has to be visible at a glance; the
-                // size drop is what makes the tree readable without a rail.
-                pl: .75 + (heading.level - 1) * 1.25,
-                fontSize: heading.level <= 2 ? 12.8 : 12,
-                fontWeight: heading.level <= 2 ? 600 : 500,
-                color: heading.level <= 2 ? 'text.primary' : 'text.secondary',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                '&:hover': { bgcolor: 'action.hover' }
-              }}
-            >{heading.text}</Box>
-          ))}
-      </Drawer>
 
       <Menu anchorEl={createMenuAt} open={Boolean(createMenuAt)} onClose={() => setCreateMenuAt(null)}>
         <MenuItem data-notes-create-blank onClick={() => void createTextNote()} sx={{ fontSize: 12.5 }}>{t('notes.newBlankText')}</MenuItem>

@@ -1285,5 +1285,8 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "有多个相近文件夹，请明确名称：{{names}}": "Several similar folders exist. Specify a name: {{names}}",
   "已完成的操作：": "Completed operations:",
   "未完成的操作：": "Incomplete operations:",
-  "未找到重叠区域，请稍向上滚动以继续拼接": "No overlap found. Scroll back up a little to continue stitching."
+  "未找到重叠区域，请稍向上滚动以继续拼接": "No overlap found. Scroll back up a little to continue stitching.",
+  "这个附件不是可以复制的图片": "This attachment is not an image that can be copied",
+  "图片另存为": "Save image as",
+  "图片": "Image"
 }

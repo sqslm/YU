@@ -46,6 +46,7 @@ import { needsAssistantContext } from './voice-intent'
 import { chainFor, withFailover } from './providers/chain'
 import { complete } from './providers/llm'
 import { registerNotesIpc } from './notes-ipc'
+import { openExternalSafely } from './safeLink'
 import { LocalAsrHost } from './local-asr/host'
 import { registerLocalAsrIpc } from './local-asr/ipc'
 import { collectResources } from './resources'
@@ -1796,6 +1797,13 @@ function registerIpc(): void {
   // The note editor's context menu needs the opposite direction; a file:// renderer
   // has no clipboard grant, so the read goes through the main process too.
   handle('app:readClipboard', (): string => clipboard.readText())
+  /**
+   * Ctrl+click on a link inside a note. The gate is the same one every other
+   * outbound link goes through, so `file:///…/calc.exe` stays inert.
+   */
+  handle('app:openExternal', (_event, url: unknown) => {
+    if (typeof url === 'string' && url) openExternalSafely(url)
+  })
 
   handle('app:version', (): string => app.getVersion())
 

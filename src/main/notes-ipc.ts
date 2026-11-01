@@ -1,6 +1,6 @@
-import { clipboard, dialog, protocol, shell } from 'electron'
-import { readFile, open } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { clipboard, dialog, nativeImage, protocol, shell } from 'electron'
+import { copyFile, readFile, open } from 'node:fs/promises'
+import { basename, extname, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
 import type { NotesStore } from './notes'
@@ -178,6 +178,33 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     const file = store.attachmentPathOf(id, path)
     if (!file) throw new Error(mt('附件不存在于这条随记目录中'))
     shell.showItemInFolder(file)
+  })
+  /**
+   * The image menu's 复制图片. The renderer can neither read the attachment file
+   * nor reach the clipboard, so the pixels travel through here.
+   */
+  ipcHandle('notes:copyAttachment', (_event, id: string, path: string) => {
+    const file = store.attachmentPathOf(id, path)
+    if (!file) throw new Error(mt('附件不存在于这条随记目录中'))
+    const image = nativeImage.createFromPath(file)
+    if (image.isEmpty()) throw new Error(mt('这个附件不是可以复制的图片'))
+    clipboard.writeImage(image)
+  })
+  /** 图片另存为: the user picks where the copy lands; null on cancel. */
+  ipcHandle('notes:saveAttachmentAs', async (_event, id: string, path: string) => {
+    const file = store.attachmentPathOf(id, path)
+    if (!file) throw new Error(mt('附件不存在于这条随记目录中'))
+    const extension = extname(file).replace(/^\./, '') || 'png'
+    const chosen = await dialog.showSaveDialog({
+      title: mt('图片另存为'),
+      defaultPath: basename(file),
+      filters: [{ name: mt('图片'), extensions: [extension] }]
+    })
+    if (chosen.canceled || !chosen.filePath) return null
+    // Saving onto the attachment itself would truncate the source mid-copy.
+    if (resolve(chosen.filePath) === resolve(file)) return chosen.filePath
+    await copyFile(file, chosen.filePath)
+    return chosen.filePath
   })
   ipcHandle('notes:exportText', (_event, ids: string[], format: NoteExportFormat) => exportNoteText(store, ids, format))
   ipcHandle('notes:exportAudio', (_event, id: string) => exportNoteAudio(store, id))

@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Box, useTheme } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { EditorSelection, EditorState, Compartment } from '@codemirror/state'
 import { EditorView, drawSelection, highlightActiveLine, keymap, placeholder as cmPlaceholder } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
@@ -123,6 +124,21 @@ function heading(view: EditorView, level: number): void {
 }
 
 /**
+ * Marks the CodeMirror line that holds `pos` so a 目录 jump is visible.
+ *
+ * The attribute goes away after the animation: CodeMirror recycles line elements
+ * while scrolling, and leaving it on would re-flash the same row later. The fade
+ * itself is CSS (`animation`), so nothing here has to time the highlight.
+ */
+function flashLine(view: EditorView, pos: number): void {
+  const { node } = view.domAtPos(pos)
+  const line = (node instanceof Element ? node : node.parentElement)?.closest('.cm-line')
+  if (!line) return
+  line.setAttribute('data-note-target', 'on')
+  window.setTimeout(() => line.removeAttribute('data-note-target'), 1200)
+}
+
+/**
  * Markdown source editor used by the 随记 「Markdown 源码」 view.
  *
  * A textarea with a couple of key handlers was the wrong tool: no undo grouping,
@@ -167,6 +183,10 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
         effects: EditorView.scrollIntoView(pos, { y: 'center' })
       })
       current.focus()
+      // CodeMirror rebuilds the lines it scrolls past, so the element that was
+      // there before the scroll is usually gone: look the line up again once the
+      // scroll has settled.
+      window.setTimeout(() => flashLine(current, pos), 90)
     }
   }), [])
 
@@ -275,7 +295,24 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
     onContextMenu={openMenu}
     data-notes-editor={field}
     data-notes-editor-mode="source"
-    sx={{ minHeight, border: 1, borderColor: 'divider', borderRadius: 1, p: 2, bgcolor: 'transparent', '& .cm-editor': { minHeight, maxHeight: 'none' }, '& .cm-scroller': { overflow: 'visible' }, '& .cm-placeholder': { color: theme.palette.text.disabled } }}
+    sx={{
+      minHeight,
+      border: 1,
+      borderColor: 'divider',
+      borderRadius: 1,
+      p: 2,
+      bgcolor: 'transparent',
+      '& .cm-editor': { minHeight, maxHeight: 'none' },
+      '& .cm-scroller': { overflow: 'visible' },
+      '& .cm-placeholder': { color: theme.palette.text.disabled },
+      // Same 目录 jump highlight as the rich editor: the accent appears, then fades.
+      '& .cm-line[data-note-target]': { animation: 'noteTargetFlash 1.1s ease-out forwards', borderRadius: '3px' },
+      '@keyframes noteTargetFlash': {
+        '0%': { backgroundColor: alpha(theme.palette.primary.main, 0.24), boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.16)}` },
+        '65%': { backgroundColor: alpha(theme.palette.primary.main, 0.2), boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.14)}` },
+        '100%': { backgroundColor: 'transparent', boxShadow: '0 0 0 3px transparent' }
+      }
+    }}
   >
     <NoteContextMenu anchor={menu ? { x: menu.x, y: menu.y } : null} entries={menu?.entries ?? []} onClose={() => setMenu(null)} />
   </Box>
