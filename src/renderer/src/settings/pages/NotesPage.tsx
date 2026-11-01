@@ -49,7 +49,7 @@ import { useTranslation } from 'react-i18next'
 import { MarkdownEditor } from './MarkdownEditor'
 import { MarkdownSourceEditor, type MarkdownSourceHandle } from './MarkdownSourceEditor'
 import { saveNoteEdit } from './notesSave'
-import { noteHeadings } from './noteOutline'
+import { matchHeadingIndex, noteHeadings } from './noteOutline'
 import { noteBodyField } from '@shared/noteBody'
 import { attachmentMarkdown } from '@shared/noteAttachments'
 import type { NoteAttachment } from '@shared/noteAttachments'
@@ -409,8 +409,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     if (!heading) return
     if (!markdownPreview) { bodyInputRef.current?.reveal(heading.offset); return }
     const pane = document.querySelector<HTMLElement>('[data-notes-detail-pane]')
-    const target = headingElements()[index]
-    if (!pane || !target) return
+    const nodes = Array.from(headingElements())
+    if (!pane || !nodes.length) return
+    // Not the same list: the outline only parses top-level `#` lines, the editor
+    // also renders headings inside quotes and keeps empty ones. Matching by text
+    // is what keeps the highlight on the row that was clicked.
+    const target = nodes[matchHeadingIndex(nodes.map(node => node.textContent ?? ''), headings, index)]
+    if (!target) return
     const paneRect = pane.getBoundingClientRect()
     const rect = target.getBoundingClientRect()
     pane.scrollTop += rect.top - paneRect.top - paneRect.height / 2 + rect.height / 2
