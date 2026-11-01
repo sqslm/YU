@@ -25,6 +25,7 @@ import type { CalendarEvent } from '@shared/calendar'
 import { MAX_EVENT_LEAD_MINUTES, MAX_EVENT_NOTES, MAX_EVENT_TITLE, formatEventTime } from '@shared/calendar'
 import { dayKeyOf, dayStart, dotDays, formatDayHeading, groupByDay, listRangeFor, monthGrid, rangeForCursor, shiftDayKey, sortEvents } from './calendarView'
 import { emptyForm, formOf, toInput, withStartDate, type CalendarForm as Form } from './calendarForm'
+import { DateTimeField } from './DateTimeField'
 import i18n from '../../i18n'
 
 /**
@@ -450,21 +451,24 @@ export function CalendarPage(): JSX.Element {
                   onChange={event => setEditor({ ...editor, form: { ...editor.form, allDay: event.target.checked } })} />}
                 label={<Typography sx={{ fontSize: 12.5 }}>{i18n.t('全天')}</Typography>} />
               <Stack direction="row" spacing={1}>
-                <TextField label={i18n.t(editor.form.allDay ? '日期' : '开始日期')} type="date" fullWidth InputLabelProps={{ shrink: true }}
-                  value={editor.form.date} sx={{ colorScheme: theme => theme.palette.mode }}
-                  onChange={event => setEditor({ ...editor, form: withStartDate(editor.form, event.target.value) })} />
-                {!editor.form.allDay && <TextField label={i18n.t('开始时间')} type="time" fullWidth InputLabelProps={{ shrink: true }}
-                  value={editor.form.start} sx={{ colorScheme: theme => theme.palette.mode }}
-                  onChange={event => setEditor({ ...editor, form: { ...editor.form, start: event.target.value } })} />}
+                {/* Same picker as the reminder editor: click anywhere in the field,
+                    and the clock is two scroll wheels instead of the OS blue
+                    widget. */}
+                <DateTimeField mode="date" label={i18n.t(editor.form.allDay ? '日期' : '开始日期')} value={editor.form.date}
+                  pickerAttribute="data-event-date-picker"
+                  onChange={value => setEditor({ ...editor, form: withStartDate(editor.form, value) })} />
+                {!editor.form.allDay && <DateTimeField mode="time" label={i18n.t('开始时间')} value={editor.form.start}
+                  pickerAttribute="data-event-time-picker"
+                  onChange={start => setEditor({ ...editor, form: { ...editor.form, start } })} />}
               </Stack>
               {!editor.form.allDay && (
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <TextField label={i18n.t('日程结束日期')} type="date" fullWidth InputLabelProps={{ shrink: true }}
-                    value={editor.form.endDate} sx={{ colorScheme: theme => theme.palette.mode }}
-                    onChange={event => setEditor({ ...editor, form: { ...editor.form, endDate: event.target.value } })} />
-                  <TextField label={i18n.t('结束时间')} type="time" fullWidth InputLabelProps={{ shrink: true }}
-                    value={editor.form.end} sx={{ colorScheme: theme => theme.palette.mode }}
-                    onChange={event => setEditor({ ...editor, form: { ...editor.form, end: event.target.value } })} />
+                  <DateTimeField mode="date" label={i18n.t('日程结束日期')} value={editor.form.endDate}
+                    pickerAttribute="data-event-end-date-picker"
+                    onChange={endDate => setEditor({ ...editor, form: { ...editor.form, endDate } })} />
+                  <DateTimeField mode="time" label={i18n.t('结束时间')} value={editor.form.end}
+                    pickerAttribute="data-event-end-time-picker"
+                    onChange={end => setEditor({ ...editor, form: { ...editor.form, end } })} />
                 </Stack>
               )}
               <TextField label={i18n.t('地点（可选）')} value={editor.form.location}

@@ -3,7 +3,7 @@ import { alpha } from '@mui/material/styles'
 import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material'
 import type { HistoryEntry, Settings } from '@shared/types'
 import type { StatsFile } from '@shared/stats'
-import { palettes } from '../theme'
+import { skinFor } from '../theme'
 import { IconBook, IconChart, IconClock, IconMic, IconSparkles } from '../icons'
 import {
   WEEKDAY,
@@ -46,7 +46,10 @@ const METRIC_LABEL: Record<Metric, string> = {
 }
 
 export function UsageInsights({ settings, mode, entries, stats, now, onOpenHistory, view }: UsageInsightsProps): JSX.Element {
-  const t = palettes[mode]
+  // The heatmap is built from these tokens, so it has to come from the active
+  // theme pack rather than the shipped palette: on the brutalist pack the year
+  // grid was still jade green, i.e. a different design language inside the page.
+  const t = skinFor(settings.themePack, mode)
   const [range, setRange] = useState<Range>(7)
   const [metric, setMetric] = useState<Metric>('count')
   const [sharing, setSharing] = useState(false)

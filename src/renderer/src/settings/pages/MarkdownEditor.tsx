@@ -7,7 +7,7 @@ import { replaceAll } from '@milkdown/kit/utils'
 import { editorViewCtx } from '@milkdown/kit/core'
 import type { EditorView } from '@milkdown/kit/prose/view'
 import { AllSelection, TextSelection, type Command } from '@milkdown/kit/prose/state'
-import { setBlockType, toggleMark, wrapIn } from '@milkdown/kit/prose/commands'
+import { lift, setBlockType, toggleMark, wrapIn } from '@milkdown/kit/prose/commands'
 import { noteAttachmentUrl } from '@shared/noteAttachments'
 import { NoteContextMenu, type NoteMenuEntry } from './NoteContextMenu'
 
@@ -66,6 +66,8 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
    * command runs.
    */
   const menuRange = useRef<{ from: number; to: number } | null>(null)
+  /** Hidden picker behind 插入 → 图像. */
+  const pickImage = useRef<HTMLInputElement | null>(null)
   const props = useRef({ value, onChange, noteId, placeholder, disabled })
   props.current = { value, onChange, noteId, placeholder, disabled }
 
@@ -92,6 +94,51 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
 
   /** Runs a ProseMirror command on the live view. */
   const withView = (run: (view: EditorView) => void): void => readView((view) => { view.focus(); run(view) })
+
+  /**
+   * The state the context menu renders against.
+   *
+   * `availableMarks` / `nodes` exist so an entry whose schema type is missing is
+   * *disabled and visible* instead of silently doing nothing — the shape of the
+   * bug that made 斜体 and 删除线 look broken. `activeMarks` drives the toggle
+   * ticks, `block` / `level` / `in*` drive the heading and list submenus.
+   */
+  interface MenuSnapshot {
+    activeMarks: Set<string>
+    availableMarks: Set<string>
+    nodes: Set<string>
+    block: string
+    level: number
+    inQuote: boolean
+    inBullet: boolean
+    inOrdered: boolean
+  }
+  const menuSnapshot = (): MenuSnapshot => {
+    const snap: MenuSnapshot = {
+      activeMarks: new Set(), availableMarks: new Set(), nodes: new Set(),
+      block: '', level: 0, inQuote: false, inBullet: false, inOrdered: false
+    }
+    readView((view) => {
+      const { state } = view
+      snap.nodes = new Set(Object.keys(state.schema.nodes))
+      snap.availableMarks = new Set(Object.keys(state.schema.marks))
+      const { from, to, $from } = state.selection
+      for (const [name, type] of Object.entries(state.schema.marks)) {
+        if (!type) continue
+        const active = from !== to ? state.doc.rangeHasMark(from, to, type) : Boolean(type.isInSet($from.marks()))
+        if (active) snap.activeMarks.add(name)
+      }
+      snap.block = $from.parent.type.name
+      snap.level = Number($from.parent.attrs.level ?? 0)
+      for (let depth = $from.depth; depth > 0; depth--) {
+        const name = $from.node(depth).type.name
+        if (name === 'blockquote') snap.inQuote = true
+        if (name === 'bullet_list') snap.inBullet = true
+        if (name === 'ordered_list') snap.inOrdered = true
+      }
+    })
+    return snap
+  }
 
   /**
    * Runs a `Command` with the dispatch it expects.
@@ -122,6 +169,26 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     void window.api.app.readClipboard().then((text) => {
       if (text) withView((view) => view.dispatch(view.state.tr.insertText(text)))
     })
+  }
+
+  /**
+   * Uploads a picked file as a note attachment and drops an image node at the
+   * caret. Same storage path the paste/drop flow uses, so the markdown keeps a
+   * note-relative `attachments/…` reference.
+   */
+  const uploadImage = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    const owner = sink.current
+    if (!file || !owner) return
+    try {
+      const added = await window.api.notes.addAttachment(owner.noteId, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) })
+      withView((view) => {
+        const image = view.state.schema.nodes.image
+        if (!image) return
+        view.dispatch(view.state.tr.replaceSelectionWith(image.create({ src: added.path, alt: file.name })))
+      })
+    } catch { /* the attachment store refused; the page reports its own error */ }
   }
 
   const openMenu = (event: React.MouseEvent): void => {
@@ -159,22 +226,55 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       })
       return
     }
-    const block = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
-      const node = state.schema.nodes[name]
-      return node ? setBlockType(node)(state, dispatch, view) : false
-    })
-    const heading = (level: number): ((view: EditorView) => void) => apply((state, dispatch, view) => {
-      const node = state.schema.nodes.heading
-      return node ? setBlockType(node, { level })(state, dispatch, view) : false
-    })
-    const wrap = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
-      const node = state.schema.nodes[name]
-      return node ? wrapIn(node)(state, dispatch, view) : false
-    })
-    const mark = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+    /**
+     * What the menu should show as active, and which schema names this editor
+     * actually has.
+     *
+     * The names are Milkdown's, not ProseMirror's defaults: italics are
+     * `emphasis` (not `em`) and strikethrough is `strike_through` (not
+     * `strikethrough`). Looking those up by the wrong key returned `undefined`,
+     * the command quietly returned `false`, and the entry did nothing — the
+     * "斜体/删除线 are dead" report.
+     */
+    const snap = menuSnapshot()
+    const has = (kind: 'mark' | 'node', name: string): boolean => (kind === 'mark' ? snap.availableMarks : snap.nodes).has(name)
+    const toggleMarkEntry = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
       const type = state.schema.marks[name]
       return type ? toggleMark(type)(state, dispatch, view) : false
     })
+    const setHeading = (level: number): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+      const heading = state.schema.nodes.heading
+      const paragraph = state.schema.nodes.paragraph
+      if (!heading || !paragraph) return false
+      const current = state.selection.$from.parent
+      // Second click on the same heading level goes back to a plain paragraph.
+      if (current.type === heading && current.attrs.level === level) return setBlockType(paragraph)(state, dispatch, view)
+      return setBlockType(heading, { level })(state, dispatch, view)
+    })
+    /** Applies a block type, or lifts it again when the caret is already inside one. */
+    const toggleBlock = (name: string): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+      const node = state.schema.nodes[name]
+      const paragraph = state.schema.nodes.paragraph
+      if (!node || !paragraph) return false
+      const { $from } = state.selection
+      let inside = false
+      for (let depth = $from.depth; depth > 0; depth--) if ($from.node(depth).type.name === name) inside = true
+      if (inside) {
+        // A code block has no wrapper to lift out of; it turns back into prose.
+        return name === 'code_block' ? setBlockType(paragraph)(state, dispatch, view) : lift(state, dispatch, view)
+      }
+      // Textblocks (code_block) replace the current block; containers wrap it.
+      return node.isTextblock ? setBlockType(node)(state, dispatch, view) : wrapIn(node)(state, dispatch, view)
+    })
+    const toggleParagraph = (): ((view: EditorView) => void) => apply((state, dispatch, view) => {
+      const paragraph = state.schema.nodes.paragraph
+      if (!paragraph) return false
+      // Already plain prose: nothing to change, but keep the entry honest.
+      if (state.selection.$from.parent.type === paragraph) return false
+      return setBlockType(paragraph)(state, dispatch, view)
+    })
+    const headingOn = (level: number): boolean => snap.block === 'heading' && snap.level === level
+
     setMenu({
       x: event.clientX,
       y: event.clientY,
@@ -184,24 +284,10 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
         { id: 'paste', label: t('粘贴'), shortcut: 'Ctrl+V', run: paste },
         { id: 'select-all', label: t('全选'), shortcut: 'Ctrl+A', run: () => withView((view) => view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)))) },
         { divider: true },
-        { id: 'bold', label: t('加粗'), shortcut: 'Ctrl+B', run: () => withView(mark('strong')) },
-        { id: 'italic', label: t('斜体'), shortcut: 'Ctrl+I', run: () => withView(mark('em')) },
-        { id: 'strike', label: t('删除线'), run: () => withView(mark('strikethrough')) },
-        { id: 'code', label: t('行内代码'), shortcut: 'Ctrl+`', run: () => withView(mark('inlineCode')) },
-        { divider: true },
-        { id: 'h1', label: t('标题 1'), shortcut: 'Ctrl+1', run: () => withView(heading(1)) },
-        { id: 'h2', label: t('标题 2'), shortcut: 'Ctrl+2', run: () => withView(heading(2)) },
-        { id: 'h3', label: t('标题 3'), shortcut: 'Ctrl+3', run: () => withView(heading(3)) },
-        { id: 'paragraph', label: t('正文'), shortcut: 'Ctrl+0', run: () => withView(block('paragraph')) },
-        { id: 'quote', label: t('引用'), run: () => withView(wrap('blockquote')) },
-        { id: 'bullet', label: t('无序列表'), run: () => withView(wrap('bullet_list')) },
-        { id: 'ordered', label: t('有序列表'), run: () => withView(wrap('ordered_list')) },
-        { id: 'code-block', label: t('代码块'), run: () => withView(block('code_block')) },
-        { id: 'rule', label: t('分隔线'), run: () => withView((view) => {
-          const rule = view.state.schema.nodes.hr
-          if (rule) view.dispatch(view.state.tr.replaceSelectionWith(rule.create()))
-        }) },
-        { divider: true },
+        { id: 'bold', label: t('加粗'), shortcut: 'Ctrl+B', disabled: !has('mark', 'strong'), checked: snap.activeMarks.has('strong'), run: () => withView(toggleMarkEntry('strong')) },
+        { id: 'italic', label: t('斜体'), shortcut: 'Ctrl+I', disabled: !has('mark', 'emphasis'), checked: snap.activeMarks.has('emphasis'), run: () => withView(toggleMarkEntry('emphasis')) },
+        { id: 'strike', label: t('删除线'), disabled: !has('mark', 'strike_through'), checked: snap.activeMarks.has('strike_through'), run: () => withView(toggleMarkEntry('strike_through')) },
+        { id: 'code', label: t('行内代码'), shortcut: 'Ctrl+`', disabled: !has('mark', 'inlineCode'), checked: snap.activeMarks.has('inlineCode'), run: () => withView(toggleMarkEntry('inlineCode')) },
         { id: 'clear', label: t('清除格式'), run: () => withView((view) => {
           const paragraph = view.state.schema.nodes.paragraph
           if (paragraph) apply(setBlockType(paragraph))(view)
@@ -210,8 +296,49 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
           const range = menuRange.current ?? view.state.selection
           view.dispatch(view.state.tr.removeMark(range.from, range.to))
         }) },
+        { divider: true },
+        {
+          id: 'heading',
+          label: t('标题'),
+          children: [
+            ...[1, 2, 3, 4, 5, 6].map(level => ({
+              id: `h${level}`,
+              label: t(['一级标题', '二级标题', '三级标题', '四级标题', '五级标题', '六级标题'][level - 1]!),
+              // Milkdown only binds Ctrl+1…6 in its own keymap; the first three
+              // are advertised here because those are the ones the app documents.
+              ...(level <= 3 ? { shortcut: `Ctrl+${level}` } : {}),
+              disabled: !has('node', 'heading'),
+              checked: headingOn(level),
+              run: () => withView(setHeading(level))
+            })),
+            { divider: true },
+            { id: 'paragraph', label: t('段落'), shortcut: 'Ctrl+0', disabled: !has('node', 'paragraph'), checked: snap.block === 'paragraph', run: () => withView(toggleParagraph()) }
+          ]
+        },
+        {
+          id: 'blocks',
+          label: t('列表与块'),
+          children: [
+            { id: 'bullet', label: t('无序列表'), disabled: !has('node', 'bullet_list'), checked: snap.inBullet, run: () => withView(toggleBlock('bullet_list')) },
+            { id: 'ordered', label: t('有序列表'), disabled: !has('node', 'ordered_list'), checked: snap.inOrdered, run: () => withView(toggleBlock('ordered_list')) },
+            { id: 'quote', label: t('引用'), disabled: !has('node', 'blockquote'), checked: snap.inQuote, run: () => withView(toggleBlock('blockquote')) },
+            { id: 'code-block', label: t('代码块'), disabled: !has('node', 'code_block'), checked: snap.block === 'code_block', run: () => withView(toggleBlock('code_block')) }
+          ]
+        },
+        {
+          id: 'insert',
+          label: t('插入'),
+          children: [
+            { id: 'insert-image', label: t('图像'), disabled: !has('node', 'image'), run: () => pickImage.current?.click() },
+            { id: 'insert-rule', label: t('水平分割线'), disabled: !has('node', 'hr'), run: () => withView((view) => {
+              const rule = view.state.schema.nodes.hr
+              if (rule) view.dispatch(view.state.tr.replaceSelectionWith(rule.create()))
+            }) }
+          ]
+        },
+        { divider: true },
         { id: 'copy-markdown', label: t('复制全文 Markdown'), run: () => copy(crepe.current?.getMarkdown() ?? '') },
-        ...(onEditSource ? [{ id: 'edit-source', label: t('编辑 Markdown 源码'), run: () => { flush(); onEditSource() } }] : [])
+        ...(onEditSource ? [{ id: 'edit-source' as const, label: t('编辑 Markdown 源码'), run: () => { flush(); onEditSource() } }] : [])
       ]
     })
   }
@@ -416,6 +543,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       }}
     >
       <NoteContextMenu anchor={menu ? { x: menu.x, y: menu.y } : null} entries={menu?.entries ?? []} onClose={() => setMenu(null)} />
+      <input ref={pickImage} type="file" accept="image/*" hidden data-notes-pick-image onChange={event => void uploadImage(event)} aria-hidden tabIndex={-1} />
     </Box>
   )
 }
