@@ -2644,5 +2644,14 @@
   "普通查询每次取回的网页数；0 表示不限，由模型自行决定；新闻汇总会自动分主题扩展，不受此总数限制。": "Page size for ordinary searches. 0 means unlimited (the model decides). News roundups expand across topics and are not capped at this total.",
   "润色": "Polish",
   "任务": "Task",
-  "分类": "Category"
+  "分类": "Category",
+  "主题包": "Theme pack",
+  "切换整套界面外观，随时可以换回来。": "Switches the whole interface look; you can always switch back.",
+  "青瓷": "Celadon",
+  "暖白瓷面与青玉点缀，应用最初的界面。": "Warm porcelain with celadon accents — the original interface.",
+  "苹果风": "Apple",
+  "系统蓝、SF 字体层级与半透明材质。": "System blue, the SF type ramp and translucent materials.",
+  "粗野": "Brutalist",
+  "墨线分隔、硬投影与信号橙，0 圆角高对比。": "Ink rules, hard offset shadows and signal orange — zero radius, maximum contrast.",
+  "深色与浅色在每套主题包里都有，主题和外观各自独立。": "Every pack ships a light and a dark palette; pack and appearance are independent."
 }

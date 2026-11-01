@@ -28,10 +28,12 @@ export function App(): JSX.Element {
     void window.api.account.closeLogin()
   }
 
+  // The sign-in window paints whichever pack the hub is using, so opening it
+  // from an Apple-styled hub never flashes the shipped palette first.
   const themeMode = settings?.themeMode === 'light' ? 'light' : 'dark'
 
   return (
-    <ThemeProvider theme={makeTheme(themeMode)}>
+    <ThemeProvider theme={makeTheme(themeMode, settings?.themePack ?? 'classic')}>
       <CssBaseline />
       <Box
         sx={{

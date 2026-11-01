@@ -41,7 +41,7 @@ function StrongReminder(): JSX.Element {
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
-  return <ThemeProvider theme={makeTheme(settings?.themeMode === 'system' ? systemTheme : settings?.themeMode ?? 'dark')}><CssBaseline />
+  return <ThemeProvider theme={makeTheme(settings?.themeMode === 'system' ? systemTheme : settings?.themeMode ?? 'dark', settings?.themePack ?? 'classic')}><CssBaseline />
     <Box data-strong-backdrop sx={{ height: '100%', display: 'grid', placeItems: 'center', p: 3, bgcolor: 'rgba(0,0,0,0.6)' }}>
     <Paper data-strong-reminder role="dialog" aria-modal="true" aria-labelledby="reminder-title" elevation={12}
       sx={{ width: 480, maxWidth: '100%', minHeight: 380, maxHeight: '100%', overflowY: 'auto', p: 3,

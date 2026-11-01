@@ -1,16 +1,22 @@
 import type { TypelessApi } from '@shared/api'
 import { rangeFor, type CalendarEvent } from '@shared/calendar'
 import { effectiveDeadline, isOverdue, sortTodos, type Reminder } from '@shared/reminders'
-import type { Briefing } from '@shared/briefing'
 import type { HistoryEntry, NoteEntry } from '@shared/types'
 import type { StatsFile } from '@shared/stats'
 import type { Workflow } from '@shared/workflow'
 import { statusOf } from './historyView'
 
+/**
+ * What the overview reads.
+ *
+ * The briefing is deliberately absent: it has its own page, and the home card
+ * that used to mirror it was one more panel competing for height with the lists
+ * the page is actually for. Not fetching it also removes a store that could
+ * fail and take a warning slot on a page that no longer shows it.
+ */
 export interface HomeData {
   events: CalendarEvent[]
   todos: Reminder[]
-  briefing: Briefing
   notes: NoteEntry[]
   history: HistoryEntry[]
   workflows: Workflow[]
@@ -26,7 +32,6 @@ export async function loadHomeData(api: TypelessApi, now: number): Promise<{
   const reads = {
     events: () => api.life.eventsBetween(from, until),
     todos: () => api.reminders.list(),
-    briefing: () => api.life.briefing(),
     notes: () => api.notes.list().then(store => store.notes),
     history: () => api.history.list(),
     workflows: () => api.workflow.list(),
@@ -74,5 +79,5 @@ export function recentActivity(history: readonly HistoryEntry[], notes: readonly
     })),
     ...notes.map(row => ({ id: row.id, kind: 'note' as const,
       text: row.title?.trim() || row.polished.trim() || row.transcript.trim(), at: row.updatedAt, failed: false }))
-  ].filter(row => row.text).sort((a, b) => b.at - a.at).slice(0, 4)
+  ].filter(row => row.text).sort((a, b) => b.at - a.at).slice(0, 8)
 }

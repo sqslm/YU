@@ -18,7 +18,7 @@ interface SettingsPage {
 
 /** Every destination is also searchable, including the former horizontal tabs. */
 export const SETTINGS_PAGES = [
-  { id: 'general', group: 'preferences', label: 'settings.nav.general', description: '外观、语言、启动与交互反馈。', keywords: '主题 theme appearance language startup 界面 音效 提示' },
+  { id: 'general', group: 'preferences', label: 'settings.nav.general', description: '外观、语言、启动与交互反馈。', keywords: '主题 主题包 苹果风 theme pack apple appearance skin language startup 界面 外观 音效 提示' },
   { id: 'shortcuts', group: 'preferences', label: 'settings.nav.shortcuts', description: '为常用操作配置顺手的快捷键。', keywords: 'hotkey keyboard 快捷键 按键 录音 截图' },
   { id: 'speech', group: 'voice', label: '录音与语言', description: '选择麦克风，调整识别语言与音频处理。', keywords: 'microphone mic audio device language 麦克风 设备 识别 翻译 语言 音频 降噪' },
   { id: 'wake', group: 'voice', label: '语音唤醒', description: '使用唤醒词打开语音入口，并学习你的发音。', keywords: 'wake word training confidence 唤醒词 置信度 学习' },

@@ -63,7 +63,8 @@ function ScreenshotEditor(): JSX.Element {
   const [systemMode, setSystemMode] = useState(() => resolveThemeMode('system'))
   useEffect(() => onSystemThemeChange(() => setSystemMode(resolveThemeMode('system'))), [])
   const mode = settings?.themeMode === 'system' ? systemMode : settings?.themeMode ?? 'dark'
-  const theme = useMemo(() => makeTheme(mode), [mode])
+  const pack = settings?.themePack ?? 'classic'
+  const theme = useMemo(() => makeTheme(mode, pack), [mode, pack])
   useEffect(() => { if (settings) applyUiLanguage(settings.uiLanguage) }, [settings?.uiLanguage])
   const [view, setView] = useState(() => ({ width: innerWidth, height: innerHeight }))
   const canvas = useRef<HTMLCanvasElement>(null), image = useRef<HTMLCanvasElement | null>(null), gesture = useRef<Gesture | null>(null)

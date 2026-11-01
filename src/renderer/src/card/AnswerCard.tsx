@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import InputBase from '@mui/material/InputBase'
 import { useTranslation } from 'react-i18next'
 import type { AnswerCardPayload } from '@shared/api'
@@ -10,6 +10,7 @@ import i18n, { applyUiLanguage } from '../i18n'
 import { answerNote } from './answerNote'
 import { useVoiceQuestion } from './useVoiceQuestion'
 import { AnswerSelection } from './AnswerSelection'
+import { accentWash, glassOf, glassSkin, wash, type GlassSkin } from '../settings/appearance'
 
 /** Entrance/exit timings shared with the bar's own "appear" language. */
 const ENTER_MS = 200
@@ -106,6 +107,12 @@ export function AnswerCard(): JSX.Element | null {
   const [saveError, setSaveError] = useState('')
   const dataRef = useRef<AnswerCardPayload | null>(null)
   const saveInFlight = useRef(false)
+  /**
+   * The colours this card paints with. Seeded with the shipped pack so the frame
+   * drawn before `settings.get()` resolves is the card this app always had.
+   */
+  const [glass, setGlass] = useState<GlassSkin>(() => glassSkin('classic', 'dark'))
+  const s = useMemo(() => cardStyles(glass), [glass])
 
   /** True once this mount has played `cardIn`; reset when the window hides. */
   const enteredRef = useRef(false)
@@ -129,7 +136,11 @@ export function AnswerCard(): JSX.Element | null {
   const voice = useVoiceQuestion(submitQuestion)
 
   useEffect(() => {
-    const apply = (settings: Settings): void => { applyUiLanguage(settings.uiLanguage); setSourceSize(settings.listPageSize) }
+    const apply = (settings: Settings): void => {
+      applyUiLanguage(settings.uiLanguage)
+      setSourceSize(settings.listPageSize)
+      setGlass(glassOf(settings))
+    }
     void window.api.settings.get().then(apply)
     return window.api.settings.onChanged(apply)
   }, [])
@@ -344,13 +355,13 @@ export function AnswerCard(): JSX.Element | null {
   }
 
   return (
-    <div style={stage}>
-      <style>{baseCss}</style>
+    <div style={s.stage}>
+      <style>{s.baseCss}</style>
 
       <div
         ref={cardRef}
         style={{
-          ...card,
+          ...s.card,
           width: explanationOpen ? 'calc(100% - min(312px, 40vw))' : '100%',
           minHeight: busy && followUpHeight.current ? Math.min(followUpHeight.current, window.innerHeight - STAGE_PADDING * 2) : undefined,
           animation: closing
@@ -360,21 +371,21 @@ export function AnswerCard(): JSX.Element | null {
               : 'none'
         }}
       >
-        <div style={header}>
-          <div style={brandRow}>
-            <span style={brandDot} />
-            <span style={brandText}>{data.selection ? i18n.t('选区处理') : 'Ask'}</span>
-            {!busy && !data.selection && <span style={chip} data-card-retrieval>{data.stopped ? i18n.t('已停止') : searchLabel}</span>}
+        <div style={s.header}>
+          <div style={s.brandRow}>
+            <span style={s.brandDot} />
+            <span style={s.brandText}>{data.selection ? i18n.t('选区处理') : 'Ask'}</span>
+            {!busy && !data.selection && <span style={s.chip} data-card-retrieval>{data.stopped ? i18n.t('已停止') : searchLabel}</span>}
           </div>
-          <div style={headerActions}>
+          <div style={s.headerActions}>
             <button type="button" data-card-pin aria-pressed={pinned} title={i18n.t(pinned ? '取消固定' : '固定显示')}
-              aria-label={i18n.t(pinned ? '取消固定' : '固定显示')} style={{ ...iconButton, width: 'auto', padding: '0 6px', color: pinned ? '#9bd6bb' : '#909d92' }}
+              aria-label={i18n.t(pinned ? '取消固定' : '固定显示')} style={{ ...s.iconButton, width: 'auto', padding: '0 6px', color: pinned ? glass.accent : glass.textFaint }}
               onClick={() => setPinned(value => !value)}>{i18n.t(pinned ? '已固定' : '固定')}</button>
             <button
               type="button"
               title={i18n.t('关闭')}
               aria-label={i18n.t('关闭')}
-              style={iconButton}
+              style={s.iconButton}
               onClick={requestClose}
             >
               ✕
@@ -382,67 +393,67 @@ export function AnswerCard(): JSX.Element | null {
           </div>
         </div>
 
-        {previousAnswer && !data.selection && <details data-card-context style={{ padding: '6px 14px', fontSize: 11.5, color: '#abb5ac' }}>
+        {previousAnswer && !data.selection && <details data-card-context style={{ padding: '6px 14px', fontSize: 11.5, color: glass.textDim }}>
           <summary>{i18n.t('沿用上下文：{{question}}', { question: previousAnswer.question })}</summary>
           <div style={{ whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto', marginTop: 6 }}>{previousAnswer.answer}</div>
         </details>}
         {question !== '' && (
-          <div style={questionRow}>
-            <MicIcon />
-            <span style={questionText} title={question}>
+          <div style={s.questionRow}>
+            <MicIcon stroke={s.micStroke} />
+            <span style={s.questionText} title={question}>
               {question}
             </span>
           </div>
         )}
 
         {statusLine !== null && (
-          <div style={statusRow} aria-live="polite">
+          <div style={s.statusRow} aria-live="polite">
             {busy && <span className="card-dots" aria-hidden="true">
               <span />
               <span />
               <span />
             </span>}
-            <span style={statusText}>{statusLine}</span>
+            <span style={s.statusText}>{statusLine}</span>
           </div>
         )}
 
-        <div ref={scrollRef} style={answerBox} data-card-scroll>
-          <div style={answerTitleRow}>
-            <span style={answerMark}>✦</span>
-            <span style={answerTitle}>{i18n.t(data.selection ? '处理结果' : '回答')}</span>
+        <div ref={scrollRef} style={s.answerBox} data-card-scroll>
+          <div style={s.answerTitleRow}>
+            <span style={s.answerMark}>✦</span>
+            <span style={s.answerTitle}>{i18n.t(data.selection ? '处理结果' : '回答')}</span>
           </div>
-          <div style={answerBody} data-card-body>
-            <AnswerSelection snapshotKey={`${data.taskId ?? ''}:${data.question}:${answer}`} busy={busy} onOpen={setExplanationOpen}>
-            <MarkdownView text={answer} streaming={streaming} sources={sourceList} copiedCode={copied}
+          <div style={s.answerBody} data-card-body>
+            <AnswerSelection snapshotKey={`${data.taskId ?? ''}:${data.question}:${answer}`} busy={busy} onOpen={setExplanationOpen} glass={glass}>
+            <MarkdownView text={answer} streaming={streaming} sources={sourceList} copiedCode={copied} glass={glass}
               onCopyCode={busy ? undefined : (text, key) => runAction({ id: 'copy', label: i18n.t('复制代码'), payload: text }, key)} />
             </AnswerSelection>
           </div>
           {items.length > 0 && <div data-card-items>
             {items.slice((safeItemPage - 1) * sourceSize, safeItemPage * sourceSize).map((item, index) => <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
               <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontSize: 12 }}>
-                <div>{(safeItemPage - 1) * sourceSize + index + 1}. {item.name}</div><div style={{ color: '#909d92', fontSize: 11, marginTop: 3 }}>{item.path}</div>
+                <div>{(safeItemPage - 1) * sourceSize + index + 1}. {item.name}</div><div style={{ color: glass.textFaint, fontSize: 11, marginTop: 3 }}>{item.path}</div>
               </div>
-              <button data-card-open-item={item.id} style={primaryButton} disabled={busy} onClick={() => bridge().action?.({ id: 'open-item', payload: item.id, label: i18n.t('打开') })}>{i18n.t('打开')}</button>
+              <button data-card-open-item={item.id} style={s.primaryButton} disabled={busy} onClick={() => bridge().action?.({ id: 'open-item', payload: item.id, label: i18n.t('打开') })}>{i18n.t('打开')}</button>
             </div>)}
             {itemPages > 1 && <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button style={primaryButton} disabled={safeItemPage <= 1} onClick={() => setItemPage(safeItemPage - 1)}>{i18n.t('上一页')}</button>
-              <span style={sourcesTitle}>{i18n.t('第 {{page}} / {{total}} 页', { page: safeItemPage, total: itemPages })}</span>
-              <button style={primaryButton} disabled={safeItemPage >= itemPages} onClick={() => setItemPage(safeItemPage + 1)}>{i18n.t('下一页')}</button>
+              <button style={s.primaryButton} disabled={safeItemPage <= 1} onClick={() => setItemPage(safeItemPage - 1)}>{i18n.t('上一页')}</button>
+              <span style={s.sourcesTitle}>{i18n.t('第 {{page}} / {{total}} 页', { page: safeItemPage, total: itemPages })}</span>
+              <button style={s.primaryButton} disabled={safeItemPage >= itemPages} onClick={() => setItemPage(safeItemPage + 1)}>{i18n.t('下一页')}</button>
             </div>}
           </div>}
 
-          {data.memoryTemporary && <div style={{ color: '#909d92', fontSize: 11, marginTop: 10 }}>{i18n.t('临时对话：不读取或保存长期记忆')}</div>}
+          {data.memoryTemporary && <div style={{ color: glass.textFaint, fontSize: 11, marginTop: 10 }}>{i18n.t('临时对话：不读取或保存长期记忆')}</div>}
           {Boolean(data.memories?.length) && <details style={{ marginTop: 10, fontSize: 12 }} data-card-memories><summary>{i18n.t('本次使用的记忆')} · {data.memories!.length}</summary>{data.memories!.map(row => <div key={row.id} style={{ marginTop: 8, overflowWrap: 'anywhere' }}>{row.text}</div>)}</details>}
           {sourceList.length > 0 && (
-            <div style={sources}>
-              <button type="button" style={sourceToggle} aria-expanded={sourcesExpanded} data-card-sources-toggle onClick={() => setSourcesExpanded(value => !value)}>
+            <div style={s.sources}>
+              <button type="button" style={s.sourceToggle} aria-expanded={sourcesExpanded} data-card-sources-toggle onClick={() => setSourcesExpanded(value => !value)}>
                 <span>{i18n.t('来源')} · {sourceList.length}</span><span>{sourcesExpanded ? '−' : '+'}</span>
               </button>
-              {retrieval && <div style={sourcesTitle} data-card-coverage>
+              {retrieval && <div style={s.sourcesTitle} data-card-coverage>
                 {i18n.t('检索 {{queries}} 个方向 · 阅读 {{pages}} 篇原文', { queries: retrieval.queries.length, pages: retrieval.pagesRead })}
                 {retrieval.partial && ` · ${i18n.t('部分检索未完成')}`}
               </div>}
-              {retrieval?.digest && <div style={sourcesTitle}>{i18n.t('已合并重复报道；仅代表本次检索覆盖范围。')}</div>}
+              {retrieval?.digest && <div style={s.sourcesTitle}>{i18n.t('已合并重复报道；仅代表本次检索覆盖范围。')}</div>}
               {sourcesExpanded && sourceList.slice((safeSourcePage - 1) * sourceSize, safeSourcePage * sourceSize).map((item, localIndex) => {
                 const index = (safeSourcePage - 1) * sourceSize + localIndex
                 return (
@@ -451,21 +462,21 @@ export function AnswerCard(): JSX.Element | null {
                   key={`${item.url}-${index}`}
                   href={isSafeLink(item.url) ? item.url : undefined}
                   target="_blank" rel="noopener noreferrer"
-                  style={sourceLink}
+                  style={s.sourceLink}
                   title={`${i18n.t('在默认浏览器打开')}：${item.title || item.url}\n${item.url}`}
                 >
-                  <span style={sourceNumber}>{index + 1}</span>
+                  <span style={s.sourceNumber}>{index + 1}</span>
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#d3ddd3', fontSize: 12 }}>{item.title || item.url}</span>
-                    <span style={{ display: 'block', color: '#909d92', fontSize: 10.5, marginTop: 3 }}>{sourceHost(item.url)}{item.publishedAt ? ` · ${item.publishedAt.slice(0, 10)}` : ''}</span>
-                    {item.snippet && <span style={sourceSnippet}>{item.snippet}</span>}
+                    <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: glass.label, fontSize: 12 }}>{item.title || item.url}</span>
+                    <span style={{ display: 'block', color: glass.textFaint, fontSize: 10.5, marginTop: 3 }}>{sourceHost(item.url)}{item.publishedAt ? ` · ${item.publishedAt.slice(0, 10)}` : ''}</span>
+                    {item.snippet && <span style={s.sourceSnippet}>{item.snippet}</span>}
                   </span>
                 </a>
               )})}
               {sourcesExpanded && sourcePages > 1 && <div data-card-source-pagination style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                <button type="button" style={primaryButton} data-source-prev disabled={safeSourcePage <= 1} onClick={() => setSourcePage(safeSourcePage - 1)}>{i18n.t('上一页')}</button>
-                <span style={sourcesTitle}>{i18n.t('第 {{page}} / {{total}} 页', { page: safeSourcePage, total: sourcePages })}</span>
-                <button type="button" style={primaryButton} data-source-next disabled={safeSourcePage >= sourcePages} onClick={() => setSourcePage(safeSourcePage + 1)}>{i18n.t('下一页')}</button>
+                <button type="button" style={s.primaryButton} data-source-prev disabled={safeSourcePage <= 1} onClick={() => setSourcePage(safeSourcePage - 1)}>{i18n.t('上一页')}</button>
+                <span style={s.sourcesTitle}>{i18n.t('第 {{page}} / {{total}} 页', { page: safeSourcePage, total: sourcePages })}</span>
+                <button type="button" style={s.primaryButton} data-source-next disabled={safeSourcePage >= sourcePages} onClick={() => setSourcePage(safeSourcePage + 1)}>{i18n.t('下一页')}</button>
               </div>}
 
             </div>
@@ -473,21 +484,21 @@ export function AnswerCard(): JSX.Element | null {
         </div>
 
         {tools.length > 0 && (
-          <div style={chipRow}>
+          <div style={s.chipRow}>
             {tools.map((tool, index) => (
-              <span key={`${tool}-${index}`} style={chip}>
+              <span key={`${tool}-${index}`} style={s.chip}>
                 {toolLabel(tool)}
               </span>
             ))}
           </div>
         )}
 
-        <div style={actionRow}>
-          {busy && <button type="button" style={primaryButton} data-card-stop onClick={() => bridge().action?.({ id: 'stop', label: i18n.t('停止生成') })}>{i18n.t('停止生成')}</button>}
-          <button type="button" style={primaryButton} onClick={copyAnswer} disabled={!answer}>
+        <div style={s.actionRow}>
+          {busy && <button type="button" style={s.primaryButton} data-card-stop onClick={() => bridge().action?.({ id: 'stop', label: i18n.t('停止生成') })}>{i18n.t('停止生成')}</button>}
+          <button type="button" style={s.primaryButton} onClick={copyAnswer} disabled={!answer}>
             {copied === 'answer' ? i18n.t('已复制') : i18n.t(data.selection ? '复制结果' : '复制回答')}
           </button>
-          {!data.selection && <button type="button" data-card-save-note style={primaryButton}
+          {!data.selection && <button type="button" data-card-save-note style={s.primaryButton}
             disabled={busy || saving || !answer.trim() || saved?.question === data.question && saved?.answer === answer} onClick={() => void saveAnswer()}>
             {i18n.t(saving ? '保存中…' : saved?.question === data.question && saved?.answer === answer ? '已保存到随记' : '保存到随记')}
           </button>}
@@ -497,7 +508,7 @@ export function AnswerCard(): JSX.Element | null {
                 <button
                   key={key}
                   type="button"
-                  style={primaryButton}
+                  style={s.primaryButton}
                   disabled={busy}
                   onClick={() => runAction(action, key)}
                 >
@@ -506,18 +517,18 @@ export function AnswerCard(): JSX.Element | null {
               )
             })}
         </div>
-        {saveError && <div role="alert" style={{ padding: '0 14px 8px', fontSize: 12, color: '#ffb4aa' }}>{saveError}</div>}
-        {voice.error && <div role="alert" style={{ padding: '0 14px 8px', fontSize: 12, color: '#ffb4aa' }}>{voice.error}</div>}
+        {saveError && <div role="alert" style={{ padding: '0 14px 8px', fontSize: 12, color: glass.dangerFaint }}>{saveError}</div>}
+        {voice.error && <div role="alert" style={{ padding: '0 14px 8px', fontSize: 12, color: glass.dangerFaint }}>{voice.error}</div>}
 
-        {!data.selection && <div style={askRow}>
+        {!data.selection && <div style={s.askRow}>
           <InputBase
             className="card-ask"
             autoFocus={data.assistant && !data.question}
             value={draft}
             disabled={busy || voice.recording || voice.working}
             placeholder={voice.recording ? i18n.t('正在聆听，点击结束并发送…') : voice.working ? i18n.t('正在识别语音…') : busy ? i18n.t('正在思考…') : data.stopped ? i18n.t('重新提问…') : i18n.t('继续追问…')}
-            style={askInput}
-            inputProps={{ 'aria-label': i18n.t('追问'), style: askInputInner }}
+            style={s.askInput}
+            inputProps={{ 'aria-label': i18n.t('追问'), style: s.askInputInner }}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return
@@ -527,14 +538,14 @@ export function AnswerCard(): JSX.Element | null {
               submitFollowUp()
             }}
           />
-          <button type="button" data-card-voice style={{ ...askButton, color: voice.recording ? '#ffb4aa' : '#bce5cf' }}
+          <button type="button" data-card-voice style={{ ...s.askButton, color: voice.recording ? glass.dangerFaint : glass.accentTint }}
             disabled={busy || voice.working} aria-pressed={voice.recording} onClick={voice.toggle}>
             {i18n.t(voice.recording ? '结束并发送' : voice.working ? '识别中…' : '语音追问')}
           </button>
-          {(voice.recording || voice.working) && <button type="button" style={askButton} onClick={voice.cancel}>{i18n.t('取消')}</button>}
+          {(voice.recording || voice.working) && <button type="button" style={s.askButton} onClick={voice.cancel}>{i18n.t('取消')}</button>}
           <button
             type="button"
-            style={{ ...askButton, opacity: busy || draft.trim() === '' ? 0.5 : 1 }}
+            style={{ ...s.askButton, opacity: busy || draft.trim() === '' ? 0.5 : 1 }}
             disabled={busy || voice.recording || voice.working || draft.trim() === ''}
             onClick={submitFollowUp}
           >
@@ -575,14 +586,14 @@ function sourceHost(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
 }
 
-function MicIcon(): JSX.Element {
+function MicIcon({ stroke }: { stroke: string }): JSX.Element {
   return (
     <svg
       width="13"
       height="13"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#7b8598"
+      stroke={stroke}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -596,15 +607,62 @@ function MicIcon(): JSX.Element {
   )
 }
 
-const baseCss = `
+/** Everything the card paints, so a pack swap re-derives one object. */
+interface CardStyles {
+  baseCss: string
+  /** Stroke of the mic glyph that heads the question row. */
+  micStroke: string
+  stage: React.CSSProperties
+  card: React.CSSProperties
+  header: React.CSSProperties
+  brandRow: React.CSSProperties
+  brandDot: React.CSSProperties
+  brandText: React.CSSProperties
+  headerActions: React.CSSProperties
+  iconButton: React.CSSProperties
+  questionRow: React.CSSProperties
+  questionText: React.CSSProperties
+  statusRow: React.CSSProperties
+  statusText: React.CSSProperties
+  answerBox: React.CSSProperties
+  answerTitleRow: React.CSSProperties
+  answerMark: React.CSSProperties
+  answerTitle: React.CSSProperties
+  answerBody: React.CSSProperties
+  sources: React.CSSProperties
+  sourcesTitle: React.CSSProperties
+  sourceLink: React.CSSProperties
+  sourceToggle: React.CSSProperties
+  sourceNumber: React.CSSProperties
+  sourceSnippet: React.CSSProperties
+  chipRow: React.CSSProperties
+  chip: React.CSSProperties
+  actionRow: React.CSSProperties
+  primaryButton: React.CSSProperties
+  askRow: React.CSSProperties
+  askInput: React.CSSProperties
+  askInputInner: React.CSSProperties
+  askButton: React.CSSProperties
+}
+
+/**
+ * The card's whole style table, resolved from one skin.
+ *
+ * Every colour, type face, corner radius and material lives here so a theme pack
+ * repaints the card by changing `glass` alone; layout, sizes, spacing and the
+ * animation timings stay literals because they are not the pack's business.
+ * Classic values are exactly the literals this file used to hard-code.
+ */
+function cardStyles(g: GlassSkin): CardStyles {
+  const baseCss = `
   html, body, #root { margin: 0; height: 100%; background: transparent; overflow: hidden }
   * { box-sizing: border-box }
   button:disabled { opacity: .45; cursor: default !important }
-  button:focus-visible, a:focus-visible { outline: 2px solid #9bd6bb; outline-offset: 2px }
-  [data-card-source]:hover { background: rgba(255,255,255,.06) !important }
+  button:focus-visible, a:focus-visible { outline: 2px solid ${g.accent}; outline-offset: 2px }
+  [data-card-source]:hover { background: ${wash(g, .06)} !important }
   ::-webkit-scrollbar { width: 6px; height: 6px }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,.14); border-radius: 8px;
+    background: ${wash(g, .14)}; border-radius: 8px;
     border: 1px solid transparent; background-clip: content-box;
   }
   ::-webkit-scrollbar-track { background: transparent }
@@ -626,287 +684,262 @@ const baseCss = `
 
   .card-dots { display: inline-flex; gap: 2px; align-items: center }
   .card-dots > span {
-    width: 4px; height: 4px; border-radius: 99px; background: #909d92;
+    width: 4px; height: 4px; border-radius: 99px; background: ${g.textFaint};
     animation: cardDot 1.2s ease-in-out infinite;
   }
   .card-dots > span:nth-child(2) { animation-delay: .15s }
   .card-dots > span:nth-child(3) { animation-delay: .3s }
 
   .card-ask {
-    border: 1px solid rgba(255,255,255,.10);
-    background: rgba(255,255,255,.04);
-    border-radius: 8px;
+    border: ${g.borderWidth}px solid ${wash(g, .10)};
+    background: ${wash(g, .04)};
+    border-radius: ${g.radiusSm}px;
     padding: 3px 8px;
     transition: border-color .15s ease;
   }
-  .card-ask:focus-within { border-color: rgba(155,214,187,.45) }
+  .card-ask:focus-within { border-color: ${accentWash(g, .45)} }
   .card-ask.Mui-disabled { opacity: .6 }
-  .card-ask input::placeholder { color: #909d92; opacity: 1 }
+  .card-ask input::placeholder { color: ${g.textFaint}; opacity: 1 }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
 `
 
-const stage: React.CSSProperties = {
-  // Flex-end keeps the card glued to the bottom edge of the window — the edge
-  // that faces the pill — even when the main process enlarged the window before
-  // the content grew (or clamped it at CARD_MIN_HEIGHT for a short answer).
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'flex-end',
-  height: '100%',
-  padding: STAGE_PADDING,
-  fontFamily: '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif'
-}
-
-const card: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  // Height follows the content; the window is resized to match, so growing
-  // answers push the card upwards away from the pill.
-  height: 'auto',
-  maxHeight: '100%',
-  minHeight: 0,
-  borderRadius: 14,
-  background: 'rgba(25,28,26,.97)',
-  backdropFilter: 'blur(18px)',
-  WebkitBackdropFilter: 'blur(18px)',
-  border: '1px solid rgba(255,255,255,.10)',
-  color: '#eef1e9',
-  overflow: 'hidden',
-  // The card is anchored above the pill: it should rise out of the bar.
-  transformOrigin: 'bottom center',
-  // No shadow: the window is transparent and shadowless, a CSS shadow here
-  // would paint a dark ring around the card.
-  boxShadow: 'none'
-} as React.CSSProperties
-
-const header: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  height: 40,
-  padding: '0 10px 0 14px',
-  flex: '0 0 auto',
-  borderBottom: '1px solid rgba(255,255,255,.06)',
-  WebkitAppRegion: 'drag'
-} as React.CSSProperties
-
-const brandRow: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8
-}
-
-const brandDot: React.CSSProperties = {
-  width: 7,
-  height: 7,
-  borderRadius: 99,
-  background: '#9bd6bb'
-}
-
-const brandText: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: 0.2,
-  color: '#d3ddd3'
-}
-
-const headerActions: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 4,
-  WebkitAppRegion: 'no-drag'
-} as React.CSSProperties
-
-const iconButton: React.CSSProperties = {
-  width: 24,
-  height: 24,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: 6,
-  border: 'none',
-  background: 'transparent',
-  color: '#909d92',
-  fontSize: 12,
-  lineHeight: 1,
-  cursor: 'pointer',
-  WebkitAppRegion: 'no-drag'
-} as React.CSSProperties
-
-const questionRow: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: 8,
-  padding: '12px 14px 8px',
-  flex: '0 0 auto'
-}
-
-const questionText: React.CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  fontSize: 12.5,
-  lineHeight: 1.5,
-  color: '#abb5ac',
-  display: '-webkit-box',
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: 'vertical',
-  overflow: 'hidden'
-} as React.CSSProperties
-
-
-const statusRow: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '0 14px 8px',
-  flex: '0 0 auto',
-  minHeight: 18
-}
-
-const statusText: React.CSSProperties = {
-  fontSize: 12,
-  lineHeight: 1.4,
-  color: '#909d92'
-}
-
-const answerBox: React.CSSProperties = {
-  flex: '0 1 auto',
-  minHeight: 0,
-  padding: '10px 16px 12px',
-  overflowY: 'auto',
-  userSelect: 'text'
-}
-
-const answerTitleRow: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 5,
-  marginBottom: 6
-}
-
-const answerMark: React.CSSProperties = {
-  fontSize: 11,
-  color: '#9bd6bb'
-}
-
-const answerTitle: React.CSSProperties = {
-  fontSize: 11,
-  letterSpacing: 0.6,
-  color: '#909d92'
-}
-
-const answerBody: React.CSSProperties = {
-  // The body itself no longer sets type: MarkdownView owns the scale, spacing and
-  // inline styling, and the scroll box only has to keep the text selectable.
-  color: '#eef1e9',
-  wordBreak: 'break-word',
-  userSelect: 'text'
-}
-
-
-const sources: React.CSSProperties = {
-  marginTop: 10,
-  paddingTop: 8,
-  borderTop: '1px solid rgba(255,255,255,.06)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 3
-}
-
-const sourcesTitle: React.CSSProperties = {
-  fontSize: 10.5,
-  letterSpacing: 0.5,
-  color: '#909d92',
-  marginBottom: 2
-}
-
-const sourceLink: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: 9,
-  padding: '9px 8px',
-  borderRadius: 8,
-  background: 'rgba(255,255,255,.025)',
-  textDecoration: 'none',
-}
-
-const sourceToggle: React.CSSProperties = {
-  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-  width: '100%', padding: '3px 0 6px', color: '#abb5ac', background: 'transparent', border: 0, fontSize: 12, cursor: 'pointer'
-}
-const sourceNumber: React.CSSProperties = {
-  flex: '0 0 22px', textAlign: 'center', padding: '2px 0', border: '1px solid rgba(155,214,187,.25)', borderRadius: 5, color: '#9bd6bb', fontSize: 11
-}
-const sourceSnippet: React.CSSProperties = {
-  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 11.5, lineHeight: 1.5, color: '#abb5ac', marginTop: 4
-}
-
-const chipRow: React.CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 6,
-  padding: '8px 14px 0',
-  flex: '0 0 auto'
-}
-
-const chip: React.CSSProperties = {
-  padding: '1px 7px',
-  borderRadius: 99,
-  border: '1px solid rgba(255,255,255,.08)',
-  background: 'rgba(255,255,255,.04)',
-  color: '#abb5ac',
-  fontSize: 10.5,
-  lineHeight: 1.6
-}
-
-const actionRow: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'flex-end',
-  flexWrap: 'wrap',
-  gap: 8,
-  padding: '8px 14px 0',
-  borderTop: '1px solid rgba(255,255,255,.06)',
-  flex: '0 0 auto'
-}
-
-const primaryButton: React.CSSProperties = {
-  padding: '5px 12px',
-  borderRadius: 8,
-  border: '1px solid rgba(155,214,187,.35)',
-  background: 'rgba(155,214,187,.16)',
-  color: '#bce5cf',
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: 'pointer'
-}
-
-const askRow: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '10px 14px 12px',
-  flex: '0 0 auto'
-}
-
-const askInput: React.CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  fontSize: 12.5,
-  color: '#eef1e9'
-}
-
-const askInputInner: React.CSSProperties = {
-  padding: '2px 0',
-  color: '#eef1e9'
-}
-
-const askButton: React.CSSProperties = {
-  flex: '0 0 auto',
-  padding: '5px 12px',
-  borderRadius: 8,
-  border: '1px solid rgba(155,214,187,.35)',
-  background: 'rgba(155,214,187,.16)',
-  color: '#bce5cf',
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: 'pointer'
+  return {
+    baseCss,
+    micStroke: g.iconStroke,
+    stage: {
+      // Flex-end keeps the card glued to the bottom edge of the window — the edge
+      // that faces the pill — even when the main process enlarged the window before
+      // the content grew (or clamped it at CARD_MIN_HEIGHT for a short answer).
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'flex-end',
+      height: '100%',
+      padding: STAGE_PADDING,
+      fontFamily: g.font
+    } as React.CSSProperties,
+    card: {
+      display: 'flex',
+      flexDirection: 'column',
+      // Height follows the content; the window is resized to match, so growing
+      // answers push the card upwards away from the pill.
+      height: 'auto',
+      maxHeight: '100%',
+      minHeight: 0,
+      borderRadius: g.radiusPanel,
+      background: g.cardSurface,
+      backdropFilter: g.frostedPanel,
+      WebkitBackdropFilter: g.frostedPanel,
+      border: `${g.borderWidth}px solid ${wash(g, .10)}`,
+      color: g.text,
+      overflow: 'hidden',
+      // The card is anchored above the pill: it should rise out of the bar.
+      transformOrigin: 'bottom center',
+      // No shadow: the window is transparent and shadowless, a CSS shadow here
+      // would paint a dark ring around the card.
+      boxShadow: 'none'
+    } as React.CSSProperties,
+    header: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      height: 40,
+      padding: '0 10px 0 14px',
+      flex: '0 0 auto',
+      borderBottom: `${g.borderWidth}px solid ${wash(g, .06)}`,
+      WebkitAppRegion: 'drag'
+    } as React.CSSProperties,
+    brandRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    },
+    brandDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 99,
+      background: g.accent
+    },
+    brandText: {
+      fontSize: 12,
+      fontWeight: 600,
+      letterSpacing: 0.2,
+      color: g.label
+    },
+    headerActions: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
+      WebkitAppRegion: 'no-drag'
+    } as React.CSSProperties,
+    iconButton: {
+      width: 24,
+      height: 24,
+      display: 'grid',
+      placeItems: 'center',
+      borderRadius: 6,
+      border: 'none',
+      background: 'transparent',
+      color: g.textFaint,
+      fontSize: 12,
+      lineHeight: 1,
+      cursor: 'pointer',
+      WebkitAppRegion: 'no-drag'
+    } as React.CSSProperties,
+    questionRow: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 8,
+      padding: '12px 14px 8px',
+      flex: '0 0 auto'
+    },
+    questionText: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 12.5,
+      lineHeight: 1.5,
+      color: g.textDim,
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+      overflow: 'hidden'
+    } as React.CSSProperties,
+    statusRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '0 14px 8px',
+      flex: '0 0 auto',
+      minHeight: 18
+    },
+    statusText: {
+      fontSize: 12,
+      lineHeight: 1.4,
+      color: g.textFaint
+    },
+    answerBox: {
+      flex: '0 1 auto',
+      minHeight: 0,
+      padding: '10px 16px 12px',
+      overflowY: 'auto',
+      userSelect: 'text'
+    },
+    answerTitleRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 5,
+      marginBottom: 6
+    },
+    answerMark: {
+      fontSize: 11,
+      color: g.accent
+    },
+    answerTitle: {
+      fontSize: 11,
+      letterSpacing: 0.6,
+      color: g.textFaint
+    },
+    answerBody: {
+      // The body itself no longer sets type: MarkdownView owns the scale, spacing and
+      // inline styling, and the scroll box only has to keep the text selectable.
+      color: g.text,
+      wordBreak: 'break-word',
+      userSelect: 'text'
+    },
+    sources: {
+      marginTop: 10,
+      paddingTop: 8,
+      borderTop: `${g.borderWidth}px solid ${wash(g, .06)}`,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 3
+    },
+    sourcesTitle: {
+      fontSize: 10.5,
+      letterSpacing: 0.5,
+      color: g.textFaint,
+      marginBottom: 2
+    },
+    sourceLink: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 9,
+      padding: '9px 8px',
+      borderRadius: g.radiusSm,
+      background: wash(g, .025),
+      textDecoration: 'none',
+    },
+    sourceToggle: {
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      width: '100%', padding: '3px 0 6px', color: g.textDim, background: 'transparent', border: 0, fontSize: 12, cursor: 'pointer'
+    },
+    sourceNumber: {
+      flex: '0 0 22px', textAlign: 'center', padding: '2px 0', border: `${g.borderWidth}px solid ${accentWash(g, .25)}`, borderRadius: 5, color: g.accent, fontSize: 11
+    },
+    sourceSnippet: {
+      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 11.5, lineHeight: 1.5, color: g.textDim, marginTop: 4
+    } as React.CSSProperties,
+    chipRow: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 6,
+      padding: '8px 14px 0',
+      flex: '0 0 auto'
+    },
+    chip: {
+      padding: '1px 7px',
+      borderRadius: 99,
+      border: `${g.borderWidth}px solid ${wash(g, .08)}`,
+      background: wash(g, .04),
+      color: g.textDim,
+      fontSize: 10.5,
+      lineHeight: 1.6
+    },
+    actionRow: {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      flexWrap: 'wrap',
+      gap: 8,
+      padding: '8px 14px 0',
+      borderTop: `${g.borderWidth}px solid ${wash(g, .06)}`,
+      flex: '0 0 auto'
+    },
+    primaryButton: {
+      padding: '5px 12px',
+      borderRadius: g.radiusSm,
+      border: `${g.borderWidth}px solid ${accentWash(g, .35)}`,
+      background: accentWash(g, .16),
+      color: g.accentTint,
+      fontSize: 12,
+      fontWeight: 500,
+      cursor: 'pointer'
+    },
+    askRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      padding: '10px 14px 12px',
+      flex: '0 0 auto'
+    },
+    askInput: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 12.5,
+      color: g.text
+    },
+    askInputInner: {
+      padding: '2px 0',
+      color: g.text
+    },
+    askButton: {
+      flex: '0 0 auto',
+      padding: '5px 12px',
+      borderRadius: g.radiusSm,
+      border: `${g.borderWidth}px solid ${accentWash(g, .35)}`,
+      background: accentWash(g, .16),
+      color: g.accentTint,
+      fontSize: 12,
+      fontWeight: 500,
+      cursor: 'pointer'
+    }
+  }
 }

@@ -14,8 +14,8 @@ import {
 } from '@mui/material'
 import ChevronLeftRounded from '@mui/icons-material/ChevronLeftRounded'
 import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded'
-import { makeTheme, palettes, onSystemThemeChange, resolveThemeMode } from './theme'
-import type { ThemeMode } from '@shared/types'
+import { makeTheme, skinFor, onSystemThemeChange, resolveThemeMode } from './theme'
+import type { ThemeMode, ThemePack } from '@shared/types'
 import { useSettings } from './useSettings'
 import { SettingsDialog } from './SettingsDialog'
 import { HomePage } from './pages/Home'
@@ -124,13 +124,18 @@ export function App(): JSX.Element {
    * `themeMode` is the stored preference; `mode` is what actually paints. The
    * third option is `'system'`, which is resolved here against the OS and
    * re-resolved whenever Windows flips — the choice lives in 设置 → 通用 → 外观 → 主题.
+   *
+   * `themePack` is the second, independent dial: it chooses the visual language
+   * (shipped palette or Apple), while `mode` still chooses light or dark inside
+   * that language. Both feed one `makeTheme` call and one skin lookup.
    */
   const themeMode: ThemeMode = settings?.themeMode ?? 'dark'
   const [systemMode, setSystemMode] = useState<'dark' | 'light'>(() => resolveThemeMode('system'))
   useEffect(() => onSystemThemeChange(() => setSystemMode(resolveThemeMode('system'))), [])
   const mode: 'dark' | 'light' = themeMode === 'system' ? systemMode : themeMode
-  const theme = useMemo(() => makeTheme(mode), [mode])
-  const t = palettes[mode]
+  const pack: ThemePack = settings?.themePack ?? 'classic'
+  const theme = useMemo(() => makeTheme(mode, pack), [mode, pack])
+  const t = skinFor(pack, mode)
 
   // The window buttons are drawn above the page, so the dialog that dims the
   // page has to tell main to dim them too.

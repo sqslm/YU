@@ -1,12 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { BarState, BarWindowLayout, Mode, Settings } from '@shared/types'
-import { AlertRow, alertOf, alertTone, hasAlertActions } from './AlertRow'
+import type { BarState, BarWindowLayout, Mode, Settings, ThemePack } from '@shared/types'
+import { AlertRow, alertOf, alertTone, alertTonesFor, hasAlertActions, type AlertTones } from './AlertRow'
 import { MicCapture, listDevices } from './capture'
 import { disposeCues, playCue } from './cues'
 import { CaptionTicker } from './CaptionTicker'
 import { createNoteAudioPlayer } from './noteAudio'
 import { createSpeechPlayer } from './speechPlayback'
 import i18n, { applyUiLanguage } from '../i18n'
+// The capsule is a themed surface like every other window: the pack decides its
+// fill, type, geometry and material, and the shipped pack's values are exactly
+// the literals this file used to hard-code. Imported from `appearance`, which
+// has no MUI dependency — this window must stay cheap to open.
+import { accentWash, glassSkin, resolveThemeMode, type GlassSkin } from '../settings/appearance'
 
 /**
  * Mode tags are translated at render time rather than in a module constant:
@@ -75,6 +80,22 @@ export function Bar(): JSX.Element {
   // Defaults to the shipped default (`showModeInBar: true`) so the tag does not
   // pop in a frame late while the first settings round-trip is in flight.
   const [showMode, setShowMode] = useState(true)
+  /**
+   * Which theme pack paints the capsule.
+   *
+   * Kept as one object rather than two states so glass and tones can never come
+   * from different packs: both are derived from this in the same render. The
+   * default is the shipped pack in dark mode, which is what this window looked
+   * like before the setting existed — so the first frame, before the settings
+   * round-trip lands, is unchanged.
+   */
+  const [appearance, setAppearance] = useState<{ pack: ThemePack; mode: 'dark' | 'light' }>({
+    pack: 'classic',
+    mode: 'dark'
+  })
+  const glass = useMemo(() => glassSkin(appearance.pack, appearance.mode), [appearance.pack, appearance.mode])
+  const tones = useMemo<AlertTones>(() => alertTonesFor(appearance.pack, appearance.mode), [appearance.pack, appearance.mode])
+  const s = useMemo(() => barStyles(glass), [glass])
   const captureRef = useRef<MicCapture | null>(null)
   // Phase mirror for cue transitions, and the user's cue switch.
   const stateRef = useRef<BarState>({ phase: 'idle' })
@@ -110,6 +131,7 @@ export function Bar(): JSX.Element {
       void capture.setDevice(settings.inputDeviceId, settings.audioProcessing)
       setShowMode(settings.showModeInBar)
       soundsRef.current = settings.playSounds
+      setAppearance({ pack: settings.themePack ?? 'classic', mode: resolveThemeMode(settings.themeMode) })
     }
     void window.api.settings.get().then(applySettings, () => undefined)
     const offSettings = window.api.settings.onChanged(applySettings)
@@ -208,7 +230,7 @@ export function Bar(): JSX.Element {
     <div
       style={
         {
-          ...stage,
+          ...s.stage,
           // A `drag` region is hit-tested as a window caption and swallows the
           // click before the pill's own buttons see it, so the pill only gives
           // up the drag handle while it actually shows buttons.
@@ -228,51 +250,51 @@ export function Bar(): JSX.Element {
         .bar-alert-action { transition: filter .12s ease, transform .08s ease }
         .bar-alert-action:hover { filter: brightness(1.32) }
         .bar-alert-action:active { transform: translateY(.5px) }
-        button:focus-visible, .bar-alert-action:focus-visible { outline: 2px solid #9bd6bb; outline-offset: 2px }
+        button:focus-visible, .bar-alert-action:focus-visible { outline: 2px solid ${glass.accent}; outline-offset: 2px }
       `}</style>
 
       <div data-bar-strip style={{ position: 'absolute', left: 0, top: layout.barTop, width: 340, height: 60,
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 8 }}>
       <div style={{ position: 'relative', maxWidth: 300, ...(feedbackText ? { minWidth: 264 } : {}) }}>
       {showBubble && (layout.barTop > 0 || layout.captionSide === 'below') && <div data-caption-bubble data-task-feedback={feedbackText ? true : undefined} data-caption-side={layout.captionSide}
-        style={{ ...captionBubble, ...(layout.captionSide === 'above' ? { bottom: 48 } : { top: 48 }),
+        style={{ ...s.captionBubble, ...(layout.captionSide === 'above' ? { bottom: 48 } : { top: 48 }),
           '--caption-launch-y': layout.captionSide === 'above' ? '42px' : '-42px',
           transformOrigin: `center ${layout.captionSide === 'above' ? 'bottom' : 'top'}` } as React.CSSProperties & { '--caption-launch-y': string }}>
         {feedbackText ? <span title={feedbackText} role="status" style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical',
           WebkitLineClamp: 2, overflow: 'hidden', overflowWrap: 'anywhere', whiteSpace: 'pre-line', fontSize: 12, lineHeight: '15px',
-          color: feedback?.failed ? '#ffc6c6' : undefined }}>{feedbackText}</span> : <CaptionTicker text={caption.text} />}
+          color: feedback?.failed ? glass.danger : undefined }}>{feedbackText}</span> : <CaptionTicker text={caption.text} />}
         <span aria-hidden="true" style={{ position: 'absolute', left: 'calc(50% - 4.5px)',
-          ...(layout.captionSide === 'above' ? { bottom: -5, borderRight: '1px solid rgba(255,255,255,.12)', borderBottom: '1px solid rgba(255,255,255,.12)' }
-            : { top: -5, borderLeft: '1px solid rgba(255,255,255,.12)', borderTop: '1px solid rgba(255,255,255,.12)' }),
-          width: 9, height: 9, transform: 'rotate(45deg)', background: '#202421' }} />
+          ...(layout.captionSide === 'above' ? { bottom: -5, borderRight: `1px solid ${glass.border}`, borderBottom: `1px solid ${glass.border}` }
+            : { top: -5, borderLeft: `1px solid ${glass.border}`, borderTop: `1px solid ${glass.border}` }),
+          width: 9, height: 9, transform: 'rotate(45deg)', background: glass.panel }} />
       </div>}
-      {phase === 'idle' && <div style={idlePill} />}
+      {phase === 'idle' && <div style={s.idlePill} />}
 
       {phase !== 'idle' && (
         <div
           data-recording-pill
           style={{
-            ...pill,
+            ...s.pill,
             // The alert owns the hairline while it is up (its level colours the
             // whole capsule); a bare `error` keeps the original red, and every
             // other phase stays borderless so the pill melts into the desktop.
             borderColor: alert
-              ? alertTone(alert.level).border
+              ? alertTone(alert.level, tones).border
               : phase === 'error'
-                ? 'rgba(239,95,95,.45)'
+                ? glass.dangerLine
                 : phase === 'recording'
-                  ? 'rgba(255,255,255,.10)'
+                  ? glass.border
                   : 'transparent',
             // Buttons need room: 340px window, 8px stage padding a side.
-            maxWidth: pill.maxWidth,
+            maxWidth: s.pill.maxWidth,
             animation: 'barfade .18s ease-out'
           }}
         >
           {phase === 'recording' && (
             <>
               <span data-caption-unavailable={caption.unavailable || undefined} title={caption.unavailable ? i18n.t('字幕暂不可用') : undefined}
-                style={{ ...dot, ...(caption.unavailable ? { background: '#cf9b52' } : {}), animation: 'barpulse 1.4s ease-in-out infinite' }} />
-              <div data-recording-wave style={wave}>
+                style={{ ...s.dot, ...(caption.unavailable ? { background: '#cf9b52' } : {}), animation: 'barpulse 1.4s ease-in-out infinite' }} />
+              <div data-recording-wave style={s.wave}>
                 {Array.from({ length: 16 }).map((_, index) => {
                   const center = 7.5
                   const distance = Math.abs(index - center) / center
@@ -285,7 +307,7 @@ export function Bar(): JSX.Element {
                         width: 2.5,
                         height,
                         borderRadius: 2,
-                        background: '#c4e8d5',
+                        background: glass.accentWave,
                         animation: `barwave ${0.7 + (index % 5) * 0.09}s ease-in-out infinite`
                       }}
                     />
@@ -294,18 +316,18 @@ export function Bar(): JSX.Element {
               </div>
               {/* The mode text lives in the right-hand tag so the
                   `showModeInBar` switch controls it in one place. */}
-              <span style={timer}>{(elapsed / 1000).toFixed(1)}s</span>
+              <span style={s.timer}>{(elapsed / 1000).toFixed(1)}s</span>
             </>
           )}
 
           {phase === 'working' && (
             <>
-              <span style={{ ...dot, background: '#9bd6bb' }} />
-              <span style={{ ...label, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{state.hint ?? i18n.t('处理中…')}</span>
+              <span style={{ ...s.dot, background: glass.accent }} />
+              <span style={{ ...s.label, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{state.hint ?? i18n.t('处理中…')}</span>
             </>
           )}
 
-          {phase === 'done' && <span style={{ ...result, ...(feedback?.failed ? { color: '#ffc6c6' } : {}) }}>
+          {phase === 'done' && <span style={{ ...s.result, ...(feedback?.failed ? { color: glass.danger } : {}) }}>
             {feedback ? i18n.t(feedback.failed ? '任务失败' : '已完成') : truncate(state.text)}</span>}
 
 
@@ -314,21 +336,21 @@ export function Bar(): JSX.Element {
               the same place; a bare error keeps the legacy red line. */}
           {phase === 'error' &&
             (state.alert ? (
-              <AlertRow alert={state.alert} title={state.message} />
+              <AlertRow alert={state.alert} title={state.message} tones={tones} />
             ) : (
-              <span style={{ ...result, color: '#ffb3b3' }}>{truncate(state.message)}</span>
+              <span style={{ ...s.result, color: glass.dangerText }}>{truncate(state.message)}</span>
             ))}
 
           {/* Non-fatal notices: busy, network advice, cancelled, session cap. */}
-          {phase === 'alert' && alert && <AlertRow alert={feedbackText ? { ...alert, text: i18n.t('快速提醒') } : alert} title={alert.text} />}
-          {feedbackText && <button data-bar-action="dismiss" aria-label={i18n.t('关闭')} style={feedbackButton}
+          {phase === 'alert' && alert && <AlertRow alert={feedbackText ? { ...alert, text: i18n.t('快速提醒') } : alert} title={alert.text} tones={tones} />}
+          {feedbackText && <button data-bar-action="dismiss" aria-label={i18n.t('关闭')} style={s.feedbackButton}
             onClick={() => window.api.bar.action('dismiss')}>×</button>}
 
-          {promptName && <span data-bar-prompt title={promptName} aria-label={promptName} style={promptTag}>{promptName}</span>}
+          {promptName && <span data-bar-prompt title={promptName} aria-label={promptName} style={s.promptTag}>{promptName}</span>}
 
           {/* Always the right-most child: `modeLabelFor` returns null for idle
               and error, so nothing is appended in those phases. */}
-          {modeLabel && <span style={modeTag}>{modeLabel}</span>}
+          {modeLabel && <span style={s.modeTag}>{modeLabel}</span>}
         </div>
       )}
       </div>
@@ -341,115 +363,143 @@ function truncate(text: string): string {
   return text.length > 64 ? `${text.slice(0, 64)}…` : text
 }
 
-const stage: React.CSSProperties = {
-  height: '100%',
-  position: 'relative',
-  fontFamily: '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif',
-  WebkitAppRegion: 'drag'
-} as React.CSSProperties
-
-const captionBubble: React.CSSProperties = {
-  position: 'absolute', left: -14, width: 'calc(100% + 28px)', maxWidth: 324, height: 42,
-  display: 'flex', alignItems: 'center', padding: '0 16px', borderRadius: 12,
-  color: '#eef1e9', background: '#202421', border: '1px solid rgba(255,255,255,.12)',
-  boxShadow: '0 3px 10px rgba(0,0,0,.12)', animation: 'caption-launch .24s cubic-bezier(.2,.8,.25,1) both'
-}
-
-const feedbackButton: React.CSSProperties = {
-  flexShrink: 0, border: 'none', borderRadius: 6, background: 'rgba(155,214,187,.16)', color: '#bce5cf',
-  padding: '4px 7px', fontSize: 11, cursor: 'pointer', WebkitAppRegion: 'no-drag'
-} as React.CSSProperties
-
-const idlePill: React.CSSProperties = {
-  width: 40,
-  height: 6,
-  borderRadius: 99,
-  background: 'rgb(128,128,128)',
-  opacity: 0.18,
-  // The window is transparent and shadowless: any shadow here would ring the
-  // pill with a dark halo on the desktop.
-  boxShadow: 'none',
-  transition: 'opacity .2s cubic-bezier(.05,.6,.4,.95)'
-}
-
-const pill: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  height: 38,
-  maxWidth: 300,
-  padding: '0 14px',
-  borderRadius: 99,
-  background: 'rgba(20,23,21,.96)',
-  // Only the recording state keeps a hairline border; everything else is
-  // borderless so the pill melts into the desktop.
-  border: '1px solid transparent',
-  boxShadow: 'none',
-  backdropFilter: 'blur(14px)',
-  color: '#eef1e9',
-  fontSize: 12,
-  overflow: 'hidden'
-}
-
-const dot: React.CSSProperties = {
-  width: 7,
-  height: 7,
-  borderRadius: 99,
-  background: '#9bd6bb',
-  flex: '0 0 auto'
-}
-
-const wave: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 2,
-  height: 22,
-  flex: '0 0 auto'
-}
-
-const label: React.CSSProperties = {
-  fontSize: 11.5,
-  color: '#bbc9bd',
-  whiteSpace: 'nowrap'
-}
-
-const timer: React.CSSProperties = {
-  fontVariantNumeric: 'tabular-nums',
-  fontSize: 11,
-  color: '#909d92'
-}
-
-const promptTag: React.CSSProperties = {
-  fontSize: 10.5, lineHeight: '18px', color: '#bce5cf', background: 'rgba(155,214,187,.08)',
-  border: '1px solid rgba(155,214,187,.18)', borderRadius: 5, padding: '0 6px',
-  minWidth: 0, maxWidth: 80, flex: '0 1 auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-}
-
 /**
- * The optional "current mode" tag. Deliberately the cheapest thing in the pill:
- * fixed-size, capped at 72 px and never asked to give up width, so a long
- * transcript or hint (which already ellipsise) is what shrinks first. The
- * `overflow`/`textOverflow` pair is the backstop for a label that outgrows the
- * cap: it ellipsises inside its own box instead of bursting the 272 px capsule.
- * No shadow, per the borderless bar style.
+ * Every static style the capsule uses, resolved once per theme pack.
+ *
+ * These used to be module-level constants with literal colours. A pack has to be
+ * able to repaint them — an Apple capsule is a white sheet in light mode — so
+ * they are built from `GlassSkin` instead. The classic skin carries exactly the
+ * literals that were here, which is why the shipped look is unchanged.
  */
-const modeTag: React.CSSProperties = {
-  fontSize: 11,
-  letterSpacing: '.02em',
-  opacity: 0.72,
-  color: '#abb5ac',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  flex: '0 0 auto',
-  maxWidth: 72,
-  boxShadow: 'none'
+interface BarStyles {
+  stage: React.CSSProperties
+  captionBubble: React.CSSProperties
+  feedbackButton: React.CSSProperties
+  idlePill: React.CSSProperties
+  pill: React.CSSProperties
+  dot: React.CSSProperties
+  wave: React.CSSProperties
+  label: React.CSSProperties
+  timer: React.CSSProperties
+  promptTag: React.CSSProperties
+  modeTag: React.CSSProperties
+  result: React.CSSProperties
 }
 
-const result: React.CSSProperties = {
-  fontSize: 11.5,
-  color: '#d3ddd3',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis'
+function barStyles(g: GlassSkin): BarStyles {
+  return {
+    stage: {
+      height: '100%',
+      position: 'relative',
+      fontFamily: g.font,
+      WebkitAppRegion: 'drag'
+    } as React.CSSProperties,
+
+    captionBubble: {
+      position: 'absolute', left: -14, width: 'calc(100% + 28px)', maxWidth: 324, height: 42,
+      display: 'flex', alignItems: 'center', padding: '0 16px', borderRadius: g.radius,
+      color: g.text, background: g.panel, border: `${g.borderWidth}px solid ${g.border}`,
+      boxShadow: g.shadow, animation: 'caption-launch .24s cubic-bezier(.2,.8,.25,1) both'
+    },
+
+    feedbackButton: {
+      flexShrink: 0, border: 'none', borderRadius: 6, background: accentWash(g, .16), color: g.accentTint,
+      padding: '4px 7px', fontSize: 11, cursor: 'pointer', WebkitAppRegion: 'no-drag'
+    } as React.CSSProperties,
+
+    idlePill: {
+      width: 40,
+      height: 6,
+      borderRadius: 99,
+      background: 'rgb(128,128,128)',
+      opacity: 0.18,
+      // The window is transparent and shadowless: any shadow here would ring the
+      // pill with a dark halo on the desktop.
+      boxShadow: 'none',
+      transition: 'opacity .2s cubic-bezier(.05,.6,.4,.95)'
+    },
+
+    pill: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      height: 38,
+      maxWidth: 300,
+      padding: '0 14px',
+      borderRadius: 99,
+      background: g.surface,
+      // Only the recording state keeps a hairline border; everything else is
+      // borderless so the pill melts into the desktop.
+      border: `${g.borderWidth}px solid transparent`,
+      boxShadow: 'none',
+      backdropFilter: g.frosted,
+      WebkitBackdropFilter: g.frosted,
+      color: g.text,
+      fontSize: 12,
+      overflow: 'hidden'
+    },
+
+    dot: {
+      width: 7,
+      height: 7,
+      borderRadius: 99,
+      background: g.accent,
+      flex: '0 0 auto'
+    },
+
+    wave: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 2,
+      height: 22,
+      flex: '0 0 auto'
+    },
+
+    label: {
+      fontSize: 11.5,
+      color: g.textMuted,
+      whiteSpace: 'nowrap'
+    },
+
+    timer: {
+      fontVariantNumeric: 'tabular-nums',
+      fontSize: 11,
+      color: g.textFaint
+    },
+
+    promptTag: {
+      fontSize: 10.5, lineHeight: '18px', color: g.accentTint, background: accentWash(g, .08),
+      border: `${g.borderWidth}px solid ${accentWash(g, .18)}`, borderRadius: 5, padding: '0 6px',
+      minWidth: 0, maxWidth: 80, flex: '0 1 auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+    },
+
+    /**
+     * The optional "current mode" tag. Deliberately the cheapest thing in the pill:
+     * fixed-size, capped at 72 px and never asked to give up width, so a long
+     * transcript or hint (which already ellipsise) is what shrinks first. The
+     * `overflow`/`textOverflow` pair is the backstop for a label that outgrows the
+     * cap: it ellipsises inside its own box instead of bursting the 272 px capsule.
+     * No shadow, per the borderless bar style.
+     */
+    modeTag: {
+      fontSize: 11,
+      letterSpacing: '.02em',
+      opacity: 0.72,
+      color: g.textDim,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      flex: '0 0 auto',
+      maxWidth: 72,
+      boxShadow: 'none'
+    },
+
+    result: {
+      fontSize: 11.5,
+      color: g.label,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }
 }

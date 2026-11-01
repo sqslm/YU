@@ -142,6 +142,19 @@ describe('mergeSettings', () => {
     )
   })
 
+  it('keeps the theme pack orthogonal to the appearance', () => {
+    expect(mergeSettings({ themePack: 'apple' }).themePack).toBe('apple')
+    expect(mergeSettings({ themePack: 'brutal' }).themePack).toBe('brutal')
+    expect(mergeSettings({ themePack: 'brutal', themeMode: 'dark' }).themeMode).toBe('dark')
+    expect(mergeSettings({ themePack: 'apple', themeMode: 'light' }).themeMode).toBe('light')
+    // A pack the build does not know must not leave the app unpainted.
+    expect(mergeSettings({ themePack: 'nord' } as never).themePack).toBe(
+      DEFAULT_SETTINGS.themePack
+    )
+    // Files written before packs existed have no field at all.
+    expect(mergeSettings({} as never).themePack).toBe('classic')
+  })
+
   it('does not mutate the defaults', () => {
     const before = structuredClone(DEFAULT_SETTINGS)
     mergeSettings({ language: 'en' })

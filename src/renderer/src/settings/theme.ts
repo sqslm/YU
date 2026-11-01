@@ -1,83 +1,27 @@
 import { alpha, createTheme, type Theme } from '@mui/material/styles'
-import type { ThemeMode } from '@shared/types'
-
-/** Warm neutral surfaces and jade accents shared by the desktop renderers. */
-export interface Tokens {
-  canvas: string
-  sidebar: string
-  surface: string
-  surfaceHi: string
-  line: string
-  text: string
-  textDim: string
-  textFaint: string
-  accent: string
-  accentSoft: string
-  danger: string
-  shadow: string
-}
-
-export const palettes: Record<'dark' | 'light', Tokens> = {
-  dark: {
-    canvas: '#191c1a',
-    sidebar: '#141715',
-    surface: '#202421',
-    surfaceHi: '#2a302c',
-    line: 'rgba(224,235,224,.10)',
-    text: '#eef1e9',
-    textDim: '#abb5ac',
-    textFaint: '#909d92',
-    accent: '#9bd6bb',
-    accentSoft: 'rgba(155,214,187,.11)',
-    danger: '#f0948c',
-    shadow: '0 20px 64px rgba(0,0,0,.32)'
-  },
-  light: {
-    canvas: '#f5f5f0',
-    sidebar: '#eeefe8',
-    surface: '#fdfdf9',
-    surfaceHi: '#e9ece4',
-    line: 'rgba(35,53,42,.11)',
-    text: '#25352b',
-    textDim: '#616e62',
-    textFaint: '#64705f',
-    accent: '#28664c',
-    accentSoft: 'rgba(40,102,76,.09)',
-    danger: '#b3443b',
-    shadow: '0 20px 64px rgba(35,53,42,.13)'
-  }
-}
-
-/** Backwards-compatible default export used by every renderer module. */
-export const tokens = palettes.dark
-
-/** Media query the OS answers with its own light/dark choice. */
-const DARK_QUERY = '(prefers-color-scheme: dark)'
+import type { ThemePack } from '@shared/types'
+import { normalizeThemePack, skins } from './appearance'
 
 /**
- * Which palette a stored preference paints with.
+ * MUI themes per theme pack.
  *
- * `'system'` asks the browser rather than a timer or a clock: Chromium already
- * tracks Windows' light/dark setting, and main's `nativeTheme` reads the same
- * source, so the page and the native window buttons agree.
+ * The token layer lives in `./appearance` (no MUI imports, so the overlay
+ * windows can use it without pulling the design system into their bundles) and
+ * is re-exported here, which keeps every existing `from './theme'` import
+ * working.
  */
-export function resolveThemeMode(mode: ThemeMode): 'dark' | 'light' {
-  if (mode !== 'system') return mode
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'dark'
-  return window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light'
-}
+export * from './appearance'
 
-/** Calls back when the OS flips appearance; returns the unsubscribe function. */
-export function onSystemThemeChange(callback: () => void): () => void {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {}
-  const query = window.matchMedia(DARK_QUERY)
-  query.addEventListener('change', callback)
-  return () => query.removeEventListener('change', callback)
-}
-
-export function makeTheme(mode: 'dark' | 'light'): Theme {
+/**
+ * The shipped theme.
+ *
+ * Kept as its own function, with the original numbers spelled out, rather than
+ * folded into a shared builder: a shared builder is how a palette edit silently
+ * restyles the UI someone asked to keep unchanged.
+ */
+function makeClassicTheme(mode: 'dark' | 'light'): Theme {
   const resolved = mode
-  const t = palettes[resolved]
+  const t = skins.classic[resolved]
   return createTheme({
     palette: {
       mode: resolved,
@@ -180,6 +124,437 @@ export function makeTheme(mode: 'dark' | 'light'): Theme {
       }
     }
   })
+}
+
+/**
+ * The Apple-flavoured theme.
+ *
+ * Same component inventory as the shipped theme, different design language:
+ * HIG type ramp with tighter tracking, 8px controls inside 12–20px sheets,
+ * system-blue filled controls, separators that read as hairlines instead of
+ * borders, capsule chips, the iOS green switch, and real `backdrop-filter`
+ * materials on the sidebar, menus and tooltips.
+ */
+function makeAppleTheme(mode: 'dark' | 'light'): Theme {
+  const s = skins.apple[mode]
+  const dark = mode === 'dark'
+  return createTheme({
+    palette: {
+      mode,
+      background: { default: s.canvas, paper: s.surface },
+      primary: { main: s.accentFill, contrastText: s.accentInk },
+      // System indigo: the second colour of the iOS/macOS accent set.
+      secondary: { main: dark ? '#5e5ce6' : '#5856d6' },
+      text: { primary: s.text, secondary: s.textDim },
+      divider: s.line,
+      error: { main: s.danger },
+      success: { main: s.positive },
+      warning: { main: dark ? '#ffd60a' : '#b25000' },
+      info: { main: dark ? '#64d2ff' : '#0071a4' },
+      action: { active: s.textDim, hover: alpha(s.accent, 0.08), selected: s.accentSoft, focus: alpha(s.accent, 0.2) }
+    },
+    shape: { borderRadius: s.radiusSm },
+    typography: {
+      fontFamily: s.font,
+      fontSize: 14,
+      h4: { fontSize: 34, fontWeight: 700, letterSpacing: -1.1, lineHeight: 1.2 },
+      h5: { fontSize: 26, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1.3 },
+      h6: { fontSize: 19, fontWeight: 600, letterSpacing: -0.35, lineHeight: 1.45 },
+      body1: { lineHeight: 1.62, letterSpacing: -0.1 },
+      body2: { lineHeight: 1.62, letterSpacing: -0.1 },
+      button: { textTransform: 'none', fontWeight: 590, letterSpacing: -0.05 }
+    },
+    components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          ':root': { colorScheme: mode },
+          body: {
+            background: s.canvas,
+            color: s.text,
+            WebkitFontSmoothing: 'antialiased',
+            textRendering: 'optimizeLegibility',
+            // The HIG calls this "optical" tracking: subpixel-level tightening
+            // that makes the SF stack read like a system app rather than a page.
+            letterSpacing: '-0.011em'
+          },
+          // The hub's rail is drawn with an inline background, so the material is
+          // applied as a filter over it instead of as another background.
+          '[data-app-sidebar]': { backdropFilter: s.frost, WebkitBackdropFilter: s.frost },
+          '[data-caption-bubble]': { backdropFilter: s.frost, WebkitBackdropFilter: s.frost },
+          '::selection': { background: alpha(s.accent, 0.28), color: s.text },
+          ':focus-visible': { outline: `3px solid ${alpha(s.accent, 0.6)}`, outlineOffset: 2 },
+          '@media (prefers-reduced-motion: reduce)': {
+            '*, *::before, *::after': { animationDuration: '0.01ms !important', animationIterationCount: '1 !important', transitionDuration: '0.01ms !important', scrollBehavior: 'auto !important' }
+          },
+          // macOS overlay scrollbars: thin, rounded, no track.
+          '::-webkit-scrollbar': { width: 12, height: 12 },
+          '::-webkit-scrollbar-thumb': {
+            background: dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.22)',
+            borderRadius: 999,
+            border: '3px solid transparent',
+            backgroundClip: 'content-box'
+          },
+          '::-webkit-scrollbar-thumb:hover': { background: dark ? 'rgba(255,255,255,.32)' : 'rgba(0,0,0,.32)' },
+          '::-webkit-scrollbar-track': { background: 'transparent' }
+        }
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            backgroundImage: 'none',
+            border: `1px solid ${s.line}`,
+            backgroundColor: s.surface,
+            borderRadius: s.radiusPanel + 2
+          }
+        }
+      },
+      MuiButton: {
+        defaultProps: { disableElevation: true },
+        styleOverrides: {
+          root: {
+            borderRadius: s.radiusSm,
+            padding: '6px 15px',
+            fontSize: 13,
+            fontWeight: 590,
+            letterSpacing: -0.05,
+            transition: 'background-color 180ms cubic-bezier(.4,0,.2,1), border-color 180ms cubic-bezier(.4,0,.2,1), transform 120ms cubic-bezier(.4,0,.2,1)',
+            // The "press" of an iOS button is a scale, not a colour jump.
+            '&:active': { transform: 'scale(.975)' }
+          },
+          sizeSmall: { padding: '4px 11px', fontSize: 12 },
+          containedPrimary: {
+            backgroundColor: s.accentFill,
+            color: s.accentInk,
+            '&:hover': { backgroundColor: dark ? '#3b9dff' : '#0a63c4' }
+          },
+          outlinedPrimary: {
+            borderColor: s.line,
+            color: s.accent,
+            '&:hover': { borderColor: alpha(s.accent, .5), backgroundColor: s.accentSoft }
+          },
+          textPrimary: { color: s.accent }
+        }
+      },
+      MuiButtonBase: { styleOverrides: { root: { '&.Mui-focusVisible': { outline: `3px solid ${alpha(s.accent, .6)}`, outlineOffset: 2 } } } },
+      MuiIconButton: { styleOverrides: { root: { borderRadius: 8, transition: 'background-color 140ms ease', '&:hover': { backgroundColor: alpha(s.text, 0.08) } } } },
+      MuiTextField: { defaultProps: { size: 'small', fullWidth: true } },
+      MuiFormControl: { defaultProps: { size: 'small', fullWidth: true } },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            borderRadius: s.radiusSm,
+            backgroundColor: s.surface,
+            fontSize: 13,
+            transition: 'box-shadow 160ms ease, border-color 160ms ease',
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: s.line },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: alpha(s.text, .24) },
+            // The 3px halo is the macOS focus ring, drawn *outside* the hairline.
+            '&.Mui-focused': { boxShadow: `0 0 0 4px ${alpha(s.accent, .2)}` },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: s.accent, borderWidth: 1 }
+          }
+        }
+      },
+      MuiTabs: { styleOverrides: { root: { minHeight: 36 }, indicator: { height: 2.5, borderRadius: 2 } } },
+      MuiTab: { styleOverrides: { root: { minHeight: 36, fontSize: 12.5, fontWeight: 500, letterSpacing: -0.05, '&.Mui-selected': { fontWeight: 600 } } } },
+      MuiToggleButton: {
+        styleOverrides: {
+          root: {
+            borderColor: s.line,
+            textTransform: 'none',
+            borderRadius: s.radiusSm,
+            '&.Mui-selected': {
+              backgroundColor: s.accentFill,
+              color: s.accentInk,
+              '&:hover': { backgroundColor: alpha(s.accentFill, .88) }
+            }
+          }
+        }
+      },
+      // Capsule chips, as in every Apple settings sheet.
+      MuiChip: { styleOverrides: { root: { borderRadius: 999, fontSize: 11.5, fontWeight: 500 }, outlined: { borderColor: s.line } } },
+      MuiSwitch: {
+        styleOverrides: {
+          root: {
+            '& .MuiSwitch-switchBase.Mui-checked': { color: '#ffffff' },
+            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: s.positive, opacity: 1 }
+          }
+        }
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            borderRadius: 20,
+            boxShadow: s.shadow,
+            backdropFilter: s.frost,
+            WebkitBackdropFilter: s.frost
+          }
+        }
+      },
+      // macOS sheets do not black out the window behind them.
+      MuiBackdrop: { styleOverrides: { root: { backgroundColor: dark ? 'rgba(0,0,0,.45)' : 'rgba(0,0,0,.16)' } } },
+      MuiMenu: {
+        styleOverrides: {
+          paper: {
+            borderRadius: 12,
+            boxShadow: s.shadow,
+            padding: 4,
+            border: `1px solid ${s.line}`,
+            backdropFilter: s.frost,
+            WebkitBackdropFilter: s.frost
+          }
+        }
+      },
+      MuiMenuItem: { styleOverrides: { root: { fontSize: 13, borderRadius: 7, minHeight: 34 } } },
+      MuiAlert: { styleOverrides: { root: { borderRadius: 10, fontSize: 12.5 } } },
+      MuiListItemButton: {
+        styleOverrides: {
+          root: {
+            borderRadius: 8,
+            color: s.textDim,
+            '&.Mui-selected': {
+              color: s.accent,
+              backgroundColor: s.accentSoft,
+              '&:hover': { backgroundColor: alpha(s.accent, 0.16) }
+            }
+          }
+        }
+      },
+      MuiTooltip: {
+        styleOverrides: {
+          tooltip: {
+            backgroundColor: dark ? 'rgba(58,58,60,.96)' : 'rgba(255,255,255,.96)',
+            color: s.text,
+            border: `1px solid ${s.line}`,
+            borderRadius: 7,
+            fontSize: 11.5,
+            padding: '5px 9px',
+            boxShadow: s.shadow,
+            backdropFilter: s.frost,
+            WebkitBackdropFilter: s.frost
+          }
+        }
+      }
+    }
+  })
+}
+
+/**
+ * The brutalist theme.
+ *
+ * Structure over surface: every decision is a rule, a block or an offset.
+ * 0 px radius everywhere, 2–3 px ink borders on components, *hard* shadows
+ * (`6px 6px 0`) instead of blurs, 800-weight uppercase labels with wide
+ * tracking, and a single signal orange for interaction. Transitions are
+ * intentionally instant — the style calls for a mechanical press, not a glide —
+ * which is also why the reduced-motion block still exists: a user who asks for
+ * less motion must get none, not just shorter durations.
+ */
+function makeBrutalTheme(mode: 'dark' | 'light'): Theme {
+  const s = skins.brutal[mode]
+  const dark = mode === 'dark'
+  /** Components are bordered in full ink; `line` stays a muted hairline. */
+  const ink = s.text
+  const rule = `${s.borderWidth}px solid ${ink}`
+  return createTheme({
+    palette: {
+      mode,
+      background: { default: s.canvas, paper: s.surface },
+      primary: { main: s.accentFill, contrastText: s.accentInk },
+      // The style's other two primaries, toned for a reading surface.
+      secondary: { main: dark ? '#8ab4ff' : '#1a3fd0' },
+      text: { primary: s.text, secondary: s.textDim },
+      divider: s.line,
+      error: { main: s.danger },
+      success: { main: s.positive },
+      warning: { main: dark ? '#ffd400' : '#8a4b00' },
+      info: { main: dark ? '#8ab4ff' : '#1a3fd0' },
+      action: { active: s.textDim, hover: alpha(s.accentFill, 0.12), selected: s.accentSoft, focus: alpha(s.accentFill, 0.3) }
+    },
+    shape: { borderRadius: 0 },
+    typography: {
+      fontFamily: s.font,
+      fontSize: 14,
+      h4: { fontSize: 32, fontWeight: 800, letterSpacing: -0.6, lineHeight: 1.15, textTransform: 'uppercase' },
+      h5: { fontSize: 24, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.25 },
+      h6: { fontSize: 18, fontWeight: 800, letterSpacing: 0.1, lineHeight: 1.35, textTransform: 'uppercase' },
+      body1: { lineHeight: 1.62 },
+      body2: { lineHeight: 1.62 },
+      button: { textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.06em' }
+    },
+    components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          ':root': { colorScheme: mode },
+          body: { background: s.canvas, color: s.text, WebkitFontSmoothing: 'antialiased' },
+          // A solid block of accent, with the black/white pairing the style uses.
+          '::selection': { background: s.accentFill, color: s.accentInk },
+          ':focus-visible': { outline: `3px solid ${ink}`, outlineOffset: 2 },
+          '@media (prefers-reduced-motion: reduce)': {
+            '*, *::before, *::after': { animationDuration: '0.01ms !important', animationIterationCount: '1 !important', transitionDuration: '0.01ms !important', scrollBehavior: 'auto !important' }
+          },
+          // Square scrollbars with a visible rule, not a floating pill.
+          '::-webkit-scrollbar': { width: 14, height: 14 },
+          '::-webkit-scrollbar-thumb': { background: ink, borderRadius: 0, border: `3px solid ${s.canvas}` },
+          '::-webkit-scrollbar-thumb:hover': { background: s.accentFill },
+          '::-webkit-scrollbar-track': { background: s.canvas, borderLeft: `1px solid ${s.line}` }
+        }
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            backgroundImage: 'none',
+            backgroundColor: s.surface,
+            border: rule,
+            borderRadius: 0,
+            boxShadow: s.shadow
+          }
+        }
+      },
+      MuiButton: {
+        defaultProps: { disableElevation: true },
+        styleOverrides: {
+          root: {
+            borderRadius: 0,
+            padding: '7px 16px',
+            fontSize: 12.5,
+            fontWeight: 800,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            border: rule,
+            boxShadow: `3px 3px 0 ${ink}`,
+            transition: 'none',
+            // The press is a mechanical shift into its own shadow.
+            '&:active': { transform: `translate(${s.borderWidth + 1}px, ${s.borderWidth + 1}px)`, boxShadow: 'none' }
+          },
+          sizeSmall: { padding: '5px 10px', fontSize: 11.5 },
+          // Text buttons sit in dense rows; a 2 px box on every one would shout.
+          text: { border: 'none', boxShadow: 'none', padding: '4px 8px', '&:hover': { backgroundColor: s.accentSoft } },
+          containedPrimary: { backgroundColor: s.accentFill, color: s.accentInk, '&:hover': { backgroundColor: s.accentFill, filter: 'brightness(1.07)' } },
+          outlinedPrimary: { borderColor: ink, color: s.text, backgroundColor: s.surface, '&:hover': { borderColor: ink, backgroundColor: s.accentSoft } },
+          textPrimary: { color: s.accent }
+        }
+      },
+      MuiButtonBase: { styleOverrides: { root: { '&.Mui-focusVisible': { outline: `3px solid ${ink}`, outlineOffset: 2 } } } },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            borderRadius: 0,
+            border: `${s.borderWidth}px solid transparent`,
+            transition: 'none',
+            '&:hover': { borderColor: ink, backgroundColor: s.accentSoft }
+          }
+        }
+      },
+      MuiTextField: { defaultProps: { size: 'small', fullWidth: true } },
+      MuiFormControl: { defaultProps: { size: 'small', fullWidth: true } },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            borderRadius: 0,
+            backgroundColor: s.surface,
+            fontSize: 13,
+            transition: 'none',
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: ink, borderWidth: s.borderWidth },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: ink },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: s.accentFill, borderWidth: s.borderWidth + 1 }
+          }
+        }
+      },
+      MuiTabs: { styleOverrides: { root: { minHeight: 36 }, indicator: { height: 3, borderRadius: 0, backgroundColor: s.accentFill } } },
+      MuiTab: {
+        styleOverrides: {
+          root: {
+            minHeight: 36,
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            '&.Mui-selected': { fontWeight: 800 }
+          }
+        }
+      },
+      MuiToggleButton: {
+        styleOverrides: {
+          root: {
+            border: rule,
+            borderRadius: 0,
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            '&.Mui-selected': {
+              backgroundColor: s.accentFill,
+              color: s.accentInk,
+              '&:hover': { backgroundColor: s.accentFill }
+            }
+          }
+        }
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: { borderRadius: 0, border: `${s.borderWidth}px solid ${ink}`, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' },
+          outlined: { border: `${s.borderWidth}px solid ${ink}` }
+        }
+      },
+      MuiSwitch: {
+        styleOverrides: {
+          root: {
+            '& .MuiSwitch-track': { borderRadius: 0, border: `${s.borderWidth}px solid ${ink}`, backgroundColor: s.surface, opacity: 1 },
+            '& .MuiSwitch-thumb': { borderRadius: 0, backgroundColor: ink },
+            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: s.accentFill, opacity: 1 }
+          }
+        }
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: { borderRadius: 0, border: `3px solid ${ink}`, boxShadow: `10px 10px 0 ${ink}` }
+        }
+      },
+      MuiBackdrop: { styleOverrides: { root: { backgroundColor: dark ? 'rgba(0,0,0,.72)' : 'rgba(16,16,16,.45)' } } },
+      MuiMenu: {
+        styleOverrides: {
+          paper: { borderRadius: 0, border: `${s.borderWidth}px solid ${ink}`, boxShadow: `6px 6px 0 ${ink}`, padding: 4, backgroundColor: s.surface }
+        }
+      },
+      MuiMenuItem: {
+        styleOverrides: {
+          root: { fontSize: 13, borderRadius: 0, minHeight: 36, '&.Mui-selected': { backgroundColor: s.accentSoft, fontWeight: 700 } }
+        }
+      },
+      MuiAlert: { styleOverrides: { root: { borderRadius: 0, border: `${s.borderWidth}px solid ${ink}`, fontSize: 12.5 } } },
+      MuiListItemButton: {
+        styleOverrides: {
+          root: {
+            borderRadius: 0,
+            color: s.textDim,
+            '&.Mui-selected': {
+              color: s.text,
+              backgroundColor: s.accentSoft,
+              '&:hover': { backgroundColor: s.accentSoft }
+            }
+          }
+        }
+      },
+      MuiTooltip: {
+        styleOverrides: {
+          tooltip: { backgroundColor: ink, color: s.canvas, border: 'none', borderRadius: 0, fontSize: 11, fontWeight: 600, padding: '5px 8px', boxShadow: 'none' }
+        }
+      }
+    }
+  })
+}
+
+/**
+ * Builds the theme for a pack.
+ *
+ * The pack argument defaults to `'classic'`, so every existing call site that
+ * only passes a mode keeps painting the shipped look until it is taught about
+ * packs — that is what makes the pack additive rather than a rewrite.
+ */
+export function makeTheme(mode: 'dark' | 'light', pack: ThemePack = 'classic'): Theme {
+  const resolved = normalizeThemePack(pack)
+  if (resolved === 'apple') return makeAppleTheme(mode)
+  if (resolved === 'brutal') return makeBrutalTheme(mode)
+  return makeClassicTheme(mode)
 }
 
 export const theme = makeTheme('dark')

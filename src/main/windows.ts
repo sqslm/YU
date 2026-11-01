@@ -1,6 +1,6 @@
 import { app, BrowserWindow, nativeTheme, screen } from 'electron'
 import { join } from 'node:path'
-import type { BarWindowLayout, ThemeMode } from '@shared/types'
+import type { BarWindowLayout, ThemeMode, ThemePack } from '@shared/types'
 import { BAR_HEIGHT, BAR_WIDTH, barCaptionRect } from './barLayout'
 import { openExternalSafely } from './safeLink'
 import { mt } from '@shared/mainI18n'
@@ -60,12 +60,27 @@ interface Chrome {
 }
 
 /**
- * Canvas colour of the hub per theme. The window background has to match it,
- * otherwise Windows paints a dark canvas while the page is still light.
+ * Canvas colour of the hub per theme, per pack. The window background has to
+ * match the canvas the renderer paints, otherwise Windows shows a flash of the
+ * old canvas (or the wrong pack's canvas) while the page repaints.
  */
-const HUB_CHROME: Record<'dark' | 'light', Chrome> = {
-  dark: { color: '#191c1a', symbolColor: '#eef1e9', symbolDim: '#687168' },
-  light: { color: '#f5f5f0', symbolColor: '#25352b', symbolDim: '#929a8f' }
+const HUB_CHROME: Record<ThemePack, Record<'dark' | 'light', Chrome>> = {
+  classic: {
+    dark: { color: '#191c1a', symbolColor: '#eef1e9', symbolDim: '#687168' },
+    light: { color: '#f5f5f0', symbolColor: '#25352b', symbolDim: '#929a8f' }
+  },
+  // Mirrors `APPLE` in renderer/src/settings/theme.ts: #1c1c1e / #f5f5f7 canvas,
+  // HIG label colours for the OS glyphs.
+  apple: {
+    dark: { color: '#1c1c1e', symbolColor: '#f5f5f7', symbolDim: '#6e6e73' },
+    light: { color: '#f5f5f7', symbolColor: '#1d1d1f', symbolDim: '#86868b' }
+  },
+  // Mirrors `BRUTAL`: bone paper / coal canvas, full-contrast glyphs because the
+  // pack's whole premise is ink on a flat field.
+  brutal: {
+    dark: { color: '#121110', symbolColor: '#f2efe6', symbolDim: '#8d8779' },
+    light: { color: '#f2efe6', symbolColor: '#101010', symbolDim: '#6b665a' }
+  }
 }
 
 /**
@@ -90,8 +105,15 @@ export function resolveThemeMode(mode: ThemeMode): 'dark' | 'light' {
   return mode
 }
 
-export function hubBackgroundColor(mode: ThemeMode): string {
-  return HUB_CHROME[resolveThemeMode(mode)].color
+export function hubBackgroundColor(mode: ThemeMode, pack: ThemePack = 'classic'): string {
+  return HUB_CHROME[normalizePack(pack)][resolveThemeMode(mode)].color
+}
+
+/** Anything a newer build stored that this one does not know paints classic. */
+function normalizePack(pack: ThemePack | undefined): ThemePack {
+  if (pack === 'apple') return 'apple'
+  if (pack === 'brutal') return 'brutal'
+  return 'classic'
 }
 
 /**
@@ -100,11 +122,13 @@ export function hubBackgroundColor(mode: ThemeMode): string {
  * no flash of the old canvas shows while the renderer repaints.
  *
  * `dimmed` is set while a dialog is open in the hub, so the buttons do not stay
- * the brightest thing on a black window.
+ * the brightest thing on a black window. `pack` is the second dial: it picks
+ * which canvas the chrome is painted from, and defaults to the shipped pack so
+ * an unchanged caller keeps the original chrome.
  */
-export function applyHubTheme(win: BrowserWindow, mode: ThemeMode, dimmed = false): void {
+export function applyHubTheme(win: BrowserWindow, mode: ThemeMode, dimmed = false, pack: ThemePack = 'classic'): void {
   if (win.isDestroyed()) return
-  const chrome = HUB_CHROME[resolveThemeMode(mode)]
+  const chrome = HUB_CHROME[normalizePack(pack)][resolveThemeMode(mode)]
   win.setBackgroundColor(chrome.color)
   win.setTitleBarOverlay({
     color: OVERLAY_COLOR,
@@ -121,8 +145,8 @@ export function applyHubTheme(win: BrowserWindow, mode: ThemeMode, dimmed = fals
  * The renderer already reserves the matching 40px strip and paints its own
  * draggable region there.
  */
-export function createSettingsWindow(mode: ThemeMode = 'dark'): BrowserWindow {
-  const chrome = HUB_CHROME[resolveThemeMode(mode)]
+export function createSettingsWindow(mode: ThemeMode = 'dark', pack: ThemePack = 'classic'): BrowserWindow {
+  const chrome = HUB_CHROME[normalizePack(pack)][resolveThemeMode(mode)]
   const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'),
     width: 1080,
     height: 750,
@@ -170,14 +194,14 @@ export function createSettingsWindow(mode: ThemeMode = 'dark'): BrowserWindow {
  */
 let loginWindow: BrowserWindow | null = null
 
-export function openLoginWindow(mode: ThemeMode = 'dark'): BrowserWindow {
+export function openLoginWindow(mode: ThemeMode = 'dark', pack: ThemePack = 'classic'): BrowserWindow {
   if (loginWindow && !loginWindow.isDestroyed()) {
     if (loginWindow.isMinimized()) loginWindow.restore()
     loginWindow.show()
     loginWindow.focus()
     return loginWindow
   }
-  const chrome = HUB_CHROME[resolveThemeMode(mode)]
+  const chrome = HUB_CHROME[normalizePack(pack)][resolveThemeMode(mode)]
   const win = new BrowserWindow({ icon: join(app.getAppPath(), 'resources/icon.png'),
     width: 460,
     height: 640,

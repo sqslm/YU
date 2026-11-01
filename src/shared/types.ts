@@ -580,6 +580,13 @@ export interface Settings {
   /** UI palette; toggled from the sidebar sun/moon button. */
   themeMode: ThemeMode
   /**
+   * Which visual theme pack paints the hub, the overlay windows and the native
+   * chrome. Independent of `themeMode`: every pack has a light and a dark
+   * palette. Unknown values fall back to `'classic'`, so a settings file
+   * written by a newer build never leaves the app unpainted.
+   */
+  themePack: ThemePack
+  /**
    * Language of the interface itself.
    *
    * Deliberately separate from `language`, which is the recogniser hint: someone
@@ -747,6 +754,23 @@ export interface PromptLibrary {
  * settings list — nothing silently cycles through it.
  */
 export type ThemeMode = 'dark' | 'light' | 'system'
+
+/**
+ * Which visual theme pack paints every window.
+ *
+ * `'classic'` is the palette the app shipped with — warm neutral surfaces and a
+ * jade accent — and it has to stay byte-identical, so an install that never
+ * opens 设置 → 外观 → 主题包 looks exactly as it did before packs existed.
+ * `'apple'` is the Apple-flavoured pack: the system-blue accent, the SF type
+ * ramp, Apple control geometry and translucent materials.
+ * `'brutal'` is the brutalist pack: ink rules, hard offset shadows, 0 px
+ * radius, 800-weight labels and a single signal-orange accent.
+ *
+ * A pack is orthogonal to `themeMode`: every pack owns a dark **and** a light
+ * palette, so switching pack never changes the light/dark choice, and switching
+ * light/dark never changes the pack.
+ */
+export type ThemePack = 'classic' | 'apple' | 'brutal'
 
 /**
  * New takes are stored only as completed. Archived entries retain their original

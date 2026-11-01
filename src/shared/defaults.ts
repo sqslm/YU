@@ -165,6 +165,12 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   maxSessionSeconds: 540,
   arrowToCursorInBar: false,
   themeMode: 'dark',
+  /**
+   * The shipped palette. A fresh install and every settings file written before
+   * theme packs existed resolve to this, which is what keeps the original UI
+   * looking exactly the same for anyone who never picks another pack.
+   */
+  themePack: 'classic',
   /** Interface language; see `Settings.uiLanguage`. */
   uiLanguage: 'zh',
   promptLibrary: defaultPromptLibrary(),
@@ -409,6 +415,10 @@ export function mergeSettings(input: Partial<Settings>): Settings {
   // value is never stored, so a machine that flips between light and dark at
   // sunset keeps working without rewriting the settings file.
   merged.themeMode = pickEnum(input.themeMode, ['dark', 'light', 'system'], base.themeMode)
+  // The theme pack is orthogonal to the appearance above: a settings file with
+  // no `themePack` (every file written before packs existed) keeps the shipped
+  // palette instead of inventing an Apple look for an existing install.
+  merged.themePack = pickEnum(input.themePack, ['classic', 'apple', 'brutal'], base.themePack)
   merged.uiLanguage = pickEnum(input.uiLanguage, ['zh', 'en'], base.uiLanguage)
   // Translation targets: 1–3 distinct language codes. The legacy single
   // `translateTarget` is honoured for settings files written before v0.9, and

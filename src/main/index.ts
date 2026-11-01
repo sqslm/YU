@@ -920,7 +920,7 @@ function handleBarAction(id: BarActionId): void {
 function ensureSettingsWindow(): BrowserWindow {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     // The theme may have flipped while the window was hidden behind the tray.
-    applyHubTheme(settingsWindow, store.get().themeMode, chromeDimmed)
+    applyHubTheme(settingsWindow, store.get().themeMode, chromeDimmed, store.get().themePack)
     if (settingsWindow.isMinimized()) settingsWindow.restore()
     settingsWindow.show()
     settingsWindow.focus()
@@ -928,7 +928,7 @@ function ensureSettingsWindow(): BrowserWindow {
   }
   // A fresh window starts with a dialogue-free page, whatever the old one left.
   chromeDimmed = false
-  settingsWindow = createSettingsWindow(store.get().themeMode)
+  settingsWindow = createSettingsWindow(store.get().themeMode, store.get().themePack)
   const win = settingsWindow
   win.on('close', event => {
     if (quitting) return
@@ -1429,7 +1429,7 @@ function registerIpc(): void {
     // dimmed state carries over: a theme switch happens *inside* an open dialog,
     // and the buttons must not pop back to full brightness behind it.
     if (settingsWindow && !settingsWindow.isDestroyed()) {
-      applyHubTheme(settingsWindow, next.themeMode, chromeDimmed)
+      applyHubTheme(settingsWindow, next.themeMode, chromeDimmed, next.themePack)
       settingsWindow.webContents.send('settings:changed', next)
     }
     if (barWindow && !barWindow.isDestroyed()) barWindow.webContents.send('settings:changed', next)
@@ -1463,7 +1463,7 @@ function registerIpc(): void {
   })
   handle('account:meta', (_event, serverUrl: string) => cloud.meta(serverUrl))
   handle('account:open-login', () => {
-    openLoginWindow(store.get().themeMode)
+    openLoginWindow(store.get().themeMode, store.get().themePack)
     return true
   })
   handle('account:close-login', () => {
@@ -1808,7 +1808,7 @@ function registerIpc(): void {
   handle('app:chromeDim', (_event, dimmed: unknown) => {
     chromeDimmed = dimmed === true
     if (!settingsWindow || settingsWindow.isDestroyed()) return
-    applyHubTheme(settingsWindow, store.get().themeMode, chromeDimmed)
+    applyHubTheme(settingsWindow, store.get().themeMode, chromeDimmed, store.get().themePack)
     log(`[chrome] window buttons ${chromeDimmed ? 'dimmed behind the dialog' : 'restored'}`)
   })
 
@@ -2455,7 +2455,7 @@ async function bootstrap(): Promise<void> {
     if (next === appliedSystemTheme) return
     appliedSystemTheme = next
     if (settingsWindow && !settingsWindow.isDestroyed()) {
-      applyHubTheme(settingsWindow, 'system', chromeDimmed)
+      applyHubTheme(settingsWindow, 'system', chromeDimmed, store.get().themePack)
     }
     log(`[theme] OS appearance is now ${next}`)
   })

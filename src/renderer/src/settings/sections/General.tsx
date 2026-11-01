@@ -11,6 +11,9 @@ import { HISTORY_RETENTIONS } from '@shared/defaults'
 // as the row above: adding names to a shared line restyles it wholesale.
 import { Alert, Chip } from '@mui/material'
 import i18n from '../../i18n'
+// The theme pack picker is its own component: it owns a radio group and a
+// token-drawn preview, neither of which belongs in a layout kit module.
+import { ThemePackPicker } from '../ThemePackPicker'
 import { AssistantAccessSection } from './AssistantAccess'
 
 /* ------------------------------------------------------------------------- *
@@ -838,6 +841,17 @@ export function GeneralSection({ settings, patch }: {
             <MenuItem value="light">{i18n.t('浅色')}</MenuItem>
             <MenuItem value="system">{i18n.t('跟随系统')}</MenuItem>
           </TextField>
+        </SettingsRow>
+        <SettingsRow
+          label={i18n.t('主题包')}
+          description={i18n.t('切换整套界面外观，随时可以换回来。')}
+          detail={i18n.t('深色与浅色在每套主题包里都有，主题和外观各自独立。')}
+        >
+          <ThemePackPicker
+            value={settings.themePack}
+            label={i18n.t('主题包')}
+            onChange={(pack) => patch({ themePack: pack })}
+          />
         </SettingsRow>
         <SettingsRow
           label={i18n.t('界面语言')}

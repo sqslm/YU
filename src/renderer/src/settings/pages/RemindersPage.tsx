@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { Reminder, ReminderAction, ReminderDraft, ReminderInput, ReminderView, TodoPriority } from '@shared/reminders'
 import { isOverdue, localDateTime, normalizePriority, PRIORITY_LABELS, TODO_PRIORITIES } from '@shared/reminders'
 import { PagedList } from '../Pagination'
-import { ReminderDateTime } from './ReminderDateTime'
+import { DateTimeField } from './DateTimeField'
 import { SnoozeButton } from '../../reminder/SnoozeButton'
 import { formatDeadline, reminderDateBounds, reminderView, type ReminderKind, type ReminderPeriod, type ReminderPriorityFilter } from './reminderView'
 import { empty, fromReminder, fromDraft, input, type Form } from './reminderForm'
@@ -26,10 +26,19 @@ function Fields({ form, change }: { form: Form; change: (form: Form) => void }):
         onChange={e => change({ ...form, priority: e.target.value as TodoPriority })}>
         {TODO_PRIORITIES.map(priority => <MenuItem key={priority} value={priority}>{t(PRIORITY_LABELS[priority])}</MenuItem>)}
       </TextField>
-      <TextField type="datetime-local" label={t('截止时间（可选）')} size="small" value={form.deadline} sx={{ flex: 1, colorScheme: theme => theme.palette.mode }}
-        InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-deadline-editor': true }} onChange={e => change({ ...form, deadline: e.target.value })} />
+      {/* Both time fields are the same component, so the deadline picker is the
+          same themed popover as the reminder one — the old native
+          `datetime-local` control drew Chromium's blue calendar and only opened
+          from its tiny icon. Clicking anywhere in the field opens it. */}
+      <DateTimeField label={t('截止时间（可选）')} value={form.deadline} sx={{ flex: 1 }}
+        pickerAttribute="data-reminder-deadline-picker"
+        inputProps={{ 'data-reminder-deadline-editor': true }}
+        onChange={deadline => change({ ...form, deadline })} />
     </Stack>
-    {form.kind === 'reminder' && <><ReminderDateTime required value={form.date} onChange={date => change({ ...form, date,
+    {form.kind === 'reminder' && <><DateTimeField required label={t('提醒时间')} value={form.date}
+      pickerAttribute="data-reminder-picker" inputProps={{ 'data-reminder-datetime': true }}
+      helperText={t('请选择提醒时间')}
+      onChange={date => change({ ...form, date,
       weekday: form.repeat === 'weekly' && date && !form.weekdays.includes(new Date(date).getDay()) ? new Date(date).getDay() : form.weekday })} />
     <Stack direction="row" spacing={1}>
       <TextField select label={t('提醒等级')} size="small" value={form.level} onChange={e => change({ ...form, level: e.target.value as Form['level'] })}>
@@ -52,7 +61,7 @@ function Fields({ form, change }: { form: Form; change: (form: Form) => void }):
     {form.repeat!=='none' && <><Stack direction="row" spacing={1}>
       <TextField type="number" size="small" label={t('重复间隔')} value={form.interval} inputProps={{min:1,max:100}} onChange={e=>change({...form,interval:Number(e.target.value)})}/>
       <TextField type="number" size="small" label={t('总次数（可选）')} value={form.count} inputProps={{min:1,max:10000}} onChange={e=>change({...form,count:e.target.value})}/>
-      <TextField type="date" size="small" label={t('结束日期（可选）')} value={form.until} InputLabelProps={{shrink:true}} onChange={e=>change({...form,until:e.target.value})}/>
+      <DateTimeField mode="date" label={t('结束日期（可选）')} value={form.until} onChange={until => change({ ...form, until })} sx={{ width: 170 }} />
     </Stack><Typography variant="caption" color="text.secondary">{t('次数包含首次，完成一次消耗一次；月末缺少该日期时在最后一天提醒。')}</Typography></>}
     </>}
   </Stack>
@@ -142,8 +151,8 @@ export function RemindersPage({ view, onOpenNote, onViewConsumed }: { view: Remi
         </TextField>
     </Stack>
     {period === 'custom' && <Stack direction="row" spacing={1} sx={{ mb: 2 }} data-reminder-time-filter>
-        <TextField type="date" size="small" label={t('开始日期')} value={from} onChange={e => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-date': 'from' }} sx={{ width: 170, colorScheme: theme => theme.palette.mode }} />
-        <TextField type="date" size="small" label={t('结束日期')} value={to} onChange={e => setTo(e.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'data-reminder-date': 'to' }} sx={{ width: 170, colorScheme: theme => theme.palette.mode }} />
+        <DateTimeField mode="date" label={t('开始日期')} value={from} onChange={setFrom} inputProps={{ 'data-reminder-date': 'from' }} sx={{ width: 170 }} />
+        <DateTimeField mode="date" label={t('结束日期')} value={to} onChange={setTo} inputProps={{ 'data-reminder-date': 'to' }} sx={{ width: 170 }} />
     </Stack>}
     {bounds.error && <Alert severity="warning" sx={{ mb: 2 }}>{t(bounds.error)}</Alert>}
     {!filtered.length && <Typography color="text.secondary" sx={{ py: 4, fontSize: 13 }}>{t('没有符合条件的事项')}</Typography>}

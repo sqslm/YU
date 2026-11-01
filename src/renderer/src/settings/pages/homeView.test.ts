@@ -41,7 +41,9 @@ describe('workspace reads', () => {
     expect(result.data.history).toBeUndefined()
     expect(result.data.todos).toHaveLength(1)
     expect(result.data.notes).toHaveLength(1)
-    expect(result.data.briefing?.body).toBe('Today')
+    // The briefing is not part of the overview anymore: it must not be fetched,
+    // so a broken briefing store cannot put a warning on this page.
+    expect(Object.keys(result.data)).not.toContain('briefing')
     expect(result.errors).toEqual([
       { section: 'events', message: 'Calendar unavailable' }, { section: 'history', message: 'History unavailable' }
     ])
@@ -107,5 +109,17 @@ describe('recent activity', () => {
       [note({ title: ' ', polished: 'Draft' })])
     expect(rows[0]?.text).toBe('Draft')
     expect(rows[1]).toMatchObject({ text: 'Connection failed', failed: true })
+  })
+
+  it('returns at most eight rows, newest first', () => {
+    // The card scrolls, so the cap is about not building an unbounded list for a
+    // panel that shows a handful of rows — eight leaves room for one screen plus
+    // a little overscroll before the "查看全部" action takes over.
+    const rows = recentActivity(
+      Array.from({ length: 12 }, (_, index) => history({ id: `h${index}`, createdAt: now - index * 1000 })),
+      []
+    )
+    expect(rows).toHaveLength(8)
+    expect(rows.map(row => row.id)).toEqual(['h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7'])
   })
 })
