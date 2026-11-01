@@ -35,6 +35,12 @@ export interface MarkdownSourceEditorProps {
   placeholder?: string
   /** Switch the page back to the rich editor (context menu → 切换到富文本编辑). */
   onEditRich?: () => void
+  /**
+   * Called with the line a `reveal` landed on, once it has been laid out. The page
+   * owns the reading pane, so it is the one that knows how far down the line has
+   * to sit (the sticky action row must stay clear) — the editor only knows offsets.
+   */
+  onReveal?: (line: HTMLElement | null) => void
 }
 
 /** Trim a leading marker off one line, returning the lines it should become. */
@@ -130,12 +136,13 @@ function heading(view: EditorView, level: number): void {
  * while scrolling, and leaving it on would re-flash the same row later. The fade
  * itself is CSS (`animation`), so nothing here has to time the highlight.
  */
-function flashLine(view: EditorView, pos: number): void {
+function flashLine(view: EditorView, pos: number): HTMLElement | null {
   const { node } = view.domAtPos(pos)
-  const line = (node instanceof Element ? node : node.parentElement)?.closest('.cm-line')
-  if (!line) return
+  const line = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>('.cm-line') ?? null
+  if (!line) return null
   line.setAttribute('data-note-target', 'on')
   window.setTimeout(() => line.removeAttribute('data-note-target'), 1200)
+  return line
 }
 
 /**
@@ -147,7 +154,7 @@ function flashLine(view: EditorView, pos: number): void {
  * indentation) and this file only adds Typora's markdown habits on top.
  */
 export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSourceEditorProps>(function MarkdownSourceEditor(
-  { value, onChange, field, noteId, disabled = false, minHeight = '42vh', placeholder = '', onEditRich },
+  { value, onChange, field, noteId, disabled = false, minHeight = '42vh', placeholder = '', onEditRich, onReveal },
   ref
 ) {
   const { t } = useTranslation()
@@ -157,8 +164,8 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
   const view = useRef<EditorView | null>(null)
   const readonly = useRef(new Compartment())
   const known = useRef(value)
-  const props = useRef({ value, onChange, disabled, placeholder })
-  props.current = { value, onChange, disabled, placeholder }
+  const props = useRef({ value, onChange, disabled, placeholder, onReveal })
+  props.current = { value, onChange, disabled, placeholder, onReveal }
 
   useImperativeHandle(ref, () => ({
     focus: () => view.current?.focus(),
@@ -180,13 +187,18 @@ export const MarkdownSourceEditor = forwardRef<MarkdownSourceHandle, MarkdownSou
       const pos = Math.max(0, Math.min(offset, current.state.doc.length))
       current.dispatch({
         selection: EditorSelection.cursor(pos),
-        effects: EditorView.scrollIntoView(pos, { y: 'center' })
+        // `start`, not `center`: an outline jump is meant to show the whole
+        // section under the heading, so the line goes to the top of the view.
+        effects: EditorView.scrollIntoView(pos, { y: 'start' })
       })
       current.focus()
       // CodeMirror rebuilds the lines it scrolls past, so the element that was
       // there before the scroll is usually gone: look the line up again once the
-      // scroll has settled.
-      window.setTimeout(() => flashLine(current, pos), 90)
+      // scroll has settled, then hand it to the page for the final alignment.
+      window.setTimeout(() => {
+        const line = flashLine(current, pos)
+        props.current.onReveal?.(line)
+      }, 90)
     }
   }), [])
 

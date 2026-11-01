@@ -404,21 +404,35 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
    * latter also scrolls the ancestors (the page behind the pane moved on the first
    * try).
    */
+  /**
+   * Puts `element` at the top edge of the reading pane.
+   *
+   * An outline jump exists so the whole section under the heading can be read in
+   * one go, and centring the target wastes the upper half of the pane. The sticky
+   * action row keeps its own height plus a line of breathing room clear, so the
+   * heading never lands underneath it.
+   */
+  const scrollPaneTo = (element: HTMLElement): void => {
+    const pane = document.querySelector<HTMLElement>('[data-notes-detail-pane]')
+    if (!pane) return
+    const sticky = pane.querySelector<HTMLElement>('[data-notes-primary-actions]')
+    const inset = (sticky?.offsetHeight ?? 0) + 10
+    pane.scrollTop += element.getBoundingClientRect().top - pane.getBoundingClientRect().top - inset
+  }
   const revealHeading = (index: number): void => {
     const heading = headings[index]
     if (!heading) return
+    // The source view reports the line it landed on through `onReveal`, so both
+    // views align the same way.
     if (!markdownPreview) { bodyInputRef.current?.reveal(heading.offset); return }
-    const pane = document.querySelector<HTMLElement>('[data-notes-detail-pane]')
     const nodes = Array.from(headingElements())
-    if (!pane || !nodes.length) return
+    if (!nodes.length) return
     // Not the same list: the outline only parses top-level `#` lines, the editor
     // also renders headings inside quotes and keeps empty ones. Matching by text
     // is what keeps the highlight on the row that was clicked.
     const target = nodes[matchHeadingIndex(nodes.map(node => node.textContent ?? ''), headings, index)]
     if (!target) return
-    const paneRect = pane.getBoundingClientRect()
-    const rect = target.getBoundingClientRect()
-    pane.scrollTop += rect.top - paneRect.top - paneRect.height / 2 + rect.height / 2
+    scrollPaneTo(target)
     showMarker(target)
   }
   /**
@@ -1943,6 +1957,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                 <MarkdownSourceEditor key={`source-${selected.id}:${primaryField}`} ref={bodyInputRef} field={primaryField} noteId={selected.id} value={primaryValue}
                   onChange={next => commitDraft(selected.id, primaryField, next)}
                   disabled={attachmentBusy || retranscribingId === selected.id}
+                  onReveal={line => { if (line) scrollPaneTo(line) }}
                   onEditRich={() => switchMode(false)}
                   placeholder={t(primaryField === 'polished' ? 'notes.polishedPlaceholder' : 'notes.bodyPlaceholder')} />}
                 <Stack direction="row" spacing={1} sx={{ mt: .5 }}>
