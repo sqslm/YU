@@ -2671,6 +2671,8 @@
   "搜索聊天、附件、随记和历史": "Search chats, attachments, notes and history",
   "没有找到匹配内容": "No matching content",
   "搜索中…": "Searching…",
+  "搜索失败，请重试": "Search failed. Try again.",
+  "搜索需要重启 YU 后才能使用": "Search needs a restart of YU before it can be used",
   "回到最新消息": "Back to latest messages",
   "备份与恢复": "Backup and restore",
   "完整保存本地用户数据与附件，不包含模型缓存和登录态。密钥仍使用系统加密，换电脑后可能需要重新填写。": "Save all local user data and attachments. Models, caches and login sessions are excluded. Keys remain system-encrypted and may need to be entered again on another computer.",

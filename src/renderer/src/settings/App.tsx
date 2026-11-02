@@ -293,7 +293,7 @@ export function App(): JSX.Element {
           </Box>
 
           <List component="nav" aria-label={translate('工作空间')} dense sx={{ px: rail ? 1 : 1.5, py: 0, overflowY: 'auto', minHeight: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: .5, px: rail ? 0 : 1, mb: 1 }}><WorkspaceSearch onOpen={openRecord} />{!rail && <Typography fontSize={12} color="text.secondary">{translate('搜索全部内容')}</Typography>}</Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', px: rail ? 0 : 1, mb: 1.5 }}><WorkspaceSearch rail={rail} onOpen={openRecord} /></Box>
             {NAV.map((item) => (
               <Box key={item.id}>
               {['chat', 'notes', 'history'].includes(item.id) && !rail && <Typography component="div" sx={{ px: 1.5, pt: item.id === 'chat' ? 0 : 2.5, pb: 1, fontSize: 10, letterSpacing: 1.2, color: t.textFaint, fontWeight: 600 }}>{translate(item.id === 'chat' ? '工作空间' : item.id === 'notes' ? '日常' : '资料库')}</Typography>}

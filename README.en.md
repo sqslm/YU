@@ -46,7 +46,7 @@ Screenshot QR scanning: select the entire code, including a clear border, then c
 
 Chat can query local notes, dictation history, reminders/tasks and calendar events, including when web search is off. Existing disabled-tool permissions still apply. Original-record links come from actual tool results, persist with the conversation, and open the matching record. These chat tools are read-only.
 
-The sidebar's **Search all content** searches chat bodies, extracted chat attachments, notes, history, reminders and events locally. Literal substring matching supports short Chinese queries and punctuation. Results are paged, and old chat messages open directly with a highlight and a **Back to latest messages** action.
+The search field at the top of the sidebar (the whole strip is the button — clicking the label opens it too) searches chat bodies, extracted chat attachments, notes, history, reminders and events locally. Literal substring matching supports short Chinese queries and punctuation. Results are paged, and old chat messages open directly with a highlight and a **Back to latest messages** action. A hot-reloaded window can outrun the running main process; if the dialog reports that search needs a restart, restart YU once.
 
 ICS imports preserve IANA time-zone instants and multi-day all-day ranges, including after a title edit. Recurrence rules and unsupported custom time-zone names are rejected before any event in the file is written; expand recurring events into individual events first. Subscriptions use the same parser.
 
