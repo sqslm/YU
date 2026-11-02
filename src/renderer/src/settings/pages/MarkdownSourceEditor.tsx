@@ -8,6 +8,7 @@ import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { markdown } from '@codemirror/lang-markdown'
 import { useTranslation } from 'react-i18next'
 import { NoteContextMenu, type NoteMenuEntry } from './NoteContextMenu'
+import { markdownHeading } from './noteOutline'
 
 export interface MarkdownSourceHandle {
   focus(): void
@@ -126,7 +127,7 @@ function continueList(view: EditorView): boolean {
 
 /** Ctrl/Cmd+1..6 sets a heading, Ctrl/Cmd+0 turns it back into a paragraph. */
 function heading(view: EditorView, level: number): void {
-  withPrefix(view, (line) => line.replace(/^\s*#{1,6}\s+/, level === 0 ? '' : `${'#'.repeat(level)} `))
+  withPrefix(view, (line) => markdownHeading(line, level))
 }
 
 /**

@@ -16,6 +16,11 @@ export interface NoteHeading {
   offset: number
 }
 
+/** Apply a source-editor heading command to either a paragraph or an existing heading. */
+export function markdownHeading(line: string, level: number): string {
+  return (level === 0 ? '' : `${'#'.repeat(level)} `) + line.replace(/^\s*#{1,6}\s+/, '')
+}
+
 /** ``` or ~~~ at the start of a line, with or without an info string. */
 const FENCE = /^\s{0,3}(?:```|~~~)/
 

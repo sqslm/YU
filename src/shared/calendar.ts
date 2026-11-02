@@ -206,9 +206,8 @@ export function normalizeEventInput(input: CalendarEventInput, now: number): Cal
   let start = Number.isFinite(input.start) ? input.start : now
   if (allDay) start = startOfLocalDay(start)
   let end = Number.isFinite(input.end) ? input.end : start + (allDay ? DAY : HOUR)
-  // An all-day event is exactly one local day; a stray end from a parser cannot widen it.
-  if (allDay) end = start + DAY
-  if (end <= start) end = start + (allDay ? DAY : HOUR)
+  if (allDay) end = Math.max(shiftDays(start, 1), startOfLocalDay(end))
+  if (end <= start) end = allDay ? shiftDays(start, 1) : start + HOUR
   const notes = typeof input.notes === 'string' && input.notes.trim() ? input.notes.trim().slice(0, MAX_EVENT_NOTES) : undefined
   const location = typeof input.location === 'string' && input.location.trim() ? input.location.trim() : undefined
   const uid = typeof input.uid === 'string' && input.uid.trim() ? input.uid.trim() : undefined
@@ -381,8 +380,25 @@ function parseIcsDate(value: string, params: Record<string, string>): { at: numb
   const clock = [Number(hours), Number(minutes ?? 0), Number(seconds ?? 0)]
   const at = zulu
     ? Date.UTC(numbers[0], numbers[1], numbers[2], clock[0], clock[1], clock[2])
+    : params.TZID ? zonedIcsTime([...numbers, ...clock], params.TZID)
     : new Date(numbers[0], numbers[1], numbers[2], clock[0], clock[1], clock[2], 0).getTime()
   return { at, allDay: false }
+}
+
+/** Resolve an ICS wall clock in its own zone, including that date's DST offset. */
+function zonedIcsTime(parts: number[], zone: string): number {
+  let formatter: Intl.DateTimeFormat
+  try { formatter = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }) }
+  catch { throw new Error(mt('不支持的日历时区：{{zone}}', { zone })) }
+  const wall = Date.UTC(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5])
+  let at = wall
+  for (let i = 0; i < 3; i++) {
+    const fields = Object.fromEntries(formatter.formatToParts(at).map(part => [part.type, part.value]))
+    const rendered = Date.UTC(Number(fields.year), Number(fields.month) - 1, Number(fields.day), Number(fields.hour), Number(fields.minute), Number(fields.second))
+    if (rendered === wall) return at
+    at += wall - rendered
+  }
+  throw new Error(mt('日历时间在时区 {{zone}} 中不存在，请检查夏令时切换时间', { zone }))
 }
 
 function eventFromProperties(props: Record<string, IcsProperty>): CalendarEventInput | null {
@@ -404,7 +420,7 @@ function eventFromProperties(props: Record<string, IcsProperty>): CalendarEventI
     title: title || mt('未命名日程'),
     ...(notes ? { notes } : {}),
     start: start.at,
-    end: allDay ? start.at + DAY : until,
+    end: allDay ? end?.allDay && end.at > start.at ? end.at : shiftDays(start.at, 1) : until,
     allDay,
     ...(location ? { location } : {}),
     source: 'import',
@@ -416,9 +432,9 @@ function eventFromProperties(props: Record<string, IcsProperty>): CalendarEventI
 /**
  * Tolerant ICS reader: CRLF or LF, folded lines, parameters, UTC or floating time.
  *
- * Deliberately partial. Recurrence (RRULE), alarms (VALARM) and timezone
- * definitions (VTIMEZONE) are ignored — this app stores one-off events, and the
- * caller keeps its own reminder lead instead of importing VALARM.
+ * One-off events only: recurrence is rejected before the store writes anything.
+ * IANA TZID values use Intl; custom VTIMEZONE names are rejected. VALARM is ignored
+ * because the caller keeps its own reminder lead.
  *
  * `STATUS:CANCELLED` events are returned too, marked with `status:'cancelled'`;
  * deciding whether that means "update to cancelled" or "leave the local row
@@ -439,6 +455,9 @@ export function parseIcs(text: string): CalendarEventInput[] {
       if (input) out.push(input)
       current = null
       continue
+    }
+    if (current && ['RRULE', 'RDATE', 'EXDATE', 'RECURRENCE-ID'].includes(property.name)) {
+      throw new Error(mt('暂不支持导入重复日程，本次未导入任何日程；请先将重复日程展开为单次事件'))
     }
     // First occurrence wins: a duplicate DESCRIPTION from a bad exporter cannot double the notes.
     if (current && !(property.name in current)) current[property.name] = property

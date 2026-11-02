@@ -9,7 +9,7 @@ import { editorViewCtx } from '@milkdown/kit/core'
 import type { EditorView } from '@milkdown/kit/prose/view'
 import { AllSelection, TextSelection, type Command } from '@milkdown/kit/prose/state'
 import { lift, setBlockType, toggleMark, wrapIn } from '@milkdown/kit/prose/commands'
-import { noteAttachmentUrl } from '@shared/noteAttachments'
+import { decodeAttachmentTarget, encodeAttachmentTarget, noteAttachmentUrl } from '@shared/noteAttachments'
 import { NoteContextMenu, type NoteMenuEntry } from './NoteContextMenu'
 import { guardEditorSelectionDrag } from './editorDragGuard'
 
@@ -219,7 +219,8 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     event.preventDefault()
     if (!(event.ctrlKey || event.metaKey)) return
     const href = anchor.getAttribute('href') ?? ''
-    if (href) void window.api.app.openExternal(href)
+    if (href.startsWith('attachments/')) onAttachment(decodeAttachmentTarget(href))
+    else if (href) void window.api.app.openExternal(href)
   }
 
   const paste = (): void => {
@@ -243,7 +244,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       withView((view) => {
         const image = view.state.schema.nodes.image
         if (!image) return
-        view.dispatch(view.state.tr.replaceSelectionWith(image.create({ src: added.path, alt: file.name })))
+        view.dispatch(view.state.tr.replaceSelectionWith(image.create({ src: encodeAttachmentTarget(added.path), alt: file.name })))
       })
     } catch { /* the attachment store refused; the page reports its own error */ }
   }
@@ -299,7 +300,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
       // the proxied `typeless-attachment://` URL, which is what made every entry
       // grey the first time round.
       const stored = typeof image?.attrs.src === 'string' ? image.attrs.src : ''
-      const relative = stored.startsWith('attachments/') ? stored : ''
+      const relative = stored.startsWith('attachments/') ? decodeAttachmentTarget(stored) : ''
       const owner = sink.current?.noteId ?? ''
       const ratio = Number(image?.attrs.ratio ?? 1)
       const setRatio = (next: number): (() => void) => () => withView((view) => {
@@ -472,7 +473,7 @@ export function MarkdownEditor({ value, onChange, noteId, onAttachment, placehol
     const noteOwner = owner.noteId
     const upload = async (file: File): Promise<string> => {
       const added = await window.api.notes.addAttachment(noteOwner, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) })
-      return added.path
+      return encodeAttachmentTarget(added.path)
     }
     // A child node per instance: the previous editor's DOM (and its ProseMirror
     // view, which owns the undo history) lives in its own subtree, so the async

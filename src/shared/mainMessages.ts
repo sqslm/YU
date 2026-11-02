@@ -1288,5 +1288,8 @@ export const MAIN_MESSAGES: Record<string, string> = {
   "未找到重叠区域，请稍向上滚动以继续拼接": "No overlap found. Scroll back up a little to continue stitching.",
   "这个附件不是可以复制的图片": "This attachment is not an image that can be copied",
   "图片另存为": "Save image as",
-  "图片": "Image"
+  "图片": "Image",
+  "不支持的日历时区：{{zone}}": "Unsupported calendar time zone: {{zone}}",
+  "日历时间在时区 {{zone}} 中不存在，请检查夏令时切换时间": "This calendar time does not exist in {{zone}}. Check the daylight-saving transition.",
+  "暂不支持导入重复日程，本次未导入任何日程；请先将重复日程展开为单次事件": "Recurring calendar events are not supported. Nothing was imported. Expand them into individual events first."
 }

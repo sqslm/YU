@@ -306,9 +306,9 @@ describe('calendar store', () => {
     expect(rows).toHaveLength(3)
     expect(rows[0].title).toBe('这是一个需要折行的很长很长的中文日程标题用来验证按 UTF-8 字节折行而不是按字符切分的事情会发生在一个很长的标题上面并且还要继续加内容')
     expect(rows[0].notes).toBe('第一行\n第二行, 逗号')
-    // TZID is read as local wall-clock time; the quote in TZID="..." must not break the key.
-    expect(rows[0].start).toBe(new Date(2026, 9, 21, 10, 0, 0).getTime())
-    expect(rows[0].end).toBe(new Date(2026, 9, 21, 11, 30, 0).getTime())
+    // TZID identifies an instant independently of the computer's local zone.
+    expect(rows[0].start).toBe(Date.UTC(2026, 9, 21, 2, 0, 0))
+    expect(rows[0].end).toBe(Date.UTC(2026, 9, 21, 3, 30, 0))
     expect(rows[1].start).toBe(Date.UTC(2026, 9, 21, 2, 0, 0))
     expect(rows[2].allDay).toBe(true)
     expect(rows[2].start).toBe(new Date(2026, 9, 21).getTime())

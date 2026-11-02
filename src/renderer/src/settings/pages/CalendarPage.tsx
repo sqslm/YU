@@ -312,7 +312,7 @@ export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
           <ToggleButton value="list" sx={{ px: 1.5, py: 0.25, fontSize: 12 }}>{i18n.t('列表')}</ToggleButton>
         </ToggleButtonGroup>
         <Box sx={{ flex: 1 }} />
-        <Button size="small" variant="outlined" disabled={busy} data-calendar-import onClick={() => void runImport()}>{i18n.t('导入 ICS')}</Button>
+        <Tooltip title={i18n.t('支持单次日程、IANA 时区和多日全天事件；暂不支持重复规则。')}><span><Button size="small" variant="outlined" disabled={busy} data-calendar-import onClick={() => void runImport()}>{i18n.t('导入 ICS')}</Button></span></Tooltip>
         <Button size="small" variant="outlined" disabled={busy} data-calendar-export onClick={() => void runExport()}>{i18n.t('导出 ICS')}</Button>
         <Button size="small" variant="contained" startIcon={<Add />} data-calendar-new
           onClick={() => { setDialogError(''); setEditor({ form: emptyForm(selected) }) }}>{i18n.t('新建日程')}</Button>
