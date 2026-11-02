@@ -44,6 +44,16 @@ Wake learning: enable Voice & input → Wake word, then choose Learn wake phrase
 
 Screenshot QR scanning: select the entire code, including a clear border, then click Scan QR code. Decoding is local and needs no configured model. Copy the text or explicitly open a recognized HTTP(S) link; QR content is never executed automatically.
 
+Chat can query local notes, dictation history, reminders/tasks and calendar events, including when web search is off. Existing disabled-tool permissions still apply. Original-record links come from actual tool results, persist with the conversation, and open the matching record. These chat tools are read-only.
+
+The sidebar's **Search all content** searches chat bodies, extracted chat attachments, notes, history, reminders and events locally. Literal substring matching supports short Chinese queries and punctuation. Results are paged, and old chat messages open directly with a highlight and a **Back to latest messages** action.
+
+ICS imports preserve IANA time-zone instants and multi-day all-day ranges, including after a title edit. Recurrence rules and unsupported custom time-zone names are rejected before any event in the file is written; expand recurring events into individual events first. Subscriptions use the same parser.
+
+**Settings → Data and app → Storage** includes backup and restore. A backup is a complete directory with a `manifest.json`, SQLite snapshots and file hashes. It includes user records, original attachments, recordings, memory databases and settings, while excluding model caches and login sessions. Keep the entire directory. API keys remain encrypted by the operating system and may need to be entered again on another computer or Windows account.
+
+Restore validates and previews the backup before confirmation, stages it and restarts the app, then replaces files before opening any store. The current notes location is preserved and sync is turned off. Copies of the previous data remain in `.yu-before-restore-*` directories. Interrupted restores recover the original files before retrying; failed writes roll back.
+
 ## Screens
 
 The interface pairs warm white / graphite surfaces with jade accents and supports light, dark and system appearance. The collapsible sidebar groups navigation into Workspace, Everyday and Library. Overview, chat, notes, calendar, to-dos, history and settings share the same visual language; the floating bar and answer card use graphite and jade while retaining warning and error colours.

@@ -29,6 +29,8 @@ export interface IpcCaller {
 }
 
 const trustedIds = new Set<number>()
+let dataMaintenance = false
+export function setDataMaintenance(active: boolean): void { dataMaintenance = active }
 
 /**
  * The rule: the caller must be a window we created, and must be calling from
@@ -102,6 +104,7 @@ export function handle(
 ): void {
   ipcMain.handle(channel, (event, ...args) => {
     assertTrusted(event)
+    if (dataMaintenance && !channel.startsWith('backup:') && !['app:version', 'app:resources'].includes(channel)) throw Error('正在备份或准备恢复，请稍候')
     return listener(event, ...(args as never[]))
   })
 }
@@ -117,6 +120,7 @@ export function subscribe(
   listener: (event: IpcMainEvent, ...args: never[]) => void
 ): void {
   ipcMain.on(channel, (event, ...args) => {
+    if (dataMaintenance) return
     if (isIpcCall(event) && !allowsIpc(event, trustedIds)) return
     listener(event, ...(args as never[]))
   })

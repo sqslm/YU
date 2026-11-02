@@ -15,6 +15,7 @@ import i18n from '../../i18n'
 // token-drawn preview, neither of which belongs in a layout kit module.
 import { ThemePackPicker } from '../ThemePackPicker'
 import { AssistantAccessSection } from './AssistantAccess'
+import { BackupSection } from './Backup'
 
 /* ------------------------------------------------------------------------- *
  * Shared settings-dialog layout kit.
@@ -1252,6 +1253,7 @@ export function StorageSection({ settings, patch }: {
   const [retentionConfirmOpen, setRetentionConfirmOpen] = useState(false)
   return (
     <Stack spacing={3}>
+      <BackupSection />
       <SettingsGroup icon={<IconHistory />} title={i18n.t('历史')}>
         <SettingsRow
           label={i18n.t('历史保留期')}

@@ -1,6 +1,8 @@
 import { MemoryService } from './memory/host'
 import { ChatService } from './chat'
 import { readWorkspaceRecord, searchWorkspace } from './workspace'
+import { applyPendingRestore, createBackup, inspectBackup, stageRestore, type BackupRoots } from './backup'
+import { setDataMaintenance } from './ipc-trust'
 import { explainSelection } from './explanation'
 import { setMemoryService } from './memory/registry'
 import { memoryIdleCheck } from './memory/idle'
@@ -12,7 +14,7 @@ import { personalCommand } from './tools/personal'
 import { taskDiagnosticSummary } from './task-diagnostics'
 import { app, clipboard, dialog, nativeTheme, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join, resolve } from 'node:path'
 import os from 'node:os'
@@ -129,6 +131,16 @@ if (resolve(app.getPath('userData')) === resolve(join(app.getPath('appData'), ap
   app.setPath('userData', join(app.getPath('appData'), 'typeless-rebuild'))
 }
 app.setName('YU')
+const gotLock = app.requestSingleInstanceLock()
+const chatRoot = join(app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(), 'data', 'chat')
+if (gotLock && existsSync(join(app.getPath('userData'), 'restore-pending.json'))) {
+  try {
+    const user = app.getPath('userData'), pending = JSON.parse(readFileSync(join(user, 'restore-pending.json'), 'utf8'))
+    if (typeof pending.notesDir !== 'string' || !pending.notesDir) throw Error('恢复目标目录无效')
+    const recovered = applyPendingRestore({ user, notes: pending.notesDir, chat: chatRoot })
+    void app.whenReady().then(() => dialog.showMessageBox({ type: 'info', message: '备份已恢复，同步已关闭', detail: `恢复前的数据保存在：\n${recovered?.join('\n') || user}` }))
+  } catch (error) { dialog.showErrorBox('恢复未完成，软件已停止启动以保护数据', String(error)); app.exit(1) }
+}
 if (process.platform === 'win32') app.setAppUserModelId(appUserModelId())
 const store = new SettingsStore()
 const history = new HistoryStore()
@@ -154,7 +166,7 @@ let sync: SyncEngine | null = null
 const stats = new StatsStore()
 
 let settingsWindow: BrowserWindow | null = null
-const chats = new ChatService(join(app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(), 'data', 'chat', 'chats.db'), () => store.get(), event => {
+const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
 }, () => assistant.localQueries())
 let explanationController: AbortController | null = null
@@ -1270,6 +1282,59 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 
 function registerIpc(): void {
   const chatOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从语聊天页操作对话') }
+  let selectedBackup: string | null = null, backupWorking = false
+  const roots = (): BackupRoots => ({ user: app.getPath('userData'), notes: store.get().notesDir || app.getPath('userData'), chat: chatRoot })
+  const assertBackupIdle = (): void => {
+    if (chats.busy || assistant.busy || pipeline?.isBusy || notesRecording || cardVoice.active || notes.list().notes.some(note => note.polishStatus === 'pending') || sync?.status().state === 'syncing' || briefingDelivery?.history().some(row => row.status === 'sending')) throw Error('请等待录音、生成、随记转写、投递或同步完成后再备份或恢复')
+  }
+  const backupWork = async <T>(work: () => Promise<T>, restarting = false): Promise<T> => {
+    if (backupWorking) throw Error('正在备份或准备恢复，请稍候')
+    assertBackupIdle()
+    backupWorking = true
+    let paused = false, completed = false
+    const wasSuspended = wakeSuspended
+    try {
+      if (settingsWindow && !await prepareHubRelease(settingsWindow)) throw Error('请先保存编辑内容并处理未发送的草稿')
+      await store.update({})
+      assertBackupIdle()
+      setDataMaintenance(true); paused = true
+      chats.cancel(); hotkeys?.setSuspended(true); wakeSuspended = true; refreshWakeWord()
+      memory.pause('backup'); sync?.stop(); reminders?.suspend(); calendarScheduler?.stop(); briefing?.stop()
+      const result = await work(); completed = true; return result
+    } finally {
+      if (paused && (!restarting || !completed)) {
+        setDataMaintenance(false); wakeSuspended = wasSuspended; memory.resume('backup')
+        if (!gameMode.snapshot().active) {
+          hotkeys?.setSuspended(screenshotTool.isOpen || Boolean(wakeSetupMode)); refreshWakeWord()
+          if (!wakeSuspended && !wakeLocked) reminders?.resume()
+          calendarScheduler?.start(); briefing?.start(); sync?.reconfigure()
+        }
+      }
+      backupWorking = restarting && completed
+    }
+  }
+  handle('backup:create', async event => {
+    chatOwner(event)
+    const chosen = await dialog.showOpenDialog({ title: '选择备份保存位置', defaultPath: dirname(chatRoot), properties: ['openDirectory', 'createDirectory'] })
+    if (chosen.canceled || !chosen.filePaths[0]) return null
+    return backupWork(() => createBackup(join(chosen.filePaths[0], `YU-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`), roots(), {
+      '聊天': chats.store.list().threads.length, '随记': notes.list().notes.length, '历史记录': history.count(), '提醒与待办': reminders!.store.list().length, '日程': calendar!.list().length
+    }))
+  })
+  handle('backup:preview', async event => {
+    chatOwner(event); selectedBackup = null
+    const chosen = await dialog.showOpenDialog({ title: '选择 YU 备份目录', properties: ['openDirectory'] })
+    if (chosen.canceled || !chosen.filePaths[0]) return null
+    const result = inspectBackup(chosen.filePaths[0]); selectedBackup = chosen.filePaths[0]; return result
+  })
+  handle('backup:restore', async event => {
+    chatOwner(event)
+    if (!selectedBackup) throw Error('请先选择并校验备份')
+    const source = selectedBackup
+    await backupWork(() => stageRestore(source, roots()), true)
+    selectedBackup = null
+    setImmediate(() => { app.relaunch(); app.quit() })
+  })
   handle('workspace:get', (event, record: import('@shared/workspace').LocalRecord) => {
     chatOwner(event)
     return readWorkspaceRecord({ notes: () => notes.list().notes, chat: chats.store, history, reminders: () => reminders!.store.list(), events: () => calendar!.list() }, record)
@@ -2768,7 +2833,6 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   // Exiting silently here looked exactly like a broken install: no window, no
   // log, exit code 0. Say why while there is still a process to say it.

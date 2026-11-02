@@ -56,6 +56,11 @@ export interface UpdateState {
 }
 
 export interface TypelessApi {
+  backup: {
+    create(): Promise<import('./backup').BackupSummary | null>
+    preview(): Promise<import('./backup').BackupSummary | null>
+    restore(): Promise<void>
+  }
   workspace: {
     get(record: import('./workspace').LocalRecord): Promise<import('./workspace').LocalRecord>
     search(query: string, offset?: number): Promise<import('./workspace').WorkspaceSearchPage>
