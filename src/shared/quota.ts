@@ -38,3 +38,14 @@ export function quotaRemainingRatio(result?: QuotaResult): number | undefined {
   const metric = result.metrics.find(row => row.remaining !== undefined && row.total !== undefined && row.total > 0)
   return metric ? Math.max(0, Math.min(1, metric.remaining! / metric.total!)) : undefined
 }
+/**
+ * Balance-only providers report money (DeepSeek, Moonshot, SiliconFlow) or a running
+ * total (OpenRouter's unlimited key) without any ceiling, so there is no ratio to draw.
+ * Such a row still has something to show: the amount itself.
+ */
+export function quotaAmountMetric(result?: QuotaResult): QuotaMetric | undefined {
+  if (result?.status !== 'ok') return undefined
+  const capped = (row: QuotaMetric): boolean => row.total !== undefined && row.total > 0
+  return result.metrics.find(row => row.remaining !== undefined && !capped(row))
+    ?? result.metrics.find(row => row.remaining === undefined && row.used !== undefined && !capped(row))
+}

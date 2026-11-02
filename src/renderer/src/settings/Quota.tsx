@@ -2,18 +2,33 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Typography, useTheme } from '@mui/material'
 import RefreshRounded from '@mui/icons-material/RefreshRounded'
 import type { Settings } from '@shared/types'
-import { defaultQuotaTarget, quotaConnections, quotaKey, quotaRemainingRatio, type QuotaMetric, type QuotaResult, type QuotaTarget } from '@shared/quota'
+import { defaultQuotaTarget, quotaAmountMetric, quotaConnections, quotaKey, quotaRemainingRatio, type QuotaMetric, type QuotaResult, type QuotaTarget } from '@shared/quota'
 import i18n from '../i18n'
+import { amountLabel } from './quotaAmountLabel'
 
+/**
+ * Two shapes behind one control: an arc when a total allowance is known, and the amount
+ * itself when the provider only reports a balance (DeepSeek, Moonshot, SiliconFlow) or an
+ * unbounded running usage (OpenRouter key without a limit). A bare dash used to be the
+ * only answer for the balance case, which told the user nothing.
+ */
 export function QuotaRing({ result, loading, size = 28 }: { result?: QuotaResult; loading?: boolean; size?: number }): JSX.Element {
   const dark = useTheme().palette.mode === 'dark', ratio = quotaRemainingRatio(result)
+  const balance = ratio === undefined ? quotaAmountMetric(result) : undefined
+  const label = balance ? amountLabel(balance, i18n.language) : undefined
   const track = dark ? '#101010' : '#d9dce1', remaining = dark ? '#ffffff' : '#242832'
-  return <Box sx={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
+  // The sidebar ring is 28 px: inside a 4 px stroke that leaves ~19 px of room, so the
+  // currency mark only appears once the ring is big enough to keep the figure readable.
+  const mark = label && size >= 32 ? label.symbol : ''
+  const text = label ? `${mark}${label.figure}` : '—'
+  const fontSize = text.length <= 3 ? size * 0.36 : text.length <= 5 ? size * 0.29 : size * 0.24
+  const title = label && balance ? `${i18n.t(balance.label)} ${label.spoken}` : undefined
+  return <Box data-quota-ring={label ? 'amount' : ratio === undefined ? 'empty' : 'ratio'} title={title} sx={{ width: size, height: size, position: 'relative', flexShrink: 0, borderRadius: '50%', bgcolor: label ? 'action.hover' : undefined }}>
     <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden="true">
       <circle cx="18" cy="18" r="14" fill="none" stroke={track} strokeWidth="4" />
       {ratio !== undefined && <circle data-quota-remaining cx="18" cy="18" r="14" fill="none" stroke={remaining} strokeWidth="4" pathLength="100" strokeDasharray={`${ratio * 100} 100`} transform="rotate(-90 18 18)" />}
     </svg>
-    {loading ? <CircularProgress size={size - 6} thickness={2} sx={{ color: remaining, position: 'absolute', top: 3, left: 3 }} /> : ratio === undefined && <Typography component="span" aria-hidden sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 11, color: remaining }}>—</Typography>}
+    {loading ? <CircularProgress size={size - 6} thickness={2} sx={{ color: remaining, position: 'absolute', top: 3, left: 3 }} /> : ratio === undefined && <Typography component="span" aria-hidden={label ? undefined : true} sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', px: 0.25, fontSize, fontWeight: 600, lineHeight: 1, letterSpacing: '-.02em', fontVariantNumeric: 'tabular-nums', color: label ? 'text.primary' : remaining, whiteSpace: 'nowrap', overflow: 'hidden' }}><Box component="span" sx={{ display: 'inline-flex', alignItems: 'baseline' }}>{!!mark && <Box component="span" sx={{ fontSize: '0.82em', mr: '1px', opacity: 0.7 }}>{mark}</Box>}{label ? label.figure : '—'}</Box></Typography>}
   </Box>
 }
 
@@ -97,7 +112,7 @@ export function QuotaProvider({ settings, saving, children }: { settings: Settin
               {checking && <Typography role="status" sx={{ fontSize: 12, color: 'text.secondary' }}>{i18n.t('正在查询额度…')}</Typography>}
               {row?.metrics.map((metric, i) => <Box key={i} sx={{ mb: 0.75 }}><Typography sx={{ fontSize: 20, fontWeight: 600 }}>{headline(metric)}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{i18n.t(metric.label)}{metric.total !== undefined ? ` / ${display(metric.total, metric.unit)}` : ''}{metric.used !== undefined && metric.remaining !== undefined ? ` · ${i18n.t('已用')} ${display(metric.used, metric.unit)}` : ''}{ratio !== undefined ? ` · ${i18n.t('剩余')} ${Math.round(ratio * 100)}%` : ''}</Typography>{metric.resetsAt && <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{i18n.t('下次重置')} · {new Date(metric.resetsAt).toLocaleString(i18n.language)}</Typography>}</Box>)}
               <Typography sx={{ fontSize: 11.5, color: row?.status === 'error' ? 'error.main' : 'text.secondary', lineHeight: 1.7 }}>{row ? i18n.t(row.message) : !checking ? i18n.t('等待查询') : ''}</Typography>
-              {row?.status === 'ok' && ratio === undefined && <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{i18n.t('缺少可计算的总额度，暂不显示比例。')}</Typography>}
+              {row?.status === 'ok' && ratio === undefined && <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{i18n.t('只有金额没有总额度，圆环按余额显示，不画比例。')}</Typography>}
               {row && <Stack direction="row" useFlexGap spacing={1.5} sx={{ flexWrap: 'wrap', mt: 0.5, alignItems: 'center' }}><Typography sx={{ fontSize: 10.5, color: 'text.disabled' }}>{i18n.t('查询时间')} · {new Date(row.checkedAt).toLocaleTimeString(i18n.language)}</Typography>{row.consoleUrl && <Button size="small" component="a" href={row.consoleUrl} target="_blank" rel="noopener noreferrer" sx={{ p: 0, minWidth: 0, fontSize: 11 }}>{i18n.t('前往提供商控制台')}</Button>}</Stack>}
             </Box>
           </Box>
