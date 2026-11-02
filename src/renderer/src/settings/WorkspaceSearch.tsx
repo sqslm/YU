@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Box, Button, ButtonBase, Dialog, DialogContent, DialogTitle, IconButton, List, ListItemButton, Stack, TextField, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Button, ButtonBase, Chip, Dialog, DialogContent, DialogTitle, IconButton, List, ListItemButton, Stack, TextField, Tooltip, Typography } from '@mui/material'
 import SearchRounded from '@mui/icons-material/SearchRounded'
 import type { LocalRecord } from '@shared/workspace'
 import { useTranslation } from 'react-i18next'
@@ -17,10 +17,15 @@ const KINDS = { chat: '聊天', note: '随记', history: '历史记录', reminde
  * label and nothing happened. In rail mode there is no room for a field, so the
  * icon stands alone.
  */
+/** Chips stay compact: they are a filter row, not buttons that answer something. */
+const chipSx = { fontSize: 11.5, height: 26, borderRadius: 999, '& .MuiChip-label': { px: 1.25 } } as const
+
 export function WorkspaceSearch({ rail = false, onOpen }: { rail?: boolean; onOpen(record: LocalRecord): Promise<void> }): JSX.Element {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [items, setItems] = useState<LocalRecord[]>([])
   const [busy, setBusy] = useState(false), [more, setMore] = useState(false), [error, setError] = useState('')
+  /** Which kind the chips are narrowing to; `all` stacks every group. */
+  const [tab, setTab] = useState<LocalRecord['kind'] | 'all'>('all')
   const ticket = useRef(0)
   const messageOf = (reason: unknown): string => searchErrorText(reason, t)
   useEffect(() => {
@@ -41,6 +46,10 @@ export function WorkspaceSearch({ rail = false, onOpen }: { rail?: boolean; onOp
     finally { if (request === ticket.current) setBusy(false) }
   }
   const groups = groupRecords(items)
+  // Derived rather than stored: a new query can empty the picked kind, and the
+  // chips must not keep a kind that no longer has a row behind it.
+  const activeTab: LocalRecord['kind'] | 'all' = tab !== 'all' && groups.some(group => group.kind === tab) ? tab : 'all'
+  const shown = activeTab === 'all' ? groups : groups.filter(group => group.kind === activeTab)
   return <>
     {rail
       ? <Tooltip title={t('搜索全部内容')} placement="right"><IconButton data-workspace-search aria-label={t('搜索全部内容')} onClick={() => setOpen(true)}><SearchRounded fontSize="small" /></IconButton></Tooltip>
@@ -73,14 +82,18 @@ export function WorkspaceSearch({ rail = false, onOpen }: { rail?: boolean; onOp
       <DialogContent>
         <TextField autoFocus fullWidth size="small" label={t('搜索聊天、附件、随记和历史')} value={query} onChange={event => setQuery(event.target.value)} inputProps={{ maxLength: 200 }} sx={{ mt: 1 }} />
         {error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
-        {groups.map((group, index) => <Box key={group.kind} data-workspace-group={group.kind} sx={{ mt: index ? 1.5 : 1 }}>
-          {/* Sticky so the kind stays visible while scrolling its own results; the rule
-              running to the right edge keeps the header from reading like a title. */}
-          <Stack direction="row" alignItems="center" gap={1} sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: 'background.paper', py: .75, pl: .25 }}>
+        {!!groups.length && <Stack direction="row" gap={.75} sx={{ position: 'sticky', top: 0, zIndex: 2, bgcolor: 'background.paper', pt: 1.25, pb: 1, overflowX: 'auto' }}>
+          <Chip data-workspace-tab="all" size="small" label={`${t('全部')} ${items.length}`} onClick={() => setTab('all')} variant={activeTab === 'all' ? 'filled' : 'outlined'} color={activeTab === 'all' ? 'primary' : 'default'} sx={chipSx} />
+          {groups.map(group => <Chip key={group.kind} data-workspace-tab={group.kind} size="small" label={`${t(KINDS[group.kind])} ${group.rows.length}`} onClick={() => setTab(group.kind)} variant={activeTab === group.kind ? 'filled' : 'outlined'} color={activeTab === group.kind ? 'primary' : 'default'} sx={chipSx} />)}
+        </Stack>}
+        {shown.map((group, index) => <Box key={group.kind} data-workspace-group={group.kind} sx={{ mt: activeTab === 'all' && index ? 1.5 : .5 }}>
+          {/* One kind picked: the chip above already says which, so the header would repeat it.
+              The rule running to the right edge keeps the label from reading like a title. */}
+          {activeTab === 'all' && <Stack direction="row" alignItems="center" gap={1} sx={{ py: .75, pl: .25 }}>
             <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'text.secondary' }}>{t(KINDS[group.kind])}</Typography>
             <Typography sx={{ fontSize: 10.5, color: 'text.disabled' }}>{group.rows.length}</Typography>
             <Box sx={{ flex: 1, height: 1, bgcolor: 'divider' }} />
-          </Stack>
+          </Stack>}
           <List dense disablePadding>{group.rows.map(record => <ListItemButton key={`${record.kind}:${record.id}`} data-workspace-hit onClick={() => { void onOpen(record).then(() => setOpen(false)).catch(error => setError(messageOf(error))) }} sx={{ borderRadius: 1.5, alignItems: 'flex-start', py: 1.25, px: 1 }}>
             <Box sx={{ minWidth: 0, width: '100%' }}>
               <Typography fontSize={13} fontWeight={600} noWrap>{record.title || t(KINDS[record.kind])}</Typography>
