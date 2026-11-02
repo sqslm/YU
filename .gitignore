@@ -11,6 +11,7 @@
 !/docs/
 /docs/*
 !/docs/asr-api-setup.md
+!/docs/rust-refactor-plan.md
 !/package.json
 !/pnpm-lock.yaml
 !/pnpm-workspace.yaml
