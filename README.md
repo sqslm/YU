@@ -291,6 +291,7 @@ Electron 主进程保留 TypeScript；热键与 UIA 分别由独立 Rust 程序 
 - `native/hotkey/` + `src/main/hotkey/host.ts` — Rust 全局键盘钩子与 Electron 进程管理。Windows 消息直接驱动手势，空闲无限等待，不再用 4 ms 轮询；仅按键仍被记为按下时每 25 ms 核对丢失的释放事件。手势以钩子账本为准，`GetAsyncKeyState` 只允许删除条目，不把吞掉的按键误判为没按。退出、崩溃重启、暂停、快捷键录制与主进程活动状态沿用现有接口。
 - `native/uia/` + `src/main/uia/host.ts` — 不拥有窗口的 MTA 线程调用官方 COM 绑定，只读 ValuePattern；原窗口的句柄、PID 和标题在读前读后核对，密码框不返回快照。保留末尾最多 4000 个 UTF-16 单元且不截断 emoji，控件类型按 Windows SDK 枚举识别。录音路径按需预热，启动等待至少 1500ms，默认读取预算 150ms；超时终止卡住的进程，闲置 5 分钟或显式释放时回收。
 - `native/windows/` + `src/main/windows-native.ts` — 按明确操作列表选择原生或 PowerShell 后端；原生失败不会切回脚本重试。四项原生操作保留原窗口句柄/PID/标题及最小化检查、固定/可移动盘容量、默认多媒体输出设备、音量范围、OCR 语言选择/6 MiB 图像上限/行框/中文间距规则。图片在内存中处理，沿用 15 秒超时、取消和输出限制。应用发现、启动、最近文件、Windows Search、浏览器/Office 内容以及独立语音脚本继续使用原实现。
+- `native/scroll/` + `src/main/scroll-match.ts` — 滚动截图的重叠评分和固定边缘检测在纯计算 Rust DLL 中执行，复用 Koffi 同步借用帧 Buffer，不拷贝整帧、不保留像素指针。变化掩码只包含评分实际采样的列；拼接块、缩略图、32M 像素/30,000 行上限和取消仍由 TypeScript 管理。DLL 按需加载、位于 `resources/native/yu-scroll.dll`，与主进程共享故障域；系统接口和模型继续隔离在进程中。
 - `src/main/pipeline.ts` — 一次听写的完整生命周期（2200 行）：`MIN_DURATION_MS=350` 防误触、`STOP_GRACE_MS=500` 等最后一块音频、每步 async 都用 run token 复检，取消之后绝不可能再插入。
 - `src/main/insert.ts` — 剪贴板整段粘贴优先，SendInput 用 40 字节手写 `INPUT` 布局，注入前 `AttachThreadInput` 强制前台；剪贴板只在内容仍是我们写的时才恢复。
 - `src/main/agent.ts` + `src/main/tools/` — Ask 的调度与 9 个工具。原生 `tool_calls` 优先，不支持时降级为严格 JSON 意图；`runTool` 永不抛异常，网络类工具每个都有 ≤8 秒的硬预算。
@@ -307,11 +308,12 @@ Electron 主进程保留 TypeScript；热键与 UIA 分别由独立 Rust 程序 
 ```powershell
 pnpm test                     # 单元测试 + 自动拉起真实本地服务端的联调测试
 pnpm typecheck                # 主进程与渲染层两套 project 都查
-pnpm test:native              # Rust 热键、UIA 和 Windows 桥接回归
-pnpm build:native             # 编译三个原生程序；dev / build / test / package 自动执行
+pnpm test:native              # Rust 热键、UIA、Windows 桥接和截图计算回归
+pnpm build:native             # 编译三个原生程序和截图 DLL；dev / build / test / package 自动执行
 pnpm benchmark:hotkey         # 隔离比较重构前后辅助进程，测试期间短暂使用 F8
 pnpm benchmark:uia            # 真实合成控件验收及新旧对比，短暂激活专用测试窗
 pnpm benchmark:windows        # 四项桥接的完整请求对比，不切换前台、不修改音量
+pnpm benchmark:scroll         # 合成帧新旧/稀疏 TS/Rust 对照、CPU 采样和传输成本
 
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）
 pnpm mock
@@ -329,6 +331,8 @@ node_modules\electron\dist\electron.exe .        # 启动前按 README 顶部的
 UIA 的[原始测量](tests/yu-v2/evidence/rust-uia-20261103.json)使用相同的专用 Windows Forms 测试控件、交错两轮比较：辅助进程私有驻留内存约 19 → 1.8–1.9 MiB，私有提交约 32 → 2.4–2.5 MiB，读取 P95 约 3.9–4.3 → 3.1–3.2ms，启动加首读约 92–102 → 39–45ms。可编辑、只读、长中文、按钮、密码框、目标失配及阻塞 provider 的 EOF 清理已验收；不代表所有厂商应用、权限桌面或整应用占用，CPU 降幅仍未量化。复测期间请保持专用测试窗焦点稳定；焦点或值不匹配会直接失败并丢弃该轮，不把其它窗口当成样本。
 
 Windows 操作桥接的[原始测量](tests/yu-v2/evidence/rust-windows-20261103.json)包含进程启动、输入、执行、输出和退出；同机交错两轮、每项每轮 5 个有效样本：请求中位耗时从窗口校验约 883–936 → 20–21ms、磁盘约 792–794 → 22–23ms、音量只读约 902–910 → 27ms、OCR 约 891–898 → 51–54ms。使用透明、不激活的合成窗口和内存图片，不修改真实音量。辅助进程累计 CPU 样本也记录在报告中，受计时粒度限制且不含编译器子进程；不推断整个应用的 CPU 或 RAM 降幅。
+
+滚动截图的[原始测量](tests/yu-v2/evidence/rust-scroll-20261103.json)比较旧版、稀疏掩码 TypeScript 和 Rust DLL：4K 重叠匹配中位耗时约 64 → 47–48 → 15ms；含图块追加和原始缩略图采样约 66 → 49 → 16–18ms。4K 临时变化掩码约 7.9 MiB → 129 KiB，未计作整应用内存降幅。442 组新旧结果对照和实际 Electron NativeImage/FFI 检查通过；合成帧基准不含 GDI、PNG 编码或界面耗时，不能据此宣称整条截图链路达到固定帧率。
 
 ## 已知坑
 

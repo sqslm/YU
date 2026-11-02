@@ -8,6 +8,8 @@ Optional speech models are downloaded separately and are not included in the ins
 
 The Rust keyboard, UIA and Windows-operation helpers use the following crates under their MIT license option, plus Unicode-3.0 data terms where noted. The table also records their macro/build dependencies. Windows APIs are linked from the operating system. Versions and checksums are locked in each native project's `Cargo.lock`.
 
+The project's Rust scroll-matching library (`native/scroll/`) has no third-party crate dependencies and uses the existing MIT-licensed Koffi binding listed below.
+
 | Native crate | Version | License text |
 | --- | --- | --- |
 | windows-sys | 0.61.2 | [MIT](licenses/rust-windows-sys-0.61.2-MIT) |

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({ menu: vi.fn(), popup: vi.fn(), cursor: { x: -1
 vi.mock('electron', () => ({
   shell: { openExternal: vi.fn(async () => undefined) },
   Menu: {buildFromTemplate: mocks.menu},
-  app: { getPath: () => '/pictures', getAppPath: () => '/app', getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
+  app: { getPath: () => '/pictures', isPackaged: false, getAppPath: () => process.cwd(), getLocale: () => 'en-US' }, clipboard: { writeImage: mocks.copyImage, writeText: mocks.copyText },
   globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
   desktopCapturer: { getSources: mocks.sources }, nativeImage: { createFromDataURL: mocks.image, createFromBitmap: () => ({ toDataURL: () => 'data:image/png;base64,cHJldmlldw==' }) }, dialog: { showSaveDialog: mocks.save },
   screen: { dipToScreenRect: (_win: unknown, rect: {x:number;y:number;width:number;height:number}) => Object.fromEntries(Object.entries(rect).map(([key,value]) => [key,Math.round(value*1.5)])), getCursorScreenPoint: () => mocks.cursor, getDisplayNearestPoint: () => ({ id: 42, scaleFactor: 1.5, bounds: { x: -1280, y: 0, width: 1280, height: 720 }, workAreaSize:{width:1280,height:720} }) },

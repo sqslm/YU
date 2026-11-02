@@ -262,6 +262,7 @@ Modules worth calling out:
 - `native/hotkey/` + `src/main/hotkey/host.ts` — the Rust keyboard hook and Electron lifecycle. Gestures run directly on keyboard events; idle waits indefinitely instead of polling every 4 ms. Only held keys require 25 ms lost-release reconciliation. Hook events remain authoritative; `GetAsyncKeyState` may only remove entries. Restart, suspension, shortcut capture and activity acknowledgements retain their existing interface.
 - `native/uia/` + `src/main/uia/host.ts` — a windowless MTA uses generated COM bindings and only ValuePattern. Target HWND/PID/title are checked before and after reads; password controls return no snapshot. Values retain at most 4000 trailing UTF-16 units without splitting surrogate pairs; official SDK constants identify control types. On-demand warmup, at least 1500ms startup wait, default 150ms read budget, timeout termination and five-minute idle reclamation bound the lifecycle.
 - `native/windows/` + `src/main/windows-native.ts` — explicit per-action native/PowerShell routing, without fallback after native failure. Window identity/minimized checks, fixed/removable disk fields, the default multimedia render endpoint, volume range and OCR language/6 MiB limit/line geometry/Chinese spacing remain intact. Images stay in memory; the 15-second timeout, cancellation and output cap remain. App discovery/activation, recent files, Windows Search, browser/Office reads and independent speech scripts retain their existing implementation.
+- `native/scroll/` + `src/main/scroll-match.ts` — overlap scoring and fixed-edge detection run in a pure Rust DLL through existing Koffi bindings, synchronously borrowing frame buffers without copying or retaining them. The change mask includes only sampled columns. TypeScript retains image chunks, previews, the 32M-pixel/30,000-row limits and cancellation. The library loads on demand from `resources/native/yu-scroll.dll` and shares the main process's failure boundary; system interfaces and models remain in isolated processes.
 - `src/main/pipeline.ts` — the full lifecycle of one take (~2200 lines): `MIN_DURATION_MS=350` against accidental taps, `STOP_GRACE_MS=500` to wait for the final audio chunk, and a run token re-checked at every async hop so a cancelled take can never be inserted.
 - `src/main/insert.ts` — clipboard paste first; SendInput uses a hand-written 40-byte `INPUT` layout with `AttachThreadInput` before injection; the clipboard is restored only while it still holds our text.
 - `src/main/agent.ts` + `src/main/tools/` — Ask's scheduler and its 9 tools. Native `tool_calls` first, a strict JSON-intent fallback when the model can't call tools; `runTool` never throws and every network tool has a hard ≤8 s budget.
@@ -278,11 +279,12 @@ Modules worth calling out:
 ```powershell
 pnpm test                     # unit tests plus integration tests that start a real local server
 pnpm typecheck                # both the main-process and renderer projects
-pnpm test:native              # Rust hotkey, UIA and Windows bridge regression tests
+pnpm test:native              # Rust hotkey, UIA, Windows bridge and scroll matching tests
 pnpm build:native             # also run automatically by dev/build/test/package
 pnpm benchmark:hotkey         # isolated old/new worker comparison; briefly uses F8
 pnpm benchmark:uia            # synthetic real UIA controls; briefly focuses a test form
 pnpm benchmark:windows        # four full-request comparisons; no focus or audio changes
+pnpm benchmark:scroll         # synthetic baseline/sparse-TS/Rust, CPU samples and transfer costs
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
 # dictation, Ask + retrieval, multimodal)
@@ -301,6 +303,8 @@ The [raw hook benchmark](tests/yu-v2/evidence/rust-hotkey-20261103.json) compare
 The [UIA benchmark](tests/yu-v2/evidence/rust-uia-20261103.json) uses the same owned Windows Forms control over two interleaved rounds: private resident memory about 19 → 1.8–1.9 MiB, private commit 32 → 2.4–2.5 MiB, read P95 3.9–4.3 → 3.1–3.2ms, and readiness plus first read 92–102 → 39–45ms. Editable/read-only/long Chinese/button/password controls, mismatched targets and EOF during a blocked provider passed. These results do not cover every vendor application, elevated desktop or total app memory, and do not quantify CPU reduction. Keep fixture focus stable during the probe; mismatched focus or content fails the run instead of sampling another window.
 
 The [Windows bridge benchmark](tests/yu-v2/evidence/rust-windows-20261103.json) includes process startup, input, execution, output and exit over two interleaved rounds, five measured requests per action per round: median window check 883–936 → 20–21ms, disk query 792–794 → 22–23ms, audio read 902–910 → 27ms and OCR 891–898 → 51–54ms. It uses an owned transparent, non-activating window and an in-memory image without changing audio settings. Worker CPU samples have accounting granularity and exclude compiler subprocesses; no total-app CPU or RAM reduction is inferred.
+
+The [scroll benchmark](tests/yu-v2/evidence/rust-scroll-20261103.json) compares baseline, sparse-mask TypeScript and Rust DLL matching: 4K median matching is about 64 → 47–48 → 15ms; matching plus chunk append and raw thumbnail sampling is about 66 → 49 → 16–18ms. The 4K temporary change mask shrinks from 7.9 MiB to 129 KiB; this is not total-app memory. All 442 differential cases and a real Electron NativeImage/FFI probe passed. Synthetic-frame timings exclude GDI, PNG encoding and UI work, so they do not establish an end-to-end capture frame rate.
 
 ## Known pitfalls
 

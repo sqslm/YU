@@ -1,4 +1,5 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+vi.mock('electron', () => ({ app: { isPackaged: false, getAppPath: () => process.cwd() } }))
 import { ScrollCapture, findScrollOffset } from './scroll-capture'
 
 const width = 120, height = 100
