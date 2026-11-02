@@ -13,7 +13,7 @@ import { complete } from './providers/llm'
 import { generateFromImage } from './providers/gemini'
 import { windowsNative } from './windows-native'
 import { runWithDeadline } from './tools/read-webpage'
-import { captureScreen } from './capture-screen'
+import { captureScreen, captureScreenPixels } from './capture-screen'
 import { captureWindowBounds } from './foreground'
 import { normalizeOcrText, ocrRegions, prepareOcrImage } from './ocr'
 import { ScrollCapture } from './scroll-capture'
@@ -191,8 +191,7 @@ export class ScreenshotTool {
     // The next desktop composition must exclude the overlay before GDI reads it.
     this.scrollTimer = setInterval(() => {
       try {
-        const image = captureScreen(physical)
-        const status = scroll.add(image.toBitmap())
+        const status = scroll.add(captureScreenPixels(physical))
         if (status === 'added') previewDirty = true
         if (status === 'unchanged' && !previewDirty) return
         unmatchedFrames = status === 'unmatched' ? unmatchedFrames + 1 : 0

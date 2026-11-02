@@ -5,7 +5,7 @@ import { mergeSettings } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 import type { ScreenshotAction } from '@shared/screenshot'
 
-const mocks = vi.hoisted(() => ({ menu: vi.fn(), popup: vi.fn(), cursor: { x: -100, y: 50 }, capture: vi.fn(), sources: vi.fn(), image: vi.fn(), copyImage: vi.fn(), copyText: vi.fn(), save: vi.fn(), write: vi.fn(), native: vi.fn(), complete: vi.fn(), vision: vi.fn(), handlers: new Map<string, (...args: any[]) => any>(), windows: [] as any[] }))
+const mocks = vi.hoisted(() => ({ menu: vi.fn(), popup: vi.fn(), cursor: { x: -100, y: 50 }, capture: vi.fn(), pixels: vi.fn(), sources: vi.fn(), image: vi.fn(), copyImage: vi.fn(), copyText: vi.fn(), save: vi.fn(), write: vi.fn(), native: vi.fn(), complete: vi.fn(), vision: vi.fn(), handlers: new Map<string, (...args: any[]) => any>(), windows: [] as any[] }))
 vi.mock('electron', () => ({
   shell: { openExternal: vi.fn(async () => undefined) },
   Menu: {buildFromTemplate: mocks.menu},
@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('node:fs/promises', () => ({ writeFile: mocks.write }))
 vi.mock('./windows-native', () => ({ windowsNative: mocks.native }))
-vi.mock('./capture-screen', () => ({ captureScreen: mocks.capture }))
+vi.mock('./capture-screen', () => ({ captureScreen: mocks.capture, captureScreenPixels: mocks.pixels }))
 vi.mock('./foreground', () => ({ captureWindowBounds: () => [{ x: -1800, y: 30, width: 1200, height: 900 }] }))
 vi.mock('./ocr', async importOriginal => ({ ...await importOriginal<typeof import('./ocr')>(), prepareOcrImage: () => Buffer.from('ocr pixels') }))
 vi.mock('./providers/llm', () => ({ complete: mocks.complete }))
@@ -46,6 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks(); mocks.handlers.clear(); mocks.windows.length = 0
   mocks.cursor = { x: -100, y: 50 }
   mocks.capture.mockReset().mockImplementation(() => { throw Error('GDI unavailable in this test') })
+  mocks.pixels.mockReset().mockImplementation(() => { throw Error('GDI unavailable in this test') })
   mocks.sources.mockReset().mockResolvedValue([{ display_id: 'wrong', thumbnail: cropped() }, { display_id: '42', thumbnail: { ...cropped(), getSize: () => ({ width: 1920, height: 1080 }), toBitmap: () => Buffer.from([1, 2, 3, 255]) } }])
   mocks.image.mockReset().mockImplementation(cropped)
   mocks.native.mockReset().mockResolvedValue({ text: '真实 OCR 文字', width: 900, height: 300,
@@ -85,7 +86,7 @@ describe('explicit screenshot tool', () => {
   it('captures a DPI-correct scrolling region, releases focus, exports pixels and stops its timer', async () => {
     await tool.open(); vi.useFakeTimers()
     const pixels = Buffer.alloc(90 * 90 * 4, 255); pixels[0] = 10; pixels[2] = 30
-    mocks.capture.mockReturnValue({ toBitmap: () => pixels })
+    mocks.pixels.mockReturnValue(pixels)
     mocks.handlers.get('screenshot:scroll-start')!(event(), { x: 100, y: 100, width: 60, height: 60 }, { x: 100, y: 170, width: 410, height: 100 })
     const win = mocks.windows[0]
     expect(win.setContentProtection).toHaveBeenLastCalledWith(true)
@@ -96,37 +97,38 @@ describe('explicit screenshot tool', () => {
     expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(false, { forward: true })
     mocks.cursor = { x: -100, y: 50 }; await vi.advanceTimersByTimeAsync(200)
     expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(true, { forward: true })
-    expect(mocks.capture).toHaveBeenLastCalledWith({ x: -1770, y: 150, width: 90, height: 90 })
+    // The scroll timer reads the raw BGRA buffer and never builds a NativeImage.
+    expect(mocks.pixels).toHaveBeenLastCalledWith({ x: -1770, y: 150, width: 90, height: 90 })
     expect(win.webContents.send).toHaveBeenCalledWith('screenshot:scroll-progress', { width: 90, height: 90, frames: 1, preview: 'data:image/png;base64,cHJldmlldw==' })
     const frame = mocks.handlers.get('screenshot:scroll-finish')!(event())
     expect(frame).toMatchObject({ width: 90, height: 90 }); expect(frame.pixels.subarray(0,4)).toEqual(Buffer.from([30,255,10,255]))
     expect(win.setIgnoreMouseEvents).toHaveBeenLastCalledWith(false)
     expect(win.setFocusable).toHaveBeenLastCalledWith(true)
     expect(globalShortcut.unregister).toHaveBeenCalledWith('Escape')
-    const calls = mocks.capture.mock.calls.length
-    await vi.advanceTimersByTimeAsync(1000); expect(mocks.capture).toHaveBeenCalledTimes(calls)
+    const calls = mocks.pixels.mock.calls.length
+    await vi.advanceTimersByTimeAsync(1000); expect(mocks.pixels).toHaveBeenCalledTimes(calls)
   })
   it('rejects invalid scrolling bounds and never leaves capture running after close', async () => {
     await tool.open(); vi.useFakeTimers()
     expect(() => mocks.handlers.get('screenshot:scroll-start')!(event(), { x: -1, y: 0, width: 100, height: 100 }, { x: 0, y: 120, width: 410, height: 100 })).toThrow('滚动截图区域')
-    mocks.capture.mockReturnValue({ toBitmap: () => Buffer.alloc(90 * 90 * 4, 255) })
+    mocks.pixels.mockReturnValue(Buffer.alloc(90 * 90 * 4, 255))
     mocks.handlers.get('screenshot:scroll-start')!(event(), { x: 0, y: 0, width: 60, height: 60 }, { x: 0, y: 70, width: 410, height: 100 })
     await expect(run('copy')).rejects.toThrow('请先完成滚动截图')
-    tool.close(); const calls = mocks.capture.mock.calls.length
-    await vi.advanceTimersByTimeAsync(1000); expect(mocks.capture).toHaveBeenCalledTimes(calls)
+    tool.close(); const calls = mocks.pixels.mock.calls.length
+    await vi.advanceTimersByTimeAsync(1000); expect(mocks.pixels).toHaveBeenCalledTimes(calls)
     expect(active).toHaveBeenLastCalledWith(false)
   })
   it('flushes the final preview after a short continuous burst even when following frames are unchanged', async () => {
     await tool.open(); vi.useFakeTimers()
-    const page = (top: number): { toBitmap: () => Buffer } => {
+    const page = (top: number): Buffer => {
       const pixels = Buffer.alloc(90 * 90 * 4, 255)
       for (let y = 0; y < 90; y++) for (let x = 0; x < 90; x++) {
         const value = (y + top) * 1337 + x * 311, shade = ((value ^ (value >>> 5)) * 13) & 255
         const i = (y * 90 + x) * 4; pixels[i] = shade; pixels[i + 1] = shade; pixels[i + 2] = shade
       }
-      return { toBitmap: () => pixels }
+      return pixels
     }
-    mocks.capture.mockReturnValueOnce(page(0)).mockReturnValue(page(31))
+    mocks.pixels.mockReturnValueOnce(page(0)).mockReturnValue(page(31))
     mocks.handlers.get('screenshot:scroll-start')!(event(), { x: 100, y: 100, width: 60, height: 60 }, { x: 100, y: 170, width: 410, height: 100 })
     await vi.advanceTimersByTimeAsync(100)
     await vi.advanceTimersByTimeAsync(250)

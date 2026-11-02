@@ -46,6 +46,7 @@
 !/scripts/benchmark-uia.mjs
 !/scripts/benchmark-windows.mjs
 !/scripts/benchmark-scroll.mjs
+!/scripts/benchmark-capture.mjs
 !/scripts/benchmark-model-workers.mjs
 !/native/
 /native/bin/
