@@ -96,8 +96,8 @@ export function toInput(form: CalendarForm): CalendarEventInput {
     source: form.source
   }
   if (form.allDay) {
-    // An all-day event is exactly one local day; the store normalises it the same way.
-    return { ...details, start: day, end: day + DAY_MS, allDay: true }
+    // Imported all-day ranges use an exclusive end date; editing their title keeps it.
+    return { ...details, start: day, end: Math.max(dayStart(shiftDayKey(form.date, 1))!, dayStart(form.endDate) ?? day), allDay: true }
   }
   const start = stampOf(form.date, form.start)
   const end = stampOf(form.endDate, form.end)

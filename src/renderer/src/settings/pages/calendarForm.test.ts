@@ -23,6 +23,10 @@ function edit(original: CalendarEvent): CalendarEvent {
 }
 
 describe('calendar form round trips', () => {
+    it('preserves a multi-day all-day event when editing its title', () => {
+      const original = event({ allDay: true, start: at(27), end: at(30) })
+      expect(toInput({ ...formOf(original), title: '改名' })).toMatchObject({ title: '改名', start: original.start, end: original.end, allDay: true })
+    })
   it.each([false, true])('preserves notes, location and UID when only the title changes; allDay=%s', allDay => {
     const original = event(allDay ? { allDay, start: at(29), end: at(30) } : {})
     expect(edit(original)).toMatchObject({ title: 'Renamed', notes: original.notes, location: original.location, uid: original.uid })
