@@ -1,0 +1,1623 @@
+{
+  "date": "2026-11-02T21:20:09.678Z",
+  "baseline": "c4d4ca5",
+  "electron": "42.11.18",
+  "node": "24.19.0",
+  "platform": "10.0.26300 x64",
+  "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+  "model": {
+    "bytes": 24010842,
+    "sha256": "15b717c382bcb518ba457b93ea6850ede7f4f1cd8937454aa06972366cd19bcc"
+  },
+  "asrRecognition": {
+    "measured": false,
+    "reason": "This probe measures runtime import and synthetic PCM conversion only, without loading an ASR recognition model or downloading models."
+  },
+  "sourceSha256": {
+    "local-asr/worker.ts": "2e71e4c468d482fac5a0bc7318d935934f236f57b4b89d6796c3c7448ef506fd",
+    "memory/worker.ts": "f9f2829cdb10c7cede7053db2ae363e0fc74bc1e965281f8e14afc1f8a56d064",
+    "memory/catalog.ts": "25fda190ea5baa95f5c01527c28a156aab4aa3397c3807d825efa0911e77e58e",
+    "memory/host.ts": "11b6fd626d7e771e056b15d09d285e735745a75dcd0c998c97c48547cb5558f1"
+  },
+  "scope": "Two isolated Electron utility-process rounds, with ASR and memory in separate processes. Memory component stages include prior imports; deltas are not exact model weight ownership. Private resident, working set and private commit use K32 EX2; JS metrics use process.memoryUsage. These are snapshots, not total-app/peak RAM. Synthetic text/audio and separate databases only; no user memories, recordings, network or LLMs. PCM round-trip/operation times include Float32 hashing; conversionMs excludes hashing and IPC. One warmup then seven samples; CPU timing has OS granularity. Production memory workers are bundled from baseline/current sources and readers run in interleaved order on the same synthetic stores; firstRecallMs excludes worker startup/init and OS caches are not flushed. New reader forbids Mem0 imports and checks database hashes. No application startup/LLM or ASR decoding benchmark is implied. All owned workers exit and temporary data are removed.",
+  "cancellation": {
+    "initialKill": false,
+    "killAfterSpawn": true,
+    "exited": true,
+    "note": "Real utilityProcess early-kill/late-spawn API probe; host cancellation regression is covered separately by tests."
+  },
+  "rounds": [
+    {
+      "round": 0,
+      "asrStages": [
+        {
+          "stage": "empty-utility",
+          "memory": {
+            "privateResidentBytes": 14544896,
+            "workingSetBytes": 105369600,
+            "committedBytes": 23937024
+          },
+          "js": {
+            "rss": 105369600,
+            "heapTotal": 4456448,
+            "heapUsed": 3214408,
+            "external": 2450878,
+            "arrayBuffers": 0
+          },
+          "spawnedMs": 20.3318
+        },
+        {
+          "stage": "asr-runtime",
+          "operationMs": 8.336199999999998,
+          "memory": {
+            "privateResidentBytes": 16158720,
+            "workingSetBytes": 109015040,
+            "committedBytes": 28004352
+          },
+          "js": {
+            "rss": 108867584,
+            "heapTotal": 4980736,
+            "heapUsed": 3720612,
+            "external": 2450918,
+            "arrayBuffers": 0
+          }
+        }
+      ],
+      "asrCleanup": {
+        "exited": true,
+        "ms": 2.6709999999999354
+      },
+      "stages": [
+        {
+          "stage": "empty-utility",
+          "memory": {
+            "privateResidentBytes": 14635008,
+            "workingSetBytes": 105537536,
+            "committedBytes": 25022464
+          },
+          "js": {
+            "rss": 105537536,
+            "heapTotal": 4456448,
+            "heapUsed": 3214532,
+            "external": 2450878,
+            "arrayBuffers": 0
+          },
+          "spawnedMs": 20.615400000000022
+        },
+        {
+          "stage": "sdk",
+          "roundTripMs": 930.7114,
+          "operationMs": 930.464,
+          "cpuMs": 1016,
+          "memory": {
+            "privateResidentBytes": 151908352,
+            "workingSetBytes": 243109888,
+            "committedBytes": 163303424
+          },
+          "js": {
+            "rss": 243105792,
+            "heapTotal": 129204224,
+            "heapUsed": 71172124,
+            "external": 4125177,
+            "arrayBuffers": 0
+          }
+        },
+        {
+          "stage": "transformers",
+          "roundTripMs": 52.646600000000035,
+          "operationMs": 52.371399999999994,
+          "cpuMs": 62,
+          "memory": {
+            "privateResidentBytes": 160112640,
+            "workingSetBytes": 255680512,
+            "committedBytes": 175259648
+          },
+          "js": {
+            "rss": 255680512,
+            "heapTotal": 131301376,
+            "heapUsed": 76537044,
+            "external": 7105976,
+            "arrayBuffers": 0
+          }
+        },
+        {
+          "stage": "model",
+          "roundTripMs": 97.30939999999987,
+          "operationMs": 96.96850000000006,
+          "cpuMs": 110,
+          "memory": {
+            "privateResidentBytes": 207294464,
+            "workingSetBytes": 312221696,
+            "committedBytes": 256819200
+          },
+          "js": {
+            "rss": 311996416,
+            "heapTotal": 134492160,
+            "heapUsed": 83731632,
+            "external": 8272458,
+            "arrayBuffers": 0
+          }
+        }
+      ],
+      "pcm": [
+        {
+          "seconds": 3,
+          "variant": "before",
+          "intermediatePcmBytes": 96000,
+          "p50Ms": 0.4222999999999786,
+          "p95Ms": 0.47059999999999036,
+          "operationP50Ms": 0.17159999999999798,
+          "samples": [
+            {
+              "roundTripMs": 0.4222999999999786,
+              "ms": 0.15959999999999752,
+              "cpuMs": 0,
+              "conversionMs": 0.07570000000000476
+            },
+            {
+              "roundTripMs": 0.42560000000000286,
+              "ms": 0.17439999999999856,
+              "cpuMs": 0,
+              "conversionMs": 0.08899999999999864
+            },
+            {
+              "roundTripMs": 0.4341000000000008,
+              "ms": 0.1677000000000035,
+              "cpuMs": 0,
+              "conversionMs": 0.08319999999999794
+            },
+            {
+              "roundTripMs": 0.47059999999999036,
+              "ms": 0.19089999999999918,
+              "cpuMs": 0,
+              "conversionMs": 0.1051000000000002
+            },
+            {
+              "roundTripMs": 0.39980000000002747,
+              "ms": 0.15919999999999845,
+              "cpuMs": 0,
+              "conversionMs": 0.07959999999999923
+            },
+            {
+              "roundTripMs": 0.3959000000000117,
+              "ms": 0.17159999999999798,
+              "cpuMs": 0,
+              "conversionMs": 0.07759999999999678
+            },
+            {
+              "roundTripMs": 0.3902999999999963,
+              "ms": 0.18529999999999802,
+              "cpuMs": 0,
+              "conversionMs": 0.09949999999999903
+            }
+          ]
+        },
+        {
+          "seconds": 3,
+          "variant": "after",
+          "intermediatePcmBytes": 0,
+          "p50Ms": 0.3487999999999829,
+          "p95Ms": 0.3756999999999948,
+          "operationP50Ms": 0.12930000000000064,
+          "samples": [
+            {
+              "roundTripMs": 0.35829999999998563,
+              "ms": 0.1291000000000011,
+              "cpuMs": 0,
+              "conversionMs": 0.04530000000000456
+            },
+            {
+              "roundTripMs": 0.35089999999999577,
+              "ms": 0.1297000000000068,
+              "cpuMs": 0,
+              "conversionMs": 0.04570000000000363
+            },
+            {
+              "roundTripMs": 0.3487999999999829,
+              "ms": 0.11850000000000449,
+              "cpuMs": 0,
+              "conversionMs": 0.041600000000002524
+            },
+            {
+              "roundTripMs": 0.3756999999999948,
+              "ms": 0.13759999999999906,
+              "cpuMs": 0,
+              "conversionMs": 0.053300000000000125
+            },
+            {
+              "roundTripMs": 0.31380000000001473,
+              "ms": 0.12140000000000128,
+              "cpuMs": 0,
+              "conversionMs": 0.04370000000000118
+            },
+            {
+              "roundTripMs": 0.33039999999999736,
+              "ms": 0.13520000000000465,
+              "cpuMs": 0,
+              "conversionMs": 0.05649999999999977
+            },
+            {
+              "roundTripMs": 0.3432000000000244,
+              "ms": 0.12930000000000064,
+              "cpuMs": 0,
+              "conversionMs": 0.046100000000002694
+            }
+          ]
+        },
+        {
+          "seconds": 60,
+          "variant": "before",
+          "intermediatePcmBytes": 1920000,
+          "p50Ms": 4.91719999999998,
+          "p95Ms": 5.6547999999999945,
+          "operationP50Ms": 3.0990000000000038,
+          "samples": [
+            {
+              "roundTripMs": 4.9372000000000185,
+              "ms": 3.154500000000006,
+              "cpuMs": 0,
+              "conversionMs": 1.59879999999999
+            },
+            {
+              "roundTripMs": 4.446899999999999,
+              "ms": 2.7302999999999997,
+              "cpuMs": 0,
+              "conversionMs": 1.2922999999999973
+            },
+            {
+              "roundTripMs": 5.295899999999989,
+              "ms": 3.0990000000000038,
+              "cpuMs": 0,
+              "conversionMs": 1.3321000000000112
+            },
+            {
+              "roundTripMs": 4.7161000000000115,
+              "ms": 2.7235000000000014,
+              "cpuMs": 0,
+              "conversionMs": 1.2789000000000073
+            },
+            {
+              "roundTripMs": 4.91719999999998,
+              "ms": 3.1239999999999952,
+              "cpuMs": 0,
+              "conversionMs": 1.3481000000000023
+            },
+            {
+              "roundTripMs": 5.6547999999999945,
+              "ms": 3.9028999999999883,
+              "cpuMs": 0,
+              "conversionMs": 2.359800000000007
+            },
+            {
+              "roundTripMs": 4.58189999999999,
+              "ms": 2.8596999999999895,
+              "cpuMs": 0,
+              "conversionMs": 1.4239000000000033
+            }
+          ]
+        },
+        {
+          "seconds": 60,
+          "variant": "after",
+          "intermediatePcmBytes": 0,
+          "p50Ms": 4.064399999999978,
+          "p95Ms": 4.273399999999981,
+          "operationP50Ms": 2.151300000000006,
+          "samples": [
+            {
+              "roundTripMs": 3.8877999999999986,
+              "ms": 2.1289000000000016,
+              "cpuMs": 16,
+              "conversionMs": 0.6927999999999912
+            },
+            {
+              "roundTripMs": 4.064399999999978,
+              "ms": 2.1573000000000064,
+              "cpuMs": 0,
+              "conversionMs": 0.702699999999993
+            },
+            {
+              "roundTripMs": 3.968900000000019,
+              "ms": 2.1307999999999936,
+              "cpuMs": 0,
+              "conversionMs": 0.6838000000000051
+            },
+            {
+              "roundTripMs": 4.176899999999989,
+              "ms": 2.1577999999999946,
+              "cpuMs": 0,
+              "conversionMs": 0.6878999999999991
+            },
+            {
+              "roundTripMs": 4.218600000000009,
+              "ms": 2.151300000000006,
+              "cpuMs": 15,
+              "conversionMs": 0.7201000000000022
+            },
+            {
+              "roundTripMs": 3.849400000000003,
+              "ms": 2.140100000000004,
+              "cpuMs": 0,
+              "conversionMs": 0.6954999999999956
+            },
+            {
+              "roundTripMs": 4.273399999999981,
+              "ms": 2.5723999999999876,
+              "cpuMs": 0,
+              "conversionMs": 0.6887000000000114
+            }
+          ]
+        },
+        {
+          "seconds": 180,
+          "variant": "before",
+          "intermediatePcmBytes": 5760000,
+          "p50Ms": 14.24920000000003,
+          "p95Ms": 23.77249999999998,
+          "operationP50Ms": 8.699000000000012,
+          "samples": [
+            {
+              "roundTripMs": 19.75840000000005,
+              "ms": 13.94319999999999,
+              "cpuMs": 0,
+              "conversionMs": 9.663000000000011
+            },
+            {
+              "roundTripMs": 23.77249999999998,
+              "ms": 18.700400000000002,
+              "cpuMs": 15,
+              "conversionMs": 14.419999999999987
+            },
+            {
+              "roundTripMs": 13.146100000000047,
+              "ms": 7.896300000000025,
+              "cpuMs": 16,
+              "conversionMs": 3.5674999999999955
+            },
+            {
+              "roundTripMs": 14.24920000000003,
+              "ms": 8.699000000000012,
+              "cpuMs": 16,
+              "conversionMs": 3.7591999999999928
+            },
+            {
+              "roundTripMs": 13.143000000000029,
+              "ms": 8.124900000000025,
+              "cpuMs": 15,
+              "conversionMs": 3.6259999999999764
+            },
+            {
+              "roundTripMs": 14.162699999999973,
+              "ms": 9.163499999999999,
+              "cpuMs": 16,
+              "conversionMs": 4.52660000000003
+            },
+            {
+              "roundTripMs": 17.23150000000004,
+              "ms": 8.13470000000001,
+              "cpuMs": 16,
+              "conversionMs": 3.5803999999999974
+            }
+          ]
+        },
+        {
+          "seconds": 180,
+          "variant": "after",
+          "intermediatePcmBytes": 0,
+          "p50Ms": 11.539100000000019,
+          "p95Ms": 21.903500000000008,
+          "operationP50Ms": 6.598899999999958,
+          "samples": [
+            {
+              "roundTripMs": 21.903500000000008,
+              "ms": 15.818699999999978,
+              "cpuMs": 15,
+              "conversionMs": 11.258899999999983
+            },
+            {
+              "roundTripMs": 11.952099999999973,
+              "ms": 6.731699999999989,
+              "cpuMs": 0,
+              "conversionMs": 1.9590000000000032
+            },
+            {
+              "roundTripMs": 11.120499999999993,
+              "ms": 6.2549000000000206,
+              "cpuMs": 16,
+              "conversionMs": 1.9823000000000093
+            },
+            {
+              "roundTripMs": 11.539100000000019,
+              "ms": 6.666699999999992,
+              "cpuMs": 0,
+              "conversionMs": 2.363299999999981
+            },
+            {
+              "roundTripMs": 11.556700000000035,
+              "ms": 6.222100000000012,
+              "cpuMs": 0,
+              "conversionMs": 1.949199999999962
+            },
+            {
+              "roundTripMs": 11.469900000000052,
+              "ms": 6.598899999999958,
+              "cpuMs": 16,
+              "conversionMs": 2.307700000000011
+            },
+            {
+              "roundTripMs": 11.251600000000053,
+              "ms": 6.307800000000043,
+              "cpuMs": 15,
+              "conversionMs": 2.0300000000000296
+            }
+          ]
+        }
+      ],
+      "inference": {
+        "tokenize": {
+          "p50Ms": 0.2980000000000018,
+          "p95Ms": 0.4316999999998643,
+          "operationP50Ms": 0.0864000000001397,
+          "samples": [
+            {
+              "roundTripMs": 0.4316999999998643,
+              "ms": 0.11940000000004147,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.253800000000183,
+              "ms": 0.08500000000003638,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.3002999999998792,
+              "ms": 0.11950000000001637,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.2980000000000018,
+              "ms": 0.0729999999998654,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.40840000000002874,
+              "ms": 0.0864000000001397,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.2737999999999374,
+              "ms": 0.0967000000000553,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.1616999999998825,
+              "ms": 0.06369999999992615,
+              "cpuMs": 0,
+              "conversionMs": null
+            }
+          ]
+        },
+        "embed": {
+          "p50Ms": 1.4462999999998374,
+          "p95Ms": 5.8525999999999385,
+          "operationP50Ms": 1.2554000000000087,
+          "samples": [
+            {
+              "roundTripMs": 1.6473000000000866,
+              "ms": 1.4355000000000473,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.4462999999998374,
+              "ms": 1.2554000000000087,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.3273000000001502,
+              "ms": 1.167599999999993,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 2.047399999999925,
+              "ms": 1.7199000000000524,
+              "cpuMs": 46,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.1684999999999945,
+              "ms": 1.026200000000017,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 5.8525999999999385,
+              "ms": 1.3898999999998978,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.2847999999999047,
+              "ms": 1.0746999999998934,
+              "cpuMs": 0,
+              "conversionMs": null
+            }
+          ]
+        },
+        "search1000SyntheticRows": {
+          "p50Ms": 17.77839999999992,
+          "p95Ms": 18.763599999999997,
+          "operationP50Ms": 17.463399999999865,
+          "samples": [
+            {
+              "roundTripMs": 17.9695999999999,
+              "ms": 17.607999999999947,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 17.60290000000009,
+              "ms": 17.13220000000001,
+              "cpuMs": 47,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 18.763599999999997,
+              "ms": 18.46550000000002,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 17.77839999999992,
+              "ms": 17.48129999999992,
+              "cpuMs": 32,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 17.978900000000067,
+              "ms": 17.463399999999865,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 17.667799999999943,
+              "ms": 17.367500000000064,
+              "cpuMs": 32,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 17.444500000000062,
+              "ms": 17.152199999999993,
+              "cpuMs": 47,
+              "conversionMs": null
+            }
+          ]
+        },
+        "catalogSearch1000SyntheticRows": {
+          "p50Ms": 11.605199999999968,
+          "p95Ms": 14.33789999999999,
+          "operationP50Ms": 11.333899999999858,
+          "samples": [
+            {
+              "roundTripMs": 14.33789999999999,
+              "ms": 14.0945999999999,
+              "cpuMs": 15,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.565399999999954,
+              "ms": 11.333899999999858,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.605199999999968,
+              "ms": 11.229599999999891,
+              "cpuMs": 32,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 12.0782999999999,
+              "ms": 11.72700000000009,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.39280000000008,
+              "ms": 11.1724999999999,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.933199999999943,
+              "ms": 11.502700000000004,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 10.755200000000059,
+              "ms": 10.500800000000027,
+              "cpuMs": 31,
+              "conversionMs": null
+            }
+          ]
+        },
+        "oracle": {
+          "cases": 16,
+          "rows": 1000,
+          "idsMetadataAndScoresEqual": true
+        },
+        "fullMemory": {
+          "privateResidentBytes": 262283264,
+          "workingSetBytes": 369147904,
+          "committedBytes": 314531840
+        },
+        "js": {
+          "rss": 369278976,
+          "heapTotal": 140439552,
+          "heapUsed": 85725924,
+          "external": 44117997,
+          "arrayBuffers": 0
+        },
+        "afterDispose": {
+          "privateResidentBytes": 235372544,
+          "workingSetBytes": 342282240,
+          "committedBytes": 286437376
+        }
+      },
+      "cleanup": {
+        "exited": true,
+        "ms": 2.5597999999999956
+      }
+    },
+    {
+      "round": 1,
+      "asrStages": [
+        {
+          "stage": "empty-utility",
+          "memory": {
+            "privateResidentBytes": 14684160,
+            "workingSetBytes": 106274816,
+            "committedBytes": 24055808
+          },
+          "js": {
+            "rss": 106274816,
+            "heapTotal": 4456448,
+            "heapUsed": 3214464,
+            "external": 2450878,
+            "arrayBuffers": 0
+          },
+          "spawnedMs": 21.797000000000025
+        },
+        {
+          "stage": "asr-runtime",
+          "operationMs": 8.544799999999999,
+          "memory": {
+            "privateResidentBytes": 16355328,
+            "workingSetBytes": 109985792,
+            "committedBytes": 29216768
+          },
+          "js": {
+            "rss": 109809664,
+            "heapTotal": 4980736,
+            "heapUsed": 3720632,
+            "external": 2450918,
+            "arrayBuffers": 0
+          }
+        }
+      ],
+      "asrCleanup": {
+        "exited": true,
+        "ms": 2.6401999999998225
+      },
+      "stages": [
+        {
+          "stage": "empty-utility",
+          "memory": {
+            "privateResidentBytes": 14602240,
+            "workingSetBytes": 106201088,
+            "committedBytes": 23937024
+          },
+          "js": {
+            "rss": 106201088,
+            "heapTotal": 4456448,
+            "heapUsed": 3214436,
+            "external": 2450878,
+            "arrayBuffers": 0
+          },
+          "spawnedMs": 22.966199999999844
+        },
+        {
+          "stage": "sdk",
+          "roundTripMs": 902.4241999999999,
+          "operationMs": 902.1638,
+          "cpuMs": 1047,
+          "memory": {
+            "privateResidentBytes": 151851008,
+            "workingSetBytes": 243511296,
+            "committedBytes": 164532224
+          },
+          "js": {
+            "rss": 243511296,
+            "heapTotal": 129466368,
+            "heapUsed": 71440464,
+            "external": 4125177,
+            "arrayBuffers": 0
+          }
+        },
+        {
+          "stage": "transformers",
+          "roundTripMs": 54.36830000000009,
+          "operationMs": 54.087800000000016,
+          "cpuMs": 47,
+          "memory": {
+            "privateResidentBytes": 160161792,
+            "workingSetBytes": 256090112,
+            "committedBytes": 176287744
+          },
+          "js": {
+            "rss": 256090112,
+            "heapTotal": 131301376,
+            "heapUsed": 76759100,
+            "external": 7105976,
+            "arrayBuffers": 0
+          }
+        },
+        {
+          "stage": "model",
+          "roundTripMs": 99.25370000000021,
+          "operationMs": 98.93070000000012,
+          "cpuMs": 140,
+          "memory": {
+            "privateResidentBytes": 206852096,
+            "workingSetBytes": 312119296,
+            "committedBytes": 257482752
+          },
+          "js": {
+            "rss": 312016896,
+            "heapTotal": 134492160,
+            "heapUsed": 83978444,
+            "external": 8272458,
+            "arrayBuffers": 0
+          }
+        }
+      ],
+      "pcm": [
+        {
+          "seconds": 3,
+          "variant": "after",
+          "intermediatePcmBytes": 0,
+          "p50Ms": 0.4131999999999607,
+          "p95Ms": 0.42870000000039,
+          "operationP50Ms": 0.143100000000004,
+          "samples": [
+            {
+              "roundTripMs": 0.39960000000019136,
+              "ms": 0.143100000000004,
+              "cpuMs": 0,
+              "conversionMs": 0.05469999999999686
+            },
+            {
+              "roundTripMs": 0.4155000000000655,
+              "ms": 0.132000000000005,
+              "cpuMs": 0,
+              "conversionMs": 0.0438000000000045
+            },
+            {
+              "roundTripMs": 0.405699999999797,
+              "ms": 0.15399999999999636,
+              "cpuMs": 0,
+              "conversionMs": 0.06469999999999487
+            },
+            {
+              "roundTripMs": 0.4131999999999607,
+              "ms": 0.13689999999999714,
+              "cpuMs": 0,
+              "conversionMs": 0.04839999999999378
+            },
+            {
+              "roundTripMs": 0.41249999999990905,
+              "ms": 0.14049999999999585,
+              "cpuMs": 0,
+              "conversionMs": 0.05180000000000007
+            },
+            {
+              "roundTripMs": 0.4196999999999207,
+              "ms": 0.1507000000000005,
+              "cpuMs": 0,
+              "conversionMs": 0.05390000000000583
+            },
+            {
+              "roundTripMs": 0.42870000000039,
+              "ms": 0.1501000000000019,
+              "cpuMs": 0,
+              "conversionMs": 0.055999999999997385
+            }
+          ]
+        },
+        {
+          "seconds": 3,
+          "variant": "before",
+          "intermediatePcmBytes": 96000,
+          "p50Ms": 0.4248000000002321,
+          "p95Ms": 0.479200000000219,
+          "operationP50Ms": 0.1670999999999978,
+          "samples": [
+            {
+              "roundTripMs": 0.4248000000002321,
+              "ms": 0.1758000000000024,
+              "cpuMs": 0,
+              "conversionMs": 0.08970000000000056
+            },
+            {
+              "roundTripMs": 0.3977999999997337,
+              "ms": 0.15729999999999933,
+              "cpuMs": 0,
+              "conversionMs": 0.07580000000000098
+            },
+            {
+              "roundTripMs": 0.479200000000219,
+              "ms": 0.16779999999999973,
+              "cpuMs": 0,
+              "conversionMs": 0.08209999999999695
+            },
+            {
+              "roundTripMs": 0.4169999999999163,
+              "ms": 0.16679999999999495,
+              "cpuMs": 0,
+              "conversionMs": 0.08159999999999457
+            },
+            {
+              "roundTripMs": 0.4226000000003296,
+              "ms": 0.16440000000000055,
+              "cpuMs": 0,
+              "conversionMs": 0.07950000000000301
+            },
+            {
+              "roundTripMs": 0.42990000000008877,
+              "ms": 0.17419999999999902,
+              "cpuMs": 0,
+              "conversionMs": 0.08800000000000097
+            },
+            {
+              "roundTripMs": 0.4373000000000502,
+              "ms": 0.1670999999999978,
+              "cpuMs": 0,
+              "conversionMs": 0.08200000000000074
+            }
+          ]
+        },
+        {
+          "seconds": 60,
+          "variant": "after",
+          "intermediatePcmBytes": 0,
+          "p50Ms": 4.336699999999837,
+          "p95Ms": 8.085599999999886,
+          "operationP50Ms": 2.142700000000005,
+          "samples": [
+            {
+              "roundTripMs": 4.383300000000418,
+              "ms": 2.1814000000000036,
+              "cpuMs": 0,
+              "conversionMs": 0.7250000000000014
+            },
+            {
+              "roundTripMs": 7.030999999999949,
+              "ms": 5.277299999999997,
+              "cpuMs": 0,
+              "conversionMs": 3.6842999999999932
+            },
+            {
+              "roundTripMs": 8.085599999999886,
+              "ms": 5.885099999999994,
+              "cpuMs": 0,
+              "conversionMs": 4.413800000000009
+            },
+            {
+              "roundTripMs": 3.8679000000001906,
+              "ms": 2.127200000000002,
+              "cpuMs": 0,
+              "conversionMs": 0.6706999999999965
+            },
+            {
+              "roundTripMs": 3.827299999999923,
+              "ms": 2.113200000000006,
+              "cpuMs": 15,
+              "conversionMs": 0.6623000000000019
+            },
+            {
+              "roundTripMs": 4.336699999999837,
+              "ms": 2.142700000000005,
+              "cpuMs": 0,
+              "conversionMs": 0.6811000000000007
+            },
+            {
+              "roundTripMs": 4.049099999999726,
+              "ms": 2.124600000000001,
+              "cpuMs": 0,
+              "conversionMs": 0.6724999999999994
+            }
+          ]
+        },
+        {
+          "seconds": 60,
+          "variant": "before",
+          "intermediatePcmBytes": 1920000,
+          "p50Ms": 4.604799999999614,
+          "p95Ms": 5.061099999999897,
+          "operationP50Ms": 2.740099999999998,
+          "samples": [
+            {
+              "roundTripMs": 4.76319999999987,
+              "ms": 2.740099999999998,
+              "cpuMs": 0,
+              "conversionMs": 1.271899999999988
+            },
+            {
+              "roundTripMs": 5.040400000000318,
+              "ms": 2.8282000000000096,
+              "cpuMs": 0,
+              "conversionMs": 1.244499999999988
+            },
+            {
+              "roundTripMs": 4.461299999999937,
+              "ms": 2.718599999999995,
+              "cpuMs": 0,
+              "conversionMs": 1.2727999999999895
+            },
+            {
+              "roundTripMs": 4.604799999999614,
+              "ms": 2.8526999999999987,
+              "cpuMs": 15,
+              "conversionMs": 1.258800000000008
+            },
+            {
+              "roundTripMs": 5.061099999999897,
+              "ms": 2.8493999999999886,
+              "cpuMs": 0,
+              "conversionMs": 1.4040000000000106
+            },
+            {
+              "roundTripMs": 4.467999999999847,
+              "ms": 2.712999999999994,
+              "cpuMs": 0,
+              "conversionMs": 1.2719999999999914
+            },
+            {
+              "roundTripMs": 4.594100000000253,
+              "ms": 2.717199999999991,
+              "cpuMs": 16,
+              "conversionMs": 1.2763000000000204
+            }
+          ]
+        },
+        {
+          "seconds": 180,
+          "variant": "after",
+          "intermediatePcmBytes": 0,
+          "p50Ms": 11.50019999999995,
+          "p95Ms": 12.02659999999969,
+          "operationP50Ms": 6.243099999999998,
+          "samples": [
+            {
+              "roundTripMs": 11.220100000000002,
+              "ms": 6.224099999999993,
+              "cpuMs": 0,
+              "conversionMs": 1.9257000000000062
+            },
+            {
+              "roundTripMs": 11.426800000000185,
+              "ms": 6.2303,
+              "cpuMs": 15,
+              "conversionMs": 1.9481000000000108
+            },
+            {
+              "roundTripMs": 11.50019999999995,
+              "ms": 6.377399999999994,
+              "cpuMs": 15,
+              "conversionMs": 2.0833999999999833
+            },
+            {
+              "roundTripMs": 11.957100000000082,
+              "ms": 6.216000000000008,
+              "cpuMs": 0,
+              "conversionMs": 1.9343000000000075
+            },
+            {
+              "roundTripMs": 11.0341999999996,
+              "ms": 6.243099999999998,
+              "cpuMs": 0,
+              "conversionMs": 1.9393999999999778
+            },
+            {
+              "roundTripMs": 12.02659999999969,
+              "ms": 6.2520999999999844,
+              "cpuMs": 16,
+              "conversionMs": 1.9528999999999996
+            },
+            {
+              "roundTripMs": 11.7496000000001,
+              "ms": 6.5195999999999685,
+              "cpuMs": 0,
+              "conversionMs": 2.1870999999999867
+            }
+          ]
+        },
+        {
+          "seconds": 180,
+          "variant": "before",
+          "intermediatePcmBytes": 5760000,
+          "p50Ms": 16.514500000000226,
+          "p95Ms": 22.446699999999964,
+          "operationP50Ms": 10.0668,
+          "samples": [
+            {
+              "roundTripMs": 13.145100000000184,
+              "ms": 7.940700000000049,
+              "cpuMs": 0,
+              "conversionMs": 3.6416000000000395
+            },
+            {
+              "roundTripMs": 16.514500000000226,
+              "ms": 11.010400000000004,
+              "cpuMs": 0,
+              "conversionMs": 6.692800000000034
+            },
+            {
+              "roundTripMs": 19.055899999999838,
+              "ms": 10.0668,
+              "cpuMs": 15,
+              "conversionMs": 5.804400000000044
+            },
+            {
+              "roundTripMs": 21.84320000000025,
+              "ms": 16.724199999999996,
+              "cpuMs": 15,
+              "conversionMs": 12.444700000000012
+            },
+            {
+              "roundTripMs": 22.446699999999964,
+              "ms": 17.132000000000005,
+              "cpuMs": 16,
+              "conversionMs": 12.859300000000019
+            },
+            {
+              "roundTripMs": 13.012699999999768,
+              "ms": 7.7730999999999995,
+              "cpuMs": 0,
+              "conversionMs": 3.4998999999999683
+            },
+            {
+              "roundTripMs": 12.997699999999895,
+              "ms": 7.807199999999966,
+              "cpuMs": 0,
+              "conversionMs": 3.4975000000000023
+            }
+          ]
+        }
+      ],
+      "inference": {
+        "tokenize": {
+          "p50Ms": 0.17689999999993233,
+          "p95Ms": 0.2783999999996922,
+          "operationP50Ms": 0.06740000000013424,
+          "samples": [
+            {
+              "roundTripMs": 0.2783999999996922,
+              "ms": 0.09130000000004657,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.22620000000006257,
+              "ms": 0.08360000000016043,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.15810000000010405,
+              "ms": 0.06340000000000146,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.17689999999993233,
+              "ms": 0.0728999999998905,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.1855000000000473,
+              "ms": 0.06740000000013424,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.13170000000036453,
+              "ms": 0.0546999999999116,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 0.14419999999972788,
+              "ms": 0.05709999999999127,
+              "cpuMs": 0,
+              "conversionMs": null
+            }
+          ]
+        },
+        "embed": {
+          "p50Ms": 1.3387000000002445,
+          "p95Ms": 6.16150000000016,
+          "operationP50Ms": 1.1620000000000346,
+          "samples": [
+            {
+              "roundTripMs": 1.6547999999997955,
+              "ms": 1.445699999999988,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.4245999999998276,
+              "ms": 1.1908000000000811,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.2371000000002823,
+              "ms": 1.0918000000001484,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.3067000000000917,
+              "ms": 1.1520000000000437,
+              "cpuMs": 16,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.3387000000002445,
+              "ms": 1.1620000000000346,
+              "cpuMs": 46,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 1.25,
+              "ms": 1.0597000000000207,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 6.16150000000016,
+              "ms": 1.3117000000002008,
+              "cpuMs": 0,
+              "conversionMs": null
+            }
+          ]
+        },
+        "search1000SyntheticRows": {
+          "p50Ms": 15.788099999999758,
+          "p95Ms": 17.263099999999213,
+          "operationP50Ms": 15.613800000000083,
+          "samples": [
+            {
+              "roundTripMs": 15.55600000000004,
+              "ms": 15.323499999999967,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 15.64009999999962,
+              "ms": 15.326600000000099,
+              "cpuMs": 16,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 16.170399999999972,
+              "ms": 15.944799999999987,
+              "cpuMs": 32,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 16.0604000000003,
+              "ms": 15.816700000000083,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 17.263099999999213,
+              "ms": 17.04650000000015,
+              "cpuMs": 32,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 15.377600000000712,
+              "ms": 15.028700000000072,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 15.788099999999758,
+              "ms": 15.613800000000083,
+              "cpuMs": 31,
+              "conversionMs": null
+            }
+          ]
+        },
+        "catalogSearch1000SyntheticRows": {
+          "p50Ms": 11.318299999999908,
+          "p95Ms": 12.31670000000031,
+          "operationP50Ms": 10.93119999999999,
+          "samples": [
+            {
+              "roundTripMs": 12.31670000000031,
+              "ms": 12.06100000000015,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 10.751800000000003,
+              "ms": 10.469800000000077,
+              "cpuMs": 32,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 10.798200000000179,
+              "ms": 10.498100000000022,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.318299999999908,
+              "ms": 10.882700000000114,
+              "cpuMs": 15,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.79989999999998,
+              "ms": 11.4846,
+              "cpuMs": 0,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.47479999999996,
+              "ms": 11.21400000000017,
+              "cpuMs": 31,
+              "conversionMs": null
+            },
+            {
+              "roundTripMs": 11.133499999999913,
+              "ms": 10.93119999999999,
+              "cpuMs": 32,
+              "conversionMs": null
+            }
+          ]
+        },
+        "oracle": {
+          "cases": 16,
+          "rows": 1000,
+          "idsMetadataAndScoresEqual": true
+        },
+        "fullMemory": {
+          "privateResidentBytes": 261885952,
+          "workingSetBytes": 368766976,
+          "committedBytes": 314474496
+        },
+        "js": {
+          "rss": 368832512,
+          "heapTotal": 140177408,
+          "heapUsed": 85678532,
+          "external": 43946325,
+          "arrayBuffers": 0
+        },
+        "afterDispose": {
+          "privateResidentBytes": 236568576,
+          "workingSetBytes": 343494656,
+          "committedBytes": 288112640
+        }
+      },
+      "cleanup": {
+        "exited": true,
+        "ms": 2.5523999999995794
+      }
+    }
+  ],
+  "production": [
+    {
+      "round": 0,
+      "variant": "before",
+      "noSdkImportGuard": false,
+      "databasesUnchanged": null,
+      "catalogMs": 1.0285000000003492,
+      "catalogMemory": {
+        "privateResidentBytes": 14065664,
+        "workingSetBytes": 105779200,
+        "committedBytes": 23552000
+      },
+      "addFirstModelAndSdkMs": 1168.1057,
+      "firstRecallMs": 1125.5675,
+      "recall": {
+        "p50Ms": 1.1715000000003783,
+        "p95Ms": 1.2542999999996027,
+        "operationP50Ms": null,
+        "samples": [
+          {
+            "roundTripMs": 1.2452000000002954,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.2542999999996027,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.1733000000003813,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.1715000000003783,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.0748999999996158,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.0169000000005326,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.0172999999995227,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          }
+        ]
+      },
+      "loadedMemory": {
+        "privateResidentBytes": 209264640,
+        "workingSetBytes": 316116992,
+        "committedBytes": 262221824
+      },
+      "cleanup": {
+        "exited": true,
+        "ms": 2.5471999999999753
+      }
+    },
+    {
+      "round": 0,
+      "variant": "after",
+      "noSdkImportGuard": true,
+      "databasesUnchanged": true,
+      "catalogMs": 0.8455999999996493,
+      "catalogMemory": {
+        "privateResidentBytes": 14245888,
+        "workingSetBytes": 105934848,
+        "committedBytes": 23662592
+      },
+      "addFirstModelAndSdkMs": 1168.1057,
+      "firstRecallMs": 202.6842999999999,
+      "recall": {
+        "p50Ms": 1.3926000000001295,
+        "p95Ms": 2.672599999999875,
+        "operationP50Ms": null,
+        "samples": [
+          {
+            "roundTripMs": 1.4877999999998792,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.308799999999792,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.2700999999997293,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.4768999999996595,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.3926000000001295,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.3702999999995882,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 2.672599999999875,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          }
+        ]
+      },
+      "loadedMemory": {
+        "privateResidentBytes": 80211968,
+        "workingSetBytes": 186028032,
+        "committedBytes": 131657728
+      },
+      "cleanup": {
+        "exited": true,
+        "ms": 2.4899999999997817
+      }
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "noSdkImportGuard": true,
+      "databasesUnchanged": true,
+      "catalogMs": 1.3075000000008004,
+      "catalogMemory": {
+        "privateResidentBytes": 14295040,
+        "workingSetBytes": 105988096,
+        "committedBytes": 23785472
+      },
+      "addFirstModelAndSdkMs": 1098.4921999999988,
+      "firstRecallMs": 188.02839999999924,
+      "recall": {
+        "p50Ms": 1.3175000000010186,
+        "p95Ms": 3.4504999999990105,
+        "operationP50Ms": null,
+        "samples": [
+          {
+            "roundTripMs": 1.6034999999992579,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.441500000000815,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.3175000000010186,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 3.4504999999990105,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.273800000000847,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.162400000001071,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.2209000000002561,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          }
+        ]
+      },
+      "loadedMemory": {
+        "privateResidentBytes": 80060416,
+        "workingSetBytes": 185876480,
+        "committedBytes": 129409024
+      },
+      "cleanup": {
+        "exited": true,
+        "ms": 2.4679999999989377
+      }
+    },
+    {
+      "round": 1,
+      "variant": "before",
+      "noSdkImportGuard": false,
+      "databasesUnchanged": null,
+      "catalogMs": 0.85740000000078,
+      "catalogMemory": {
+        "privateResidentBytes": 16920576,
+        "workingSetBytes": 108548096,
+        "committedBytes": 26419200
+      },
+      "addFirstModelAndSdkMs": 1098.4921999999988,
+      "firstRecallMs": 1106.1467999999986,
+      "recall": {
+        "p50Ms": 1.1638999999995576,
+        "p95Ms": 1.4394000000011147,
+        "operationP50Ms": null,
+        "samples": [
+          {
+            "roundTripMs": 1.4394000000011147,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.2313000000012835,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.1638999999995576,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.103399999999965,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.0762999999988097,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.193199999999706,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          },
+          {
+            "roundTripMs": 1.078300000001036,
+            "ms": null,
+            "cpuMs": null,
+            "conversionMs": null
+          }
+        ]
+      },
+      "loadedMemory": {
+        "privateResidentBytes": 225669120,
+        "workingSetBytes": 332525568,
+        "committedBytes": 278188032
+      },
+      "cleanup": {
+        "exited": true,
+        "ms": 2.346000000001368
+      }
+    }
+  ]
+}

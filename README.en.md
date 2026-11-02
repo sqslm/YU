@@ -285,6 +285,7 @@ pnpm benchmark:hotkey         # isolated old/new worker comparison; briefly uses
 pnpm benchmark:uia            # synthetic real UIA controls; briefly focuses a test form
 pnpm benchmark:windows        # four full-request comparisons; no focus or audio changes
 pnpm benchmark:scroll         # synthetic baseline/sparse-TS/Rust, CPU samples and transfer costs
+pnpm benchmark:models         # existing local model; isolated SDK/inference/recall/PCM measurements
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
 # dictation, Ask + retrieval, multimodal)
@@ -305,6 +306,8 @@ The [UIA benchmark](tests/yu-v2/evidence/rust-uia-20261103.json) uses the same o
 The [Windows bridge benchmark](tests/yu-v2/evidence/rust-windows-20261103.json) includes process startup, input, execution, output and exit over two interleaved rounds, five measured requests per action per round: median window check 883–936 → 20–21ms, disk query 792–794 → 22–23ms, audio read 902–910 → 27ms and OCR 891–898 → 51–54ms. It uses an owned transparent, non-activating window and an in-memory image without changing audio settings. Worker CPU samples have accounting granularity and exclude compiler subprocesses; no total-app CPU or RAM reduction is inferred.
 
 The [scroll benchmark](tests/yu-v2/evidence/rust-scroll-20261103.json) compares baseline, sparse-mask TypeScript and Rust DLL matching: 4K median matching is about 64 → 47–48 → 15ms; matching plus chunk append and raw thumbnail sampling is about 66 → 49 → 16–18ms. The 4K temporary change mask shrinks from 7.9 MiB to 129 KiB; this is not total-app memory. All 442 differential cases and a real Electron NativeImage/FFI probe passed. Synthetic-frame timings exclude GDI, PNG encoding and UI work, so they do not establish an end-to-end capture frame rate.
+
+Local model wrappers retain TypeScript and process isolation. The [component and baseline benchmark](tests/yu-v2/evidence/model-workers-20261103.json) shows that avoiding the Mem0 SDK import for read-only recall reduces worker private resident memory from about 200–215 to 76–77 MiB and first recall from 1106–1126 to 188–203ms; warm recall over one memory changes from about 1.2 to 1.3–1.4ms. Retrieval over 1000 synthetic vectors changes from 15.8–17.8 to 11.3–11.6ms. Models, normalization, cosine ranking, learning and storage remain compatible; writes still load the SDK. Direct WAV-to-Float32 conversion removes about 5.5 MiB of intermediate PCM for three minutes of audio. These are synthetic worker measurements, not real ASR decoding or total-app peak RAM; no model download is needed for validation.
 
 ## Known pitfalls
 
@@ -433,7 +436,7 @@ Explicit “remember” requests and automatic learning both use Mem0 extraction
 
 Open Settings → Assistant & automation → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.
 
-Mem0 **2.4.6** supplies extraction, deduplication, ADD/UPDATE/DELETE, retrieval and SQLite persistence. Version 3.3.1 was evaluated but its additive capture does not replace conflicting old facts. The SDK runs in an on-demand Electron utility process; no Python, Docker or database server is required. LLM requests reuse the selected connection in the main process. Local storage does not make cloud-configured LLM calls offline.
+Mem0 **2.4.6** supplies extraction, deduplication, ADD/UPDATE/DELETE and SQLite persistence. Read-only recall uses the same float32 cosine scores, stable ties, user/category separation and 5/3-result limits over the pinned SQLite format without importing the SDK; SDK upgrades require differential validation. Version 3.3.1 was evaluated but its additive capture does not replace conflicting old facts. Writes load the SDK in an on-demand Electron utility process; no Python, Docker or database server is required. LLM requests reuse the selected connection in the main process. Local storage does not make cloud-configured LLM calls offline.
 
 Assistant facts and writing preferences use separate databases under `memory/`. New Ask user statements and explicit writing preferences may be learned; ordinary dictation, older history, notes, webpages, files and clipboard are not automatically imported. Writing receives style preferences only. Say “remember…”, “forget…”, or start an assistant conversation with “temporary chat”. The manager supports search, add, edit, delete and clear, and Ask can show the memory references used.
 

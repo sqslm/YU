@@ -63,13 +63,6 @@ interface Sherpa {
 
 const parent = (process as unknown as { parentPort?: ParentPort }).parentPort
 
-/** Turns the PCM16 that the recorder produces into the float samples the model wants. */
-export function toSamples(pcm: Int16Array): Float32Array {
-  const samples = new Float32Array(pcm.length)
-  for (let i = 0; i < pcm.length; i++) samples[i] = pcm[i] / 32768
-  return samples
-}
-
 /** Reads the 16-bit mono data chunk out of a RIFF/WAVE buffer. */
 export function wavToSamples(wav: Uint8Array): Float32Array {
   const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength)
@@ -80,9 +73,9 @@ export function wavToSamples(wav: Uint8Array): Float32Array {
     if (id === 'data') {
       const start = offset + 8
       const length = Math.min(size, wav.byteLength - start)
-      const pcm = new Int16Array(Math.floor(length / 2))
-      for (let i = 0; i < pcm.length; i++) pcm[i] = view.getInt16(start + i * 2, true)
-      return toSamples(pcm)
+      const samples = new Float32Array(Math.floor(length / 2))
+      for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(start + i * 2, true) / 32768
+      return samples
     }
     offset += 8 + size + (size % 2)
   }

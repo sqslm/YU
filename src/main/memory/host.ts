@@ -68,6 +68,7 @@ export class MemoryService implements MemoryBackend {
     if (generation !== this.generation) throw Error('记忆任务已取消')
     const child = utilityProcess.fork(join(__dirname, 'memory.js'), [], { serviceName: 'YU memory', stdio: 'pipe' })
     this.child = child
+    child.once('spawn', () => { if (this.child !== child) child.kill() })
     child.stdout?.on('data', () => {})
     child.stderr?.on('data', () => {})
     child.on('message', (message: any) => {

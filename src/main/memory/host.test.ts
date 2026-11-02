@@ -3,14 +3,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 
-const fixture = vi.hoisted(() => ({ children: [] as any[], writes: [] as string[], hanging: false, failure: '', llm: false }))
+const fixture = vi.hoisted(() => ({ children: [] as any[], writes: [] as string[], hanging: false, failure: '', llm: false, delayedSpawn: false }))
 vi.mock('../providers/llm', () => ({ complete: vi.fn(async () => '{"facts":["用户正在制作语的介绍视频"]}') }))
 vi.mock('electron', () => ({ utilityProcess: { fork: () => {
   const child = new EventEmitter() as any
-  child.killed = false; child.messages = []
-  child.kill = vi.fn(() => { child.killed = true })
+  child.killed = false; child.messages = []; child.pid = fixture.delayedSpawn ? undefined : 42
+  child.kill = vi.fn(() => { if (!child.pid) return false; child.killed = true; return true })
   child.postMessage = (message: any) => {
     child.messages.push(message)
+    if (fixture.delayedSpawn && message.method === 'init') return
     if (fixture.hanging && message.method === 'learn') return
     queueMicrotask(() => {
       if (child.killed) return
@@ -39,13 +40,33 @@ const llmComplete = vi.mocked(complete)
 
 let settings: Settings, service: MemoryService, busy = false, idleEnough = true
 beforeEach(async () => {
-  vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false; fixture.failure = ''; fixture.llm = false
+  vi.useFakeTimers(); fixture.children = []; fixture.writes = []; fixture.hanging = false; fixture.failure = ''; fixture.llm = false; fixture.delayedSpawn = false
   llmComplete.mockClear()
   settings = structuredClone(DEFAULT_SETTINGS); settings.memory = { enabled: true, autoLearn: true, profileId: null, effort: 'high' }; busy = false; idleEnough = true
   service = new MemoryService('release/verification-entities/memory-host-test', () => settings, () => busy, () => {}, () => idleEnough)
   await service.configure()
 })
 afterEach(() => { service.shutdown(); vi.useRealTimers() })
+it('kills a cancelled memory process when its PID arrives after shutdown', async () => {
+  fixture.delayedSpawn = true
+  const listing = service.list('assistant')
+  const cancelled = expect(listing).rejects.toThrow('记忆任务已取消')
+  await vi.waitFor(() => expect(fixture.children).toHaveLength(1))
+  const child = fixture.children[0]
+  service.shutdown()
+  await cancelled
+  expect(child.kill).toHaveBeenCalledTimes(1)
+  expect(child.killed).toBe(false)
+  fixture.delayedSpawn = false
+  await service.list('assistant')
+  const replacement = fixture.children[1]
+  child.pid = 42; child.emit('spawn')
+  expect(child.kill).toHaveBeenCalledTimes(2)
+  expect(child.killed).toBe(true)
+  replacement.emit('spawn')
+  expect(replacement.kill).not.toHaveBeenCalled()
+  expect(replacement.killed).toBe(false)
+})
 it('allows explicit remember extraction inside the foreground task, while recording and games remain blocked', async () => {
   fixture.llm = true
   settings.profiles = [{ ...settings.polish, id: 'qa', name: 'QA', kind: 'llm', preset: '', enabled: true }]

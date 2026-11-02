@@ -16,6 +16,7 @@
     "benchmark:uia": "node scripts/build-native.mjs && node scripts/benchmark-uia.mjs",
     "benchmark:windows": "node scripts/build-native.mjs && node scripts/benchmark-windows.mjs",
     "benchmark:scroll": "node scripts/build-native.mjs && node scripts/benchmark-scroll.mjs",
+    "benchmark:models": "node scripts/benchmark-model-workers.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "node scripts/build-native.mjs && vitest run",
     "test:watch": "node scripts/build-native.mjs && vitest",

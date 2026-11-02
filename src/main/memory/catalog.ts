@@ -5,6 +5,37 @@ import type { MemoryEntry, MemoryGraph, MemoryKind } from '@shared/memory'
 
 interface CatalogRow extends MemoryEntry { vector?: number[] }
 
+/** Read-only equivalent of pinned Mem0 2.4.6 MemoryVectorStore.search.
+ * Keep float32 storage, cosine scores, stable ties and category/user isolation.
+ * Writes and extraction still belong to the SDK; recall need not import it.
+ */
+export function searchCatalog(home: string, kind: MemoryKind, query: number[]): MemoryEntry[] {
+  if (query.length !== 512) throw Error('Memory query dimension mismatch')
+  const path = join(home, `${kind}.db`)
+  if (!existsSync(path)) return []
+  const db = new DatabaseSync(path, { readOnly: true })
+  try {
+    db.exec('PRAGMA busy_timeout = 1000')
+    const results: MemoryEntry[] = []
+    const queryNorm = Math.sqrt(query.reduce((sum, value) => sum + value * value, 0))
+    for (const row of db.prepare("SELECT id, payload, vector FROM vectors WHERE json_extract(payload, '$.userId') = ?").iterate('local-user')) {
+      const bytes = row.vector as Uint8Array
+      if (bytes.byteLength !== query.length * 4) throw Error('Memory vector dimension mismatch')
+      const vector = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      let dot = 0, norm = 0
+      for (let i = 0; i < query.length; i++) {
+        const value = vector.getFloat32(i * 4, true)
+        dot += query[i] * value; norm += value * value
+      }
+      const payload = JSON.parse(row.payload as string)
+      results.push({ id: row.id as string, text: payload.data, kind, sourceId: payload.sourceId ?? '', createdAt: payload.createdAt, updatedAt: payload.updatedAt,
+        score: dot / (queryNorm * Math.sqrt(norm)) })
+    }
+    results.sort((a, b) => (b.score || 0) - (a.score || 0))
+    return results.slice(0, kind === 'assistant' ? 5 : 3)
+  } finally { db.close() }
+}
+
 // Read-only view of the pinned Mem0 2.4.6 SQLite format. All writes remain in Mem0.
 export function readCatalog(home: string, kind: MemoryKind, limit = 10000, query = '', vectors = false): { rows: CatalogRow[]; total: number } {
   const path = join(home, `${kind}.db`)

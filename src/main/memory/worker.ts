@@ -1,7 +1,7 @@
 import { join } from 'node:path'
-import type { MemoryEntry, MemoryKind } from '@shared/memory'
+import type { MemoryKind } from '@shared/memory'
 import { validateMemoryReply } from '@shared/memory-reply'
-import { readCatalog, readGraph } from './catalog'
+import { readCatalog, readGraph, searchCatalog } from './catalog'
 
 const port = (process as unknown as { parentPort: { on(name: string, fn: (event: { data: any }) => void): void; postMessage(data: unknown): void } }).parentPort
 let home = '', modelDir = '', userId = 'local-user', sequence = 0
@@ -42,9 +42,6 @@ async function store(kind: MemoryKind): Promise<InstanceType<typeof import('mem0
   }
   return stores.get(kind)!
 }
-function rows(result: any, kind: MemoryKind): MemoryEntry[] {
-  return (result.results ?? []).map((row: any) => ({ id: row.id, text: row.memory, kind, sourceId: row.metadata?.sourceId ?? '', createdAt: row.createdAt, updatedAt: row.updatedAt, score: row.score }))
-}
 async function command(message: any): Promise<unknown> {
   if (message.method === 'init') {
     home = message.home; modelDir = message.modelDir
@@ -64,8 +61,8 @@ async function command(message: any): Promise<unknown> {
   }
   if (kind !== 'assistant' && kind !== 'style') throw Error('Invalid memory kind')
   if (message.method === 'list') return readCatalog(home, kind).rows
+  if (message.method === 'recall') return searchCatalog(home, kind, await embedQuery(message.text))
   const memory = await store(kind)
-  if (message.method === 'recall') return rows(await memory.search(message.text, { userId, limit: kind === 'assistant' ? 5 : 3 }), kind)
   if (message.method === 'add' || message.method === 'learn') {
     const inferred = message.method === 'learn' || message.sourceId !== 'manual'
     const result = await memory.add([{ role: 'user', content: message.text }], { userId, infer: inferred, metadata: { sourceId: message.sourceId } })
