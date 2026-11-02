@@ -31,6 +31,8 @@ files:
 extraResources:
   - from: native/bin/yu-hotkey.exe
     to: native/yu-hotkey.exe
+  - from: native/bin/yu-uia.exe
+    to: native/yu-uia.exe
   - from: resources/system-volume.ps1
     to: system-volume.ps1
   - from: resources/voice-wake.ps1

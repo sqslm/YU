@@ -6,7 +6,7 @@ The tables below record production dependencies and bundled renderer dependencie
 
 Optional speech models are downloaded separately and are not included in the installer or source archive. Their own upstream model licenses apply.
 
-The Rust keyboard helper statically incorporates the following crates under their MIT license option. Windows APIs are linked from the operating system. Exact dependency versions and checksums are locked in `native/hotkey/Cargo.lock`.
+The Rust keyboard and UIA helpers use the following crates under their MIT license option, plus Unicode-3.0 data terms where noted. The table also records their macro/build dependencies. Windows APIs are linked from the operating system. Versions and checksums are locked in `native/hotkey/Cargo.lock` and `native/uia/Cargo.lock`.
 
 | Native crate | Version | License text |
 | --- | --- | --- |
@@ -17,6 +17,21 @@ The Rust keyboard helper statically incorporates the following crates under thei
 | itoa | 1.0.18 | [MIT](licenses/rust-itoa-1.0.18-MIT) |
 | memchr | 2.8.3 | [MIT](licenses/rust-memchr-2.8.3-MIT) |
 | zmij | 1.0.23 | [MIT](licenses/rust-zmij-1.0.23-MIT) |
+| windows | 0.61.3 | [MIT](licenses/rust-windows-0.61.3-MIT) |
+| windows-collections | 0.2.0 | [MIT](licenses/rust-windows-collections-0.2.0-MIT) |
+| windows-core | 0.61.2 | [MIT](licenses/rust-windows-core-0.61.2-MIT) |
+| windows-implement | 0.60.2 | [MIT](licenses/rust-windows-implement-0.60.2-MIT) |
+| windows-interface | 0.59.3 | [MIT](licenses/rust-windows-interface-0.59.3-MIT) |
+| windows-link | 0.1.3 | [MIT](licenses/rust-windows-link-0.1.3-MIT) |
+| windows-result | 0.3.4 | [MIT](licenses/rust-windows-result-0.3.4-MIT) |
+| windows-strings | 0.4.2 | [MIT](licenses/rust-windows-strings-0.4.2-MIT) |
+| windows-future | 0.2.1 | [MIT](licenses/rust-windows-future-0.2.1-MIT) |
+| windows-threading | 0.1.0 | [MIT](licenses/rust-windows-threading-0.1.0-MIT) |
+| windows-numerics | 0.2.0 | [MIT](licenses/rust-windows-numerics-0.2.0-MIT) |
+| proc-macro2 | 1.0.107 | [MIT](licenses/rust-proc-macro2-1.0.107-MIT) |
+| quote | 1.0.47 | [MIT](licenses/rust-quote-1.0.47-MIT) |
+| syn | 2.0.119 | [MIT](licenses/rust-syn-2.0.119-MIT) |
+| unicode-ident | 1.0.26 | [MIT](licenses/rust-unicode-ident-1.0.26-MIT), [Unicode-3.0](licenses/rust-unicode-ident-1.0.26-UNICODE) |
 
 | Package | Version | License | License texts |
 | --- | --- | --- | --- |

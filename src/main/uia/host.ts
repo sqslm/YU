@@ -1,21 +1,22 @@
 /**
  * Owns the UI Automation child process.
  *
- * Contract: `read()` never throws, never hangs longer than `timeoutMs`, and
+ * Contract: `read()` never throws, has a bounded startup wait plus `timeoutMs`, and
  * never respawns in a loop. A missing snapshot is a normal outcome — the
  * pipeline simply polishes without surrounding text. That is why a dead or
  * slow child is treated as "no context" instead of an error the user must see.
  *
- * The child is *not* kept alive for the app's lifetime. A Node utility process
- * costs ~75 MB of resident memory, and the snapshot it produces is only needed
+ * The native Rust child is not kept alive for the app's lifetime. Its snapshot is only needed
  * while a take is being captured, so the process is started by `warm()` on the
  * take path and reclaimed after `IDLE_STOP_MS` without a read. A read that
  * arrives before the child is ready waits for it instead of reporting "no
  * context": the read already overlaps the whole recording, so the wait is free.
  */
-import { utilityProcess, type UtilityProcess } from 'electron'
+import { app } from 'electron'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { join } from 'node:path'
-import type { UiaSnapshot } from './reader'
+import { createInterface } from 'node:readline'
+import type { UiaSnapshot } from './types'
 import type { TaskTarget } from '@shared/task'
 
 interface PendingRead {
@@ -46,9 +47,9 @@ const READY_WAIT_MS = 1500
 const IDLE_STOP_MS = Number(process.env.TYPELESS_UIA_IDLE_MS ?? 5 * 60_000)
 
 export class UiaHost {
-  private proc: UtilityProcess | null = null
+  private proc: ChildProcessWithoutNullStreams | null = null
   private pending = new Map<number, PendingRead>()
-  private readyWaiters: Array<() => void> = []
+  private readyWaiters = new Set<(ready: boolean) => void>()
   private idleTimer: NodeJS.Timeout | null = null
   private seq = 0
   private restarts = 0
@@ -58,6 +59,8 @@ export class UiaHost {
   private restartTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly log: (line: string) => void = () => {}) {}
+
+  get pid(): number | undefined { return this.proc?.pid }
 
   /**
    * Arms the host without spending a process. Used at startup: from here on a
@@ -70,7 +73,7 @@ export class UiaHost {
 
   /**
    * Starts the reader ahead of a take and pushes the idle deadline back. Safe to
-   * call repeatedly: the child is only forked when there is none.
+   * call repeatedly: the child is only spawned when there is none.
    */
   warm(): void {
     if (this.stopped || !this.wanted) return
@@ -88,23 +91,30 @@ export class UiaHost {
     if (this.stopped || !this.wanted || this.proc) return
     if (this.restartTimer) clearTimeout(this.restartTimer)
     this.restartTimer = null
-    const entry = join(__dirname, 'uia.js')
+    const entry = app.isPackaged
+      ? join(process.resourcesPath, 'native', 'yu-uia.exe')
+      : join(app.getAppPath(), 'native', 'bin', 'yu-uia.exe')
     try {
-      const child = utilityProcess.fork(entry, [], {
-        serviceName: 'typeless-uia',
-        stdio: 'inherit'
-      })
+      const child = spawn(entry, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
       this.proc = child
       child.once('spawn', () => { if (this.proc !== child || this.stopped) child.kill() })
-      child.on('message', (message: unknown) => {
-        if (this.proc === child) this.onMessage(message as ChildMessage)
+      child.on('error', error => this.log(`[uia] spawn failed: ${error.message}`))
+      child.stdin.on('error', () => { if (this.proc === child) this.terminate() })
+      child.stderr.setEncoding('utf8')
+      child.stderr.on('data', (text: string) => this.log(`[uia] ${text.trim()}`))
+      const lines = createInterface({ input: child.stdout })
+      lines.on('line', line => {
+        if (this.proc !== child) return
+        try { this.onMessage(JSON.parse(line) as ChildMessage) } catch {
+          this.log('[uia] invalid helper response')
+          this.terminate()
+        }
       })
-      child.on('exit', (code) => {
+      child.on('close', (code) => {
+        lines.close()
         if (this.proc !== child) return
         this.log(`[uia] exited with ${code}`)
-        this.proc = null
-        this.ready = false
-        this.flushPending()
+        this.terminate()
         if (!this.stopped && this.restarts < MAX_RESTARTS) {
           this.restarts += 1
           this.restartTimer = setTimeout(() => { this.restartTimer = null; this.spawn() }, 1200)
@@ -118,21 +128,19 @@ export class UiaHost {
 
   private onMessage(message: ChildMessage): void {
     if (message.type === 'ready') {
-      this.restarts = 0
       this.ready = true
       this.log('[uia] ready')
       // Arm the reclaimer here as well as after a read: a child that comes back
       // after a crash is only reclaimed if something schedules it, and a spawned
       // child that never gets a read would otherwise stay for the whole session.
       this.scheduleIdle()
-      const waiters = this.readyWaiters
-      this.readyWaiters = []
-      for (const wake of waiters) wake()
+      this.wakeReady(true)
       return
     }
     if (message.type !== 'result' || typeof message.id !== 'number') return
     const pending = this.pending.get(message.id)
     if (!pending) return
+    this.restarts = 0
     this.pending.delete(message.id)
     clearTimeout(pending.timer)
     pending.resolve(message.snapshot ?? null)
@@ -150,12 +158,29 @@ export class UiaHost {
 
   private waitForReady(ms: number): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => resolve(false), ms)
-      this.readyWaiters.push(() => {
+      const finish = (ready: boolean): void => {
         clearTimeout(timer)
-        resolve(true)
-      })
+        this.readyWaiters.delete(finish)
+        resolve(ready)
+      }
+      const timer = setTimeout(() => finish(false), ms)
+      this.readyWaiters.add(finish)
     })
+  }
+
+  private wakeReady(ready: boolean): void {
+    for (const wake of this.readyWaiters) wake(ready)
+  }
+
+  /** Retire first, then kill: late pipe/close events cannot affect a new reader. */
+  private terminate(): void {
+    this.clearIdle()
+    const proc = this.proc
+    this.proc = null
+    this.ready = false
+    this.flushPending()
+    this.wakeReady(false)
+    proc?.kill()
   }
 
   private clearIdle(): void {
@@ -165,8 +190,7 @@ export class UiaHost {
   }
 
   /**
-   * Kills the child once it has been quiet for `IDLE_STOP_MS`. That is ~75 MB
-   * back on an app that spends most of its life waiting for a hotkey; the cost
+   * Kills the child once it has been quiet for `IDLE_STOP_MS`; the cost
    * is one spawn the next time a take asks for context.
    */
   private scheduleIdle(): void {
@@ -179,10 +203,7 @@ export class UiaHost {
         return
       }
       this.log('[uia] idle: reclaiming the context reader')
-      const proc = this.proc
-      this.proc = null
-      this.ready = false
-      proc.kill()
+      this.terminate()
     }, IDLE_STOP_MS)
     // Never hold the event loop open just to reclaim memory later.
     this.idleTimer.unref?.()
@@ -204,26 +225,27 @@ export class UiaHost {
   private async readWithBudget(timeoutMs: number, target?: TaskTarget): Promise<UiaSnapshot | null> {
     if (this.stopped || !this.wanted) return null
     this.warm()
+    const proc = this.proc
+    if (!proc) return null
     if (!this.ready) {
       const ready = await this.waitForReady(Math.max(timeoutMs, READY_WAIT_MS))
-      if (!ready || this.stopped) return null
+      if (!ready || this.stopped || this.proc !== proc) {
+        if (!ready && this.proc === proc) this.terminate()
+        return null
+      }
     }
-    const proc = this.proc
-    if (!proc) return Promise.resolve(null)
     const id = (this.seq += 1)
     const result = await new Promise<UiaSnapshot | null>((resolve) => {
       const timer = setTimeout(() => {
-        this.pending.delete(id)
         this.log('[uia] read timed out')
-        resolve(null)
+        // A hung COM provider would otherwise block every subsequent request.
+        if (this.proc === proc) this.terminate()
       }, timeoutMs)
       this.pending.set(id, { resolve, timer })
       try {
-        proc.postMessage({ type: 'read', id, ...(target ? { target } : {}) })
+        proc.stdin.write(JSON.stringify({ type: 'read', id, ...(target ? { target } : {}) }) + '\n')
       } catch {
-        this.pending.delete(id)
-        clearTimeout(timer)
-        resolve(null)
+        this.terminate()
       }
     })
     if (this.pending.size === 0) this.scheduleIdle()
@@ -235,25 +257,13 @@ export class UiaHost {
     this.wanted = false
     if (this.restartTimer) clearTimeout(this.restartTimer)
     this.restartTimer = null
-    this.clearIdle()
-    this.flushPending()
-    const proc = this.proc
-    this.proc = null
-    this.ready = false
-    const waiters = this.readyWaiters
-    this.readyWaiters = []
-    for (const wake of waiters) wake()
-    proc?.kill()
+    this.terminate()
   }
 
   /** Drop only an idle reader, leaving on-demand reads enabled. */
   reclaim(): boolean {
     if (!this.proc || this.pending.size > 0 || !this.ready) return false
-    this.clearIdle()
-    const proc = this.proc
-    this.proc = null
-    this.ready = false
-    proc.kill()
+    this.terminate()
     return true
   }
 }

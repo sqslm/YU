@@ -40,6 +40,7 @@
 !/scripts/benchmark-memory.cjs
 !/scripts/build-native.mjs
 !/scripts/benchmark-hotkey.mjs
+!/scripts/benchmark-uia.mjs
 !/native/
 /native/bin/
 /native/**/target/

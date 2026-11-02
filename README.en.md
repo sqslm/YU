@@ -255,11 +255,12 @@ insert: clipboard paste → SendInput Unicode fallback → UIA fallback, then re
 history.sqlite (SQLite search, with sources and pipeline markers)
 ```
 
-The Electron main process remains TypeScript. The keyboard hook runs in a separate Rust executable, `yu-hotkey.exe`; UIA, local ASR and memory models retain separate Electron utility processes. Hook/provider faults cannot freeze the UI, and local model processes can be terminated to reclaim memory. Newline-delimited JSON travels over inherited stdin/stdout pipes; the helper exits on pipe EOF. The packaged helper lives in `resources/native/`, outside ASAR, with the CRT linked statically so users do not need a separate VC++ runtime. The resource panel includes its PID and marks unreadable measurements unavailable.
+The Electron main process remains TypeScript. Keyboard hooks and UIA run in separate Rust executables, `yu-hotkey.exe` and `yu-uia.exe`; local ASR and memory retain separate Electron utility processes. Each native process uses inherited stdin/stdout JSON pipes and exits on EOF, including when a UIA provider blocks. Both live in `resources/native/`, outside ASAR, with a static CRT. The resource panel includes both PIDs and marks unreadable measurements unavailable. Progress, acceptance evidence and remaining work are tracked in the [Rust refactor plan](docs/rust-refactor-plan.md).
 
 Modules worth calling out:
 
 - `native/hotkey/` + `src/main/hotkey/host.ts` — the Rust keyboard hook and Electron lifecycle. Gestures run directly on keyboard events; idle waits indefinitely instead of polling every 4 ms. Only held keys require 25 ms lost-release reconciliation. Hook events remain authoritative; `GetAsyncKeyState` may only remove entries. Restart, suspension, shortcut capture and activity acknowledgements retain their existing interface.
+- `native/uia/` + `src/main/uia/host.ts` — a windowless MTA uses generated COM bindings and only ValuePattern. Target HWND/PID/title are checked before and after reads; password controls return no snapshot. Values retain at most 4000 trailing UTF-16 units without splitting surrogate pairs; official SDK constants identify control types. On-demand warmup, at least 1500ms startup wait, default 150ms read budget, timeout termination and five-minute idle reclamation bound the lifecycle.
 - `src/main/pipeline.ts` — the full lifecycle of one take (~2200 lines): `MIN_DURATION_MS=350` against accidental taps, `STOP_GRACE_MS=500` to wait for the final audio chunk, and a run token re-checked at every async hop so a cancelled take can never be inserted.
 - `src/main/insert.ts` — clipboard paste first; SendInput uses a hand-written 40-byte `INPUT` layout with `AttachThreadInput` before injection; the clipboard is restored only while it still holds our text.
 - `src/main/agent.ts` + `src/main/tools/` — Ask's scheduler and its 9 tools. Native `tool_calls` first, a strict JSON-intent fallback when the model can't call tools; `runTool` never throws and every network tool has a hard ≤8 s budget.
@@ -276,9 +277,10 @@ Modules worth calling out:
 ```powershell
 pnpm test                     # unit tests plus integration tests that start a real local server
 pnpm typecheck                # both the main-process and renderer projects
-pnpm test:native              # Rust gesture, key ownership and lost-release tests
+pnpm test:native              # Rust hotkey and UIA regression tests
 pnpm build:native             # also run automatically by dev/build/test/package
 pnpm benchmark:hotkey         # isolated old/new worker comparison; briefly uses F8
+pnpm benchmark:uia            # synthetic real UIA controls; briefly focuses a test form
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
 # dictation, Ask + retrieval, multimodal)
@@ -290,9 +292,11 @@ node_modules\electron\dist\electron.exe .        # enable self-test via environm
 
 Debug switches (self-test mode, skip the silence gate, capture UI only, point at a specific FFmpeg binary) are environment variables; the readers are at the top of `src/main/index.ts` and in `src/main/audio/transcode.ts`. UI-only captures land in `screenshots/`, which is not committed.
 
-Stack: Electron 42, electron-vite 4, React 18, MUI 6, TypeScript 5.9, Rust and Vitest 4. The native hook uses `windows-sys` and `serde_json`, pinned in `native/hotkey/Cargo.lock`; other features retain their existing Node dependencies.
+Stack: Electron 42, electron-vite 4, React 18, MUI 6, TypeScript 5.9, Rust and Vitest 4. Native helpers use `windows-sys` / `windows` and `serde_json`, pinned in their Cargo lockfiles. Other features retain existing Node dependencies. Builds skip copying identical helpers that may be running; exit a running development build before changing its native binaries.
 
 The [raw hook benchmark](tests/yu-v2/evidence/rust-hotkey-20261103.json) compares two interleaved rounds per implementation in isolated Electron: private committed memory about 33–34 → 1 MiB, working set 61–64 → 5.3 MiB, and injected-key-to-host-start P95 about 16–17 → 0.3–0.5 ms. These are worker-only measurements, excluding UI, microphone and models. Idle CPU timing was too coarse to establish a reduction. Re-run with `pnpm benchmark:hotkey --baseline <old-commit> --output <report-path>`. Physical keyboards, UAC and lock-screen transitions still need manual acceptance.
+
+The [UIA benchmark](tests/yu-v2/evidence/rust-uia-20261103.json) uses the same owned Windows Forms control over two interleaved rounds: private resident memory about 19 → 1.8–1.9 MiB, private commit 32 → 2.4–2.5 MiB, read P95 3.9–4.3 → 3.1–3.2ms, and readiness plus first read 92–102 → 39–45ms. Editable/read-only/long Chinese/button/password controls, mismatched targets and EOF during a blocked provider passed. These results do not cover every vendor application, elevated desktop or total app memory, and do not quantify CPU reduction. Keep fixture focus stable during the probe; mismatched focus or content fails the run instead of sampling another window.
 
 ## Known pitfalls
 

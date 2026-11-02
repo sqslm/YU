@@ -63,7 +63,7 @@ import { recordingLog } from './recordingLog'
 import { muteOthers, restoreOthers } from './systemAudio'
 import { appLabel, foregroundWindow, type ForegroundInfo } from './foreground'
 
-import type { UiaSnapshot } from './uia/reader'
+import type { UiaSnapshot } from './uia/types'
 import { mainLanguage, mt } from '@shared/mainI18n'
 import { LiveCaptions } from './live-captions'
 import { matchVoiceCommand } from '@shared/voiceCommands'

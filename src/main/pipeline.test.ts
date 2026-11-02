@@ -9,7 +9,7 @@ import { DEFAULT_VOICE_COMMANDS } from '@shared/voiceCommands'
 import { mergeSettings } from '@shared/defaults'
 import { encodeWav } from '@shared/audio'
 import type { PipelineOptions } from './pipeline'
-import type { UiaSnapshot } from './uia/reader'
+import type { UiaSnapshot } from './uia/types'
 
 /**
  * The take lifecycle of the real pipeline (REQ-01 / REQ-02 / REQ-03 / REQ-17).
@@ -244,7 +244,7 @@ function silence(ms: number): Int16Array {
 function snapshot(overrides: Partial<UiaSnapshot> = {}): UiaSnapshot {
   return {
     controlType: 'edit',
-    controlTypeId: 50030,
+    controlTypeId: 50004,
     className: 'Edit',
     automationId: '',
     name: '',

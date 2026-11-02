@@ -13,9 +13,7 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           // The keyboard hook is built separately as native/bin/yu-hotkey.exe.
-          // UI Automation reaches into other apps' accessibility providers. A
-          // provider fault must kill this child, never the UI.
-          uia: resolve('src/main/uia/child.ts'),
+          // UIA is built separately as native/bin/yu-uia.exe for fault isolation.
           // The speech recogniser owns ~230 MB of native weights. Out of
           // process, 释放内存 is a kill instead of a wish, and a faulty model
           // cannot take the UI down with it.

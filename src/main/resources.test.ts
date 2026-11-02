@@ -7,6 +7,16 @@ function metric(pid: number, type: string, name?: string): Electron.ProcessMetri
 const model = { loaded: false, autoResume: true }
 
 describe('resource measurement', () => {
+  it('includes the native UIA PID and deduplicates it independently of the hotkey PID', () => {
+    const read = (pid: number) => ({ privateResidentBytes: pid * 10, workingSetBytes: pid * 20, committedBytes: pid * 30 })
+    const result = collectResources([metric(1, 'Browser')], model, read, 7, 8)
+    expect(result.processes.map(p => [p.pid, p.role])).toEqual([[1, 'main'], [7, 'hotkeys'], [8, 'context']])
+    expect(result.privateResidentBytes).toBe(160)
+    expect(result.workingSetBytes).toBe(320)
+    expect(result.committedBytes).toBe(480)
+    expect(collectResources([metric(8, 'Utility', 'typeless-uia')], model, read, undefined, 8).processes).toHaveLength(1)
+    expect(collectResources([], model, () => null, undefined, 8).workingSetBytes).toBeNull()
+  })
   it('includes the native hotkey PID in every total without double counting it', () => {
     const read = (pid: number) => ({ privateResidentBytes: pid * 10, workingSetBytes: pid * 20, committedBytes: pid * 30 })
     const result = collectResources([metric(1, 'Browser')], model, read, 7)
