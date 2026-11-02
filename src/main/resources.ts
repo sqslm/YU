@@ -64,9 +64,10 @@ function roleOf(metric: Electron.ProcessMetric): string {
 export function collectResources(
   metrics: Electron.ProcessMetric[],
   localModel: ResourceUsage['localModel'],
-  readMemory: (pid: number) => ProcessMemory | null = windowsMemory
+  readMemory: (pid: number) => ProcessMemory | null = windowsMemory,
+  hotkeyPid?: number
 ): ResourceUsage {
-  const processes = metrics.map((metric) => {
+  const processes: ResourceUsage['processes'] = metrics.map((metric) => {
     const memory = readMemory(metric.pid)
     return {
       pid: metric.pid,
@@ -76,11 +77,22 @@ export function collectResources(
       committedBytes: memory?.committedBytes ?? (metric.memory.privateBytes === undefined ? null : metric.memory.privateBytes * 1024)
     }
   })
+  if (hotkeyPid !== undefined && !processes.some(p => p.pid === hotkeyPid)) {
+    const memory = readMemory(hotkeyPid)
+    processes.push({
+      pid: hotkeyPid,
+      role: 'hotkeys',
+      privateResidentBytes: memory?.privateResidentBytes ?? null,
+      workingSetBytes: memory?.workingSetBytes ?? null,
+      committedBytes: memory?.committedBytes ?? null
+    })
+  }
   return {
     measuredAt: Date.now(),
     privateResidentBytes: processes.every((p) => p.privateResidentBytes !== null)
       ? processes.reduce((sum, p) => sum + p.privateResidentBytes!, 0) : null,
-    workingSetBytes: processes.reduce((sum, p) => sum + p.workingSetBytes, 0),
+    workingSetBytes: processes.every((p) => p.workingSetBytes !== null)
+      ? processes.reduce((sum, p) => sum + p.workingSetBytes!, 0) : null,
     committedBytes: processes.every((p) => p.committedBytes !== null)
       ? processes.reduce((sum, p) => sum + p.committedBytes!, 0) : null,
     processes,

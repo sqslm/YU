@@ -1,59 +1,98 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { resolve } from 'node:path'
 
-const native = vi.hoisted(() => ({
-  handler: null as null | ((code: number, message: number, key: unknown) => number),
-  receive: null as null | ((event: { data: unknown }) => void),
-  held: new Set<number>(),
-  post: vi.fn()
-}))
-
-vi.mock('koffi', () => ({ default: {
-  load: () => ({ func: (signature: string) => {
-    if (signature.includes('GetAsyncKeyState')) return (vk: number) => native.held.has(vk) ? 0x8000 : 0
-    if (signature.includes('CallNextHookEx')) return () => 0
-    if (signature.includes('PeekMessageW')) return () => 0
-    return () => 1
-  } }),
-  struct: () => ({}), proto: () => ({}), pointer: (value: unknown) => value,
-  register: (handler: typeof native.handler) => { native.handler = handler; return handler },
-  decode: (value: unknown) => value, address: () => 0, unregister: vi.fn()
-} }))
-
-beforeEach(async () => {
-  vi.useFakeTimers()
-  vi.resetModules()
-  native.held.clear()
-  native.post.mockClear()
-  vi.stubGlobal('process', { ...process, on: vi.fn(), parentPort: {
-    postMessage: native.post,
-    on: (_event: string, receive: typeof native.receive) => { native.receive = receive }
-  } })
-  await import('./child')
-  configure()
-})
-afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals() })
-
+// Keep the existing gesture assertions and run every trace through the actual
+// Rust executable. Replay never installs a hook or changes the user's keyboard.
+const executable = resolve('native/bin/yu-hotkey.exe')
+type Result = { events: { type: string; [key: string]: unknown }[]; swallowed: boolean | null; releases: number[]; waitMs: number }
+let trace: Record<string, unknown>[], held: Set<number>, now: number, clearAt: number
+let cached: Result[], cachedLength: number
+const native = { receive: (event: { data: Record<string, unknown> }) => trace.push({ ...event.data, at: now }) }
+function replay(): Result[] {
+  if (cachedLength === trace.length) return cached
+  const result = spawnSync(executable, ['--replay'], { input: JSON.stringify(trace), encoding: 'utf8', windowsHide: true })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(result.stderr)
+  cached = JSON.parse(result.stdout); cachedLength = trace.length
+  return cached
+}
+function clearEvents(): void { clearAt = trace.length }
+function tick(ms: number): void {
+  now += ms
+  trace.push({ type: 'tick', at: now, held: [...held] })
+}
 function configure(): void {
-  native.receive!({ data: { type: 'config', bindings: {
+  native.receive({ data: { type: 'config', bindings: {
     dictation: ['RightAlt'], ask: ['RightAlt', 'Space'], translate: ['RightAlt', 'RightShift']
   }, pasteLast: ['LeftCtrl', 'RightShift', 'V'], selection: ['LeftCtrl', 'RightShift', 'S'],
     selectionTranslate: ['LeftCtrl', 'RightShift', 'T'], reminder: ['LeftCtrl', 'RightShift', 'R'], assistant: ['LeftCtrl', 'RightShift', 'A'], screenshot: ['LeftCtrl', 'RightShift', 'X'], promptCycle: ['LeftCtrl', 'RightShift', 'P'], notes: [] } })
-  native.post.mockClear()
+  clearEvents()
 }
 function key(vk: number, down: boolean): number {
-  if (down) native.held.add(vk)
-  else native.held.delete(vk)
-  const swallowed = native.handler!(0, down ? 0x100 : 0x101, { vkCode: vk, scanCode: 0, flags: 0 })
-  vi.advanceTimersByTime(8)
-  return swallowed
+  if (down) held.add(vk); else held.delete(vk)
+  const index = trace.length
+  trace.push({ type: 'key', vk, down, at: now })
+  tick(8)
+  return Number(replay()[index].swallowed)
 }
-function events(type: string): unknown[] {
-  return native.post.mock.calls.map(([event]) => event).filter(event => event.type === type)
-}
+function events(type: string): unknown[] { return replay().slice(clearAt).flatMap(x => x.events).filter(event => event.type === type) }
+beforeEach(() => {
+  trace = []; held = new Set(); now = 1000; clearAt = 0; cached = []; cachedLength = -1
+  configure()
+})
+
+it('ignores injected traffic unless explicitly allowed by the replay probe', () => {
+  trace.push({ type: 'key', vk: 0xa5, down: true, at: now, flags: 0x10 })
+  trace.push({ type: 'key', vk: 0xa5, down: false, at: now + 1, flags: 0x10 })
+  expect(events('start')).toHaveLength(0)
+  expect(replay().at(-1)?.swallowed).toBe(false)
+  trace.push({ type: 'key', vk: 0xa5, down: true, at: now + 2, flags: 0x10, allowInjected: true })
+  trace.push({ type: 'key', vk: 0xa5, down: false, at: now + 3, flags: 0x10, allowInjected: true })
+  expect(events('start')).toHaveLength(1)
+})
+
+it('recognizes generic VK_SHIFT as the right physical qualifier by scan code', () => {
+  key(0xa5, true)
+  trace.push({ type: 'key', vk: 0x10, scan: 0x36, down: true, at: now })
+  trace.push({ type: 'key', vk: 0x10, scan: 0x36, down: false, at: now + 1 })
+  key(0xa5, false)
+  expect(events('start')).toEqual([expect.objectContaining({ mode: 'translate' })])
+})
+
+it('captures a physical shortcut once and retains release ownership after capture ends', () => {
+  native.receive({ data: { type: 'capture', active: true } })
+  expect(key(0xa1, true)).toBe(1); expect(key(0xa1, true)).toBe(1)
+  expect(events('capture-key')).toEqual([{ type: 'capture-key', token: 'RightShift', down: true }])
+  native.receive({ data: { type: 'capture', active: false } })
+  expect(key(0xa1, false)).toBe(1)
+  expect(key(0xa1, false)).toBe(0)
+  expect(events('start')).toHaveLength(0)
+})
+
+it('opens notes without a voice take and permits repeated complete chords', () => {
+  native.receive({ data: { type: 'config', bindings: {}, notes: ['LeftCtrl', 'LeftAlt', 'N'] } })
+  for (let i = 0; i < 2; i++) {
+    key(0xa2, true); key(0xa4, true); expect(key(0x4e, true)).toBe(1)
+    key(0x4e, false); key(0xa4, false); key(0xa2, false)
+  }
+  expect(events('notes-toggle')).toHaveLength(2)
+  expect(events('start')).toHaveLength(0)
+})
+
+it('retains the original primary when a custom longer chord lists its qualifier first', () => {
+  native.receive({ data: { type: 'config', bindings: { dictation: ['F8'], ask: ['LeftShift', 'F8'] } } })
+  key(0x77, true); key(0xa0, true); key(0x77, false)
+  expect(events('start')).toEqual([expect.objectContaining({ mode: 'ask' })])
+  key(0xa0, false)
+  expect(events('stop')).toHaveLength(0)
+  key(0x77, true)
+  expect(events('stop')).toEqual([expect.objectContaining({ mode: 'ask' })])
+})
 
 it('cycles prompts on each fresh main-key press while modifiers remain held', () => {
   native.receive!({ data: { type: 'config', bindings: {}, pasteLast: [], promptCycle: ['LeftCtrl', 'LeftAlt', 'S'] } })
-  native.post.mockClear()
+  clearEvents()
   key(0xa2, true); key(0xa4, true); key(0x53, true)
   expect(events('prompt-cycle')).toHaveLength(1)
   key(0x53, true)
@@ -124,7 +163,7 @@ describe('action shortcut release ordering', () => {
   })
   it('owns Escape through repeats and release while cancelling a recording, but passes it when idle', () => {
     expect(key(0x1b, true)).toBe(0); expect(key(0x1b, false)).toBe(0)
-    native.post.mockClear()
+    clearEvents()
     key(0xa5, true); key(0xa5, false)
     expect(key(0x1b, true)).toBe(1)
     expect(key(0x1b, true)).toBe(1)
@@ -162,14 +201,14 @@ describe('action shortcut release ordering', () => {
     expect(events(action)).toHaveLength(0)
     key(0xa2, false)
     expect(events(action)).toHaveLength(1)
-    vi.advanceTimersByTime(1000)
+    tick(1000)
     expect(events(action)).toHaveLength(1)
     expect(events('start')).toHaveLength(0)
   })
 
   it('Ctrl + Right Shift alone never starts a voice task', () => {
     key(0xa2, true); key(0xa1, true)
-    vi.advanceTimersByTime(3000)
+    tick(3000)
     key(0xa1, false); key(0xa2, false)
     expect(events('start')).toHaveLength(0)
     expect(events('selection')).toHaveLength(0)

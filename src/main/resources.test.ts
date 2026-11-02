@@ -7,6 +7,25 @@ function metric(pid: number, type: string, name?: string): Electron.ProcessMetri
 const model = { loaded: false, autoResume: true }
 
 describe('resource measurement', () => {
+  it('includes the native hotkey PID in every total without double counting it', () => {
+    const read = (pid: number) => ({ privateResidentBytes: pid * 10, workingSetBytes: pid * 20, committedBytes: pid * 30 })
+    const result = collectResources([metric(1, 'Browser')], model, read, 7)
+    expect(result.processes).toEqual([
+      expect.objectContaining({ pid: 1, role: 'main' }),
+      expect.objectContaining({ pid: 7, role: 'hotkeys' })
+    ])
+    expect(result.privateResidentBytes).toBe(80)
+    expect(result.workingSetBytes).toBe(160)
+    expect(result.committedBytes).toBe(240)
+    expect(collectResources([metric(7, 'Utility', 'typeless-hotkey')], model, read, 7).processes).toHaveLength(1)
+  })
+  it('keeps an unreadable native process visible and marks incomplete totals unavailable', () => {
+    const result = collectResources([metric(1, 'Browser')], model, () => null, 7)
+    expect(result.processes[1]).toEqual({ pid: 7, role: 'hotkeys', privateResidentBytes: null, workingSetBytes: null, committedBytes: null })
+    expect(result.privateResidentBytes).toBeNull()
+    expect(result.workingSetBytes).toBeNull()
+    expect(result.committedBytes).toBeNull()
+  })
   it('identifies the memory process separately from auxiliary processes', () => {
     expect(collectResources([metric(7, 'Utility', 'YU memory')], model, () => null).processes[0].role).toBe('memory')
   })

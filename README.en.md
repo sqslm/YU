@@ -126,7 +126,7 @@ The automation page lists the workflows you saved: describe a run of steps once,
 
 ## Quick start
 
-Requirements: Windows 10/11 x64, Node.js 22.18 or newer (the self-hosted server needs ≥ 22.5 because it uses `node:sqlite`), and pnpm 11.
+Requirements: Windows 10/11 x64, Node.js 22.18 or newer (the self-hosted server needs ≥ 22.5 because it uses `node:sqlite`), pnpm 11, and the Rust stable MSVC toolchain with Visual Studio C++ Build Tools / Windows SDK. Rust is a build dependency; users do not need it installed.
 
 ```powershell
 git clone https://github.com/sqslm/YU.git
@@ -239,7 +239,7 @@ The server only handles accounts and sync (history, notes, note audio, events, r
 
 ```
 Right Alt (tap / hold)
-  ↓  WH_KEYBOARD_LL global hook (utilityProcess + koffi, swallows its keys, leaves normal Alt behaviour intact)
+  ↓  WH_KEYBOARD_LL global hook (separate Rust process, swallows its keys, leaves normal Alt behaviour intact)
 hotkey child ──IPC──▶ main/pipeline
   ↓
 bar window (AudioWorklet, always-on warm stream, 16 kHz mono PCM16)
@@ -255,11 +255,11 @@ insert: clipboard paste → SendInput Unicode fallback → UIA fallback, then re
 history.sqlite (SQLite search, with sources and pipeline markers)
 ```
 
-The main process has four build entries for one reason — fault isolation: besides `index.ts`, the keyboard hook, the UIA client and local ASR each run in their own custom process. A wedged hook must not freeze the UI, another vendor's UIA provider crashing may only kill a child process, and local model weights (100–230 MB) can be killed and reloaded on demand.
+The Electron main process remains TypeScript. The keyboard hook runs in a separate Rust executable, `yu-hotkey.exe`; UIA, local ASR and memory models retain separate Electron utility processes. Hook/provider faults cannot freeze the UI, and local model processes can be terminated to reclaim memory. Newline-delimited JSON travels over inherited stdin/stdout pipes; the helper exits on pipe EOF. The packaged helper lives in `resources/native/`, outside ASAR, with the CRT linked statically so users do not need a separate VC++ runtime. The resource panel includes its PID and marks unreadable measurements unavailable.
 
 Modules worth calling out:
 
-- `src/main/hotkey/child.ts` — the global hook. `PeekMessageW` plus a 4 ms timer pump (a blocking `GetMessageW` would starve V8 and koffi callbacks would never run); gesture state is a ledger of hook events, and `GetAsyncKeyState` may only *remove* entries; the callback argument must be declared `const KBDLLHOOKSTRUCT *` to be decoded automatically.
+- `native/hotkey/` + `src/main/hotkey/host.ts` — the Rust keyboard hook and Electron lifecycle. Gestures run directly on keyboard events; idle waits indefinitely instead of polling every 4 ms. Only held keys require 25 ms lost-release reconciliation. Hook events remain authoritative; `GetAsyncKeyState` may only remove entries. Restart, suspension, shortcut capture and activity acknowledgements retain their existing interface.
 - `src/main/pipeline.ts` — the full lifecycle of one take (~2200 lines): `MIN_DURATION_MS=350` against accidental taps, `STOP_GRACE_MS=500` to wait for the final audio chunk, and a run token re-checked at every async hop so a cancelled take can never be inserted.
 - `src/main/insert.ts` — clipboard paste first; SendInput uses a hand-written 40-byte `INPUT` layout with `AttachThreadInput` before injection; the clipboard is restored only while it still holds our text.
 - `src/main/agent.ts` + `src/main/tools/` — Ask's scheduler and its 9 tools. Native `tool_calls` first, a strict JSON-intent fallback when the model can't call tools; `runTool` never throws and every network tool has a hard ≤8 s budget.
@@ -276,6 +276,9 @@ Modules worth calling out:
 ```powershell
 pnpm test                     # unit tests plus integration tests that start a real local server
 pnpm typecheck                # both the main-process and renderer projects
+pnpm test:native              # Rust gesture, key ownership and lost-release tests
+pnpm build:native             # also run automatically by dev/build/test/package
+pnpm benchmark:hotkey         # isolated old/new worker comparison; briefly uses F8
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
 # dictation, Ask + retrieval, multimodal)
@@ -287,7 +290,9 @@ node_modules\electron\dist\electron.exe .        # enable self-test via environm
 
 Debug switches (self-test mode, skip the silence gate, capture UI only, point at a specific FFmpeg binary) are environment variables; the readers are at the top of `src/main/index.ts` and in `src/main/audio/transcode.ts`. UI-only captures land in `screenshots/`, which is not committed.
 
-Stack: Electron 42, electron-vite 4, React 18, MUI 6, TypeScript 5.9, Vitest 4. There are only four runtime dependencies (`chrono-node`, `electron-updater`, `koffi`, `sherpa-onnx-node`); React and MUI exist only at development time.
+Stack: Electron 42, electron-vite 4, React 18, MUI 6, TypeScript 5.9, Rust and Vitest 4. The native hook uses `windows-sys` and `serde_json`, pinned in `native/hotkey/Cargo.lock`; other features retain their existing Node dependencies.
+
+The [raw hook benchmark](tests/yu-v2/evidence/rust-hotkey-20261103.json) compares two interleaved rounds per implementation in isolated Electron: private committed memory about 33–34 → 1 MiB, working set 61–64 → 5.3 MiB, and injected-key-to-host-start P95 about 16–17 → 0.3–0.5 ms. These are worker-only measurements, excluding UI, microphone and models. Idle CPU timing was too coarse to establish a reduction. Re-run with `pnpm benchmark:hotkey --baseline <old-commit> --output <report-path>`. Physical keyboards, UAC and lock-screen transitions still need manual acceptance.
 
 ## Known pitfalls
 

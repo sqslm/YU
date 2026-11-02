@@ -1,9 +1,9 @@
-import { utilityProcess, type UtilityProcess } from 'electron'
+import { app } from 'electron'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { HotkeyEvent, Mode, Settings } from '@shared/types'
 import { mt } from '@shared/mainI18n'
-
-const here = __dirname
 
 /**
  * Events the hook child reports. `cancel` (ESC while recording, or a discarded
@@ -47,12 +47,12 @@ export type HotkeyMessage =
   | { type: 'log'; line: string }
 
 /**
- * Owns the native keyboard hook, which lives in a utilityProcess so a stuck
+ * Owns the native Rust keyboard hook, in a separate process so a stuck
  * message pump or a native fault can never freeze the UI. Restarts the child if
  * it dies: an uninstalled hook means the user loses dictation entirely.
  */
 export class HotkeyHost {
-  private proc: UtilityProcess | null = null
+  private proc: ChildProcessWithoutNullStreams | null = null
   private settings: Settings | null = null
   private restarts = 0
   /** Set by `stop()` so a deliberate teardown is not mistaken for a crash. */
@@ -68,6 +68,9 @@ export class HotkeyHost {
     private readonly onLog: (line: string) => void = () => {}
   ) {}
 
+  /** Native children are absent from Electron's app.getAppMetrics(). */
+  get pid(): number | undefined { return this.proc?.pid }
+
   start(settings: Settings): void {
     if (this.proc) { this.apply(settings); return }
     if (this.restartTimer) clearTimeout(this.restartTimer)
@@ -79,19 +82,32 @@ export class HotkeyHost {
   }
 
   private spawn(): void {
-    const entry = join(here, 'hotkey.js')
+    const entry = app.isPackaged
+      ? join(process.resourcesPath, 'native', 'yu-hotkey.exe')
+      : join(app.getAppPath(), 'native', 'bin', 'yu-hotkey.exe')
     this.onLog(`[hotkey] spawning ${entry}`)
-    const child = utilityProcess.fork(entry, [], {
-      serviceName: 'typeless-hotkey',
-      stdio: 'inherit'
-    })
+    const child = spawn(entry, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     this.proc = child
-    // kill() can return false before a utility process has a PID.
+    // kill() can return false before a process has a PID.
     child.once('spawn', () => { if (this.proc !== child || this.stopping) child.kill() })
 
-    child.on('message', (message: unknown) => {
+    child.on('error', error => this.onLog(`[hotkey] spawn error: ${error.message}`))
+    child.stdin.on('error', error => {
       if (this.proc !== child || this.stopping) return
-      const msg = message as HotkeyMessage
+      this.onLog(`[hotkey] pipe error: ${error.message}`)
+      child.kill()
+    })
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (text: string) => this.onLog(`[hotkey] ${text.trim()}`))
+    const lines = createInterface({ input: child.stdout })
+    lines.on('line', (line: string) => {
+      if (this.proc !== child || this.stopping) return
+      let msg: HotkeyMessage
+      try { msg = JSON.parse(line) as HotkeyMessage } catch {
+        this.onLog('[hotkey] invalid helper response')
+        child.kill()
+        return
+      }
       if (msg.type === 'ready') {
         this.onLog('[hotkey] ready')
         this.pushConfig()
@@ -117,10 +133,12 @@ export class HotkeyHost {
       this.onEvent(msg)
       // Main may reject a start while busy or in an excluded app. Acknowledge
       // its actual state even when unchanged, so the hook cannot retain a ghost take.
-      if (msg.type === 'start' && this.proc === child && !this.stopping) child.postMessage({ type: 'activity', value: this.activity })
+      if (msg.type === 'start' && this.proc === child && !this.stopping) this.send({ type: 'activity', value: this.activity })
     })
 
-    child.on('exit', (code) => {
+    // close also runs after spawn failures, when no exit event is emitted.
+    child.on('close', (code) => {
+      lines.close()
       if (this.proc !== child) return
       this.onLog(`[hotkey] exited with ${code}`)
       this.proc = null
@@ -147,6 +165,10 @@ export class HotkeyHost {
     })
   }
 
+  private send(message: object): void {
+    if (this.proc?.stdin.writable) this.proc.stdin.write(JSON.stringify(message) + '\n')
+  }
+
   /** Pushes the current shortcuts (and enabled flag) to the hook process. */
   apply(settings: Settings): void {
     this.settings = settings
@@ -160,7 +182,7 @@ export class HotkeyHost {
     for (const [mode, binding] of Object.entries(settings.hotkeys.bindings)) {
       bindings[mode] = binding.keys
     }
-    this.proc.postMessage({
+    this.send({
       type: 'config',
       bindings,
       pasteLast: settings.hotkeys.pasteLastKeys.keys,
@@ -173,12 +195,12 @@ export class HotkeyHost {
       reminder: settings.hotkeys.reminderKeys.keys,
       activation: settings.activationMode
     })
-    this.proc.postMessage({ type: 'enabled', value: settings.hotkeys.enabled && !this.capturing && !this.suspended })
+    this.send({ type: 'enabled', value: settings.hotkeys.enabled && !this.capturing && !this.suspended })
     // A re-spawned child starts with the card flag cleared; restore it so ESC
     // keeps working on a card that was already up when the hook restarted.
-    this.proc.postMessage({ type: 'card', open: this.cardOpen })
-    this.proc.postMessage({ type: 'capture', active: this.capturing })
-    this.proc.postMessage({ type: 'activity', value: this.activity })
+    this.send({ type: 'card', open: this.cardOpen })
+    this.send({ type: 'capture', active: this.capturing })
+    this.send({ type: 'activity', value: this.activity })
     this.onLog(`[hotkey] config activation=${settings.activationMode} enabled=${settings.hotkeys.enabled}`)
     this.onLog(`[hotkey] notes chord ${(settings.hotkeys.notesKeys?.keys ?? []).join('+') || '(none)'}`)
   }
@@ -191,25 +213,25 @@ export class HotkeyHost {
    */
   setCardOpen(open: boolean): void {
     this.cardOpen = open
-    this.proc?.postMessage({ type: 'card', open })
+    this.send({ type: 'card', open })
   }
 
   setActivity(value: 'idle' | 'recording' | 'working'): void {
     if (value === this.activity) return
     this.activity = value
-    this.proc?.postMessage({ type: 'activity', value })
+    this.send({ type: 'activity', value })
   }
 
   private suspended = false
   setSuspended(value: boolean): void {
     this.suspended = value
-    this.proc?.postMessage({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !this.capturing && !value })
+    this.send({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !this.capturing && !value })
   }
 
   setCapturing(active: boolean): void {
     this.capturing = active
-    this.proc?.postMessage({ type: 'capture', active })
-    this.proc?.postMessage({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !active && !this.suspended })
+    this.send({ type: 'capture', active })
+    this.send({ type: 'enabled', value: Boolean(this.settings?.hotkeys.enabled) && !active && !this.suspended })
   }
 
   /**
@@ -220,7 +242,7 @@ export class HotkeyHost {
    * like a completion instead of a start.
    */
   reset(): void {
-    this.proc?.postMessage({ type: 'reset' })
+    this.send({ type: 'reset' })
     this.onLog('[hotkey] state reset')
   }
 

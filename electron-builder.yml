@@ -29,6 +29,8 @@ files:
   - '!node_modules/pdfjs-dist/**/*.map'
   - '!node_modules/pdfjs-dist/**/*.min.mjs'
 extraResources:
+  - from: native/bin/yu-hotkey.exe
+    to: native/yu-hotkey.exe
   - from: resources/system-volume.ps1
     to: system-volume.ps1
   - from: resources/voice-wake.ps1

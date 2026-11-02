@@ -12,9 +12,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
-          // The low-level keyboard hook must not share a process with the UI:
-          // it owns a message pump and swallows keys.
-          hotkey: resolve('src/main/hotkey/child.ts'),
+          // The keyboard hook is built separately as native/bin/yu-hotkey.exe.
           // UI Automation reaches into other apps' accessibility providers. A
           // provider fault must kill this child, never the UI.
           uia: resolve('src/main/uia/child.ts'),

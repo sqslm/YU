@@ -1821,7 +1821,7 @@ function registerIpc(): void {
     await shell.openPath(app.getPath('userData'))
   })
   const resources = (): ReturnType<typeof collectResources> =>
-    ({ ...collectResources(app.getAppMetrics(), localAsr.memoryState()), gameMode: gameMode.snapshot() })
+    ({ ...collectResources(app.getAppMetrics(), localAsr.memoryState(), undefined, hotkeys?.pid), gameMode: gameMode.snapshot() })
   handle('app:resources', resources)
   handle('app:gameMode', (_event, active: unknown) => {
     if (typeof active !== 'boolean') throw new Error('Invalid game mode')

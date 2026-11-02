@@ -152,7 +152,7 @@ ICS 导入保留 IANA 时区所表示的实际时间及多日全天事件的结�
 
 ## 快速开始
 
-需要 Windows 10/11 x64、Node.js 22.18 或更新（自建服务端要求 ≥ 22.5，它用 `node:sqlite`）和 pnpm 11。
+需要 Windows 10/11 x64、Node.js 22.18 或更新（自建服务端要求 ≥ 22.5，它用 `node:sqlite`）、pnpm 11，以及 Rust stable MSVC 工具链与 Visual Studio C++ Build Tools / Windows SDK。Rust 仅用于构建，最终用户无需安装。
 
 ```powershell
 git clone https://github.com/sqslm/YU.git
@@ -269,7 +269,7 @@ pnpm start                # 或按 server/README.md 用 Docker
 
 ```
 右 Alt（按一下 / 按住）
-  ↓  WH_KEYBOARD_LL 全局钩子（utilityProcess + koffi，吞键，不影响原本的 Alt 行为）
+  ↓  WH_KEYBOARD_LL 全局钩子（独立 Rust 进程，吞键，不影响原本的 Alt 行为）
 hotkey child ──IPC──▶ main/pipeline
   ↓
 bar 窗口（AudioWorklet，常开暖流，16 kHz 单声道 PCM16）
@@ -284,11 +284,11 @@ pipeline：静音判断 → 拼接 WAV → trim → 路由
 history.sqlite（SQLite 检索，含来源与链路标记）
 ```
 
-主进程有四个构建入口，为的是故障隔离：`index.ts` 之外，键盘钩子、UIA、本地 ASR 各跑在独立的自定义进程里——钩子卡死不能冻结界面，别家应用的 UIA provider 崩了只杀子进程，本地模型权重（100–230 MB）可以随时 kill 释放。
+Electron 主进程保留 TypeScript；热键由独立 Rust 程序 `yu-hotkey.exe` 负责，UIA、本地 ASR 和记忆模型仍使用独立 Electron utilityProcess。钩子卡死不能冻结界面，别家应用的 UIA provider 崩了只杀子进程，本地模型可按需终止进程释放。热键程序通过继承的标准输入输出管道收发逐行 JSON，父进程管道关闭时退出；打包后位于 `resources/native/`，不放进 ASAR，也不要求用户另装 VC++ 运行库。资源面板按实际 PID 计入 Rust 进程，读取失败的指标显示为不可用。
 
 几个值得单独说明的模块：
 
-- `src/main/hotkey/child.ts` — 全局键盘钩子。`PeekMessageW` + 4 ms 定时器泵消息（阻塞式 `GetMessageW` 会让 V8 无法执行 koffi 回调）；手势状态以钩子事件账本为准，`GetAsyncKeyState` 只允许「删除」条目；回调指针必须声明成 `const KBDLLHOOKSTRUCT *` 才会自动解码。
+- `native/hotkey/` + `src/main/hotkey/host.ts` — Rust 全局键盘钩子与 Electron 进程管理。Windows 消息直接驱动手势，空闲无限等待，不再用 4 ms 轮询；仅按键仍被记为按下时每 25 ms 核对丢失的释放事件。手势以钩子账本为准，`GetAsyncKeyState` 只允许删除条目，不把吞掉的按键误判为没按。退出、崩溃重启、暂停、快捷键录制与主进程活动状态沿用现有接口。
 - `src/main/pipeline.ts` — 一次听写的完整生命周期（2200 行）：`MIN_DURATION_MS=350` 防误触、`STOP_GRACE_MS=500` 等最后一块音频、每步 async 都用 run token 复检，取消之后绝不可能再插入。
 - `src/main/insert.ts` — 剪贴板整段粘贴优先，SendInput 用 40 字节手写 `INPUT` 布局，注入前 `AttachThreadInput` 强制前台；剪贴板只在内容仍是我们写的时才恢复。
 - `src/main/agent.ts` + `src/main/tools/` — Ask 的调度与 9 个工具。原生 `tool_calls` 优先，不支持时降级为严格 JSON 意图；`runTool` 永不抛异常，网络类工具每个都有 ≤8 秒的硬预算。
@@ -305,6 +305,9 @@ history.sqlite（SQLite 检索，含来源与链路标记）
 ```powershell
 pnpm test                     # 单元测试 + 自动拉起真实本地服务端的联调测试
 pnpm typecheck                # 主进程与渲染层两套 project 都查
+pnpm test:native              # Rust 手势、吞键配对与丢失释放回归
+pnpm build:native             # 只编译热键程序；dev / build / test / package 自动执行
+pnpm benchmark:hotkey         # 隔离比较重构前后辅助进程，测试期间短暂使用 F8
 
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）
 pnpm mock
@@ -315,7 +318,9 @@ node_modules\electron\dist\electron.exe .        # 启动前按 README 顶部的
 
 调试开关（自检模式、跳过静音门槛、只截 UI、指定 FFmpeg 可执行文件）都通过环境变量控制，读取处见 `src/main/index.ts` 顶部的常量与 `src/main/audio/transcode.ts`。只截 UI 时生成的图片落在 `screenshots/`，该目录不入库。
 
-技术栈：Electron 42 + electron-vite 4 + React 18 + MUI 6 + TypeScript 5.9 + Vitest 4。运行时依赖只有四个（`chrono-node`、`electron-updater`、`koffi`、`sherpa-onnx-node`），React 和 MUI 只在开发期存在。
+技术栈：Electron 42 + electron-vite 4 + React 18 + MUI 6 + TypeScript 5.9 + Rust + Vitest 4。热键原生依赖为 `windows-sys` 和 `serde_json`，固定版本见 `native/hotkey/Cargo.lock`；其它功能继续沿用现有 Node 依赖。
+
+热键重构的[原始测量](tests/yu-v2/evidence/rust-hotkey-20261103.json)采用同机隔离 Electron、交错两轮新旧进程比较：私有提交内存约 33–34 → 1 MiB，工作集约 61–64 → 5.3 MiB，注入按键到主进程收到开始事件的 P95 约 16–17 → 0.3–0.5 ms。仅测热键辅助进程，不包含页面、麦克风或模型；待机 CPU 计时粒度有限，未据此宣称降幅。可用 `pnpm benchmark:hotkey --baseline <旧提交> --output <报告路径>` 重测。实体键盘、UAC 与锁屏切换仍需人工验收。
 
 ## 已知坑
 

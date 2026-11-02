@@ -37,6 +37,11 @@
 !/scripts/evaluate-memory.cjs
 !/scripts/verify-memory-runtime.cjs
 !/scripts/benchmark-memory.cjs
+!/scripts/build-native.mjs
+!/scripts/benchmark-hotkey.mjs
+!/native/
+/native/bin/
+/native/**/target/
 **/node_modules/
 **/data/
 **/.env

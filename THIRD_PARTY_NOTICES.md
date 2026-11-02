@@ -6,6 +6,18 @@ The tables below record production dependencies and bundled renderer dependencie
 
 Optional speech models are downloaded separately and are not included in the installer or source archive. Their own upstream model licenses apply.
 
+The Rust keyboard helper statically incorporates the following crates under their MIT license option. Windows APIs are linked from the operating system. Exact dependency versions and checksums are locked in `native/hotkey/Cargo.lock`.
+
+| Native crate | Version | License text |
+| --- | --- | --- |
+| windows-sys | 0.61.2 | [MIT](licenses/rust-windows-sys-0.61.2-MIT) |
+| windows-link | 0.2.1 | [MIT](licenses/rust-windows-link-0.2.1-MIT) |
+| serde_json | 1.0.151 | [MIT](licenses/rust-serde_json-1.0.151-MIT) |
+| serde_core | 1.0.229 | [MIT](licenses/rust-serde_core-1.0.229-MIT) |
+| itoa | 1.0.18 | [MIT](licenses/rust-itoa-1.0.18-MIT) |
+| memchr | 2.8.3 | [MIT](licenses/rust-memchr-2.8.3-MIT) |
+| zmij | 1.0.23 | [MIT](licenses/rust-zmij-1.0.23-MIT) |
+
 | Package | Version | License | License texts |
 | --- | --- | --- | --- |
 | pinyin-pro | 3.29.5 | MIT | [LICENSE](licenses/pinyin-pro-3.29.5-LICENSE) |

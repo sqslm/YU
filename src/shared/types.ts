@@ -435,13 +435,13 @@ export interface ResourceUsage {
   measuredAt: number
   /** Private physical RAM, excluding shared pages; null when unavailable. */
   privateResidentBytes: number | null
-  workingSetBytes: number
+  workingSetBytes: number | null
   committedBytes: number | null
   processes: Array<{
     pid: number
     role: string
     privateResidentBytes: number | null
-    workingSetBytes: number
+    workingSetBytes: number | null
     committedBytes: number | null
   }>
   localModel: { loaded: boolean; autoResume: boolean }
