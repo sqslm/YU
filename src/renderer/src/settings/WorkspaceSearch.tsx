@@ -4,6 +4,7 @@ import SearchRounded from '@mui/icons-material/SearchRounded'
 import type { LocalRecord } from '@shared/workspace'
 import { useTranslation } from 'react-i18next'
 import { searchErrorText } from './searchError'
+import { groupRecords } from './workspaceSearchGroups'
 
 const KINDS = { chat: '聊天', note: '随记', history: '历史记录', reminder: '提醒与待办', event: '日程' }
 
@@ -39,6 +40,7 @@ export function WorkspaceSearch({ rail = false, onOpen }: { rail?: boolean; onOp
     catch (error) { if (request === ticket.current) setError(messageOf(error)) }
     finally { if (request === ticket.current) setBusy(false) }
   }
+  const groups = groupRecords(items)
   return <>
     {rail
       ? <Tooltip title={t('搜索全部内容')} placement="right"><IconButton data-workspace-search aria-label={t('搜索全部内容')} onClick={() => setOpen(true)}><SearchRounded fontSize="small" /></IconButton></Tooltip>
@@ -71,9 +73,21 @@ export function WorkspaceSearch({ rail = false, onOpen }: { rail?: boolean; onOp
       <DialogContent>
         <TextField autoFocus fullWidth size="small" label={t('搜索聊天、附件、随记和历史')} value={query} onChange={event => setQuery(event.target.value)} inputProps={{ maxLength: 200 }} sx={{ mt: 1 }} />
         {error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
-        <List>{items.map(record => <ListItemButton key={`${record.kind}:${record.id}`} onClick={() => { void onOpen(record).then(() => setOpen(false)).catch(error => setError(messageOf(error))) }} sx={{ borderBottom: 1, borderColor: 'divider', alignItems: 'flex-start', py: 1.5 }}>
-          <Box sx={{ minWidth: 0, width: '100%' }}><Stack direction="row" justifyContent="space-between" gap={2}><Typography fontSize={13} fontWeight={600}>{record.title || t(KINDS[record.kind])}</Typography><Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{t(KINDS[record.kind])}</Typography></Stack><Typography fontSize={12} color="text.secondary" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: .5 }}>{record.text}</Typography></Box>
-        </ListItemButton>)}</List>
+        {groups.map((group, index) => <Box key={group.kind} data-workspace-group={group.kind} sx={{ mt: index ? 1.5 : 1 }}>
+          {/* Sticky so the kind stays visible while scrolling its own results; the rule
+              running to the right edge keeps the header from reading like a title. */}
+          <Stack direction="row" alignItems="center" gap={1} sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: 'background.paper', py: .75, pl: .25 }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'text.secondary' }}>{t(KINDS[group.kind])}</Typography>
+            <Typography sx={{ fontSize: 10.5, color: 'text.disabled' }}>{group.rows.length}</Typography>
+            <Box sx={{ flex: 1, height: 1, bgcolor: 'divider' }} />
+          </Stack>
+          <List dense disablePadding>{group.rows.map(record => <ListItemButton key={`${record.kind}:${record.id}`} data-workspace-hit onClick={() => { void onOpen(record).then(() => setOpen(false)).catch(error => setError(messageOf(error))) }} sx={{ borderRadius: 1.5, alignItems: 'flex-start', py: 1.25, px: 1 }}>
+            <Box sx={{ minWidth: 0, width: '100%' }}>
+              <Typography fontSize={13} fontWeight={600} noWrap>{record.title || t(KINDS[record.kind])}</Typography>
+              {!!record.text && <Typography fontSize={12} color="text.secondary" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: .25, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{record.text}</Typography>}
+            </Box>
+          </ListItemButton>)}</List>
+        </Box>)}
         {!busy && query.trim() && !items.length && !error && <Typography color="text.secondary">{t('没有找到匹配内容')}</Typography>}
         {busy && <Typography role="status" color="text.secondary">{t('搜索中…')}</Typography>}
         {more && <Button disabled={busy} onClick={() => void next()}>{t('加载更多')}</Button>}
