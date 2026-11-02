@@ -48,8 +48,8 @@ export class ChatService {
     private localQueries: () => Pick<AgentOptions, 'personal' | 'life' | 'toolAccess'> = () => ({})) { this.store = new ChatStore(path) }
   get busy(): boolean { return Boolean(this.active) }
   list(): ChatIndex { return { ...this.store.list(), busyThreadId: this.active?.threadId ?? null } }
-  get(id: string, limit?: number): ChatDetail {
-    const detail = this.store.get(id, limit)
+  get(id: string, limit?: number, messageId?: string): ChatDetail {
+    const detail = this.store.get(id, limit, messageId)
     if (this.active?.threadId === id) detail.messages = detail.messages.map(message => message.id === this.active!.messageId ? { ...message, text: this.active!.text } : message)
     return detail
   }

@@ -42,11 +42,15 @@ export class ChatStore {
   list(): { threads: ChatThread[]; groups: ChatGroup[] } {
     return { threads: this.db.prepare('SELECT * FROM chat_threads ORDER BY updatedAt DESC,id').all().map(row => ({ ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), profileId: row.profileId ?? null, effort: row.effort ?? null })) as unknown as ChatThread[], groups: this.db.prepare('SELECT * FROM chat_groups ORDER BY name,id').all() as unknown as ChatGroup[] }
   }
-  get(id: string, limit = 100): ChatDetail {
+  get(id: string, limit = 100, messageId?: string): ChatDetail {
     if (typeof id !== 'string' || !Number.isInteger(limit) || limit < 1 || limit > 10000) throw Error('无效的对话请求')
     const row = this.db.prepare('SELECT * FROM chat_threads WHERE id=?').get(id)
     if (!row) throw Error('对话不存在，请刷新')
-    const messages = this.db.prepare('SELECT * FROM (SELECT * FROM chat_messages WHERE threadId=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(id, limit)
+    const target = messageId ? this.db.prepare('SELECT seq FROM chat_messages WHERE threadId=? AND id=?').get(id, messageId) : undefined
+    if (messageId && !target) throw Error('原记录已不存在，请刷新后重试')
+    const messages = target
+      ? this.db.prepare('SELECT * FROM chat_messages WHERE threadId=? AND seq>=? ORDER BY seq LIMIT ?').all(id, Number(target.seq) - 1, limit)
+      : this.db.prepare('SELECT * FROM (SELECT * FROM chat_messages WHERE threadId=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(id, limit)
     return { ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), profileId: row.profileId ?? null, effort: row.effort ?? null, messages: messages.map(message => ({ id: message.id, role: message.role, text: message.text, state: message.state, createdAt: message.createdAt, sources: JSON.parse(String(message.sources)), records: JSON.parse(String(message.records)), attachments: this.db.prepare('SELECT id,name,size,kind,thumbnail,truncated FROM chat_attachments WHERE messageId=? ORDER BY rowid').all(String(message.id)).map(file => ({ ...file, truncated: Boolean(file.truncated) })) })) as ChatMessage[], total: Number(this.db.prepare('SELECT COUNT(*) AS n FROM chat_messages WHERE threadId=?').get(id)!.n) } as ChatDetail
   }
   create(groupId: string | null = null): ChatDetail {
@@ -54,6 +58,15 @@ export class ChatStore {
     const id = randomUUID()
     this.db.prepare('INSERT INTO chat_threads(id,title,groupId,updatedAt) VALUES(?,?,?,?)').run(id, '新对话', groupId, Date.now())
     return this.get(id)
+  }
+  search(query: string, limit: number): LocalRecord[] {
+    const needle = query.toLowerCase()
+    return this.db.prepare(`SELECT m.id,m.threadId,m.createdAt,t.title,
+      CASE WHEN instr(lower(m.text),?)>0 THEN m.text ELSE coalesce((SELECT a.name||char(10)||coalesce(a.text,'') FROM chat_attachments a WHERE a.messageId=m.id AND instr(lower(a.name||char(10)||coalesce(a.text,'')),?)>0 LIMIT 1),m.text) END AS text
+      FROM chat_messages m JOIN chat_threads t ON t.id=m.threadId
+      WHERE instr(lower(m.text),?)>0 OR instr(lower(t.title),?)>0 OR EXISTS(SELECT 1 FROM chat_attachments a WHERE a.messageId=m.id AND instr(lower(a.name||char(10)||coalesce(a.text,'')),?)>0)
+      ORDER BY m.createdAt DESC,m.seq DESC LIMIT ?`).all(needle, needle, needle, needle, needle, limit)
+      .map(row => ({ kind: 'chat', id: String(row.id), threadId: String(row.threadId), title: String(row.title), text: String(row.text), at: Number(row.createdAt) }))
   }
   private group(id: string | null): void {
     if (id !== null && (typeof id !== 'string' || !this.db.prepare('SELECT id FROM chat_groups WHERE id=?').get(id))) throw Error('分组不存在')

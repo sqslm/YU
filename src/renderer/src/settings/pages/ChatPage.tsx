@@ -44,7 +44,7 @@ function llmChoices(settings: Settings): Array<{ id: string; label: string }> {
   return settings.profiles.filter(profile => profile.kind === 'llm' && profile.enabled).sort((a, b) => rank(a.id) - rank(b.id)).map(profile => ({ id: profile.id, label: (profile.model || profile.name).trim() || profile.id }))
 }
 
-export function ChatPage({ onModels, onOpenRecord }: { onModels(): void; onOpenRecord(record: LocalRecord): Promise<void> }): JSX.Element {
+export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): void; onOpenRecord(record: LocalRecord): Promise<void>; focusRecord?: LocalRecord }): JSX.Element {
   const { t } = useTranslation()
   const [index, setIndex] = useState<ChatIndex>({ threads: [], groups: [], busyThreadId: null })
   const [selected, setSelected] = useState<string | null>(null), selectedRef = useRef<string | null>(null)
@@ -65,13 +65,14 @@ export function ChatPage({ onModels, onOpenRecord }: { onModels(): void; onOpenR
   const [navOpen, setNavOpen] = useState<boolean>(() => !stored<boolean>('chat.nav.collapsed', false))
   const [models, setModels] = useState<Array<{ id: string; label: string }>>([])
   const [draftModel, setDraftModel] = useState<{ profileId: string | null; effort: string } | null>(null), [modelMenu, setModelMenu] = useState<HTMLElement | null>(null)
+  const focusedRef = useRef<string | undefined>(), [focused, setFocused] = useState<string | undefined>()
   const toggleNav = (): void => setNavOpen(open => { remember('chat.nav.collapsed', open); return !open })
   const toggleGroup = (key: string): void => setCollapsedGroups(previous => { const next = previous.includes(key) ? previous.filter(item => item !== key) : [...previous, key]; remember('chat.groups.collapsed', next); return next })
   const loadModels = useCallback(async (): Promise<void> => {
     try { setModels(llmChoices(await window.api.settings.get())) } catch { /* an unreadable list must not block chatting: the menu then offers the settings entry */ }
   }, [])
   useEffect(() => { void loadModels() }, [loadModels])
-  const choose = (id: string | null): void => { setError(''); selectedRef.current = id; setSelected(id); limitRef.current = 100; setLimit(100); nearBottom.current = true }
+  const choose = (id: string | null): void => { focusedRef.current = undefined; setFocused(undefined); setError(''); selectedRef.current = id; setSelected(id); limitRef.current = 100; setLimit(100); nearBottom.current = true }
   const refresh = useCallback(async (): Promise<void> => {
     const request = ++ticket.current
     try {
@@ -80,7 +81,7 @@ export function ChatPage({ onModels, onOpenRecord }: { onModels(): void; onOpenR
       setIndex(next)
       let id = selectedRef.current
       if (id && !next.threads.some(row => row.id === id)) { id = next.threads[0]?.id ?? null; selectedRef.current = id; setSelected(id) }
-      const row = id ? await window.api.chat.get(id, limitRef.current) : null
+      const row = id ? await window.api.chat.get(id, limitRef.current, focusedRef.current) : null
       if (ticket.current === request) setDetail(row)
     } catch (error) { if (ticket.current === request) setError(messageOf(error)) }
     finally { if (ticket.current === request) setLoading(false) }
@@ -96,6 +97,12 @@ export function ChatPage({ onModels, onOpenRecord }: { onModels(): void; onOpenR
     return () => { ++ticket.current; off() }
   }, [refresh])
   useEffect(() => { void refresh() }, [selected, limit, refresh])
+  useEffect(() => {
+    if (!focusRecord?.threadId) return
+    choose(focusRecord.threadId); focusedRef.current = focusRecord.id; setFocused(focusRecord.id); nearBottom.current = false
+    void refresh()
+  }, [focusRecord, refresh])
+  useEffect(() => { if (focused) Array.from(scroll.current?.querySelectorAll<HTMLElement>('[data-message-id]') ?? []).find(el => el.dataset.messageId === focused)?.scrollIntoView({ block: 'center' }) }, [focused, detail])
   useEffect(() => { if (nearBottom.current) scroll.current?.scrollTo({ top: scroll.current.scrollHeight }) }, [detail?.messages, status])
   useEffect(() => registerGameModePreparation(async () => !index.busyThreadId && !Object.values(drafts).some(text => text.trim()) && !Object.values(files).some(items => items.length)), [drafts, files, index.busyThreadId])
   const draftKey = selected ?? 'new', draft = drafts[draftKey] ?? ''
@@ -225,13 +232,14 @@ export function ChatPage({ onModels, onOpenRecord }: { onModels(): void; onOpenR
       </Stack>
       {error && <Alert severity="error" onClose={() => setError('')} action={<Button color="inherit" size="small" onClick={() => { setError(''); void refresh() }}>{t('刷新')}</Button>}>{error.replace(/^Error: /, '')}</Alert>}
       <Box ref={scroll} onScroll={event => { const el = event.currentTarget; nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 2, lg: 4 }, py: 2.5 }}>
-        {detail && detail.total > detail.messages.length && <Button fullWidth size="small" onClick={() => { nearBottom.current = false; limitRef.current += 100; setLimit(limitRef.current) }}>{t('加载更早消息')}</Button>}
+        {focused && <Button onClick={() => { focusedRef.current = undefined; setFocused(undefined); nearBottom.current = true; void refresh() }}>{t('回到最新消息')}</Button>}
+        {!focused && detail && detail.total > detail.messages.length && <Button fullWidth size="small" onClick={() => { nearBottom.current = false; limitRef.current += 100; setLimit(limitRef.current) }}>{t('加载更早消息')}</Button>}
         {!detail?.messages.length && <Box sx={{ maxWidth: 460, mx: 'auto', pt: { xs: '5vh', lg: '9vh' }, textAlign: 'center' }}>
           <Box aria-hidden sx={{ width: 64, height: 64, mx: 'auto', mb: 3, display: 'grid', placeItems: 'center', color: 'primary.main', bgcolor: 'action.selected', border: 1, borderColor: 'divider', borderRadius: '20px' }}><GraphicEqRounded sx={{ fontSize: 30 }} /></Box>
           <Typography component="h1" sx={{ fontSize: { xs: 28, lg: 36 }, fontWeight: 500, letterSpacing: -1, mb: 1.5 }}>{t('和语聊聊')}<Box component="span" sx={{ color: 'primary.main' }}>.</Box></Typography>
           <Typography color="text.secondary" role={loading ? 'status' : undefined} sx={{ lineHeight: 2, fontSize: 13, maxWidth: 350, mx: 'auto' }}>{loading ? t('正在读取对话…') : t('提问、梳理想法，或一起解决问题。对话保存在本机，可按分组整理。')}</Typography>
         </Box>}
-        {detail?.messages.map(message => <Box key={message.id} data-chat-message={message.role} sx={{ maxWidth: 760, mx: 'auto', mb: 3, display: 'flex', flexDirection: 'column', alignItems: message.role === 'user' ? 'flex-end' : 'stretch' }}>
+        {detail?.messages.map(message => <Box key={message.id} data-chat-message={message.role} data-message-id={message.id} sx={{ maxWidth: 760, mx: 'auto', mb: 3, display: 'flex', flexDirection: 'column', alignItems: message.role === 'user' ? 'flex-end' : 'stretch', outline: message.id === focused ? '2px solid' : undefined, outlineColor: 'primary.main', borderRadius: 2 }}>
           <Typography sx={{ fontSize: 10.5, color: 'text.secondary', mb: .8 }}>{t(message.role === 'user' ? '你' : '语')}</Typography>
           {!!message.attachments?.length && <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 1 }}>{message.attachments.map(file => <Button key={file.id} variant="outlined" size="small" title={file.name} onClick={() => { void window.api.chat.attachment(detail.id, file.id).then(setPreview).catch(error => setError(messageOf(error))) }} sx={{ textTransform: 'none', maxWidth: 220, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: .5 }}>
             {file.thumbnail && <Box component="img" src={file.thumbnail} alt={file.name} sx={{ height: 65, maxWidth: 160, objectFit: 'contain' }} />}

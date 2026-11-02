@@ -21,6 +21,7 @@ import { useSettings } from './useSettings'
 import { SettingsDialog } from './SettingsDialog'
 import { HomePage } from './pages/Home'
 import { ChatPage } from './pages/ChatPage'
+import { WorkspaceSearch } from './WorkspaceSearch'
 import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded'
 import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
@@ -85,6 +86,7 @@ export function App(): JSX.Element {
   const [historyQuery, setHistoryQuery] = useState<string | undefined>(undefined)
   const [historyId, setHistoryId] = useState<string | undefined>()
   const [eventToOpen, setEventToOpen] = useState<LocalRecord | undefined>()
+  const [chatToOpen, setChatToOpen] = useState<LocalRecord | undefined>()
   const openRecord = async (input: LocalRecord): Promise<void> => {
     const record = await window.api.workspace.get(input)
     setSettingsOpen(false)
@@ -92,6 +94,7 @@ export function App(): JSX.Element {
     else if (record.kind === 'history') { setHistoryId(record.id); setHistoryQuery(''); setPage('history') }
     else if (record.kind === 'reminder') { setReminderView({ id: record.id }); setPage('reminders') }
     else if (record.kind === 'event') { setEventToOpen(record); setCalendarTab('schedule'); setPage('calendar') }
+    else if (record.kind === 'chat') { setChatToOpen(record); setPage('chat') }
   }
   /**
    * 简报 lives inside 日程 now, so the calendar owns which of the two panes is
@@ -290,6 +293,7 @@ export function App(): JSX.Element {
           </Box>
 
           <List component="nav" aria-label={translate('工作空间')} dense sx={{ px: rail ? 1 : 1.5, py: 0, overflowY: 'auto', minHeight: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: .5, px: rail ? 0 : 1, mb: 1 }}><WorkspaceSearch onOpen={openRecord} />{!rail && <Typography fontSize={12} color="text.secondary">{translate('搜索全部内容')}</Typography>}</Box>
             {NAV.map((item) => (
               <Box key={item.id}>
               {['chat', 'notes', 'history'].includes(item.id) && !rail && <Typography component="div" sx={{ px: 1.5, pt: item.id === 'chat' ? 0 : 2.5, pb: 1, fontSize: 10, letterSpacing: 1.2, color: t.textFaint, fontWeight: 600 }}>{translate(item.id === 'chat' ? '工作空间' : item.id === 'notes' ? '日常' : '资料库')}</Typography>}
@@ -370,7 +374,7 @@ export function App(): JSX.Element {
           <MissedReminders />
           <Box sx={{ flex: 1, minHeight: 0, overflow: page === 'home' || page === 'chat' ? 'hidden' : 'auto' }}>
             {page !== 'chat' && body()}
-            {(page === 'chat' || chatVisited) && <Box sx={{ display: page === 'chat' ? 'block' : 'none', height: '100%' }}><ChatPage onOpenRecord={openRecord} onModels={() => { setSettingsSection('models'); setSettingsOpen(true) }} /></Box>}
+            {(page === 'chat' || chatVisited) && <Box sx={{ display: page === 'chat' ? 'block' : 'none', height: '100%' }}><ChatPage focusRecord={chatToOpen} onOpenRecord={openRecord} onModels={() => { setSettingsSection('models'); setSettingsOpen(true) }} /></Box>}
           </Box>
         </Box>
       </Box>

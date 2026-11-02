@@ -18,13 +18,13 @@ ipcRenderer.on('card:hidden', () => { lastCard = null })
 
 const api: TypelessApi = {
   chat: {
-    list: () => ipcRenderer.invoke('chat:list'), get: (id, limit) => ipcRenderer.invoke('chat:get', id, limit),
+    list: () => ipcRenderer.invoke('chat:list'), get: (id, limit, messageId) => ipcRenderer.invoke('chat:get', id, limit, messageId),
     attachment: (id, attachmentId) => ipcRenderer.invoke('chat:attachment', id, attachmentId),
     create: group => ipcRenderer.invoke('chat:create', group ?? null), edit: input => ipcRenderer.invoke('chat:edit', input),
     send: (id, text, attachments) => ipcRenderer.invoke('chat:send', id, text, attachments), cancel: () => ipcRenderer.invoke('chat:cancel'),
     onEvent: callback => { const listener = (_event: Electron.IpcRendererEvent, event: import('@shared/chat').ChatEvent): void => callback(event); ipcRenderer.on('chat:event', listener); return () => ipcRenderer.removeListener('chat:event', listener) }
   },
-  workspace: { get: record => ipcRenderer.invoke('workspace:get', record) },
+  workspace: { get: record => ipcRenderer.invoke('workspace:get', record), search: (query, offset) => ipcRenderer.invoke('workspace:search', query, offset) },
   quota: {
     query: target => ipcRenderer.invoke('quota:query', target),
     refresh: () => ipcRenderer.invoke('quota:refresh')

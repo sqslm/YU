@@ -58,10 +58,11 @@ export interface UpdateState {
 export interface TypelessApi {
   workspace: {
     get(record: import('./workspace').LocalRecord): Promise<import('./workspace').LocalRecord>
+    search(query: string, offset?: number): Promise<import('./workspace').WorkspaceSearchPage>
   }
   chat: {
     list(): Promise<import('./chat').ChatIndex>
-    get(id: string, limit?: number): Promise<import('./chat').ChatDetail>
+    get(id: string, limit?: number, messageId?: string): Promise<import('./chat').ChatDetail>
     attachment(id: string, attachmentId: string): Promise<{ name: string; url?: string; text?: string }>
     create(groupId?: string | null): Promise<import('./chat').ChatDetail>
     edit(input: import('./chat').ChatEdit): Promise<void>

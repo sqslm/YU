@@ -1,6 +1,6 @@
 import { MemoryService } from './memory/host'
 import { ChatService } from './chat'
-import { readWorkspaceRecord } from './workspace'
+import { readWorkspaceRecord, searchWorkspace } from './workspace'
 import { explainSelection } from './explanation'
 import { setMemoryService } from './memory/registry'
 import { memoryIdleCheck } from './memory/idle'
@@ -1274,8 +1274,12 @@ function registerIpc(): void {
     chatOwner(event)
     return readWorkspaceRecord({ notes: () => notes.list().notes, chat: chats.store, history, reminders: () => reminders!.store.list(), events: () => calendar!.list() }, record)
   })
+  handle('workspace:search', (event, query: string, offset?: number) => {
+    chatOwner(event)
+    return searchWorkspace({ notes: () => notes.list().notes, chat: chats.store, history, reminders: () => reminders!.store.list(), events: () => calendar!.list() }, query, offset)
+  })
   handle('chat:list', event => { chatOwner(event); return chats.list() })
-  handle('chat:get', (event, id: string, limit?: number) => { chatOwner(event); return chats.get(id, limit) })
+  handle('chat:get', (event, id: string, limit?: number, messageId?: string) => { chatOwner(event); return chats.get(id, limit, messageId) })
   handle('chat:attachment', (event, id: string, attachmentId: string) => { chatOwner(event); return chats.store.attachment(id, attachmentId) })
   handle('chat:create', (event, group: string | null) => { chatOwner(event); return chats.create(group) })
   handle('chat:edit', (event, input: import('@shared/chat').ChatEdit) => { chatOwner(event); return chats.edit(input) })

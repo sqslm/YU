@@ -7,6 +7,7 @@ export interface LocalRecord {
   at: number
   threadId?: string
 }
+export interface WorkspaceSearchPage { items: LocalRecord[]; hasMore: boolean }
 export const LOCAL_QUERY_TOOLS = ['search_notes', 'search_history', 'list_reminders', 'list_events'] as const
 
 export function recordsFromTool(name: string, data: Record<string, unknown>): LocalRecord[] {
