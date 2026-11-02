@@ -63,6 +63,7 @@ export interface ToolContext {
   workflow?: WorkflowTools
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
+  onToolResult?: (name: string, result: ToolOutcome) => void
   allowedTools?: readonly string[]
   access?: () => Settings['assistantAccess']
   settings: Settings
@@ -863,6 +864,7 @@ async function runTaskTool(name: string, args: Record<string, unknown>, ctx: Too
   const status = result.status ?? (result.action || result.data.needsConfirmation === true || result.data.needsClarification === true || result.data.preview === true && result.data.applied === false
     ? 'awaiting_confirmation' : result.ok ? 'completed' : result.data.available === false ? 'unsupported' : 'failed')
   const outcome = { ...result, status, ...(task ? { taskId: task.id } : {}) }
+  ctx.onToolResult?.(name, outcome)
   const durationMs = Math.round(performance.now() - started)
   if (task && !outcome.reused) {
     task.receipts.push({ tool: name, state: status, durationMs })

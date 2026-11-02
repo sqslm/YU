@@ -24,6 +24,7 @@ const api: TypelessApi = {
     send: (id, text, attachments) => ipcRenderer.invoke('chat:send', id, text, attachments), cancel: () => ipcRenderer.invoke('chat:cancel'),
     onEvent: callback => { const listener = (_event: Electron.IpcRendererEvent, event: import('@shared/chat').ChatEvent): void => callback(event); ipcRenderer.on('chat:event', listener); return () => ipcRenderer.removeListener('chat:event', listener) }
   },
+  workspace: { get: record => ipcRenderer.invoke('workspace:get', record) },
   quota: {
     query: target => ipcRenderer.invoke('quota:query', target),
     refresh: () => ipcRenderer.invoke('quota:refresh')
@@ -181,6 +182,7 @@ const api: TypelessApi = {
     }
   },
   history: {
+    get: id => ipcRenderer.invoke('history:get', id),
     exportText: (ids, format) => ipcRenderer.invoke('history:export-text', ids, format),
     list: (query = ''): Promise<HistoryEntry[]> => ipcRenderer.invoke('history:list', query),
     latest: (): Promise<HistoryEntry | undefined> => ipcRenderer.invoke('history:latest'),

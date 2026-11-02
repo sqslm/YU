@@ -18,7 +18,7 @@ export interface ChatThread {
   profileId?: string | null
   effort?: string | null
 }
-export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; state: 'working' | 'done' | 'error' | 'cancelled'; sources: SearchResult[]; createdAt: number; attachments?: ChatAttachment[] }
+export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; state: 'working' | 'done' | 'error' | 'cancelled'; sources: SearchResult[]; createdAt: number; attachments?: ChatAttachment[]; records?: import('./workspace').LocalRecord[] }
 export interface ChatDetail extends ChatThread { messages: ChatMessage[]; total: number }
 export interface ChatIndex { threads: ChatThread[]; groups: ChatGroup[]; busyThreadId: string | null }
 export type ChatEdit = { action: 'rename'; id: string; name: string } | { action: 'move'; id: string; groupId: string | null } | { action: 'delete'; id: string } | { action: 'group-create'; name: string } | { action: 'group-rename'; id: string; name: string } | { action: 'group-delete'; id: string } | { action: 'model'; id: string; profileId: string | null; effort: string }

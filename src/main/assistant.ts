@@ -413,6 +413,10 @@ export class AssistantSession {
   }) {}
 
   get busy(): boolean { return this.controller !== null || this.trialSession !== null }
+  /** Chat shares the stores, while its own allowlist restricts them to queries. */
+  localQueries(): Pick<AgentOptions, 'personal' | 'life' | 'toolAccess'> {
+    return { personal: this.deps.personal, life: this.deps.life, toolAccess: () => this.deps.settings().assistantAccess }
+  }
   /** An isolated onboarding exchange shares real tools but never the user's thread. */
   async trial(input: string, signal: AbortSignal): Promise<AssistantTurn> {
     if (this.busy) throw new Error(mt('助手正在处理，请先停止当前任务'))

@@ -102,6 +102,7 @@ export interface AgentOptions {
   workflow?: ToolContext['workflow']
   windows?: ToolContext['windows']
   onLocalResult?: ToolContext['onLocalResult']
+  onToolResult?: ToolContext['onToolResult']
   conversation?: AgentConversation
   allowedTools?: readonly string[]
   /** Start a fresh conversation (the default for a new take). */
@@ -1684,6 +1685,7 @@ async function askTask(
     workflow: options.workflow,
     windows: options.windows,
     onLocalResult: options.onLocalResult,
+    onToolResult: options.onToolResult,
     allowedTools: options.allowedTools,
     settings,
     question,
@@ -1855,9 +1857,10 @@ async function askTask(
     }
 
     // 2. Search disabled: this is a pure LLM answer, no tools at all.
+    const localTools = Boolean(ctx.windows || ctx.personal || ctx.life || ctx.workflow)
     const offline = !settings.search.enabled || /不要联网|不用联网|无需联网|别搜索|不要搜索|不需要搜索|do not (?:search|browse)|don.t (?:search|browse)/i.test(question)
     if (offline) {
-      if (!ctx.windows) return await plain()
+      if (!localTools) return await plain()
       ctx.allowedTools = ctx.allowedTools?.filter(name => !['web_search', 'read_webpage', 'get_weather', 'open_search', 'open_url'].includes(name))
     }
 
@@ -1870,7 +1873,7 @@ async function askTask(
     }
 
     // 3. Router: native function calling first.
-    if (settings.search.decideWithModel || ctx.windows) {
+    if (settings.search.decideWithModel || localTools) {
       onStatus?.('正在思考…')
       const system = withAskExtra(settings, buildToolInstructionPrompt(formatToday(), context), options.identity)
       const native = await nativeToolLoop(settings, question, system, ctx, abort, log, {
@@ -1896,7 +1899,7 @@ async function askTask(
       }
 
       // 4. Fallback: strict JSON intent, executed once by this program.
-      if (ctx.windows) {
+      if (localTools) {
         const runs: ToolRun[] = []
         for (let step = 0; step < 4; step++) {
           abort.throwIfAborted()

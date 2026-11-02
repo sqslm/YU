@@ -16,6 +16,7 @@ import ChevronLeftRounded from '@mui/icons-material/ChevronLeftRounded'
 import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded'
 import { makeTheme, skinFor, onSystemThemeChange, resolveThemeMode } from './theme'
 import type { ThemeMode, ThemePack } from '@shared/types'
+import type { LocalRecord } from '@shared/workspace'
 import { useSettings } from './useSettings'
 import { SettingsDialog } from './SettingsDialog'
 import { HomePage } from './pages/Home'
@@ -82,6 +83,16 @@ export function App(): JSX.Element {
   }, [])
   /** Scene name the home page asked to look up; history seeds its search box with it. */
   const [historyQuery, setHistoryQuery] = useState<string | undefined>(undefined)
+  const [historyId, setHistoryId] = useState<string | undefined>()
+  const [eventToOpen, setEventToOpen] = useState<LocalRecord | undefined>()
+  const openRecord = async (input: LocalRecord): Promise<void> => {
+    const record = await window.api.workspace.get(input)
+    setSettingsOpen(false)
+    if (record.kind === 'note') { setNoteToOpen({ id: record.id }); setPage('notes') }
+    else if (record.kind === 'history') { setHistoryId(record.id); setHistoryQuery(''); setPage('history') }
+    else if (record.kind === 'reminder') { setReminderView({ id: record.id }); setPage('reminders') }
+    else if (record.kind === 'event') { setEventToOpen(record); setCalendarTab('schedule'); setPage('calendar') }
+  }
   /**
    * 简报 lives inside 日程 now, so the calendar owns which of the two panes is
    * showing. It is held here because the assistant still navigates to the
@@ -181,7 +192,7 @@ export function App(): JSX.Element {
   const body = (): JSX.Element => {
     if (!settings) return <Typography color="text.secondary">{i18n.t(i18n.t('读取设置…'))}</Typography>
     if (page === 'history') {
-      return <HistoryPage settings={settings} patch={patch} initialQuery={historyQuery} />
+      return <HistoryPage key={historyId ?? 'all'} settings={settings} patch={patch} initialQuery={historyQuery} initialId={historyId} onClearFocus={() => setHistoryId(undefined)} />
     }
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} openNote={noteToOpen} />
     if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen({ id }); setPage('notes') }} />
@@ -189,6 +200,7 @@ export function App(): JSX.Element {
       <CalendarPage
         settings={settings}
         tab={calendarTab}
+        focusEvent={eventToOpen}
         onTab={setCalendarTab}
         onOpenSettings={() => { setSettingsSection('life'); setSettingsOpen(true) }}
       />
@@ -358,7 +370,7 @@ export function App(): JSX.Element {
           <MissedReminders />
           <Box sx={{ flex: 1, minHeight: 0, overflow: page === 'home' || page === 'chat' ? 'hidden' : 'auto' }}>
             {page !== 'chat' && body()}
-            {(page === 'chat' || chatVisited) && <Box sx={{ display: page === 'chat' ? 'block' : 'none', height: '100%' }}><ChatPage onModels={() => { setSettingsSection('models'); setSettingsOpen(true) }} /></Box>}
+            {(page === 'chat' || chatVisited) && <Box sx={{ display: page === 'chat' ? 'block' : 'none', height: '100%' }}><ChatPage onOpenRecord={openRecord} onModels={() => { setSettingsSection('models'); setSettingsOpen(true) }} /></Box>}
           </Box>
         </Box>
       </Box>

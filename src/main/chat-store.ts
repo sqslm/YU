@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { ChatDetail, ChatEdit, ChatGroup, ChatMessage, ChatThread } from '@shared/chat'
 import type { SearchResult } from '@shared/types'
 import type { StoredChatAttachment } from './chat-attachments'
+import type { LocalRecord } from '@shared/workspace'
 
 function name(value: unknown): string {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > 80) throw Error('名称需为 1–80 字')
@@ -28,6 +29,7 @@ export class ChatStore {
         CREATE INDEX IF NOT EXISTS chat_attachments_message ON chat_attachments(messageId);
         UPDATE chat_messages SET state='cancelled' WHERE state='working';`)
       this.database = db
+      if (!db.prepare('PRAGMA table_info(chat_messages)').all().some(row => row.name === 'records')) db.exec("ALTER TABLE chat_messages ADD COLUMN records TEXT NOT NULL DEFAULT '[]'")
       const columns = db.prepare('PRAGMA table_info(chat_threads)').all()
       if (!columns.some(column => column.name === 'memoryTemporary')) db.exec('ALTER TABLE chat_threads ADD COLUMN memoryTemporary INTEGER NOT NULL DEFAULT 0')
       // A thread's own model and thinking effort. Both are nullable on purpose: a row written
@@ -45,7 +47,7 @@ export class ChatStore {
     const row = this.db.prepare('SELECT * FROM chat_threads WHERE id=?').get(id)
     if (!row) throw Error('对话不存在，请刷新')
     const messages = this.db.prepare('SELECT * FROM (SELECT * FROM chat_messages WHERE threadId=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(id, limit)
-    return { ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), profileId: row.profileId ?? null, effort: row.effort ?? null, messages: messages.map(message => ({ id: message.id, role: message.role, text: message.text, state: message.state, createdAt: message.createdAt, sources: JSON.parse(String(message.sources)), attachments: this.db.prepare('SELECT id,name,size,kind,thumbnail,truncated FROM chat_attachments WHERE messageId=? ORDER BY rowid').all(String(message.id)).map(file => ({ ...file, truncated: Boolean(file.truncated) })) })) as ChatMessage[], total: Number(this.db.prepare('SELECT COUNT(*) AS n FROM chat_messages WHERE threadId=?').get(id)!.n) } as ChatDetail
+    return { ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), profileId: row.profileId ?? null, effort: row.effort ?? null, messages: messages.map(message => ({ id: message.id, role: message.role, text: message.text, state: message.state, createdAt: message.createdAt, sources: JSON.parse(String(message.sources)), records: JSON.parse(String(message.records)), attachments: this.db.prepare('SELECT id,name,size,kind,thumbnail,truncated FROM chat_attachments WHERE messageId=? ORDER BY rowid').all(String(message.id)).map(file => ({ ...file, truncated: Boolean(file.truncated) })) })) as ChatMessage[], total: Number(this.db.prepare('SELECT COUNT(*) AS n FROM chat_messages WHERE threadId=?').get(id)!.n) } as ChatDetail
   }
   create(groupId: string | null = null): ChatDetail {
     this.group(groupId)
@@ -107,8 +109,8 @@ export class ChatStore {
     } catch (error) { this.db.exec('ROLLBACK'); throw error }
     return { userId, answerId }
   }
-  finish(id: string, text: string, state: ChatMessage['state'], sources: SearchResult[] = []): void {
-    this.db.prepare('UPDATE chat_messages SET text=?,state=?,sources=? WHERE id=?').run(text, state, JSON.stringify(sources), id)
+  finish(id: string, text: string, state: ChatMessage['state'], sources: SearchResult[] = [], records: LocalRecord[] = []): void {
+    this.db.prepare('UPDATE chat_messages SET text=?,state=?,sources=?,records=? WHERE id=?').run(text, state, JSON.stringify(sources), JSON.stringify(records), id)
   }
   close(): void { this.database?.close(); this.database = null }
 }

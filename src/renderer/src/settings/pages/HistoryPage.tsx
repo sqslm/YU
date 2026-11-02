@@ -176,9 +176,11 @@ interface HistoryPageProps {
   patch?: (delta: Partial<Settings>) => void
   /** Search text the caller wants applied on arrival (e.g. a 热门场景 chip). */
   initialQuery?: string
+  initialId?: string
+  onClearFocus?: () => void
 }
 
-export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps = {}): JSX.Element {
+export function HistoryPage({ settings, patch, initialQuery, initialId, onClearFocus }: HistoryPageProps = {}): JSX.Element {
   const themeMode = useTheme().palette.mode
   /**
    * 上次离开本页时的视图。切页会卸载本组件，所以搜索词、时间范围、状态标签页、
@@ -197,7 +199,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
    * act on the same list and paging sees only what survived them.
    */
   const [appFilter, setAppFilter] = useState<string>(APP_FILTER_ALL)
-  const [query, setQuery] = useState(initialQuery ?? restoredView.query)
+  const [query, setQuery] = useState(initialId ? '' : initialQuery ?? restoredView.query)
   const [period, setPeriod] = useState<HistoryPeriod>(restoredView.period)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [toolbarMenu, setToolbarMenu] = useState<HTMLElement | null>(null)
@@ -277,7 +279,8 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
         if (next === null) break
         queuedSearch.current = null
         try {
-          const rows = await window.api.history.list(next)
+          const entry = initialId && !next ? await window.api.history.get(initialId) : undefined
+          const rows = initialId && !next ? entry ? [entry] : [] : await window.api.history.list(next)
           setEntries(rows); setLoadedQuery(next); setLoadError('')
         } catch (error) {
           setLoadError(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(error))
@@ -287,7 +290,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
       inFlight.current = false
       setRefreshing(false)
     }
-  }, [])
+  }, [initialId])
 
   // 挂载这一发直接带上恢复出来的搜索词：先读一次空搜索只会让用户看到「全部
   // 记录」再闪成筛选结果（热门场景 chip 的 initialQuery 同样按这个顺序生效）。
@@ -403,12 +406,13 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
    */
   const dateBounds = historyDateBounds(period, dateFrom, dateTo)
   const visible = useMemo(() => {
+    if (initialId && !query) return entries
     const byArchive = entries.filter((item) => (item.status === 'archived') === showArchived)
     // Filed by category, not by mode: a 任务 ran through dictation/ask and a
     // 润色 has no mode of its own, so `item.mode` would put both in 听写.
     const byCategory = filterByCategory(byArchive, filter)
     return historyDateView(filterByApp(byCategory, appFilter), dateBounds, order)
-  }, [entries, filter, appFilter, showArchived, dateBounds.start, dateBounds.end, order])
+  }, [entries, filter, appFilter, showArchived, dateBounds.start, dateBounds.end, order, initialId, query])
   const total = visible.length
   const exportCurrent = async (format: 'markdown' | 'text'): Promise<void> => {
     setExportMenu(null)
@@ -578,6 +582,7 @@ export function HistoryPage({ settings, patch, initialQuery }: HistoryPageProps 
 
   return (
     <Box sx={{ px: { xs: 2.5, md: 4, lg: 5 }, pt: 2.5, pb: 4 }}>
+      {initialId && !query && <Alert severity="info" action={<Button onClick={onClearFocus}>{i18n.t('查看全部')}</Button>}>{i18n.t('已定位原记录')}</Alert>}
       <Box component="section" aria-label={i18n.t('输入活动热力图')} sx={{ mb: 2.5 }}>
         <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>{i18n.t('输入活动 · 最近 52 周')}<Box component="span" sx={{ ml: 1, fontSize: 10.5 }}>{i18n.t('累计使用量，不随下方筛选或清空历史改变')}</Box></Typography>
         {heatStats && <UsageInsights view="heat" settings={settings ?? DEFAULT_SETTINGS} mode={themeMode} stats={heatStats} entries={entries} now={Date.now()} onOpenHistory={() => {}} />}

@@ -129,11 +129,12 @@ function EventRow({ row, language, busy, onEdit, onSettle }: {
 
 export type CalendarTab = 'schedule' | 'briefing'
 
-export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
+export function CalendarPage({ settings, tab, onTab, onOpenSettings, focusEvent }: {
   settings: Settings
   tab: CalendarTab
   onTab: (next: CalendarTab) => void
   onOpenSettings?: () => void
+  focusEvent?: import('@shared/workspace').LocalRecord
 }): JSX.Element {
   const language: 'zh' | 'en' = i18n.resolvedLanguage === 'en' ? 'en' : 'zh'
   /** Recomputed per render: the page can sit open past midnight. */
@@ -207,6 +208,7 @@ export function CalendarPage({ settings, tab, onTab, onOpenSettings }: {
   }, [])
 
   const toggleView = (next: string | null): void => { if (next === 'month' || next === 'list') setView(next) }
+  useEffect(() => { if (focusEvent) select(dayKeyOf(focusEvent.at)) }, [focusEvent, select])
 
   // Left/right walk a week, `T` comes home. Ignored while typing or while the
   // editor is open, so the dialog's own fields keep their arrow keys.

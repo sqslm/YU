@@ -17,6 +17,7 @@ import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import type { ChatDetail, ChatGroup, ChatIndex, ChatThread } from '@shared/chat'
 import { CHAT_ATTACHMENT_BYTES, CHAT_ATTACHMENT_LIMIT, CHAT_ATTACHMENT_TOTAL, CHAT_FILE_ACCEPT } from '@shared/chat'
 import type { Settings } from '@shared/types'
+import type { LocalRecord } from '@shared/workspace'
 import { stripSourceTail } from '@shared/sourceText'
 import { MarkdownView } from '../../card/MarkdownView'
 import i18n from '../../i18n'
@@ -43,7 +44,7 @@ function llmChoices(settings: Settings): Array<{ id: string; label: string }> {
   return settings.profiles.filter(profile => profile.kind === 'llm' && profile.enabled).sort((a, b) => rank(a.id) - rank(b.id)).map(profile => ({ id: profile.id, label: (profile.model || profile.name).trim() || profile.id }))
 }
 
-export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
+export function ChatPage({ onModels, onOpenRecord }: { onModels(): void; onOpenRecord(record: LocalRecord): Promise<void> }): JSX.Element {
   const { t } = useTranslation()
   const [index, setIndex] = useState<ChatIndex>({ threads: [], groups: [], busyThreadId: null })
   const [selected, setSelected] = useState<string | null>(null), selectedRef = useRef<string | null>(null)
@@ -238,6 +239,7 @@ export function ChatPage({ onModels }: { onModels(): void }): JSX.Element {
           </Button>)}</Stack>}
           {message.role === 'user' ? <Box sx={{ bgcolor: 'action.selected', border: 1, borderColor: 'divider', borderRadius: '16px 16px 4px 16px', p: '12px 18px', maxWidth: '90%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 14 }}>{message.text}</Box>
             : <Box sx={theme => ({ fontSize: 14, lineHeight: 1.9, overflowWrap: 'anywhere', '--answer-text': theme.palette.text.primary, '--answer-muted': theme.palette.text.secondary, '--answer-accent': theme.palette.primary.main, '--answer-line': theme.palette.divider, '--answer-fill': theme.palette.action.hover })}><MarkdownView text={(message.sources?.length ? stripSourceTail(message.text) : message.text) || t('正在思考…')} sources={message.sources} streaming={message.state === 'working'} onCopyCode={text => { void window.api.app.copyText(text) }} /></Box>}
+          {!!message.records?.length && <Stack direction="row" gap={.5} flexWrap="wrap">{message.records.map(record => <Button size="small" variant="outlined" key={`${record.kind}:${record.id}`} onClick={() => void onOpenRecord(record).catch(error => setError(messageOf(error)))}>{t('查看原记录')} · {record.title || record.id}</Button>)}</Stack>}
           {message.state === 'error' && <Typography color="error" variant="caption">{t('本轮回答失败，可重新发送')}</Typography>}
           {message.state === 'cancelled' && <Typography color="text.secondary" variant="caption">{t('生成已停止')}</Typography>}
           {message.role === 'assistant' && message.state === 'done' && <Button size="small" sx={{ alignSelf: 'flex-start', fontSize: 11, color: 'text.secondary', px: 0 }} onClick={() => void window.api.app.copyText(message.text)}>{t('复制回答')}</Button>}

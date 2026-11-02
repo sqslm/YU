@@ -1,5 +1,6 @@
 import { MemoryService } from './memory/host'
 import { ChatService } from './chat'
+import { readWorkspaceRecord } from './workspace'
 import { explainSelection } from './explanation'
 import { setMemoryService } from './memory/registry'
 import { memoryIdleCheck } from './memory/idle'
@@ -155,7 +156,7 @@ const stats = new StatsStore()
 let settingsWindow: BrowserWindow | null = null
 const chats = new ChatService(join(app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(), 'data', 'chat', 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
-})
+}, () => assistant.localQueries())
 let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
 let cardWindow: BrowserWindow | null = null
@@ -1269,6 +1270,10 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 
 function registerIpc(): void {
   const chatOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从语聊天页操作对话') }
+  handle('workspace:get', (event, record: import('@shared/workspace').LocalRecord) => {
+    chatOwner(event)
+    return readWorkspaceRecord({ notes: () => notes.list().notes, chat: chats.store, history, reminders: () => reminders!.store.list(), events: () => calendar!.list() }, record)
+  })
   handle('chat:list', event => { chatOwner(event); return chats.list() })
   handle('chat:get', (event, id: string, limit?: number) => { chatOwner(event); return chats.get(id, limit) })
   handle('chat:attachment', (event, id: string, attachmentId: string) => { chatOwner(event); return chats.store.attachment(id, attachmentId) })
@@ -1713,6 +1718,7 @@ function registerIpc(): void {
   })
 
   handle('history:list', (_event, query: string) => history.list(query ?? '', store.get().historyLimit))
+  handle('history:get', (_event, id: string) => history.get(id))
   handle('history:export-text', (_event, ids, format) => exportHistory(history, ids, format))
   handle('history:latest', () => history.latest())
   handle('history:remove', (_event, id: string) => history.remove(id))

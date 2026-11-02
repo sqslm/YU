@@ -2664,5 +2664,7 @@
   "打开所在文件夹": "Open containing folder",
   "回到顶部": "Back to top",
   "回到底部": "Back to bottom",
-  "支持单次日程、IANA 时区和多日全天事件；暂不支持重复规则。": "Supports one-off events, IANA time zones and multi-day all-day events. Recurrence rules are not supported."
+  "支持单次日程、IANA 时区和多日全天事件；暂不支持重复规则。": "Supports one-off events, IANA time zones and multi-day all-day events. Recurrence rules are not supported.",
+  "查看原记录": "Open original record",
+  "已定位原记录": "Showing the original record"
 }

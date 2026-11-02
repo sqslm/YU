@@ -9,6 +9,8 @@ import { egressFetch } from './net/egress'
 import { isCurrentContentRequest } from './voice-intent'
 import { CHAT_IDENTITY_PROMPT } from '@shared/prompts'
 import { ChatStore } from './chat-store'
+import { LOCAL_QUERY_TOOLS, recordsFromTool, type LocalRecord } from '@shared/workspace'
+import type { AgentOptions } from './agent'
 
 /**
  * Only the wire fields a thread's chosen profile owns.
@@ -42,7 +44,8 @@ export class ChatService {
   private active: { threadId: string; messageId: string; text: string; controller: AbortController } | null = null
   private titles = new Set<AbortController>()
   private closing = false
-  constructor(path: string, private settings: () => Settings, private changed: (event: ChatEvent) => void) { this.store = new ChatStore(path) }
+  constructor(path: string, private settings: () => Settings, private changed: (event: ChatEvent) => void,
+    private localQueries: () => Pick<AgentOptions, 'personal' | 'life' | 'toolAccess'> = () => ({})) { this.store = new ChatStore(path) }
   get busy(): boolean { return Boolean(this.active) }
   list(): ChatIndex { return { ...this.store.list(), busyThreadId: this.active?.threadId ?? null } }
   get(id: string, limit?: number): ChatDetail {
@@ -92,8 +95,12 @@ export class ChatService {
         the web" keeps the web tools for such a request.
       */
       const summarizing = isCurrentContentRequest(question.trim()) && !/搜索|检索|联网|上网|\b(?:search|browse|look up)\b/iu.test(question)
-      const allowedTools = summarizing ? ['get_weather', 'get_datetime', 'calculate'] : ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate']
+      const local = this.localQueries(), records: LocalRecord[] = []
+      const queryTools = LOCAL_QUERY_TOOLS.filter(name => name === 'list_events' ? local.life : local.personal)
+      const allowedTools = [...(summarizing ? ['get_weather', 'get_datetime', 'calculate'] : ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate']), ...queryTools]
       const pending = askAgent(effective, question.trim(), {}, active.controller.signal, () => {}, {
+        ...local,
+        onToolResult: (name, result) => { if (result.ok) for (const row of recordsFromTool(name, result.data)) if (!records.some(item => item.kind === row.kind && item.id === row.id)) records.push(row) },
         reset: false, conversation, allowedTools, timeouts: { llm: 90000 }, fetchImpl: egressFetch,
         // 「语」 answers as itself in the chat page; the voice bar stays generic.
         identity: CHAT_IDENTITY_PROMPT,
@@ -105,7 +112,7 @@ export class ChatService {
       if (this.closing) return
       // The chat page renders `sources` as its own section, so the appended markdown list is
       // dropped before storing: otherwise every answer, and every later export, repeats it.
-      this.store.finish(answerId, stripAppendedSources(result.text), result.taskState === 'failed' ? 'error' : 'done', dedupeSources(result.sources))
+      this.store.finish(answerId, stripAppendedSources(result.text), result.taskState === 'failed' ? 'error' : 'done', dedupeSources(result.sources), records.slice(0, 40))
       if (first && result.taskState !== 'failed') void this.title(id, question, result.text)
     } catch (error) {
       const imageHint = conversation.reference?.images?.length ? '图片回答失败，请确认当前 LLM 支持视觉输入。' : ''

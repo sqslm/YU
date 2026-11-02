@@ -56,6 +56,9 @@ export interface UpdateState {
 }
 
 export interface TypelessApi {
+  workspace: {
+    get(record: import('./workspace').LocalRecord): Promise<import('./workspace').LocalRecord>
+  }
   chat: {
     list(): Promise<import('./chat').ChatIndex>
     get(id: string, limit?: number): Promise<import('./chat').ChatDetail>
@@ -211,6 +214,7 @@ export interface TypelessApi {
     onChanged(callback: (settings: Settings) => void): () => void
   }
   history: {
+    get(id: string): Promise<HistoryEntry | undefined>
     exportText(ids: string[], format: NoteExportFormat): Promise<{ path: string; count: number } | null>
     list(query?: string): Promise<HistoryEntry[]>
     latest(): Promise<HistoryEntry | undefined>
