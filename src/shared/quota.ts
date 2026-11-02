@@ -3,6 +3,7 @@ import { ttsProfiles } from './speech'
 
 export interface QuotaTarget { kind: ProviderKind | 'tts' | 'local-asr'; id: string }
 export interface QuotaConnection extends QuotaTarget { name: string; model: string; enabled: boolean }
+export type QuotaConnectionKind = QuotaConnection['kind']
 export interface QuotaMetric {
   label: string
   remaining?: number

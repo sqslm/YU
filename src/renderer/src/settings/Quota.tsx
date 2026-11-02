@@ -1,10 +1,14 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Typography, useTheme } from '@mui/material'
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Stack, TextField, Tooltip, Typography, useTheme } from '@mui/material'
 import RefreshRounded from '@mui/icons-material/RefreshRounded'
+import SearchRounded from '@mui/icons-material/SearchRounded'
 import type { Settings } from '@shared/types'
-import { defaultQuotaTarget, quotaAmountMetric, quotaConnections, quotaKey, quotaRemainingRatio, type QuotaMetric, type QuotaResult, type QuotaTarget } from '@shared/quota'
+import { defaultQuotaTarget, quotaAmountMetric, quotaConnections, quotaKey, quotaRemainingRatio, type QuotaConnection, type QuotaConnectionKind, type QuotaMetric, type QuotaResult, type QuotaTarget } from '@shared/quota'
 import i18n from '../i18n'
 import { amountLabel } from './quotaAmountLabel'
+import { filterQuotaConnections, type QuotaKindFilter } from './quotaFilter'
+
+const chipSx = { fontSize: 11.5, height: 26, borderRadius: 999, '& .MuiChip-label': { px: 1.25 } }
 
 /**
  * Two shapes behind one control: an arc when a total allowance is known, and the amount
@@ -46,6 +50,7 @@ export function QuotaProvider({ settings, saving, children }: { settings: Settin
   const [chosen, setChosen] = useState<QuotaTarget>(), [opened, setOpened] = useState(false), [busy, setBusy] = useState(false)
   const [results, setResults] = useState<Record<string, QuotaResult>>({}), [loading, setLoading] = useState<Record<string, boolean>>({})
   const [notice, setNotice] = useState('')
+  const [filterText, setFilterText] = useState(''), [kindTab, setKindTab] = useState<QuotaKindFilter>('all')
   const selected = connections.find(row => chosen && quotaKey(row) === quotaKey(chosen)) ?? (settings ? defaultQuotaTarget(settings) : undefined)
   const selectedKey = selected ? quotaKey(selected) : ''
   const generation = useRef(0), busyRef = useRef(false), openedRef = useRef(false)
@@ -92,7 +97,10 @@ export function QuotaProvider({ settings, saving, children }: { settings: Settin
     return () => document.removeEventListener('visibilitychange', visible)
   }, [opened, saving, revision, selectedKey])
   const result = results[selectedKey]
-  return <QuotaContext.Provider value={{ open: target => { if (target) setChosen(target); setOpened(true) }, selected, result, loading: Boolean(loading[selectedKey]), name: connections.find(row => quotaKey(row) === selectedKey)?.name ?? '' }}>
+  const kindLabel = (kind: QuotaConnectionKind): string => kind === 'multimodal' ? i18n.t('多模态') : kind === 'local-asr' ? i18n.t('本地 ASR') : kind.toUpperCase()
+  const nameOf = (row: QuotaConnection): string => row.kind === 'local-asr' ? i18n.t(row.name) : row.name || i18n.t('未命名连接')
+  const view = filterQuotaConnections(connections, filterText, kindTab, kindLabel, nameOf)
+  return <QuotaContext.Provider value={{ open: target => { if (target) setChosen(target); setFilterText(''); setKindTab('all'); setOpened(true) }, selected, result, loading: Boolean(loading[selectedKey]), name: connections.find(row => quotaKey(row) === selectedKey)?.name ?? '' }}>
     {children}
     <Dialog open={opened} onClose={() => setOpened(false)} fullWidth maxWidth="sm" aria-labelledby="quota-title">
       <DialogTitle id="quota-title">{i18n.t('模型额度')}<Typography sx={{ mt: 0.5, fontSize: 12, color: 'text.secondary' }}>{i18n.t('所有已保存的模型连接；共享余额不会重复相加。')}</Typography></DialogTitle>
@@ -100,12 +108,20 @@ export function QuotaProvider({ settings, saving, children }: { settings: Settin
         {saving && <Alert severity="info">{i18n.t('配置尚未保存，保存后查询。')}</Alert>}
         {notice && <Alert severity="error">{i18n.t(notice)}</Alert>}
         {!connections.length && <Typography sx={{ p: 3, color: 'text.secondary' }}>{i18n.t('尚未添加模型连接，请先在模型设置中配置。')}</Typography>}
-        {connections.map(connection => {
+        {!!connections.length && <Box data-quota-filters sx={{ position: 'sticky', top: 0, zIndex: 3, bgcolor: 'background.paper', px: 2.5, pt: 1.5, pb: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+          <TextField size="small" fullWidth value={filterText} onChange={event => setFilterText(event.target.value)} placeholder={i18n.t('搜索名称或模型')} inputProps={{ 'aria-label': i18n.t('搜索名称或模型'), 'data-quota-search': true }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchRounded fontSize="small" /></InputAdornment> }} />
+          <Stack direction="row" useFlexGap spacing={0.75} sx={{ mt: 1.25, flexWrap: 'wrap' }}>
+            <Chip data-quota-tab="all" size="small" label={`${i18n.t('全部')} ${view.matched}`} variant={view.kind === 'all' ? 'filled' : 'outlined'} color={view.kind === 'all' ? 'primary' : 'default'} onClick={() => setKindTab('all')} sx={chipSx} />
+            {view.counts.map(({ kind, count }) => <Chip key={kind} data-quota-tab={kind} size="small" label={`${kindLabel(kind as QuotaConnectionKind)} ${count}`} variant={view.kind === kind ? 'filled' : 'outlined'} color={view.kind === kind ? 'primary' : 'default'} onClick={() => setKindTab(kind)} sx={chipSx} />)}
+          </Stack>
+        </Box>}
+        {!!connections.length && !view.rows.length && <Typography data-quota-empty sx={{ p: 3, color: 'text.secondary' }}>{i18n.t('没有找到匹配的连接')}</Typography>}
+        {view.rows.map(connection => {
           const key = quotaKey(connection), row = results[key], checking = loading[key], ratio = quotaRemainingRatio(row)
           return <Box key={key} data-quota-row={key} sx={{ p: 2.5, borderBottom: 1, borderColor: 'divider', bgcolor: key === selectedKey ? 'action.selected' : undefined }}>
             <Stack direction="row" alignItems="center" spacing={1.5}>
               <QuotaRing result={row} loading={checking} size={36} />
-              <Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>{connection.kind === 'local-asr' ? i18n.t(connection.name) : connection.name || i18n.t('未命名连接')}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary', overflowWrap: 'anywhere' }}>{connection.kind === 'multimodal' ? i18n.t('音频直达') : connection.kind === 'local-asr' ? i18n.t('本地 ASR') : connection.kind.toUpperCase()} · {connection.model || i18n.t(connection.kind === 'tts' ? '系统声音' : '未选模型')}{!connection.enabled ? ` · ${i18n.t('未启用')}` : ''}</Typography></Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>{nameOf(connection)}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary', overflowWrap: 'anywhere' }}>{connection.kind === 'multimodal' ? i18n.t('音频直达') : kindLabel(connection.kind)} · {connection.model || i18n.t(connection.kind === 'tts' ? '系统声音' : '未选模型')}{!connection.enabled ? ` · ${i18n.t('未启用')}` : ''}</Typography></Box>
               <Button size="small" disabled={key === selectedKey} onClick={() => setChosen(connection)}>{i18n.t(key === selectedKey ? '圆环当前显示' : '在圆环显示')}</Button>
             </Stack>
             <Box sx={{ pl: '48px', mt: 1.25 }}>

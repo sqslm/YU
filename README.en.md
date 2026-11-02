@@ -402,7 +402,7 @@ Examples stay outside the input until the user clicks â€œFill in this sentenceâ€
 
 ## Model allowances
 
-The sidebar ring initially shows the preferred LLM connection. Click it to see all saved ASR, LLM, multimodal and TTS connections, including disabled ones and enabled local ASR. Any connection can be selected for the ring. Each model connection also has a Check allowance button in settings.
+The sidebar ring initially shows the preferred LLM connection. Click it to see all saved ASR, LLM, multimodal and TTS connections, including disabled ones and enabled local ASR. Any connection can be selected for the ring. Each model connection also has a Check allowance button in settings. The dialog opens with a search field (name, model or kind) and a row of kind chips (all / LLM / multimodal / ASR / TTS / local ASR, each with a count, and kinds without a hit do not appear); picking a chip narrows the list, and both stay pinned while the list scrolls.
 
 Queries support DeepSeek and Kimi China account balances, SiliconFlow China's user-info endpoint when it returns valid billing data, OpenRouter key spending caps, and ElevenLabs subscription allowances. Unsupported providers, custom gateways, unavailable endpoints, authentication errors and invalid responses are shown explicitly, never as zero balance. SiliconFlow's empty-status zero placeholders are treated as unavailable. These APIs expose shared account/key allowance, not an independent balance for each model; shared amounts are never summed together.
 
