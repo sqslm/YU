@@ -106,24 +106,42 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
    * The value is deliberately fractional — rounding down left a 30px gutter on
    * the right, and a tenth of a pixel per cell is invisible while the grid now
    * ends exactly at the card's padding edge.
+   *
+   * Two guards keep this from becoming a layout loop. The measured width is the
+   * flex box, not a box the grid can widen, and a change under a quarter pixel
+   * is ignored — a grid that reacts to its own effect on the page (a fractional
+   * cell makes the card a hair taller, the page grows a scrollbar, the content
+   * narrows by 15px, the cell shrinks, the bar goes away…) never settles and
+   * shows up as the window trembling.
    */
   const heatBoxRef = useRef<HTMLDivElement | null>(null)
+  const heatLabelRef = useRef<HTMLDivElement | null>(null)
   const [heatCell, setHeatCell] = useState(11)
   const heatWeekCount = heat.weeks.length
   useEffect(() => {
     const element = heatBoxRef.current
     if (!element) return
     const measure = (): void => {
-      const available = element.clientWidth - 26
+      const label = heatLabelRef.current
+      const labelWidth = label ? label.getBoundingClientRect().width + HEAT_GAP * 4 : 26
+      const available = element.clientWidth - labelWidth
       if (available <= 0 || heatWeekCount === 0) return
       const raw = (available - HEAT_GAP * (heatWeekCount - 1)) / heatWeekCount
-      setHeatCell(Math.max(8, Math.min(20, Math.round(raw * 100) / 100)))
+      const next = Math.max(8, Math.min(20, Math.floor(raw * 8) / 8))
+      setHeatCell((previous) => (Math.abs(previous - next) < 0.25 ? previous : next))
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(element)
     return () => observer.disconnect()
   }, [heatWeekCount])
+  /**
+   * Row height is a whole pixel while the column width stays fractional: the
+   * cells are square enough to the eye either way, and an integer height means
+   * a re-measure cannot nudge the page's total height by half a pixel and flip
+   * the scrollbar under everything below the card.
+   */
+  const heatRow = Math.round(heatCell)
 
   /**
    * Month captions land on the column where that month's first week starts.
@@ -579,6 +597,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
       {(!view || view === 'heat') && <Box sx={{ ...card, px: 1.5, py: 1.25, flexShrink: 0 }}>
         <Box ref={heatBoxRef} sx={{ display: 'flex', gap: 1, minWidth: 0, overflowX: 'auto' }}>
           <Box
+            ref={heatLabelRef}
             sx={{
               pt: `${MONTH_ROW + 2}px`,
               display: 'flex',
@@ -593,8 +612,8 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
                 sx={{
                   fontSize: 9,
                   color: t.textFaint,
-                  height: heatCell,
-                  lineHeight: `${heatCell}px`
+                  height: heatRow,
+                  lineHeight: `${heatRow}px`
                 }}
               >
                 {index % 2 === 0 && index < 5 ? i18n.t(day) : ''}
@@ -633,7 +652,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
               sx={{
                 display: 'grid',
                 gridTemplateColumns: `repeat(${heat.weeks.length}, ${heatCell}px)`,
-                gridTemplateRows: `repeat(7, ${heatCell}px)`,
+                gridTemplateRows: `repeat(7, ${heatRow}px)`,
                 gridAutoFlow: 'column',
                 columnGap: `${HEAT_GAP}px`,
                 rowGap: `${HEAT_GAP}px`,
@@ -651,7 +670,7 @@ export function UsageInsights({ settings, mode, entries, stats, now, onOpenHisto
                       data-heat-level={level}
                       sx={{
                         width: heatCell,
-                        height: heatCell,
+                        height: heatRow,
                         borderRadius: '3px',
                         bgcolor:
                           level === 0

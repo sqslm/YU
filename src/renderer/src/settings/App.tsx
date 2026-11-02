@@ -372,7 +372,21 @@ export function App(): JSX.Element {
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ height: 40, flex: '0 0 auto' }} />
           <MissedReminders />
-          <Box sx={{ flex: 1, minHeight: 0, overflow: page === 'home' || page === 'chat' ? 'hidden' : 'auto' }}>
+          {/* `scrollbarGutter: stable` reserves the bar's width even while the
+              page is short. Without it a page that grows past the fold narrows
+              its own content by 15px, and any element sized from that width —
+              the history heat grid is one — resizes, changes the page height,
+              and can toggle the very scrollbar that caused it: an endless
+              layout loop that reads as the whole window shaking. */}
+          <Box
+            data-hub-scroll
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              scrollbarGutter: 'stable',
+              overflow: page === 'home' || page === 'chat' ? 'hidden' : 'auto'
+            }}
+          >
             {page !== 'chat' && body()}
             {(page === 'chat' || chatVisited) && <Box sx={{ display: page === 'chat' ? 'block' : 'none', height: '100%' }}><ChatPage focusRecord={chatToOpen} onOpenRecord={openRecord} onModels={() => { setSettingsSection('models'); setSettingsOpen(true) }} /></Box>}
           </Box>
