@@ -41,6 +41,7 @@
 !/scripts/build-native.mjs
 !/scripts/benchmark-hotkey.mjs
 !/scripts/benchmark-uia.mjs
+!/scripts/benchmark-windows.mjs
 !/native/
 /native/bin/
 /native/**/target/

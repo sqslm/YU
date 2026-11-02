@@ -6,13 +6,14 @@ The tables below record production dependencies and bundled renderer dependencie
 
 Optional speech models are downloaded separately and are not included in the installer or source archive. Their own upstream model licenses apply.
 
-The Rust keyboard and UIA helpers use the following crates under their MIT license option, plus Unicode-3.0 data terms where noted. The table also records their macro/build dependencies. Windows APIs are linked from the operating system. Versions and checksums are locked in `native/hotkey/Cargo.lock` and `native/uia/Cargo.lock`.
+The Rust keyboard, UIA and Windows-operation helpers use the following crates under their MIT license option, plus Unicode-3.0 data terms where noted. The table also records their macro/build dependencies. Windows APIs are linked from the operating system. Versions and checksums are locked in each native project's `Cargo.lock`.
 
 | Native crate | Version | License text |
 | --- | --- | --- |
 | windows-sys | 0.61.2 | [MIT](licenses/rust-windows-sys-0.61.2-MIT) |
 | windows-link | 0.2.1 | [MIT](licenses/rust-windows-link-0.2.1-MIT) |
 | serde_json | 1.0.151 | [MIT](licenses/rust-serde_json-1.0.151-MIT) |
+| base64 | 0.22.1 | [MIT](licenses/rust-base64-0.22.1-MIT) |
 | serde_core | 1.0.229 | [MIT](licenses/rust-serde_core-1.0.229-MIT) |
 | itoa | 1.0.18 | [MIT](licenses/rust-itoa-1.0.18-MIT) |
 | memchr | 2.8.3 | [MIT](licenses/rust-memchr-2.8.3-MIT) |

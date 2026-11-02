@@ -3,7 +3,6 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
-if ($request.action -eq 'system-volume') { . (Join-Path $PSScriptRoot 'system-volume.ps1'); exit 0 }
 if ($request.action -eq 'recent-files') {
   $recent = [Environment]::GetFolderPath('Recent')
   $shell = New-Object -ComObject WScript.Shell
@@ -17,70 +16,13 @@ if ($request.action -eq 'recent-files') {
   } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
   exit 0
 }
-if ($request.action -eq 'ocr') {
-  Add-Type -AssemblyName System.Runtime.WindowsRuntime
-  [void][Windows.Storage.Streams.InMemoryRandomAccessStream,Windows.Storage.Streams,ContentType=WindowsRuntime]
-  [void][Windows.Storage.Streams.DataWriter,Windows.Storage.Streams,ContentType=WindowsRuntime]
-  [void][Windows.Graphics.Imaging.BitmapDecoder,Windows.Graphics.Imaging,ContentType=WindowsRuntime]
-  [void][Windows.Graphics.Imaging.SoftwareBitmap,Windows.Graphics.Imaging,ContentType=WindowsRuntime]
-  [void][Windows.Media.Ocr.OcrEngine,Windows.Foundation,ContentType=WindowsRuntime]
-  [void][Windows.Media.Ocr.OcrResult,Windows.Foundation,ContentType=WindowsRuntime]
-  $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetGenericArguments().Count -eq 1 -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
-  function Await-Result($operation, [Type]$type) {
-    $task = $asTask.MakeGenericMethod($type).Invoke($null, @($operation))
-    $task.Wait()
-    return $task.Result
-  }
-  [void][Windows.Globalization.Language,Windows.Globalization,ContentType=WindowsRuntime]
-  $engine = $null
-  # The Chinese recognizer also reads Latin text. Prefer it for mixed Chinese/English screenshots.
-  $language = [string]$request.language
-  if (!$language -or $language -eq 'auto') { $language = 'zh' }
-  $recognizer = [Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages | Where-Object { $_.LanguageTag -like "$language*" } | Select-Object -First 1
-  if ($recognizer) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($recognizer) }
-  elseif ($request.language -and $request.language -ne 'auto') { throw 'Requested Windows OCR language pack is not installed' }
-  if (!$engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
-  if (!$engine) { throw 'Windows OCR language support is unavailable' }
-  $bytes = [Convert]::FromBase64String([string]$request.png)
-  if (!$bytes.Length -or $bytes.Length -gt 6291456) { throw 'Invalid OCR image size' }
-  $stream = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream
-  $writer = New-Object Windows.Storage.Streams.DataWriter($stream.GetOutputStreamAt(0))
-  $bitmap = $null
-  try {
-    $writer.WriteBytes($bytes)
-    [void](Await-Result ($writer.StoreAsync()) ([uint32]))
-    [void]$writer.DetachStream()
-    $stream.Seek(0)
-    $decoder = Await-Result ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-    $bitmap = Await-Result ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-    if ($bitmap.PixelWidth -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension -or $bitmap.PixelHeight -gt [Windows.Media.Ocr.OcrEngine]::MaxImageDimension) { throw 'Image exceeds Windows OCR dimensions' }
-    $result = Await-Result ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-    $lines = @($result.Lines | ForEach-Object {
-      $ocrLine = $_
-      $line = $_.Text -replace '([\p{IsCJKUnifiedIdeographs}])\s+(?=[\p{IsCJKUnifiedIdeographs}])', '$1'
-      $line = $line -replace '\s+([\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\u3001\uFF09\u300B\u3011\u300D\u300F])', '$1'
-      $line = $line -replace '([\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\u3001\uFF08\u300A\u3010\u300C\u300E])\s+', '$1'
-      $words = @($ocrLine.Words)
-      if ($words.Count -gt 0 -and $line.Trim()) {
-        $left = ($words | ForEach-Object { $_.BoundingRect.X } | Measure-Object -Minimum).Minimum
-        $top = ($words | ForEach-Object { $_.BoundingRect.Y } | Measure-Object -Minimum).Minimum
-        $right = ($words | ForEach-Object { $_.BoundingRect.X + $_.BoundingRect.Width } | Measure-Object -Maximum).Maximum
-        $bottom = ($words | ForEach-Object { $_.BoundingRect.Y + $_.BoundingRect.Height } | Measure-Object -Maximum).Maximum
-        @{text=$line.Trim();x=$left;y=$top;width=($right-$left);height=($bottom-$top)}
-      }
-    })
-    @{text=(($lines | ForEach-Object { $_.text }) -join "`n");lines=$lines;width=$bitmap.PixelWidth;height=$bitmap.PixelHeight;language=$engine.RecognizerLanguage.LanguageTag} | ConvertTo-Json -Compress -Depth 5
-  } finally { if ($bitmap) { $bitmap.Dispose() }; $writer.Dispose(); $stream.Dispose() }
-  exit
-}
-if ($request.action -in @('explorer-folder','browser-url','window-check','current-content')) {
+if ($request.action -in @('explorer-folder','browser-url','current-content')) {
   Add-Type -TypeDefinition @'
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
 public static class YUWindow {
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
-  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
@@ -96,11 +38,6 @@ public static class YUWindow {
     if (![YUWindow]::IsWindow($script:hwnd) -or $windowPid -ne [uint32]$request.pid -or $title.ToString() -cne [string]$request.title) { throw 'Original window has changed or closed' }
   }
   Assert-OriginalWindow
-  if ($request.action -eq 'window-check') {
-    if ([YUWindow]::IsIconic($hwnd)) { throw 'Original window is minimized; restore it before capture' }
-    @{valid=$true} | ConvertTo-Json -Compress
-    exit
-  }
   if ($request.action -eq 'explorer-folder') {
     $shell = New-Object -ComObject Shell.Application
     $windows = $shell.Windows()
@@ -112,13 +49,6 @@ public static class YUWindow {
     exit
   }
   . (Join-Path $PSScriptRoot 'current-content.ps1')
-  exit
-}
-if ($request.action -eq 'disk-space') {
-  $drives = @([IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -in @('Fixed','Removable') } | ForEach-Object {
-    @{name=$_.Name;label=$_.VolumeLabel;totalBytes=$_.TotalSize;freeBytes=$_.AvailableFreeSpace;usedBytes=($_.TotalSize-$_.AvailableFreeSpace)}
-  })
-  @{drives=$drives} | ConvertTo-Json -Depth 5 -Compress
   exit
 }
 if ($request.action -eq 'activate') {

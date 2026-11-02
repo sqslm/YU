@@ -14,6 +14,7 @@
     "test:native": "node scripts/build-native.mjs --test",
     "benchmark:hotkey": "node scripts/build-native.mjs && node scripts/benchmark-hotkey.mjs",
     "benchmark:uia": "node scripts/build-native.mjs && node scripts/benchmark-uia.mjs",
+    "benchmark:windows": "node scripts/build-native.mjs && node scripts/benchmark-windows.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "node scripts/build-native.mjs && vitest run",
     "test:watch": "node scripts/build-native.mjs && vitest",

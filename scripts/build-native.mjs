@@ -7,7 +7,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const test = process.argv.includes('--test')
 if (!test && (process.platform !== 'win32' || process.arch !== 'x64')) throw new Error('The production helper requires Windows x64')
 const args = test ? ['test', '--locked'] : ['build', '--release', '--locked']
-for (const name of ['hotkey', 'uia']) {
+for (const name of ['hotkey', 'uia', 'windows']) {
   const directory = resolve(root, 'native', name)
   const manifest = resolve(directory, 'Cargo.toml')
   // The crate cwd makes Cargo read its scoped static-CRT configuration.

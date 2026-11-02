@@ -2,14 +2,20 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { app } from 'electron'
 
-/** Only a fixed, shipped script is executed; request fields never enter command text. */
+const nativeActions = new Set(['window-check', 'disk-space', 'system-volume', 'ocr'])
+
+/** Fixed executables/scripts only. Native failures never retry through PowerShell. */
 export function windowsNative(request: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
   signal?.throwIfAborted()
   if (process.platform !== 'win32') return Promise.reject(new Error('Windows only'))
   const script = app.isPackaged ? join(process.resourcesPath, 'windows-tools.ps1') : join(app.getAppPath(), 'resources/windows-tools.ps1')
+  const native = nativeActions.has(String(request.action))
+  const executable = native
+    ? join(app.isPackaged ? process.resourcesPath : app.getAppPath(), app.isPackaged ? 'native' : 'native/bin', 'yu-windows.exe')
+    : join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
+  const args = native ? ['--parent-pid', String(process.pid)] : ['-NoProfile', '-NonInteractive', '-File', script]
   return new Promise((resolve, reject) => {
-    const child = spawn(join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
-      ['-NoProfile', '-NonInteractive', '-File', script], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(executable, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     let output = '', error = '', settled = false
     const finish = (failure?: Error): void => {
       if (settled) return

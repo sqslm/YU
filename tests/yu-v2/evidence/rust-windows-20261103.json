@@ -1,0 +1,378 @@
+{
+  "date": "2026-11-02T20:34:42.939Z",
+  "baseline": "88377c9",
+  "platform": "10.0.26300 x64",
+  "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+  "helperBytes": 363520,
+  "helperSha256": "7a17f74bc9891aa323c372c266e7c2e44f622f31c25986e18bb702c408687c8d",
+  "scope": "Complete one-shot request wall time including process startup, input, output and exit; five measured requests per action per round after one discarded warmup. Worker CPU sums all its threads, may exceed wall time, excludes compiler subprocesses and has OS accounting granularity. No total-app CPU or RAM reduction is inferred. Uses an owned transparent non-activating window and synthetic in-memory image; audio is read only. No user paths, audio values or OCR text are saved in this report.",
+  "checks": [
+    {
+      "variant": "powershell",
+      "windowCheck": true,
+      "mismatchedPidRejected": true,
+      "staleTitleRejected": true,
+      "minimizedRejected": true,
+      "volumeReadOnly": true,
+      "invalidVolumeRejected": true,
+      "unavailableOcrLanguageRejected": true
+    },
+    {
+      "variant": "rust",
+      "windowCheck": true,
+      "mismatchedPidRejected": true,
+      "staleTitleRejected": true,
+      "minimizedRejected": true,
+      "volumeReadOnly": true,
+      "invalidVolumeRejected": true,
+      "unavailableOcrLanguageRejected": true
+    },
+    {
+      "closedWindowRejected": true,
+      "ocrFieldsAndBoundsEqual": true,
+      "diskLabelsAndTotalsEqual": true
+    }
+  ],
+  "rounds": [
+    {
+      "variant": "powershell",
+      "measurements": [
+        {
+          "action": "window-check",
+          "p50Ms": 935.5774000000001,
+          "p95Ms": 999.6081000000013,
+          "workerCpuP50Ms": 1671.875,
+          "elapsedSamples": [
+            913.5390000000007,
+            989.4616999999998,
+            999.6081000000013,
+            935.5774000000001,
+            899.0002000000004
+          ],
+          "workerCpuSamples": [
+            1546.875,
+            1765.625,
+            1734.375,
+            1671.875,
+            1640.625
+          ]
+        },
+        {
+          "action": "disk-space",
+          "p50Ms": 791.5554000000011,
+          "p95Ms": 822.2981,
+          "workerCpuP50Ms": 1531.25,
+          "elapsedSamples": [
+            783.0653000000002,
+            791.5554000000011,
+            822.2981,
+            821.5677000000032,
+            789.2916000000005
+          ],
+          "workerCpuSamples": [
+            1531.25,
+            1500,
+            1531.25,
+            1531.25,
+            1531.25
+          ]
+        },
+        {
+          "action": "system-volume",
+          "p50Ms": 901.7904999999992,
+          "p95Ms": 948.3165000000008,
+          "workerCpuP50Ms": 1484.375,
+          "elapsedSamples": [
+            885.6442000000025,
+            906.3958999999995,
+            882.9821000000011,
+            901.7904999999992,
+            948.3165000000008
+          ],
+          "workerCpuSamples": [
+            1500,
+            1468.75,
+            1531.25,
+            1484.375,
+            1468.75
+          ]
+        },
+        {
+          "action": "ocr",
+          "p50Ms": 891.1195000000007,
+          "p95Ms": 907.2662999999993,
+          "workerCpuP50Ms": 1671.875,
+          "elapsedSamples": [
+            887.6237000000001,
+            875.5616999999984,
+            891.1195000000007,
+            893.8869000000013,
+            907.2662999999993
+          ],
+          "workerCpuSamples": [
+            1671.875,
+            1640.625,
+            1703.125,
+            1718.75,
+            1640.625
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "rust",
+      "measurements": [
+        {
+          "action": "window-check",
+          "p50Ms": 19.944800000001123,
+          "p95Ms": 21.025300000001153,
+          "workerCpuP50Ms": 0,
+          "elapsedSamples": [
+            19.232100000001083,
+            19.944800000001123,
+            19.668799999999464,
+            20.34609999999884,
+            21.025300000001153
+          ],
+          "workerCpuSamples": [
+            0,
+            0,
+            15.625,
+            15.625,
+            0
+          ]
+        },
+        {
+          "action": "disk-space",
+          "p50Ms": 21.54819999999745,
+          "p95Ms": 22.226399999999558,
+          "workerCpuP50Ms": 0,
+          "elapsedSamples": [
+            20.77509999999893,
+            21.54819999999745,
+            21.681499999998778,
+            21.21140000000014,
+            22.226399999999558
+          ],
+          "workerCpuSamples": [
+            15.625,
+            0,
+            31.25,
+            0,
+            0
+          ]
+        },
+        {
+          "action": "system-volume",
+          "p50Ms": 27.049800000000687,
+          "p95Ms": 28.147899999999936,
+          "workerCpuP50Ms": 15.625,
+          "elapsedSamples": [
+            28.147899999999936,
+            27.36489999999685,
+            26.234300000000076,
+            25.866799999999785,
+            27.049800000000687
+          ],
+          "workerCpuSamples": [
+            31.25,
+            15.625,
+            0,
+            15.625,
+            15.625
+          ]
+        },
+        {
+          "action": "ocr",
+          "p50Ms": 54.21779999999853,
+          "p95Ms": 64.32760000000053,
+          "workerCpuP50Ms": 31.25,
+          "elapsedSamples": [
+            54.21779999999853,
+            64.32760000000053,
+            63.598799999999756,
+            51.07610000000204,
+            53.085299999998824
+          ],
+          "workerCpuSamples": [
+            46.875,
+            46.875,
+            31.25,
+            31.25,
+            31.25
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "rust",
+      "measurements": [
+        {
+          "action": "window-check",
+          "p50Ms": 20.819299999999203,
+          "p95Ms": 22.22989999999845,
+          "workerCpuP50Ms": 0,
+          "elapsedSamples": [
+            18.000099999997474,
+            20.819299999999203,
+            20.306399999997666,
+            22.22989999999845,
+            21.804400000000896
+          ],
+          "workerCpuSamples": [
+            0,
+            0,
+            15.625,
+            0,
+            15.625
+          ]
+        },
+        {
+          "action": "disk-space",
+          "p50Ms": 23.009399999999005,
+          "p95Ms": 24.838999999999942,
+          "workerCpuP50Ms": 0,
+          "elapsedSamples": [
+            23.009399999999005,
+            24.122599999998783,
+            22.09820000000036,
+            24.838999999999942,
+            20.818299999999
+          ],
+          "workerCpuSamples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "action": "system-volume",
+          "p50Ms": 27.08730000000287,
+          "p95Ms": 27.96229999999923,
+          "workerCpuP50Ms": 15.625,
+          "elapsedSamples": [
+            27.96229999999923,
+            27.08730000000287,
+            27.436600000000908,
+            26.406999999999243,
+            27.03099999999904
+          ],
+          "workerCpuSamples": [
+            46.875,
+            15.625,
+            0,
+            15.625,
+            15.625
+          ]
+        },
+        {
+          "action": "ocr",
+          "p50Ms": 51.49660000000222,
+          "p95Ms": 52.57500000000073,
+          "workerCpuP50Ms": 46.875,
+          "elapsedSamples": [
+            52.57500000000073,
+            51.49660000000222,
+            50.72989999999845,
+            49.86479999999938,
+            51.71570000000065
+          ],
+          "workerCpuSamples": [
+            46.875,
+            46.875,
+            31.25,
+            31.25,
+            78.125
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "powershell",
+      "measurements": [
+        {
+          "action": "window-check",
+          "p50Ms": 882.6548000000003,
+          "p95Ms": 885.0345000000016,
+          "workerCpuP50Ms": 1531.25,
+          "elapsedSamples": [
+            882.6548000000003,
+            869.489999999998,
+            882.8844000000026,
+            885.0345000000016,
+            871.4592000000048
+          ],
+          "workerCpuSamples": [
+            1562.5,
+            1531.25,
+            1531.25,
+            1453.125,
+            1562.5
+          ]
+        },
+        {
+          "action": "disk-space",
+          "p50Ms": 794.1973999999973,
+          "p95Ms": 810.2021999999997,
+          "workerCpuP50Ms": 1531.25,
+          "elapsedSamples": [
+            810.2021999999997,
+            794.1973999999973,
+            777.1892000000007,
+            780.594600000004,
+            797.3970999999947
+          ],
+          "workerCpuSamples": [
+            1562.5,
+            1500,
+            1453.125,
+            1546.875,
+            1531.25
+          ]
+        },
+        {
+          "action": "system-volume",
+          "p50Ms": 910.328499999996,
+          "p95Ms": 914.182799999995,
+          "workerCpuP50Ms": 1468.75,
+          "elapsedSamples": [
+            910.328499999996,
+            891.4380000000019,
+            890.6028000000006,
+            914.182799999995,
+            910.7085000000006
+          ],
+          "workerCpuSamples": [
+            1468.75,
+            1468.75,
+            1453.125,
+            1546.875,
+            1562.5
+          ]
+        },
+        {
+          "action": "ocr",
+          "p50Ms": 897.7154999999984,
+          "p95Ms": 901.3381000000008,
+          "workerCpuP50Ms": 1593.75,
+          "elapsedSamples": [
+            897.7154999999984,
+            900.9735000000001,
+            890.7655000000013,
+            887.9368000000031,
+            901.3381000000008
+          ],
+          "workerCpuSamples": [
+            1671.875,
+            1671.875,
+            1593.75,
+            1500,
+            1593.75
+          ]
+        }
+      ]
+    }
+  ]
+}
