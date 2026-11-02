@@ -5,6 +5,7 @@ import type { LocalRecord } from '@shared/workspace'
 import { useTranslation } from 'react-i18next'
 import { searchErrorText } from './searchError'
 import { groupRecords } from './workspaceSearchGroups'
+import { hitClock } from './searchHitTime'
 
 const KINDS = { chat: '聊天', note: '随记', history: '历史记录', reminder: '提醒与待办', event: '日程' }
 
@@ -94,12 +95,16 @@ export function WorkspaceSearch({ rail = false, onOpen }: { rail?: boolean; onOp
             <Typography sx={{ fontSize: 10.5, color: 'text.disabled' }}>{group.rows.length}</Typography>
             <Box sx={{ flex: 1, height: 1, bgcolor: 'divider' }} />
           </Stack>}
-          <List dense disablePadding>{group.rows.map(record => <ListItemButton key={`${record.kind}:${record.id}`} data-workspace-hit onClick={() => { void onOpen(record).then(() => setOpen(false)).catch(error => setError(messageOf(error))) }} sx={{ borderRadius: 1.5, alignItems: 'flex-start', py: 1.25, px: 1 }}>
-            <Box sx={{ minWidth: 0, width: '100%' }}>
-              <Typography fontSize={13} fontWeight={600} noWrap>{record.title || t(KINDS[record.kind])}</Typography>
-              {!!record.text && <Typography fontSize={12} color="text.secondary" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: .25, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{record.text}</Typography>}
-            </Box>
-          </ListItemButton>)}</List>
+          <List dense disablePadding>{group.rows.map(record => {
+            const clock = hitClock(record.at)
+            return <ListItemButton key={`${record.kind}:${record.id}`} data-workspace-hit onClick={() => { void onOpen(record).then(() => setOpen(false)).catch(error => setError(messageOf(error))) }} sx={{ display: 'block', mb: 1, p: 1.25, borderRadius: 2, border: 1, borderColor: 'divider', bgcolor: 'background.paper', transition: 'border-color .15s ease, background-color .15s ease', '&:hover': { borderColor: 'text.disabled', bgcolor: 'action.hover' }, '&:last-of-type': { mb: 0 } }}>
+              <Stack direction="row" alignItems="baseline" gap={1.5}>
+                <Typography fontSize={13} fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>{record.title || t(KINDS[record.kind])}</Typography>
+                {!!clock && <Typography sx={{ fontSize: 10.5, color: 'text.disabled', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{clock}</Typography>}
+              </Stack>
+              {!!record.text && <Typography fontSize={12} color="text.secondary" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: .5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{record.text}</Typography>}
+            </ListItemButton>
+          })}</List>
         </Box>)}
         {!busy && query.trim() && !items.length && !error && <Typography color="text.secondary">{t('没有找到匹配内容')}</Typography>}
         {busy && <Typography role="status" color="text.secondary">{t('搜索中…')}</Typography>}
