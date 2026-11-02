@@ -12,6 +12,9 @@
 /docs/*
 !/docs/asr-api-setup.md
 !/docs/rust-refactor-plan.md
+!/docs/plans/
+/docs/plans/*
+!/docs/plans/2026-11-03-rust-gdi-capture-dsh.md
 !/package.json
 !/pnpm-lock.yaml
 !/pnpm-workspace.yaml
