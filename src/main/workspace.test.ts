@@ -1,13 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { ChatStore } from './chat-store'
 import { readWorkspaceRecord, searchWorkspace, type WorkspaceSources } from './workspace'
 import type { NoteEntry } from '@shared/types'
 
 const roots: string[] = [], stores: ChatStore[] = []
-afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
+afterEach(() => { vi.restoreAllMocks(); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 function fixture(): WorkspaceSources {
   const root = mkdtempSync(join(tmpdir(), 'yu-workspace-')); roots.push(root)
   const chat = new ChatStore(join(root, 'chats.db')); stores.push(chat)
@@ -39,4 +39,11 @@ it('paginates a combined result deterministically and provides the matching exce
   expect(first.items[0].text).toContain('关键词'); expect(first.items[0].text.length).toBeLessThan(185)
   expect(() => searchWorkspace(sources, '关键词', -1)).toThrow('无效')
   expect(() => readWorkspaceRecord(sources, { ...first.items[0], id: 'gone' })).toThrow('不存在')
+})
+it('keeps pages stable when many chat messages have the same timestamp', () => {
+  const sources = fixture(), thread = sources.chat.create()
+  vi.spyOn(Date, 'now').mockReturnValue(100)
+  for (let i = 0; i < 40; i++) { const ids = sources.chat.begin(thread.id, '同时创建'); sources.chat.finish(ids.answerId, '完成', 'done') }
+  const first = searchWorkspace(sources, '同时'), next = searchWorkspace(sources, '同时', 30)
+  expect(new Set([...first.items, ...next.items].map(row => row.id)).size).toBe(40)
 })

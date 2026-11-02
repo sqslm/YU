@@ -49,7 +49,7 @@ export function searchWorkspace(sources: WorkspaceSources, query: string, offset
   rows.push(...sources.chat.search(needle, take))
   for (const item of sources.reminders()) if (matches(item.title, item.description || '')) rows.push({ kind: 'reminder', id: item.id, title: item.title, text: item.description || '', at: item.updatedAt })
   for (const item of sources.events()) if (matches(item.title, item.notes || '', item.location || '')) rows.push({ kind: 'event', id: item.id, title: item.title, text: [item.notes, item.location].filter(Boolean).join('\n'), at: item.start })
-  rows.sort((a, b) => b.at - a.at || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id))
+  rows.sort((a, b) => b.at - a.at || a.kind.localeCompare(b.kind))
   return { hasMore: rows.length > offset + 30, items: rows.slice(offset, offset + 30).map(row => {
     const at = row.text.toLowerCase().indexOf(needle), start = Math.max(0, at - 50)
     return { ...row, text: (start ? '…' : '') + row.text.slice(start, start + 180) + (row.text.length > start + 180 ? '…' : '') }

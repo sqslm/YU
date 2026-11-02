@@ -140,6 +140,7 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
   const send = async (): Promise<void> => {
     const text = draft.trim()
     if ((!text && !pendingFiles.length) || index.busyThreadId || saving) return
+    focusedRef.current = undefined; setFocused(undefined)
     setError(''); setSaving(true)
     let restoreKey = draftKey
     try {
