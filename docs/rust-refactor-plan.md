@@ -20,7 +20,7 @@
 | 6 | GDI 截图采集 | 已完成，`00d652c`；阶段 7 已复核内存 | [开发计划与结果](plans/2026-11-03-rust-gdi-capture-dsh.md)：采纳缓存绑定的 TS，未上线 Rust；1080p P50 14.1→12.3ms、P95 20.8→18.7ms；6.5 GB 私有内存在“释放引用 + 显式 GC + 空闲”探针条件下可回收，不覆盖全部生产场景 |
 | 7 | 记忆关系图纯计算评估与上一阶段核验 | 已交付 `4bb22dc`，采用 TS；Rust 未上线 | [开发计划与结果](plans/2026-11-03-rust-memory-graph-dsh.md)：报告为 512 维、21/81/200 节点，算法对比在 Electron 主进程，最终版另测 worker 往返；文档维数与测量范围由阶段 8 校正为 512 维、21/81/200 节点与主进程/worker 的真实边界 |
 | 8 | 常驻语音唤醒宿主与设备枚举 | 已交付并接入，`d31a0a4`；归因由阶段 9 修正 | [开发计划与续做结果](plans/2026-11-03-rust-voice-wake-dsh.md)：Rust 监听/枚举、PS 学习；原报告 ready P95 1123→572ms、私有 75.5→13.3MB。阶段 9 复核发现事件掩码缺 SDK 校验位、格式 GUID 写错、音频时间轴与资源清理问题，原「机器限制」归因已被推翻，性能数字不代替功能验收 |
-| 9 | Rust 唤醒正确性与资源回收 | 已完成，`0356574` | [修复计划与结果](plans/2026-11-03-rust-wake-correctness-dsh.md)：`SetInterest` 补 `SPFEI_FLAGCHECK` 后 `S_OK`，`SPDFID_WaveFormatEx` 改正后 `SetBaseStream` 成功；会话改由 `SPEI_END_SR_STREAM` 收尾（文件输入 63–90ms），音频时间轴改为已消费字节，读取改为边消费边等待并补 `Drop`；ready P95 1277→597ms、待命私有 75.4→13.3MB；音标跨宿主（IPA 对拼音）未解决 |
+| 9 | Rust 唤醒正确性与资源回收 | 已完成，`44335c6` | [修复计划与结果](plans/2026-11-03-rust-wake-correctness-dsh.md)：`SetInterest` 补 `SPFEI_FLAGCHECK` 后 `S_OK`，`SPDFID_WaveFormatEx` 改正后 `SetBaseStream` 成功；会话改由 `SPEI_END_SR_STREAM` 收尾（文件输入 63–90ms），音频时间轴改为已消费字节，读取改为边消费边等待并补 `Drop`；ready P95 1277→597ms、待命私有 75.4→13.3MB；音标跨宿主（IPA 对拼音）未解决 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
