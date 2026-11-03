@@ -144,3 +144,41 @@ try {
     }
   } finally { await rm(root, { recursive: true }) }
 }, 60_000)
+
+it.skipIf(process.platform !== 'win32')('keeps the phrase grammar on the wake phrase instead of matching it mid sentence', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'yu-wake-grammar-'))
+  try {
+    const synth = join(root, 'synthesize.ps1')
+    // One positive (the phrase split by a pause) and three negatives that the wake
+    // grammar could match if it were allowed to match anywhere or accept a fragment.
+    await writeFile(synth, '\uFEFF' + `param([string]$OutputRoot)
+Add-Type -AssemblyName System.Speech
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try {
+  $voice = $synth.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name -eq 'zh-CN' } | Select-Object -First 1
+  if (!$voice) { Write-Output 'unavailable'; exit }
+  $synth.SelectVoice($voice.VoiceInfo.Name)
+  $files = [ordered]@{
+    'split.wav' = '<speak version="1.0" xml:lang="zh-CN">你好<break time="700ms"/>胡小杨</speak>'
+    'embedded.wav' = '今天开会的时候大家都说你好胡小杨这个人做事很认真。'
+    'partial.wav' = '你好胡。'
+    'unrelated.wav' = '请把窗外的雨声关小一点。'
+  }
+  foreach ($name in $files.Keys) {
+    $synth.SetOutputToWaveFile((Join-Path $OutputRoot $name))
+    if ($files[$name].StartsWith('<speak')) { $synth.SpeakSsml($files[$name]) } else { $synth.Speak($files[$name]) }
+    $synth.SetOutputToNull()
+  }
+} finally { $synth.Dispose() }
+`)
+    if ((await run(['-File', synth, root])).includes('unavailable')) { context.skip(); return }
+    const wakeFor = async (name: string) => {
+      const stdout = await run(['-File', join(process.cwd(), 'resources/voice-wake.ps1')], { phrase: '你好，胡小杨', language: 'zh', wave: join(root, name) })
+      const events = stdout.trim().split('\n').map(line => JSON.parse(line.replace(/^\uFEFF/, '')))
+      expect(events.filter(event => event.type === 'error')).toEqual([])
+      return events.filter(event => event.type === 'wake')
+    }
+    expect(await wakeFor('split.wav')).toHaveLength(1)
+    for (const name of ['embedded.wav', 'partial.wav', 'unrelated.wav']) expect(await wakeFor(name), name).toEqual([])
+  } finally { await rm(root, { recursive: true }) }
+}, 40_000)

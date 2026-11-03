@@ -323,7 +323,11 @@ public static class YUWake {
       var grammar = new Grammar(builder); engine.LoadGrammar(grammar); engine.SetInputToNull();
       var target = engine.EmulateRecognize(spoken);
       string targetPhones = target == null ? "" : Phones(target.Words);
-      engine.UnloadGrammar(grammar); engine.LoadGrammar(new DictationGrammar());
+      // Keep the phrase grammar loaded while sampling. Dictation alone is unreliable on a
+      // recognizer with a weak language model (measured here: the phrase came back as
+      // "依靠和象牙…"), so the samples never agreed with the target pronunciation and
+      // learning always failed; the phrase grammar supplies the pronunciation it heard.
+      engine.LoadGrammar(new DictationGrammar());
       engine.InitialSilenceTimeout = TimeSpan.FromSeconds(6);
       foreach (string wave in waves) {
         var text = new StringBuilder(); var phones = new StringBuilder(); float confidence = 0; int words = 0;
@@ -388,8 +392,43 @@ public static class YUWake {
       string targetPhones = target == null ? "" : Phones(target.Words);
       var targetTexts = new HashSet<string>(); foreach (string text in texts) targetTexts.Add(MatchText(text));
       if (targetPhones.Length > 0) phones.Add(targetPhones);
-      // Competing ordinary speech can be rejected instead of forced into the one wake phrase.
-      engine.LoadGrammar(new DictationGrammar { Name = "background", Weight = 0.5f });
+      // A grammar that only lists the complete phrase cannot explain "phrase + command":
+      // once a sentence follows the phrase the background dictation grammar explains the
+      // whole utterance and the wake grammar reports nothing at all (measured: one
+      // recognition result, grammar "background", no wake). Accepting the phrase plus
+      // whatever follows puts that audio back on the wake path.
+      var followed = new GrammarBuilder { Culture = selected.Culture };
+      followed.Append(choices);
+      followed.AppendDictation();
+      engine.LoadGrammar(new Grammar(followed) { Name = "wake-followed" });
+      // A phrase spoken across a silence gap arrives as separate recognition results, and
+      // a one-word phrase has no partial hypothesis of its own, so the pieces either side
+      // of the gap are recognised explicitly. They only ever feed the carry path below:
+      // a piece never emits a wake on its own, and "phrase + command" is still matched
+      // by the two grammars above.
+      var leading = new Choices(); var trailing = new Choices();
+      bool hasLeading = false, hasTrailing = false;
+      foreach (string text in texts) {
+        string flat = MatchText(text);
+        if (flat.IndexOf(' ') >= 0) {
+          var words = flat.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+          for (int take = 1; take < words.Length; take++) {
+            leading.Add(String.Join(" ", words, 0, take)); hasLeading = true;
+            trailing.Add(String.Join(" ", words, take, words.Length - take)); hasTrailing = true;
+          }
+        } else {
+          for (int take = 2; take < flat.Length; take++) { leading.Add(flat.Substring(0, take)); hasLeading = true; }
+          for (int from = 1; from <= flat.Length - 2; from++) { trailing.Add(flat.Substring(from)); hasTrailing = true; }
+        }
+      }
+      if (hasLeading) { var leadingGrammar = new GrammarBuilder { Culture = selected.Culture }; leadingGrammar.Append(leading); engine.LoadGrammar(new Grammar(leadingGrammar) { Name = "wake-leading" }); }
+      if (hasTrailing) { var trailingGrammar = new GrammarBuilder { Culture = selected.Culture }; trailingGrammar.Append(trailing); engine.LoadGrammar(new Grammar(trailingGrammar) { Name = "wake-trailing" }); }
+      // The background dictation grammar is deliberately absent: measured on this machine
+      // it wins every competition, including two-word fragments (confidence 0.04 against
+      // 0.97 for the wake grammar), which silenced both the command case and the carry.
+      // Ordinary speech is instead kept out by requiring a wake match to start an
+      // utterance (see the lastSilence check in candidate below) and by the negative
+      // corpus in src/main/wake-word-native.test.ts.
       int index = Resolve(device, !String.IsNullOrEmpty(wave));
       WaveInCapture capture = null;
       try {
@@ -421,6 +460,7 @@ public static class YUWake {
         }
       } catch { Emit(new { type = "error", error = "microphone" }); return; }
       using (var ended = new ManualResetEvent(false)) {
+        double lastSilence = 0;
         string pendingText = "", pendingPhones = "";
         float pendingConfidence = 0; int pendingWords = 0;
         TimeSpan pendingStart = TimeSpan.Zero, pendingEnd = TimeSpan.Zero;
@@ -428,6 +468,9 @@ public static class YUWake {
           if (result == null || result.Audio == null || String.IsNullOrEmpty(result.Text)) return;
           var audioStart = result.Audio.AudioPosition;
           bool carry = pendingWords > 0 && audioStart >= pendingEnd && audioStart - pendingEnd <= TimeSpan.FromSeconds(3);
+          // A wake word starts the utterance it belongs to; without that rule the leading
+          // and trailing pieces would also match the phrase in the middle of a sentence.
+          if (!carry && audioStart.TotalMilliseconds - lastSilence > 600) return;
           var prefixText = new StringBuilder(carry ? pendingText : "");
           var prefixPhones = new StringBuilder(carry ? pendingPhones : "");
           float confidence = carry ? pendingConfidence : 0; int count = carry ? pendingWords : 0;
@@ -455,6 +498,7 @@ public static class YUWake {
         };
         DateTime lastLevel = DateTime.MinValue;
         engine.AudioLevelUpdated += (sender, e) => {
+          if (e.AudioLevel == 0) lastSilence = engine.RecognizerAudioPosition.TotalMilliseconds;
           if ((DateTime.UtcNow - lastLevel).TotalMilliseconds < 500) return;
           lastLevel = DateTime.UtcNow; Emit(new { type = "level", value = e.AudioLevel });
         };
