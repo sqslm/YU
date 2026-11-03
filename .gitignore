@@ -50,6 +50,7 @@
 !/scripts/benchmark-scroll.mjs
 !/scripts/benchmark-capture.mjs
 !/scripts/benchmark-memory-graph.mjs
+!/scripts/benchmark-wake.mjs
 !/scripts/benchmark-model-workers.mjs
 !/native/
 /native/bin/

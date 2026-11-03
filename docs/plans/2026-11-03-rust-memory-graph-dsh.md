@@ -86,11 +86,14 @@
 ### 前置任务 A
 
 - 唤醒测试：`resources/voice-wake.ps1`、`src/shared/wake-word.ts`、`src/main/wake-word-native.test.ts` 自 `872e5b5` 起逐字节未变（SHA-256 `b155e27…`、`c5472bc…`、`c5e5401…`）。把 `git show 872e5b5:resources/voice-wake.ps1` 解到隔离目录后用同一段 SAPI 合成音频复跑，与当前脚本输出完全一致：`exit 0`、只有 `{"type":"ready"}`、0 个 wake。根因是本机 zh-CN SAPI 在“唤醒词+紧跟指令”的整句音频上返回后台 `DictationGrammar` 的假设（conf 0.23）而不是唤醒语法的结果（同一音频单独用受限 Choices 识别为 `你好胡小杨` conf 0.993）；移除听写语法即恢复 `wake`。这与本仓库改动无关，属环境限制，保留两项失败原样，未跳过、未降阈值、未改期望。证据：[`wake-word-environment-20261103.json`](../../tests/yu-v2/evidence/wake-word-environment-20261103.json)。
-- 截图内存：新增回收探针后复跑（旧报告 `rust-capture-20261103.json` 原样保留，新证据 [`rust-capture-memory-20261103.json`](../../tests/yu-v2/evidence/rust-capture-memory-20261103.json)）。1080p 私有内存检查点 afterWindow 66 MB → buffer 739 MB → image 1282 MB → thumbnail 1354 MB → scroll 441 MB → CPU 批次后 6655 MB（external 仅 65 MB）；随后 `gc` + 两次 400 ms 空闲回到 109 MB，再跑 100 次 `captureScreenPixels` 与 100 次 `nativeImage.createFromBitmap` 仍为 104 MB，空闲 8 s 后 104 MB。720p 同形态（3355 MB → 92 MB）。即阶段 6 的 6.5 GB 是基准同步循环里“分配快于回收”的已提交内存，不是生产泄漏；阶段 6 文档已按此修订，并更正“绑定 10 个导出”为 9 个、删除“解析导出成本超过 GDI 本身”的无证据表述。
+- 截图内存：新增回收探针后复跑（旧报告 `rust-capture-20261103.json` 原样保留，新证据 [`rust-capture-memory-20261103.json`](../../tests/yu-v2/evidence/rust-capture-memory-20261103.json)）。结论只覆盖该探针条件：调用方释放引用、显式 GC、并让出事件循环空闲之后，这些已提交内存可以被回收，不能据此断定所有生产场景都不存在泄漏。1080p 私有内存检查点 afterWindow 66 MB → buffer 739 MB → image 1282 MB → thumbnail 1354 MB → scroll 441 MB → CPU 批次后 6655 MB（external 仅 65 MB）；随后 `gc` + 两次 400 ms 空闲回到 109 MB，再跑 100 次 `captureScreenPixels` 与 100 次 `nativeImage.createFromBitmap` 仍为 104 MB，空闲 8 s 后 104 MB。720p 同形态（3355 MB → 92 MB）。即阶段 6 的 6.5 GB 是基准同步循环里“分配快于回收”的已提交内存，不是生产泄漏；阶段 6 文档已按此修订，并更正“绑定 10 个导出”为 9 个、删除“解析导出成本超过 GDI 本身”的无证据表述。
 
 ### 任务 B：真实关系图基线
 
-- 新增 `scripts/benchmark-memory-graph.mjs`（自行构建候选 crate、每场景独立临时 home、删除 `ELECTRON_RUN_AS_NODE`）与 `tests/yu-v2/fixtures/memory-graph-electron.cjs`（固定种子 20261103 的合成 SQLite：NODES+6 行，含 5 行其他用户、多来源、`manual`、重复向量用于同分；真实 `utilityProcess` 加载 `out/main/memory.js`）。A/B/C 交错 `A/B/C/C/B/A`，预热 3 轮 + 15 轮 → 每变体 30 样本，CPU 另用 30 次连续批次。
+- 新增 `scripts/benchmark-memory-graph.mjs`（自行构建候选 crate、每场景独立临时 home、删除 `ELECTRON_RUN_AS_NODE`）与 `tests/yu-v2/fixtures/memory-graph-electron.cjs`（固定种子 20261103 的合成 SQLite：512 维向量、`NODES+6` 行，含 5 行其他用户、多来源、`manual`、重复向量用于同分）。A/B/C 交错 `A/B/C/C/B/A`，预热 3 轮 + 15 轮 → 每变体 30 样本，CPU 另用 30 次连续批次。
+- 测量位置：A/B/C 的算法对比（`readCatalog`/`graphLinks`/`readGraph` 各变体）在 **Electron 主进程**里直接调用三份 `catalog.ts` 模块完成；只有最终实现另外通过真实 `utilityProcess` 加载 `out/main/memory.js` 测了一次 host→worker→host 往返。因此主进程的 `process.cpuUsage()` 只代表主进程，不能当作 worker CPU；`worker.cpuMsPerCall` 实测为 0 就是该原因，不能用它推断 worker 开销。
+- `worker.coldMs` 是 worker 就绪后的**首次 `graph` 请求**耗时，`initMs` 单独记录；二者都不包含 utility process 启动本身，也不包含 host 侧序列化之外的开销。
+- 实际数据规模：三个场景的合成库真实行数为 21/81/200（20/80 节点库各多 1 行同用户数据；200 节点场景先按 200 条 LIMIT 截断），与场景名 20/80/200 不完全相同。
 - 基线（A = `00d652c`）：200 节点 `readCatalog` 3.62–4.42 ms、`graphLinks` 9.46–9.59 ms、`readGraph` 15.2–16.3 ms（P95 16.8–19.7 ms）。worker 冷启 30–45 ms、`init` 42–71 ms、热调用 P50 15.2–16.5 ms、payload 50.9 KB。
 - 分层归因（200 节点、3937 对）：setup（来源集合 + Float64 拷贝 + 范数）1.2 ms、双循环余弦 12.6–12.9 ms、排序/选边 1.6 ms。
 
@@ -111,7 +114,7 @@
 
 - `pnpm exec vitest run src/main/memory/catalog.test.ts src/main/memory/catalog.graph.test.ts src/main/memory/host.test.ts` → 3 文件 / 79 通过；差分测试把 `00d652c` 的 `graphLinks` 原样内嵌为 oracle，覆盖空库、单节点、缺向量、短向量、长度不同、零范数、正交/负相关/不同范数、0.78 阈值两侧、NaN/Infinity、重复向量同分与 200 节点完整链路顺序。
 - `pnpm typecheck` 通过；`pnpm test` → 234 文件通过 / 1 失败（238），3502 通过 / 2 失败 / 8 跳过（3512），两项失败即上文已归因的唤醒测试；`pnpm build` 通过（renderer 13.8 s）。
-- 未测项：真实 512 维用户库规模下的表现（只用 16 维合成向量跑 200 节点与 20/80 节点合成库）、renderer 布局与力导向渲染、250 ms 防抖、PNG 导出；`readGraph` 的 worker 往返只在当前实现上测过，没有重跑基线版本的同链路对比。
+- 未测项：真实用户库规模下的表现（合成库为 512 维、rows 21/81/200，未读用户数据）、renderer 布局与力导向渲染、250 ms 防抖、PNG 导出；A/B/C 的算法对比在 Electron 主进程完成，`readGraph` 的 worker 往返只在最终实现上测过，没有重跑基线版本的同链路对比，也没有三方案的 worker 对照。
 
 ### 清理
 

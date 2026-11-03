@@ -317,6 +317,7 @@ pnpm benchmark:windows        # 四项桥接的完整请求对比，不切换前
 pnpm benchmark:scroll         # 合成帧新旧/稀疏 TS/Rust 对照、CPU 采样和传输成本
 pnpm benchmark:capture        # GDI 采集三方案对照（原版/缓存绑定 TS/Rust DLL），结论为不采纳 DLL
 pnpm benchmark:memory-graph  # 关系图计算对照（基线 TS/零拷贝+每对一次 TS/Rust 批量），结论为只采纳 TS
+pnpm benchmark:wake          # 常驻唤醒宿主：枚举/首次 ready/待命 CPU 与私有内存（监听仍用 PowerShell）
 pnpm benchmark:models         # 复用本地记忆模型，隔离测量 SDK/推理/召回与音频预处理
 
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）

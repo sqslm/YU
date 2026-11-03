@@ -1,0 +1,168 @@
+{
+  "kind": "wake-helper-host",
+  "date": "2026-11-03T11:51:34.387Z",
+  "node": "v24.22.2",
+  "phrase": "你好，胡小杨",
+  "rounds": 3,
+  "idleMs": 5000,
+  "helpers": {
+    "powershell": {
+      "enumerate": [
+        {
+          "helper": "powershell",
+          "wallMs": 923.4286,
+          "code": 0,
+          "peakPrivateKb": 53020,
+          "devices": 2,
+          "stdout": 127
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 912.4893000000002,
+          "code": 0,
+          "peakPrivateKb": 50380,
+          "devices": 2,
+          "stdout": 127
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 907.4802999999993,
+          "code": 0,
+          "peakPrivateKb": 51260,
+          "devices": 2,
+          "stdout": 127
+        }
+      ],
+      "listen": [
+        {
+          "helper": "powershell",
+          "state": "ready",
+          "failure": null,
+          "readyMs": 1075.1473999999998,
+          "privateKbPeak": 76716,
+          "privateKbSettled": 76716,
+          "workingSetKbPeak": 159604,
+          "idleCpuMsPerSecond": 112.4,
+          "idleSeconds": 5,
+          "events": [
+            "device",
+            "ready"
+          ]
+        },
+        {
+          "helper": "powershell",
+          "state": "ready",
+          "failure": null,
+          "readyMs": 1076.3202,
+          "privateKbPeak": 76724,
+          "privateKbSettled": 76724,
+          "workingSetKbPeak": 159580,
+          "idleCpuMsPerSecond": 115.6,
+          "idleSeconds": 5,
+          "events": [
+            "device",
+            "ready"
+          ]
+        },
+        {
+          "helper": "powershell",
+          "state": "ready",
+          "failure": null,
+          "readyMs": 1076.9003000000012,
+          "privateKbPeak": 77312,
+          "privateKbSettled": 77312,
+          "workingSetKbPeak": 160136,
+          "idleCpuMsPerSecond": 109.4,
+          "idleSeconds": 5,
+          "events": [
+            "device",
+            "ready"
+          ]
+        }
+      ],
+      "readyMs": {
+        "count": 3,
+        "p50": 1076.3202,
+        "p95": 1076.9003000000012,
+        "min": 1075.1473999999998,
+        "max": 1076.9003000000012
+      },
+      "privateKbSettled": {
+        "count": 3,
+        "p50": 76724,
+        "p95": 77312,
+        "min": 76716,
+        "max": 77312
+      },
+      "idleCpuMsPerSecond": {
+        "count": 3,
+        "p50": 112.4,
+        "p95": 115.6,
+        "min": 109.4,
+        "max": 115.6
+      }
+    },
+    "native": {
+      "enumerate": [
+        {
+          "helper": "native",
+          "wallMs": 50.112700000001496,
+          "code": 0,
+          "peakPrivateKb": 0,
+          "devices": 2,
+          "stdout": 126
+        },
+        {
+          "helper": "native",
+          "wallMs": 47.22529999999824,
+          "code": 0,
+          "peakPrivateKb": 0,
+          "devices": 2,
+          "stdout": 126
+        },
+        {
+          "helper": "native",
+          "wallMs": 45.335299999998824,
+          "code": 0,
+          "peakPrivateKb": 0,
+          "devices": 2,
+          "stdout": 126
+        }
+      ],
+      "listen": [
+        {
+          "helper": "native",
+          "skipped": "listening not implemented in this helper"
+        },
+        {
+          "helper": "native",
+          "skipped": "listening not implemented in this helper"
+        },
+        {
+          "helper": "native",
+          "skipped": "listening not implemented in this helper"
+        }
+      ],
+      "readyMs": {
+        "count": 3
+      },
+      "privateKbSettled": {
+        "count": 3
+      },
+      "idleCpuMsPerSecond": {
+        "count": 3
+      }
+    }
+  },
+  "scope": [
+    "Enumeration and listening are measured for the helper process only; the parent application is not instrumented here.",
+    "Idle CPU comes from the helper process total processor time sampled over the idle window, not from the parent.",
+    "Time to first ready covers process start plus grammar setup and covers the SAPI engine load.",
+    "Live listening uses the default capture device; no audio is stored or uploaded.",
+    "The native helper is reported only when native/bin/yu-wake.exe exists; it covers device enumeration only, so no listening numbers exist for it."
+  ],
+  "decision": {
+    "adopted": "powershell",
+    "reason": "The PowerShell/System.Speech host keeps listening; the native candidate covers enumeration only, and an unverified listening path is not shipped."
+  }
+}

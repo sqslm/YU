@@ -18,6 +18,7 @@
     "benchmark:scroll": "node scripts/build-native.mjs && node scripts/benchmark-scroll.mjs",
     "benchmark:capture": "node scripts/benchmark-capture.mjs",
     "benchmark:memory-graph": "node scripts/benchmark-memory-graph.mjs",
+    "benchmark:wake": "node scripts/benchmark-wake.mjs",
     "benchmark:models": "node scripts/benchmark-model-workers.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "node scripts/build-native.mjs && vitest run",

@@ -288,6 +288,7 @@ pnpm benchmark:windows        # four full-request comparisons; no focus or audio
 pnpm benchmark:scroll         # synthetic baseline/sparse-TS/Rust, CPU samples and transfer costs
 pnpm benchmark:capture        # GDI capture: baseline / cached-binding TS / Rust DLL; verdict: DLL rejected
 pnpm benchmark:memory-graph  # graph maths: baseline TS / copy-free TS / Rust batch; verdict: TS only
+pnpm benchmark:wake          # wake host: enumeration, first ready, idle CPU and private memory (listening stays on PowerShell)
 pnpm benchmark:models         # existing local model; isolated SDK/inference/recall/PCM measurements
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
