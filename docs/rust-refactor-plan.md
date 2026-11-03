@@ -19,8 +19,8 @@
 | 5 | 本地 ASR / 记忆模型包装层 | 已完成分析与优化，`872e5b5`；保留 TS | 只读召回避免 SDK 开销；修复延迟启动进程回收并去掉 PCM 中间数组，ASR 解码未测 |
 | 6 | GDI 截图采集 | 已完成，`00d652c`；阶段 7 已复核内存 | [开发计划与结果](plans/2026-11-03-rust-gdi-capture-dsh.md)：采纳缓存绑定的 TS，未上线 Rust；1080p P50 14.1→12.3ms、P95 20.8→18.7ms；6.5 GB 私有内存在“释放引用 + 显式 GC + 空闲”探针条件下可回收，不覆盖全部生产场景 |
 | 7 | 记忆关系图纯计算评估与上一阶段核验 | 已交付 `4bb22dc`，采用 TS；Rust 未上线 | [开发计划与结果](plans/2026-11-03-rust-memory-graph-dsh.md)：报告为 512 维、21/81/200 节点，算法对比在 Electron 主进程，最终版另测 worker 往返；文档维数与测量范围由阶段 8 校正为 512 维、21/81/200 节点与主进程/worker 的真实边界 |
-| 8 | 常驻语音唤醒宿主与设备枚举 | 已交付并接入，`d31a0a4`；正确性待阶段 9 修复核验 | [开发计划与续做结果](plans/2026-11-03-rust-voice-wake-dsh.md)：Rust 监听/枚举、PS 学习；原报告 ready P95 1123→572ms、私有 75.5→13.3MB。代码复核发现事件掩码、格式 GUID、音频时间轴与资源清理问题，性能数字不代替功能验收 |
-| 9 | Rust 唤醒正确性与资源回收 | 待 DSH 实施 | [修复计划](plans/2026-11-03-rust-wake-correctness-dsh.md)：修 SDK 参数、持续监听时序、大块读取与错误清理，保存可重复的真实 Rust/SAPI 回归，再复测收益；不扩展新迁移模块 |
+| 8 | 常驻语音唤醒宿主与设备枚举 | 已交付并接入，`d31a0a4`；归因由阶段 9 修正 | [开发计划与续做结果](plans/2026-11-03-rust-voice-wake-dsh.md)：Rust 监听/枚举、PS 学习；原报告 ready P95 1123→572ms、私有 75.5→13.3MB。阶段 9 复核发现事件掩码缺 SDK 校验位、格式 GUID 写错、音频时间轴与资源清理问题，原「机器限制」归因已被推翻，性能数字不代替功能验收 |
+| 9 | Rust 唤醒正确性与资源回收 | 已完成，`0356574` | [修复计划与结果](plans/2026-11-03-rust-wake-correctness-dsh.md)：`SetInterest` 补 `SPFEI_FLAGCHECK` 后 `S_OK`，`SPDFID_WaveFormatEx` 改正后 `SetBaseStream` 成功；会话改由 `SPEI_END_SR_STREAM` 收尾（文件输入 63–90ms），音频时间轴改为已消费字节，读取改为边消费边等待并补 `Drop`；ready P95 1277→597ms、待命私有 75.4→13.3MB；音标跨宿主（IPA 对拼音）未解决 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -260,14 +260,17 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 **续做批次（同日）交付 `d31a0a4` 并接入 Rust 监听**：`native/wake` 实现 SAPI 事件读取、SRGS 规则与自有 waveIn/IStream；`WakeWordHost`、构建和资源使用 `yu-wake.exe`，学习仍用 PS。原报告记录 8 例合成语料和 30 次正常启停，枚举 912→54ms、ready P95 1123→572ms、私有 75.5→13.3MB；这些数据不证明所有行为已等价。源码复核发现 `SetInterest` 掩码缺 SDK 校验位、音频格式 GUID 写错，不能把原 API 错误直接归为机器限制；队列长度被当作时间轴，错误出口缺统一资源清理。文档原“900ms 无结果推断”也不能代替与源码一致的音频边界证据。上述问题由阶段 9 修复与复测；真实讲话/热插拔/RDP等仍未测。
 
-## 阶段 9：Rust 唤醒正确性与资源回收（待实施）
+## 阶段 9：Rust 唤醒正确性与资源回收（已完成）
 
-- [ ] 修 SDK 事件掩码与格式标识，重新验证原 API 失败，移除缺乏依据的延迟/订阅绕行。
-- [ ] 修单调音频时间轴、大块/零字节读取及错误退出的资源生命周期，保留可见设备回落与旧训练兼容。
-- [ ] 保存受跟踪的实际 Rust/SAPI 回归，覆盖延迟发声、持续监听、故障清理及既有语义，然后复测性能。
-- [ ] 自行回写本轮结果与原归因，提交后停止。详细要求见[第九阶段计划](plans/2026-11-03-rust-wake-correctness-dsh.md)。
+阶段 8 记为「机器限制」的三处失败全部是本项目代码问题：`SetInterest` 漏了 SDK 要求的 `SPFEI_FLAGCHECK=(1<<30)|(1<<33)`（补上后四事件掩码返回 `S_OK`），`SPDFID_WaveFormatEx` GUID 写成 `c6e13340…`（应为 `c31adbae…`，改正后 `SetBaseStream` 成功），会话结束靠「文件字节数/32+1500ms」与 1200ms 宽限（改由 `SPEI_END_SR_STREAM` 收尾）。只有 `SpMMAudioIn::SetDeviceId(真实索引)` 仍返回 `0x80045002`，所以保留自有 waveIn + `IStream` 的采集路径。
 
-证据：`tests/yu-v2/evidence/rust-wake-20261103.json`（上批次）与 `tests/yu-v2/evidence/rust-wake-listener-20261103.json`（续做批次）；详细结果见[本轮计划文末](plans/2026-11-03-rust-voice-wake-dsh.md#续做批次实际结果dsh2026-11-03)。
+- 时间轴与读取：`Shared::position_ms()` 由积压队列长度改为已消费字节（单调），结果、静音、carry 共用一条时间轴；`read()` 边消费边等待、`cb=0` 立即返回、超大请求可完成，溢出按整帧丢弃并计入 `dropped_bytes()`。
+- 生命周期与回落：`Capture` 的 prepare/add/start 逐步检查并实现 `Drop`，部分初始化与所有错误出口统一 Stop/Reset/Unprepare/Close；设备索引消失时记录 `device-missing` 后回落系统默认，事件报**实际**设备名。
+- 行为：完整短语、短语后接指令、700ms 跨段、2s 停顿、同音、片段、句中嵌词、无关中文、白噪声、10s 前置静音、10s 段内间隔、9.45 分钟连续会话（8/8 唤醒、0 error）均按预期；`src/main/wake-word-rust.test.ts` 12/12。
+- 性能复测（各 20 样本）：枚举 981→52ms，首次 ready P50/P95 1151/1277→546/597ms，待命私有 75.4→13.3MB；待命 CPU 在 250ms 采样下两侧多为 0，只能说未观察到稳定差异，不能写「无退化」。
+- 未解决：`ISpPhoneConverter` 给拼音、`System.Speech` 学习样本是 IPA，跨宿主音标比对不成立，变体匹配实际仍靠 text；英文识别未验证（本机只装 zh-CN 识别器）；真实麦克风、热插拔、RDP/锁屏未测。
+
+证据：`tests/yu-v2/evidence/rust-wake-correctness-20261103.json`（本轮）；`rust-wake-20261103.json` 与 `rust-wake-listener-20261103.json` 原样保留。详细结果见[阶段 9 计划文末](plans/2026-11-03-rust-wake-correctness-dsh.md#实际修复与验收结果dsh2026-11-03)。
 
 ## 后续阶段的推进规则
 

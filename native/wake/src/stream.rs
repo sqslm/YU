@@ -14,8 +14,9 @@ use windows::core::{Error, GUID, HRESULT, Result, implement};
 
 use crate::capture::{self, Shared};
 
-/// Format id SAPI uses for raw wave data.
-pub const SPDFID_WAVE_FORMAT: GUID = GUID::from_u128(0xc6e13340_30ac_11d0_a18c_00a0c9118956);
+/// `SPDFID_WaveFormatEx` from the speech SDK: the format id SAPI uses for raw wave
+/// data in an `ISpStreamFormat` (System.Speech SAPIGuids.SPDFID_WaveFormatEx).
+pub const SPDFID_WAVE_FORMAT: GUID = GUID::from_u128(0xc31adbae_527f_4ff5_a230_f62bb61ff70c);
 
 #[implement(IStream, ISpStreamFormat)]
 pub struct CaptureStream {

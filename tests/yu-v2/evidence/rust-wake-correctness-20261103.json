@@ -1,0 +1,1674 @@
+{
+  "kind": "wake-listener-host",
+  "date": "2026-11-03T14:51:03.632Z",
+  "node": "v24.22.2",
+  "phrase": "你好，胡小杨",
+  "samples": 20,
+  "warmupMs": 2000,
+  "windowMs": 6000,
+  "wave": null,
+  "device": "0",
+  "scope": [
+    "Enumeration, time to first ready and the settled idle window are measured for the helper process only.",
+    "The idle rate is ΔCPU / Δwall inside a window that starts after a warm-up, so start-up and grammar compilation are excluded.",
+    "Time to first ready covers process start plus engine and grammar setup, measured from spawn to the ready event.",
+    "Listening uses a synthetic wave unless --device is passed; no capture device is opened by default and no audio is stored.",
+    "A missing or invalid metric is reported as null with its reason; invalid runs are excluded from the statistics, not counted as zero."
+  ],
+  "helpers": {
+    "powershell": {
+      "enumerate": [
+        {
+          "helper": "powershell",
+          "wallMs": 1065.608,
+          "pid": 6696,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50724,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 937.5224999999991,
+          "pid": 32916,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 54348,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 984.2365999999965,
+          "pid": 32828,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50664,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 995.847099999999,
+          "pid": 32892,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 52840,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 997.3511999999901,
+          "pid": 13464,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50112,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 919.5641999999934,
+          "pid": 29668,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 52300,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 1085.0193000000145,
+          "pid": 33536,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 51368,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 1002.2059000000008,
+          "pid": 28756,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50336,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 1092.1494999999995,
+          "pid": 26716,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 54544,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 1034.1901999999827,
+          "pid": 32256,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50260,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 1057.1394999999902,
+          "pid": 29632,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50880,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 981.2528000000166,
+          "pid": 26944,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 51168,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 955.6679000000004,
+          "pid": 32144,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50308,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 933.8035999999847,
+          "pid": 10880,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50408,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 925.6036000000313,
+          "pid": 29360,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50488,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 881.5971000000136,
+          "pid": 32408,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50752,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 891.3202000000165,
+          "pid": 29444,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 51324,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 900.3557000000146,
+          "pid": 444,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50984,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 924.8300999999628,
+          "pid": 17588,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 51040,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        },
+        {
+          "helper": "powershell",
+          "wallMs": 906.2491000000155,
+          "pid": 31160,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": 50076,
+          "deviceCount": 2,
+          "error": null,
+          "points": 1
+        }
+      ],
+      "listen": [
+        {
+          "helper": "powershell",
+          "pid": 32488,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1153.2455000000002,
+          "settled": {
+            "fromMs": 3410.9551999999994,
+            "toMs": 9215.624,
+            "wallSeconds": 5.8046688,
+            "cpuMs": 0,
+            "privateKb": 77200,
+            "workingSetKb": 160000,
+            "samples": 23,
+            "startupCpuMs": 1734,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77576,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 33684,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1156.9276000000027,
+          "settled": {
+            "fromMs": 3436.6719999999987,
+            "toMs": 9006.380299999997,
+            "wallSeconds": 5.5697082999999985,
+            "cpuMs": 78,
+            "privateKb": 77320,
+            "workingSetKb": 155936,
+            "samples": 22,
+            "startupCpuMs": 1688,
+            "cpuMsPerSecond": 14.004324068461543
+          },
+          "wakes": [],
+          "peakPrivateKb": 77688,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 20664,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1153.7747999999992,
+          "settled": {
+            "fromMs": 3404.8799,
+            "toMs": 8961.175300000003,
+            "wallSeconds": 5.556295400000002,
+            "cpuMs": 0,
+            "privateKb": 76620,
+            "workingSetKb": 159404,
+            "samples": 22,
+            "startupCpuMs": 1734,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 76956,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 31912,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1524.6120999999985,
+          "settled": {
+            "fromMs": 3646.17319999999,
+            "toMs": 9477.1244,
+            "wallSeconds": 5.83095120000001,
+            "cpuMs": 32,
+            "privateKb": 76956,
+            "workingSetKb": 155576,
+            "samples": 23,
+            "startupCpuMs": 1516,
+            "cpuMsPerSecond": 5.487955378532399
+          },
+          "wakes": [],
+          "peakPrivateKb": 77332,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 15856,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1171.5524999999907,
+          "settled": {
+            "fromMs": 3414.866599999994,
+            "toMs": 8974.572799999994,
+            "wallSeconds": 5.559706200000001,
+            "cpuMs": 0,
+            "privateKb": 77372,
+            "workingSetKb": 160116,
+            "samples": 22,
+            "startupCpuMs": 1766,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77744,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 29148,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1094.1049000000057,
+          "settled": {
+            "fromMs": 3379.383700000006,
+            "toMs": 9214.050199999998,
+            "wallSeconds": 5.834666499999992,
+            "cpuMs": 0,
+            "privateKb": 77292,
+            "workingSetKb": 160152,
+            "samples": 23,
+            "startupCpuMs": 1672,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77660,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 29148,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1277.3299000000115,
+          "settled": {
+            "fromMs": 3518.098100000003,
+            "toMs": 9081.544300000009,
+            "wallSeconds": 5.563446200000006,
+            "cpuMs": 0,
+            "privateKb": 76932,
+            "workingSetKb": 159648,
+            "samples": 22,
+            "startupCpuMs": 1703,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77312,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 27836,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1150.9760999999999,
+          "settled": {
+            "fromMs": 3440.2187999999733,
+            "toMs": 8963.992599999998,
+            "wallSeconds": 5.523773800000025,
+            "cpuMs": 62,
+            "privateKb": 76824,
+            "workingSetKb": 159916,
+            "samples": 22,
+            "startupCpuMs": 1844,
+            "cpuMsPerSecond": 11.224210520713163
+          },
+          "wakes": [],
+          "peakPrivateKb": 77196,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 33372,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1127.5501999999979,
+          "settled": {
+            "fromMs": 3406.5353000000177,
+            "toMs": 9202.85990000001,
+            "wallSeconds": 5.796324599999993,
+            "cpuMs": 0,
+            "privateKb": 77176,
+            "workingSetKb": 160004,
+            "samples": 23,
+            "startupCpuMs": 1719,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77556,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 8952,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1173.291900000011,
+          "settled": {
+            "fromMs": 3445.851400000014,
+            "toMs": 9022.497000000003,
+            "wallSeconds": 5.576645599999989,
+            "cpuMs": 0,
+            "privateKb": 76684,
+            "workingSetKb": 159404,
+            "samples": 22,
+            "startupCpuMs": 1781,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77064,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 32216,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1218.3055000000168,
+          "settled": {
+            "fromMs": 3477.3655000000144,
+            "toMs": 9267.715200000035,
+            "wallSeconds": 5.790349700000021,
+            "cpuMs": 0,
+            "privateKb": 77356,
+            "workingSetKb": 160140,
+            "samples": 23,
+            "startupCpuMs": 1797,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77724,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 1728,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1133.8095000000321,
+          "settled": {
+            "fromMs": 3416.5875000000233,
+            "toMs": 9198.07620000001,
+            "wallSeconds": 5.781488699999987,
+            "cpuMs": 62,
+            "privateKb": 76712,
+            "workingSetKb": 159500,
+            "samples": 23,
+            "startupCpuMs": 1734,
+            "cpuMsPerSecond": 10.72388154974689
+          },
+          "wakes": [],
+          "peakPrivateKb": 77044,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 26744,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1134.8661999999895,
+          "settled": {
+            "fromMs": 3406.4090000000433,
+            "toMs": 9185.135999999999,
+            "wallSeconds": 5.7787269999999555,
+            "cpuMs": 31,
+            "privateKb": 77280,
+            "workingSetKb": 160068,
+            "samples": 23,
+            "startupCpuMs": 1781,
+            "cpuMsPerSecond": 5.364503289392324
+          },
+          "wakes": [],
+          "peakPrivateKb": 77660,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 12716,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1107.817800000019,
+          "settled": {
+            "fromMs": 3395.964500000002,
+            "toMs": 8971.643199999991,
+            "wallSeconds": 5.575678699999989,
+            "cpuMs": 93,
+            "privateKb": 77208,
+            "workingSetKb": 160012,
+            "samples": 22,
+            "startupCpuMs": 1797,
+            "cpuMsPerSecond": 16.67958377874252
+          },
+          "wakes": [],
+          "peakPrivateKb": 77580,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 2280,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1136.1453999999794,
+          "settled": {
+            "fromMs": 3398.377199999988,
+            "toMs": 9217.264099999971,
+            "wallSeconds": 5.818886899999983,
+            "cpuMs": 110,
+            "privateKb": 77296,
+            "workingSetKb": 160064,
+            "samples": 23,
+            "startupCpuMs": 1734,
+            "cpuMsPerSecond": 18.903959105993334
+          },
+          "wakes": [],
+          "peakPrivateKb": 77676,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 32464,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1050.0866999999853,
+          "settled": {
+            "fromMs": 3318.7336999999825,
+            "toMs": 8859.367700000003,
+            "wallSeconds": 5.54063400000002,
+            "cpuMs": 0,
+            "privateKb": 77172,
+            "workingSetKb": 160048,
+            "samples": 22,
+            "startupCpuMs": 1547,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77560,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 14812,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1056.4507999999914,
+          "settled": {
+            "fromMs": 3354.385500000033,
+            "toMs": 8936.971100000024,
+            "wallSeconds": 5.582585599999991,
+            "cpuMs": 0,
+            "privateKb": 77452,
+            "workingSetKb": 160240,
+            "samples": 22,
+            "startupCpuMs": 1562,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77840,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 28004,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1096.3632999999681,
+          "settled": {
+            "fromMs": 3362.362199999974,
+            "toMs": 9134.288699999976,
+            "wallSeconds": 5.771926500000001,
+            "cpuMs": 0,
+            "privateKb": 77032,
+            "workingSetKb": 159752,
+            "samples": 23,
+            "startupCpuMs": 1609,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77404,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 31808,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1108.819300000032,
+          "settled": {
+            "fromMs": 3416.443200000038,
+            "toMs": 8987.150200000033,
+            "wallSeconds": 5.570706999999995,
+            "cpuMs": 0,
+            "privateKb": 77136,
+            "workingSetKb": 159912,
+            "samples": 22,
+            "startupCpuMs": 1688,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 77504,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "powershell",
+          "pid": 32888,
+          "state": "ready",
+          "error": null,
+          "readyMs": 1264.6867000000202,
+          "settled": {
+            "fromMs": 3497.503700000001,
+            "toMs": 9259.614900000044,
+            "wallSeconds": 5.762111200000043,
+            "cpuMs": 31,
+            "privateKb": 77400,
+            "workingSetKb": 160088,
+            "samples": 23,
+            "startupCpuMs": 1875,
+            "cpuMsPerSecond": 5.379972535066621
+          },
+          "wakes": [],
+          "peakPrivateKb": 77772,
+          "survivedStop": true,
+          "events": [
+            "device",
+            "ready"
+          ],
+          "wave": null,
+          "device": "0"
+        }
+      ]
+    },
+    "native": {
+      "enumerate": [
+        {
+          "helper": "native",
+          "wallMs": 62.62549999999828,
+          "pid": 31816,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 52.76219999999739,
+          "pid": 32848,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 51.74539999999979,
+          "pid": 32980,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 47.83060000000114,
+          "pid": 33068,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 52.22650000000431,
+          "pid": 12864,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 48.68839999998454,
+          "pid": 16280,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 81.45300000000861,
+          "pid": 32124,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 52.27729999998701,
+          "pid": 33480,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 57.66709999999148,
+          "pid": 32256,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 50.111999999993714,
+          "pid": 9772,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 55.80820000002859,
+          "pid": 32336,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 55.098400000017136,
+          "pid": 27208,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 57.23690000001807,
+          "pid": 2708,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 53.195699999982025,
+          "pid": 32780,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 52.48609999998007,
+          "pid": 28840,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 49.675800000026356,
+          "pid": 30884,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 71.1699999999837,
+          "pid": 29260,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 49.53649999998743,
+          "pid": 32784,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 52.180500000016764,
+          "pid": 32976,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        },
+        {
+          "helper": "native",
+          "wallMs": 46.54720000002999,
+          "pid": 21788,
+          "exitCode": 0,
+          "timeout": false,
+          "peakPrivateKb": null,
+          "deviceCount": 2,
+          "error": null,
+          "points": 0
+        }
+      ],
+      "listen": [
+        {
+          "helper": "native",
+          "pid": 27456,
+          "state": "ready",
+          "error": null,
+          "readyMs": 540.2873,
+          "settled": {
+            "fromMs": 2564.7834999999977,
+            "toMs": 8384.109099999998,
+            "wallSeconds": 5.8193256,
+            "cpuMs": 0,
+            "privateKb": 13608,
+            "workingSetKb": 39612,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13608,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 32928,
+          "state": "ready",
+          "error": null,
+          "readyMs": 546.1869999999981,
+          "settled": {
+            "fromMs": 2871.1480999999985,
+            "toMs": 8432.882400000002,
+            "wallSeconds": 5.561734300000004,
+            "cpuMs": 15,
+            "privateKb": 13572,
+            "workingSetKb": 35480,
+            "samples": 22,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 2.6970004662034985
+          },
+          "wakes": [],
+          "peakPrivateKb": 13572,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 11020,
+          "state": "ready",
+          "error": null,
+          "readyMs": 540.3948999999993,
+          "settled": {
+            "fromMs": 2564.0400999999983,
+            "toMs": 8354.224600000001,
+            "wallSeconds": 5.790184500000003,
+            "cpuMs": 31,
+            "privateKb": 13560,
+            "workingSetKb": 35464,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 5.353888118763743
+          },
+          "wakes": [],
+          "peakPrivateKb": 13560,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 25044,
+          "state": "ready",
+          "error": null,
+          "readyMs": 541.3540999999968,
+          "settled": {
+            "fromMs": 2807.001000000004,
+            "toMs": 8324.510600000009,
+            "wallSeconds": 5.517509600000005,
+            "cpuMs": 15,
+            "privateKb": 13572,
+            "workingSetKb": 35420,
+            "samples": 22,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 2.7186178343939784
+          },
+          "wakes": [],
+          "peakPrivateKb": 13572,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 28384,
+          "state": "ready",
+          "error": null,
+          "readyMs": 545.6863999999914,
+          "settled": {
+            "fromMs": 2621.640299999999,
+            "toMs": 8455.051999999981,
+            "wallSeconds": 5.833411699999982,
+            "cpuMs": 0,
+            "privateKb": 13572,
+            "workingSetKb": 39568,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13572,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 25704,
+          "state": "ready",
+          "error": null,
+          "readyMs": 550.1510999999882,
+          "settled": {
+            "fromMs": 2883.9199999999837,
+            "toMs": 8464.297300000006,
+            "wallSeconds": 5.580377300000022,
+            "cpuMs": 0,
+            "privateKb": 13596,
+            "workingSetKb": 39612,
+            "samples": 22,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13596,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 27208,
+          "state": "ready",
+          "error": null,
+          "readyMs": 621.8219000000099,
+          "settled": {
+            "fromMs": 2775.145600000018,
+            "toMs": 8581.386300000013,
+            "wallSeconds": 5.806240699999995,
+            "cpuMs": 16,
+            "privateKb": 13592,
+            "workingSetKb": 39624,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 2.7556556516852657
+          },
+          "wakes": [],
+          "peakPrivateKb": 13592,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 4484,
+          "state": "ready",
+          "error": null,
+          "readyMs": 569.5506999999925,
+          "settled": {
+            "fromMs": 2904.232399999979,
+            "toMs": 8468.299299999984,
+            "wallSeconds": 5.564066900000006,
+            "cpuMs": 0,
+            "privateKb": 13592,
+            "workingSetKb": 39588,
+            "samples": 22,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13592,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 13320,
+          "state": "ready",
+          "error": null,
+          "readyMs": 555.0399000000034,
+          "settled": {
+            "fromMs": 2890.2276999999885,
+            "toMs": 8436.195000000007,
+            "wallSeconds": 5.545967300000019,
+            "cpuMs": 0,
+            "privateKb": 13580,
+            "workingSetKb": 39644,
+            "samples": 22,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13580,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 32968,
+          "state": "ready",
+          "error": null,
+          "readyMs": 546.3058000000019,
+          "settled": {
+            "fromMs": 2583.6357000000135,
+            "toMs": 8390.350000000006,
+            "wallSeconds": 5.806714299999992,
+            "cpuMs": 16,
+            "privateKb": 14160,
+            "workingSetKb": 40128,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 2.755430898330924
+          },
+          "wakes": [],
+          "peakPrivateKb": 14160,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 32052,
+          "state": "ready",
+          "error": null,
+          "readyMs": 559.2397000000346,
+          "settled": {
+            "fromMs": 2865.837700000033,
+            "toMs": 8659.25939999998,
+            "wallSeconds": 5.793421699999948,
+            "cpuMs": 0,
+            "privateKb": 13680,
+            "workingSetKb": 39648,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13680,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 32824,
+          "state": "ready",
+          "error": null,
+          "readyMs": 543.7606999999844,
+          "settled": {
+            "fromMs": 2803.160900000017,
+            "toMs": 8564.428799999994,
+            "wallSeconds": 5.761267899999977,
+            "cpuMs": 16,
+            "privateKb": 13572,
+            "workingSetKb": 39572,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 2.7771664636529163
+          },
+          "wakes": [],
+          "peakPrivateKb": 13572,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 27560,
+          "state": "ready",
+          "error": null,
+          "readyMs": 563.8585000000312,
+          "settled": {
+            "fromMs": 2845.611200000043,
+            "toMs": 8641.113100000017,
+            "wallSeconds": 5.795501899999974,
+            "cpuMs": 15,
+            "privateKb": 13608,
+            "workingSetKb": 39656,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 2.588214145870622
+          },
+          "wakes": [],
+          "peakPrivateKb": 13608,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 32464,
+          "state": "ready",
+          "error": null,
+          "readyMs": 540.1459999999497,
+          "settled": {
+            "fromMs": 2571.6401999999653,
+            "toMs": 8380.693899999955,
+            "wallSeconds": 5.809053699999989,
+            "cpuMs": 0,
+            "privateKb": 13592,
+            "workingSetKb": 40000,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13592,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 28636,
+          "state": "ready",
+          "error": null,
+          "readyMs": 535.9371999999858,
+          "settled": {
+            "fromMs": 2794.14380000002,
+            "toMs": 8363.0441,
+            "wallSeconds": 5.56890029999998,
+            "cpuMs": 0,
+            "privateKb": 14116,
+            "workingSetKb": 40112,
+            "samples": 22,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 14116,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 8556,
+          "state": "ready",
+          "error": null,
+          "readyMs": 545.4647000000114,
+          "settled": {
+            "fromMs": 2820.38810000004,
+            "toMs": 8602.183100000024,
+            "wallSeconds": 5.781794999999984,
+            "cpuMs": 15,
+            "privateKb": 13584,
+            "workingSetKb": 39580,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 2.594350024516615
+          },
+          "wakes": [],
+          "peakPrivateKb": 13584,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 15916,
+          "state": "ready",
+          "error": null,
+          "readyMs": 597.2749000000185,
+          "settled": {
+            "fromMs": 2853.5195999999996,
+            "toMs": 8632.540500000003,
+            "wallSeconds": 5.7790209000000035,
+            "cpuMs": 0,
+            "privateKb": 13596,
+            "workingSetKb": 39596,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13596,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 17176,
+          "state": "ready",
+          "error": null,
+          "readyMs": 548.9743000000017,
+          "settled": {
+            "fromMs": 2809.781799999997,
+            "toMs": 8356.67869999999,
+            "wallSeconds": 5.546896899999992,
+            "cpuMs": 0,
+            "privateKb": 13612,
+            "workingSetKb": 39592,
+            "samples": 22,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13612,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 33784,
+          "state": "ready",
+          "error": null,
+          "readyMs": 543.7277999999933,
+          "settled": {
+            "fromMs": 2565.1547000000137,
+            "toMs": 8361.414700000023,
+            "wallSeconds": 5.796260000000009,
+            "cpuMs": 0,
+            "privateKb": 13580,
+            "workingSetKb": 39648,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13580,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        },
+        {
+          "helper": "native",
+          "pid": 33316,
+          "state": "ready",
+          "error": null,
+          "readyMs": 538.953499999945,
+          "settled": {
+            "fromMs": 2576.089399999997,
+            "toMs": 8367.896899999992,
+            "wallSeconds": 5.791807499999996,
+            "cpuMs": 0,
+            "privateKb": 13592,
+            "workingSetKb": 39660,
+            "samples": 23,
+            "startupCpuMs": null,
+            "cpuMsPerSecond": 0
+          },
+          "wakes": [],
+          "peakPrivateKb": 13592,
+          "survivedStop": false,
+          "events": [
+            "device",
+            "ready",
+            "level"
+          ],
+          "wave": null,
+          "device": "0"
+        }
+      ]
+    }
+  },
+  "powershell": {
+    "enumerateRuns": 20,
+    "enumerateFailures": 0,
+    "enumerateWallMs": {
+      "count": 20,
+      "p50": 981.2528000000166,
+      "p95": 1085.0193000000145,
+      "min": 881.5971000000136,
+      "max": 1092.1494999999995
+    },
+    "listenRuns": 20,
+    "listenReady": 20,
+    "listenFailures": [],
+    "readyMs": {
+      "count": 20,
+      "p50": 1150.9760999999999,
+      "p95": 1277.3299000000115,
+      "min": 1050.0866999999853,
+      "max": 1524.6120999999985
+    },
+    "settledPrivateKb": {
+      "count": 20,
+      "p50": 77200,
+      "p95": 77400,
+      "min": 76620,
+      "max": 77452
+    },
+    "settledCpuMsPerSecond": {
+      "count": 20,
+      "p50": 0,
+      "p95": 16.67958377874252,
+      "min": 0,
+      "max": 18.903959105993334
+    },
+    "startupCpuMs": {
+      "count": 20,
+      "p50": 1734,
+      "p95": 1844,
+      "min": 1516,
+      "max": 1875
+    },
+    "survivedStop": false
+  },
+  "native": {
+    "enumerateRuns": 20,
+    "enumerateFailures": 0,
+    "enumerateWallMs": {
+      "count": 20,
+      "p50": 52.48609999998007,
+      "p95": 71.1699999999837,
+      "min": 46.54720000002999,
+      "max": 81.45300000000861
+    },
+    "listenRuns": 20,
+    "listenReady": 20,
+    "listenFailures": [],
+    "readyMs": {
+      "count": 20,
+      "p50": 546.1869999999981,
+      "p95": 597.2749000000185,
+      "min": 535.9371999999858,
+      "max": 621.8219000000099
+    },
+    "settledPrivateKb": {
+      "count": 20,
+      "p50": 13592,
+      "p95": 14116,
+      "min": 13560,
+      "max": 14160
+    },
+    "settledCpuMsPerSecond": {
+      "count": 20,
+      "p50": 0,
+      "p95": 2.7771664636529163,
+      "min": 0,
+      "max": 5.353888118763743
+    },
+    "startupCpuMs": {
+      "count": 0,
+      "p50": null,
+      "p95": null,
+      "min": null,
+      "max": null
+    },
+    "survivedStop": true
+  },
+  "comparison": {
+    "readyP95Pct": -53.24035709177299,
+    "readyP95DeltaMs": -680.054999999993,
+    "settledPrivatePct": -82.39378238341969,
+    "settledPrivateDeltaKb": -63608,
+    "idleCpuPct": null
+  },
+  "decision": {
+    "adopted": "native-ready",
+    "criteria": {
+      "readyP95PctAtMost": -30,
+      "readyP95DeltaMsAtMost": -100,
+      "settledPrivatePctAtMost": -25,
+      "settledPrivateDeltaKbAtMost": -20480
+    }
+  }
+}

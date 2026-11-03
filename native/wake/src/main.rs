@@ -42,6 +42,7 @@ fn read_config(line: &str, arguments: &[String]) -> Result<Config, String> {
     let wave = value
         .get("wave")
         .and_then(Value::as_str)
+        .filter(|path| !path.is_empty())
         .map(str::to_string)
         .or_else(|| option(arguments, "--file"));
     let device = value
@@ -73,6 +74,7 @@ fn read_config(line: &str, arguments: &[String]) -> Result<Config, String> {
     let stream = value
         .get("stream")
         .and_then(Value::as_str)
+        .filter(|path| !path.is_empty())
         .map(str::to_string);
     let input = match (stream, wave) {
         (Some(path), _) => Input::Stream(path),
@@ -124,11 +126,16 @@ fn main() {
         watcher.store(true, Ordering::Relaxed);
     });
 
-    let wave = matches!(config.input, Input::Wave(_) | Input::Stream(_));
+    // Only a file input has an obvious end; the stream-end event closes it. Everything
+    // else runs until the parent closes the pipe, so the deadline is a wedge guard.
+    let fallback = if matches!(config.input, Input::Wave(_)) {
+        300_000
+    } else {
+        u64::MAX
+    };
     let deadline = option(&arguments, "--deadline")
         .and_then(|value| value.parse().ok())
-        .unwrap_or(if wave { 30_000 } else { u64::MAX });
-    let phrase = config.phrase.clone();
+        .unwrap_or(fallback);
     match speech::run(&config, &stop, deadline) {
         Ok(()) => {}
         Err(failure) => {
@@ -136,5 +143,4 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let _ = phrase;
 }

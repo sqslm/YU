@@ -10,11 +10,12 @@ use std::time::Instant;
 use windows::Win32::Foundation::WAIT_OBJECT_0;
 use windows::Win32::Media::Audio::WAVEFORMATEX;
 use windows::Win32::Media::Speech::{
-    ISpDataKey, ISpObjectToken, ISpObjectTokenCategory, ISpPhrase, ISpRecoContext, ISpRecoGrammar,
-    ISpRecoResult, ISpRecognizer, ISpStream, ISpStreamFormat, SPEI_END_SR_STREAM,
-    SPEI_FALSE_RECOGNITION, SPEI_RECOGNITION, SPEI_SR_AUDIO_LEVEL, SPFM_OPEN_READONLY,
-    SPGS_ENABLED, SPLO_DYNAMIC, SPPHRASE, SPRST_ACTIVE, SPRST_INACTIVE, SPRULESTATE,
-    SPSTREAMFORMATTYPE, SpInprocRecognizer, SpObjectTokenCategory, SpStream,
+    ISpDataKey, ISpObjectToken, ISpObjectTokenCategory, ISpObjectWithToken, ISpPhoneConverter,
+    ISpPhrase, ISpRecoContext, ISpRecoGrammar, ISpRecoResult, ISpRecognizer, ISpStream,
+    ISpStreamFormat, SPEI_END_SR_STREAM, SPEI_FALSE_RECOGNITION, SPEI_RECOGNITION,
+    SPEI_SR_AUDIO_LEVEL, SPFM_OPEN_READONLY, SPGS_ENABLED, SPLO_DYNAMIC, SPPHRASE, SPRST_ACTIVE,
+    SPRST_INACTIVE, SPRULESTATE, SPSTREAMFORMATTYPE, SpInprocRecognizer, SpObjectTokenCategory,
+    SpPhoneConverter, SpStream,
 };
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
@@ -82,6 +83,73 @@ fn lcid(language: &str) -> u32 {
         "zh" => 0x804,
         "en" => 0x409,
         _ => 0x409,
+    }
+}
+
+/// Phone converter bound to the same language as the recogniser: the engine reports
+/// numeric phone ids, and this converter renders them as the pinyin-like string in the
+/// converter's phone map. Note that `System.Speech` renders the same ids as IPA, so a
+/// variant trained by the PowerShell host cannot be compared on phones alone.
+fn phone_converter(language: &str) -> Result<ISpPhoneConverter, Failure> {
+    unsafe {
+        let converter: ISpPhoneConverter = CoCreateInstance(&SpPhoneConverter, None, CLSCTX_ALL)
+            .map_err(|error| {
+                eprintln!("phone converter: {error}");
+                Failure::Language
+            })?;
+        let bound: ISpObjectWithToken = converter.cast().map_err(|error| {
+            eprintln!("phone converter token: {error}");
+            Failure::Language
+        })?;
+        let category: ISpObjectTokenCategory =
+            CoCreateInstance(&SpObjectTokenCategory, None, CLSCTX_ALL).map_err(|error| {
+                eprintln!("phone category: {error}");
+                Failure::Language
+            })?;
+        category
+            .SetId(
+                &HSTRING::from("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\PhoneConverters"),
+                false,
+            )
+            .map_err(|error| {
+                eprintln!("phone category id: {error}");
+                Failure::Language
+            })?;
+        let tokens = category
+            .EnumTokens(&HSTRING::new(), &HSTRING::new())
+            .map_err(|error| {
+                eprintln!("phone tokens: {error}");
+                Failure::Language
+            })?;
+        let wanted = format!("{:X}", lcid(language));
+        loop {
+            let mut token: [Option<ISpObjectToken>; 1] = [None];
+            let mut fetched = 0u32;
+            if tokens
+                .Next(1, token.as_mut_ptr(), Some(&mut fetched))
+                .is_err()
+                || fetched == 0
+            {
+                break;
+            }
+            let Some(token) = token[0].take() else { break };
+            let languages = token
+                .OpenKey(&HSTRING::from("Attributes"))
+                .map(|key| string_value(&key, "Language"))
+                .unwrap_or_default();
+            let matches = languages
+                .split(';')
+                .any(|entry| entry.trim().eq_ignore_ascii_case(&wanted));
+            if matches {
+                bound.SetObjectToken(&token).map_err(|error| {
+                    eprintln!("phone token: {error}");
+                    Failure::Language
+                })?;
+                return Ok(converter);
+            }
+        }
+        eprintln!("no phone converter for language {language}");
+        Err(Failure::Language)
     }
 }
 
@@ -228,21 +296,22 @@ fn grammar_xml(config: &Config) -> (String, Vec<String>, bool) {
     (xml, active, !config.variants.is_empty())
 }
 
-fn word_from_element(element: &windows::Win32::Media::Speech::SPPHRASEELEMENT) -> Word {
+fn word_from_element(
+    element: &windows::Win32::Media::Speech::SPPHRASEELEMENT,
+    converter: &ISpPhoneConverter,
+) -> Word {
     let text = if element.pszDisplayText.is_null() {
         read_wide(element.pszLexicalForm)
     } else {
         read_wide(element.pszDisplayText)
     };
-    let phones = read_phones(element.pszPronunciation);
+    let phones = phone_string(converter, element.pszPronunciation);
+    // An engine that reports no usable score yields 0 instead of a guessed 0.9/0.6/0.3,
+    // so the threshold decides on a real number.
     let confidence = if element.SREngineConfidence > 0.0 && element.SREngineConfidence <= 1.0 {
         element.SREngineConfidence
     } else {
-        match element.ActualConfidence {
-            2 => 0.9,
-            1 => 0.6,
-            _ => 0.3,
-        }
+        0.0
     };
     Word {
         text: matching::match_text(&text),
@@ -259,23 +328,21 @@ fn read_wide(pointer: PCWSTR) -> String {
     unsafe { pointer.to_string() }.unwrap_or_default()
 }
 
-/// Phone ids arrive as a null-terminated `WORD` array; the PowerShell host stores the
-/// same ids as characters, so converting one to one keeps trained variants valid.
-fn read_phones(pointer: *const u16) -> String {
-    if pointer.is_null() {
+/// IPA string for the element's phone ids, in the form System.Speech stores.
+fn phone_string(converter: &ISpPhoneConverter, ids: *const u16) -> String {
+    if ids.is_null() {
         return String::new();
     }
-    let mut ids = Vec::new();
-    let mut index = 0usize;
-    loop {
-        let value = unsafe { *pointer.add(index) };
-        if value == 0 || index > 512 {
-            break;
-        }
-        ids.push(value);
-        index += 1;
+    let mut buffer = vec![0u16; 1024];
+    let result = unsafe { converter.IdToPhone(ids, windows::core::PWSTR(buffer.as_mut_ptr())) };
+    if result.is_err() {
+        return String::new();
     }
-    matching::phones(&ids)
+    let end = buffer
+        .iter()
+        .position(|unit| *unit == 0)
+        .unwrap_or(buffer.len());
+    matching::phones(&String::from_utf16_lossy(&buffer[..end]))
 }
 
 struct GrammarFile {
@@ -316,6 +383,13 @@ fn opening(name: &str, error: windows::core::Error) -> Failure {
     Failure::Microphone
 }
 
+/// `SPFEI_FLAGCHECK` from sapi.h: reserved bits every interest mask has to carry.
+const SPFEI_FLAGCHECK: u64 = (1 << 30) | (1 << 33);
+
+fn spfei(id: i32) -> u64 {
+    (1u64 << id) | SPFEI_FLAGCHECK
+}
+
 fn step<T>(name: &str, result: windows::core::Result<T>) -> Result<T, Failure> {
     result.map_err(|error| {
         eprintln!("{name}: {error}");
@@ -326,6 +400,9 @@ fn step<T>(name: &str, result: windows::core::Result<T>) -> Result<T, Failure> {
 pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), Failure> {
     let _com = Com::start()?;
     let recognizer = recognizer_for(&config.language)?;
+    // The engine reports phone ids; trained variants store the IPA string System.Speech
+    // derived from them, so both sides meet after this conversion.
+    let converter = phone_converter(&config.language)?;
     let context: ISpRecoContext =
         unsafe { recognizer.CreateRecoContext() }.map_err(|_| Failure::Unavailable)?;
     let wave_input = matches!(config.input, Input::Wave(_) | Input::Stream(_));
@@ -350,7 +427,7 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
 
     let factor = bytes_per_ms(&recognizer);
     let mut capture: Option<crate::capture::Capture> = None;
-    let level_sink: Option<Arc<crate::capture::Shared>>;
+    let mut level_sink: Option<Arc<crate::capture::Shared>> = None;
     match &config.input {
         Input::Wave(path) => {
             let stream: ISpStream = unsafe { CoCreateInstance(&SpStream, None, CLSCTX_ALL) }
@@ -367,7 +444,6 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
             .map_err(|error| opening("bind wave", error))?;
             unsafe { recognizer.SetInput(&stream, true) }
                 .map_err(|error| opening("wave input", error))?;
-            level_sink = None;
         }
         Input::Stream(path) => {
             let shared = Arc::new(crate::capture::Shared::new_for_test());
@@ -379,43 +455,72 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
             level_sink = Some(shared);
         }
         Input::Device(index) => {
+            // A remembered device may be gone, and opening it or handing its stream to
+            // the recogniser may still fail; both fall back to the default input once,
+            // reporting the name that is actually in use.
             let known = crate::devices::list();
             let requested = *index;
-            let available =
-                requested < 0 || known.iter().any(|(id, _)| id == &requested.to_string());
-            let device = if available {
-                crate::capture::map_device(requested)
-            } else {
-                // The remembered device disappeared; say so once and fall back to the
-                // default input instead of failing the whole session.
+            let missing =
+                requested >= 0 && !known.iter().any(|(id, _)| id == &requested.to_string());
+            if missing {
                 json::emit(&json::log_event("device-missing", requested));
-                crate::capture::map_device(-1)
-            };
-            let opened = crate::capture::Capture::open(device).map_err(|code| {
-                let _ = code;
-                json::emit(&json::log_event("device-open-failed", requested));
-                Failure::Microphone
-            })?;
-            let shared = opened.shared();
-            let stream: ISpStreamFormat =
-                crate::stream::CaptureStream::new(Arc::clone(&shared)).into();
-            unsafe { recognizer.SetInput(&stream, true) }
-                .map_err(|error| opening("device input", error))?;
-            let name = if device == crate::capture::WAVE_MAPPER {
-                String::new()
+            }
+            let preferred = if missing {
+                crate::capture::WAVE_MAPPER
             } else {
-                crate::capture::device_name(device)
+                crate::capture::map_device(requested)
             };
-            json::emit(&json::device_event(requested, &name));
-            level_sink = Some(shared);
-            capture = Some(opened);
+            let mut attempts = vec![preferred];
+            if preferred != crate::capture::WAVE_MAPPER {
+                attempts.push(crate::capture::WAVE_MAPPER);
+            }
+            let mut opened = None;
+            let mut failure = Failure::Microphone;
+            for (position, device) in attempts.iter().enumerate() {
+                match open_device(&recognizer, *device) {
+                    Ok((input, shared)) => {
+                        let actual = crate::capture::preferred_device(*device);
+                        json::emit(&json::device_event(
+                            requested,
+                            &crate::capture::device_name(actual),
+                        ));
+                        level_sink = Some(shared);
+                        opened = Some(input);
+                        break;
+                    }
+                    Err((error, code)) => {
+                        if position == 0 && attempts.len() > 1 {
+                            json::emit(&json::log_event(
+                                if code.is_some() {
+                                    "device-open-failed"
+                                } else {
+                                    "device-stream-failed"
+                                },
+                                requested,
+                            ));
+                        }
+                        failure = error;
+                    }
+                }
+            }
+            let Some(input) = opened else {
+                return Err(failure);
+            };
+            capture = Some(input);
         }
     }
 
     step("notify", unsafe { context.SetNotifyWin32Event() })?;
-    let interest = 1u64 << SPEI_RECOGNITION.0;
-    let _ = interest;
-    // step("interest", unsafe { context.SetInterest(interest, interest) })?;
+    // sapi.h: SPFEI(id) = (1 << id) | SPFEI_FLAGCHECK, and SetInterest rejects a mask
+    // without the reserved flag bits with E_INVALIDARG, which is what an earlier round
+    // mistook for a machine limitation.
+    let interest = spfei(SPEI_RECOGNITION.0)
+        | spfei(SPEI_FALSE_RECOGNITION.0)
+        | spfei(SPEI_END_SR_STREAM.0)
+        | spfei(SPEI_SR_AUDIO_LEVEL.0);
+    step("interest", unsafe {
+        context.SetInterest(interest, interest)
+    })?;
     let handle = unsafe { context.GetNotifyEventHandle() };
 
     let mut tracker = Tracker::new(&config.phrase, &config.variants);
@@ -426,38 +531,12 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
     // Ready means the session is really listening: the recogniser is active, so a
     // caller may speak as soon as this line arrives.
     json::emit(&json::ready_event());
-    // SAPI rejects every interest mask on this machine, so the session runs on the
-    // default interest; file input ends itself, which is why the wave deadline exists.
-    if let Err(error) = unsafe { context.SetInterest(interest, interest) } {
-        let _ = error;
-    }
-    // A wave file ends on its own, but without SPEI_END_SR_STREAM the only way to
-    // notice is the length of the audio plus room for the final result.
-    let limit_ms = match &config.input {
-        Input::Wave(path) => {
-            let bytes = std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0);
-            (bytes as f64 / factor + 1500.0).ceil() as u64
-        }
-        Input::Device(_) => deadline_ms,
-        Input::Stream(_) => deadline_ms,
-    }
-    .min(deadline_ms);
-    let mut drained = Instant::now();
+    // The session ends on SPEI_END_SR_STREAM; the deadline only guards a wedged engine.
+    let limit_ms = deadline_ms;
     while !ended
         && (wave_input || !stop.load(Ordering::Relaxed))
         && started.elapsed().as_millis() < u128::from(limit_ms)
     {
-        // A stream input finishes when the file is exhausted; give SAPI a moment to
-        // deliver the last hypotheses before closing the session.
-        if let (Input::Stream(_), Some(shared)) = (&config.input, level_sink.as_ref()) {
-            if shared.is_finished() {
-                if drained.elapsed().as_millis() >= 1200 {
-                    ended = true;
-                }
-            } else {
-                drained = Instant::now();
-            }
-        }
         let signalled = unsafe { WaitForSingleObject(handle, 100) } == WAIT_OBJECT_0;
         // SAPI never delivers audio-level events here, so the level comes from the
         // buffers we captured; silence marks where the next utterance may start.
@@ -498,7 +577,7 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
                 let Some(result) = take_result(event.lParam) else {
                     continue;
                 };
-                handle_result(&result, &mut tracker, factor, &config.phrase);
+                handle_result(&result, &mut tracker, factor, &config.phrase, &converter);
             }
         }
     }
@@ -514,6 +593,21 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
     Ok(())
 }
 
+/// Opens one waveIn device and hands its stream to the recogniser. The capture is
+/// released by `Capture::drop` when `SetInput` fails.
+fn open_device(
+    recognizer: &ISpRecognizer,
+    device: u32,
+) -> Result<(crate::capture::Capture, Arc<crate::capture::Shared>), (Failure, Option<u32>)> {
+    let opened =
+        crate::capture::Capture::open(device).map_err(|code| (Failure::Microphone, Some(code)))?;
+    let shared = opened.shared();
+    let stream: ISpStreamFormat = crate::stream::CaptureStream::new(Arc::clone(&shared)).into();
+    unsafe { recognizer.SetInput(&stream, true) }
+        .map_err(|error| (opening("device input", error), None))?;
+    Ok((opened, shared))
+}
+
 fn take_result(lparam: windows::Win32::Foundation::LPARAM) -> Option<ISpRecoResult> {
     if lparam.0 == 0 {
         return None;
@@ -521,7 +615,13 @@ fn take_result(lparam: windows::Win32::Foundation::LPARAM) -> Option<ISpRecoResu
     Some(unsafe { ISpRecoResult::from_raw(lparam.0 as *mut c_void) })
 }
 
-fn handle_result(result: &ISpRecoResult, tracker: &mut Tracker, factor: f64, phrase_text: &str) {
+fn handle_result(
+    result: &ISpRecoResult,
+    tracker: &mut Tracker,
+    factor: f64,
+    phrase_text: &str,
+    converter: &ISpPhoneConverter,
+) {
     let phrase_interface: ISpPhrase = match result.cast() {
         Ok(interface) => interface,
         Err(_) => return,
@@ -533,7 +633,7 @@ fn handle_result(result: &ISpRecoResult, tracker: &mut Tracker, factor: f64, phr
         return;
     }
     // GetPhrase hands out a CoTaskMem block: read it, then release it on every path.
-    let parsed = unsafe { read_phrase(&*raw) };
+    let parsed = unsafe { read_phrase(&*raw, converter) };
     unsafe { CoTaskMemFree(Some(raw as *const c_void)) };
     let Some((words, start_bytes, duration_ms)) = parsed else {
         return;
@@ -558,13 +658,16 @@ fn handle_result(result: &ISpRecoResult, tracker: &mut Tracker, factor: f64, phr
 
 /// Reads the words and the audio timeline of one phrase: the stream position is a byte
 /// offset, the size time is in 100 ns units, so both are converted for the tracker.
-fn read_phrase(phrase: &SPPHRASE) -> Option<(Vec<Word>, f64, f64)> {
+fn read_phrase(phrase: &SPPHRASE, converter: &ISpPhoneConverter) -> Option<(Vec<Word>, f64, f64)> {
     let count = phrase.Base.Rule.ulCountOfElements as usize;
     if phrase.Base.pElements.is_null() || count == 0 {
         return None;
     }
     let elements = unsafe { std::slice::from_raw_parts(phrase.Base.pElements, count) };
-    let words: Vec<Word> = elements.iter().map(word_from_element).collect();
+    let words: Vec<Word> = elements
+        .iter()
+        .map(|element| word_from_element(element, converter))
+        .collect();
     let start_ms = phrase.Base.ullAudioStreamPosition as f64;
     let duration_ms = f64::from(phrase.Base.ulAudioSizeTime) / 10_000.0;
     Some((words, start_ms, duration_ms))

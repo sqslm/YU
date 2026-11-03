@@ -1,27 +1,45 @@
 // Wake phrase matching: the rules the PowerShell host already applies, kept in one
 // place so they can be tested without a recogniser.
 //
-// Text matching uses a compatibility-folded, separator-free form of each word ("lucy",
-// "你好胡小杨"). Pronunciations are the raw SAPI phone ids the engine reports, minus
-// tone/format marks, which is exactly what the PowerShell host stores in a trained
-// variant, so existing training data keeps working without migration.
+// Text matching uses the NFKC form of each word with separators removed ("lucy",
+// "你好胡小杨"), so full-width letters and digits fold like the PowerShell host's
+// `MatchText`. Pronunciations are the recogniser's IPA string (SAPI phone ids run through
+// `ISpPhoneConverter::IdToPhone`), decomposed and stripped of marks, which is the form
+// `System.Speech` stores in a trained variant, so existing training data keeps working.
 
 const CARRY_MS: f64 = 3000.0;
 const MAX_PHRASE_MS: f64 = 9000.0;
 const UTTERANCE_START_MS: f64 = 600.0;
 
-/// Compatibility-folded letters and digits only, lowercased.
+/// Unicode normalisation through Win32; returns the input unchanged if it fails.
+fn normalize(text: &str, form: windows::Win32::Globalization::NORM_FORM) -> String {
+    use windows::Win32::Globalization::NormalizeString;
+    let source: Vec<u16> = text.encode_utf16().collect();
+    let needed = unsafe { NormalizeString(form, &source, None) };
+    if needed <= 0 {
+        return text.to_string();
+    }
+    let mut destination = vec![0u16; needed as usize];
+    let written = unsafe { NormalizeString(form, &source, Some(&mut destination)) };
+    if written <= 0 {
+        return text.to_string();
+    }
+    String::from_utf16_lossy(&destination[..written as usize])
+}
+
+/// NFKC-folded letters and digits only, lowercased.
 pub fn match_text(text: &str) -> String {
-    text.chars()
+    normalize(text, windows::Win32::Globalization::NormalizationKC)
+        .chars()
         .filter(|character| character.is_alphanumeric())
         .flat_map(|character| character.to_lowercase())
         .collect()
 }
 
-/// Phone ids as a comparable string: marks and separators dropped.
-pub fn phones(ids: &[u16]) -> String {
-    ids.iter()
-        .filter_map(|id| char::from_u32(u32::from(*id)))
+/// Recogniser IPA as a comparable string: decomposed, marks and separators dropped.
+pub fn phones(ipa: &str) -> String {
+    normalize(ipa, windows::Win32::Globalization::NormalizationKD)
+        .chars()
         .filter(|character| !character.is_whitespace() && !is_mark(*character))
         .flat_map(|character| character.to_lowercase())
         .collect()
@@ -239,7 +257,10 @@ mod tests {
     fn folds_text_and_phone_marks() {
         assert_eq!(match_text("你好，胡小杨！"), "你好胡小杨");
         assert_eq!(match_text("Hey, Jarvis!"), "heyjarvis");
-        assert_eq!(phones(&[0x6E, 0x69, 0x0301, 0x307, 0x68, 0x61]), "niha");
+        // NFKC folds the full-width forms the engine can return.
+        assert_eq!(match_text("Ｈｅｙ　Ｊａｒｖｉｓ"), "heyjarvis");
+        // NFKD plus mark removal: an accented vowel compares equal to its base.
+        assert_eq!(phones("ni\u{301}ha"), "niha");
     }
 
     #[test]
@@ -315,14 +336,14 @@ mod tests {
 
     #[test]
     fn accepts_trained_variants_by_text_or_phones() {
-        let variants = vec![("你好晓阳".to_string(), "ni3hao3xiao3yang2".to_string())];
+        let variants = vec![("你好晓阳".to_string(), "ni2hao3xiao3yang2".to_string())];
         let mut tracker = Tracker::new("你好，胡小杨", &variants);
         assert!(matches!(
             tracker.on_result(&[word("你好晓阳", "")], 80.0, 900.0, 0.95),
             Outcome::Wake { .. }
         ));
         let mut tracker = Tracker::new("你好，胡小杨", &variants);
-        let by_phone = vec![word("你好小羊", "ni3hao3xiao3yang2")];
+        let by_phone = vec![word("你好小羊", "ni2hao3xiao3yang2")];
         assert!(matches!(
             tracker.on_result(&by_phone, 80.0, 900.0, 0.95),
             Outcome::Wake { .. }
