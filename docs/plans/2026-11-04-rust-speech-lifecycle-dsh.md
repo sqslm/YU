@@ -27,13 +27,13 @@
 
 1. 两侧共用同一段测量代码，方法天然一致，`comparable` 可以直接为 `true`，不需要为“PS 用 A 法、Rust 用 B 法”出具不可比声明。
 2. 区间覆盖到进程退出（job 记账由内核在子进程结束时累加），不丢 END → close 尾部。
-3. 不改 helper 生产协议：`yu-speech.exe` 与 `resources/speech.ps1` 一行不动，所以本轮 helper 字节数与 SHA-256 保持不变（336896 B / `2bafa91e…`）。
+3. 不改 helper 源码与生产协议：`native/speech/` 与 `resources/speech.ps1` 本轮零改动（`git diff 8482b8f..HEAD -- native/ resources/speech.ps1` 为空）。但 `build` / `test` / `test:native` 三条脚本都执行 `scripts/build-native.mjs`（清单含 `speech`），二进制会被重写：字节数仍 336896 B，SHA-256 随每次构建变化，本轮最终值 `e5664328ca858d69d8f676da3c7f7032f7b089b88965f9ac8abe7df40a3edccb`（与证据 `binary.sha256` 一致；`2bafa91e…` 是阶段 11 那次构建的值）。
 4. `koffi` 已在 `package.json` 依赖内（Electron 主进程用它加载 `yu-capture.dll`），基准脚本直接复用，不新增依赖。
 
 实现细节与约束：
 
 - `CreateJobObjectW` 建匿名 job；`OpenProcess(PROCESS_SET_QUOTA|PROCESS_TERMINATE|PROCESS_QUERY_INFORMATION|PROCESS_VM_READ)` 拿句柄后 `AssignProcessToJobObject`。Node 自身若已在 job 中，Windows 8+ 支持嵌套 job，不影响。
-- close 后 job 记账要等内核把终止计数记满，因此做最多 300 ms 的**记账收敛轮询**（`TotalTerminatedProcesses < TotalProcesses` 时重查）。该轮询发生在 close 之后，不进入 `totalMs`，也不改变任何耗时字段。
+- close 后 job 记账要等内核把 CPU 时间记满，因此做最多 300 ms 的**记账收敛轮询**（判据是 `TotalUserTime + TotalKernelTime > 0`；本机实测 `TotalTerminatedProcesses` 始终为 0，不能拿它当收敛条件）。该轮询发生在 close 之后，不进入 `totalMs`，也不改变任何耗时字段。
 - 采样器在 100 ms 定时器上跑，只调两个内核查询（`GetProcessMemoryInfo`、`GetProcessHandleCount`），每 5 个 tick 再用 toolhelp 快照数一次线程；采样任务在收尾前 await，失败/缺失如实记录，不用 `if` 跳过后写成通过。
 - 若 job 分配失败（例如极短请求的进程已退出），该样本标记 `invalidReason`，不写入 CPU 字段；checks 会因有效样本不足而非零退出，而不是给一个假数字。
 
@@ -64,7 +64,9 @@ pnpm build
 pnpm test
 ```
 
-helper 未改动，二进制字节数与 SHA-256 应保持 336896 B / `2bafa91e2a2d54b01d9e043d15fce58f6656d2323cd75fc9e83f2f0ece2823d5`；若 `build-native` 结果与之不同，按实际值回填并说明原因。
+helper 源码未改；但 `pnpm test:native` / `pnpm build` / `pnpm test` 都会执行 `scripts/build-native.mjs` 重写 `native/bin/yu-speech.exe`，所以 SHA-256 取**最后一次构建之后**的值回填，并注明取自哪一步构建。本轮最终值 `e5664328ca858d69d8f676da3c7f7032f7b089b88965f9ac8abe7df40a3edccb`，336896 B 不变（`native/bin/` 被 `.gitignore` 忽略，`git status` 看不出这处漂移，只能以证据 `binary.sha256` 兜底）。
+
+收尾规则（自本阶段起）：验证链最后一步跑 `pnpm test`，之后执行 `sha256sum native/bin/yu-speech.exe` 再回填文档，或直接声明“二进制哈希以证据 `binary.sha256` 为准”；`build` / `test` / `test:native` 都会重建 helper，不能拿验证前的哈希当结论。
 
 ## 4. 证据字段
 
@@ -89,7 +91,9 @@ A1–A3、B1–B2、C1–C3 全部落地，C4 见下方提交编号。
 - `checks[]` 结构化 12 项（两处 fixed 前提 + 80 条样本全覆盖 + 每侧 4 项硬检查 + 百分比只在可比时出现），任一 fail 即 `process.exitCode = 1`。
 - 证据结构按 §4：`meta{generatedAt,host,node,samples,text,voice,rate,volume,interleave,measurement{...}}`、`aggregate{powershell,native}`（含 `n`/`valid`/`invalid` 与五项指标 P50/P95）、`runs[]`（80 条逐样本记录，`side` 区分两侧）、`comparison`、`checks`、`decision`；另保留 `platform`/`binary`/`scope`/`settings`/`voices` 便于复核。旧 `rust-speech-correctness-20261104.json`、`rust-speech-20261104.json` 未动。
 
-**测量结果（`node scripts/benchmark-speech.mjs --samples 20`，每侧 40 个有效样本，80/80 全部有效，12 项 checks 全 PASS）**
+**测量结果**（`node scripts/benchmark-speech.mjs --samples 20`，每侧 40 个有效样本，80/80 全部有效，12 项 checks 全 PASS）
+
+下表的数字取自**第六次（最后一次）复跑**：证据文件 `meta.generatedAt = 2026-11-03T22:52:21.864Z`（本地 2026-11-04 06:52:21），`binary.sha256 = e5664328…`；`/tmp/verify12.log` 里那次基准（06:40 前后）是更早的一次运行，数字略不同（PS `started` 915 / `total` 5040 / CPU 1750，Rust 304 / 4221 / 140.6），已在下表"连续三次"小节留档，不能拿它复现本次证据。
 
 | 指标 | PS P50 | Rust P50 | P50 差 | P95 差 |
 | --- | --- | --- | --- | --- |
@@ -102,7 +106,17 @@ A1–A3、B1–B2、C1–C3 全部落地，C4 见下方提交编号。
 
 `decision` 仍为 `memory`（私有内存 P50 −86.0% ≤ −30%，`started` P95 −66.0% 且 −622ms ≤ −25%/−100ms），判据沿用阶段 10/11，未新增凑结论的阈值。
 
-同一脚本连续三次 20 轮实跑，口径稳定：`started` P50 差 −66.8%～−67.3%、P95 差 −64.9%～−66.0%，CPU P50 差 −91.9%～−92.7%，私有内存 −86.0%～−86.1%，工作集 −63.5%；绝对值的抖动集中在 CPU（PS 1703～1750ms、Rust 125～141ms），说明该指标应按百分比读，不按单次毫秒读。`yu-speech.exe` 未重建，仍 336896 B / `2bafa91e2a2d54b01d9e043d15fce58f6656d2323cd75fc9e83f2f0ece2823d5`。
+**连续三次 20 轮实跑（口径稳定性留档）**
+
+| 次序 | 本地时间 | binary.sha256 | PS `started` P50/P95 | Rust `started` P50/P95 | PS CPU P50 | Rust CPU P50 | PS 私有峰值 P50 | Rust 私有峰值 P50 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 第 1 次 | 06:32（`generatedAt` 22:32:57Z） | `2bafa91e…` | 912 / 1038 | 300 / 324 | 1734.4ms | 140.6ms | 77264kB | 10776kB |
+| 第 2 次 | 06:40（`/tmp/verify12.log:66-92`，证据后被覆盖，仅日志留档） | `2bafa91e…`（该次运行在 06:42:55 那次 `build-native` 之前） | 915 / 951 | 304 / 334 | 1750ms | 140.6ms | 77316kB | 10792kB |
+| 第 3 次 | 06:52（入库证据） | `e5664328…` | 891 / 943 | 291 / 321 | 1703.1ms | 125.0ms | 77224kB | 10792kB |
+
+三次口径稳定：`started` P50 差 −66.8%～−67.3%、P95 差 −64.9%～−66.0%，CPU P50 差 −91.9%～−92.7%，私有内存 −86.0%～−86.1%，工作集 −63.5%；绝对值的抖动集中在 CPU（PS 1703～1750ms、Rust 125～141ms）与 `started` P95（PS 943～1038ms），说明该指标应按百分比读，不按单次毫秒读。
+
+`native/bin/yu-speech.exe` 源码未改，但第 2 次运行之后 `pnpm test:native` 的 `build-native` 把它重建了一次：最终 336896 B / `e5664328ca858d69d8f676da3c7f7032f7b089b88965f9ac8abe7df40a3edccb`（与证据 `binary.sha256` 一致）；`2bafa91e2a2d54b01d9e043d15fce58f6656d2323cd75fc9e83f2f0ece2823d5` 是阶段 11 那次构建的值。
 
 **文档对齐（C1–C3）**
 
