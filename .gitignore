@@ -16,6 +16,7 @@
 /docs/plans/*
 !/docs/plans/2026-11-03-rust-gdi-capture-dsh.md
 !/docs/plans/2026-11-03-rust-memory-graph-dsh.md
+!/docs/plans/2026-11-03-rust-voice-wake-dsh.md
 !/package.json
 !/pnpm-lock.yaml
 !/pnpm-workspace.yaml
