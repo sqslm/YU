@@ -6,14 +6,21 @@
  *
  *   node scripts/benchmark-speech.mjs [--samples 20] [--text '…'] [--voice '…']
  *
- * The script writes tests/yu-v2/evidence/rust-speech-20261104.json and prints a
- * table. Memory and CPU are sampled from the helper process itself; the parent
- * Node process is never used as a proxy for helper cost.
+ * Timing boundaries are the real ones: everything is measured from the moment
+ * the request is written to the moment the child's stdio is closed, so no
+ * artificial delay is folded into the total. Resource numbers are a snapshot
+ * taken while the helper is alive and are labelled as such — they are not a
+ * lifetime CPU figure.
+ *
+ * The script writes tests/yu-v2/evidence/rust-speech-correctness-20261104.json
+ * and exits non-zero when a check fails.
  */
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -23,57 +30,90 @@ const option = (name, fallback) => {
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback
 }
 
-const samples = Number(option('samples', '10'))
+const rounds = Number(option('samples', '10'))
 const text = option('text', '你好，这是一次本地朗读测试。')
 const voice = option('voice', 'Microsoft Huihui Desktop')
 const rate = Number(option('rate', '0'))
 const volume = Number(option('volume', '0'))
-const output = resolve(root, option('output', 'tests/yu-v2/evidence/rust-speech-20261104.json'))
+const exe = resolve(root, option('exe', 'native/bin/yu-speech.exe'))
+const output = resolve(root, option('output', 'tests/yu-v2/evidence/rust-speech-correctness-20261104.json'))
 const shell = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 
 const hosts = {
   powershell: { command: shell, args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'resources', 'speech.ps1')] },
-  native: { command: resolve(root, option('exe', 'native/bin/yu-speech.exe')), args: [] }
+  native: { command: exe, args: [] }
 }
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms))
 
-/** Reads the helper's RSS/private bytes, threads and CPU in one probe. */
+/** Reads the helper's private bytes, working set, threads, handles and CPU. */
 function probe(pid) {
   return new Promise((done) => {
     const script = [
       `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}"`,
-      'if (-not $p) { "{}"; exit 0 }',
-      '$g = Get-Process -Id ' + pid + ' -ErrorAction SilentlyContinue',
+      'if (-not $p) { \'{"missing":true}\'; exit 0 }',
+      `$g = Get-Process -Id ${pid} -ErrorAction SilentlyContinue`,
       '[pscustomobject]@{ privateKb = [math]::Round($p.PrivatePageCount / 1kb, 1); workingKb = [math]::Round($p.WorkingSetSize / 1kb, 1); threads = $p.ThreadCount; handles = $p.HandleCount; cpuMs = if ($g) { [math]::Round($g.TotalProcessorTime.TotalMilliseconds, 1) } else { $null } } | ConvertTo-Json -Compress'
     ].join('; ')
     const child = spawn(shell, ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true })
     let out = ''
+    let settled = false
+    let timer = null
+    const finish = (value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      done({ ...value, atMs: Math.round(performance.now() - t0) })
+    }
+    const t0 = performance.now()
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk) => { out += chunk })
-    child.on('exit', () => {
-      try { done(JSON.parse(out.trim() || '{}')) } catch { done({}) }
+    child.on('close', () => {
+      try { finish(JSON.parse(out.trim() || '{}')) } catch { finish({ error: 'unreadable probe output' }) }
     })
-    child.on('error', () => done({}))
-    setTimeout(() => { try { child.kill() } catch {} }, 10_000)
+    child.on('error', (error) => finish({ error: String(error) }))
+    timer = setTimeout(() => { try { child.kill() } catch {} finish({ error: 'probe timeout' }) }, 15_000)
   })
 }
 
-/** Runs one request and returns timings plus the helper's own resource sample. */
-function run(name, request, { keepOpenMs = 0 } = {}) {
+/**
+ * Runs one request. Resolves on `close`, so the reported total covers the whole
+ * child lifetime and drained pipes; no extra wait is added on top.
+ */
+function run(name, request, { round = 0, sampleAfterMs = 300 } = {}) {
   const host = hosts[name]
   return new Promise((done) => {
     const started = performance.now()
-    const child = spawn(host.command, host.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
-    let buffer = ''
+    let child
+    try {
+      child = spawn(host.command, host.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+    } catch (error) {
+      done({ host: name, round, spawnError: String(error), events: [], code: -1, valid: false })
+      return
+    }
     const events = []
-    let exitCode = null
-    let settled = false
+    let buffer = ''
+    let writeAtMs = null
+    let writeError = null
     let sample = null
-    const finish = () => {
+    let sampleTask = null
+    let settled = false
+    const timers = []
+    const finish = (extra = {}) => {
       if (settled) return
       settled = true
-      done({ host: name, pid: child.pid, exitCode, ms: Math.round(performance.now() - started), events, sample })
+      for (const timer of timers) clearTimeout(timer)
+      Promise.resolve(sampleTask).then(() => done({
+        host: name,
+        round,
+        pid: child.pid,
+        events,
+        sample,
+        writeAtMs,
+        writeError,
+        sampleAtMs: sample?.atMs ?? null,
+        ...extra
+      }))
     }
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk) => {
@@ -87,24 +127,34 @@ function run(name, request, { keepOpenMs = 0 } = {}) {
         let parsed = null
         try { parsed = JSON.parse(line) } catch { parsed = { raw: line } }
         events.push({ at, ...parsed })
-        if (parsed.event === 'started') {
-          setTimeout(async () => { sample = await probe(child.pid) }, 300)
-        }
-        if (keepOpenMs && parsed.ok === true && !parsed.event && parsed.voices) {
-          setTimeout(() => child.stdin.end(), keepOpenMs)
+        if (parsed.event === 'started' && !sampleTask) {
+          // Alive-only snapshot: a sample of an already exited helper would be
+          // an empty object and is reported as such, not silently used.
+          sampleTask = sleep(sampleAfterMs).then(() => probe(child.pid)).then((value) => { sample = { ...value, ofPid: child.pid } })
         }
       }
     })
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', () => {})
-    child.on('error', (error) => { events.push({ at: -1, error: String(error) }); exitCode = -1 })
-    child.on('exit', (code) => { exitCode = code; setTimeout(finish, 200) })
-    child.stdin.write(JSON.stringify(request) + '\n')
+    child.stdin.on('error', (error) => { writeError = String(error) })
+    child.on('error', (error) => finish({ code: -1, spawnError: String(error), closed: false }))
+    child.on('close', (code, signal) => {
+      const closedAt = Math.round(performance.now() - started)
+      if (buffer.trim()) events.push({ at: closedAt, raw: buffer.trim() })
+      finish({ code, signal, closed: true, closedAtMs: closedAt })
+    })
+    timers.push(setTimeout(() => { try { child.kill() } catch {} }, 60_000))
+    try {
+      child.stdin.write(JSON.stringify(request) + '\n')
+      writeAtMs = Math.round(performance.now() - started)
+    } catch (error) {
+      writeError = String(error)
+    }
     if (request.action !== 'speak') child.stdin.end()
-    setTimeout(() => { try { child.kill() } catch {} }, 60_000)
   })
 }
 
+/** Percentile over the samples that passed validation; raw stays in the report. */
 function stats(values) {
   const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b)
   if (!sorted.length) return null
@@ -114,32 +164,39 @@ function stats(values) {
 
 const round = (value) => (value == null ? null : Math.round(value * 10) / 10)
 
-async function collect(kind, order, total) {
-  const runs = { powershell: [], native: [] }
-  for (let round = 0; round < total; round += 1) {
-    for (const name of order) {
-      const request = kind === 'voices' ? { action: 'voices' } : { action: 'speak', text, voice, rate, volume }
-      const result = await run(name, request)
-      const startedEvent = result.events.find((event) => event.event === 'started')
-      const finished = result.events.some((event) => event.ok === true && !event.event)
-      runs[name].push({
-        kind,
-        startedMs: startedEvent?.at ?? null,
-        finished,
-        totalMs: result.ms,
-        exitCode: result.exitCode,
-        privateKb: result.sample?.privateKb ?? null,
-        workingKb: result.sample?.workingKb ?? null,
-        threads: result.sample?.threads ?? null,
-        handles: result.sample?.handles ?? null,
-        cpuMs: result.sample?.cpuMs ?? null,
-        voices: result.events.find((event) => Array.isArray(event.voices))?.voices ?? null,
-        error: result.events.find((event) => event.ok === false)?.error ?? null
-      })
-      await sleep(250)
-    }
+function record(result, kind) {
+  const started = result.events.find((event) => event.event === 'started') ?? null
+  const terminal = result.events.find((event) => event.ok === true && !event.event) ?? null
+  const failure = result.events.find((event) => event.ok === false) ?? null
+  const voices = result.events.find((event) => Array.isArray(event.voices))?.voices ?? null
+  const ok = result.code === 0 && (kind === 'voices' ? Array.isArray(voices) : terminal !== null)
+  return {
+    kind,
+    host: result.host,
+    round: result.round,
+    pid: result.pid ?? null,
+    ok,
+    code: result.code ?? null,
+    spawnError: result.spawnError ?? null,
+    writeError: result.writeError ?? null,
+    writeAtMs: result.writeAtMs ?? null,
+    startedMs: started ? started.at : null,
+    terminalMs: terminal ? terminal.at : null,
+    closedAtMs: result.closedAtMs ?? null,
+    // Whole child lifetime, measured to pipes-drained close: the request cost
+    // without any artificial completion delay.
+    totalMs: result.closedAtMs ?? null,
+    sampleAtMs: result.sampleAtMs ?? null,
+    privateKb: Number.isFinite(result.sample?.privateKb) ? result.sample.privateKb : null,
+    workingKb: Number.isFinite(result.sample?.workingKb) ? result.sample.workingKb : null,
+    threads: Number.isFinite(result.sample?.threads) ? result.sample.threads : null,
+    handles: Number.isFinite(result.sample?.handles) ? result.sample.handles : null,
+    // Per-sample CPU is the process total at the moment of the snapshot; it is
+    // not the CPU of the whole utterance and is labelled that way.
+    cpuSnapshotMs: Number.isFinite(result.sample?.cpuMs) ? result.sample.cpuMs : null,
+    voices,
+    error: failure?.error ?? null
   }
-  return runs
 }
 
 const summary = (records, key) => stats(records.map((record) => record[key]))
@@ -155,7 +212,40 @@ function compare(base, next, key) {
   }
 }
 
-console.log(`speech benchmark: ${samples} sample rounds per host, text ${JSON.stringify(text)}, voice ${JSON.stringify(voice)}`)
+async function collect(kind, order, total) {
+  const runs = { powershell: [], native: [] }
+  for (let index = 0; index < total; index += 1) {
+    for (const name of order) {
+      const request = kind === 'voices' ? { action: 'voices' } : { action: 'speak', text, voice, rate, volume }
+      runs[name].push(record(await run(name, request, { round: index }), kind))
+      await sleep(150)
+    }
+  }
+  return runs
+}
+
+function hostSummary(records) {
+  const ok = records.filter((record) => record.ok)
+  return {
+    requests: records.length,
+    valid: ok.length,
+    failed: records.length - ok.length,
+    totalMs: summary(ok, 'totalMs'),
+    startedMs: summary(ok, 'startedMs'),
+    privateKb: summary(ok, 'privateKb'),
+    workingKb: summary(ok, 'workingKb'),
+    handles: summary(ok, 'handles'),
+    threads: summary(ok, 'threads'),
+    cpuSnapshotMs: summary(ok, 'cpuSnapshotMs'),
+    failures: records.filter((record) => !record.ok).map((record) => ({ round: record.round, code: record.code, error: record.error, spawnError: record.spawnError }))
+  }
+}
+
+const binaryHash = (() => {
+  try { return createHash('sha256').update(readFileSync(exe)).digest('hex') } catch { return null }
+})()
+
+console.log(`speech benchmark: ${rounds} rounds per ordering slot, text ${JSON.stringify(text)}, voice ${JSON.stringify(voice)}`)
 
 // Warm both hosts so their first-run page cache and SAPI initialisation do not
 // land on the measured samples.
@@ -164,73 +254,83 @@ for (const name of ['powershell', 'native']) {
   await run(name, { action: 'speak', text, voice, rate, volume })
 }
 
-const voices = await collect('voices', ['powershell', 'native', 'native', 'powershell'], samples)
-const speak = await collect('speak', ['powershell', 'native', 'native', 'powershell'], samples)
+const voices = await collect('voices', ['powershell', 'native', 'native', 'powershell'], rounds)
+const speak = await collect('speak', ['powershell', 'native', 'native', 'powershell'], rounds)
 
-const voicesOk = Object.entries(voices).every(([name, records]) => records.every((record) => record.exitCode === 0 && record.voices))
-const nativeVoices = voices.native[0]?.voices
-const powershellVoices = voices.powershell[0]?.voices
+const nativeVoices = voices.native.find((record) => record.voices)?.voices ?? null
+const powershellVoices = voices.powershell.find((record) => record.voices)?.voices ?? null
 const sameVoices = JSON.stringify(nativeVoices) === JSON.stringify(powershellVoices)
-const speakOk = Object.entries(speak).every(([name, records]) => records.every((record) => record.exitCode === 0 && record.finished))
+const voicesOk = [...voices.powershell, ...voices.native].every((record) => record.ok)
+const speakOk = [...speak.powershell, ...speak.native].every((record) => record.ok)
 
 const report = {
   kind: 'speech-host-comparison',
+  version: 2,
   date: new Date().toISOString(),
   platform: { os: process.env.OS ?? 'windows', node: process.version },
+  binary: { path: 'native/bin/yu-speech.exe', bytes: (() => { try { return readFileSync(exe).length } catch { return null } })(), sha256: binaryHash },
   scope: {
-    voices: 'one process per sample, request answered and exited',
+    voices: 'one process per sample; the request is answered and the process exits',
     speak: `one utterance (${text.length} chars), rate ${rate}, volume ${volume}; started is the host's own start event`,
-    memory: 'sampled from the helper process 300 ms after started',
+    timing: 'total is request write to stdio close; no artificial completion delay is added',
+    memory: 'one snapshot per sample, taken ~300 ms after started while the helper is alive (not a peak)',
+    cpu: 'process-total CPU at the snapshot moment, not the CPU of the whole utterance',
     excluded: ['cloud TTS', 'playback of provider audio', 'SSML/markup', 'renderer/UI', 'multi-utterance sessions']
   },
-  settings: { text, voice, rate, volume, samplesPerHost: samples },
+  settings: { text, voice, rate, volume, roundsPerSlot: rounds, order: ['powershell', 'native', 'native', 'powershell'] },
   voices: {
-    powershell: powerSummary(voices.powershell),
-    native: powerSummary(voices.native),
+    powershell: hostSummary(voices.powershell),
+    native: hostSummary(voices.native),
     identical: sameVoices,
     sample: { powershell: powershellVoices, native: nativeVoices }
   },
   speak: {
-    powershell: powerSummary(speak.powershell),
-    native: powerSummary(speak.native),
+    powershell: hostSummary(speak.powershell),
+    native: hostSummary(speak.native),
     comparison: {
-      total: compare(speak.powershell, speak.native, 'totalMs'),
-      started: compare(speak.powershell, speak.native, 'startedMs'),
-      privateKb: compare(speak.powershell, speak.native, 'privateKb'),
-      workingKb: compare(speak.powershell, speak.native, 'workingKb')
+      total: compare(speak.powershell.filter((r) => r.ok), speak.native.filter((r) => r.ok), 'totalMs'),
+      started: compare(speak.powershell.filter((r) => r.ok), speak.native.filter((r) => r.ok), 'startedMs'),
+      privateKb: compare(speak.powershell.filter((r) => r.ok), speak.native.filter((r) => r.ok), 'privateKb'),
+      workingKb: compare(speak.powershell.filter((r) => r.ok), speak.native.filter((r) => r.ok), 'workingKb')
     }
   },
-  checks: { voicesOk, sameVoices, speakOk },
+  checks: { voicesOk, sameVoices, speakOk, nativeValidSamples: speak.native.filter((record) => record.ok).length, powershellValidSamples: speak.powershell.filter((record) => record.ok).length },
   raw: { voices, speak }
 }
 
-function powerSummary(records) {
-  const first = records[0] ?? {}
-  return {
-    count: records.length,
-    ok: records.every((record) => record.exitCode === 0),
-    totalMs: summary(records, 'totalMs'),
-    startedMs: summary(records, 'startedMs'),
-    privateKb: summary(records, 'privateKb'),
-    workingKb: summary(records, 'workingKb'),
-    cpuMs: summary(records, 'cpuMs'),
-    handles: summary(records, 'handles'),
-    threads: summary(records, 'threads'),
-    error: first.error ?? null
-  }
+// Adoption thresholds from the delivery plan, re-evaluated on this run.
+const comparison = report.speak.comparison
+report.adoption = {
+  memoryPct: comparison.privateKb.p50Pct,
+  memoryMeets: comparison.privateKb.p50Pct !== null && comparison.privateKb.p50Pct <= -30,
+  startedP95Pct: comparison.started.p95Pct,
+  startedP95DeltaMs: comparison.started.p95Delta,
+  startedMeets: comparison.started.p95Pct !== null && comparison.started.p95Pct <= -25 && comparison.started.p95Delta <= -100,
+  decision: comparison.privateKb.p50Pct !== null && comparison.privateKb.p50Pct <= -30 ? 'memory' : (comparison.started.p95Pct !== null && comparison.started.p95Pct <= -25 && comparison.started.p95Delta <= -100 ? 'startup' : 'below-threshold')
 }
 
 mkdirSync(dirname(output), { recursive: true })
 writeFileSync(output, JSON.stringify(report, null, 2) + '\n')
 
-const cells = (label, host) => [label, host.totalMs?.p50, host.totalMs?.p95, host.startedMs?.p50, host.startedMs?.p95, host.privateKb?.p50, host.workingKb?.p50, host.cpuMs?.p50]
-console.table([
-  cells('voices PS', report.voices.powershell),
-  cells('voices Rust', report.voices.native),
-  cells('speak PS', report.speak.powershell),
-  cells('speak Rust', report.speak.native)
-].map((row) => Object.fromEntries(['host', 'total p50', 'total p95', 'start p50', 'start p95', 'private p50', 'working p50', 'cpu p50'].map((key, index) => [key, row[index]]))))
-
+const row = (label, host) => ({
+  host: label,
+  requests: host.requests,
+  valid: host.valid,
+  'start p50': host.startedMs?.p50 ?? null,
+  'start p95': host.startedMs?.p95 ?? null,
+  'total p50': host.totalMs?.p50 ?? null,
+  'private p50': host.privateKb?.p50 ?? null,
+  'working p50': host.workingKb?.p50 ?? null,
+  'cpu snapshot p50': host.cpuSnapshotMs?.p50 ?? null
+})
+console.table([row('voices PS', report.voices.powershell), row('voices Rust', report.voices.native), row('speak PS', report.speak.powershell), row('speak Rust', report.speak.native)])
 console.log('voices identical:', sameVoices, '| voices ok:', voicesOk, '| speak ok:', speakOk)
-console.log('speak comparison:', JSON.stringify(report.speak.comparison))
+console.log('speak comparison:', JSON.stringify(comparison))
+console.log('adoption:', JSON.stringify(report.adoption))
 console.log('evidence:', output)
+
+const failed = !voicesOk || !sameVoices || !speakOk || report.checks.nativeValidSamples < 20 || report.checks.powershellValidSamples < 20
+if (failed) {
+  console.error('speech benchmark checks failed; see', output)
+  process.exitCode = 1
+}
