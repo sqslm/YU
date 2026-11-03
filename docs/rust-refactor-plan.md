@@ -20,7 +20,7 @@
 | 6 | GDI 截图采集 | 已完成，`00d652c`；阶段 7 已复核内存 | [开发计划与结果](plans/2026-11-03-rust-gdi-capture-dsh.md)：采纳缓存绑定的 TS，未上线 Rust；1080p P50 14.1→12.3ms、P95 20.8→18.7ms；6.5 GB 私有内存在“释放引用 + 显式 GC + 空闲”探针条件下可回收，不覆盖全部生产场景 |
 | 7 | 记忆关系图纯计算评估与上一阶段核验 | 已交付 `4bb22dc`，采用 TS；Rust 未上线 | [开发计划与结果](plans/2026-11-03-rust-memory-graph-dsh.md)：报告为 512 维、21/81/200 节点，算法对比在 Electron 主进程，最终版另测 worker 往返；文档维数与测量范围由阶段 8 校正为 512 维、21/81/200 节点与主进程/worker 的真实边界 |
 | 8 | 常驻语音唤醒宿主与设备枚举 | 已交付并接入，`d31a0a4`；归因由阶段 9 修正 | [开发计划与续做结果](plans/2026-11-03-rust-voice-wake-dsh.md)：Rust 监听/枚举、PS 学习；原报告 ready P95 1123→572ms、私有 75.5→13.3MB。阶段 9 复核发现事件掩码缺 SDK 校验位、格式 GUID 写错、音频时间轴与资源清理问题，原「机器限制」归因已被推翻，性能数字不代替功能验收 |
-| 9 | Rust 唤醒正确性与资源回收 | 主要修复已交付，`44335c6`；旧音标兼容待续做 | [修复计划与续做任务](plans/2026-11-03-rust-wake-correctness-dsh.md)：SDK 掩码/GUID、读取/回收等已修；原报告 ready P95 1277→597ms、私有 75.4→13.3MB。仍需让旧 PS 学习 IPA 与 Rust 真正等价，并完成至少 600s 的最终会话（上批实际 568s），不另开新迁移模块 |
+| 9 | Rust 唤醒正确性与资源回收 | 已完成，`44335c6` + 续做 | [修复计划与结果](plans/2026-11-03-rust-wake-correctness-dsh.md)：SDK 掩码/GUID、读取/回收已修；旧 PS 学习 IPA 经系统 `SAPI2UPS` + `FormD` 与 Rust 逐值一致；同一 PID 622s 会话两次唤醒在 600s 之后、私有内存 32.9–33.2MB 平稳；ready P95 1277→597ms（各 20 样本） |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -266,9 +266,11 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 - 时间轴与读取：`Shared::position_ms()` 由积压队列长度改为已消费字节（单调），结果、静音、carry 共用一条时间轴；`read()` 边消费边等待、`cb=0` 立即返回、超大请求可完成，溢出按整帧丢弃并计入 `dropped_bytes()`。
 - 生命周期与回落：`Capture` 的 prepare/add/start 逐步检查并实现 `Drop`，部分初始化与所有错误出口统一 Stop/Reset/Unprepare/Close；设备索引消失时记录 `device-missing` 后回落系统默认，事件报**实际**设备名。
-- 行为：完整短语、短语后接指令、700ms 跨段、2s 停顿、同音、片段、句中嵌词、无关中文、白噪声、10s 前置静音、10s 段内间隔、9.45 分钟连续会话（8/8 唤醒、0 error）均按预期；`src/main/wake-word-rust.test.ts` 12/12。
+- 行为：完整短语、短语后接指令、700ms 跨段、2s 停顿、同音、片段、句中嵌词、无关中文、白噪声、10s 前置静音、10s 段内间隔、622s 连续会话（含 600s 后的正负语料）均按预期；`src/main/wake-word-rust.test.ts` 13/13。
 - 性能复测（各 20 样本）：枚举 981→52ms，首次 ready P50/P95 1151/1277→546/597ms，待命私有 75.4→13.3MB；待命 CPU 在 250ms 采样下两侧多为 0，只能说未观察到稳定差异，不能写「无退化」。
-- 未解决：`ISpPhoneConverter` 给拼音、`System.Speech` 学习样本是 IPA，跨宿主音标比对不成立，变体匹配实际仍靠 text；英文识别未验证（本机只装 zh-CN 识别器）；真实麦克风、热插拔、RDP/锁屏未测。
+- 音标兼容（续做批次）：旧 `ISpPhoneConverter` 输出拼音的问题已确认并修正，改用系统 `ISpPhoneticAlphabetConverter::SAPI2UPS` 加 `FormD` 去组合符，与 PowerShell 学习保存的 IPA 逐值一致（真实 ids `00e7 000b …` → `nihaʊhuɕjaʊjɑŋ`）；转换器创建失败只降级音标匹配，不影响文字唤醒，也不迁移用户训练数据。
+- 十分钟会话（续做批次）：单进程 `pid 23520` 运行 622s，600s 后送入正/负语料，两次唤醒 602.809s/618.433s（conf 0.9921/0.9917），中间无关语音未唤醒；私有内存 32.9–33.2MB、句柄 296–299，无单调增长。会话脚本 `tests/yu-v2/fixtures/wake-long-session.cjs` 受跟踪。
+- 未测：英文识别（本机只装 zh-CN 识别器，未下载语言包）；真实麦克风讲话、热插拔、RDP/锁屏、1 小时以上连续运行；`ready` 的 wave 模式（69ms）与设备模式（546ms）口径不同，不能互相替代。
 
 证据：`tests/yu-v2/evidence/rust-wake-correctness-20261103.json`（本轮）；`rust-wake-20261103.json` 与 `rust-wake-listener-20261103.json` 原样保留。详细结果见[阶段 9 计划文末](plans/2026-11-03-rust-wake-correctness-dsh.md#实际修复与验收结果dsh2026-11-03)。
 

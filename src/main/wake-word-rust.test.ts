@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url)
 const fixture = require('../../tests/yu-v2/fixtures/wake-native.cjs') as {
   EXE: string
   devices: () => { devices?: { id: string; name: string }[] }
+  learn: (options: { phrase: string; samples: Buffer[] }) => Promise<{ samples: { text: string; phones: string }[] }>
   listen: (options: {
     config: object | string
     keepOpenMs?: number
@@ -132,6 +133,23 @@ describe.skipIf(!available)('rust wake helper', () => {
     expect(result.code).toBe(0)
     expect(wakes(result.events)).toHaveLength(1)
   }, 60_000)
+
+  it('accepts the variants the PowerShell host learned, pronunciation included', async () => {
+    // The old host still trains: three samples through `mode: "learn"`. Its stored phones are
+    // the IPA the Rust listener now derives from the engine's UPS, so this pins the two ends
+    // of the conversion against real output from both.
+    const { readFileSync } = await import('node:fs')
+    const sample = readFileSync(corpus.homophone)
+    const learned = await fixture.learn({ phrase: '你好胡晓阳', samples: [sample, sample, sample] })
+    expect(learned.samples).toHaveLength(3)
+    for (const row of learned.samples as { text: string; phones: string }[]) {
+      expect(row.phones).toBe('nihaʊhuɕjaʊjɑŋ')
+    }
+    const variants = (learned.samples as { text: string; phones: string }[]).map((row) => ({ text: row.text, phones: row.phones }))
+    const result = await fixture.listen({ config: { phrase, language: 'zh', wave: corpus.homophone, device: '', variants } })
+    expect(result.code).toBe(0)
+    expect(wakes(result.events)).toHaveLength(1)
+  }, 120_000)
 
   it('enumerates the waveIn devices with string ids', () => {
     const payload = fixture.devices()

@@ -10,12 +10,12 @@ use std::time::Instant;
 use windows::Win32::Foundation::WAIT_OBJECT_0;
 use windows::Win32::Media::Audio::WAVEFORMATEX;
 use windows::Win32::Media::Speech::{
-    ISpDataKey, ISpObjectToken, ISpObjectTokenCategory, ISpObjectWithToken, ISpPhoneConverter,
-    ISpPhrase, ISpRecoContext, ISpRecoGrammar, ISpRecoResult, ISpRecognizer, ISpStream,
-    ISpStreamFormat, SPEI_END_SR_STREAM, SPEI_FALSE_RECOGNITION, SPEI_RECOGNITION,
-    SPEI_SR_AUDIO_LEVEL, SPFM_OPEN_READONLY, SPGS_ENABLED, SPLO_DYNAMIC, SPPHRASE, SPRST_ACTIVE,
-    SPRST_INACTIVE, SPRULESTATE, SPSTREAMFORMATTYPE, SpInprocRecognizer, SpObjectTokenCategory,
-    SpPhoneConverter, SpStream,
+    ISpDataKey, ISpObjectToken, ISpObjectTokenCategory, ISpPhoneticAlphabetConverter, ISpPhrase,
+    ISpRecoContext, ISpRecoGrammar, ISpRecoResult, ISpRecognizer, ISpStream, ISpStreamFormat,
+    SPEI_END_SR_STREAM, SPEI_FALSE_RECOGNITION, SPEI_RECOGNITION, SPEI_SR_AUDIO_LEVEL,
+    SPFM_OPEN_READONLY, SPGS_ENABLED, SPLO_DYNAMIC, SPPHRASE, SPRST_ACTIVE, SPRST_INACTIVE,
+    SPRULESTATE, SPSTREAMFORMATTYPE, SpInprocRecognizer, SpObjectTokenCategory,
+    SpPhoneticAlphabetConverter, SpStream,
 };
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
@@ -86,70 +86,24 @@ fn lcid(language: &str) -> u32 {
     }
 }
 
-/// Phone converter bound to the same language as the recogniser: the engine reports
-/// numeric phone ids, and this converter renders them as the pinyin-like string in the
-/// converter's phone map. Note that `System.Speech` renders the same ids as IPA, so a
-/// variant trained by the PowerShell host cannot be compared on phones alone.
-fn phone_converter(language: &str) -> Result<ISpPhoneConverter, Failure> {
+/// Alphabetic converter bound to the same language as the recogniser. The engine reports
+/// numeric phone ids; `SAPI2UPS` turns them into UPS characters, the same ones
+/// `System.Speech` derives from those ids, and `matching::phones` reduces the result to the
+/// form the PowerShell host stores in a trained variant.
+fn phonetic_converter(language: &str) -> Result<ISpPhoneticAlphabetConverter, Failure> {
     unsafe {
-        let converter: ISpPhoneConverter = CoCreateInstance(&SpPhoneConverter, None, CLSCTX_ALL)
+        let converter: ISpPhoneticAlphabetConverter =
+            CoCreateInstance(&SpPhoneticAlphabetConverter, None, CLSCTX_ALL).map_err(|error| {
+                eprintln!("phonetic converter: {error}");
+                Failure::Language
+            })?;
+        converter
+            .SetLangId(lcid(language) as u16)
             .map_err(|error| {
-                eprintln!("phone converter: {error}");
+                eprintln!("phonetic language: {error}");
                 Failure::Language
             })?;
-        let bound: ISpObjectWithToken = converter.cast().map_err(|error| {
-            eprintln!("phone converter token: {error}");
-            Failure::Language
-        })?;
-        let category: ISpObjectTokenCategory =
-            CoCreateInstance(&SpObjectTokenCategory, None, CLSCTX_ALL).map_err(|error| {
-                eprintln!("phone category: {error}");
-                Failure::Language
-            })?;
-        category
-            .SetId(
-                &HSTRING::from("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\PhoneConverters"),
-                false,
-            )
-            .map_err(|error| {
-                eprintln!("phone category id: {error}");
-                Failure::Language
-            })?;
-        let tokens = category
-            .EnumTokens(&HSTRING::new(), &HSTRING::new())
-            .map_err(|error| {
-                eprintln!("phone tokens: {error}");
-                Failure::Language
-            })?;
-        let wanted = format!("{:X}", lcid(language));
-        loop {
-            let mut token: [Option<ISpObjectToken>; 1] = [None];
-            let mut fetched = 0u32;
-            if tokens
-                .Next(1, token.as_mut_ptr(), Some(&mut fetched))
-                .is_err()
-                || fetched == 0
-            {
-                break;
-            }
-            let Some(token) = token[0].take() else { break };
-            let languages = token
-                .OpenKey(&HSTRING::from("Attributes"))
-                .map(|key| string_value(&key, "Language"))
-                .unwrap_or_default();
-            let matches = languages
-                .split(';')
-                .any(|entry| entry.trim().eq_ignore_ascii_case(&wanted));
-            if matches {
-                bound.SetObjectToken(&token).map_err(|error| {
-                    eprintln!("phone token: {error}");
-                    Failure::Language
-                })?;
-                return Ok(converter);
-            }
-        }
-        eprintln!("no phone converter for language {language}");
-        Err(Failure::Language)
+        Ok(converter)
     }
 }
 
@@ -298,14 +252,17 @@ fn grammar_xml(config: &Config) -> (String, Vec<String>, bool) {
 
 fn word_from_element(
     element: &windows::Win32::Media::Speech::SPPHRASEELEMENT,
-    converter: &ISpPhoneConverter,
+    converter: Option<&ISpPhoneticAlphabetConverter>,
 ) -> Word {
     let text = if element.pszDisplayText.is_null() {
         read_wide(element.pszLexicalForm)
     } else {
         read_wide(element.pszDisplayText)
     };
-    let phones = phone_string(converter, element.pszPronunciation);
+    let phones = match converter {
+        Some(converter) => phone_string(converter, element.pszPronunciation),
+        None => String::new(),
+    };
     // An engine that reports no usable score yields 0 instead of a guessed 0.9/0.6/0.3,
     // so the threshold decides on a real number.
     let confidence = if element.SREngineConfidence > 0.0 && element.SREngineConfidence <= 1.0 {
@@ -328,14 +285,25 @@ fn read_wide(pointer: PCWSTR) -> String {
     unsafe { pointer.to_string() }.unwrap_or_default()
 }
 
-/// IPA string for the element's phone ids, in the form System.Speech stores.
-fn phone_string(converter: &ISpPhoneConverter, ids: *const u16) -> String {
+/// IPA string for the element's phone ids, in the form `System.Speech` stores.
+fn phone_string(converter: &ISpPhoneticAlphabetConverter, ids: *const u16) -> String {
     if ids.is_null() {
         return String::new();
     }
-    let mut buffer = vec![0u16; 1024];
-    let result = unsafe { converter.IdToPhone(ids, windows::core::PWSTR(buffer.as_mut_ptr())) };
-    if result.is_err() {
+    let mut length = 0usize;
+    unsafe {
+        while *ids.add(length) != 0 {
+            length += 1;
+        }
+    }
+    if length == 0 {
+        return String::new();
+    }
+    let Ok(needed) = (unsafe { converter.GetMaxConvertLength(length as u32, true) }) else {
+        return String::new();
+    };
+    let mut buffer = vec![0u16; needed as usize + 1];
+    if unsafe { converter.SAPI2UPS(ids, &mut buffer) }.is_err() {
         return String::new();
     }
     let end = buffer
@@ -401,8 +369,9 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
     let _com = Com::start()?;
     let recognizer = recognizer_for(&config.language)?;
     // The engine reports phone ids; trained variants store the IPA string System.Speech
-    // derived from them, so both sides meet after this conversion.
-    let converter = phone_converter(&config.language)?;
+    // derived from them, so both sides meet after this conversion. A converter that cannot be
+    // created only costs the phone comparison: plain text wakes must keep working.
+    let converter = phonetic_converter(&config.language).ok();
     let context: ISpRecoContext =
         unsafe { recognizer.CreateRecoContext() }.map_err(|_| Failure::Unavailable)?;
     let wave_input = matches!(config.input, Input::Wave(_) | Input::Stream(_));
@@ -577,7 +546,13 @@ pub fn run(config: &Config, stop: &AtomicBool, deadline_ms: u64) -> Result<(), F
                 let Some(result) = take_result(event.lParam) else {
                     continue;
                 };
-                handle_result(&result, &mut tracker, factor, &config.phrase, &converter);
+                handle_result(
+                    &result,
+                    &mut tracker,
+                    factor,
+                    &config.phrase,
+                    converter.as_ref(),
+                );
             }
         }
     }
@@ -620,7 +595,7 @@ fn handle_result(
     tracker: &mut Tracker,
     factor: f64,
     phrase_text: &str,
-    converter: &ISpPhoneConverter,
+    converter: Option<&ISpPhoneticAlphabetConverter>,
 ) {
     let phrase_interface: ISpPhrase = match result.cast() {
         Ok(interface) => interface,
@@ -658,7 +633,10 @@ fn handle_result(
 
 /// Reads the words and the audio timeline of one phrase: the stream position is a byte
 /// offset, the size time is in 100 ns units, so both are converted for the tracker.
-fn read_phrase(phrase: &SPPHRASE, converter: &ISpPhoneConverter) -> Option<(Vec<Word>, f64, f64)> {
+fn read_phrase(
+    phrase: &SPPHRASE,
+    converter: Option<&ISpPhoneticAlphabetConverter>,
+) -> Option<(Vec<Word>, f64, f64)> {
     let count = phrase.Base.Rule.ulCountOfElements as usize;
     if phrase.Base.pElements.is_null() || count == 0 {
         return None;
@@ -671,4 +649,26 @@ fn read_phrase(phrase: &SPPHRASE, converter: &ISpPhoneConverter) -> Option<(Vec<
     let start_ms = phrase.Base.ullAudioStreamPosition as f64;
     let duration_ms = f64::from(phrase.Base.ulAudioSizeTime) / 10_000.0;
     Some((words, start_ms, duration_ms))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The phone ids the engine reported for `你好胡小杨` in a real session, converted by the
+    /// same call the listener uses. The expected string is what `resources/voice-wake.ps1`
+    /// stored when it learned from the same audio, so a trained variant keeps matching.
+    #[test]
+    fn converts_recognised_phone_ids_to_the_stored_ipa() {
+        let _com = Com::start().expect("COM");
+        let converter = phonetic_converter("zh").expect("converter");
+        let ids: [u16; 11] = [
+            0x00e7, 0x000b, 0x0081, 0x000c, 0x0088, 0x000b, 0x0169, 0x000c, 0x0175, 0x000b, 0,
+        ];
+        assert_eq!(
+            phone_string(&converter, ids.as_ptr()),
+            "niha\u{28a}hu\u{255}ja\u{28a}j\u{251}\u{14b}"
+        );
+        // The converter is declared after `com`, so it is released before COM shuts down.
+    }
 }

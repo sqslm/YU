@@ -124,6 +124,36 @@ function listen({ exe = EXE, config, keepOpenMs = 0, timeoutMs = 45_000, env = {
   })
 }
 
+/// Runs the PowerShell learning path the product still uses and returns its samples, so a
+/// variant trained by the old host can be fed to the Rust listener unchanged.
+function learn({ phrase, samples, timeoutMs = 60_000 }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(POWERSHELL, ['-NoProfile', '-NonInteractive', '-File', path.join(ROOT, 'resources', 'voice-wake.ps1')], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+    let output = ''
+    let stderr = ''
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error(`learning timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => { output += chunk })
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    child.on('exit', (code) => {
+      clearTimeout(timer)
+      const learned = output.split('\n').map((line) => {
+        try { return JSON.parse(line.replace(/^\uFEFF/, '')) } catch { return null }
+      }).find((row) => row?.type === 'learned')
+      if (!learned) return reject(new Error(`learning produced no samples (${code}): ${stderr.slice(0, 400)}`))
+      resolve({ samples: learned.samples, code, output, stderr })
+    })
+    child.stdin.end(JSON.stringify({ mode: 'learn', phrase, language: /[\u3400-\u9fff]/u.test(phrase) ? 'zh' : 'en', samples: samples.map((wav) => wav.toString('base64')) }) + '\n', 'utf8')
+  })
+}
+
 /// Enumerates devices through the helper's own flag.
 function devices(exe = EXE) {
   const result = spawnSync(exe, ['--list-devices'], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
@@ -136,4 +166,4 @@ function workspace() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'yu-wake-fixture-'))
 }
 
-module.exports = { EXE, PHRASES, devices, listen, synthesize, workspace, POWERSHELL }
+module.exports = { EXE, PHRASES, devices, learn, listen, synthesize, workspace, POWERSHELL }

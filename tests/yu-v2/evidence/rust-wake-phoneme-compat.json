@@ -1,0 +1,300 @@
+{
+  "kind": "wake-phoneme-compatibility",
+  "date": "2026-11-04T02:35:00.000+08:00",
+  "baseline": "9ffbaa8",
+  "binary": {
+    "path": "native/bin/yu-wake.exe",
+    "bytes": 417280,
+    "sha256": "ea90799128db03a0cde0b06b1f154c099d9ffd25fe3815a7e0aa0c59be3c342d",
+    "note": "A clean rebuild of the same source can produce different bytes because the release build uses LTO; the hash identifies the shipped artifact for this run, while verification rests on the tests and the session below."
+  },
+  "scope": [
+    "Only the zh-CN recogniser installed on this machine was exercised; no English engine is installed and none was downloaded.",
+    "All audio is synthesised by SAPI into a temporary directory and deleted afterwards; no microphone is opened and no user recording or training data is read.",
+    "The phone comparison is verified with real engine output and real PowerShell learning output, but the phones-only branch cannot be reached end to end because the closed grammar only ever yields the text of a loaded rule.",
+    "The ten-minute session runs the release binary on a synthetic stream; its timing is measured from process start to exit on one PID."
+  ],
+  "problem": {
+    "symptom": "A variant learned by the PowerShell host stored IPA, while the listener compared SAPI phone ids rendered through ISpPhoneConverter::IdToPhone, which returns pinyin. The two representations could never be equal, so a learned variant could only ever match by its text.",
+    "oldConversion": "ISpPhoneConverter::IdToPhone -> pinyin such as ni2hao3hu2xiao3yang2",
+    "storedFormat": "System.Speech Pronunciation -> IPA such as nihaʊhuɕjaʊjɑŋ"
+  },
+  "converter": {
+    "api": "ISpPhoneticAlphabetConverter::{SetLangId, GetMaxConvertLength, SAPI2UPS}",
+    "language": "zh-CN",
+    "langid": "0x804",
+    "engine": "Microsoft Speech Recognizer 8.0 for Windows (Chinese Simplified - PRC)",
+    "rawIdsForComplete": [
+      "0x00e7",
+      "0x000b",
+      "0x0081",
+      "0x000c",
+      "0x0088",
+      "0x000b",
+      "0x0169",
+      "0x000c",
+      "0x0175",
+      "0x000b"
+    ],
+    "maxConvertLength": "10 * ids + 1",
+    "upsCodepoints": [
+      230,
+      105,
+      772,
+      779,
+      104,
+      97,
+      865,
+      650,
+      768,
+      783,
+      772,
+      104,
+      117,
+      772,
+      779,
+      597,
+      106,
+      97,
+      865,
+      650,
+      768,
+      783,
+      772,
+      106,
+      641,
+      865,
+      331,
+      772,
+      779
+    ],
+    "upsText": "ni̋hãʊ̀̏̄huɕjãʊ̀̏̄jɑ̃ŋ̋",
+    "normalisation": "FormD, then drop combining marks and whitespace, then lower case — the same steps resources/voice-wake.ps1 applies through [System.Text.NormalizationForm]::FormD and \\p{M}\\s",
+    "result": "nihaʊhuɕjaʊjɑŋ"
+  },
+  "learnedVariant": {
+    "source": "resources/voice-wake.ps1 mode=learn through spawn, three samples of homophone.wav, phrase 你好胡晓阳",
+    "exitCode": 0,
+    "samples": [
+      {
+        "text": "你好胡晓阳",
+        "phones": "nihaʊhuɕjaʊjɑŋ",
+        "targetPhones": "nihaʊhuɕjaʊjɑŋ",
+        "confidence": 0.9137277
+      },
+      {
+        "text": "你好胡晓阳",
+        "phones": "nihaʊhuɕjaʊjɑŋ",
+        "targetPhones": "nihaʊhuɕjaʊjɑŋ",
+        "confidence": 0.9137277
+      },
+      {
+        "text": "你好胡晓阳",
+        "phones": "nihaʊhuɕjaʊjɑŋ",
+        "targetPhones": "nihaʊhuɕjaʊjɑŋ",
+        "confidence": 0.9137277
+      }
+    ],
+    "equalsConverted": true
+  },
+  "regressions": {
+    "rust": [
+      {
+        "name": "matching::tests::converts_engine_phones_to_the_stored_ipa_form",
+        "proves": "matching::phones(real UPS text) == real PowerShell phones"
+      },
+      {
+        "name": "matching::tests::wakes_on_a_learned_variant_through_phones_alone",
+        "proves": "with an empty phrase and a variant whose text differs, the real UPS text still wakes; clearing the phones turns the same input into Ignore, so the text branch took no part"
+      },
+      {
+        "name": "speech::tests::converts_recognised_phone_ids_to_the_stored_ipa",
+        "proves": "the production converter chain (SpPhoneticAlphabetConverter + SetLangId + SAPI2UPS + matching::phones) turns the real ids into the stored IPA"
+      },
+      {
+        "name": "matching::tests::accepts_a_trained_variant_by_its_text",
+        "proves": "a trained variant still matches by text when the pronunciation is not involved"
+      }
+    ],
+    "electron": [
+      {
+        "name": "accepts the variants the PowerShell host learned, pronunciation included",
+        "command": "pnpm exec vitest run src/main/wake-word-rust.test.ts",
+        "proves": "the PowerShell host really learns phones == nihaʊhuɕjaʊjɑŋ and the Rust listener wakes on exactly those variants"
+      }
+    ],
+    "harness": [
+      {
+        "name": "phone_only.cjs",
+        "cases": [
+          {
+            "name": "text phrase",
+            "wakes": 1
+          },
+          {
+            "name": "phones only",
+            "wakes": 0
+          },
+          {
+            "name": "wrong phones",
+            "wakes": 0
+          },
+          {
+            "name": "pinyin phones (old bug)",
+            "wakes": 0
+          }
+        ],
+        "finding": "With a phrase and a variant text that the audio cannot produce, no rule yields a candidate at all, so the phones branch is unreachable end to end. This is a property of the closed grammar, not of the conversion; the branch is therefore proven where the engine output is real and the text targets are removed."
+      }
+    ]
+  },
+  "corpus": {
+    "generator": "SAPI Microsoft Huihui Desktop, 16 kHz / 16 bit / mono",
+    "sha256": {
+      "complete.wav": "86038c9c0fd58b2e7fb85190de8e982ccbb090a1e4d1b681e2e969c38d89fdb5",
+      "command.wav": "b54863349ee2e222a2ffe7393403c4baf7618c526b7c1a425fe24eafc1f53135",
+      "split.wav": "a0580c00cdb1d4ab957a91bd263a96622e522cad17d336b0e1d7bf81660f4a51",
+      "homophone.wav": "42bf1160abce62a515e0860f2d943f2dcba727ed047b1644da11697eab1f8545",
+      "pause2s.wav": "88ab9726f24d21da4977a7351684a7e360ef554ec12e4109313a3dfe829d8aab",
+      "embedded.wav": "e7ac7a30e776dd0d8af8b789cf0562a139077fb854f766f677efcbbfacd281ea",
+      "partial.wav": "105341be1d85fda650c3b5f03a35a911c97b439d0e3d1fd603258c17b03eb5b1",
+      "unrelated.wav": "2551f4385d5506df6aa2190220bc195edde53b381912f5bf3f9bd343a9d2be0d"
+    }
+  },
+  "longSession": {
+    "command": "node tests/yu-v2/fixtures/wake-long-session.cjs --silence 600 --out native/wake/target/probe10/session600.json",
+    "input": "600 s of silence, then complete.wav, 5 s, unrelated.wav, 5 s, complete.wav, 3 s, streamed in real time through the custom IStream on one process",
+    "binarySha256": "ea90799128db03a0cde0b06b1f154c099d9ffd25fe3815a7e0aa0c59be3c342d",
+    "pid": 23520,
+    "exitCode": 0,
+    "seconds": 622,
+    "marks": [
+      {
+        "name": "complete.wav",
+        "atSeconds": 602.08
+      },
+      {
+        "name": "unrelated.wav",
+        "atSeconds": 610.47
+      },
+      {
+        "name": "complete.wav",
+        "atSeconds": 617.55
+      }
+    ],
+    "wakes": [
+      {
+        "at": 602809,
+        "confidence": 0.9920560121536255,
+        "durationMs": 1290
+      },
+      {
+        "at": 618433,
+        "confidence": 0.9917265176773071,
+        "durationMs": 1330
+      }
+    ],
+    "errors": [],
+    "lateNegative": "unrelated.wav between the two wakes produced no wake",
+    "resources": {
+      "samples": 62,
+      "privateMb": {
+        "min": 32.9,
+        "max": 33.2,
+        "firstHalfAverage": 32.96,
+        "secondHalfAverage": 32.95
+      },
+      "workingMb": {
+        "first": 56.6,
+        "last": 58.1
+      },
+      "threads": [
+        6,
+        8,
+        9,
+        11
+      ],
+      "handles": {
+        "min": 296,
+        "max": 299
+      },
+      "trend": "private memory and handle count stay flat across the ten minute session"
+    }
+  },
+  "commands": [
+    {
+      "command": "cargo fmt -- --check",
+      "cwd": "native/wake",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo clippy --locked --offline --all-targets -- -D warnings",
+      "cwd": "native/wake",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo test --locked --offline",
+      "cwd": "native/wake",
+      "exitCode": 0,
+      "result": "13 passed"
+    },
+    {
+      "command": "cargo build --release --locked --offline",
+      "cwd": "native/wake",
+      "exitCode": 0
+    },
+    {
+      "command": "node scripts/build-native.mjs",
+      "cwd": ".",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm exec vitest run src/main/wake-word-rust.test.ts",
+      "cwd": ".",
+      "exitCode": 0,
+      "result": "13 passed in 31.76 s"
+    },
+    {
+      "command": "pnpm typecheck",
+      "cwd": ".",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm test:native",
+      "cwd": ".",
+      "exitCode": 0,
+      "result": "hotkey/uia/windows/scroll/wake all passed; wake 13 unit tests"
+    },
+    {
+      "command": "pnpm test",
+      "cwd": ".",
+      "exitCode": 0,
+      "result": "236 files passed, 3 skipped; 3519 tests passed, 8 skipped"
+    },
+    {
+      "command": "pnpm build",
+      "cwd": ".",
+      "exitCode": 0,
+      "result": "renderer built in 14.02 s"
+    },
+    {
+      "command": "node tests/yu-v2/fixtures/wake-long-session.cjs --silence 600 --out native/wake/target/session600.json",
+      "cwd": ".",
+      "exitCode": 0,
+      "result": "pid 23520, 622 s, wakes at 602.809 s and 618.433 s"
+    },
+    {
+      "command": "node tests/yu-v2/fixtures/wake-long-session.cjs --silence 3 --out native/wake/target/probe10/short.json",
+      "cwd": ".",
+      "exitCode": 0,
+      "result": "smoke run of the tracked fixture: 24 s, 2 wakes"
+    }
+  ],
+  "limits": [
+    "The phones-only branch is proven with real engine ids and real learning output, but not through a full recognition session, because the closed grammar cannot produce a text outside its rules.",
+    "English is untested: this machine has no English recognition engine and no language pack was downloaded.",
+    "Real speech, hot-plugged microphones, RDP sessions, lock screen and UAC boundaries remain untested.",
+    "The ten-minute session uses the stream input; the device input shares the same reader and tracker but was only exercised in short sessions."
+  ],
+  "trackedFixture": "tests/yu-v2/fixtures/wake-long-session.cjs"
+}

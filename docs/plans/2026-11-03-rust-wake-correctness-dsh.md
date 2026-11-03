@@ -2,7 +2,7 @@
 
 > **执行者：DSH，继续现有 typeless 对话和工作区。** 直接修复、验证、自行回写文档并提交，完成后停止，等待用户下一轮指令。Codex 不监听开发过程。
 
-**状态：主要修复已交付，旧音标兼容与完整 600s 验收待续做。** 上批功能提交 `44335c6`，记录提交 `9ffbaa8`，基线 `d31a0a4`；SDK 参数、读取与回收已有实现和测试，学习音标仍不等价。执行本文末“续做批次：旧学习音标兼容收尾”，按实际验证收尾，不把剩余兼容问题当作迁移完成。
+**状态：已完成（DSH，2026-11-04，基线 `d31a0a4`）。** 上批功能提交 `44335c6`，记录提交 `9ffbaa8`，续做要求 `f69cf8c`；本批次收尾了旧学习音标兼容与同一 PID 的 600s 会话。旧报告的 568s 会话保留为历史记录，不作为本轮验收依据。
 
 **目标：** 先让已接入的 Rust 唤醒可靠保持既有功能与资源生命周期，再讨论新迁移模块。启动延迟/内存收益不能代替正确性验收。
 
@@ -46,14 +46,14 @@
 - [x] 修已选设备打开/送流失败时的默认回落，保留一次可见 notice，报告实际输入名；默认也失败则按 microphone 错误退出。保留 waveIn ID，不改用户设置、默认系统设备，不添加无限重试或双监听。
 - [x] 核对 TS stop/初始化期间暂停/迟到 spawn/迟到事件/父进程退出。现有 host 改动没有加入 spawn 后的过期进程再清理，需要用生命周期回归证明没有遗留，而非只看 30 次已进入 ready 的正常退出。
 - [x] 对照 `resources/voice-wake.ps1` 的 MatchText/Phones 做实际 NFKC/NFD 归一化，覆盖全角拉丁字母/数字、大小写与组合附加符。复用现有 Win32/依赖实现，不用“兼容折叠”注释替代真正转换。
-- [ ] 用 PS `Learn()` 实际生成的合成训练样本比较编码，再验证 Rust 识别结果的音标与旧 variants，要求至少一组只能靠音标而不是变体 text 相同匹配。核实 SAPI phone ID、UPS/IPA 与 System.Speech Pronunciation 的关系，不预设 ID 就是保存的字符串；不得迁移或重写用户训练数据。
+- [x] 用 PS `Learn()` 实际生成的合成训练样本比较编码，再验证 Rust 识别结果的音标与旧 variants，要求至少一组只能靠音标而不是变体 text 相同匹配。核实 SAPI phone ID、UPS/IPA 与 System.Speech Pronunciation 的关系，不预设 ID 就是保存的字符串；不得迁移或重写用户训练数据。
 - [x] 保留整句与拼接/部分词的置信度语义和 0.1–0.99 用户门槛、300–9000ms 时长与 5s 冷却。对比原控制方案的句级/词级分数，真实零分不能被抬高成固定猜测；缺失/非法分数不得伪装高置信度成功。
 
 ## 5. 可重复验收、文档与停止条件
 
 - [x] 把上轮位于 `native/wake/target/probe/table2.cjs` 的必要语料/生命周期探针整理为受跟踪的最小 fixture 或真正的 Rust 集成测试，例如 `src/main/wake-word-rust.test.ts`、`tests/yu-v2/fixtures/wake-native.cjs`。只保留必要生成脚本，不提交大批 WAV；新脚本按 allowlist 管理。纯 matcher 六个测试和仍调用 PS 的测试不能冒充真实 Rust 监听覆盖。
 - [x] 相关回归先验证修前失败、修后通过，再运行 Rust fmt/test/Clippy、`pnpm test:native`、`pnpm typecheck`、`pnpm test`、`pnpm build`。保留已有正负语料，不改阈值/预期或 skip 来掩盖回归；语言包确实缺失与功能失败分开记录。
-- [ ] 做隔离 Electron 的实际宿主/子进程验证，并在合成受控输入下连续监听至少 10 分钟，在后段送入唤醒/负语料，记录线程/句柄、内存平台值、事件与结束。可生成音频流而不保存长文件；等待期间只在 DSH 本对话报告有意义进度，不要求 Codex 监听。1h/热插拔/真实讲话/UAC/RDP 未测仍保留未测。**部分完成：上批记录为 568s（9.45 分钟），未达到 600s；续做只对最终版本补一次完整会话，不重复所有旧基准。**
+- [x] 做隔离 Electron 的实际宿主/子进程验证，并在合成受控输入下连续监听至少 10 分钟，在后段送入唤醒/负语料，记录线程/句柄、内存平台值、事件与结束。可生成音频流而不保存长文件；等待期间只在 DSH 本对话报告有意义进度，不要求 Codex 监听。1h/热插拔/真实讲话/UAC/RDP 未测仍保留未测。**已完成：续做批次在同一 PID 上跑满 622s，两次唤醒发生在 602.8s 与 618.4s，中间负语料未误唤醒；上批 568s 的记录保留为历史。**
 - [x] 正确性通过后用相同输入、识别器和采样条件重测修复后的 PS 与 Rust；启动/内存/CPU/唤醒尾延迟范围分开。现有报告的 `decision` 只按 ready/内存判断，不含功能与 CPU 退化门槛，须与真实功能验收结合，缺测 CPU 不能写成“无退化”。不重复无目标全量重建或扩大到学习/ASR等迁移。
 - [x] 新报告建议 `tests/yu-v2/evidence/rust-wake-correctness-20261103.json`，记录基线、实际文件/hash、命令/退出码、回归与限制。原 `rust-wake-listener-20261103.json` 保留，不能覆盖后声称从未有问题。
 - [x] 开始时将本文标“实施中”；结束自行追加“实际修复与验收结果”，仅勾已完成项目，同步总计划、阶段 8 归因与中英文 README 的现行行为。硬件未测、可复现 API 阻塞保留真实状态，不把所有待办机械勾选。
@@ -129,7 +129,7 @@
 
 ### 局限与未测项
 
-- **音标编码（未完成）**：`ISpPhoneConverter` 对中文输出拼音串（`ni2hao3…`），而 `System.Speech` 的 `Pronunciation` 是 IPA（`nihaʊhuɕjaʊjɑŋ`）。两者都来自同一 phone id 序列，但文字不同，因此 PS 学习出的 variants 与 Rust 识别结果**不能只靠音标比对**；当前变体匹配实际由 text 承担，单元测试只验证了同一表示法内部的音标匹配。修复需要 pinyin→IPA 或 id 级别的共享表示，本轮未做，也没有迁移或改写用户训练数据。
+- **音标编码（已由续做批次解决）**：本轮记录时 `ISpPhoneConverter` 对中文输出拼音串，与 `System.Speech` 的 IPA 不同，变体只能靠 text 命中。续做批次改用系统原生 `ISpPhoneticAlphabetConverter::SAPI2UPS` 加 `FormD`，与 PS `Phones()` 逐值一致（见文末「音标兼容续做结果」），未迁移或改写用户训练数据。
 - 英文识别未验证：本机只装了 zh-CN 识别器（`MS-2052-80-DESK`），英文语料未能识别，片段规则只在 PowerShell 侧验证。
 - 真实麦克风讲话、热插拔、UAC/RDP/锁屏切换、1 小时连续运行仍未测；设备回滚只验证了「索引消失回落到系统默认」。
 - 待命 CPU 受 250ms 采样分辨率限制，缺测值写 `null`，没有推断为「无退化」。
@@ -140,32 +140,93 @@
 
 ### 续做 1：建立同版真实音标对照
 
-- [ ] 阅读 `resources/voice-wake.ps1` 的 Learn/Phones、`src/shared/wake-word.ts`、`native/wake/src/{speech,matching}.rs` 和现有 fixture。用本机实际 System.Speech/识别器生成多组中文合成样本及三次学习结果，保存语言/token、原始 phone ID 序列、PS Pronunciation、规范化 phones 和 Rust 当前输出的对照；不读取个人训练数据或录音。
-- [ ] 对照微软 `Result/RecognitionResult.cs::ConvertPronunciation`、`Internal/AlphabetConverter.cs::SapiToIpa` 和 `Result/RecognizedPhrase.cs` 的音标处理。当前 `ISpPhoneConverter::IdToPhone` 返回拼音，不是已等价 IPA；更正 matching.rs 顶部及 phone_string 的错误注释。源码研究是路径依据，实际兼容以本机旧 Framework 学习输出为准。
-- [ ] 精确保持 PS 的 `FormD` 后去组合符/空白/小写规则；当前 Rust 用 `NormalizationKD`，不能直接当作相同。比较声调、组合标记、IPA 修饰符和完整前缀；不改变 PS 输出/旧训练来配合 Rust，不放宽成子串或编辑距离匹配。
+- [x] 阅读 `resources/voice-wake.ps1` 的 Learn/Phones、`src/shared/wake-word.ts`、`native/wake/src/{speech,matching}.rs` 和现有 fixture。用本机实际 System.Speech/识别器生成多组中文合成样本及三次学习结果，保存语言/token、原始 phone ID 序列、PS Pronunciation、规范化 phones 和 Rust 当前输出的对照；不读取个人训练数据或录音。
+- [x] 对照微软 `Result/RecognitionResult.cs::ConvertPronunciation`、`Internal/AlphabetConverter.cs::SapiToIpa` 和 `Result/RecognizedPhrase.cs` 的音标处理。当前 `ISpPhoneConverter::IdToPhone` 返回拼音，不是已等价 IPA；更正 matching.rs 顶部及 phone_string 的错误注释。源码研究是路径依据，实际兼容以本机旧 Framework 学习输出为准。
+- [x] 精确保持 PS 的 `FormD` 后去组合符/空白/小写规则；当前 Rust 用 `NormalizationKD`，不能直接当作相同。比较声调、组合标记、IPA 修饰符和完整前缀；不改变 PS 输出/旧训练来配合 Rust，不放宽成子串或编辑距离匹配。
 
 ### 续做 2：先验证系统原生转换，再选最小实现
 
-- [ ] 本地固定 0.61.3 已有 `SpPhoneticAlphabetConverter`、`ISpPhoneticAlphabetConverter::{SetLangId,GetMaxConvertLength,SAPI2UPS,UPS2SAPI}`，以及 `ISpPhoneticAlphabetSelection::{IsAlphabetUPS,SetAlphabetToUPS}`。用同一实际语言/token 的原始 ID 做小探针，记录 HRESULT、输入/输出代码点与 PS oracle 比较；不能只用接口名字断定 UPS、ASCII 名称与 IPA 字符串一定相同。
-- [ ] 优先验证 `SpPhoneticAlphabetConverter` 的原生转换及实际支持接口的 alphabet 选择。语言来自实际选中识别器，输出容量按 API 契约计算，处理终止符与失败；不要硬编码 1024 字符输出就假设任何输入都安全，不手写 COM vtable 或升级依赖来绕过问题。
-- [ ] 若系统路径能给出等价结果，就在现有 Rust 会话内初始化并复用，只在需要的匹配路径转换，释放资源；不每词重新创建整个 COM 环境。没有训练的正常文字唤醒不能因为训练转换路径失败而失效，实际不支持的训练匹配也不能伪装成已支持。
-- [ ] 只有原生路径经过可复现失败/不等价对照后，才考虑复用微软官方且许可证允许的最小转换实现/表，记录来源版本、哈希、许可证与体积；仅覆盖当前支持范围，不搬完整语音框架，不自创汉语拼音→IPA 规则，不下载模型或修改识别器。如果确有外部阻塞，留下具体 API/HRESULT/最小复现及可用行为范围，不能只写“拼音不是IPA所以不做”。
-- [ ] `WakeTraining`、variants.text/phones、保存路径、学习/删除/重录行为保持；修补转换适配，禁止迁移、覆盖或重新生成用户训练数据。旧设置读取与导出保持一致，合成 fixture 的读前/读后哈希不变。
+- [x] 本地固定 0.61.3 已有 `SpPhoneticAlphabetConverter`、`ISpPhoneticAlphabetConverter::{SetLangId,GetMaxConvertLength,SAPI2UPS,UPS2SAPI}`，以及 `ISpPhoneticAlphabetSelection::{IsAlphabetUPS,SetAlphabetToUPS}`。用同一实际语言/token 的原始 ID 做小探针，记录 HRESULT、输入/输出代码点与 PS oracle 比较；不能只用接口名字断定 UPS、ASCII 名称与 IPA 字符串一定相同。
+- [x] 优先验证 `SpPhoneticAlphabetConverter` 的原生转换及实际支持接口的 alphabet 选择。语言来自实际选中识别器，输出容量按 API 契约计算，处理终止符与失败；不要硬编码 1024 字符输出就假设任何输入都安全，不手写 COM vtable 或升级依赖来绕过问题。
+- [x] 若系统路径能给出等价结果，就在现有 Rust 会话内初始化并复用，只在需要的匹配路径转换，释放资源；不每词重新创建整个 COM 环境。没有训练的正常文字唤醒不能因为训练转换路径失败而失效，实际不支持的训练匹配也不能伪装成已支持。
+- [x] 只有原生路径经过可复现失败/不等价对照后，才考虑复用微软官方且许可证允许的最小转换实现/表，记录来源版本、哈希、许可证与体积；仅覆盖当前支持范围，不搬完整语音框架，不自创汉语拼音→IPA 规则，不下载模型或修改识别器。如果确有外部阻塞，留下具体 API/HRESULT/最小复现及可用行为范围，不能只写“拼音不是IPA所以不做”。
+- [x] `WakeTraining`、variants.text/phones、保存路径、学习/删除/重录行为保持；修补转换适配，禁止迁移、覆盖或重新生成用户训练数据。旧设置读取与导出保持一致，合成 fixture 的读前/读后哈希不变。
 
 ### 续做 3：证明旧学习确实可用
 
-- [ ] 新回归必须来自真实 PS Learn 的输出和真实 Rust/SAPI 识别数据；至少一组明确排除相同 text 能成功的路径，证明完整 phones 匹配。可以在测试中单独屏蔽文字分支验证已有识别数据，但不能改生产识别结果、自造两个相同音标字符串或偷偷改变配置后宣称端到端通过；同时保留真实 helper 的学习变体使用用例。
-- [ ] 覆盖完整音标、分段/carry、前缀/后缀不能单独唤醒、近音却不同完整音标、无关文本、组合标记、旧无训练设置；置信度/时长/冷却及负语料保持。纯文字成功不能代替 phoneme 验收，不降低阈值或跳过失败。
-- [ ] 本机仅 zh-CN：中文执行真实识别/学习测试；英文可做有明确来源的转换和规则测试，实际未安装英语引擎则保留未测，不声称英文整链路已验收，不下载语言包。探针与回归保存到现有受跟踪 fixture/测试，避免再次只留下 target/probe 中的临时脚本。
+- [x] 新回归必须来自真实 PS Learn 的输出和真实 Rust/SAPI 识别数据；至少一组明确排除相同 text 能成功的路径，证明完整 phones 匹配。可以在测试中单独屏蔽文字分支验证已有识别数据，但不能改生产识别结果、自造两个相同音标字符串或偷偷改变配置后宣称端到端通过；同时保留真实 helper 的学习变体使用用例。
+- [x] 覆盖完整音标、分段/carry、前缀/后缀不能单独唤醒、近音却不同完整音标、无关文本、组合标记、旧无训练设置；置信度/时长/冷却及负语料保持。纯文字成功不能代替 phoneme 验收，不降低阈值或跳过失败。
+- [x] 本机仅 zh-CN：中文执行真实识别/学习测试；英文可做有明确来源的转换和规则测试，实际未安装英语引擎则保留未测，不声称英文整链路已验收，不下载语言包。探针与回归保存到现有受跟踪 fixture/测试，避免再次只留下 target/probe 中的临时脚本。
 
 ### 续做 4：验证并结束本阶段
 
-- [ ] 在最终代码上只补一次同一 PID 实际运行 ≥600s 的合成受控会话，600s 后仍送入正/负语料，记录单调起止时间、事件、内存/线程/句柄与退出；不能只用 WAV 标称时长或多次短会话加总。默认不打开真实输入，不保存用户语音；临时长合成文件用完清理，测试缓冲占用与生产占用分开。
-- [ ] 先跑直接相关的新回归、现有 wake host/Rust/native 及共享学习测试，再做 Rust fmt/test/Clippy、`pnpm typecheck`、`pnpm test`、`pnpm build`。完整 10 分钟会话只跑最终版本一次；只有新失败/改变才扩大或重复验证，不重测所有已完成迁移。
-- [ ] 检查转换后的冷启动、常驻私有与唤醒尾延迟是否出现明显回退；若新增对象/表带来实质成本，用同输入的修复后 PS/Rust 对照记录。CPU 缺测仍如实写缺测，不用零值证明无开销；不以性能收益替代本轮兼容验收。
-- [ ] 新证据建议 `tests/yu-v2/evidence/rust-wake-phoneme-compat.json`，包含代码/音频来源哈希、原始对照、真实命令/退出码与限制；旧报告保留。实际音频或音标诊断只来自合成 fixture，产品常规日志不记录识别正文/用户音标。
-- [ ] 自行在本文件追加“音标兼容续做结果”，按真实结果更新遗留勾选、状态、总计划和必要的 README；尚未完成的内容不能标完成，568s 原报告保留为历史。检查 Diff，仅暂存本任务文件，必要验证后自动 Conventional Commit，不为填当前提交 hash 再建单独文档提交。
-- [ ] 清理本轮且确认退出的隔离/编译暂存，保留有效交付、模型、依赖、用户数据和必要证据，报告主要占用。不 push、不发布、不打安装器、不改个人设置或重启用户开发版。最终在当前 DSH 对话回复结果、文档路径和 commit hash，然后停止，等待用户下一轮。
+- [x] 在最终代码上只补一次同一 PID 实际运行 ≥600s 的合成受控会话，600s 后仍送入正/负语料，记录单调起止时间、事件、内存/线程/句柄与退出；不能只用 WAV 标称时长或多次短会话加总。默认不打开真实输入，不保存用户语音；临时长合成文件用完清理，测试缓冲占用与生产占用分开。
+- [x] 先跑直接相关的新回归、现有 wake host/Rust/native 及共享学习测试，再做 Rust fmt/test/Clippy、`pnpm typecheck`、`pnpm test`、`pnpm build`。完整 10 分钟会话只跑最终版本一次；只有新失败/改变才扩大或重复验证，不重测所有已完成迁移。
+- [x] 检查转换后的冷启动、常驻私有与唤醒尾延迟是否出现明显回退；若新增对象/表带来实质成本，用同输入的修复后 PS/Rust 对照记录。CPU 缺测仍如实写缺测，不用零值证明无开销；不以性能收益替代本轮兼容验收。
+- [x] 新证据建议 `tests/yu-v2/evidence/rust-wake-phoneme-compat.json`，包含代码/音频来源哈希、原始对照、真实命令/退出码与限制；旧报告保留。实际音频或音标诊断只来自合成 fixture，产品常规日志不记录识别正文/用户音标。
+- [x] 自行在本文件追加“音标兼容续做结果”，按真实结果更新遗留勾选、状态、总计划和必要的 README；尚未完成的内容不能标完成，568s 原报告保留为历史。检查 Diff，仅暂存本任务文件，必要验证后自动 Conventional Commit，不为填当前提交 hash 再建单独文档提交。
+- [x] 清理本轮且确认退出的隔离/编译暂存，保留有效交付、模型、依赖、用户数据和必要证据，报告主要占用。不 push、不发布、不打安装器、不改个人设置或重启用户开发版。最终在当前 DSH 对话回复结果、文档路径和 commit hash，然后停止，等待用户下一轮。
+
+## 音标兼容续做结果（DSH，2026-11-04）
+
+**结论**：旧 `resources/voice-wake.ps1` 学习出的变体现在能被 Rust 监听按音标匹配。系统原生 `ISpPhoneticAlphabetConverter::SAPI2UPS` 加 `FormD` 去组合符，与 PowerShell 的 `Phones()` 逐值一致；没有引入转换表、没有新增进程、没有迁移或改写任何训练数据。
+
+### 根因与证据
+
+| 项目 | 旧实现（`44335c6`） | 现在 |
+| --- | --- | --- |
+| 接口 | `SpPhoneConverter` + `ISpObjectWithToken` + `IdToPhone` | `SpPhoneticAlphabetConverter` + `SetLangId(lcid)` + `SAPI2UPS` |
+| 同一真实 ids 的输出 | 拼音 `ni2hao3…` | UPS `ni̋hãʊ̀̏̄huɕjãʊ̀̏̄jɑ̃ŋ̋`（码点见证据） |
+| 规范化 | `NormalizationKD` | `NormalizationD` + 去组合符/空白 + 小写，与 PS 相同 |
+| 结果 | 与 PS 存的 IPA 永不相等，变体只能靠 text 命中 | 去标记后为 `nihaʊhuɕjaʊjɑŋ`，与 PS 完全一致 |
+
+- 真实识别数据：`complete.wav`（`你好胡小杨。`）的引擎 phone id 为 `00e7 000b 0081 000c 0088 000b 0169 000c 0175 000b`；`GetMaxConvertLength(10, true)` 返回 101。
+- 真实学习数据：PS `mode=learn` 三份 `homophone.wav`（合成的 `你好，胡晓阳。`）输出 `phones = targetPhones = nihaʊhuɕjaʊjɑŋ`，confidence 0.9137277。
+- 既有实现对照：微软 `AlphabetConverter.SapiToIpa` 用自己的 `PhoneMapData` 资源表把 SAPI 映射到 UPS，`RecognitionResult.ConvertPronunciation` 只调用它；本项目用系统 `SAPI2UPS` 得到同一串 UPS 字符，属实测等价，不是同一个函数。已在 `matching.rs`/`speech.rs` 注释中写明，不再声称「SAPI2UPS 就是 .NET 那个调用」。
+- 组合符处理：`char` 没有 category，Win32 `CT_CTYPE3` 与 Unicode 15.1 不一致（漏 1531 个 mark，还把 1041 个普通字符标成 mark），因此在 `matching.rs` 内置 309 段 Unicode 15.1 Mn/Mc/Me 区间表，`binary_search_by` 判定，不依赖 API 的字符分类。
+
+### 代码改动
+
+- `native/wake/src/speech.rs`：`phonetic_converter(language)` 创建转换器并 `SetLangId`；`phone_string(converter, ids)` 按 id 长度算容量后 `SAPI2UPS` 再交给 `matching::phones()`。转换器创建失败只降级为 `None`（音标不参与匹配，文字唤醒不受影响），不吞掉识别错误。
+- `native/wake/src/matching.rs`：`phones()` 改 FormD；新增 `MARK_RANGES`/`is_mark()`；前缀判定补 `!text.is_empty()`/`!phones.is_empty()` 守卫，避免空音标被当成任意 target 的前缀。
+- `tests/yu-v2/fixtures/wake-native.cjs`：新增 `learn()`，直接调 `resources/voice-wake.ps1` 的 learn 模式，返回真实学习样本。
+- `src/main/wake-word-rust.test.ts`：新增 `accepts the variants the PowerShell host learned, pronunciation included`，用真实 PS 学习结果驱动 Rust 监听。
+
+### 回归与结果
+
+- Rust 单测（`cargo test --locked --offline`）13 项通过，其中：
+  - `converts_engine_phones_to_the_stored_ipa_form`：真实 UPS → `nihaʊhuɕjaʊjɑŋ`。
+  - `wakes_on_a_learned_variant_through_phones_alone`：`Tracker::new("", [("你好胡晓阳", IPA)])` 只靠音标命中真实识别结果；把 phones 清空后不再唤醒，证明该用例没有走文字分支。
+  - `converts_recognised_phone_ids_to_the_stored_ipa`：真实 id 序列经 COM 转换器得到同一 IPA。
+- `pnpm exec vitest run src/main/wake-word-rust.test.ts` → 13 passed / 31.76 s（含 PS 学习用例 1.55 s）。
+- 端到端限制：闭合语法下 SAPI 返回的文本一定来自语法，`text` 与 `phones` 都是短语或变体本身，因此「文本完全不同、只有音标相同」的输入无法在真实链路上构造；`phone_only.cjs` 的四个实验（text 命中 1 次、仅音标 0 次、错误音标 0 次、拼音 0 次）也印证了这点。音标分支因此以真实引擎数据 + 空 text 目标的单元测试证明，未改生产识别结果。
+
+### 十分钟会话（最终二进制）
+
+- 单进程 `pid 23520`（交付二进制 `ea907991…`），`stream` 实时输入「600 s 静音 → `complete.wav` → 5 s → `unrelated.wav` → 5 s → `complete.wav` → 3 s」，`seconds 622`、`exit 0`；命令 `node tests/yu-v2/fixtures/wake-long-session.cjs --silence 600 --out <json>`。
+- 两次唤醒在 602.809 s 与 618.433 s（均在 600 s 之后），confidence 0.9921 / 0.9917，durationMs 1290 / 1330；中间 `unrelated.wav` 未唤醒；无 error 事件。
+- 62 个采样点：私有内存 32.9–33.2 MB（前后半均值 32.96/32.95），工作集 56.6→58.1 MB，线程 {6,8,9,11}，句柄 296–299，无单调增长。
+- 构建可复现性：release 用 LTO，干净重编会得到不同字节（本轮四次构建的 hash 各不相同、功能相同），因此交付 hash 只标识本次产物，验收以测试与会话为准。
+- 会话脚本已作为受跟踪 fixture `tests/yu-v2/fixtures/wake-long-session.cjs` 保存（`--silence`/`--out` 参数），并用 `--silence 3` 冒烟验证过（24 s、2 次唤醒）。
+
+### 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | 通过 |
+| `cargo clippy --locked --offline --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --offline` | 13 passed |
+| `pnpm exec vitest run src/main/wake-word-rust.test.ts` | 13 passed / 31.76 s |
+| `node scripts/benchmark-wake.mjs --samples 5` | PS 枚举 937 ms、ready p50 1005/p95 1033 ms；Rust 枚举 50 ms、ready p50 69/p95 71 ms（wave 模式，ready 不含设备打开） |
+| 唤醒尾延迟（`fixture.listen`，最终 exe） | complete 75 ms、command 65 ms、homophone 66 ms |
+
+### 局限与未测项
+
+- 音标等价只在 zh-CN `MS-2052-80-DESK` + `Microsoft Huihui Desktop` 上核对；英文引擎未安装，英文整链路未测，也没有下载语言包。
+- `ready` 的 wave 模式数字（69 ms）与设备模式的 546 ms 口径不同，不能互相替代；待命 CPU 在多数组采样中仍为 0，缺测按 `null` 记录。
+- 真实麦克风讲话、热插拔、RDP/锁屏、1 小时以上连续运行仍未测；十分钟会话用的是合成音频经自定义流输入，不打开真实输入。
+
+证据：`tests/yu-v2/evidence/rust-wake-phoneme-compat.json`。旧报告 `rust-wake-correctness-20261103.json`、`rust-wake-listener-20261103.json`、`rust-wake-20261103.json` 原样保留。
 
 ### 本批次官方参考
 
