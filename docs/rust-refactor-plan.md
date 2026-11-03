@@ -24,6 +24,7 @@
 | 10 | Windows 本地 TTS 宿主 | 已接入 `4ad5cdd`；验收缺口由阶段 11 补齐 | [交付记录](plans/2026-11-04-rust-local-tts-dsh.md)：按需 Rust SAPI helper 已接入；原始报告的残留检测、计时与文本边界缺口已在阶段 11 修复并复测；真实声卡听辨未测 |
 | 11 | 本地 TTS 正确性与验收证据校正 | 已完成 `cd4925c`；helper 336896 B / `2bafa91e…` | [交付记录](plans/2026-11-04-rust-local-tts-correctness-dsh.md)：残留探测、采样时机、生产运行器覆盖、NUL 拒绝与 SAPI 失败出口已修，基准改按 close 收尾；校准后 `started` P95 1491→396ms、私有内存 −85%，真实声卡/热插拔未测 |
 | 12 | 本地 TTS 生命周期观测与验收口径对齐 | 已完成 `9c07ce7`；helper 源码未改，重建后 336896 B / `e5664328…` | [开发计划与结果](plans/2026-11-04-rust-speech-lifecycle-dsh.md)：生命周期 CPU 差分与朗读期峰值内存可复现采集；总计划/阶段计划/README 未测项措辞一致；证据落 `rust-speech-lifecycle-<日期>.json` |
+| 13 | 浏览器地址读取 | 待 DSH 实施，基线 `903d88d` | [开发计划](plans/2026-11-04-rust-browser-url-dsh.md)：仅迁移 `browser-url`，复用一次性 Windows helper；原窗口、地址候选与权限边界一致，真实 UIA 验收及同机对照达标才接入 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -305,6 +306,15 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 **未测项（阶段 11 后）**：真实声卡听辨与响度、蓝牙/热插拔、远程桌面与锁屏、无音频输出设备时的失败表现、默认音频设备切换；事件读取/等待失败与缺失 START 的用例是替身模拟，未在真实故障设备上复现；CPU 与内存已按阶段 12 的生命周期口径实测（`tests/yu-v2/evidence/rust-speech-lifecycle-20261104.json`），不再是采样瞬间快照。云 TTS 与浏览器播放路径未改。
 
 **阶段 12 结果**：A1–A3、B1–B2、C1–C3 全部落地（逐项见阶段 12 计划第 5 节）。`scripts/benchmark-speech.mjs` 的 CPU 由“存活瞬间快照”改为 job 记账的进程累计差分，窗口是 `stdin` 请求写入 → stdio `close`，与 `totalMs` 同区间；私有内存取 job 内核峰值、工作集取 100ms 采样的最大值；两侧共用同一段测量代码，`comparison` 每项带 `comparable`/`reason`，做不到同法就不出百分比。每侧 40 个有效样本（80/80 有效，12 项结构化 checks 全 PASS，退出码 0）：音色枚举 P50 852 → 26ms；启动至 `started` P50 891 → 291ms、P95 943 → 321ms（−66.0%，−622ms）；整次朗读 CPU P50 1703 → 125ms（−92.7%）；私有内存峰值 75.4 → 10.5MB（−86.0%）；工作集峰值 113.8 → 41.5MB（−63.5%）；`total` P50 5010 → 4209ms、P95 −15.6%。判据沿用阶段 10/11，`decision` 仍为 `memory`。连续三次实跑口径稳定（`started` 差 −66.8%～−67.3%、CPU −91.9%～−92.7%、私有内存 −86.0%～−86.1%），CPU 绝对值抖动较大，按百分比读。证据 `tests/yu-v2/evidence/rust-speech-lifecycle-20261104.json`（`generatedAt` 06:52:21，`binary.sha256` `e5664328…`），旧两份证据未动；helper 源码零改动，但 `pnpm test` 链内的 `build-native` 会重建二进制，最终 336896 B / `e5664328…`。实现提交 `9c07ce7`；验证一次连续执行全部退出码 0（`cargo fmt/clippy/test`、基准 20 轮、四个语音测试文件 64 用例、`pnpm typecheck`、`pnpm test:native` 39 项、`pnpm build`、`pnpm test` 237 文件 3535 用例全通过）。
+
+## 阶段 13：浏览器地址读取（待实施）
+
+`get_current_page` 的 `browser-url` 目前每次仍启动 PowerShell 并加载 .NET UIA，作为下一处候选迁移到现有 `yu-windows.exe`。本轮不迁移 `current-content`、Office、Explorer、搜索或其他操作，不增加常驻进程。详细规则、fixture、验收和交付要求见[阶段 13 计划](plans/2026-11-04-rust-browser-url-dsh.md)。
+
+- [ ] 保留冻结 HWND/PID/标题的读前读后校验、工具栏与 Document 候选规则、文件 URL 兼容和 TS 权限边界。
+- [ ] 真实受控 UIA 对照、取消/卡住 provider/父退出与至少 30 次启停通过。
+- [ ] 同机交错每侧至少 20 个有效样本；行为一致且延迟或可比内存收益达到计划门槛，才切换生产路由。
+- [ ] DSH 自行更新已实现项、实际验证、证据、未测项与提交编号，完成文档和代码收尾。
 
 ## 后续阶段的推进规则
 
