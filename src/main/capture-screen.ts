@@ -15,8 +15,9 @@ interface CaptureApi {
   getBits(dc: unknown, bitmap: unknown, start: number, lines: number, bits: Buffer, info: Buffer, usage: number): number
 }
 
-// Resolving ten exports on every capture cost more than the GDI call itself, so
-// bind once on first use. Nothing touches the desktop at import time.
+// Nine exports are resolved once and reused; the untimed comparison against the
+// previous per-call binding is in tests/yu-v2/evidence/rust-capture-*.json.
+// Nothing touches the desktop at import time.
 let api: CaptureApi | null = null
 
 function captureApi(): CaptureApi {

@@ -10,6 +10,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { createRequire } = require('node:module')
 const crypto = require('node:crypto')
+const v8 = require('node:v8')
+const { runInNewContext } = require('node:vm')
 const ts = require('typescript')
 const { app, BrowserWindow, nativeImage, screen } = require('electron')
 const koffi = require('koffi')
@@ -240,7 +242,15 @@ async function memory() {
     privateKb: info?.private ?? 0,
     residentKb: info?.residentSet ?? Math.round(usage.rss / 1024),
     heapUsedKb: Math.round(usage.heapUsed / 1024),
+    externalKb: Math.round(usage.external / 1024),
+    arrayBuffersKb: Math.round(usage.arrayBuffers / 1024),
   }
+}
+
+function reclaim() {
+  // Diagnostic-only collection: never called inside a timed section, so the
+  // three variants are measured under identical allocation pressure.
+  collectGarbage()
 }
 
 function createWindow() {
@@ -288,6 +298,13 @@ async function settle(window) {
 }
 
 app.disableHardwareAcceleration()
+// Every sample allocates a full BGRA frame (7.9 MB at 1080p). V8 frees those
+// external buffers on its own schedule, so a run that never collects holds
+// gigabytes of dead frames. Electron does not hand --expose-gc to the main
+// process, so enable the flag on the live isolate and take gc from a fresh
+// context; it is only called between measured blocks.
+v8.setFlagsFromString('--expose-gc')
+const collectGarbage = runInNewContext('gc')
 
 app.whenReady().then(async () => {
   const window = createWindow()
@@ -363,9 +380,11 @@ app.whenReady().then(async () => {
     scroll: (variant) => variant.scroll(),
   }
 
-  const memoryBefore = await memory()
+  const memoryCheckpoints = { afterWindow: await memory() }
+  const peaks = {}
   const results = {}
   for (const [metric, run] of Object.entries(work)) {
+    const peak = { externalKb: 0, rssKb: 0 }
     results[metric] = Object.fromEntries(variants.map((variant) => [variant.name, []]))
     for (let round = 0; round < WARMUP; round += 1) {
       for (const name of order) run(byName.get(name))
@@ -374,8 +393,14 @@ app.whenReady().then(async () => {
       for (const name of order) {
         const sampleResult = measureOnce(() => run(byName.get(name)))
         results[metric][name].push(sampleResult)
+        const usage = process.memoryUsage()
+        peak.externalKb = Math.max(peak.externalKb, Math.round(usage.external / 1024))
+        peak.rssKb = Math.max(peak.rssKb, Math.round(usage.rss / 1024))
       }
     }
+    reclaim()
+    memoryCheckpoints[`afterMetric:${metric}`] = await memory()
+    peaks[metric] = peak
   }
 
   // process.cpuUsage() has ~15.6 ms granularity on Windows, so a single 8 ms
@@ -394,8 +419,10 @@ app.whenReady().then(async () => {
         cpuMsPerCall: Number((((used.user + used.system) / 1000) / 100).toFixed(3)),
         wallMsPerCall: Number(((performance.now() - startedAt) / 100).toFixed(3)),
       }
+      reclaim()
     }
   }
+  memoryCheckpoints.afterCpuBatches = await memory()
 
   // Pixel verification: every implementation must see the same bytes.
   const hashes = {}
@@ -452,13 +479,42 @@ app.whenReady().then(async () => {
   const leak = {}
   for (const variant of variants) {
     variant.buffer()
-    const before = { gdi: gdiObjects(), user: userObjects() }
+    reclaim()
+    const before = { gdi: gdiObjects(), user: userObjects(), memory: await memory() }
     for (let index = 0; index < 200; index += 1) variant.buffer()
-    const after = { gdi: gdiObjects(), user: userObjects() }
-    leak[variant.name] = { before, after, deltaGdi: after.gdi - before.gdi, deltaUser: after.user - before.user }
+    reclaim()
+    const after = { gdi: gdiObjects(), user: userObjects(), memory: await memory() }
+    leak[variant.name] = {
+      before,
+      after,
+      deltaGdi: after.gdi - before.gdi,
+      deltaUser: after.user - before.user,
+      deltaPrivateKb: after.memory.privateKb - before.memory.privateKb,
+    }
   }
+  memoryCheckpoints.afterLeakCheck = await memory()
 
-  const memorySnapshot = { before: memoryBefore, after: await memory() }
+  // Reclaim probe: after the batched sections, separate what the JS heap still
+  // owns from what an allocator or Electron keeps after the caller dropped it.
+  // The window stays alive until the probe ends: Electron quits as soon as the
+  // last window closes, which would cut the probe short.
+  const idle = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  const settleMemory = async () => {
+    reclaim()
+    await idle(400)
+    reclaim()
+    await idle(400)
+    return memory()
+  }
+  const memoryProbe = { afterBatches: await settleMemory() }
+  for (let index = 0; index < 100; index += 1) productionModule.captureScreenPixels(rect)
+  memoryProbe.afterBuffers = await settleMemory()
+  for (let index = 0; index < 100; index += 1) {
+    nativeImage.createFromBitmap(productionModule.captureScreenPixels(rect), { width: rect.width, height: rect.height })
+  }
+  memoryProbe.afterNativeImages = await settleMemory()
+  await idle(8000)
+  memoryProbe.afterIdle = await memory()
   window.destroy()
 
   const payload = {
@@ -496,7 +552,7 @@ app.whenReady().then(async () => {
     verification: { hashes, probes, production },
     cpuBatches,
     leak: leak,
-    memory: memorySnapshot,
+    memory: { gcAvailable: typeof collectGarbage === 'function', checkpoints: memoryCheckpoints, peaks, probe: memoryProbe },
     dllBytes: dllPath ? fs.statSync(dllPath).size : 0,
   }
   process.stdout.write('__RESULT__' + JSON.stringify(payload) + '\n')

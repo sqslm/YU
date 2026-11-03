@@ -1,0 +1,83 @@
+{
+  "kind": "wake-word-environment-check",
+  "date": "2026-11-03",
+  "task": "Phase 7 task A：判定 src/main/wake-word-native.test.ts 两项失败是否为本轮引入",
+  "repository": "E:/code/deepseek-harness/rea/typeless",
+  "head": "b73e081",
+  "baseline": "872e5b5",
+  "platform": {
+    "os": "Microsoft Windows 11 专业版 10.0.26300",
+    "powershell": "5.1.26100.9711",
+    "node": "v24.22.2",
+    "v8": "13.6.233.17-node.63"
+  },
+  "speechEngine": {
+    "recognizer": "Microsoft Speech Recognizer 8.0 for Windows (Chinese Simplified - PRC)",
+    "recognizerId": "MS-2052-80-DESK",
+    "voice": "Microsoft Huihui Desktop (zh-CN)"
+  },
+  "resourceHashes": {
+    "resources/voice-wake.ps1": {
+      "872e5b5": "b155e273a7fad07dd03ae65cb8787f115f0483c5ae66070bcdf57786fa172802",
+      "head": "b155e273a7fad07dd03ae65cb8787f115f0483c5ae66070bcdf57786fa172802"
+    },
+    "src/shared/wake-word.ts": {
+      "872e5b5": "c5472bc02331c5f549fd4b338d430e77b7f14b6537142546ebe47eff5ab5e795",
+      "head": "c5472bc02331c5f549fd4b338d430e77b7f14b6537142546ebe47eff5ab5e795"
+    },
+    "src/main/wake-word-native.test.ts": {
+      "872e5b5": "c5e54013179dbb1d1042ff112541f34df584e2985a2306e962b2c55f9259703d",
+      "head": "c5e54013179dbb1d1042ff112541f34df584e2985a2306e962b2c55f9259703d"
+    }
+  },
+  "hashConclusion": "唤醒脚本、学习算法与测试文件在 872e5b5 与当前 HEAD 上逐字节相同，阶段六没有改动它们。",
+  "commands": [
+    {
+      "command": "pnpm exec vitest run src/main/wake-word-native.test.ts",
+      "exitCode": 0,
+      "result": "Test Files 1 failed (1)；Tests 2 failed | 1 passed (3)；Duration 8.97s",
+      "failures": [
+        "recognizes the complete custom wake phrase when it leads into a command —— AssertionError: [{\"type\":\"ready\"}]: expected [] to have a length of 1 but got +0（src/main/wake-word-native.test.ts:61）",
+        "recognizes a custom Chinese name after a one-second pause through the real offline engine —— Error: 未识别到两次一致的完整唤醒词，请在安静环境中重新录制（src/shared/wake-word.ts:38，调用点 src/main/wake-word-native.test.ts:126）"
+      ]
+    },
+    {
+      "command": "node 探针：以测试相同方式（powershell -NoProfile -NonInteractive -File，\\uFEFF + JSON stdin）合成 command.wav（zh-CN TTS，22050 Hz / 16-bit / mono）后分别运行当前脚本与 git show 872e5b5:resources/voice-wake.ps1 的解包副本",
+      "audio": "E:/CpanQianYi/Temp/wakeprobe/cmd.wav 187604 字节",
+      "results": [
+        { "script": "HEAD resources/voice-wake.ps1", "wave": "command.wav (22050 Hz)", "exitCode": 0, "events": ["ready"], "wake": 0 },
+        { "script": "872e5b5 resources/voice-wake.ps1", "wave": "command.wav (22050 Hz)", "exitCode": 0, "events": ["ready"], "wake": 0 },
+        { "script": "HEAD resources/voice-wake.ps1", "wave": "cmd16.wav (16000 Hz mono)", "exitCode": 0, "events": ["ready"], "wake": 0 },
+        { "script": "872e5b5 resources/voice-wake.ps1", "wave": "cmd16.wav (16000 Hz mono)", "exitCode": 0, "events": ["ready"], "wake": 0 }
+      ]
+    }
+  ],
+  "diagnostics": [
+    {
+      "probe": "同一 wav 用 DictationGrammar 单独识别",
+      "result": { "text": "依靠和夏阳把我拉着一架飞机", "confidence": 0.107276, "words": 11 },
+      "note": "同一音频在 16 kHz mono 重合成后得到 依靠和象牙当我拉住一下随机 conf 0.2334228，说明问题不在测试音频格式。"
+    },
+    {
+      "probe": "同一 wav 用受限 Choices 语法（你好胡小杨 / 你好胡小杨帮我朗读一下随记）单独识别",
+      "result": { "text": "你好胡小杨", "confidence": 0.993222237, "words": 1 },
+      "note": "唤醒语法本身在真实音频上能正确命中，声学模型并未损坏。"
+    },
+    {
+      "probe": "在 resources/voice-wake.ps1 副本中给 SpeechRecognized/SpeechRecognitionRejected 加日志后运行（保留原逻辑）",
+      "result": { "recognized": "依靠和象牙当我拉住一下随机", "confidence": 0.2334228, "words": 8, "wakeEvents": 0 },
+      "note": "识别事件被 DictationGrammar 的整句假设占据，脚本 candidate() 看到的是普通听写文本，不会命中唤醒短语。"
+    },
+    {
+      "probe": "同一副本仅移除 engine.LoadGrammar(new DictationGrammar { Weight = 0.5f }) 后运行",
+      "result": { "wakeEvents": 1, "confidence": 0.993222237, "durationMs": 1310 },
+      "note": "移除背景听写语法后唤醒立刻命中（22050 Hz 版本 conf 0.9913562、durationMs 1350）。"
+    }
+  ],
+  "rootCause": "本机 zh-CN SAPI 引擎在处理「唤醒词 + 紧跟指令」的整句音频时返回整句听写假设（conf ≈ 0.11–0.23），而不是脚本加载的唤醒短语语法结果；脚本按设计只接受唤醒语法的文本/音素匹配，因此只发出 ready。相同字节的 872e5b5 脚本在同一音频上结果完全一致，所以该失败与阶段六/七的改动无关，属于本机语音识别环境行为。",
+  "untested": [
+    "真实麦克风输入下的唤醒（本轮只用 TTS 合成 wav，与测试用例相同）",
+    "安装完整 Windows 语音识别语言包后是否恢复（未改动系统组件）"
+  ],
+  "decision": "保留两项失败原样，不放宽阈值、不改期望、不跳过用例；作为既有环境限制记录，阶段六/七的验收不以它们为准。"
+}

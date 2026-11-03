@@ -104,6 +104,7 @@ for (const scenario of results) {
     sha256: [...hashes][0] ?? null,
     production,
     leaks: scenario.leak,
+    memory: scenario.memory,
   })
 }
 
@@ -150,7 +151,7 @@ const report = {
   cpu: cpus()[0]?.model ?? 'unknown',
   dll: { path: 'native/bin/yu-capture.dll', bytes: statSync(dll).size, sha256: createHash('sha256').update(binary).digest('hex') },
   scope:
-    'Three implementations of the same GDI rectangle capture inside one Electron main process, on one synthetic opaque top-level window that is painted, made topmost and captured by its own content bounds (1920x1080 display, 100% scale). A is the 872e5b5 TypeScript (Koffi bindings re-created per call, NativeImage result); B keeps the same bindings cached and returns the raw BGRA buffer; C calls the Rust DLL. Interleaved A/B/C/C/B/A order, three warmups then thirty samples per variant per metric. Metrics: buffer (A adds toBitmap), image (nativeImage.createFromBitmap for B/C), thumbnail (capture + resize to 640 wide + toBitmap, i.e. the open() path without PNG or renderer wait), scroll (capture + ScrollCapture.add + preview, so scroll matching time is included but unchanged between variants). Excluded: PNG encoding, renderer/desktopCapturer round trips, UI composition waits, multi-display stitching, 4K real capture (no 4K display here), mixed DPI, UAC/RDP/locked-session behaviour, first DLL load (measured outside the samples), and Windows 11 corner rounding is disabled with DwmSetWindowAttribute so the whole client area is captured. Thirty samples per variant; p95 is nearest-rank. CPU cost is a separate 100-call batch per variant because process.cpuUsage() has 15.6 ms granularity. After the samples, the shipping module src/main/capture-screen.ts is loaded from the working tree and its captureScreenPixels/captureScreen output is compared byte-for-byte with the measured implementations.',
+    'Three implementations of the same GDI rectangle capture inside one Electron main process, on one synthetic opaque top-level window that is painted, made topmost and captured by its own content bounds (1920x1080 display, 100% scale). A is the 872e5b5 TypeScript (Koffi bindings re-created per call, NativeImage result); B keeps the same bindings cached and returns the raw BGRA buffer; C calls the Rust DLL. Interleaved A/B/C/C/B/A order, three warmups then thirty samples per variant per metric. Metrics: buffer (A adds toBitmap), image (nativeImage.createFromBitmap for B/C), thumbnail (capture + resize to 640 wide + toBitmap, i.e. the open() path without PNG or renderer wait), scroll (capture + ScrollCapture.add + preview, so scroll matching time is included but unchanged between variants). Excluded: PNG encoding, renderer/desktopCapturer round trips, UI composition waits, multi-display stitching, 4K real capture (no 4K display here), mixed DPI, UAC/RDP/locked-session behaviour, first DLL load (measured outside the samples), and Windows 11 corner rounding is disabled with DwmSetWindowAttribute so the whole client area is captured. Thirty samples per variant; p95 is nearest-rank. CPU cost is a separate 100-call batch per variant because process.cpuUsage() has 15.6 ms granularity. After the samples, the shipping module src/main/capture-screen.ts is loaded from the working tree and its captureScreenPixels/captureScreen output is compared byte-for-byte with the measured implementations. Every sample allocates a full BGRA frame, and V8 frees those external buffers on its own schedule, so the fixture exposes the collector and calls it between measured blocks only (after each metric block, after each 100-call CPU batch, after the leak loop); memory checkpoints record private/resident/heapUsed/external/arrayBuffers at the window, after each metric block, after the CPU batches and after the leak loop, so dead frames cannot pile up into gigabytes and cannot be mistaken for a per-variant leak.',
   scenarios: results,
   verification,
   comparisons,
@@ -182,10 +183,27 @@ const rows = comparisons.flatMap((entry) =>
 )
 console.log(`capture benchmark -> ${output}`)
 console.table(rows)
+const mb = (kb) => Math.round(kb / 1024)
+for (const entry of verification) {
+  const points = entry.memory?.checkpoints ?? {}
+  console.log(
+    `${entry.scenario} memory: ` +
+      Object.entries(points)
+        .map(([label, value]) => `${label} private ${mb(value.privateKb)}MB external ${mb(value.externalKb)}MB`)
+        .join(' | '),
+  )
+  const probe = entry.memory?.probe ?? {}
+  console.log(
+    `${entry.scenario} reclaim probe: ` +
+      Object.entries(probe)
+        .map(([label, value]) => `${label} private ${mb(value.privateKb)}MB external ${mb(value.externalKb)}MB`)
+        .join(' | '),
+  )
+}
 console.log(
   JSON.stringify({
     decision,
-    verification: verification.map(({ scenario, ok, failures, production }) => ({ scenario, ok, failures, production })),
+    verification: verification.map(({ scenario, ok, failures, production, memory }) => ({ scenario, ok, failures, production, memory })),
     dll: report.dll,
   }),
 )

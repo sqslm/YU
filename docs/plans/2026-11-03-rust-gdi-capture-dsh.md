@@ -16,7 +16,7 @@
 
 | 候选 | 现有证据 | 本轮决定 |
 | --- | --- | --- |
-| GDI 截图采集 | `capture-screen.ts` 每帧重新 load/绑定约 10 个 API，遍历全部像素设置 alpha；`screenshot-tool.ts` 每 50ms 调用并转回 Bitmap | 本轮优先，先测再迁移；采集收益尚未测定 |
+| GDI 截图采集 | `capture-screen.ts` 每帧重新 load/绑定 9 个 API，遍历全部像素设置 alpha；`screenshot-tool.ts` 每 50ms 调用并转回 Bitmap | 本轮优先，先测再迁移；采集收益尚未测定 |
 | 记忆向量评分/图谱 | 上轮 1000 条向量召回已降到约 11ms，且在独立 worker 内；进一步迁移需付出 BLOB/FFI 与分数兼容成本 | 留作后续候选，需证明计算而非 SQLite/嵌入成为主要开销 |
 | 前台窗口/进程信息 | `foreground.ts` 已缓存绑定；标题、排除自身、窗口 Z 序和原目标身份要求严格 | 暂缓，不以 API 数量推断性能收益 |
 | 文本注入、游戏状态、资源面板 | 核心已是 Win32 调用；输入还涉及焦点、修饰键与 UIPI | 暂缓，缺少本轮可量化的性能证据 |
@@ -144,14 +144,14 @@ cargo clippy --locked --offline --all-targets -- -D warnings
 | 1080p | thumbnail | 17.082/20.673 ms | 16.943/29.588 ms | 16.859/28.404 ms | 0.5% |
 | 1080p | scroll | 13.697/18.737 ms | 12.516/13.785 ms | 12.282/12.954 ms | 1.9% |
 
-- 真实收益在 A→B：1080p 采集到 Buffer 的 P50 从 14.1 → 12.3 ms（−12.8%）、P95 从 20.8 → 18.7 ms（−10.1%），720p P50 8.7 → 7.9 ms（−9.1%）、P95 13.2 → 9.1 ms（−31%）。三次运行 A→B 的 P50 区间为 6.9%–12.8%，来自“每帧重新解析并绑定 10 个导出 + 为每帧创建 NativeImage 再 `toBitmap`”这两处被移除的成本。
+- 真实收益在 A→B：1080p 采集到 Buffer 的 P50 从 14.1 → 12.3 ms（−12.8%）、P95 从 20.8 → 18.7 ms（−10.1%），720p P50 8.7 → 7.9 ms（−9.1%）、P95 13.2 → 9.1 ms（−31%）。三次运行 A→B 的 P50 区间为 6.9%–12.8%，来自“每帧重新 `koffi.load` 并绑定 9 个导出 + 为每帧创建 NativeImage 再 `toBitmap`”这两处被移除的成本；两处的占比没有单独测量，不能把 −6.9%～−12.8% 全部归给导出解析。
 - Rust DLL 相对 B 的 P50 只有 −2.5%–7.9%（三次运行区间），低于本计划“P50 改善至少 10%”的采纳参考，且 p95 无稳定优势（1080p buffer +30%、image −25%、thumbnail +4%、scroll +6%），因此不采用：不接入生产路径、不进 `scripts/build-native.mjs`、不进 `electron-builder.yml`、不产生打包产物。`native/capture/` 作为“已测量的候选实现”留在仓库，DLL 只由基准脚本构建到 gitignore 目录。
 - 采集收益只能归因于缓存绑定与原始 Buffer 路径；上一轮滚动匹配的 64→15 ms 与本轮无关（本轮 `scroll` 指标内两方案共用同一个 `yu-scroll.dll`，变体差异仅来自采集与包装）。
 
 ### 实际接口与文件
 
 - `src/main/capture-screen.ts`（重写，约 85 行）：
-  - `captureApi()` 在首次调用时 `koffi.load('user32.dll'/'gdi32.dll')` 并绑定 10 个签名（GetDC/ReleaseDC/CreateCompatibleDC/DeleteDC/CreateCompatibleBitmap/SelectObject/DeleteObject/BitBlt/GetDIBits），模块级缓存；import 时不触碰桌面。
+  - `captureApi()` 在首次调用时 `koffi.load('user32.dll'/'gdi32.dll')` 并绑定 9 个签名（GetDC/ReleaseDC/CreateCompatibleDC/DeleteDC/CreateCompatibleBitmap/SelectObject/DeleteObject/BitBlt/GetDIBits），模块级缓存；import 时不触碰桌面。
   - `captureScreenPixels(rect: Rectangle): Buffer` — 校验 `win32`、整数宽高、`width<1 / height<1 / width*height > 40_000_000`，错误文案仍为 `Unsupported screen capture`；`GetDC → CreateCompatibleDC → CreateCompatibleBitmap → SelectObject → BitBlt(0x40cc0020) → 先选出旧对象 → GetDIBits`；40 字节 `BITMAPINFOHEADER`（40 / `-height` / planes 1 / 32bpp / BI_RGB），`Buffer.allocUnsafe(width*height*4)`，行数不等于高度抛 `GetDIBits failed`，alpha 逐 4 字节填 255；`finally` 中先恢复旧选中对象，再 DeleteObject、DeleteDC、ReleaseDC。
   - `captureScreen(rect): NativeImage` = `nativeImage.createFromBitmap(captureScreenPixels(rect), { width, height })`，调用方接口不变。
 - `src/main/screenshot-tool.ts`：滚动计时器改为一行动作 `scroll.add(captureScreenPixels(physical))`，不再 `captureScreen(...).toBitmap()`；`open()` 仍用 `captureScreen`，结束导出的 BGRA→RGBA 交换未改动。
@@ -182,7 +182,7 @@ cargo clippy --locked --offline --all-targets -- -D warnings
 
 - 逐字节校验：顶部四色块（红/绿/蓝/白）、首行与末行、奇数宽度像素（`w-1`）、末行 6 个采样列、相邻行错位、alpha 全 255，全部等于确定性图案公式；`captureScreen` 与 `captureScreenPixels` 的字节完全一致，证明 BGRA 通道顺序、行方向与行跨度未被包装层改动。
 - 泄漏：每个变体先采集 1 次再连续采集 200 次，GDI 对象 19→19、USER 对象 50→50，两个场景均零增量；`GetGuiResources` 由 user32 提供。
-- 内存：`process.getProcessMemoryInfo()` 为异步接口，本次已改为 await 并在运行前后各取一次（720p 前 69.5 MB 私有 / 127 MB 驻留，后 6.5 GB / 6.3 GB）。该增长来自基准自身未及时回收的 Buffer（单场景约 800 次整屏采集），不代表任一实现的内存特性，不作为变体间对比；句柄计数才是本轮泄漏证据。
+- 内存：`process.getProcessMemoryInfo()` 为异步接口，本次已改为 await 并在运行前后各取一次（720p 前 69.5 MB 私有 / 127 MB 驻留，后 6.5 GB / 6.3 GB）。阶段 7 复核结论（`tests/yu-v2/evidence/rust-capture-memory-20261103.json`）：6.5 GB 是基准同步批次分配快于回收时保留的已提交内存，external 始终只有 19–65 MB；采样停止后 `gc` + 两次 400 ms 事件循环空闲让私有内存回到 104–109 MB，再跑 100 次 `captureScreenPixels` 与 100 次 `nativeImage.createFromBitmap` 都不残留，生产路径无泄漏。该数字不能作为变体间对比；GDI/USER 句柄零增长只证明被统计的句柄稳定。
 - CPU：单次调用低于 Windows 计时粒度，按每变体连续 100 次累计。1080p buffer 批次 A 11.24 / B 7.03 / C 4.69 ms/次，720p A 5.77 / B 2.35 / C 2.19 ms/次，但跨运行波动明显（含 GC 与分配器归属），只作为旁证，不构成采纳依据。
 - 未测项：4K（无 4K 显示器，也未做内存 DC 合成）、第二显示器与混合 DPI（本机单屏 1920×1080、scaleFactor 1）、UAC/安全桌面、RDP、锁屏、HDR/广色域、独占全屏 DirectX、PNG 编码、renderer 往返与桌面合成等待。`image`/`thumbnail` 指标只覆盖主进程内的 NativeImage 创建与 `resize().toBitmap()`，不是整条截图链路帧率。
 - 边界条件：1080p 场景实际客户区为 1920×1032，因为普通顶层窗口会被 Windows 限制在 1080p 显示器的工作区内（`enableLargerThanScreen` 只在 macOS 生效）；报告在 `scenario.note` 中记录了该裁剪。窗口四角用 `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DONOTROUND)` 取消圆角，否则边角像素会与桌面混合导致探针失败。

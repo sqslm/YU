@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { MemoryEntry, MemoryGraph, MemoryKind } from '@shared/memory'
 
-interface CatalogRow extends MemoryEntry { vector?: number[] }
+interface CatalogRow extends MemoryEntry { vector?: number[] | Float32Array }
 
 /** Read-only equivalent of pinned Mem0 2.4.6 MemoryVectorStore.search.
  * Keep float32 storage, cosine scores, stable ties and category/user isolation.
@@ -49,9 +49,11 @@ export function readCatalog(home: string, kind: MemoryKind, limit = 10000, query
     return { total, rows: rows.map(row => {
       const payload = JSON.parse(row.payload as string)
       const bytes = row.vector as Uint8Array | undefined
-      const view = bytes && new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      // The driver hands each row its own buffer, so the float32 payload is read
+      // in place instead of being copied into a boxed array.
+      const view = bytes && new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)
       return { id: row.id as string, text: payload.data, kind, sourceId: payload.sourceId ?? '', createdAt: payload.createdAt, updatedAt: payload.updatedAt,
-        ...(view && { vector: Array.from({ length: view.byteLength / 4 }, (_, i) => view.getFloat32(i * 4, true)) }) }
+        ...(view && { vector: view }) }
     }) }
   } finally { db.close() }
 }
@@ -59,19 +61,38 @@ export function readCatalog(home: string, kind: MemoryKind, limit = 10000, query
 export function graphLinks(rows: CatalogRow[]): MemoryGraph['links'] {
   const links: MemoryGraph['links'] = [], pairs = new Set<string>()
   const sources = rows.map(row => new Set(row.sourceId.split(',').filter(id => id && id !== 'manual')))
-  const norms = rows.map(row => Math.sqrt(row.vector?.reduce((sum, v) => sum + v * v, 0) ?? 0))
-  for (let i = 0; i < rows.length; i++) {
-    const candidates: Array<{ j: number; type: 'similar' | 'source'; score: number }> = []
-    for (let j = 0; j < rows.length; j++) {
-      if (i === j) continue
-      const common = [...sources[i]].some(id => sources[j].has(id))
-      const a = rows[i].vector, b = rows[j].vector
+  // float32 widens to these exactly, and a flat float64 copy keeps the dot
+  // product loop out of the slower float32 element path.
+  const vectors = rows.map(row => row.vector && Float64Array.from(row.vector))
+  const norms = vectors.map(vector => Math.sqrt(vector ? vector.reduce((sum, value) => sum + value * value, 0) : 0))
+  // One score per unordered pair: the cosine and the shared-source test are
+  // both symmetric, so each pair is evaluated once and read back in the
+  // original ascending order.
+  const size = rows.length, scores = new Float64Array(size * size), kinds = new Uint8Array(size * size)
+  for (let i = 0; i < size; i++) {
+    for (let j = i + 1; j < size; j++) {
+      let common = false
+      for (const id of sources[i]) if (sources[j].has(id)) { common = true; break }
+      const a = vectors[i], b = vectors[j]
       let score = 0
       if (a && b && a.length === b.length && norms[i] && norms[j]) {
         for (let n = 0; n < a.length; n++) score += a[n] * b[n]
         score /= norms[i] * norms[j]
       }
-      if (common || score >= 0.78) candidates.push({ j, type: common ? 'source' : 'similar', score })
+      // Written as "not (score >= threshold)" so a non-finite score keeps the
+      // baseline rule: such a pair only survives through a shared source.
+      if (!common && !(score >= 0.78)) continue
+      const kind = common ? 2 : 1
+      kinds[i * size + j] = kinds[j * size + i] = kind
+      scores[i * size + j] = scores[j * size + i] = score
+    }
+  }
+  for (let i = 0; i < size; i++) {
+    const candidates: Array<{ j: number; type: 'similar' | 'source'; score: number }> = []
+    for (let j = 0; j < size; j++) {
+      const kind = kinds[i * size + j]
+      if (!kind) continue
+      candidates.push({ j, type: kind === 2 ? 'source' : 'similar', score: scores[i * size + j] })
     }
     candidates.sort((a, b) => Number(b.type === 'source') - Number(a.type === 'source') || b.score - a.score)
     for (const edge of candidates.slice(0, 3)) {

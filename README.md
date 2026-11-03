@@ -292,7 +292,7 @@ Electron 主进程保留 TypeScript；热键与 UIA 分别由独立 Rust 程序 
 - `native/uia/` + `src/main/uia/host.ts` — 不拥有窗口的 MTA 线程调用官方 COM 绑定，只读 ValuePattern；原窗口的句柄、PID 和标题在读前读后核对，密码框不返回快照。保留末尾最多 4000 个 UTF-16 单元且不截断 emoji，控件类型按 Windows SDK 枚举识别。录音路径按需预热，启动等待至少 1500ms，默认读取预算 150ms；超时终止卡住的进程，闲置 5 分钟或显式释放时回收。
 - `native/windows/` + `src/main/windows-native.ts` — 按明确操作列表选择原生或 PowerShell 后端；原生失败不会切回脚本重试。四项原生操作保留原窗口句柄/PID/标题及最小化检查、固定/可移动盘容量、默认多媒体输出设备、音量范围、OCR 语言选择/6 MiB 图像上限/行框/中文间距规则。图片在内存中处理，沿用 15 秒超时、取消和输出限制。应用发现、启动、最近文件、Windows Search、浏览器/Office 内容以及独立语音脚本继续使用原实现。
 - `native/scroll/` + `src/main/scroll-match.ts` — 滚动截图的重叠评分和固定边缘检测在纯计算 Rust DLL 中执行，复用 Koffi 同步借用帧 Buffer，不拷贝整帧、不保留像素指针。变化掩码只包含评分实际采样的列；拼接块、缩略图、32M 像素/30,000 行上限和取消仍由 TypeScript 管理。DLL 按需加载、位于 `resources/native/yu-scroll.dll`，与主进程共享故障域；系统接口和模型继续隔离在进程中。
-- `src/main/capture-screen.ts` — GDI 采集在主进程内直接用 Koffi 调 `GetDC`/`BitBlt`/`GetDIBits`：10 个导出在首次采集时解析并常驻，`captureScreenPixels(rect)` 把自上而下的 BGRA 写进 JS 分配的 Buffer，`captureScreen(rect)` 只负责包装成 NativeImage。滚动截图因此不再为每一帧创建 NativeImage 再 `toBitmap`，其余（DPI/多屏换算、40M 像素上限、失败回退、取消与回收）不变。同一进程内的三方案对照显示，这层改写让 1080p 采集 P50 从 14.1 → 12.3ms，而独立 Rust DLL 相对它只有 −2.5%～7.9%，未过 10% 门槛，所以 DLL 不接入运行时也不进安装包；候选实现留在 `native/capture/`，`native/bin/yu-capture.dll` 只由 `pnpm benchmark:capture` 构建。
+- `src/main/capture-screen.ts` — GDI 采集在主进程内直接用 Koffi 调 `GetDC`/`BitBlt`/`GetDIBits`：9 个导出在首次采集时解析并常驻，`captureScreenPixels(rect)` 把自上而下的 BGRA 写进 JS 分配的 Buffer，`captureScreen(rect)` 只负责包装成 NativeImage。滚动截图因此不再为每一帧创建 NativeImage 再 `toBitmap`，其余（DPI/多屏换算、40M 像素上限、失败回退、取消与回收）不变。同一进程内的三方案对照显示，这层改写让 1080p 采集 P50 从 14.1 → 12.3ms，而独立 Rust DLL 相对它只有 −2.5%～7.9%，未过 10% 门槛，所以 DLL 不接入运行时也不进安装包；候选实现留在 `native/capture/`，`native/bin/yu-capture.dll` 只由 `pnpm benchmark:capture` 构建。
 - `src/main/pipeline.ts` — 一次听写的完整生命周期（2200 行）：`MIN_DURATION_MS=350` 防误触、`STOP_GRACE_MS=500` 等最后一块音频、每步 async 都用 run token 复检，取消之后绝不可能再插入。
 - `src/main/insert.ts` — 剪贴板整段粘贴优先，SendInput 用 40 字节手写 `INPUT` 布局，注入前 `AttachThreadInput` 强制前台；剪贴板只在内容仍是我们写的时才恢复。
 - `src/main/agent.ts` + `src/main/tools/` — Ask 的调度与 9 个工具。原生 `tool_calls` 优先，不支持时降级为严格 JSON 意图；`runTool` 永不抛异常，网络类工具每个都有 ≤8 秒的硬预算。
@@ -315,7 +315,8 @@ pnpm benchmark:hotkey         # 隔离比较重构前后辅助进程，测试期
 pnpm benchmark:uia            # 真实合成控件验收及新旧对比，短暂激活专用测试窗
 pnpm benchmark:windows        # 四项桥接的完整请求对比，不切换前台、不修改音量
 pnpm benchmark:scroll         # 合成帧新旧/稀疏 TS/Rust 对照、CPU 采样和传输成本
-pnpm benchmark:capture        # GDI 采集三方案对照（原版/缓存绑定 TS/Rust DLL），本轮结论为不采纳 DLL
+pnpm benchmark:capture        # GDI 采集三方案对照（原版/缓存绑定 TS/Rust DLL），结论为不采纳 DLL
+pnpm benchmark:memory-graph  # 关系图计算对照（基线 TS/零拷贝+每对一次 TS/Rust 批量），结论为只采纳 TS
 pnpm benchmark:models         # 复用本地记忆模型，隔离测量 SDK/推理/召回与音频预处理
 
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）
@@ -397,7 +398,7 @@ Windows 操作桥接的[原始测量](tests/yu-v2/evidence/rust-windows-20261103
 - Ask 只对个人、偏好、项目或推荐类问题查询记忆，最多五条；写作最多三条。检索新增等待不超过 600ms，冷启动超时则本次不用长期记忆，加载可在后台完成。总结当前页面仍须取得真实正文。
 - 新交互先在内存暂存，最多 30 条；积满三条或最早一条等待五分钟后，电脑需连续空闲至少一分钟、平均 CPU 不超过 25%，且可用内存不少于 1GiB 和总内存的 10%，才每批整理最多三条/6000 字。退出软件会丢弃尚未整理的候选内容，超限保留最近 30 条；明确“记住”仍立即执行。
 - 整理完成后立即释放模型，普通检索闲置 30 秒释放；关闭主窗口会回收闲置的记忆、上下文读取与本地 ASR 进程，下次使用按需恢复。列表和图谱走只读 SQLite，不加载向量模型，读取进程闲置五秒退出。语义召回只加载 BGE 模型，直接读取固定 Mem0 2.4.6 SQLite 格式，保持相同 float32 余弦评分、稳定排序、用户/分类隔离及 5/3 条上限；学习与所有写操作仍由 Mem0 执行，升级 SDK 时需重跑结果对照。录音、游戏、前台任务和锁屏暂停后台学习；中断片段恢复空闲后再处理。清空取消待处理学习；关闭功能保留已有记忆。
-- 「记忆关系图」支持滚轮缩放、拖动、搜索和按类别筛选；点击节点可看全文、时间、来源和关联记忆。实线表示共同来源，虚线表示向量相似（每节点最多三个近邻、相似度至少 0.78），不代表已确认的人物/项目事实关系。最多显示 200 个匹配节点，搜索在截取前执行；图谱不调用 LLM 或向量模型，不启动 Neo4j。
+- 「记忆关系图」支持滚轮缩放、拖动、搜索和按类别筛选；点击节点可看全文、时间、来源和关联记忆。实线表示共同来源，虚线表示向量相似（每节点最多三个近邻、相似度至少 0.78），不代表已确认的人物/项目事实关系。最多显示 200 个匹配节点，搜索在截取前执行；图谱不调用 LLM 或向量模型，不启动 Neo4j。关系图计算在记忆进程内用 TypeScript 完成：向量按 float32 原位读取，每对向量只算一次余弦，200 节点整图 P50 约 16.3 → 10.2ms；批量 Rust 余弦只再快 6%（0.6ms），未达门槛，不进安装包。
 - 下载的 BGE 是开源向量检索模型，不是 Mem0 专用模型，也不负责生成或提炼事实；自动提炼由当前 LLM 完成。理论上可更换本地向量模型或使用向量 API，但当前版本仍固定本地 BGE，未提供云向量配置。更换向量模型需要重新计算已有向量，不能直接混用。清空历史与清空长期记忆相互独立。
 - Mem0 3.3.1 的追加式自动学习不满足冲突替换需求，因此采用经本地验证、支持 ADD/UPDATE/DELETE 的 2.4.6。协议、合成中文用例和性能结果不代表真实 LLM 提取准确率；旧版 SDK 的未使用客户端依赖审计告警及输入限制见 [核对记录](PROVIDER_API_AUDIT.md#本地长期记忆rc17)。
 
