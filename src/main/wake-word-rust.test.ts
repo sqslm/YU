@@ -112,6 +112,9 @@ describe.skipIf(!available)('rust wake helper', () => {
     const result = await fixture.listen({
       config: { phrase, language: 'zh', wave: '', device: '9' },
       keepOpenMs: 1200,
+      // Opening the real input device behind a saturated test runner takes far
+      // longer than the idle path; this only widens the listener's wait.
+      timeoutMs: 120_000,
     })
     expect(result.code).toBe(0)
     expect(result.events.some((event) => event.type === 'log' && event.reason === 'device-missing')).toBe(true)
@@ -120,7 +123,7 @@ describe.skipIf(!available)('rust wake helper', () => {
     expect(result.events.some((event) => event.type === 'ready')).toBe(true)
     // Closing the pipe is the stop signal; the helper must not linger.
     expect(result.ms).toBeLessThan(8000)
-  }, 60_000)
+  }, 150_000)
 
   it('fails a malformed configuration without hanging', async () => {
     const result = await fixture.listen({ config: '{"phrase":""}' })

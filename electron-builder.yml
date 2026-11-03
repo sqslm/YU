@@ -39,14 +39,14 @@ extraResources:
     to: native/yu-scroll.dll
   - from: native/bin/yu-wake.exe
     to: native/yu-wake.exe
+  - from: native/bin/yu-speech.exe
+    to: native/yu-speech.exe
   - from: resources/voice-wake.ps1
     to: voice-wake.ps1
   - from: resources/windows-tools.ps1
     to: windows-tools.ps1
   - from: resources/current-content.ps1
     to: current-content.ps1
-  - from: resources/speech.ps1
-    to: speech.ps1
   - from: resources/installer.ico
     to: shortcut.ico
 asar: true

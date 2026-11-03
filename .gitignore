@@ -52,6 +52,7 @@
 !/scripts/benchmark-capture.mjs
 !/scripts/benchmark-memory-graph.mjs
 !/scripts/benchmark-wake.mjs
+!/scripts/benchmark-speech.mjs
 !/scripts/benchmark-model-workers.mjs
 !/native/
 /native/bin/

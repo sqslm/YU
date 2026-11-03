@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TTS_SETTINGS, MAX_SPEECH_CHARS, normalizeTtsSettings, speechText, type TtsSettings } from '@shared/speech'
-import { SpeechService, createWindowsSpeechRunner, type SpeechRequest, type SpeechResult, type SpeechRunner } from './speech'
+import { SpeechService, createSpeechRunner, type SpeechRequest, type SpeechResult, type SpeechRunner } from './speech'
 
 it('reads a complete explicitly requested source in bounded chunks without losing its tail', async () => {
   const body = '这是一篇需要全部朗读的文章。'.repeat(220) + '这是最后一句。'
@@ -252,12 +252,21 @@ describe('SpeechService settings', () => {
   })
 })
 
-describe('createWindowsSpeechRunner', () => {
+describe('createSpeechRunner', () => {
   it('builds a runner without spawning anything', () => {
-    // Only the shape is unit-checkable here; the bridge itself is the part that
-    // needs a real powershell.exe and is exercised by hand.
-    const run = createWindowsSpeechRunner('resources/speech.ps1')
+    // Only the shape is unit-checkable here; the bridge itself needs the real
+    // helper and is covered by speech-native.test.ts.
+    const run = createSpeechRunner('native/bin/yu-speech.exe')
     expect(typeof run).toBe('function')
+  })
+})
+
+describe('createSpeechRunner failures', () => {
+  it('reports a missing helper as a value instead of throwing', async () => {
+    const run = createSpeechRunner('native/bin/does-not-exist.exe')
+    const result = await run({ action: 'voices' })
+    expect(result.ok).toBe(false)
+    expect(result.error).toBeTruthy()
   })
 })
 

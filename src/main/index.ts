@@ -70,7 +70,7 @@ import { handle, subscribe } from './ipc-trust'
 import { CalendarSync, checkFeedUrl, refreshExternalCalendars, type ExternalCalendar } from './calendar-sync'
 import { RemindersSync } from './reminders-sync'
 import { BriefingScheduler, briefingTasks, type BriefingState } from './briefing'
-import { SpeechService, createWindowsSpeechRunner } from './speech'
+import { SpeechService, createSpeechRunner } from './speech'
 import { createSpeechPlayback } from './speech-playback'
 import { synthesizeSpeech } from './providers/tts'
 import { WorkflowStore } from './workflows'
@@ -2401,9 +2401,9 @@ async function bootstrap(): Promise<void> {
    */
   calendar = new CalendarStore(join(app.getPath('userData'), 'calendar.json'))
   speech = new SpeechService({ settings: () => gameMode.snapshot().active || cardVoice.active ? { tts: { ...store.get().tts, enabled: false } } : store.get(),
-    run: createWindowsSpeechRunner(app.isPackaged
-      ? join(process.resourcesPath, 'speech.ps1')
-      : join(app.getAppPath(), 'resources/speech.ps1')),
+    run: createSpeechRunner(app.isPackaged
+      ? join(process.resourcesPath, 'native/yu-speech.exe')
+      : join(app.getAppPath(), 'native/bin/yu-speech.exe')),
     cloud: { synthesize: synthesizeSpeech, play: createSpeechPlayback(() => barWindow) },
     onBackgroundError: text => pipeline?.showAlert({ kind: 'selection', level: 'error', text }),
     log })

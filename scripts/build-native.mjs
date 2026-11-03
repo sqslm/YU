@@ -7,7 +7,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const test = process.argv.includes('--test')
 if (!test && (process.platform !== 'win32' || process.arch !== 'x64')) throw new Error('The production helper requires Windows x64')
 const args = test ? ['test', '--locked'] : ['build', '--release', '--locked']
-for (const name of ['hotkey', 'uia', 'windows', 'scroll', 'wake']) {
+for (const name of ['hotkey', 'uia', 'windows', 'scroll', 'wake', 'speech']) {
   const directory = resolve(root, 'native', name)
   const manifest = resolve(directory, 'Cargo.toml')
   // The crate cwd makes Cargo read its scoped static-CRT configuration.
@@ -17,8 +17,10 @@ for (const name of ['hotkey', 'uia', 'windows', 'scroll', 'wake']) {
   if (!test) {
     const output = resolve(root, 'native/bin')
     mkdirSync(output, { recursive: true })
-    const source = resolve(directory, 'target/release', name === 'scroll' ? 'yu_scroll.dll' : `yu-${name}.exe`)
-    const destination = resolve(output, name === 'scroll' ? 'yu-scroll.dll' : `yu-${name}.exe`)
+    // Cargo names libraries with underscores; the shipped files use hyphens.
+    const artifact = name === 'scroll' ? 'yu_scroll.dll' : `yu-${name}.exe`
+    const source = resolve(directory, 'target/release', artifact)
+    const destination = resolve(output, artifact.replace('yu_', 'yu-'))
     // An unchanged helper may be running in the user's app on Windows.
     if (!existsSync(destination) || !readFileSync(source).equals(readFileSync(destination))) copyFileSync(source, destination)
   }

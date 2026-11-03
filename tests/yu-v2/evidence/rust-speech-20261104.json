@@ -1,0 +1,1467 @@
+{
+  "kind": "speech-host-comparison",
+  "date": "2026-11-03T21:13:07.569Z",
+  "platform": {
+    "os": "Windows_NT",
+    "node": "v24.22.2"
+  },
+  "scope": {
+    "voices": "one process per sample, request answered and exited",
+    "speak": "one utterance (14 chars), rate 0, volume 0; started is the host's own start event",
+    "memory": "sampled from the helper process 300 ms after started",
+    "excluded": [
+      "cloud TTS",
+      "playback of provider audio",
+      "SSML/markup",
+      "renderer/UI",
+      "multi-utterance sessions"
+    ]
+  },
+  "settings": {
+    "text": "你好，这是一次本地朗读测试。",
+    "voice": "Microsoft Huihui Desktop",
+    "rate": 0,
+    "volume": 0,
+    "samplesPerHost": 10
+  },
+  "voices": {
+    "powershell": {
+      "count": 20,
+      "ok": true,
+      "totalMs": {
+        "count": 20,
+        "min": 1010,
+        "p50": 1029,
+        "p95": 1047,
+        "max": 1107
+      },
+      "startedMs": null,
+      "privateKb": null,
+      "workingKb": null,
+      "cpuMs": null,
+      "handles": null,
+      "threads": null,
+      "error": null
+    },
+    "native": {
+      "count": 20,
+      "ok": true,
+      "totalMs": {
+        "count": 20,
+        "min": 231,
+        "p50": 233,
+        "p95": 235,
+        "max": 235
+      },
+      "startedMs": null,
+      "privateKb": null,
+      "workingKb": null,
+      "cpuMs": null,
+      "handles": null,
+      "threads": null,
+      "error": null
+    },
+    "identical": true,
+    "sample": {
+      "powershell": [
+        "Microsoft Huihui Desktop",
+        "Microsoft Zira Desktop"
+      ],
+      "native": [
+        "Microsoft Huihui Desktop",
+        "Microsoft Zira Desktop"
+      ]
+    }
+  },
+  "speak": {
+    "powershell": {
+      "count": 20,
+      "ok": true,
+      "totalMs": {
+        "count": 20,
+        "min": 5165,
+        "p50": 5203,
+        "p95": 5295,
+        "max": 5299
+      },
+      "startedMs": {
+        "count": 20,
+        "min": 836,
+        "p50": 901,
+        "p95": 955,
+        "max": 959
+      },
+      "privateKb": {
+        "count": 20,
+        "min": 70984,
+        "p50": 71400,
+        "p95": 71744,
+        "max": 71788
+      },
+      "workingKb": {
+        "count": 20,
+        "min": 116016,
+        "p50": 116348,
+        "p95": 116624,
+        "max": 116676
+      },
+      "cpuMs": {
+        "count": 20,
+        "min": 1437.5,
+        "p50": 1593.8,
+        "p95": 1640.6,
+        "max": 1656.2
+      },
+      "handles": {
+        "count": 20,
+        "min": 809,
+        "p50": 819,
+        "p95": 839,
+        "max": 839
+      },
+      "threads": {
+        "count": 20,
+        "min": 29,
+        "p50": 31,
+        "p95": 35,
+        "max": 35
+      },
+      "error": null
+    },
+    "native": {
+      "count": 20,
+      "ok": true,
+      "totalMs": {
+        "count": 20,
+        "min": 4399,
+        "p50": 4406,
+        "p95": 4527,
+        "max": 4817
+      },
+      "startedMs": {
+        "count": 20,
+        "min": 280,
+        "p50": 287,
+        "p95": 295,
+        "max": 692
+      },
+      "privateKb": {
+        "count": 20,
+        "min": 10696,
+        "p50": 10736,
+        "p95": 10796,
+        "max": 10804
+      },
+      "workingKb": {
+        "count": 20,
+        "min": 42376,
+        "p50": 42428,
+        "p95": 42464,
+        "max": 42484
+      },
+      "cpuMs": {
+        "count": 20,
+        "min": 46.9,
+        "p50": 109.4,
+        "p95": 156.2,
+        "max": 156.2
+      },
+      "handles": {
+        "count": 20,
+        "min": 458,
+        "p50": 458,
+        "p95": 458,
+        "max": 458
+      },
+      "threads": {
+        "count": 20,
+        "min": 13,
+        "p50": 14,
+        "p95": 14,
+        "max": 14
+      },
+      "error": null
+    },
+    "comparison": {
+      "total": {
+        "p50Pct": -15.3,
+        "p95Pct": -14.5,
+        "p95Delta": -768
+      },
+      "started": {
+        "p50Pct": -68.1,
+        "p95Pct": -69.1,
+        "p95Delta": -660
+      },
+      "privateKb": {
+        "p50Pct": -85,
+        "p95Pct": -85,
+        "p95Delta": -60948
+      },
+      "workingKb": {
+        "p50Pct": -63.5,
+        "p95Pct": -63.6,
+        "p95Delta": -74160
+      }
+    }
+  },
+  "checks": {
+    "voicesOk": true,
+    "sameVoices": true,
+    "speakOk": true
+  },
+  "raw": {
+    "voices": {
+      "powershell": [
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1107,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1044,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1046,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1024,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1029,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1029,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1015,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1047,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1035,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1027,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1014,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1010,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1030,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1035,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1029,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1040,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1028,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1013,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1024,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 1044,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        }
+      ],
+      "native": [
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 235,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 232,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 235,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 235,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 234,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 231,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 232,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 235,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 235,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 235,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 232,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 235,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        },
+        {
+          "kind": "voices",
+          "startedMs": null,
+          "finished": true,
+          "totalMs": 233,
+          "exitCode": 0,
+          "privateKb": null,
+          "workingKb": null,
+          "threads": null,
+          "handles": null,
+          "cpuMs": null,
+          "voices": [
+            "Microsoft Huihui Desktop",
+            "Microsoft Zira Desktop"
+          ],
+          "error": null
+        }
+      ]
+    },
+    "speak": {
+      "powershell": [
+        {
+          "kind": "speak",
+          "startedMs": 856,
+          "finished": true,
+          "totalMs": 5170,
+          "exitCode": 0,
+          "privateKb": 71280,
+          "workingKb": 116472,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1625,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 955,
+          "finished": true,
+          "totalMs": 5295,
+          "exitCode": 0,
+          "privateKb": 71336,
+          "workingKb": 116284,
+          "threads": 31,
+          "handles": 819,
+          "cpuMs": 1609.4,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 870,
+          "finished": true,
+          "totalMs": 5199,
+          "exitCode": 0,
+          "privateKb": 71624,
+          "workingKb": 116488,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1609.4,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 952,
+          "finished": true,
+          "totalMs": 5272,
+          "exitCode": 0,
+          "privateKb": 71220,
+          "workingKb": 116048,
+          "threads": 30,
+          "handles": 818,
+          "cpuMs": 1578.1,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 836,
+          "finished": true,
+          "totalMs": 5182,
+          "exitCode": 0,
+          "privateKb": 71476,
+          "workingKb": 116472,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1437.5,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 932,
+          "finished": true,
+          "totalMs": 5249,
+          "exitCode": 0,
+          "privateKb": 71088,
+          "workingKb": 116116,
+          "threads": 30,
+          "handles": 815,
+          "cpuMs": 1531.2,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 856,
+          "finished": true,
+          "totalMs": 5194,
+          "exitCode": 0,
+          "privateKb": 71364,
+          "workingKb": 116328,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1531.2,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 933,
+          "finished": true,
+          "totalMs": 5246,
+          "exitCode": 0,
+          "privateKb": 71400,
+          "workingKb": 116112,
+          "threads": 30,
+          "handles": 814,
+          "cpuMs": 1531.2,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 866,
+          "finished": true,
+          "totalMs": 5170,
+          "exitCode": 0,
+          "privateKb": 71788,
+          "workingKb": 116676,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1593.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 940,
+          "finished": true,
+          "totalMs": 5248,
+          "exitCode": 0,
+          "privateKb": 71220,
+          "workingKb": 116076,
+          "threads": 30,
+          "handles": 814,
+          "cpuMs": 1515.6,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 854,
+          "finished": true,
+          "totalMs": 5165,
+          "exitCode": 0,
+          "privateKb": 71684,
+          "workingKb": 116436,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1640.6,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 937,
+          "finished": true,
+          "totalMs": 5299,
+          "exitCode": 0,
+          "privateKb": 70984,
+          "workingKb": 116016,
+          "threads": 31,
+          "handles": 819,
+          "cpuMs": 1593.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 863,
+          "finished": true,
+          "totalMs": 5197,
+          "exitCode": 0,
+          "privateKb": 71484,
+          "workingKb": 116348,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1625,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 947,
+          "finished": true,
+          "totalMs": 5276,
+          "exitCode": 0,
+          "privateKb": 71420,
+          "workingKb": 116156,
+          "threads": 30,
+          "handles": 814,
+          "cpuMs": 1640.6,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 857,
+          "finished": true,
+          "totalMs": 5176,
+          "exitCode": 0,
+          "privateKb": 71516,
+          "workingKb": 116444,
+          "threads": 35,
+          "handles": 839,
+          "cpuMs": 1468.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 959,
+          "finished": true,
+          "totalMs": 5266,
+          "exitCode": 0,
+          "privateKb": 71180,
+          "workingKb": 116088,
+          "threads": 29,
+          "handles": 813,
+          "cpuMs": 1656.2,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 865,
+          "finished": true,
+          "totalMs": 5201,
+          "exitCode": 0,
+          "privateKb": 71744,
+          "workingKb": 116608,
+          "threads": 33,
+          "handles": 829,
+          "cpuMs": 1593.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 901,
+          "finished": true,
+          "totalMs": 5203,
+          "exitCode": 0,
+          "privateKb": 71604,
+          "workingKb": 116624,
+          "threads": 31,
+          "handles": 819,
+          "cpuMs": 1562.5,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 899,
+          "finished": true,
+          "totalMs": 5198,
+          "exitCode": 0,
+          "privateKb": 71164,
+          "workingKb": 116416,
+          "threads": 29,
+          "handles": 809,
+          "cpuMs": 1562.5,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 948,
+          "finished": true,
+          "totalMs": 5272,
+          "exitCode": 0,
+          "privateKb": 71372,
+          "workingKb": 116240,
+          "threads": 31,
+          "handles": 819,
+          "cpuMs": 1515.6,
+          "voices": null,
+          "error": null
+        }
+      ],
+      "native": [
+        {
+          "kind": "speak",
+          "startedMs": 290,
+          "finished": true,
+          "totalMs": 4527,
+          "exitCode": 0,
+          "privateKb": 10760,
+          "workingKb": 42464,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 46.9,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 692,
+          "finished": true,
+          "totalMs": 4817,
+          "exitCode": 0,
+          "privateKb": 10708,
+          "workingKb": 42428,
+          "threads": 13,
+          "handles": 458,
+          "cpuMs": 156.2,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 280,
+          "finished": true,
+          "totalMs": 4407,
+          "exitCode": 0,
+          "privateKb": 10736,
+          "workingKb": 42428,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 125,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 293,
+          "finished": true,
+          "totalMs": 4418,
+          "exitCode": 0,
+          "privateKb": 10804,
+          "workingKb": 42484,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 125,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 285,
+          "finished": true,
+          "totalMs": 4405,
+          "exitCode": 0,
+          "privateKb": 10752,
+          "workingKb": 42464,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 125,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 280,
+          "finished": true,
+          "totalMs": 4406,
+          "exitCode": 0,
+          "privateKb": 10744,
+          "workingKb": 42432,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 93.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 290,
+          "finished": true,
+          "totalMs": 4408,
+          "exitCode": 0,
+          "privateKb": 10752,
+          "workingKb": 42460,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 109.4,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 284,
+          "finished": true,
+          "totalMs": 4399,
+          "exitCode": 0,
+          "privateKb": 10696,
+          "workingKb": 42376,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 125,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 289,
+          "finished": true,
+          "totalMs": 4401,
+          "exitCode": 0,
+          "privateKb": 10704,
+          "workingKb": 42392,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 140.6,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 281,
+          "finished": true,
+          "totalMs": 4401,
+          "exitCode": 0,
+          "privateKb": 10708,
+          "workingKb": 42408,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 62.5,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 284,
+          "finished": true,
+          "totalMs": 4402,
+          "exitCode": 0,
+          "privateKb": 10740,
+          "workingKb": 42444,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 93.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 286,
+          "finished": true,
+          "totalMs": 4416,
+          "exitCode": 0,
+          "privateKb": 10716,
+          "workingKb": 42392,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 93.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 289,
+          "finished": true,
+          "totalMs": 4399,
+          "exitCode": 0,
+          "privateKb": 10736,
+          "workingKb": 42424,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 62.5,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 293,
+          "finished": true,
+          "totalMs": 4406,
+          "exitCode": 0,
+          "privateKb": 10708,
+          "workingKb": 42392,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 93.8,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 287,
+          "finished": true,
+          "totalMs": 4409,
+          "exitCode": 0,
+          "privateKb": 10764,
+          "workingKb": 42448,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 125,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 289,
+          "finished": true,
+          "totalMs": 4402,
+          "exitCode": 0,
+          "privateKb": 10696,
+          "workingKb": 42392,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 109.4,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 280,
+          "finished": true,
+          "totalMs": 4403,
+          "exitCode": 0,
+          "privateKb": 10736,
+          "workingKb": 42428,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 140.6,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 285,
+          "finished": true,
+          "totalMs": 4406,
+          "exitCode": 0,
+          "privateKb": 10796,
+          "workingKb": 42460,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 156.2,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 295,
+          "finished": true,
+          "totalMs": 4413,
+          "exitCode": 0,
+          "privateKb": 10760,
+          "workingKb": 42460,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 62.5,
+          "voices": null,
+          "error": null
+        },
+        {
+          "kind": "speak",
+          "startedMs": 280,
+          "finished": true,
+          "totalMs": 4403,
+          "exitCode": 0,
+          "privateKb": 10724,
+          "workingKb": 42420,
+          "threads": 14,
+          "handles": 458,
+          "cpuMs": 78.1,
+          "voices": null,
+          "error": null
+        }
+      ]
+    }
+  }
+}

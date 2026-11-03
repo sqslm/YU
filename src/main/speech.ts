@@ -3,9 +3,9 @@
  *
  * Two ideas shape this file:
  *
- * 1. The utterance must never travel on a command line. PowerShell arguments
- *    show up in every process listing and the shell would interpret quotes and
- *    `$` sigils, so the text goes to a fixed, shipped script through stdin.
+ * 1. The utterance must never travel on a command line. Arguments show up in
+ *    every process listing and a shell would interpret quotes and `$` sigils,
+ *    so the text goes to a fixed, shipped helper through stdin.
  * 2. Nothing here throws from the plumbing. The bridge reports failures as
  *    values, `voices()` answers with an empty list, and only `speak()` — the one
  *    place a person asked for sound — surfaces an error.
@@ -47,18 +47,19 @@ function detail(text: string, fallback: string): string {
 }
 
 /**
- * Bridge to `resources/speech.ps1`.
+ * Bridge to the local speech helper (`native/speech`, shipped as
+ * `native/yu-speech.exe`).
  *
- * Accepts the script path instead of resolving it here so the caller keeps the
- * packaged/unpackaged decision (`windows-native.ts`) and this stays testable.
+ * Accepts the helper path instead of resolving it here so the caller keeps the
+ * packaged/unpackaged decision and this stays testable.
  */
-export function createWindowsSpeechRunner(scriptPath: string): SpeechRunner {
+export function createSpeechRunner(helperPath: string): SpeechRunner {
   let active:ChildProcess|null=null
   let sequence=0
   const controls=new Map<number,{child:ChildProcess;resolve:(result:SpeechResult)=>void;timer:ReturnType<typeof setTimeout>}>()
   const run:SpeechRunner=(request,signal,onStarted)=>new Promise(resolve=>{
     let child:ChildProcess
-    try {child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',scriptPath],{windowsHide:true,stdio:['pipe','pipe','pipe']})}
+    try {child=spawn(helperPath,[],{windowsHide:true,stdio:['pipe','pipe','pipe']})}
     catch(error){resolve({ok:false,error:messageOf(error)});return}
     if(request.action==='speak')active=child
     let buffer='',errorText='',bytes=0,settled=false
