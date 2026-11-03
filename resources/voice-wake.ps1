@@ -304,6 +304,33 @@ public static class YUWake {
     return Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"[^\p{L}\p{N}]", "").ToLowerInvariant();
   }
 
+  // Pieces either side of a silence gap, cut on word boundaries when the phrase has
+  // several words (English) and on characters otherwise (Chinese phrases arrive as a
+  // single token with no separators). Neither piece can wake anything on its own: both
+  // only feed the carry path in Run.
+  static string[] Words(string text) {
+    var words = new List<string>();
+    foreach (string word in Regex.Split(text.Normalize(NormalizationForm.FormKC), @"\s+")) {
+      string matched = MatchText(word);
+      if (matched.Length > 0) words.Add(matched);
+    }
+    return words.ToArray();
+  }
+
+  public static string[] LeadingPieces(string text) {
+    var words = Words(text); var pieces = new List<string>();
+    if (words.Length > 1) { for (int take = 1; take < words.Length; take++) pieces.Add(String.Join(" ", words, 0, take)); }
+    else if (words.Length == 1) { string flat = words[0]; for (int take = 2; take < flat.Length; take++) pieces.Add(flat.Substring(0, take)); }
+    return pieces.ToArray();
+  }
+
+  public static string[] TrailingPieces(string text) {
+    var words = Words(text); var pieces = new List<string>();
+    if (words.Length > 1) { for (int take = 1; take < words.Length; take++) pieces.Add(String.Join(" ", words, take, words.Length - take)); }
+    else if (words.Length == 1) { string flat = words[0]; for (int from = 1; from <= flat.Length - 2; from++) pieces.Add(flat.Substring(from)); }
+    return pieces.ToArray();
+  }
+
   static string Phones(IEnumerable<RecognizedWordUnit> words) {
     StringBuilder value = new StringBuilder();
     foreach (var word in words) value.Append(word.Pronunciation);
@@ -409,17 +436,8 @@ public static class YUWake {
       var leading = new Choices(); var trailing = new Choices();
       bool hasLeading = false, hasTrailing = false;
       foreach (string text in texts) {
-        string flat = MatchText(text);
-        if (flat.IndexOf(' ') >= 0) {
-          var words = flat.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-          for (int take = 1; take < words.Length; take++) {
-            leading.Add(String.Join(" ", words, 0, take)); hasLeading = true;
-            trailing.Add(String.Join(" ", words, take, words.Length - take)); hasTrailing = true;
-          }
-        } else {
-          for (int take = 2; take < flat.Length; take++) { leading.Add(flat.Substring(0, take)); hasLeading = true; }
-          for (int from = 1; from <= flat.Length - 2; from++) { trailing.Add(flat.Substring(from)); hasTrailing = true; }
-        }
+        foreach (string piece in LeadingPieces(text)) { leading.Add(piece); hasLeading = true; }
+        foreach (string piece in TrailingPieces(text)) { trailing.Add(piece); hasTrailing = true; }
       }
       if (hasLeading) { var leadingGrammar = new GrammarBuilder { Culture = selected.Culture }; leadingGrammar.Append(leading); engine.LoadGrammar(new Grammar(leadingGrammar) { Name = "wake-leading" }); }
       if (hasTrailing) { var trailingGrammar = new GrammarBuilder { Culture = selected.Culture }; trailingGrammar.Append(trailing); engine.LoadGrammar(new Grammar(trailingGrammar) { Name = "wake-trailing" }); }

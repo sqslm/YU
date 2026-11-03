@@ -13,7 +13,7 @@ describe('wake-word input device picker', () => {
   beforeEach(() => {
     vi.useFakeTimers(); vi.clearAllMocks(); children = []
     mocks.spawn.mockImplementation(() => {
-      const stdin = Object.assign(new PassThrough(), { end: vi.fn() })
+      const stdin = Object.assign(new PassThrough(), { end: vi.fn(), write: vi.fn() })
       const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), stdin, kill: vi.fn() })
       children.push(child); return child
     })
@@ -43,7 +43,8 @@ describe('wake-word input device picker', () => {
     children[0].stdout.write(JSON.stringify({ type: 'devices', devices: [{ id: '2', name: '耳机麦克风' }] }) + '\n')
     children[0].emit('exit', 0, null)
     await expect(pending).resolves.toEqual([{ id: '2', name: '耳机麦克风' }])
-    expect(mocks.spawn.mock.calls[0][1]).toContain('-ListDevices')
+    expect(mocks.spawn.mock.calls[0][1]).toEqual(['--list-devices'])
+    expect(String(mocks.spawn.mock.calls[0][0])).toMatch(/yu-wake\.exe$/)
     expect(host.deviceIssue).toBe('')
   })
   it('never rejects: a failed or silent helper reports an empty list and the reason', async () => {
@@ -72,15 +73,17 @@ describe('wake-word input device picker', () => {
   it('passes the chosen device and restarts the recogniser when it changes', () => {
     const settings = { enabled: true, phrase: '你好语助手', deviceId: '1' }
     host.update(settings, false)
-    expect(JSON.parse(children[0].stdin.end.mock.calls[0][0])).toEqual({ phrase: '你好语助手', language: 'zh', device: '1' })
+    expect(JSON.parse(children[0].stdin.write.mock.calls[0][0])).toEqual({ phrase: '你好语助手', language: 'zh', device: '1' })
+    // The session ends when the host stops it: the configuration pipe stays open.
+    expect(children[0].stdin.end).not.toHaveBeenCalled()
     host.update(settings, false)
     expect(children).toHaveLength(1)
     host.update({ ...settings, deviceId: '0' }, false)
     expect(children).toHaveLength(2)
-    expect(JSON.parse(children[1].stdin.end.mock.calls[0][0]).device).toBe('0')
+    expect(JSON.parse(children[1].stdin.write.mock.calls[0][0]).device).toBe('0')
   })
   it('falls back to the system default when no device was ever chosen', () => {
     host.update({ enabled: true, phrase: 'Hey YU' }, false)
-    expect(JSON.parse(children[0].stdin.end.mock.calls[0][0])).toEqual({ phrase: 'Hey YU', language: 'en', device: '' })
+    expect(JSON.parse(children[0].stdin.write.mock.calls[0][0])).toEqual({ phrase: 'Hey YU', language: 'en', device: '' })
   })
 })

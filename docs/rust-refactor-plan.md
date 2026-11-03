@@ -19,7 +19,7 @@
 | 5 | 本地 ASR / 记忆模型包装层 | 已完成分析与优化，`872e5b5`；保留 TS | 只读召回避免 SDK 开销；修复延迟启动进程回收并去掉 PCM 中间数组，ASR 解码未测 |
 | 6 | GDI 截图采集 | 已完成，`00d652c`；阶段 7 已复核内存 | [开发计划与结果](plans/2026-11-03-rust-gdi-capture-dsh.md)：采纳缓存绑定的 TS，未上线 Rust；1080p P50 14.1→12.3ms、P95 20.8→18.7ms；6.5 GB 私有内存在“释放引用 + 显式 GC + 空闲”探针条件下可回收，不覆盖全部生产场景 |
 | 7 | 记忆关系图纯计算评估与上一阶段核验 | 已交付 `4bb22dc`，采用 TS；Rust 未上线 | [开发计划与结果](plans/2026-11-03-rust-memory-graph-dsh.md)：报告为 512 维、21/81/200 节点，算法对比在 Electron 主进程，最终版另测 worker 往返；文档维数与测量范围由阶段 8 校正为 512 维、21/81/200 节点与主进程/worker 的真实边界 |
-| 8 | 常驻语音唤醒宿主与设备枚举 | 部分完成，`01b74de` / `6208396`；待续做 Rust 监听 | [开发计划与续做任务](plans/2026-11-03-rust-voice-wake-dsh.md)：语法修复和枚举候选已提交，生产监听仍为 PS；本批次补英文片段规则、真实 SAPI 监听及验收，修正混入启动成本的 CPU 指标后再决策 |
+| 8 | 常驻语音唤醒宿主与设备枚举 | 已完成并接入 Rust 监听 | [开发计划与续做结果](plans/2026-11-03-rust-voice-wake-dsh.md)：SAPI 语法竞争按产品缺陷修复；`yu-wake.exe` 承担监听与枚举，学习仍走 PS。首次 ready P95 1123→572 ms（−49.1%），待命私有 75.5→13.3 MB（−82.4%），待命 CPU 低于采样分辨率未下结论；真实麦克风讲话未测 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -257,7 +257,9 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 - **不采纳 Rust 进程本轮上线**：`native/wake` 只完成 waveIn 枚举（45–50 ms），没有 SAPI COM 事件链、语法与 carry，达不到「正负语料与既有设置行为」的前提，因此不接 `build-native.mjs`、安装资源和 `WakeWordHost`；监听继续由修复后的 PowerShell 承担。枚举候选留档，未接入。
 - 未测项：真实讲话的准确率/误唤醒、热插拔、权限拒绝、RDP/锁屏；待命 CPU 未优化，父进程侧开销未计入。
 
-证据 `tests/yu-v2/evidence/rust-wake-20261103.json`，详细结果见[本轮计划文末](plans/2026-11-03-rust-voice-wake-dsh.md#实际实现与验收结果dsh2026-11-03)。
+**续做批次（同日）已完成 Rust SAPI 监听并接入产品**：`native/wake` 实现 `ISpRecognizer`/`ISpRecoContext` 事件链、SRGS 四种规则、真实 `SPPHRASE` 词/分数/音频位置解析与 `CoTaskMemFree`；设备输入改用自有 waveIn + 自定义 `IStream`，因为本机 `SpMMAudioIn::SetDeviceId` 对真实索引恒返回 `0x80045002`、`ISpStream::SetBaseStream` 恒 `E_INVALIDARG`，且 `ISpRecoContext::SetInterest` 恒 `E_INVALIDARG`（电平改由采集 RMS、静音起点改用 900 ms 无结果推断）。同步语料 8 例全部符合预期（含唤醒词后接指令、2 s 停顿、同音变体、嵌入长句不误唤醒），30 次启停全部 exit 0。基准（各 20 样本交错）：枚举 912→54 ms，ready P50 1080→548 ms / P95 1123→572 ms，待命私有 75.5→13.3 MB。`WakeWordHost` 与 `build-native.mjs`、`electron-builder.yml` 已改走 `native/bin/yu-wake.exe`，学习仍用 PowerShell；真实麦克风唤醒、热插拔、RDP/锁屏未测。
+
+证据：`tests/yu-v2/evidence/rust-wake-20261103.json`（上批次）与 `tests/yu-v2/evidence/rust-wake-listener-20261103.json`（续做批次）；详细结果见[本轮计划文末](plans/2026-11-03-rust-voice-wake-dsh.md#续做批次实际结果dsh2026-11-03)。
 
 ## 后续阶段的推进规则
 

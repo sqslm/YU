@@ -284,7 +284,7 @@ pipeline：静音判断 → 拼接 WAV → trim → 路由
 history.sqlite（SQLite 检索，含来源与链路标记）
 ```
 
-Electron 主进程保留 TypeScript；热键与 UIA 分别由独立 Rust 程序 `yu-hotkey.exe`、`yu-uia.exe` 负责，本地 ASR 和记忆模型继续使用独立 Electron utilityProcess。热键/UIA 通过继承管道收发逐行 JSON，父管道关闭时退出，provider 故障只影响对应子进程。`yu-windows.exe` 则每次请求启动、操作结束即退出，负责窗口校验、磁盘容量、系统音量与本地 OCR，不增加常驻进程；它也会监视父进程死亡并退出。三个程序位于 `resources/native/`、ASAR 之外，静态链接 CRT。资源面板按实际 PID 计入热键和 UIA，读取失败的指标显示为不可用。后续待办与验收记录集中在[重构计划](docs/rust-refactor-plan.md)。
+Electron 主进程保留 TypeScript；热键、UIA、常驻语音唤醒分别由独立 Rust 程序 `yu-hotkey.exe`、`yu-uia.exe`、`yu-wake.exe` 负责，本地 ASR 和记忆模型继续使用独立 Electron utilityProcess。热键/UIA 通过继承管道收发逐行 JSON，父管道关闭时退出，provider 故障只影响对应子进程。`yu-windows.exe` 则每次请求启动、操作结束即退出，负责窗口校验、磁盘容量、系统音量与本地 OCR，不增加常驻进程；它也会监视父进程死亡并退出。三个程序位于 `resources/native/`、ASAR 之外，静态链接 CRT。资源面板按实际 PID 计入热键和 UIA，读取失败的指标显示为不可用。后续待办与验收记录集中在[重构计划](docs/rust-refactor-plan.md)。
 
 几个值得单独说明的模块：
 
@@ -292,6 +292,7 @@ Electron 主进程保留 TypeScript；热键与 UIA 分别由独立 Rust 程序 
 - `native/uia/` + `src/main/uia/host.ts` — 不拥有窗口的 MTA 线程调用官方 COM 绑定，只读 ValuePattern；原窗口的句柄、PID 和标题在读前读后核对，密码框不返回快照。保留末尾最多 4000 个 UTF-16 单元且不截断 emoji，控件类型按 Windows SDK 枚举识别。录音路径按需预热，启动等待至少 1500ms，默认读取预算 150ms；超时终止卡住的进程，闲置 5 分钟或显式释放时回收。
 - `native/windows/` + `src/main/windows-native.ts` — 按明确操作列表选择原生或 PowerShell 后端；原生失败不会切回脚本重试。四项原生操作保留原窗口句柄/PID/标题及最小化检查、固定/可移动盘容量、默认多媒体输出设备、音量范围、OCR 语言选择/6 MiB 图像上限/行框/中文间距规则。图片在内存中处理，沿用 15 秒超时、取消和输出限制。应用发现、启动、最近文件、Windows Search、浏览器/Office 内容以及独立语音脚本继续使用原实现。
 - `native/scroll/` + `src/main/scroll-match.ts` — 滚动截图的重叠评分和固定边缘检测在纯计算 Rust DLL 中执行，复用 Koffi 同步借用帧 Buffer，不拷贝整帧、不保留像素指针。变化掩码只包含评分实际采样的列；拼接块、缩略图、32M 像素/30,000 行上限和取消仍由 TypeScript 管理。DLL 按需加载、位于 `resources/native/yu-scroll.dll`，与主进程共享故障域；系统接口和模型继续隔离在进程中。
+- `native/wake/` + `src/main/wake-word.ts` — 常驻唤醒监听与设备枚举在 `yu-wake.exe` 中执行：`ISpRecognizer`/`ISpRecoContext` 事件等待不忙轮询，SRGS 规则同时覆盖完整短语、短语后接指令、前后片段（中文短语是单个词，停顿要靠前后片段拼接）；识别结果按真实词/发音/音频位置换算成 300–9000ms 的时长与置信度，语音引擎、置信度阈值、5 秒冷却、暂停与游戏模式限制都不变。本机 `SpMMAudioIn::SetDeviceId` 与 `SetInterest` 恒返回 `E_INVALIDARG`/`SPERR_ALREADY_INITIALIZED`，因此音频由自有 waveIn 采集经自定义 `IStream` 交给 SAPI，电平来自采集缓冲、静音起点按 900ms 无结果推断。三次录音学习仍走 `resources/voice-wake.ps1`，训练数据格式不变；开发路径 `native/bin/yu-wake.exe`，打包后位于 `resources/native/`。同一隔离测量中，首次 ready P95 从 1123ms 降到 572ms，待命私有内存从 75.5MB 降到 13.3MB；真实麦克风讲话未测。
 - `src/main/capture-screen.ts` — GDI 采集在主进程内直接用 Koffi 调 `GetDC`/`BitBlt`/`GetDIBits`：9 个导出在首次采集时解析并常驻，`captureScreenPixels(rect)` 把自上而下的 BGRA 写进 JS 分配的 Buffer，`captureScreen(rect)` 只负责包装成 NativeImage。滚动截图因此不再为每一帧创建 NativeImage 再 `toBitmap`，其余（DPI/多屏换算、40M 像素上限、失败回退、取消与回收）不变。同一进程内的三方案对照显示，这层改写让 1080p 采集 P50 从 14.1 → 12.3ms，而独立 Rust DLL 相对它只有 −2.5%～7.9%，未过 10% 门槛，所以 DLL 不接入运行时也不进安装包；候选实现留在 `native/capture/`，`native/bin/yu-capture.dll` 只由 `pnpm benchmark:capture` 构建。
 - `src/main/pipeline.ts` — 一次听写的完整生命周期（2200 行）：`MIN_DURATION_MS=350` 防误触、`STOP_GRACE_MS=500` 等最后一块音频、每步 async 都用 run token 复检，取消之后绝不可能再插入。
 - `src/main/insert.ts` — 剪贴板整段粘贴优先，SendInput 用 40 字节手写 `INPUT` 布局，注入前 `AttachThreadInput` 强制前台；剪贴板只在内容仍是我们写的时才恢复。
@@ -310,14 +311,14 @@ Electron 主进程保留 TypeScript；热键与 UIA 分别由独立 Rust 程序 
 pnpm test                     # 单元测试 + 自动拉起真实本地服务端的联调测试
 pnpm typecheck                # 主进程与渲染层两套 project 都查
 pnpm test:native              # Rust 热键、UIA、Windows 桥接和截图计算回归
-pnpm build:native             # 编译三个原生程序和截图 DLL；dev / build / test / package 自动执行
+pnpm build:native             # 编译四个原生程序（热键/UIA/Windows/唤醒）和截图 DLL；dev / build / test / package 自动执行
 pnpm benchmark:hotkey         # 隔离比较重构前后辅助进程，测试期间短暂使用 F8
 pnpm benchmark:uia            # 真实合成控件验收及新旧对比，短暂激活专用测试窗
 pnpm benchmark:windows        # 四项桥接的完整请求对比，不切换前台、不修改音量
 pnpm benchmark:scroll         # 合成帧新旧/稀疏 TS/Rust 对照、CPU 采样和传输成本
 pnpm benchmark:capture        # GDI 采集三方案对照（原版/缓存绑定 TS/Rust DLL），结论为不采纳 DLL
 pnpm benchmark:memory-graph  # 关系图计算对照（基线 TS/零拷贝+每对一次 TS/Rust 批量），结论为只采纳 TS
-pnpm benchmark:wake          # 常驻唤醒宿主：枚举/首次 ready/待命 CPU 与私有内存（监听仍用 PowerShell）
+pnpm benchmark:wake          # 常驻唤醒宿主：枚举/首次 ready/待命 CPU 与私有内存（PowerShell 与 Rust 监听对照）
 pnpm benchmark:models         # 复用本地记忆模型，隔离测量 SDK/推理/召回与音频预处理
 
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）

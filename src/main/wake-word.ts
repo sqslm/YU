@@ -80,6 +80,10 @@ export class WakeWordHost {
   private get script(): string {
     return app.isPackaged ? join(process.resourcesPath, 'voice-wake.ps1') : join(app.getAppPath(), 'resources/voice-wake.ps1')
   }
+  /** The Rust listener: one process per session, configuration on stdin, JSON on stdout. */
+  private get listener(): string {
+    return app.isPackaged ? join(process.resourcesPath, 'native/yu-wake.exe') : join(app.getAppPath(), 'native/bin/yu-wake.exe')
+  }
   private get shell(): string {
     return join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
   }
@@ -91,8 +95,7 @@ export class WakeWordHost {
     if (process.platform !== 'win32') { this.deviceIssue = 'unavailable'; return Promise.resolve([]) }
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(this.shell, ['-NoProfile', '-NonInteractive', '-File', this.script, '-ListDevices'],
-        { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+      child = spawn(this.listener, ['--list-devices'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     } catch { this.deviceIssue = 'unavailable'; return Promise.resolve([]) }
     return new Promise((resolve) => {
       let output = ''
@@ -104,7 +107,6 @@ export class WakeWordHost {
         this.deviceIssue = issue
         resolve(devices)
       }
-      // Add-Type compiles the P/Invoke block on first use, which is slow but bounded.
       const timer = setTimeout(() => { child.kill(); finish([], 'timeout') }, 15_000)
       child.stdout?.setEncoding('utf8')
       child.stdout?.on('data', (text: string) => { if (output.length < 65_536) output += text })
@@ -151,8 +153,7 @@ export class WakeWordHost {
     this.trainingKey = trainingKey
     if (process.platform !== 'win32') { this.publish({ phase: 'error', error: 'unavailable' }); return }
     this.publish({ phase: 'starting' })
-    const child = spawn(this.shell,
-      ['-NoProfile', '-NonInteractive', '-File', this.script], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(this.listener, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     this.child = child
     let buffer = ''
     const failed = (error: WakeWordStatus['error'] = 'unavailable'): void => {
@@ -206,6 +207,8 @@ export class WakeWordHost {
     child.on('exit', () => failed())
     child.stdin.on('error', () => failed())
     this.startup = setTimeout(() => failed(), 15_000)
-    child.stdin.end(JSON.stringify({ phrase: settings.phrase, language: /[\u3400-\u9fff]/u.test(settings.phrase) ? 'zh' : 'en', device, ...(training ? { variants: training.variants } : {}) }) + '\n', 'utf8')
+    // The listener reads stdin for the whole session and treats the closed pipe as its
+    // stop signal, so the session ends in stop() rather than here.
+    child.stdin.write(JSON.stringify({ phrase: settings.phrase, language: /[\u3400-\u9fff]/u.test(settings.phrase) ? 'zh' : 'en', device, ...(training ? { variants: training.variants } : {}) }) + '\n', 'utf8')
   }
 }

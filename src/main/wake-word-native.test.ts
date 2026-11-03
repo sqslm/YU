@@ -36,6 +36,34 @@ $count = $stream.Read($buffer,0,4)
   } finally { await rm(root, { recursive: true }) }
 })
 
+it.skipIf(process.platform !== 'win32')('cuts silence-gap pieces on word boundaries for multi-word phrases', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'yu-wake-pieces-'))
+  try {
+    const source = await readFile(join(process.cwd(), 'resources/voice-wake.ps1'), 'utf8')
+    const cs = /@'\r?\n([\s\S]*?)\r?\n'@/u.exec(source)![1]
+    const script = join(root, 'pieces.ps1')
+    await writeFile(script, '\uFEFF' + `Add-Type -AssemblyName System.Speech
+Add-Type -ReferencedAssemblies System.Speech,System.Web.Extensions -TypeDefinition @'
+${cs}
+'@
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+$rows = foreach ($text in @('hey jarvis', 'Hey, Jarvis!', '你好，胡小杨')) {
+  [pscustomobject]@{ text = $text; leading = @([YUWake]::LeadingPieces($text)); trailing = @([YUWake]::TrailingPieces($text)) }
+}
+ConvertTo-Json -Compress -InputObject @($rows)
+`)
+    const rows = JSON.parse(await run(['-File', script])) as { text: string, leading: string[], trailing: string[] }[]
+    const english = rows[0]!, punctuated = rows[1]!, chinese = rows[2]!
+    // Word boundaries, not characters: the piece grammar used to admit "he" and "ey".
+    expect(english.leading).toEqual(['hey'])
+    expect(english.trailing).toEqual(['jarvis'])
+    expect(punctuated.leading).toEqual(['hey'])
+    expect(punctuated.trailing).toEqual(['jarvis'])
+    expect(chinese.leading).toEqual(['你好', '你好胡', '你好胡小'])
+    expect(chinese.trailing).toEqual(['好胡小杨', '胡小杨', '小杨'])
+  } finally { await rm(root, { recursive: true }) }
+})
+
 it.skipIf(process.platform !== 'win32')('recognizes the complete custom wake phrase when it leads into a command', async context => {
   const root = await mkdtemp(join(tmpdir(), 'yu-wake-command-'))
   try {

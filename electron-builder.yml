@@ -37,6 +37,8 @@ extraResources:
     to: native/yu-windows.exe
   - from: native/bin/yu-scroll.dll
     to: native/yu-scroll.dll
+  - from: native/bin/yu-wake.exe
+    to: native/yu-wake.exe
   - from: resources/voice-wake.ps1
     to: voice-wake.ps1
   - from: resources/windows-tools.ps1
