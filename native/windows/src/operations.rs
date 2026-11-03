@@ -22,6 +22,8 @@ use windows::{
     core::{GUID, PCWSTR},
 };
 
+#[path = "address.rs"]
+mod address;
 #[path = "ocr.rs"]
 mod ocr;
 
@@ -77,6 +79,10 @@ pub fn watch_parent() -> Result<(), Box<dyn Error>> {
 pub fn run(request: &Value) -> Result<Value, Box<dyn Error>> {
     match request["action"].as_str() {
         Some("window-check") => window_check(request),
+        Some("browser-url") => {
+            let _runtime = Runtime::initialize()?;
+            address::browser_url(request)
+        }
         Some("disk-space") => disk_space(),
         Some("system-volume") => system_volume(request),
         Some("ocr") => {

@@ -1,0 +1,828 @@
+{
+  "kind": "windows-helper-comparison",
+  "version": 1,
+  "meta": {
+    "generatedAt": "2026-11-03T23:48:31.495Z",
+    "host": {
+      "os": "win32",
+      "cpuModel": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+      "cores": 16
+    },
+    "node": "v24.22.2",
+    "samples": 20,
+    "operation": "browser-url",
+    "request": {
+      "action": "browser-url",
+      "handleFormat": "decimal HWND",
+      "pid": 32444,
+      "title": "yu-browser-url - [InPrivate] - Microsoft​ Edge"
+    },
+    "fixture": {
+      "browser": "Microsoft Edge",
+      "profile": "isolated --user-data-dir",
+      "mode": "--inprivate (an ordinary profile window restores the operator session after ~45s and rewrites its title)",
+      "ownership": "window pid verified against processes launched with our profile",
+      "placement": "off-screen, non-activating",
+      "page": "yu-browser-url.html"
+    },
+    "measurement": {
+      "method": "job accounting + wall clock",
+      "cpuWindow": "spawn → stdio close",
+      "notes": "Both sides spawn one process per request; PowerShell loads resources/windows-tools.ps1 and resources/current-content.ps1, the native side runs native/bin/yu-windows.exe."
+    }
+  },
+  "binary": {
+    "path": "native/bin/yu-windows.exe",
+    "bytes": 392704,
+    "sha256": "52266cd4d331919dc969004128550e7446ccc2eb08b343647270d18f139d9616"
+  },
+  "scope": {
+    "included": [
+      "browser-url address bar and document value",
+      "original window guard",
+      "parent death retirement"
+    ],
+    "excluded": [
+      "current-content",
+      "explorer-folder",
+      "window enumeration",
+      "activation",
+      "search",
+      "no persistent service"
+    ]
+  },
+  "runs": [
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1209.6441999999997,
+      "cpuMs": 2031.25,
+      "peakPrivateKb": 77056
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 65.67709999999988,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2540
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 64.44440000000031,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2592
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1183.1502999999993,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 76864
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1152.1888999999992,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76856
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 76.03750000000036,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2920
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 69.8694000000014,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2860
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1140.6142999999993,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76684
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1149.1926999999996,
+      "cpuMs": 1921.875,
+      "peakPrivateKb": 76612
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 65.3686000000016,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2532
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 65.88390000000072,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2496
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1208.3114999999998,
+      "cpuMs": 2140.625,
+      "peakPrivateKb": 76876
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1281.5910999999996,
+      "cpuMs": 2250,
+      "peakPrivateKb": 76556
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 71.01249999999891,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2932
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 61.10789999999906,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2700
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1155.3341,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76432
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1239.8770999999979,
+      "cpuMs": 1984.375,
+      "peakPrivateKb": 76632
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 72.57690000000002,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2916
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 61.35940000000119,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2936
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1123.8929000000026,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76924
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1226.0324,
+      "cpuMs": 2140.625,
+      "peakPrivateKb": 76708
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 68.52470000000176,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2912
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 67.42689999999857,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2864
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1163.6729999999989,
+      "cpuMs": 2000,
+      "peakPrivateKb": 76684
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1189.2687000000005,
+      "cpuMs": 1953.125,
+      "peakPrivateKb": 76544
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 65.82600000000093,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2932
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 67.34539999999834,
+      "cpuMs": 62.5,
+      "peakPrivateKb": 2912
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1225.4403999999995,
+      "cpuMs": 2140.625,
+      "peakPrivateKb": 76760
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1309.4098999999987,
+      "cpuMs": 2203.125,
+      "peakPrivateKb": 77408
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 64.29369999999835,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2536
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 67.53909999999814,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2540
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1387.168099999999,
+      "cpuMs": 2359.375,
+      "peakPrivateKb": 76684
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1407.7825000000012,
+      "cpuMs": 2406.25,
+      "peakPrivateKb": 76992
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 66.08399999999892,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2924
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 68.61739999999918,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2788
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1212.3732000000018,
+      "cpuMs": 2078.125,
+      "peakPrivateKb": 76700
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1136.6718,
+      "cpuMs": 1984.375,
+      "peakPrivateKb": 76616
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 72.96039999999994,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2904
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 66.86539999999877,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2736
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1124.3387000000002,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 76728
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1114.8898999999983,
+      "cpuMs": 2000,
+      "peakPrivateKb": 76440
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 59.887399999999616,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2544
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 61.2641999999978,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2524
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1107.0527999999977,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 76612
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1132.5734999999986,
+      "cpuMs": 1906.25,
+      "peakPrivateKb": 76584
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 79.73270000000048,
+      "cpuMs": 62.5,
+      "peakPrivateKb": 2524
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 67.5630999999994,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2528
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1135.7419999999984,
+      "cpuMs": 1890.625,
+      "peakPrivateKb": 76440
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1150.6244000000006,
+      "cpuMs": 1984.375,
+      "peakPrivateKb": 76664
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 61.495600000002014,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2524
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 62.00469999999768,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2564
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1115.5342000000019,
+      "cpuMs": 1921.875,
+      "peakPrivateKb": 76664
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1121.461599999995,
+      "cpuMs": 1890.625,
+      "peakPrivateKb": 76740
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 61.2277000000031,
+      "cpuMs": 62.5,
+      "peakPrivateKb": 2532
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 61.82310000000143,
+      "cpuMs": 62.5,
+      "peakPrivateKb": 2532
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1112.9636000000028,
+      "cpuMs": 1875,
+      "peakPrivateKb": 76640
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1153.2544000000053,
+      "cpuMs": 1859.375,
+      "peakPrivateKb": 76440
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 60.087600000006205,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2532
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 62.14600000000064,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2512
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1124.295299999998,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 76576
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1123.9766999999993,
+      "cpuMs": 1906.25,
+      "peakPrivateKb": 77292
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 60.734599999996135,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2528
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 62.507799999999406,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2516
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1136.4453999999969,
+      "cpuMs": 1859.375,
+      "peakPrivateKb": 76976
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1141.8582999999999,
+      "cpuMs": 1906.25,
+      "peakPrivateKb": 77208
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 65.8272999999972,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2520
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 63.752800000002026,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2532
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1287.965400000001,
+      "cpuMs": 2250,
+      "peakPrivateKb": 76844
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1196.4418000000005,
+      "cpuMs": 2078.125,
+      "peakPrivateKb": 76756
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 62.351300000002084,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2524
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 59.13560000000143,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2704
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1148.2716,
+      "cpuMs": 1921.875,
+      "peakPrivateKb": 76592
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1108.1891000000032,
+      "cpuMs": 1875,
+      "peakPrivateKb": 76532
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 60.41779999999562,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2552
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 60.459100000000035,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2524
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1125.244399999996,
+      "cpuMs": 2015.625,
+      "peakPrivateKb": 76732
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1167.510500000004,
+      "cpuMs": 2031.25,
+      "peakPrivateKb": 76748
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 59.690999999998894,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2532
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 61.724999999998545,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2508
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1095.0577000000048,
+      "cpuMs": 1796.875,
+      "peakPrivateKb": 76564
+    }
+  ],
+  "aggregate": {
+    "powershell": {
+      "side": "powershell",
+      "n": 40,
+      "invalid": [],
+      "totalMs": {
+        "p50": 1149.19,
+        "p95": 1309.41
+      },
+      "cpuMs": {
+        "p50": 1937.5,
+        "p95": 2250
+      },
+      "peakPrivateKb": {
+        "p50": 76684,
+        "p95": 77208
+      },
+      "failures": 0
+    },
+    "rust": {
+      "side": "rust",
+      "n": 40,
+      "invalid": [],
+      "totalMs": {
+        "p50": 64.29,
+        "p95": 72.96
+      },
+      "cpuMs": {
+        "p50": 31.25,
+        "p95": 62.5
+      },
+      "peakPrivateKb": {
+        "p50": 2540,
+        "p95": 2932
+      },
+      "failures": 0
+    }
+  },
+  "comparison": {
+    "totalMs": {
+      "p50": 64.29,
+      "p95": 72.96,
+      "baselineP50": 1149.19,
+      "baselineP95": 1309.41,
+      "p50Pct": -94.41,
+      "p95Pct": -94.43,
+      "p95DeltaMs": -1236.45,
+      "comparable": true
+    },
+    "cpuMs": {
+      "p50": 31.25,
+      "p95": 62.5,
+      "baselineP50": 1937.5,
+      "baselineP95": 2250,
+      "p50Pct": -98.39,
+      "p95Pct": -97.22,
+      "p95DeltaMs": -2187.5,
+      "comparable": true
+    },
+    "peakPrivateKb": {
+      "p50": 2540,
+      "p95": 2932,
+      "baselineP50": 76684,
+      "baselineP95": 77208,
+      "p50Pct": -96.69,
+      "p95Pct": -96.2,
+      "p95DeltaMs": -74276,
+      "comparable": true
+    }
+  },
+  "checks": [
+    {
+      "name": "result-identical",
+      "pass": true,
+      "detail": "powershell={\"title\":\"yu-browser-url - [InPrivate] - Microsoft​ Edge\",\"url\":\"E:/CPANQI~1/Temp/yu-browser-url-Og65OU/yu-browser-url.html\",\"truncated\":false} rust={\"title\":\"yu-browser-url - [InPrivate] - Microsoft​ Edge\",\"truncated\":false,\"url\":\"E:/CPANQI~1/Temp/yu-browser-url-Og65OU/yu-browser-url.html\"}"
+    },
+    {
+      "name": "url-present",
+      "pass": true,
+      "detail": "url=E:/CPANQI~1/Temp/yu-browser-url-Og65OU/yu-browser-url.html"
+    },
+    {
+      "name": "stale-title-rejected",
+      "pass": true,
+      "detail": "powershell=Original window has changed or closed\r rust=Original window has changed or closed"
+    },
+    {
+      "name": "missing-window-rejected",
+      "pass": true,
+      "detail": "powershell=Original window has changed or closed\r rust=Original window has changed or closed"
+    },
+    {
+      "name": "parent-death-retires-worker",
+      "pass": true,
+      "detail": "code=0 after 3ms"
+    },
+    {
+      "name": "samples-per-side",
+      "pass": true,
+      "detail": "powershell=40 rust=40"
+    },
+    {
+      "name": "measurement-comparable",
+      "pass": true,
+      "detail": "both sides measured by wall clock and job accounting"
+    },
+    {
+      "name": "fixture-isolated-and-stable",
+      "pass": true,
+      "detail": "handle=2952410 pid=32444 ownedProcesses=17 finalTitle=\"yu-browser-url - [InPrivate] - Microsoft​ Edge\""
+    }
+  ],
+  "passed": true,
+  "adoption": {
+    "latencyMeets": true,
+    "memoryMeets": true,
+    "decision": "latency"
+  },
+  "raw": {
+    "first": {
+      "powershell": "{\"title\":\"yu-browser-url - [InPrivate] - Microsoft​ Edge\",\"url\":\"E:/CPANQI~1/Temp/yu-browser-url-Og65OU/yu-browser-url.html\",\"truncated\":false}",
+      "rust": "{\"title\":\"yu-browser-url - [InPrivate] - Microsoft​ Edge\",\"truncated\":false,\"url\":\"E:/CPANQI~1/Temp/yu-browser-url-Og65OU/yu-browser-url.html\"}"
+    },
+    "stale": {
+      "powershell": "Original window has changed or closed\r",
+      "rust": "Original window has changed or closed"
+    },
+    "orphan": {
+      "code": 0,
+      "at": 6536.9045
+    }
+  }
+}
