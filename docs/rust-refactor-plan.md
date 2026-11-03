@@ -21,7 +21,8 @@
 | 7 | 记忆关系图纯计算评估与上一阶段核验 | 已交付 `4bb22dc`，采用 TS；Rust 未上线 | [开发计划与结果](plans/2026-11-03-rust-memory-graph-dsh.md)：报告为 512 维、21/81/200 节点，算法对比在 Electron 主进程，最终版另测 worker 往返；文档维数与测量范围由阶段 8 校正为 512 维、21/81/200 节点与主进程/worker 的真实边界 |
 | 8 | 常驻语音唤醒宿主与设备枚举 | 已交付并接入，`d31a0a4`；归因由阶段 9 修正 | [开发计划与续做结果](plans/2026-11-03-rust-voice-wake-dsh.md)：Rust 监听/枚举、PS 学习；原报告 ready P95 1123→572ms、私有 75.5→13.3MB。阶段 9 复核发现事件掩码缺 SDK 校验位、格式 GUID 写错、音频时间轴与资源清理问题，原「机器限制」归因已被推翻，性能数字不代替功能验收 |
 | 9 | Rust 唤醒正确性与资源回收 | 已完成，`44335c6` + 续做 | [修复计划与结果](plans/2026-11-03-rust-wake-correctness-dsh.md)：SDK 掩码/GUID、读取/回收已修；旧 PS 学习 IPA 经系统 `SAPI2UPS` + `FormD` 与 Rust 逐值一致；同一 PID 622s 会话两次唤醒在 600s 之后、私有内存 32.9–33.2MB 平稳；ready P95 1277→597ms（各 20 样本） |
-| 10 | Windows 本地 TTS 宿主 | 已交付并接入，`4ad5cdd` | [开发计划与结果](plans/2026-11-04-rust-local-tts-dsh.md)：本地朗读改由按需启动的 `yu-speech.exe`（SAPI）负责，云 TTS 与播放器保留 TS；音色枚举 P50 1029→233ms、启动至 started P95 955→295ms（−69.1%）、活动期私有提交 71.4→10.7MB（−85%）；真实声卡听辨未测 |
+| 10 | Windows 本地 TTS 宿主 | 已接入 `4ad5cdd`；复核整改转阶段 11 | [交付记录](plans/2026-11-04-rust-local-tts-dsh.md)：按需 Rust SAPI helper 已接入；原始报告记录启动/内存收益，但残留检测、计时与文本边界存在验收缺口，完整结论待阶段 11 复测；真实声卡听辨未测 |
+| 11 | 本地 TTS 正确性与验收证据校正 | 待 DSH 实施 | [开发要求](plans/2026-11-04-rust-local-tts-correctness-dsh.md)：修复残留进程检测及无效采样，补真实生产运行器测试、NUL 拒绝与 SAPI 失败出口，校正基准和文档后复验 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -275,17 +276,25 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 证据：`tests/yu-v2/evidence/rust-wake-correctness-20261103.json`（本轮）；`rust-wake-20261103.json` 与 `rust-wake-listener-20261103.json` 原样保留。详细结果见[阶段 9 计划文末](plans/2026-11-03-rust-wake-correctness-dsh.md#实际修复与验收结果dsh2026-11-03)。
 
-## 阶段 10：Windows 本地 TTS 宿主（已完成）
+## 阶段 10：Windows 本地 TTS 宿主（已接入，复核整改见阶段 11）
 
 基线 `95241cb`。原路径在每次音色枚举与朗读时启动 `powershell.exe`，由 `resources/speech.ps1` 加载 System.Speech 并在朗读期间每 25ms 检查控制输入。
 
 - [x] 按[阶段 10 计划](plans/2026-11-04-rust-local-tts-dsh.md)固定行为与性能基线：音色、速率、音量、默认与缺失音色的矩阵在 PowerShell 与 Rust 两侧各核对一遍；朗读与枚举分开计时。
-- [x] 真实 SAPI 候选通过协议、文本、安全边界与生命周期验证，再按收益条件决定接入：`SPF_IS_NOT_XML` 让 `<voice>`、路径与 `$` 只作字面文本，NUL 截断不丢后半句；`started`/终态对应本次 stream 的 `SPEI_START_INPUT_STREAM`/`SPEI_END_INPUT_STREAM`；事件等待取代轮询；重复 pause 不再下发给引擎，一次 resume 即清除；30 次启停无残留进程与句柄增长。
+- [ ] 完整正确性与生命周期验收待阶段 11：普通文本模式与重复暂停处理已实现；直连 helper 的 NUL 后半句会被截断，END 分支能补造 started，GetEvents/等待失败缺出口。当前控制仍通过50ms有界检查；现有残留检测阳性对照失败，句柄采样在退出后被跳过，不能据此确认30次合成启停回收。
 - [x] 交付原始性能证据与回归结果：`tests/yu-v2/evidence/rust-speech-20261104.json`，`scripts/benchmark-speech.mjs` 可复现。
 
-**结果**：`yu-speech.exe` 每次请求启动、一次朗读结束即退出，开发路径 `native/bin/`、打包在 `resources/native/`，静态链接 CRT；`resources/speech.ps1` 只作基线保留、不再打包。同机同文本同音色、PS/Rust/Rust/PS 交错各 20 个样本：音色枚举 P50 1029→233ms，启动至 `started` P95 955→295ms（−69.1%，−660ms），活动期私有提交 71.4→10.7MB（−85%），工作集 −63.5%，活动期 CPU 采样 1593.8→109.4ms，单次朗读总时长 P50 5203→4406ms。两项采纳门槛均满足。
+**交付记录**：`yu-speech.exe` 每次请求启动、一次朗读结束即退出，开发路径 `native/bin/`、打包在 `resources/native/`，静态链接 CRT；`resources/speech.ps1` 只作基线保留、不再打包。原报告记录音色枚举 P50 1029→233ms、启动至 `started` P95 955→295ms、活动期私有提交71.4→10.7MB。2026-11-04复核发现 totalMs 额外计入200ms等待，CPU为采样时刻的累计快照；原表保留为历史，校准后的分位数与采纳结论由阶段11重测。
 
 **未测项**：真实声卡听辨与响度、蓝牙/热插拔、远程桌面与锁屏、无音频输出设备时的失败表现、默认音频设备切换。云 TTS 与浏览器播放路径未改，测试结果与之前一致。
+
+## 阶段 11：本地 TTS 正确性与验收证据校正（待实施）
+
+基线 `c85e982`。Codex 已核对交付哈希、复跑49项语音回归，并复现活进程被残留检测漏报、退出后采样为空、helper 接受NUL后截断。生产文本清理已移除NUL并保留两侧，不能把直连接口问题写成正常业务已复现丢字。详细反例和本轮任务见[阶段11计划](plans/2026-11-04-rust-local-tts-correctness-dsh.md)。
+
+- [ ] 修复检测工具、采样时机与真实生产运行器覆盖，重新验证至少30次合成启停。
+- [ ] 修复直连文本边界、开始事件与SAPI错误出口，记录有界等待的实际实现。
+- [ ] 校正基准时间/CPU/样本口径并保留旧报告，DSH自行更新验证、完成状态和提交编号。
 
 ## 后续阶段的推进规则
 
