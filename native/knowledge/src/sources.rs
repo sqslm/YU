@@ -4,8 +4,10 @@
 //! to the new databases, so no duplicate copy of a note, chat or web page is
 //! kept here.
 
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, Row, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
+
+use serde_json::{Value, json};
 
 use crate::protocol::{ApiError, ApiResult, MAX_BODY_CHARS};
 use crate::store::SOURCE_KINDS;
@@ -73,26 +75,66 @@ fn sqlite_error(error: rusqlite::Error) -> ApiError {
     ApiError::storage(format!("source statement failed: {error}"))
 }
 
+/// The field limits every source-producing entry shares.
+///
+/// `source.save` and `queue.publish` both go through this, so a new entry point
+/// cannot quietly accept more than the contract allows.
+pub struct Fields<'a> {
+    pub kind: &'a str,
+    pub origin_ref: &'a str,
+    pub title: &'a str,
+    pub locator: &'a str,
+    pub version: &'a str,
+    pub scope: &'a str,
+    pub text: &'a str,
+}
+
+pub fn validate(fields: Fields<'_>) -> ApiResult<()> {
+    if !SOURCE_KINDS.contains(&fields.kind) {
+        return Err(ApiError::invalid(format!(
+            "unknown source kind: {}",
+            fields.kind
+        )));
+    }
+    let origin_ref = require_text("originRef", fields.origin_ref)?;
+    check_chars("originRef", &origin_ref, 400)?;
+    check_chars("title", fields.title, 200)?;
+    check_chars("locator", fields.locator, 2_000)?;
+    check_chars("version", fields.version, 200)?;
+    check_chars("scope", fields.scope, 1_000)?;
+    // The body is in memory only: it is measured and hashed, never stored, but an
+    // unbounded body would still have to be hashed in one piece, so it is capped.
+    check_chars("text", fields.text, MAX_BODY_CHARS)?;
+    Ok(())
+}
+
+/// Reads one source by its bound id and says whether it still matches the
+/// fingerprint a caller expected. Recovery uses this instead of trusting a
+/// queue row: the store is the authority on what still exists.
+pub fn read(connection: &Connection, id: &str, expect: Option<&str>) -> ApiResult<Value> {
+    let source = get(connection, id)?;
+    if let Some(expect) = expect {
+        check_chars("expectFingerprint", expect, 200)?;
+    }
+    let matched = expect.is_none_or(|value| value == source.fingerprint || value == source.version);
+    Ok(json!({ "source": source, "matched": matched }))
+}
+
 /// Inserts or refreshes the source identified by (kind, originRef, version).
 /// Re-reading the same version refreshes its fingerprint instead of duplicating
 /// the row, and clears a previous invalid mark.
 pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Source> {
-    if !SOURCE_KINDS.contains(&params.kind.as_str()) {
-        return Err(ApiError::invalid(format!(
-            "unknown source kind: {}",
-            params.kind
-        )));
-    }
+    validate(Fields {
+        kind: &params.kind,
+        origin_ref: &params.origin_ref,
+        title: &params.title,
+        locator: &params.locator,
+        version: &params.version,
+        scope: &params.scope,
+        text: &params.text,
+    })?;
     let origin_ref = require_text("originRef", &params.origin_ref)?;
-    check_chars("originRef", &origin_ref, 400)?;
-    check_chars("title", &params.title, 200)?;
-    check_chars("locator", &params.locator, 2_000)?;
-    check_chars("version", &params.version, 200)?;
-    check_chars("scope", &params.scope, 1_000)?;
     let locator = optional_text("locator", Some(params.locator), 2_000)?.unwrap_or_default();
-    // The body is in memory only: it is measured and hashed, never stored, but an
-    // unbounded body would still have to be hashed in one piece, so it is capped.
-    check_chars("text", &params.text, MAX_BODY_CHARS)?;
     let fingerprint = sha256_hex(&params.text);
     let size = i64::try_from(params.text.chars().count()).unwrap_or(i64::MAX);
     let now = params.read_at.unwrap_or_else(now_ms);
@@ -112,9 +154,11 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Source
            updated_at = excluded.updated_at
          RETURNING {COLUMNS}"
     );
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the source transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the source transaction: {error}"))
+        })?;
     let source = transaction
         .query_row(
             &sql,
@@ -167,9 +211,11 @@ pub fn invalidate(
     if let Some(reason) = reason {
         check_chars("reason", reason, 500)?;
     }
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the source transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the source transaction: {error}"))
+        })?;
     let changed = transaction
         .execute(
             "UPDATE sources SET state = 'invalid', invalid_reason = ?2, updated_at = ?3 WHERE id = ?1",

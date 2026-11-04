@@ -13,8 +13,15 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 2;
+pub const KNOWLEDGE_SCHEMA: i64 = 3;
 pub const PROFILE_SCHEMA: i64 = 1;
+
+/// Phase 2 (second pass) ties a queued task to the thread it came from, so
+/// deleting or hiding a conversation also cancels its reading tasks.
+const THREAD_SQL: &str = r#"
+ALTER TABLE queue_groups ADD COLUMN thread_key TEXT;
+CREATE INDEX queue_groups_thread ON queue_groups (thread_key);
+"#;
 
 /// Phase 2 adds the pending-extraction queue. It only creates tables, so a
 /// phase-1 database keeps every source, card and exclusion it already had.
@@ -193,7 +200,7 @@ impl Store {
         let knowledge = open_db(
             &knowledge_path,
             KNOWLEDGE_SCHEMA,
-            &[KNOWLEDGE_SQL, QUEUE_SQL],
+            &[KNOWLEDGE_SQL, QUEUE_SQL, THREAD_SQL],
         )?;
         let profile = open_db(&profile_path, PROFILE_SCHEMA, &[PROFILE_SQL])?;
         Ok(Store {

@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1 已通过外部复核；阶段 2 修复已实现并提交（见「阶段 2 实施记录」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1 已通过外部复核；阶段 2 第二次外部复核未通过，A～E 修复已实现并在本工作区完成验证（见「阶段 2 复核修复」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -425,9 +425,12 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 
 - Rust：`native/knowledge/src/queue.rs`（采集开关、稳定期、去重、排他、暂停、任务状态）、`history.rs`（一次性历史作业与游标）、`store.rs`（`KNOWLEDGE_SCHEMA = 2` 与增量迁移 `QUEUE_SQL`）、`service.rs`/`lib.rs`（20 个新方法注册）、`protocol.rs`（`MAX_GROUP_CHARS`、`channel_disabled`、`excluded`）。
 - TS 投影层：`src/main/knowledge/collector.ts`（笔记/问答/阅读投影、材料上限、阅读正文进程内暂存、历史控制），`src/main/knowledge/host.ts`（新增 20 个薄转发方法与 `TaskTarget`）。
-- 真实写入点：`src/main/notes.ts`（`onSettled`/`onRemoved`：新增文字随记、正文变更、后台转写与润色落地、删除；仅改标题/标签/分类不入队）、`src/main/chat.ts`（`ChatService` 第五个参数 `onCompleted`，仅在 `taskState === 'completed'`、未关闭、非临时会话时触发）、`src/main/assistant.ts`（`deps.onReading`，浮动提问完成且本轮确实读过材料时触发）。
-- 开关：`src/shared/knowledgeSettings.ts` + `Settings.knowledge` + `DEFAULT_SETTINGS.knowledge = { enabled: false, notes: true, chat: true, reading: true }`；`settings:update` 变更时同步，启动时镜像一次，游戏模式进入先 `pauseCollect('game', true)` 再停 helper、退出时恢复。
-- IPC：`knowledge:collect-configure|collect-pause|queue-list|queue-status|task-cancel|task-retry|task-invalidate|task-needs-reread|exclude-add|exclude-remove|exclude-list|history-begin|history-step|history-pause|history-resume|history-cancel|history-status|history-latest`，全部经 `handle()` 与 `knowledgeOwner`（仅设置窗口）；渲染进程不能指定数据根、不能发 SQL。
+- 真实写入点：`src/main/notes.ts`（`onSettled`/`onRemoved`）、`src/main/chat.ts`（`ChatService` 第五个参数 `onCompleted`）、`src/main/assistant.ts`（`deps.onReading`）。
+  - 首次交付的这些写入点判定有误，已在复核后修正（见「阶段 2 复核修复」B/C）：当时只检查 `completed` 而没检查临时会话与运行中取消，笔记通知不看是否真的落盘，阅读材料全部记成 `web` 并丢掉路径与覆盖范围。此处的描述不再代表当前行为。
+- 开关：`src/shared/knowledgeSettings.ts` + `Settings.knowledge` + `DEFAULT_SETTINGS.knowledge = { enabled: false, notes: true, chat: true, reading: true }`。
+  - 首次交付的 `sync()` 在总开关关闭时直接返回，等于永远不把"关闭"告诉 helper，也不清空阅读暂存；复核后改为无条件同步 `enabled` 并清空暂存，见「阶段 2 复核修复」D。
+- IPC：`knowledge:collect-configure|collect-pause|queue-list|queue-status|task-cancel|task-retry|task-invalidate|task-needs-reread|exclude-add|exclude-remove|exclude-list|history-begin|history-pause|history-resume|history-cancel|history-status|history-latest`，全部经 `handle()` 与 `knowledgeOwner`（仅设置窗口）；渲染进程不能指定数据根、不能发 SQL。
+  - 首次交付还暴露过 `history-step`（渲染进程自带 `rows`/`cursor`/`done`），这等于允许伪造"已读正文"，已在复核后删除（见「阶段 2 复核修复」A）。
 - 阅读材料上限：最多 5 条、合计 48000 字符，`scope` 记录实际包含范围与截断；正文只在本进程暂存（16 MiB LRU），逐出或 helper 重启后只能 `needs_reread`，不假装可恢复。
 
 **修复的自身问题（实现期发现）**
@@ -436,7 +439,7 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 仅改元数据会重复通知采集：`NotesStore.update` 比较改动前后的正文字段，只有正文变化才 `onSettled`。
 - 夹具 ready 帧仍写死旧架构号，导致 `loop.test.ts` 与真实 helper 不一致；夹具改用 `store::KNOWLEDGE_SCHEMA`/`PROFILE_SCHEMA`。
 
-**验证（依赖顺序执行，未并发）**
+**验证（依赖顺序执行，未并发；以下为首次交付时的测量，修复后的实测见「阶段 2 复核修复」）**
 
 | 命令 | 退出码 | 结果 |
 | --- | --- | --- |
@@ -458,3 +461,81 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 稳定期只做短窗口验证（`YU_KNOWLEDGE_STABLE_MS` 缩短），未在真实 60 秒窗口下做端到端等待。
 - 本阶段不产生卡片：`ready` 任务只排队，没有消费方；真实模型调用为 0。
 - 未做历史整理的真实大数据量压测（只验证批次游标、去重计数与暂停/恢复/完成流转）。
+
+### 阶段 2 第二次外部复核（2026-11-05，同一 thread，reportId `ea9a9602-4cc5-4add-ab07-0076296c0e98`）：未通过
+
+复核基线 HEAD `f7701a4`，工作区干净。复核方**确认通过**的部分：6 文件 / 139 项 Vitest、完整阶段 `git diff --check`、交付 release hash `e6456b0f…` 与报告一致、Rust 锁等待取消与 200000 字符边界、50 张上限卡片按字节 40+10 分页、夹具复用生产 `Link`、懒启动 status、代际隔离。**未通过的是真实入口**：采集链只在"调用方自己喂 `PublishInput`"时成立，因此阶段 2 不予验收，只允许修 A～E，不得开始阶段 3、不得调用真实模型。
+
+复核的实测探针（原始输出）：
+
+- 历史整理没有生产驱动：`history-begin` 只做转发，`history-step` 由渲染进程提交 `rows`/`cursor`/`done`，真实启动后停在 `running` / `scanned 0`；`collector.locate`/`retry` 没有生产调用方，"来源恢复"不存在。
+- 临时会话仍入库：真实 `AssistantSession`（`memoryTemporary = true`）返回 `completed`，仍发布 → `{"temporary":true,"published":1,"scope":"浮动提问"}`。
+- 清空正文后仍用旧正文：`{"probe":"intentionally_cleared_note","queued":true,"usedOldTranscript":true}`。
+- 阅读身份丢失：`{"kind":"web","originRef":"ask:synthetic-reading","locator":"","preservedDocumentPath":false,"preservedCoverage":false}`（`E:/synthetic/doc.md` 与 `coverage` 均丢失）。
+- 关闭开关不清暂存：`{"probe":"disable_clears_reading_stash","bodyRetained":true}`。
+- 新发布路径绕过字段上限：`{"probe":"new_publish_text_limit","characters":200001,"outcome":{"accepted":true}}`。
+- 乱序回合只剩一条：同线程先发布 `at=2000` 的 turn2、再发布 `at=1000` 的 turn1，只有 turn2 入库（旧实现按组 `updated_at` 判定陈旧）。
+- 取消仍推进检查点：外部持 `BEGIN IMMEDIATE` 时 `history.step` + cancel 返回 `cancelled` 且 `source_rows=0`，但 `history.status` 已是 `noteCursor='after-n-cancel'`、`scanned=1`、`failed=1`。
+- 分页把 201 条截成 200：`queue_items` 有 201 条，`queue.list` 返回 200 且 `hasMore:false`，第 201 条不可达。
+
+### 阶段 2 复核修复（A～E，2026-11-05）
+
+**A｜真实历史扫描与来源恢复（Rust 掌握扫描状态）**
+
+- `native/knowledge/src/history.rs`：`step` 改为单事务——重放保护（`cursor` 与已存游标相同时返回 `replayed: true` 且不计数）、发布走 `queue::publish_in(&transaction, row)`、`Cancelled` 直接上抛（不再计为 `failed`）、游标/计数/状态 UPDATE 与 `ensure_not_cancelled()` 在同一事务提交前完成，取消的批次不会移动检查点。
+- `native/knowledge/src/sources.rs`：`source.read` 恢复适配器（`read(conn, id, expect)` → `{source, matched}`），按已绑定的来源 id 读取既有库并按指纹/版本核对，不重新抓取、不重新扫描文件、不接受渲染进程指定路径或 URL。
+- TS：新增 `src/main/knowledge/history.ts`（`HistoryDriver`：`start`/`resume`/`control`/`walk`，只在 helper 的 `running` 状态下继续，切开关后自动 `pauseHistory`）与 `src/main/knowledge/pages.ts`（`createHistoryPages`：笔记按 `updatedAt:id` 游标、问答按 `threadId:messageIndex` 游标，单页 20 条）。渲染进程的 `history-step`（`rows`/`cursor`/`done`）已从 preload 与 `api.ts` 删除，只剩启动/暂停/恢复/取消/状态/最近作业。
+- 语义：扫描完成只表示来源收集完成，`ready` 任务等待阶段 3 提炼；卡片仍为 0，模型调用 0。
+
+**B｜真实入口的临时/失败/删除与正文字段语义**
+
+- `src/main/chat.ts`：只在 `temporary === false && taskState === 'completed' && !closing` 时发布；`temporary` 同时读会话与最终结果，运行中转为临时的线程会调用 `onRemoved(id, 'thread became temporary')` 撤回，而不是仍然入库。
+- `src/main/assistant.ts`：`turn.memoryTemporary` 为真时不交接阅读来源。
+- `src/main/notes.ts`：`save()` 返回是否真正落盘，`patch()` 只在 `save()` 成功后才 `settled(note)`；后台保存失败不再通知采集（`notes.test.ts` 用只读目录验证）。
+- `src/main/knowledge/collector.ts`：正文被清空时按"撤回"处理（`invalidateTask(..., 'note body cleared')`），不再回退到旧转写；`noteRemoved`/`threadRemoved` 走 `queue.invalidate_thread`，线程删除会同时取消该线程的问答与阅读任务（Rust `tests/queue.rs` 验证两条都被取消、来源标记 `invalid`）。
+- 观察者的失败只写脱敏日志，不回灌到原回答流程。
+
+**C｜阅读与附件身份、实际范围**
+
+- `src/main/knowledge/collector.ts`：`readingFinished` 改为**一条材料一条来源**：`originRef = material.origin`、`groupKey = reading:<origin>`、`threadKey` = 线程、`kind` 由 `materialKind` 决定（附件/文档 → `document`，URL → `web`）、`locator` 保留 URL/路径/附件 id，`scope` 记录 `材料 i/n，约 N 字符（已截断）`，正文含问题、材料、覆盖说明、回答与来源。
+- `src/main/chat-attachments.ts`：新增 `includedAttachments()`（与 `chatAttachmentReference()` 共用同一份切片，最多 5 个附件、合计 48000 字符），`chat.ts` 从这份切片投影 `attachmentMaterial()`，因此记录的就是真正送给模型的文本；单纯上传或未被引用的附件不入库；阅读通道关闭时不回退成普通问答。
+- 暂存仍只在进程内（16 MiB LRU），键为真实 `origin`；`retry` 通过 `keys` 映射按组 id 找回正文，正文不在时改为 `needs_reread`，不会留下不可恢复的 `ready`。
+
+**D｜总开关与游戏暂停**
+
+- Rust：`queue::enabled`（`queue_control.enabled`，默认 false），`channel_enabled` 要求总开关打开，`collect.configure` 可写 `enabled`；`channels_json` 回报 `enabled`。
+- TS：`collector.sync({ game })` 无条件把 `enabled` 与三通道、游戏暂停一起交给 helper；总开关关闭且 helper 未运行时只清空暂存、不启动进程；关闭时先确认配置落地（`confirmed` 握手，发布前等待仍在途的配置），再清空暂存。
+- 游戏模式：进入只在 `knowledge.running` 为真时写 `pause game` 再停进程，退出只在开关打开且进程运行中解除 `game` 原因，手动暂停不受影响。
+
+**E｜一致性、分页与输入上限**
+
+- E1 陈旧判定改为按来源：`publish` 用 `EXISTS(… origin_ref = ? AND read_at > ?)` 判断，乱序/迟到/历史回合都保留且按会话顺序追加（`tests/queue.rs` 验证 2 条都在，`ordinal` 递增）。
+- E2 见 A 的事务化；取消不再移动检查点（真实锁等待测试验证 `noteCursor` 仍为 `null`、`scanned` 为 0，随后正常批次仍能推进）。
+- E3 队列条目分页：`queue.items`（`ITEM_PAGE = 32`、`fit_page` 字节预算、`nextOffset`），201 条全部可达且无重复（测试逐页走完 201 个 `ordinal`）。
+- E4 上限复用：`sources::validate` 统一 originRef/title/locator/version/scope/正文上限，`source.publish` 与历史路径都经过它；200000 字符通过、再加一个 emoji 与 201 字符标题都返回 `too_large`，不静默截断。
+
+**未覆盖与说明**
+
+- 开关/游戏暂停的端到端验证在 `KnowledgeCollector` 与 `HistoryDriver` 层完成（含"关闭时不启动进程"），未在真实 Electron 启动流程里跑集成测试：`src/main/index.ts` 的装配目前仍由现有 vitest 结构外的人工验证覆盖。
+- 60 秒稳定期仍只用缩短窗口（`YU_KNOWLEDGE_STABLE_MS`）验证。
+
+**A～E 修复后验证（2026-11-05 第三轮，实际命令与退出码，依赖顺序执行，未并发）**
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 | — |
+| `cargo test --locked` | 0 | 15 lib + 11 process + 18 queue |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 | — |
+| `cargo clippy --locked --all-targets --features fixture -- -D warnings` | 0 | — |
+| `pnpm exec vitest run src/main/knowledge src/main/notes.test.ts src/main/chat.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts src/shared` | 0 | 46 文件 / 603 项 |
+| `pnpm typecheck` | 0 | node + web |
+| `pnpm test:native` | 0 | 7 个 crate |
+| `pnpm test` | 0 | 258 文件通过 / 3 跳过（261）；3764 项通过 / 8 跳过（3772）；102.39 s |
+| `pnpm build` | 0 | renderer 与主进程构建通过 |
+| `git diff --check`（本轮未提交 diff） | 0 | 仅 CRLF 提示，无空白错误 |
+
+- 本轮有实质改动的 crate 测试增量：`tests/queue.rs` 由 10 项增至 18 项（新增开关默认关闭、乱序回合保留、201 条分页、字段上限、线程删除同时取消问答与阅读、`source.read` 指纹核对、取消不移动检查点、重放不重复计数）。
+- 真实入口新增：`src/main/knowledge/history.integration.test.ts` 3 项（真实 `NotesStore` + 真实 `ChatStore` + 编译后的 helper，渲染进程不参与提交正文）；`src/main/knowledge/collector.test.ts` 重写为 19 项；`src/main/chat.test.ts` 15 项（含临时会话撤回、非 `completed` 不入库、附件按真实切片投影）；`src/main/notes.test.ts` 51 项（含后台保存失败不通知采集）。
+- 事务行为修正：写事务改为 `TransactionBehavior::Immediate`，避免延迟事务在锁竞争下升级失败（改为 `storage_error`），使"取消不推进检查点"在真实 `BEGIN IMMEDIATE` 竞争下成立。
+- 交付 release：`native/bin/yu-knowledge.exe`，2,489,344 字节，SHA-256 `0e6a998a7eecbbbb8332be481b1fba336aef634011ac6a92b3e46685783af457`（每次重建都会变）。
+- 仅用于测试的二进制：`target/debug/yu-knowledge.exe`（`aeb44d65…`）、`target/debug/yu-knowledge-fixture.exe`（`616f34c6…`），不随安装包分发。

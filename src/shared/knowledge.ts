@@ -245,6 +245,9 @@ export type KnowledgeMethod =
   | 'queue.cancel'
   | 'queue.retry'
   | 'queue.invalidate'
+  | 'queue.invalidate_thread'
+  | 'queue.items'
+  | 'source.read'
   | 'queue.needs_reread'
   | 'exclude.add'
   | 'exclude.remove'
@@ -315,6 +318,8 @@ export interface QueueItem {
   scope: string
   size: number
   readAt: number
+  /** `invalid` once the source behind this item was retracted. */
+  state: 'active' | 'invalid'
 }
 
 /** One pending-extraction unit: a note version, a thread, or a reading. */
@@ -330,6 +335,11 @@ export interface QueueTask {
   error?: string
   attempts: number
   items: QueueItem[]
+  /** Every item of the task, plus the continuation for the rest of them. */
+  itemsTotal: number
+  itemsOffset: number
+  itemsHasMore: boolean
+  itemsNextOffset: number | null
   updatedAt: number
 }
 
@@ -415,6 +425,10 @@ export interface PublishInput {
   text: string
   /** When the user produced the content, in milliseconds since the epoch. */
   at: number
+  /** The conversation or note it belongs to, so deleting it retracts the task. */
+  threadKey?: string
+  /** Position inside the group; several reading materials share one thread. */
+  ordinal?: number
 }
 
 export interface PublishResult {

@@ -1,5 +1,5 @@
 import type { ChatDetail, ChatEdit, ChatEvent, ChatIndex, ChatUpload } from '@shared/chat'
-import { chatAttachmentReference, prepareChatAttachments, validateChatUploads } from './chat-attachments'
+import { chatAttachmentReference, includedAttachments, prepareChatAttachments, validateChatUploads } from './chat-attachments'
 import type { ProviderProfile, ProviderSettings, Settings } from '@shared/types'
 import type { ChatMessage as LlmMessage } from './providers/llm'
 import { complete } from './providers/llm'
@@ -11,7 +11,7 @@ import { CHAT_IDENTITY_PROMPT } from '@shared/prompts'
 import { ChatStore } from './chat-store'
 import { LOCAL_QUERY_TOOLS, recordsFromTool, type LocalRecord } from '@shared/workspace'
 import type { AgentOptions } from './agent'
-import { isReadingTool, readingMaterial } from './knowledge/collector'
+import { attachmentMaterial, isReadingTool, readingMaterial } from './knowledge/collector'
 
 /**
  * Only the wire fields a thread's chosen profile owns.
@@ -52,7 +52,12 @@ export class ChatService {
      * whether the answer becomes a chat source or a reading one; nothing here
      * touches storage or the model.
      */
-    private onCompleted?: (turn: import('./knowledge/collector').ChatTurnDone) => void) { this.store = new ChatStore(path) }
+    private onCompleted?: (turn: import('./knowledge/collector').ChatTurnDone) => void,
+    /**
+     * Told when a conversation stops being storable — deleted, or turned into a
+     * temporary one mid-flight — so the tasks that quoted it can be retracted.
+     */
+    private onRemoved?: (threadId: string, reason: string) => void) { this.store = new ChatStore(path) }
   get busy(): boolean { return Boolean(this.active) }
   list(): ChatIndex { return { ...this.store.list(), busyThreadId: this.active?.threadId ?? null } }
   get(id: string, limit?: number, messageId?: string): ChatDetail {
@@ -63,7 +68,12 @@ export class ChatService {
   create(groupId: string | null): ChatDetail { const row = this.store.create(groupId); this.changed({ type: 'changed' }); return row }
   edit(input: ChatEdit): void {
     if (input?.action === 'delete' && input.id === this.active?.threadId) this.cancel()
-    this.store.edit(input); this.changed({ type: 'changed' })
+    this.store.edit(input)
+    if (input?.action === 'delete') {
+      // The conversation is gone; every task that quoted it must go with it.
+      try { this.onRemoved?.(input.id, 'thread deleted') } catch (error) { void error }
+    }
+    this.changed({ type: 'changed' })
   }
   async send(id: string, question: string, uploads: ChatUpload[] = []): Promise<void> {
     validateChatUploads(uploads)
@@ -95,7 +105,16 @@ export class ChatService {
         active.controller.signal.throwIfAborted()
         this.store.attach(userId, files); this.changed({ type: 'changed' })
       }
-      conversation.reference = chatAttachmentReference(this.store.references(id))
+      const references = this.store.references(id)
+      conversation.reference = chatAttachmentReference(references)
+      // The attachments reach the model as a reference message rather than through
+      // a read_* tool, so they are projected here — from the very slice that was
+      // sent, never from the whole file and never from a guess.
+      for (const file of includedAttachments(references)) {
+        if (file.omitted) continue
+        const material = attachmentMaterial(file)
+        if (material) materials.push(material)
+      }
       /*
         A request to summarise the page/document the user is looking at is answered
         from its actual body, never from a web search: searching here would spend
@@ -124,13 +143,19 @@ export class ChatService {
       const result = await pending
       active.controller.signal.throwIfAborted()
       if (this.closing) return
+      const temporary = Boolean(conversation.memoryTemporary) || Boolean(this.store.get(id).memoryTemporary)
+      if (temporary && !conversation.memoryTemporary) this.store.markTemporary(id)
       // The chat page renders `sources` as its own section, so the appended markdown list is
       // dropped before storing: otherwise every answer, and every later export, repeats it.
       this.store.finish(answerId, stripAppendedSources(result.text), result.taskState === 'failed' ? 'error' : 'done', dedupeSources(result.sources), records.slice(0, 40))
       if (first && result.taskState !== 'failed') void this.title(id, question, result.text)
-      // Only a real completion is worth keeping: a failed or cancelled answer has
-      // no body, and a temporary thread was never stored to begin with.
-      if (result.taskState !== 'failed' && !this.closing && !conversation.memoryTemporary) {
+      // Only a real completion is worth keeping: a failed, cancelled or still
+      // waiting answer has no body, and a temporary thread was never stored at all.
+      if (temporary) {
+        // A turn that became temporary mid-flight never becomes a source, and the
+        // tasks that quoted the thread so far are retracted.
+        try { this.onRemoved?.(id, 'thread became temporary') } catch (error) { void error }
+      } else if (result.taskState === 'completed' && !this.closing) {
         try {
           this.onCompleted?.({
             threadId: id,

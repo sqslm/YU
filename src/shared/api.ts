@@ -121,13 +121,6 @@ export interface TypelessApi {
     unexclude(kind: string, key: string): Promise<{ removed: boolean }>
     listExclusions(): Promise<import('./knowledge').ExclusionEntry[]>
     beginHistory(scopes: { notes: boolean; chat: boolean }): Promise<{ job: import('./knowledge').HistoryJob; resumed: boolean }>
-    stepHistory(input: {
-      jobId: string
-      kind: 'note' | 'chat'
-      cursor?: string | null
-      rows: import('./knowledge').PublishInput[]
-      done: boolean
-    }): Promise<{ job: import('./knowledge').HistoryJob }>
     pauseHistory(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
     resumeHistory(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
     cancelHistory(id: string): Promise<{ job: import('./knowledge').HistoryJob }>

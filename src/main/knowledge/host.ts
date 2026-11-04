@@ -670,6 +670,7 @@ export class KnowledgeHost {
   // ---------------------------------------------------------------- stage 2
 
   configureCollect(input: {
+    enabled?: boolean
     notes?: boolean
     chat?: boolean
     reading?: boolean
@@ -701,6 +702,21 @@ export class KnowledgeHost {
 
   retryTask(target: TaskTarget): Promise<TaskRefusal> {
     return this.call<TaskRefusal>('queue.retry', target)
+  }
+
+  /** Cancels every task that quoted this conversation, chat and reading alike. */
+  invalidateThread(threadKey: string, reason: string): Promise<{ threadKey: string; cancelled: string[] }> {
+    return this.call<{ threadKey: string; cancelled: string[] }>('queue.invalidate_thread', { threadKey, reason })
+  }
+
+  /** One page of a task's items; a long thread never arrives in one frame. */
+  queueItems(query: { groupId: string; offset?: number; limit?: number }): Promise<QueuePage> {
+    return this.call<QueuePage>('queue.items', query)
+  }
+
+  /** Reads a stored source by id and says whether the expected text still matches. */
+  readSource(id: string, expectFingerprint?: string): Promise<{ source: unknown; matched: boolean }> {
+    return this.call<{ source: unknown; matched: boolean }>('source.read', { id, expectFingerprint })
   }
 
   invalidateTask(target: TaskTarget, reason: string): Promise<TaskRefusal> {

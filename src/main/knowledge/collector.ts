@@ -25,6 +25,9 @@ export interface NoteProjection {
   transcript: string
   polished: string
   updatedAt: number
+  /** True while the note is still waiting to be pushed to the server; not a persistence signal. */
+  pending?: boolean
+  polishStatus?: 'pending' | 'ok' | 'failed' | 'skipped'
 }
 
 /**
@@ -54,27 +57,44 @@ export interface ThreadProjection {
   at: number
 }
 
-/** One reading material that was actually in front of the answer. */
+/**
+ * One reading material that was actually in front of the answer.
+ *
+ * `origin` is the identity the source keeps across turns: the page URL, the
+ * document path, or the attachment reference. A turn id is never an identity —
+ * the same page read twice must update one source, not create two.
+ */
 export interface ReadingMaterial {
+  origin: string
   title: string
   text: string
   truncated?: boolean
   coverage?: string
   url?: string
   path?: string
+  attachmentId?: string
+  /** Page, chapter or section when the reader reported one. */
+  locator?: string
 }
 
 /** A finished reading answer, from either the floating Ask or the chat page. */
 export interface ReadingProjection {
-  originRef: string
-  groupKey: string
-  title: string
+  /** The conversation it happened in; deleting it retracts these sources. */
+  threadId: string
   scope: string
   request: string
   materials: ReadingMaterial[]
   answer: string
   sources: Array<{ title: string; url?: string }>
   at: number
+}
+
+/** Which stored kind a material's identity implies. */
+export function materialKind(material: ReadingMaterial): SourceKind {
+  if (material.attachmentId) return 'document'
+  if (material.path) return 'document'
+  if (material.url) return 'web'
+  return 'document'
 }
 
 const MAX_MATERIALS = 5
@@ -95,15 +115,28 @@ export class KnowledgeCollector {
    */
   private readonly stash = new Map<string, { text: string; size: number }>()
   private stashed = 0
+  /** Group id → stash key, so retry can find the body it is meant to reuse. */
+  private readonly keys = new Map<string, string>()
+  /**
+   * The latest configuration hand-over. A publish waits for it, so a switch that
+   * was just turned off cannot be overtaken by a publish carrying the old state.
+   */
+  private confirmed: Promise<void> = Promise.resolve()
+  /** True only while a hand-over is in flight, so the common path stays synchronous. */
+  private confirming = false
 
   constructor(private readonly deps: CollectorDeps) {}
 
-  private get enabled(): boolean {
+  get enabled(): boolean {
     return this.deps.settings().knowledge?.enabled === true
   }
 
-  private channel(name: CollectChannel): boolean {
-    return this.deps.settings().knowledge?.[name === 'note' ? 'notes' : name] !== false
+  get channel(): (name: CollectChannel) => boolean {
+    return name => this.deps.settings().knowledge?.[name === 'note' ? 'notes' : name] !== false
+  }
+
+  private allows(name: CollectChannel): boolean {
+    return this.enabled && this.deps.settings().knowledge?.[name === 'note' ? 'notes' : name] !== false
   }
 
   private host(): KnowledgeHost | null {
@@ -114,26 +147,62 @@ export class KnowledgeCollector {
     return error instanceof Error ? error.message : String(error)
   }
 
-  /** Mirrors the switches into the helper; also called at startup and on save. */
-  async sync(): Promise<void> {
+  /**
+   * Mirrors the switches into the helper — including "off", which is the only
+   * way the helper learns that further publishes must be refused.
+   *
+   * With the feature off and the helper not running there is nothing to tell and
+   * nobody to tell it to: spawning a process just to write "off" would create the
+   * databases the default is meant to leave alone.
+   */
+  async sync(options: { game?: boolean } = {}): Promise<void> {
     const host = this.host()
-    if (!host || !this.enabled) return
-    try {
-      await host.configureCollect({
-        notes: this.deps.settings().knowledge.notes,
-        chat: this.deps.settings().knowledge.chat,
-        reading: this.deps.settings().knowledge.reading
-      })
-    } catch (error) {
-      this.deps.log?.(`[knowledge] 同步采集开关失败：${this.error(error)}`)
+    if (!host) return
+    const knowledge = this.deps.settings().knowledge
+    const enabled = knowledge?.enabled === true
+    if (!enabled && !host.running) {
+      this.confirmed = Promise.resolve()
+      this.clear()
+      return
     }
+    this.confirming = true
+    const handover = host
+      .configureCollect({
+        enabled,
+        notes: knowledge?.notes !== false,
+        chat: knowledge?.chat !== false,
+        reading: knowledge?.reading !== false,
+        paused: options.game === undefined ? undefined : { game: options.game }
+      })
+      .then(() => undefined)
+      .catch(error => {
+        this.deps.log?.(`[knowledge] 同步采集开关失败：${this.error(error)}`)
+      })
+    // Publishes await this, so a switch closed a moment ago is already known to
+    // the helper before the next source is offered.
+    this.confirmed = handover.finally(() => { this.confirming = false })
+    await this.confirmed
+    if (!enabled) this.clear()
+  }
+
+  /** Drops every in-memory body; called when the feature is switched off. */
+  clear(): void {
+    this.stash.clear()
+    this.keys.clear()
+    this.stashed = 0
   }
 
   /** A note version reached a saved body; empty or unsaved bodies create nothing. */
   noteSettled(note: NoteProjection): void {
-    if (!this.enabled || !this.channel('note')) return
-    const text = (note.polished || note.transcript || '').trim()
-    if (!text) return
+    if (!this.allows('note')) return
+    if (note.polishStatus === 'pending') return
+    const text = noteBody(note)
+    if (!text) {
+      // The body was cleared on purpose: the task that quoted the old text is
+      // retracted rather than left pointing at something the user removed.
+      this.noteRemoved(note.id, 'note body cleared')
+      return
+    }
     void this.publish({
       channel: 'note',
       kind: 'note',
@@ -147,22 +216,27 @@ export class KnowledgeCollector {
   }
 
   /** A deleted note must not leave pending extraction behind. */
-  noteRemoved(id: string): void {
+  noteRemoved(id: string, reason = 'note deleted'): void {
     const host = this.host()
     if (!host || !this.enabled) return
-    void host.invalidateTask({ channel: 'note', groupKey: id }, 'note deleted').catch(() => undefined)
+    void host.invalidateTask({ channel: 'note', groupKey: id }, reason).catch(() => undefined)
   }
 
-  /** A deleted thread drops its pending extraction the same way. */
-  threadRemoved(threadId: string): void {
+  /**
+   * A deleted or temporary thread drops every pending task that quoted it —
+   * the chat turn and any reading material read during it.
+   */
+  threadRemoved(threadId: string, reason = 'thread deleted'): void {
     const host = this.host()
     if (!host || !this.enabled) return
-    void host.invalidateTask({ channel: 'chat', groupKey: threadId }, 'thread deleted').catch(() => undefined)
+    void host.invalidateThread(threadId, reason).catch(error =>
+      this.deps.log?.(`[knowledge] 撤回会话任务失败：${this.error(error)}`)
+    )
   }
 
   /** One finished question; the thread is the group, the pair is the item. */
   threadFinished(turn: ThreadProjection): void {
-    if (!this.enabled || !this.channel('chat')) return
+    if (!this.allows('chat')) return
     const answer = turn.answer.trim()
     if (!turn.question.trim() || !answer) return
     const text = [turn.question.trim(), answer].join('\n\n')
@@ -171,6 +245,7 @@ export class KnowledgeCollector {
       kind: 'chat',
       originRef: `${turn.threadId}:${turn.userId}:${turn.answerId}`,
       groupKey: turn.threadId,
+      threadKey: turn.threadId,
       title: turn.threadTitle ?? turn.question.slice(0, 40),
       scope: '主界面问答',
       text,
@@ -179,12 +254,12 @@ export class KnowledgeCollector {
   }
 
   /**
-   * A reading answer. The materials are copied into the body with an explicit
-   * range note, so a later reader can tell what was actually included instead of
-   * assuming the whole page was seen.
+   * A reading answer. Every material becomes its own source under its own
+   * identity, so two documents never collapse into one unlocatable string and a
+   * re-read of the same page updates that page instead of minting a new one.
    */
   readingFinished(reading: ReadingProjection): void {
-    if (!this.enabled || !this.channel('reading')) return
+    if (!this.allows('reading')) return
     const answer = reading.answer.trim()
     if (!answer) return
     const kept: ReadingMaterial[] = []
@@ -192,49 +267,72 @@ export class KnowledgeCollector {
     for (const material of reading.materials) {
       if (kept.length >= MAX_MATERIALS) break
       const text = material.text ?? ''
-      if (!text) continue
+      if (!text.trim()) continue
       const room = MAX_MATERIAL_CHARS - used
       if (room <= 0) break
       kept.push(text.length > room ? { ...material, text: text.slice(0, room), truncated: true } : material)
       used += Math.min(text.length, room)
     }
-    const included = `${kept.length}/${reading.materials.length}，约 ${used} 字符${reading.materials.some((item, index) => item.truncated || index >= kept.length) ? '（已截断）' : ''}`
-    const parts = [reading.request.trim(), ...kept.map((material, index) => `【材料 ${index + 1}】${material.title}\n${material.text}`), `【回答】\n${answer}`]
-    const links = reading.sources.filter(item => item.url).map(item => item.url as string)
-    if (links.length) parts.push(`【来源】\n${links.join('\n')}`)
-    const text = parts.join('\n\n')
-    this.remember(reading.originRef, text)
-    void this.publish({
-      channel: 'reading',
-      kind: 'web',
-      originRef: reading.originRef,
-      groupKey: reading.groupKey,
-      title: reading.title,
-      scope: `${reading.scope}（材料 ${included}）`,
-      text,
-      at: reading.at
+    if (!kept.length) return
+    kept.forEach((material, index) => {
+      const range = `${index + 1}/${kept.length}，约 ${material.text.length} 字符${material.truncated ? '（已截断）' : ''}`
+      const parts = [
+        `【问题】\n${reading.request.trim()}`,
+        `【材料】${material.title}`,
+        material.coverage ? `【覆盖】${material.coverage}` : '',
+        material.text,
+        `【回答】\n${answer}`
+      ].filter(part => part !== '')
+      const links = reading.sources.filter(item => item.url).map(item => item.url as string)
+      if (links.length) parts.push(`【来源】\n${links.join('\n')}`)
+      const text = parts.join('\n\n')
+      const groupKey = `reading:${material.origin}`.slice(0, 200)
+      this.remember(material.origin, groupKey, text)
+      void this.publish({
+        channel: 'reading',
+        kind: materialKind(material),
+        originRef: material.origin,
+        groupKey,
+        threadKey: reading.threadId,
+        title: material.title.slice(0, 200),
+        locator: material.locator ?? material.url ?? material.path ?? material.attachmentId ?? '',
+        readAt: reading.at,
+        scope: `${reading.scope}（材料 ${range}）`.slice(0, 1000),
+        text,
+        at: reading.at
+      })
     })
   }
 
-  /** Retries a task, or reports that the reading body is gone for good. */
-  async retry(groupId: string): Promise<void> {
+  /**
+   * Retries a task. The body has to be reusable right now: a reading source
+   * whose text was evicted is reported as `needs_reread` instead of leaving a
+   * task that can never finish.
+   */
+  async retry(groupId: string): Promise<boolean> {
     const host = this.host()
-    if (!host) return
-    const body = this.stash.get(groupId)
+    if (!host) return false
+    const key = this.keys.get(groupId)
+    if (key && !this.stash.has(key)) {
+      await host.needsReread({ groupId }, 'reading body no longer in memory').catch(() => undefined)
+      return false
+    }
     try {
       await host.retryTask({ groupId })
+      return true
     } catch (error) {
-      if (body) return
-      await host.needsReread({ groupId }, 'reading body no longer in memory').catch(() => undefined)
-      this.deps.log?.(`[knowledge] 无法重试：${this.error(error)}`)
+      const message = this.error(error)
+      this.deps.log?.(`[knowledge] 无法重试：${message}`)
+      if (key) await host.needsReread({ groupId }, 'reading body no longer in memory').catch(() => undefined)
+      return false
     }
   }
 
-  locate(originRef: string): string | null {
-    return this.stash.get(originRef)?.text ?? null
+  locate(origin: string): string | null {
+    return this.stash.get(origin)?.text ?? null
   }
 
-  private remember(key: string, text: string): void {
+  private remember(origin: string, groupKey: string, text: string): void {
     const size = Buffer.byteLength(text, 'utf8')
     if (size > STASH_BYTES) return
     while (this.stashed + size > STASH_BYTES && this.stash.size) {
@@ -243,15 +341,22 @@ export class KnowledgeCollector {
       this.stashed -= this.stash.get(oldest.value)?.size ?? 0
       this.stash.delete(oldest.value)
     }
-    this.stash.set(key, { text, size })
+    this.stash.set(origin, { text, size })
     this.stashed += size
+    this.keys.set(groupKey, origin)
   }
 
   private async publish(input: PublishInput): Promise<PublishResult | null> {
     const host = this.host()
     if (!host) return null
     try {
-      return await host.publishSource(input)
+      // Wait for a switch hand-over still in flight: the helper must already know
+      // that this channel is off before the source is offered to it.
+      if (this.confirming) await this.confirmed
+      const result = await host.publishSource(input)
+      const key = this.keys.has(input.groupKey) ? this.keys.get(input.groupKey) : undefined
+      if (key) this.keys.set(result.groupId, key)
+      return result
     } catch (error) {
       // A refused source is not a crash: the channel may be off, the group
       // excluded, or the body too large. The reason stays in the log only.
@@ -309,13 +414,17 @@ export function noteProjection(note: {
   transcript?: string
   polished?: string
   updatedAt: number
+  pending?: boolean
+  polishStatus?: 'pending' | 'ok' | 'failed' | 'skipped'
 }): NoteProjection {
   return {
     id: note.id,
     title: note.title,
     transcript: note.transcript ?? '',
     polished: note.polished ?? '',
-    updatedAt: note.updatedAt
+    updatedAt: note.updatedAt,
+    pending: note.pending,
+    polishStatus: note.polishStatus
   }
 }
 
@@ -331,16 +440,39 @@ export function readingMaterial(name: string, data: unknown): ReadingMaterial | 
   const row = data as Record<string, unknown>
   const text = typeof row.text === 'string' ? row.text : ''
   if (!text.trim()) return null
+  const url = typeof row.url === 'string' && row.url ? row.url : undefined
+  const path = typeof row.path === 'string' && row.path ? row.path : undefined
   const title =
     (typeof row.title === 'string' && row.title.trim()) ||
-    (typeof row.path === 'string' && row.path) ||
-    (typeof row.url === 'string' && row.url) ||
+    path ||
+    url ||
     name
-  const material: ReadingMaterial = { title: String(title), text }
-  if (typeof row.url === 'string' && row.url) material.url = row.url
-  if (typeof row.path === 'string' && row.path) material.path = row.path
+  const origin = url ?? path
+  if (!origin) return null
+  const material: ReadingMaterial = { origin, title: String(title), text }
+  if (url) material.url = url
+  if (path) material.path = path
   if (row.truncated === true) material.truncated = true
   if (typeof row.coverage === 'string' && row.coverage) material.coverage = row.coverage
+  return material
+}
+
+/** An uploaded attachment that was actually sent to the model. */
+export function attachmentMaterial(input: {
+  id: string
+  name?: string
+  text: string
+  truncated?: boolean
+}): ReadingMaterial | null {
+  const text = input.text ?? ''
+  if (!text.trim()) return null
+  const material: ReadingMaterial = {
+    origin: `attachment:${input.id}`,
+    title: input.name?.trim() || input.id,
+    text,
+    attachmentId: input.id
+  }
+  if (input.truncated) material.truncated = true
   return material
 }
 

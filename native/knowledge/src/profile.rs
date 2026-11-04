@@ -6,7 +6,7 @@
 //! automatic writer, and a removed item keeps an exclusion record so old
 //! evidence cannot silently rebuild it.
 
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, Row, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{ApiError, ApiResult, Code, fit_page};
@@ -246,9 +246,11 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Profil
     }
     let automatic = origin == "auto";
     let key = key_of(&dimension, &value);
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the profile transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the profile transaction: {error}"))
+        })?;
     let excluded: i64 = transaction
         .query_row(
             "SELECT count(*) FROM exclusions WHERE kind = 'profile' AND key = ?1",
@@ -347,9 +349,11 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Pr
     let pinned = params.pinned.unwrap_or(existing.pinned);
     let corrected = params.corrected.unwrap_or(existing.corrected);
     let key = key_of(&existing.dimension, &value);
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the profile transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the profile transaction: {error}"))
+        })?;
     transaction
         .execute(
             "UPDATE profile_items SET value = ?2, category = ?3, pinned = ?4, corrected = ?5, updated_at = ?6 WHERE id = ?1",
@@ -384,9 +388,11 @@ pub fn delete(connection: &mut Connection, id: &str) -> ApiResult<bool> {
     check_chars("id", id, 128)?;
     let existing = load(connection, id)?;
     let key = key_of(&existing.dimension, &existing.value);
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the profile transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the profile transaction: {error}"))
+        })?;
     transaction
         .execute(
             "INSERT OR REPLACE INTO exclusions (kind, key, reason, created_at) VALUES ('profile', ?1, 'deleted by the user', ?2)",

@@ -83,7 +83,7 @@ describe('compiled helper over the production host', () => {
       opened: true,
       fts5: true,
       trigram: true,
-      schema: { knowledge: 2, profile: 1 }
+      schema: { knowledge: 3, profile: 1 }
     })
     const card = await instance.saveCard({
       kind: 'concept',
@@ -193,7 +193,7 @@ describe('compiled helper over the production host', () => {
 
   it('collects a note into a pending task and dedupes the same body', async () => {
     const instance = host()
-    await expect(instance.configureCollect({ notes: true })).resolves.toMatchObject({ note: true })
+    await expect(instance.configureCollect({ enabled: true, notes: true })).resolves.toMatchObject({ note: true, enabled: true })
     const input = {
       channel: 'note' as const,
       kind: 'note' as const,
@@ -220,6 +220,7 @@ describe('compiled helper over the production host', () => {
 
   it('refuses an excluded group and allows it again', async () => {
     const instance = host()
+    await instance.configureCollect({ enabled: true })
     await instance.exclude('note', 'note-2', 'kept out')
     await expect(
       instance.publishSource({ channel: 'note', kind: 'note', originRef: 'note-2', groupKey: 'note-2', text: '正文', at: Date.now() })
@@ -234,6 +235,7 @@ describe('compiled helper over the production host', () => {
 
   it('drops a deleted note by channel and key', async () => {
     const instance = host()
+    await instance.configureCollect({ enabled: true })
     await instance.publishSource({ channel: 'note', kind: 'note', originRef: 'note-3', groupKey: 'note-3', text: '正文', at: Date.now() })
     await expect(instance.invalidateTask({ channel: 'note', groupKey: 'note-3' }, 'note deleted')).resolves.toMatchObject({ state: 'cancelled' })
     const page = await instance.listQueue({ state: 'cancelled' })
@@ -243,6 +245,7 @@ describe('compiled helper over the production host', () => {
 
   it('walks a history job to completion through batches', async () => {
     const instance = host()
+    await instance.configureCollect({ enabled: true })
     const begun = await instance.beginHistory({ notes: true, chat: false })
     expect(begun).toMatchObject({ resumed: false, job: { state: 'running' } })
     const first = await instance.stepHistory({

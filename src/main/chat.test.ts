@@ -127,6 +127,29 @@ it('stores the answer without the appended source list and keeps the source card
   expect(answer.sources.map(source => source.url)).toEqual(['https://a.example/1', 'https://b.example/2'])
 })
 
+it('records an analysed attachment as its own source with the range that was sent', async () => {
+  const done: import('./knowledge/collector').ChatTurnDone[] = []
+  const collecting = new ChatService(join(root, 'collect-attachment.db'), () => settings, () => {}, () => ({}), turn => done.push(turn))
+  try {
+    const thread = collecting.create(null)
+    await collecting.send(thread.id, '概括这个文档', [{ name: '报告.txt', bytes: Buffer.from('文档正文在第一段。') }])
+    expect(done).toHaveLength(1)
+    const attachment = collecting.get(thread.id).messages[0].attachments?.[0]
+    expect(done[0].materials).toHaveLength(1)
+    expect(done[0].materials[0]).toMatchObject({
+      origin: `attachment:${attachment!.id}`,
+      title: '报告.txt',
+      text: '文档正文在第一段。',
+      attachmentId: attachment!.id
+    })
+    // A follow-up re-sends the thread's recent attachments, so the same file keeps
+    // one identity instead of becoming a second source.
+    vi.mocked(askAgent).mockResolvedValueOnce({ text: '回答', sources: [], searched: false, taskState: 'completed' })
+    await collecting.send(thread.id, '再问一句')
+    expect(done[1].materials.map(material => material.origin)).toEqual([`attachment:${attachment!.id}`])
+  } finally { collecting.close() }
+})
+
 it('hands a completed turn to the collector and skips a failed one', async () => {
   const done: import('./knowledge/collector').ChatTurnDone[] = []
   const collecting = new ChatService(join(root, 'collect.db'), () => settings, () => {}, () => ({}), turn => done.push(turn))
@@ -139,5 +162,44 @@ it('hands a completed turn to the collector and skips a failed one', async () =>
     vi.mocked(askAgent).mockRejectedValueOnce(new Error('provider down'))
     await collecting.send(thread.id, '问题二').catch(() => undefined)
     expect(done).toHaveLength(1)
+  } finally { collecting.close() }
+})
+
+it('only collects a turn that really completed, never a transient state', async () => {
+  const done: import('./knowledge/collector').ChatTurnDone[] = []
+  const collecting = new ChatService(join(root, 'collect-states.db'), () => settings, () => {}, () => ({}), turn => done.push(turn))
+  try {
+    const thread = collecting.create(null)
+    for (const state of ['awaiting_confirmation', 'cancelled', 'pending'] as const) {
+      vi.mocked(askAgent).mockResolvedValueOnce({ text: '回答', sources: [], searched: false, taskState: state })
+      await collecting.send(thread.id, `问题-${state}`)
+    }
+    expect(done).toHaveLength(0)
+    vi.mocked(askAgent).mockResolvedValueOnce({ text: '回答', sources: [], searched: false, taskState: 'completed' })
+    await collecting.send(thread.id, '问题-完成')
+    expect(done).toHaveLength(1)
+  } finally { collecting.close() }
+})
+
+it('retracts the thread tasks when a conversation is deleted or turns temporary', async () => {
+  const removed: Array<[string, string]> = [], done: import('./knowledge/collector').ChatTurnDone[] = []
+  const collecting = new ChatService(join(root, 'collect-removed.db'), () => settings, () => {}, () => ({}),
+    turn => done.push(turn), (id, reason) => { removed.push([id, reason]) })
+  try {
+    const deleted = collecting.create(null)
+    await collecting.send(deleted.id, '会被删除')
+    collecting.edit({ action: 'delete', id: deleted.id })
+    expect(removed).toEqual([[deleted.id, 'thread deleted']])
+
+    const flipped = collecting.create(null)
+    vi.mocked(askAgent).mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      // A turn can become temporary while it is being answered.
+      options!.conversation!.memoryTemporary = true
+      return { text: '临时回答', sources: [], searched: false, taskState: 'completed' }
+    })
+    await collecting.send(flipped.id, '临时对话')
+    expect(done).toHaveLength(1)
+    expect(removed.at(-1)).toEqual([flipped.id, 'thread became temporary'])
+    expect(collecting.get(flipped.id).memoryTemporary).toBe(true)
   } finally { collecting.close() }
 })

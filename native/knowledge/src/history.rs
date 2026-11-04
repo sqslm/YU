@@ -6,7 +6,7 @@
 //! dictation history, the file system or old URLs: only the notes and the
 //! completed persistent conversations the host already holds.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -139,15 +139,34 @@ pub fn step(conn: &mut Connection, params: StepParams) -> ApiResult<Value> {
         return Err(ApiError::invalid("this scope was not selected"));
     }
 
+    let stored_cursor = if params.kind == "note" {
+        job.note_cursor.clone()
+    } else {
+        job.chat_cursor.clone()
+    };
+    // A replayed batch is not a second scan: the checkpoint already covers it.
+    if params.cursor.is_some() && params.cursor == stored_cursor {
+        return Ok(json!({
+            "job": job,
+            "done": job.state == "completed",
+            "replayed": true,
+        }));
+    }
+
     let mut scanned = job.scanned;
     let mut skipped = job.skipped;
     let mut deduped = job.deduped;
     let mut ready = job.ready;
     let mut needs_reread = job.needs_reread;
     let mut failed = job.failed;
+    // Publishes, counters and the cursor move together: a cancelled or failed
+    // step must not leave a checkpoint that points past sources it never stored.
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| ApiError::storage(format!("cannot start the history step: {error}")))?;
     for row in params.rows {
         scanned += 1;
-        match queue::publish(conn, row) {
+        match queue::publish_in(&transaction, row) {
             Ok(result) => {
                 if result.duplicate {
                     deduped += 1;
@@ -156,6 +175,7 @@ pub fn step(conn: &mut Connection, params: StepParams) -> ApiResult<Value> {
                 }
             }
             Err(error) => match error.code {
+                Code::Cancelled => return Err(error),
                 Code::Excluded | Code::ChannelDisabled => skipped += 1,
                 Code::TooLarge => needs_reread += 1,
                 _ => failed += 1,
@@ -178,28 +198,32 @@ pub fn step(conn: &mut Connection, params: StepParams) -> ApiResult<Value> {
     let finished = (!job.scopes["notes"].as_bool().unwrap_or(false) || note_done)
         && (!job.scopes["chat"].as_bool().unwrap_or(false) || chat_done);
     let state = if finished { "completed" } else { "running" };
-    conn.execute(
-        &format!(
-            "UPDATE history_jobs SET {column} = ?2, {done_column} = ?3, state = ?4, scanned = ?5,
-             skipped = ?6, deduped = ?7, ready = ?8, needs_reread = ?9, failed = ?10, updated_at = ?11
-             WHERE id = ?1"
-        ),
-        params![
-            params.job_id,
-            params.cursor,
-            if params.done { 1 } else { 0 },
-            state,
-            scanned,
-            skipped,
-            deduped,
-            ready,
-            needs_reread,
-            failed,
-            now_ms()
-        ],
-    )
-    .map_err(|error| ApiError::storage(format!("cannot record the history step: {error}")))?;
+    transaction
+        .execute(
+            &format!(
+                "UPDATE history_jobs SET {column} = ?2, {done_column} = ?3, state = ?4, scanned = ?5,
+                 skipped = ?6, deduped = ?7, ready = ?8, needs_reread = ?9, failed = ?10,
+                 updated_at = ?11 WHERE id = ?1"
+            ),
+            params![
+                params.job_id,
+                params.cursor,
+                if params.done { 1 } else { 0 },
+                state,
+                scanned,
+                skipped,
+                deduped,
+                ready,
+                needs_reread,
+                failed,
+                now_ms()
+            ],
+        )
+        .map_err(|error| ApiError::storage(format!("cannot record the history step: {error}")))?;
     ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the history step: {error}")))?;
     Ok(json!({ "job": read(conn, &params.job_id)?, "done": state == "completed" }))
 }
 

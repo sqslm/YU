@@ -1431,8 +1431,9 @@ export class NotesStore {
     note.updatedAt = Math.max(Date.now(), note.updatedAt + 1)
     // Transcript and polish land here, so the row has to reach the server too.
     note.pending = true
-    this.save()
-    this.settled(note)
+    // A background save that failed never reached the disk, so the collector must
+    // not be told the new body is stored — the old text would be collected instead.
+    if (this.save()) this.settled(note)
   }
 
   /**
@@ -1448,10 +1449,17 @@ export class NotesStore {
     }
   }
 
-  private save(reportFailure = false): void {
+  /**
+   * Persists the document, then tells the window. Returns whether the write
+   * really happened: a caller that publishes to the knowledge collector has to
+   * know, otherwise a failed save would collect text that is not on disk.
+   */
+  private save(reportFailure = false): boolean {
+    let written = false
     if (this.loaded) {
       try {
         this.writeDatabase(this.root())
+        written = true
       } catch (error) {
         // The change stays in memory; a disk problem must not crash a recording.
         this.options.log(`[notes] 保存失败：${describeError(error)}`)
@@ -1464,6 +1472,7 @@ export class NotesStore {
     } catch (error) {
       this.options.log(`[notes] 通知界面失败：${describeError(error)}`)
     }
+    return written
   }
 
   /** Atomic document write: temp file plus rename, so a crash cannot truncate it. */

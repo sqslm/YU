@@ -438,7 +438,9 @@ describe('KnowledgeHost model callbacks', () => {
           release = resolve
         })
     )
-    const instance = host({ completer, requestMs: 120 })
+    // The deadline only has to be tight compared with the completer, which never
+    // answers; it must still be generous enough to survive a respawn under load.
+    const instance = host({ completer, requestMs: 2_000 })
     const first = expect(instance.getCard('model')).rejects.toMatchObject({ code: 'timeout' })
     const deadline = Date.now() + 2_000
     while (completer.mock.calls.length === 0 && Date.now() < deadline) {

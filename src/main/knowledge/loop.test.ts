@@ -80,7 +80,7 @@ describe('the Rust helper and the host around a real model callback', () => {
     // The production ready frame must declare the shared object shape.
     await expect(instance.status()).resolves.toMatchObject({
       running: true,
-      schema: { knowledge: 2, profile: 1 }
+      schema: { knowledge: 3, profile: 1 }
     })
   }, 60_000)
 

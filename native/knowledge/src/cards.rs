@@ -3,7 +3,7 @@
 //! All seven card kinds share one table and one editing path; the kind only
 //! groups and filters. Extraction strategy per kind arrives in a later stage.
 
-use rusqlite::{Connection, Row, Transaction, params};
+use rusqlite::{Connection, Row, Transaction, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
@@ -297,9 +297,11 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Card> 
     let aliases = encode_list(&params.aliases)?;
     let id = new_id("card");
     let now = now_ms();
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the card transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the card transaction: {error}"))
+        })?;
     transaction
         .execute(
             "INSERT INTO cards (id, kind, title, summary, body, topics, aliases, edited, created_at, updated_at)
@@ -369,9 +371,11 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Ca
     // Any edit through this API is a human edit unless the caller says otherwise.
     let edited = params.edited.unwrap_or(true);
     let now = now_ms();
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the card transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the card transaction: {error}"))
+        })?;
     transaction
         .execute(
             "UPDATE cards SET title = ?2, summary = ?3, body = ?4, topics = ?5, aliases = ?6, edited = ?7, updated_at = ?8 WHERE id = ?1",
@@ -394,9 +398,11 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Ca
 /// is recorded as excluded so a later extraction run cannot resurrect it.
 pub fn delete(connection: &mut Connection, id: &str) -> ApiResult<bool> {
     check_chars("id", id, 128)?;
-    let transaction = connection.transaction().map_err(|error| {
-        ApiError::storage(format!("cannot start the card transaction: {error}"))
-    })?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the card transaction: {error}"))
+        })?;
     let existing: i64 = transaction
         .query_row("SELECT count(*) FROM cards WHERE id = ?1", [id], |row| {
             row.get(0)

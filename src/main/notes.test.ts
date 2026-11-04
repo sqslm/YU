@@ -865,4 +865,26 @@ describe('collection hooks', () => {
     expect(removed).toEqual([note.id])
     expect(store.list().notes).toHaveLength(0)
   })
+
+  it('never reports a background body that failed to reach the disk', async () => {
+    const settled: string[] = []
+    const store = new NotesStore({
+      log: () => undefined,
+      getSettings: () => settings,
+      notify: () => undefined,
+      onSettled: note => settled.push(note.id)
+    })
+    await store.load()
+    const note = await store.createText({ text: '第一段' })
+    expect(settled).toEqual([note.id])
+    // Block the root so the next document write cannot happen: the body lives in
+    // memory only, and telling the collector would quote text that is not stored.
+    const blocked = join(dir, 'blocked')
+    writeFileSync(blocked, 'not a directory')
+    settings = { ...settings, notesDir: join(blocked, 'notes') }
+    mocks.complete.mockResolvedValue('第二段的润色')
+    await store.repolish(note.id)
+    expect(settled).toEqual([note.id])
+    expect(store.list().notes[0]?.polished).toBe('第二段的润色')
+  })
 })

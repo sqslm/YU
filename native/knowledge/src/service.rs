@@ -25,6 +25,14 @@ struct IdParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadParams {
+    id: String,
+    #[serde(default)]
+    expect_fingerprint: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct InvalidateParams {
     id: String,
     #[serde(default)]
@@ -127,6 +135,21 @@ impl Service {
                 let source = sources::get(&connection, &params.id)?;
                 Ok(Outcome {
                     result: serde_json::to_value(source).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "source.read" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let params: ReadParams = decode(params)?;
+                let result = sources::read(
+                    &connection,
+                    &params.id,
+                    params.expect_fingerprint.as_deref(),
+                )?;
+                Ok(Outcome {
+                    result,
                     scope: None,
                     shutdown: false,
                 })
@@ -302,6 +325,22 @@ impl Service {
                 let store = self.store()?;
                 let mut connection = store.knowledge.lock().map_err(lock_error)?;
                 let result = queue::invalidate(&mut connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "queue.items" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::items(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "queue.invalidate_thread" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::invalidate_thread(&mut connection, decode(params)?)?;
                 Ok(changed(result, "queue"))
             }
             "queue.needs_reread" => {

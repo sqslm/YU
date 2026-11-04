@@ -72,7 +72,6 @@ const api: TypelessApi = {
     unexclude: (kind, key) => ipcRenderer.invoke('knowledge:exclude-remove', kind, key),
     listExclusions: () => ipcRenderer.invoke('knowledge:exclude-list'),
     beginHistory: scopes => ipcRenderer.invoke('knowledge:history-begin', scopes),
-    stepHistory: input => ipcRenderer.invoke('knowledge:history-step', input),
     pauseHistory: id => ipcRenderer.invoke('knowledge:history-pause', id),
     resumeHistory: id => ipcRenderer.invoke('knowledge:history-resume', id),
     cancelHistory: id => ipcRenderer.invoke('knowledge:history-cancel', id),

@@ -4,7 +4,7 @@
 //! Phase 2 only *collects*. A `ready` task waits for stage 3 to consume it; no
 //! row here is ever marked extracted, because nothing extracts yet.
 
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -51,6 +51,13 @@ pub struct PublishParams {
     pub text: String,
     /// When the user produced the content, in milliseconds since the epoch.
     pub at: i64,
+    /// The conversation or note this content belongs to, so deleting it can
+    /// cancel every task that quoted it, including reading tasks.
+    #[serde(default)]
+    pub thread_key: Option<String>,
+    /// Position inside the group. Reading publishes several materials at once.
+    #[serde(default)]
+    pub ordinal: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -77,6 +84,9 @@ pub struct QueueItem {
     pub scope: String,
     pub size: i64,
     pub read_at: i64,
+    /// `active` or `invalid`: a caller must not treat an invalid source as text
+    /// it can still read.
+    pub state: String,
 }
 
 #[derive(Serialize)]
@@ -96,6 +106,10 @@ pub struct QueueTask {
     pub error: Option<String>,
     pub attempts: i64,
     pub items: Vec<QueueItem>,
+    pub items_total: i64,
+    pub items_offset: u32,
+    pub items_has_more: bool,
+    pub items_next_offset: Option<u32>,
     pub updated_at: i64,
 }
 
@@ -121,6 +135,20 @@ pub struct QueueStatus {
     pub paused_reasons: Value,
     pub channels: Value,
     pub window_ms: i64,
+}
+
+/// One task can hold a long conversation: its items are paged like everything
+/// else, so a 201st turn stays reachable instead of vanishing behind a LIMIT.
+pub const ITEM_PAGE: u32 = 32;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemsParams {
+    pub group_id: String,
+    #[serde(default)]
+    pub offset: u32,
+    #[serde(default)]
+    pub limit: u32,
 }
 
 #[derive(Deserialize)]
@@ -180,6 +208,10 @@ pub struct PauseParams {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigureParams {
+    /// The master switch. When it is off nothing is accepted, whatever the
+    /// per-channel flags say.
+    #[serde(default)]
+    pub enabled: Option<bool>,
     #[serde(default)]
     pub notes: Option<bool>,
     #[serde(default)]
@@ -229,8 +261,13 @@ fn flag(conn: &Connection, key: &str, fallback: bool) -> bool {
     }
 }
 
+/// The master switch, off until the user turns collection on.
+pub fn enabled(conn: &Connection) -> bool {
+    flag(conn, "enabled", false)
+}
+
 pub fn channel_enabled(conn: &Connection, channel: &str) -> bool {
-    flag(conn, &format!("channel_{channel}"), true)
+    enabled(conn) && flag(conn, &format!("channel_{channel}"), true)
 }
 
 pub fn paused(conn: &Connection) -> bool {
@@ -239,6 +276,7 @@ pub fn paused(conn: &Connection) -> bool {
 
 pub fn channels_json(conn: &Connection) -> Value {
     json!({
+        "enabled": enabled(conn),
         "note": channel_enabled(conn, "note"),
         "chat": channel_enabled(conn, "chat"),
         "reading": channel_enabled(conn, "reading"),
@@ -249,8 +287,11 @@ pub fn channels_json(conn: &Connection) -> Value {
 
 pub fn configure(conn: &mut Connection, params: ConfigureParams) -> ApiResult<Value> {
     let transaction = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| ApiError::storage(format!("cannot start the configure: {error}")))?;
+    if let Some(value) = params.enabled {
+        set_control(&transaction, "enabled", if value { "1" } else { "0" })?;
+    }
     for (name, value) in [
         ("notes", params.notes),
         ("chat", params.chat),
@@ -322,16 +363,37 @@ fn top_source(conn: &Connection, group_id: &str) -> Option<(String, String, i64)
 }
 
 pub fn publish(conn: &mut Connection, params: PublishParams) -> ApiResult<PublishResult> {
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| ApiError::storage(format!("cannot start the publish: {error}")))?;
+    let result = publish_in(&transaction, params)?;
+    ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the publish: {error}")))?;
+    Ok(result)
+}
+
+/// The body of a publish, run inside a transaction the caller already owns so a
+/// history batch can store sources and its checkpoint in one commit.
+pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<PublishResult> {
+    // Named for readability: the caller already opened the transaction.
+    let transaction = conn;
     let channel = params.channel.trim();
     if !CHANNELS.contains(&channel) {
         return Err(ApiError::invalid(format!("unknown channel: {channel}")));
     }
-    if !crate::store::SOURCE_KINDS.contains(&params.kind.as_str()) {
-        return Err(ApiError::invalid(format!(
-            "unknown source kind: {}",
-            params.kind
-        )));
-    }
+    // Every entry point that can mint a source goes through the same limits, so a
+    // new publish path cannot accept a body the storage path would refuse.
+    crate::sources::validate(crate::sources::Fields {
+        kind: &params.kind,
+        origin_ref: &params.origin_ref,
+        title: params.title.as_deref().unwrap_or_default(),
+        locator: params.locator.as_deref().unwrap_or_default(),
+        version: "",
+        scope: params.scope.as_deref().unwrap_or_default(),
+        text: &params.text,
+    })?;
     let origin_ref = require_text("originRef", &params.origin_ref)?;
     let group_key = require_text("groupKey", &params.group_key)?;
     check_chars("groupKey", &group_key, MAX_GROUP_CHARS)?;
@@ -358,10 +420,6 @@ pub fn publish(conn: &mut Connection, params: PublishParams) -> ApiResult<Publis
     let title = params.title.clone().unwrap_or_default();
     let scope = params.scope.clone().unwrap_or_default();
     let locator = params.locator.clone().unwrap_or_default();
-
-    let transaction = conn
-        .transaction()
-        .map_err(|error| ApiError::storage(format!("cannot start the publish: {error}")))?;
 
     // One source row per (kind, origin, content). Re-publishing the same text is
     // how a restarted host proves it can still project the body, so it must be a
@@ -429,48 +487,74 @@ pub fn publish(conn: &mut Connection, params: PublishParams) -> ApiResult<Publis
             let id = new_id("grp");
             transaction
                 .execute(
-                    "INSERT INTO queue_groups (id, channel, group_key, title, scope, state, stable_at,
-                       created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, 'stabilizing', ?6, ?7, ?8)",
-                    params![id, channel, group_key, title, scope, stable_at, at, at],
+                    "INSERT INTO queue_groups (id, channel, group_key, thread_key, title, scope, state,
+                       stable_at, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'stabilizing', ?7, ?8, ?9)",
+                    params![
+                        id,
+                        channel,
+                        group_key,
+                        params.thread_key,
+                        title,
+                        scope,
+                        stable_at,
+                        at,
+                        at
+                    ],
                 )
                 .map_err(|error| ApiError::storage(format!("cannot queue the group: {error}")))?;
-            source_link(&transaction, &id, 0, &source_id)?;
+            source_link(transaction, &id, 0, &source_id)?;
             (id, "stabilizing".to_string(), false)
         }
-        Some((id, state, updated_at)) => {
-            let top = top_source(&transaction, &id);
+        Some((id, state, _updated_at)) => {
+            let top = top_source(transaction, &id);
             let same = top
                 .as_ref()
                 .is_some_and(|(_, print, _)| print == &fingerprint);
-            let stale = at < updated_at;
+            // Only an older event of the *same* source is stale. Two different
+            // turns of one thread are independent records: a late or replayed one
+            // must still be kept and ordered, never folded into the newer turn.
+            let stale: bool = transaction
+                .query_row(
+                    "SELECT EXISTS (SELECT 1 FROM queue_items i JOIN sources s ON s.id = i.source_id
+                       WHERE i.group_id = ?1 AND s.origin_ref = ?2 AND s.read_at > ?3)",
+                    params![id, origin_ref, at],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap_or(0)
+                == 1;
             // A newer event for a group whose body did not change only refreshes
             // metadata: it must neither extend the window nor create work.
             if same || stale || state == "cancelled" {
                 (id, state, true)
             } else {
-                if channel == "chat" {
-                    let ordinal: i64 = transaction
-                        .query_row(
-                            "SELECT COALESCE(max(ordinal), -1) + 1 FROM queue_items WHERE group_id = ?1",
-                            [&id],
-                            |row| row.get(0),
-                        )
-                        .unwrap_or(0);
-                    source_link(&transaction, &id, ordinal, &source_id)?;
-                } else {
+                if channel == "note" {
                     transaction
                         .execute("DELETE FROM queue_items WHERE group_id = ?1", [&id])
                         .map_err(|error| {
                             ApiError::storage(format!("cannot replace the queued item: {error}"))
                         })?;
-                    source_link(&transaction, &id, 0, &source_id)?;
+                    source_link(transaction, &id, 0, &source_id)?;
+                } else {
+                    // Chat turns and reading materials each keep their own slot.
+                    let ordinal = match params.ordinal {
+                        Some(value) => value.max(0),
+                        None => transaction
+                            .query_row(
+                                "SELECT COALESCE(max(ordinal), -1) + 1 FROM queue_items WHERE group_id = ?1",
+                                [&id],
+                                |row| row.get(0),
+                            )
+                            .unwrap_or(0),
+                    };
+                    source_link(transaction, &id, ordinal, &source_id)?;
                 }
                 transaction
                     .execute(
                         "UPDATE queue_groups SET state = 'stabilizing', stable_at = ?2, title = ?3,
-                         scope = ?4, reason = NULL, error = NULL, updated_at = ?5 WHERE id = ?1",
-                        params![id, stable_at, title, scope, at],
+                         scope = ?4, reason = NULL, error = NULL, updated_at = ?5,
+                         thread_key = COALESCE(?6, thread_key) WHERE id = ?1",
+                        params![id, stable_at, title, scope, at, params.thread_key],
                     )
                     .map_err(|error| {
                         ApiError::storage(format!("cannot settle the queue group: {error}"))
@@ -480,10 +564,6 @@ pub fn publish(conn: &mut Connection, params: PublishParams) -> ApiResult<Publis
         }
     };
 
-    ensure_not_cancelled()?;
-    transaction
-        .commit()
-        .map_err(|error| ApiError::storage(format!("cannot commit the publish: {error}")))?;
     Ok(PublishResult {
         source_id,
         version: fingerprint.clone(),
@@ -511,16 +591,31 @@ fn source_link(conn: &Connection, group_id: &str, ordinal: i64, source_id: &str)
 const EFFECTIVE: &str =
     "CASE WHEN state = 'stabilizing' AND stable_at <= ?1 THEN 'ready' ELSE state END";
 
-fn items_of(conn: &Connection, group_id: &str) -> ApiResult<Vec<QueueItem>> {
+fn items_total(conn: &Connection, group_id: &str) -> i64 {
+    conn.query_row(
+        "SELECT count(*) FROM queue_items WHERE group_id = ?1",
+        [group_id],
+        |row| row.get(0),
+    )
+    .unwrap_or(0)
+}
+
+fn items_of(
+    conn: &Connection,
+    group_id: &str,
+    offset: u32,
+    limit: u32,
+) -> ApiResult<Vec<QueueItem>> {
     let mut statement = conn
         .prepare(
-            "SELECT s.id, i.ordinal, s.kind, s.origin_ref, s.title, s.locator, s.scope, s.size, s.read_at
+            "SELECT s.id, i.ordinal, s.kind, s.origin_ref, s.title, s.locator, s.scope, s.size,
+                    s.read_at, s.state
              FROM queue_items i JOIN sources s ON s.id = i.source_id
-             WHERE i.group_id = ?1 ORDER BY i.ordinal LIMIT 200",
+             WHERE i.group_id = ?1 ORDER BY i.ordinal LIMIT ?2 OFFSET ?3",
         )
         .map_err(|error| ApiError::storage(format!("cannot read the queue items: {error}")))?;
     let rows = statement
-        .query_map([group_id], |row| {
+        .query_map(params![group_id, limit, offset], |row| {
             Ok(QueueItem {
                 source_id: row.get(0)?,
                 ordinal: row.get(1)?,
@@ -531,10 +626,33 @@ fn items_of(conn: &Connection, group_id: &str) -> ApiResult<Vec<QueueItem>> {
                 scope: row.get(6)?,
                 size: row.get(7)?,
                 read_at: row.get(8)?,
+                state: row.get(9)?,
             })
         })
         .map_err(|error| ApiError::storage(format!("cannot read the queue items: {error}")))?;
     Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// One page of a task's own items. A long thread keeps every turn reachable,
+/// and the caller is told exactly where to continue.
+pub fn items(conn: &Connection, params: ItemsParams) -> ApiResult<Value> {
+    check_chars("groupId", &params.group_id, 128)?;
+    let total = items_total(conn, &params.group_id);
+    let limit = if params.limit == 0 {
+        ITEM_PAGE
+    } else {
+        params.limit.min(MAX_PAGE)
+    };
+    let rows = items_of(conn, &params.group_id, params.offset, limit)?;
+    let (kept, has_more, next_offset) = fit_page(rows, total, params.offset);
+    Ok(json!({
+        "items": kept,
+        "total": total,
+        "offset": params.offset,
+        "limit": limit,
+        "hasMore": has_more,
+        "nextOffset": next_offset,
+    }))
 }
 
 fn task_row(conn: &Connection, row: &Row<'_>, now: i64) -> rusqlite::Result<QueueTask> {
@@ -546,7 +664,9 @@ fn task_row(conn: &Connection, row: &Row<'_>, now: i64) -> rusqlite::Result<Queu
     } else {
         stored
     };
-    let items = items_of(conn, &id).unwrap_or_default();
+    let total = items_total(conn, &id);
+    let rows = items_of(conn, &id, 0, ITEM_PAGE).unwrap_or_default();
+    let (items, has_more, next_offset) = fit_page(rows, total, 0);
     Ok(QueueTask {
         id,
         channel: row.get(1)?,
@@ -559,6 +679,10 @@ fn task_row(conn: &Connection, row: &Row<'_>, now: i64) -> rusqlite::Result<Queu
         error: row.get(8)?,
         attempts: row.get(9)?,
         items,
+        items_total: total,
+        items_offset: 0,
+        items_has_more: has_more,
+        items_next_offset: next_offset,
         updated_at: row.get(10)?,
     })
 }
@@ -691,6 +815,56 @@ fn set_state(
     Ok(())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadParams {
+    pub thread_key: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Cancels every task that quoted a conversation: its chat turns and the reading
+/// tasks it produced. A deleted or made-temporary thread must not leave work
+/// behind just because reading tasks live under their material identity.
+pub fn invalidate_thread(conn: &mut Connection, params: ThreadParams) -> ApiResult<Value> {
+    let thread_key = require_text("threadKey", &params.thread_key)?;
+    check_chars("threadKey", &thread_key, MAX_GROUP_CHARS)?;
+    let reason = params
+        .reason
+        .clone()
+        .unwrap_or_else(|| "deleted".to_string());
+    check_chars("reason", &reason, 500)?;
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| ApiError::storage(format!("cannot start the invalidate: {error}")))?;
+    let groups: Vec<String> = {
+        let mut statement = transaction
+            .prepare("SELECT id FROM queue_groups WHERE thread_key = ?1 AND state <> 'cancelled'")
+            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
+        let rows = statement
+            .query_map([&thread_key], |row| row.get::<_, String>(0))
+            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
+        rows.filter_map(Result::ok).collect()
+    };
+    for id in &groups {
+        transaction
+            .execute(
+                "UPDATE sources SET state = 'invalid', invalid_reason = ?2, updated_at = ?3
+                 WHERE id IN (SELECT source_id FROM queue_items WHERE group_id = ?1)",
+                params![id, reason, now_ms()],
+            )
+            .map_err(|error| {
+                ApiError::storage(format!("cannot invalidate the sources: {error}"))
+            })?;
+        set_state(&transaction, id, "cancelled", Some(&reason), None)?;
+    }
+    ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the invalidate: {error}")))?;
+    Ok(json!({ "threadKey": thread_key, "cancelled": groups, "reason": reason }))
+}
+
 pub fn cancel(conn: &Connection, params: GroupParams) -> ApiResult<Value> {
     let id = group_id(conn, &params)?;
     set_state(
@@ -738,7 +912,7 @@ pub fn needs_reread(conn: &Connection, params: GroupParams) -> ApiResult<Value> 
 pub fn invalidate(conn: &mut Connection, params: GroupParams) -> ApiResult<Value> {
     let id = group_id(conn, &params)?;
     let transaction = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| ApiError::storage(format!("cannot start the invalidate: {error}")))?;
     let reason = params
         .reason
@@ -780,7 +954,7 @@ pub fn exclude_add(conn: &mut Connection, params: ExcludeParams) -> ApiResult<Va
     let key = require_text("key", &params.key)?;
     check_chars("key", &key, MAX_GROUP_CHARS)?;
     let transaction = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| ApiError::storage(format!("cannot start the exclusion: {error}")))?;
     transaction
         .execute(

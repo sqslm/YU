@@ -64,6 +64,28 @@ impl Helper {
         let mut helper = Helper { child, stdin, out };
         let ready = helper.recv();
         assert_eq!(ready["type"], "ready", "{ready}");
+        // Collection is off until the user turns it on, so every test that wants
+        // to publish starts by mirroring the real switch.
+        helper.ok("cfg", "collect.configure", json!({ "enabled": true }));
+        helper
+    }
+
+    /// A helper left at the shipped default: the master switch is off.
+    fn start_disabled(root: &Path, stable_ms: u64) -> Helper {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_yu-knowledge"));
+        command
+            .arg("--root")
+            .arg(root)
+            .env("YU_KNOWLEDGE_STABLE_MS", stable_ms.to_string())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command.spawn().unwrap();
+        let stdin = child.stdin.take();
+        let out = BufReader::new(child.stdout.take().unwrap());
+        let mut helper = Helper { child, stdin, out };
+        let ready = helper.recv();
+        assert_eq!(ready["type"], "ready", "{ready}");
         helper
     }
 
@@ -82,6 +104,34 @@ impl Helper {
         let stdin = self.stdin.as_mut().unwrap();
         stdin.write_all(&line).unwrap();
         stdin.flush().unwrap();
+        loop {
+            let frame = self.recv();
+            if frame["type"] == "result" && frame["id"] == id {
+                return frame;
+            }
+        }
+    }
+
+    /// Writes a request without waiting for its answer, so a test can cancel it.
+    fn send(&mut self, id: &str, method: &str, params: Value) {
+        let frame =
+            json!({ "v": 1, "type": "request", "id": id, "method": method, "params": params });
+        let mut line = serde_json::to_vec(&frame).unwrap();
+        line.push(b'\n');
+        let stdin = self.stdin.as_mut().unwrap();
+        stdin.write_all(&line).unwrap();
+        stdin.flush().unwrap();
+    }
+
+    fn cancel(&mut self, id: &str) {
+        let mut line = serde_json::to_vec(&json!({ "v": 1, "type": "cancel", "id": id })).unwrap();
+        line.push(b'\n');
+        let stdin = self.stdin.as_mut().unwrap();
+        stdin.write_all(&line).unwrap();
+        stdin.flush().unwrap();
+    }
+
+    fn answer(&mut self, id: &str) -> Value {
         loop {
             let frame = self.recv();
             if frame["type"] == "result" && frame["id"] == id {
@@ -503,4 +553,292 @@ fn history_runs_one_batch_at_a_time_per_scope() {
         helper.ok("r8", "history.latest", json!({}))["job"]["id"],
         job
     );
+}
+
+// ---------------------------------------------------- review round 2 checks
+
+#[test]
+fn collection_stays_off_until_the_master_switch_is_on() {
+    let root = Root::new("switch");
+    let mut helper = Helper::start_disabled(&root, 60);
+    let refused = helper.call(
+        "r1",
+        "source.publish",
+        publish("note", "note", "n1:v1", "n1", "正文", now_ms()),
+    );
+    assert_eq!(refused["ok"], false, "{refused}");
+    assert_eq!(refused["error"]["code"], "channel_disabled");
+    let status = helper.ok("r2", "queue.status", json!({}));
+    assert_eq!(status["channels"]["enabled"], false);
+    assert_eq!(status["total"], 0);
+    // Turning it on accepts the very same publish.
+    helper.ok("r3", "collect.configure", json!({ "enabled": true }));
+    helper.ok(
+        "r4",
+        "source.publish",
+        publish("note", "note", "n1:v1", "n1", "正文", now_ms()),
+    );
+    assert_eq!(helper.ok("r5", "queue.status", json!({}))["total"], 1);
+}
+
+#[test]
+fn an_independent_turn_is_kept_even_when_it_arrives_late() {
+    let root = Root::new("order");
+    let mut helper = Helper::start(&root, 60);
+    let base = now_ms();
+    helper.ok(
+        "r1",
+        "source.publish",
+        publish(
+            "chat",
+            "chat",
+            "thread-1:m2:m3",
+            "thread-1",
+            "第二问与答",
+            base + 2_000,
+        ),
+    );
+    helper.ok(
+        "r2",
+        "source.publish",
+        publish(
+            "chat",
+            "chat",
+            "thread-1:m0:m1",
+            "thread-1",
+            "第一问与答",
+            base + 1_000,
+        ),
+    );
+    let task = task_of(&mut helper, "r3", "thread-1").unwrap();
+    let items = task["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2, "both turns must survive: {task}");
+    assert_eq!(task["itemsTotal"], 2);
+    assert_eq!(items[0]["originRef"], "thread-1:m2:m3");
+    assert_eq!(items[1]["originRef"], "thread-1:m0:m1");
+    assert_eq!(items[1]["ordinal"], 1);
+}
+
+#[test]
+fn a_long_thread_keeps_every_turn_reachable() {
+    let root = Root::new("long");
+    let mut helper = Helper::start(&root, 60);
+    let base = now_ms();
+    for index in 0..201 {
+        helper.ok(
+            &format!("p{index}"),
+            "source.publish",
+            publish(
+                "chat",
+                "chat",
+                &format!("thread-9:m{index}:m{}", index + 1),
+                "thread-9",
+                &format!("第 {index} 轮问答正文"),
+                base + index,
+            ),
+        );
+    }
+    let task = task_of(&mut helper, "r1", "thread-9").unwrap();
+    assert_eq!(task["itemsTotal"], 201);
+    assert_eq!(task["items"].as_array().unwrap().len(), 32);
+    assert_eq!(task["itemsHasMore"], true);
+    let mut seen = std::collections::BTreeSet::new();
+    for item in task["items"].as_array().unwrap() {
+        seen.insert(item["ordinal"].as_i64().unwrap());
+    }
+    let mut offset = task["itemsNextOffset"].as_u64();
+    let group = task["id"].as_str().unwrap().to_string();
+    while let Some(next) = offset {
+        let page = helper.ok(
+            &format!("i{next}"),
+            "queue.items",
+            json!({ "groupId": group, "offset": next, "limit": 32 }),
+        );
+        for item in page["items"].as_array().unwrap() {
+            assert!(
+                seen.insert(item["ordinal"].as_i64().unwrap()),
+                "duplicate item"
+            );
+        }
+        offset = page["nextOffset"].as_u64();
+    }
+    assert_eq!(seen.len(), 201, "every turn must be reachable exactly once");
+    assert_eq!(*seen.iter().next().unwrap(), 0);
+    assert_eq!(*seen.iter().next_back().unwrap(), 200);
+}
+
+#[test]
+fn publishing_beyond_the_body_limit_is_refused() {
+    let root = Root::new("limit");
+    let mut helper = Helper::start(&root, 60);
+    let exact = "知".repeat(200_000);
+    helper.ok(
+        "r1",
+        "source.publish",
+        publish("note", "note", "big:v1", "big", &exact, now_ms()),
+    );
+    let over = helper.call(
+        "r2",
+        "source.publish",
+        publish(
+            "note",
+            "note",
+            "big:v2",
+            "big",
+            &format!("{exact}🌸"),
+            now_ms(),
+        ),
+    );
+    assert_eq!(over["ok"], false, "{over}");
+    assert_eq!(over["error"]["code"], "too_large");
+    // A title beyond its own limit is refused too, not silently kept.
+    let mut frame = publish("note", "note", "big:v3", "big", "正文", now_ms());
+    frame["title"] = json!("标".repeat(201));
+    let wide = helper.call("r3", "source.publish", frame);
+    assert_eq!(wide["error"]["code"], "too_large");
+}
+
+#[test]
+fn deleting_a_thread_cancels_its_reading_tasks_too() {
+    let root = Root::new("thread");
+    let mut helper = Helper::start(&root, 60);
+    let base = now_ms();
+    let mut chat = publish(
+        "chat",
+        "chat",
+        "thread-7:m0:m1",
+        "thread-7",
+        "问答正文",
+        base,
+    );
+    chat["threadKey"] = json!("thread-7");
+    helper.ok("r1", "source.publish", chat);
+    let mut reading = publish(
+        "reading",
+        "web",
+        "https://example.test/a",
+        "reading-7",
+        "材料与回答",
+        base,
+    );
+    reading["threadKey"] = json!("thread-7");
+    reading["locator"] = json!("https://example.test/a");
+    helper.ok("r2", "source.publish", reading);
+    let cancelled = helper.ok(
+        "r3",
+        "queue.invalidate_thread",
+        json!({ "threadKey": "thread-7", "reason": "thread deleted" }),
+    );
+    assert_eq!(
+        cancelled["cancelled"].as_array().unwrap().len(),
+        2,
+        "{cancelled}"
+    );
+    let page = helper.ok(
+        "r4",
+        "queue.list",
+        json!({ "state": "cancelled", "limit": 100 }),
+    );
+    assert_eq!(page["total"], 2);
+    let items = page["items"].as_array().unwrap();
+    assert!(
+        items
+            .iter()
+            .all(|item| item["items"][0]["state"] == "invalid"),
+        "{page}"
+    );
+}
+
+#[test]
+fn source_read_reports_whether_the_fingerprint_still_matches() {
+    let root = Root::new("read");
+    let mut helper = Helper::start(&root, 60);
+    let published = helper.ok(
+        "r1",
+        "source.publish",
+        publish("note", "note", "n9:v1", "n9", "当前正文", now_ms()),
+    );
+    let id = published["sourceId"].as_str().unwrap().to_string();
+    let fingerprint = published["fingerprint"].as_str().unwrap().to_string();
+    let same = helper.ok(
+        "r2",
+        "source.read",
+        json!({ "id": id, "expectFingerprint": fingerprint }),
+    );
+    assert_eq!(same["matched"], true, "{same}");
+    let changed = helper.ok(
+        "r3",
+        "source.read",
+        json!({ "id": id, "expectFingerprint": "0000" }),
+    );
+    assert_eq!(changed["matched"], false);
+    let missing = helper.call("r4", "source.read", json!({ "id": "src_absent" }));
+    assert_eq!(missing["error"]["code"], "not_found");
+}
+
+#[test]
+fn a_cancelled_batch_never_moves_the_checkpoint() {
+    let root = Root::new("cancel-step");
+    let mut helper = Helper::start(&root, 60);
+    let job = helper.ok(
+        "r1",
+        "history.begin",
+        json!({ "notes": true, "chat": false }),
+    )["job"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // A second connection holds the write lock: the batch is stuck mid-statement
+    // when the cancel arrives, which is exactly the race that used to commit.
+    let db = root.join("data").join("knowledge").join("knowledge.db");
+    let guard = rusqlite::Connection::open(&db).unwrap();
+    guard
+        .execute_batch("BEGIN IMMEDIATE; UPDATE sources SET updated_at = updated_at;")
+        .unwrap_or(());
+    let row = publish("note", "note", "hist:v1", "hist", "历史随记正文", now_ms());
+    helper.send(
+        "s1",
+        "history.step",
+        json!({ "jobId": job, "kind": "note", "cursor": "after-1", "rows": [row], "done": false }),
+    );
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    helper.cancel("s1");
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let _ = guard.execute_batch("ROLLBACK;");
+    drop(guard);
+    let answer = helper.answer("s1");
+    assert_eq!(answer["ok"], false, "{answer}");
+    assert_eq!(answer["error"]["code"], "cancelled");
+    let status = helper.ok("r2", "history.status", json!({ "jobId": job }));
+    assert_eq!(status["job"]["noteCursor"], Value::Null, "{status}");
+    assert_eq!(status["job"]["scanned"], 0);
+    // The checkpoint can still be taken afterwards, from the real beginning.
+    helper.ok("r3", "history.step", json!({ "jobId": job, "kind": "note", "cursor": "after-1", "rows": [publish("note", "note", "hist:v1", "hist", "历史随记正文", now_ms())], "done": true }));
+    let done = helper.ok("r4", "history.status", json!({ "jobId": job }));
+    assert_eq!(done["job"]["noteCursor"], "after-1");
+    assert_eq!(done["job"]["scanned"], 1);
+}
+
+#[test]
+fn replaying_the_same_batch_does_not_scan_twice() {
+    let root = Root::new("replay");
+    let mut helper = Helper::start(&root, 60);
+    let job = helper.ok(
+        "r1",
+        "history.begin",
+        json!({ "notes": true, "chat": false }),
+    )["job"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let row = publish("note", "note", "rep:v1", "rep", "重复提交的随记", now_ms());
+    helper.ok("r2", "history.step", json!({ "jobId": job, "kind": "note", "cursor": "c1", "rows": [row.clone()], "done": false }));
+    let again = helper.ok(
+        "r3",
+        "history.step",
+        json!({ "jobId": job, "kind": "note", "cursor": "c1", "rows": [row], "done": false }),
+    );
+    assert_eq!(again["replayed"], true, "{again}");
+    let status = helper.ok("r4", "history.status", json!({ "jobId": job }));
+    assert_eq!(status["job"]["scanned"], 1, "{status}");
 }

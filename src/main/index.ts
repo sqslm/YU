@@ -38,6 +38,8 @@ import { UiaHost } from './uia/host'
 import { KnowledgeHost } from './knowledge/host'
 import { createKnowledgeCompleter } from './knowledge/model'
 import { KnowledgeCollector } from './knowledge/collector'
+import { HistoryDriver } from './knowledge/history'
+import { createHistoryPages } from './knowledge/pages'
 import type { TaskTarget } from '@shared/knowledge'
 
 import {
@@ -188,7 +190,7 @@ const stats = new StatsStore()
 let settingsWindow: BrowserWindow | null = null
 const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
-}, () => assistant.localQueries(), turn => collectChatTurn(turn))
+}, () => assistant.localQueries(), turn => collectChatTurn(turn), (threadId, reason) => knowledgeCollector.threadRemoved(threadId, reason))
 let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
 /** Which pill renderer has finished loading and subscribed to its channels. */
@@ -224,19 +226,29 @@ const knowledgeCollector = new KnowledgeCollector({
   host: () => knowledge,
   log: line => log(line)
 })
+/**
+ * The only reader a history scan gets: bounded pages out of the two stores that
+ * already exist. The renderer cannot hand in rows of its own — that channel is
+ * not exposed to it at all, so a page can never be forged.
+ */
+const historyPages = createHistoryPages({ notes: () => notes, chats: () => chats })
+const historyDriver = new HistoryDriver({
+  host: () => knowledge,
+  pages: historyPages,
+  allowed: () => knowledgeCollector.enabled,
+  log: line => log(line)
+})
 
 /** A finished chat turn: a reading summary never also becomes a plain task. */
 function collectChatTurn(turn: import('./knowledge/collector').ChatTurnDone): void {
   if (turn.materials.length) {
     knowledgeCollector.readingFinished({
-      originRef: `chat:${turn.threadId}:${turn.answerId}`,
-      groupKey: `chat:${turn.threadId}:${turn.answerId}`,
-      title: turn.threadTitle ?? turn.question.slice(0, 40),
+      threadId: turn.threadId,
       scope: '主界面问答',
       request: turn.question,
       materials: turn.materials,
       answer: turn.answer,
-      sources: [],
+      sources: turn.materials.map(material => ({ title: material.title, url: material.url })),
       at: turn.at
     })
     return
@@ -785,9 +797,10 @@ function applyGameMode(status: GameModeStatus): void {
   log(`[game-mode] ${status.active ? 'entered' : 'left'} source=${status.source} game=${status.game}`)
   if (status.active) {
     chats.cancel(); explanationController?.abort()
-    // The pause has to reach the database before the helper goes away, otherwise
-    // the flag would be lost with the process and collection would resume itself.
-    void knowledge.pauseCollect('game', true).catch(() => undefined).finally(() => knowledge.stop())
+    // Only a running helper is told about the game: with the feature switched off
+    // there is nothing to pause, and spawning one just to write a flag would create
+    // the databases the feature is supposed to leave alone.
+    if (knowledge.running) void knowledge.pauseCollect('game', true).catch(() => undefined).finally(() => knowledge.stop())
     hotkeys?.stop()
     refreshWakeWord()
     cancelAssistant()
@@ -811,6 +824,8 @@ function applyGameMode(status: GameModeStatus): void {
     }
   } else {
     gamePreparation?.finish(false)
+    // Leaving the game lifts only the game reason; a manual pause stays put.
+    if (knowledgeCollector.enabled && knowledge.running) void knowledge.pauseCollect('game', false).catch(() => undefined)
     if (gameResourceTimer) clearInterval(gameResourceTimer)
     gameResourceTimer = null
     if (!quitting) {
@@ -1482,7 +1497,18 @@ function registerIpc(): void {
   })
   handle('knowledge:queue-status', event => { knowledgeOwner(event); return knowledge.queueStatus() })
   handle('knowledge:task-cancel', (event, target: TaskTarget) => { knowledgeOwner(event); return knowledge.cancelTask(target) })
-  handle('knowledge:task-retry', (event, target: TaskTarget) => { knowledgeOwner(event); return knowledge.retryTask(target) })
+  handle('knowledge:task-retry', async (event, target: TaskTarget) => {
+    knowledgeOwner(event)
+    // Retrying goes through the collector: only it knows whether a reading body is
+    // still in memory, and a body that is gone must become `needs_reread` instead
+    // of a task that can never finish.
+    if ('groupId' in (target ?? {})) {
+      const groupId = knowledgeId((target as { groupId?: string }).groupId, '任务 ID')
+      const retried = await knowledgeCollector.retry(groupId)
+      return { groupId, state: retried ? 'ready' : 'needs_reread' }
+    }
+    return knowledge.retryTask(target)
+  })
   handle('knowledge:task-invalidate', (event, target: TaskTarget, reason?: string) => {
     knowledgeOwner(event)
     return knowledge.invalidateTask(target, typeof reason === 'string' ? reason : 'user deleted')
@@ -1502,15 +1528,13 @@ function registerIpc(): void {
   handle('knowledge:exclude-list', event => { knowledgeOwner(event); return knowledge.listExclusions() })
   handle('knowledge:history-begin', (event, scopes: { notes: boolean; chat: boolean }) => {
     knowledgeOwner(event)
-    return knowledge.beginHistory(scopes ?? { notes: false, chat: false })
+    // The scan reads the stores itself; the renderer only picks the scopes.
+    if (!knowledgeCollector.enabled) throw Error('知识采集未开启')
+    return historyDriver.start({ notes: scopes?.notes !== false, chat: scopes?.chat !== false }).then(job => ({ job, resumed: false }))
   })
-  handle('knowledge:history-step', (event, input: Parameters<KnowledgeHost['stepHistory']>[0]) => {
-    knowledgeOwner(event)
-    return knowledge.stepHistory(input)
-  })
-  handle('knowledge:history-pause', (event, id: string) => { knowledgeOwner(event); return knowledge.pauseHistory(knowledgeId(id, '任务 ID')) })
-  handle('knowledge:history-resume', (event, id: string) => { knowledgeOwner(event); return knowledge.resumeHistory(knowledgeId(id, '任务 ID')) })
-  handle('knowledge:history-cancel', (event, id: string) => { knowledgeOwner(event); return knowledge.cancelHistory(knowledgeId(id, '任务 ID')) })
+  handle('knowledge:history-pause', (event, id: string) => { knowledgeOwner(event); return historyDriver.control(knowledgeId(id, '任务 ID'), 'pause') })
+  handle('knowledge:history-resume', (event, id: string) => { knowledgeOwner(event); return historyDriver.control(knowledgeId(id, '任务 ID'), 'resume') })
+  handle('knowledge:history-cancel', (event, id: string) => { knowledgeOwner(event); return historyDriver.control(knowledgeId(id, '任务 ID'), 'cancel') })
   handle('knowledge:history-status', (event, id: string) => { knowledgeOwner(event); return knowledge.historyStatus(knowledgeId(id, '任务 ID')) })
   handle('knowledge:history-latest', event => { knowledgeOwner(event); return knowledge.latestHistory() })
   let selectedBackup: string | null = null, backupWorking = false
@@ -1708,7 +1732,7 @@ function registerIpc(): void {
     const previous = store.get()
     const next = await store.update(patch)
     if (previous.memory.enabled !== next.memory.enabled || previous.memory.autoLearn !== next.memory.autoLearn) void memory.configure()
-    if (JSON.stringify(previous.knowledge) !== JSON.stringify(next.knowledge)) void knowledgeCollector.sync()
+    if (JSON.stringify(previous.knowledge) !== JSON.stringify(next.knowledge)) void knowledgeCollector.sync({ game: gameMode.snapshot().active })
     if (!next.tts.enabled) speech?.stop()
     setMainLanguage(next.uiLanguage)
     gameMode.configure(next.gameMode)
@@ -2483,8 +2507,11 @@ async function bootstrap(): Promise<void> {
     if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('recording:changed')
   })
   const settings = await store.load()
-  // Only mirrors the switches; nothing spawns and nothing is scanned.
-  void knowledgeCollector.sync()
+  // Mirrors the switches only while the feature is on: with the default off
+  // nothing spawns, no database is created and no scan is resumed. The game flag
+  // is corrected here too, so a stale pause cannot outlive a crash.
+  void knowledgeCollector.sync({ game: gameMode.snapshot().active })
+  if (knowledgeCollector.enabled) void historyDriver.resume()
   // Chromium's network stack is the only transport that reads the OS proxy/PAC,
   // so the mode is pushed in before any window exists and before any request.
   setEgressLog(log)

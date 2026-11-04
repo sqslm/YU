@@ -86,7 +86,10 @@ impl Helper {
         // src/shared/knowledge.ts types ready.schema as { knowledge, profile }.
         assert_eq!(
             ready["schema"],
-            serde_json::json!({ "knowledge": 2, "profile": 1 }),
+            serde_json::json!({
+                "knowledge": yu_knowledge::store::KNOWLEDGE_SCHEMA,
+                "profile": yu_knowledge::store::PROFILE_SCHEMA,
+            }),
             "ready schema: {ready}"
         );
         helper

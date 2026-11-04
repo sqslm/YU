@@ -682,12 +682,13 @@ export class AssistantSession {
       this.deps.log('[assistant] request failed')
     } finally {
       if (task.state === 'running') task.state = controller.signal.aborted ? 'cancelled' : turn.state === 'done' ? 'completed' : 'failed'
-      if (task.state === 'completed' && materials.length) {
+      // A temporary turn was never stored, so nothing may quote it either — the
+      // check looks at the final result, including a turn that became temporary
+      // while it was being answered.
+      if (task.state === 'completed' && materials.length && !turn.memoryTemporary) {
         try {
           this.deps.onReading?.({
-            originRef: `ask:${task.id}`,
-            groupKey: `ask:${task.id}`,
-            title: turn.question.slice(0, 40),
+            threadId: `ask:${task.id}`,
             scope: '浮动提问',
             request: turn.question,
             materials,
