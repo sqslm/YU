@@ -28,6 +28,8 @@ mod address;
 mod folder;
 #[path = "ocr.rs"]
 mod ocr;
+#[path = "recent.rs"]
+mod recent;
 
 struct Runtime;
 impl Runtime {
@@ -88,6 +90,10 @@ pub fn run(request: &Value) -> Result<Value, Box<dyn Error>> {
         Some("explorer-folder") => {
             let _runtime = Runtime::initialize()?;
             folder::explorer_folder(request)
+        }
+        Some("recent-files") => {
+            let _runtime = Runtime::initialize()?;
+            recent::recent_files(request)
         }
         Some("disk-space") => disk_space(),
         Some("system-volume") => system_volume(request),
