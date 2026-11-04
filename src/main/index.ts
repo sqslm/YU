@@ -174,6 +174,19 @@ let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
 /** Whether the notes page is playing or holding a recording; keeps the pill alive. */
 let noteAudioPlaying = false
+let noteAudioTimer:ReturnType<typeof setTimeout>|undefined
+// The page owns playback and may finish without reporting "ended" (a tool can
+// start it while the notes page is not mounted), so the flag also expires on
+// the remaining duration instead of pinning the pill window resident forever.
+function trackNoteAudioPlayback(state:{state:string;positionMs?:number;durationMs?:number;rate?:number}):void{
+  noteAudioPlaying=state.state==='playing'||state.state==='paused'
+  if(noteAudioTimer)clearTimeout(noteAudioTimer)
+  noteAudioTimer=undefined
+  if(state.state!=='playing')return
+  const rate=state.rate&&state.rate>0?state.rate:1
+  const remaining=Math.max(0,(state.durationMs??0)-(state.positionMs??0))/rate+1500
+  noteAudioTimer=setTimeout(()=>{noteAudioPlaying=false;noteAudioTimer=undefined},remaining)
+}
 let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
@@ -202,7 +215,7 @@ let tray: ReturnType<typeof createTray> | null = null
 let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || Boolean(wakeSetupMode) || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
-const noteAudio=new NoteAudioPlayer(barSink,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,state=>{noteAudioPlaying=state.state==='playing'||state.state==='paused'})
+const noteAudio=new NoteAudioPlayer(barSink,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,trackNoteAudioPlayback)
 let selectionPreview:{target:import('./selection-editor').SelectionTarget;text:string;at:number}|null=null
 function pausePlaybackForRecording(): void {
   void speech?.pause().catch(error => log(`speech pause: ${String(error)}`))
