@@ -293,6 +293,9 @@ pnpm benchmark:memory-graph  # graph maths: baseline TS / copy-free TS / Rust ba
 pnpm benchmark:wake          # wake host: enumeration, first ready, idle CPU and private memory (PowerShell vs Rust)
 pnpm benchmark:speech        # local speech host: enumeration, start-to-started, activity memory and CPU (PowerShell vs Rust)
 pnpm benchmark:models         # existing local model; isolated SDK/inference/recall/PCM measurements
+pnpm benchmark:browser-url    # browser address read: owned UIA fixture, PowerShell vs Rust field by field
+pnpm benchmark:explorer-folder # explorer folder read: owned window, PowerShell vs Rust
+pnpm benchmark:recent-files    # recent files read: read-only Recent directory, PowerShell vs Rust
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
 # dictation, Ask + retrieval, multimodal)

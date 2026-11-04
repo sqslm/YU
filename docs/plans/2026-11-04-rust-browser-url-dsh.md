@@ -74,7 +74,7 @@
       真实 Edge 的地址栏是 ToolBar（`EdgeToolbarView`）下的 `Edit`，名称“地址和搜索栏”，进程未列入任何白名单，两侧输出逐字一致；ComboBox 形式地址栏、重复值/歧义/覆盖场景未在真实 provider 上构造（见第 7 节）。
 - [x] 反向：Document 内伪地址 Edit、密码、不可见、无 toolbar、父链不能到根、深度上界、多 Document URL；证明 Rust 和旧 PS 的输出字段及值一致。
       受控页里放了 `input#address value="https://inside.example.com/not-the-address"`，两侧都未把它当成结果；本机 Edge 不向 UIA 暴露网页正文，故“伪地址 Edit 出现在 UIA 树里”这一步只能由单测覆盖。无 toolbar/父链/深度/多 Document 同属单测覆盖，未在真实 provider 上复现。
-- [ ] 文件 URL：本轮临时文件的中文/空格/转义路径、文件不存在、UNC 能否实际验证；未搭建真实 UNC 时明确未测，不操作用户共享文件。
+- [ ] 文件 URL：本轮临时文件的中文/空格/转义路径、文件不存在、UNC 能否实际验证；未搭建真实 UNC 时明确未测，不操作用户共享文件。（续做后：`file-url` fixture 已两侧对照 `path`，但仅 ASCII 路径；中文/空格/转义与 UNC 仍属未测，故不勾选。）
       未做：本轮受控页路径是 ASCII 的短名形式，中文/空格/百分号与 UNC 未构造；`path` 分支的转换逻辑只有单测覆盖（`local_path` 与 `[uri]::LocalPath` 对齐）。
 - [x] 原窗口错 PID、错标题、关闭；读取过程中改变/销毁目标的读后校验。需要受控延迟时仅在 fixture/provider 中提供，不在生产 helper 增加测试开关。
       基准的 `stale-title-rejected`（标题追加 ` (stale)`）与 `missing-window-rejected`（handle+4）两侧都非零退出并报 `Original window has changed or closed`；读后校验与读前同函数，无测试开关。
@@ -153,3 +153,17 @@
 - 指标只归因 `browser-url` 辅助进程，不代表整个应用降幅。
 
 **清理与提交。** 临时探针（合成窗口/WinForms/notepad 树 dump、标题观察、隔离与变体试验）已在提交前删除；`native/*/target` 既有缓存保留。实现与证据提交为 `4c401f3`，本文档随其后的文档提交进入仓库，均未 push。
+
+## 勾选更正（阶段 13 续做 R1–R5 之后）
+
+本文件原先的勾选在续做前超出了当时的证据。按 `plans/2026-11-04-rust-browser-url-correctness-dsh.md` 的重测结果，逐条更正如下；原始措辞保留，只补充实际依据。
+
+| 原条目 | 阶段 13 当时的实际情况 | 现在的依据 |
+| --- | --- | --- |
+| `metadataOnly`/`expectedPath` 分支语义（第 3 节） | `expectedPath` 未实现，Rust 会静默忽略该字段 | 已实现提前拒绝（`Original Office document is no longer available`），并有反例单测；`metadataOnly` 仍属 `current-content`，本轮未构造 fixture |
+| 「UIA 调用失败要保留错误出口」（第 3 节） | 枚举/属性失败被 `.ok()` 与 `unwrap_or_default()` 吞成空集或 false | 全部改为 `Result` 上抛，`UIA address read failed at {stage} (HRESULT …)`；同时实测出「进程内 provider 异常被 UIA core 吞掉」的边界，已写进续做计划 §3 |
+| Document 覆盖、父链 40 层、去重与歧义（第 3 节） | 只有 5 个地址模块单测，Edge 上碰巧覆盖到一部分 | 自有 fixture 的 17 个 mode 两侧逐字段一致（`document-overrides`、`deep-40/41`、`duplicate`、`ambiguous`、`document-ambiguous`、`pseudo-address`、`documents-20/21`、`edits-100/101`） |
+| 读后窗口校验（第 4 节） | 只有一次「改标题」的偶然观察，未做受控验证 | 读中 `retitle` 与读中 `destroy` 两个生产路径用例 |
+| abort/超时/父退出（第 4 节） | abort 与超时只对 mock 子进程验证 | 真实 `windowsNative` 生产路径：阻塞中 abort（`Cancelled`）、真实 15s 超时（实测 16.9s）、40 次请求 ≥30 个 PID 全部退出 |
+| 「≥30 次启停」（第 4 节） | 未做 | 已做，见上一行 |
+| 文件 URL 的 `path` 产出（第 4 节，原未勾选） | 未验证 | 已由 `file-url` fixture 两侧对照；**中文/空格/转义的真实文件、UNC 可达性仍未测**，故仍不勾选 |

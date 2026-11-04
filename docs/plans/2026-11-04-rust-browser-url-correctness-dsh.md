@@ -1,6 +1,6 @@
 # 阶段 13 续做：浏览器地址读取的正确性修复与验收补齐
 
-**状态：待 DSH 实施。** 基线：`f31e17a`（实现 `4c401f3`）。工作目录：`E:/code/deepseek-harness/rea/typeless`。
+**状态：已实施（DSH）。** 基线：`f31e17a`（实现 `4c401f3`）。工作目录：`E:/code/deepseek-harness/rea/typeless`。
 
 **目标：** 修复阶段 13 的文件 URL 兼容、UIA 错误处理和验收缺口，让已经接入的 `browser-url` 有可复现的正确性证据。本轮只续做同一功能，不迁移其他 Windows 操作。
 
@@ -92,3 +92,73 @@ Codex 从源码原样提取该函数、用 rustc 编译后，与本机旧 .NET �
 7. 清理本轮自有临时窗口、探针与副本；不删除用户数据、旧证据或既有 Rust 缓存，不重启用户应用。检查 diff，只暂存本轮文件并自动 Conventional Commit，不 push、不打包、不发布。计划新文件被忽略时只对确切路径 `git add -f`。
 
 完成开发与文档后汇报提交编号、R1–R5 对照、最终二进制哈希、实际验证与限制。等待 Codex 复核后再定下一轮，不自行开始其他功能的 Rust 迁移。
+
+## 3. 实施结果
+
+**状态：已实施。** 只改了地址模块、直接相关的测试/fixture/基准与文档，未迁移其他 Windows 操作，未新增依赖或服务。
+
+### R1 文件 URL 与输入契约
+
+- `local_path()` 改为 `PathCreateFromUrlW`（`Win32::UI::Shell`，已有 feature）：先按 `file:` 前缀（大小写不敏感）早退，丢弃 `#fragment`，转换后把 `?query` 拼回（API 会丢 query，`.NET [uri]::LocalPath` 会保留），存在性由 `Path::exists()` 改为 `Path::is_file()`（目录不再算命中）。
+- `expectedPath` 非空时在第一次原窗口校验之后、任何 UIA 读取之前抛 `Original Office document is no longer available`，与 `resources/current-content.ps1:85` 一致。
+- 读后的原窗口校验移到候选解析与文件检查之后、输出之前。
+- 单测 `local_path_matches_the_dotnet_conversion` 覆盖 Codex 给出的四行（`%20`、`?x=1#part`、大写 scheme、UNC）加中文路径与仅 fragment；`local_path_keeps_only_files_as_local_paths` 用临时文件/目录区分 `is_file`。
+
+### R2 UIA 错误不再被吞
+
+- 属性、枚举、父链、取值全部返回 `Result`；失败统一为 `UIA address read failed at {stage} (HRESULT 0x…)` 并非零退出；只有 `UIA_E_NOTSUPPORTED` 视为「控件没有 ValuePattern」，其余错误一律上抛。密码、可见性、祖先控制类型读不出来时不再继续读 Value。
+- **本轮实测的边界（结论与派单假设不同，按证据记录）**：进程内 provider 抛出的异常会被 UIA core 吞掉，客户端只看到「没有候选」。`-Mode provider-error` 的 `injected` 事件证明故障确实在 provider 侧触发（`GetPropertyValue(ControlType)`、`Navigate(FirstChild)`），但 PS 基线与 Rust 都返回 `{title, truncated:false}`、exit 0；`root-fragment` 与 `host-hwnd` 两档探针得到同样结论。因此「provider 抛异常」不能作为「两侧都必须失败」的证据，也不是任一实现吞错。
+- 客户端可见的故障只有两类，均已断言：**窗口消失**（`destroy` 后两侧 exit 1，同一句 `Original window has changed or closed`）与**读取永久挂死**（`-FailStage unresponsive`，两侧都必须由客户端的 15s 预算终止，实测 15.03s / 15.01s）。
+
+### R3 受控 provider 与生产路径
+
+- 新建自有 fixture `tests/yu-v2/fixtures/uia-provider.ps1` + `uia-provider.cs`：非激活窗口（`WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW` + `SW_SHOWNOACTIVATE`，自检 `uia-foreground.ps1` 断言前后 `GetForegroundWindow` 不变）、自带 `System.Windows.Automation.Provider`，`-Mode` 19 个（含 `file-url`、`provider-error`、`-FailStage`），stdin 命令 `describe/retitle/block/unblock/destroy/quit`，另有 `uia-tree.ps1` 读树与 `scripts/uia-fixture-check.mjs` 自检。目标窗口线程常驻泵消息、stdin 独立线程解析命令——这是「阻塞期间仍能改标题/销毁」的前提。
+- `scripts/compare-browser-url.mjs`：同一 fixture 同时驱动 PS 基线（`resources/windows-tools.ps1`）与 Rust helper，逐 mode 比对 `title`/`url`/`path`/`truncated`，17 个 mode 全部一致（`address-edit`/`address-combo`/`document-overrides`/`duplicate`/`deep-40`/`documents-20`/`documents-21`/`edits-100`/`edits-101` 给出地址，`no-candidate`/`ambiguous`/`document-ambiguous`/`pseudo-address`/`password`/`offscreen`/`no-toolbar`/`deep-41` 不给地址）。
+- `src/main/windows-native-browser-url.test.ts`：走真实 `windowsNative` 生产路径（只 mock `electron`），7 个用例全通过——正常读取、标题/PID 失配、读中改标题、读中销毁、阻塞中 abort（`Cancelled`，helper 退出，下一次请求独立）、真实 15s 超时（实测 16.9s 含启动开销，helper 退出）、40 次连续请求中用常驻 PowerShell 每 5ms 流式上报 PID，观测到 ≥30 个不同 helper PID 全部已退出，并以 `process.kill(pid, 0)` 做活进程正对照。
+- 键序差异（PS Hashtable 按名排序、serde_json 保持自身顺序）不影响下游 `JSON.parse`；两侧比较一律按规范化键序。
+
+### R4 基准
+
+`scripts/benchmark-browser-url.mjs` 整体重写：不再启动/移动/强杀 Edge，改用自有 fixture；请求预算与生产一致的 15s；job 记账（`CreateJobObjectW`/`OpenProcess`/`AssignProcessToJobObject`/两次 `QueryInformationJobObject` 的返回值都检查，句柄用 `CloseHandle` 关闭）；每条样本校验完整 body（`title`/`url` 或 `path`/`truncated`），失败样本进 `invalid[]` 附原因而不剔除；fixture 初始化失败、spawn/stdin 错误、超时、清理失败都计入；收尾只对自己的 fixture 与 helper 发 `quit`/`kill`，不按进程名强杀。
+
+**证据**：`tests/yu-v2/evidence/rust-browser-url-correctness-20261104.json`（`generatedAt` 2026-11-04T01:13:05.793Z，`binary` 430080 B / `303e2772cba7d29330489f8f3436ad3c5cfcb52f075fedcb26940d4665dc0a0e`），80 runs（PS 40 / Rust 40，invalid 0），14 项 checks 全 PASS，`decision = latency`。
+
+| 指标 | PowerShell | Rust | 变化 |
+| --- | --- | --- | --- |
+| 整次请求 P50 / P95 | 1121.75 / 1183.06 ms | 43.56 / 59.10 ms | −96.12% / −95.00%（P95 −1123.96 ms） |
+| CPU（job user+kernel）P50 / P95 | 1953.13 / 2046.88 ms | 31.25 / 46.88 ms | −98.40% / −97.71% |
+| 私有内存峰值 P50 / P95 | 76492 / 76756 KB | 2488 / 2560 KB | −96.75% / −96.66% |
+
+`checks` 覆盖：`https-address-identical`、`https-address-expected`、`https-address-accepted-by-consumer`（`browserAddress` 的 http(s)/无凭据/≤2000 过滤）、`file-address-yields-path`、`no-candidate-returns-no-address`、`provider-errors-equal-and-invisible`（含 `injected` 证明）、`destroyed-window-rejected`、`unresponsive-read-hits-budget`、`every-sample-valid`、`samples-per-side`、`measurement-comparable`、`job-accounting`、`cleanup-complete`、`performance-threshold`。
+
+### R5 文档
+
+- 本文件补实施结果；阶段 13 计划的超额勾选按实际证据更正（见该文件「勾选更正」）；`docs/rust-refactor-plan.md` 的阶段 13 段落补续做结果与新证据；README 的 helper 职责描述不变（本轮未改操作集合）。
+
+### 验证命令与退出码
+
+一次连续执行（日志 `/tmp/verify-correctness2.log`），逐条记录：
+
+| 命令 | 退出码 | 关键输出 |
+| --- | --- | --- |
+| `cd native/windows && cargo fmt -- --check` | 0 | — |
+| `cargo clippy --locked --offline --all-targets -- -D warnings` | 0 | — |
+| `cargo test --locked --offline` | 0 | 18 单测通过（含 5 个地址模块用例） |
+| `pnpm exec vitest run src/main/windows-native.test.ts src/main/windows-native-transport.test.ts src/main/windows-native-process.test.ts src/main/windows-native-browser-url.test.ts src/main/current-content.test.ts src/main/tools/windows.test.ts` | 0 | 6 文件 / 156 用例通过（新增 7 个生产路径用例） |
+| `pnpm typecheck` | 0 | — |
+| `pnpm test:native` | 0 | 39 项通过 |
+| `pnpm build` | 0 | built in 14.5s |
+| `pnpm test` | 0 | 238 文件 / 3542 用例通过，3 文件 8 用例跳过 |
+| `node scripts/benchmark-browser-url.mjs --samples 20` | 0 | 80/80 有效、14 项 checks 全 PASS、`decision=latency` |
+
+收尾校验：`native/bin/yu-windows.exe` 430080 B / `303e2772cba7d29330489f8f3436ad3c5cfcb52f075fedcb26940d4665dc0a0e`，与证据 `binary{}` 一致。
+
+本轮实测暴露并已修复的两处自身缺陷（如实记录，首次链的值不作结论）：`windows-native-browser-url.test.ts` 把采样进程强转成 `ChildProcessWithoutNullStreams` 触发 `TS2352`（`pnpm typecheck` 退出码 2），改为三路 `pipe` 后由类型自然收敛；`benchmark-browser-url.mjs` 末尾残留旧变量 `failures` 触发 `ReferenceError`（基准退出码 1，但 14 项 checks 已全部 PASS），改为读 `cleanupFailures` 后复跑得 0。
+
+### 未测项
+
+- 中文/空格/百分号转义路径的真实文件存在性校验：`file-url` fixture 用 `%TEMP%` 下的 ASCII 路径；转换规则（含中文、`%20`、UNC 字符串形态）由单测覆盖，**UNC 共享的可达性未测**。
+- 真实浏览器（Edge/Chrome/Firefox）与密码管理器：本轮全部改用自有 provider，未读用户会话；阶段 13 的 Edge 对照保留为旧测量。
+- 锁屏、远程桌面、UAC 提示态下的读取。
+- 跨进程 provider（真实浏览器崩溃）导致的 UIA 失败：fixture 的故障注入只能证明进程内异常被 core 吞掉，未覆盖跨进程。
+- `metadataOnly` 分支：本轮未构造对应 fixture（`get_current_page` 只用 `browser-url`，`metadataOnly` 属于 `current-content`）。

@@ -322,6 +322,9 @@ pnpm benchmark:memory-graph  # 关系图计算对照（基线 TS/零拷贝+每�
 pnpm benchmark:wake          # 常驻唤醒宿主：枚举/首次 ready/待命 CPU 与私有内存（PowerShell 与 Rust 监听对照）
 pnpm benchmark:speech        # 本地朗读宿主：音色枚举、启动至 started、活动期内存与 CPU（PowerShell 与 Rust 对照）
 pnpm benchmark:models         # 复用本地记忆模型，隔离测量 SDK/推理/召回与音频预处理
+pnpm benchmark:browser-url    # 浏览器地址读取：自有 UIA fixture、PowerShell 与 Rust 逐字段对照
+pnpm benchmark:explorer-folder # 资源管理器文件夹读取：自有窗口、PS 与 Rust 对照
+pnpm benchmark:recent-files    # 最近文件读取：只读 Recent 目录、PS 与 Rust 对照
 
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）
 pnpm mock
