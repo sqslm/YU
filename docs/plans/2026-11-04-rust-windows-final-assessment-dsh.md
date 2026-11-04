@@ -128,5 +128,5 @@ otepad.exe` → 展开后的路径；`REG_DWORD` 4660 → `Ok(None)`（`ERROR_UN
 
 ### 7.6 清理与提交
 
-清理：`/tmp/pscmp.ps1`、`/tmp/verify17.sh`、`/tmp/v17.log`、`/tmp/s17-*` 等本轮临时脚本与输出；基准脚本收尾只结束自己启动的 fixture/目录，不按进程名强杀。提交见下一节回执（实现+证据、文档两个提交，未 push）。
+清理：`/tmp/pscmp.ps1`、上一轮的 `/tmp/verify17.sh` 与 `/tmp/v17.log`、本轮的 `/tmp/verify17b.sh` 与 `/tmp/v17b.log`、`/tmp/s17-*` 等临时脚本与输出；基准脚本收尾只结束自己启动的 fixture/目录，不按进程名强杀。提交见下一节回执（实现+证据、文档两个提交，未 push）。
 
