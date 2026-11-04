@@ -255,7 +255,7 @@ insert: clipboard paste → SendInput Unicode fallback → UIA fallback, then re
 history.sqlite (SQLite search, with sources and pipeline markers)
 ```
 
-The Electron main process remains TypeScript. Keyboard hooks, UIA and the resident wake-word listener run in separate Rust executables with inherited JSON pipes and EOF cleanup. Local ASR and memory retain separate Electron utility processes. `yu-windows.exe` and `yu-speech.exe` start per request and exit after one operation or one utterance — window checks, disk queries, system volume, local OCR and browser address reading, or Windows local speech; they add no resident daemon and monitor owner death. All five live in `resources/native/`, outside ASAR, with a static CRT. Resource accounting includes the hotkey/UIA PIDs. Progress, evidence and remaining work are tracked in the [Rust refactor plan](docs/rust-refactor-plan.md).
+The Electron main process remains TypeScript. Keyboard hooks, UIA and the resident wake-word listener run in separate Rust executables with inherited JSON pipes and EOF cleanup. Local ASR and memory retain separate Electron utility processes. `yu-windows.exe` and `yu-speech.exe` start per request and exit after one operation or one utterance — window checks, disk queries, system volume, local OCR, browser address and Explorer folder reading, or Windows local speech; they add no resident daemon and monitor owner death. All five live in `resources/native/`, outside ASAR, with a static CRT. Resource accounting includes the hotkey/UIA PIDs. Progress, evidence and remaining work are tracked in the [Rust refactor plan](docs/rust-refactor-plan.md).
 
 Modules worth calling out:
 

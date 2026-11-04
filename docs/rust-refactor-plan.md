@@ -25,6 +25,7 @@
 | 11 | 本地 TTS 正确性与验收证据校正 | 已完成 `cd4925c`；helper 336896 B / `2bafa91e…` | [交付记录](plans/2026-11-04-rust-local-tts-correctness-dsh.md)：残留探测、采样时机、生产运行器覆盖、NUL 拒绝与 SAPI 失败出口已修，基准改按 close 收尾；校准后 `started` P95 1491→396ms、私有内存 −85%，真实声卡/热插拔未测 |
 | 12 | 本地 TTS 生命周期观测与验收口径对齐 | 已完成 `9c07ce7`；helper 源码未改，重建后 336896 B / `e5664328…` | [开发计划与结果](plans/2026-11-04-rust-speech-lifecycle-dsh.md)：生命周期 CPU 差分与朗读期峰值内存可复现采集；总计划/阶段计划/README 未测项措辞一致；证据落 `rust-speech-lifecycle-<日期>.json` |
 | 13 | 浏览器地址读取 | 已完成；392704 B / `52266cd4…` | [开发计划与结果](plans/2026-11-04-rust-browser-url-dsh.md)：`browser-url` 迁入一次性 Windows helper；原窗口、地址候选与权限边界一致，真实 Edge 对照 + 每侧 40 样本达标后接入 |
+| 14 | 资源管理器文件夹读取 | 已完成；396800 B / `aa9232e5…` | [开发计划与结果](plans/2026-11-04-rust-explorer-folder-dsh.md)：`explorer-folder` 迁入一次性 Windows helper；Shell 窗口绑定与原窗口校验一致，真实资源管理器对照 + 每侧 40 样本达标后接入 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -322,6 +323,22 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 **阶段 13 结果**：实现新增 `native/windows/src/address.rs`（文档/编辑框候选、ControlView 父链 40 层、ValuePattern、唯一值规则、`file://` 本地路径），`operations.rs` 增加 `browser-url` 分支，`Cargo.toml` 只补 `Win32_UI_Accessibility`、`Win32_System_Ole` 两个 feature，未新增依赖。TypeScript 侧只把 `browser-url` 加进 `src/main/windows-native.ts` 的 `nativeActions`，15s 预算、`--parent-pid`、取消与输出上限沿用原运行器。证据 `tests/yu-v2/evidence/rust-browser-url-20261104.json`（`generatedAt` 2026-11-03T23:48:31Z，`binary.sha256` `52266cd4…`），最终 `native/bin/yu-windows.exe` 392704 B / `52266cd4d331919dc969004128550e7446ccc2eb08b343647270d18f139d9616`（`cargo fmt` 后重新构建并复跑，哈希取最后一次构建之后）。验证：`cargo fmt -- --check`、`cargo clippy --locked --offline --all-targets -- -D warnings`、`cargo test --locked --offline`（9 单测）全部通过；五个 TypeScript 文件 149 用例通过；`pnpm typecheck`、`pnpm test:native` 39 项、`pnpm build`、`pnpm test` 237 文件 3535 用例全通过。
 
 **未测项（阶段 13 后）**：Chromium 网页正文的 UIA Document 元素在本机 Edge 上不出现（加 `--force-renderer-accessibility` 也不出现），因此“Document 唯一值覆盖地址栏”“网页内伪地址 Edit”“多 Document URL 歧义”三条只用逻辑单测覆盖，未在真实 provider 上复现；ComboBox 形式的地址栏、密码框与深度上界未在真实浏览器上构造。真实 Chrome/Firefox、UNC 网络路径、中文与空格路径的 `file://` 转换、UAC 提权窗口、锁屏与远程桌面均未测。fixture 依赖本机 Edge：普通 profile 窗口约 45 秒后会恢复用户会话并改写标题，故固定用 `--inprivate`，并在启动后按命令行校验窗口归属，失败即放弃而不操作其他窗口。
+
+## 阶段 14：资源管理器文件夹读取
+
+`read_current_content` 在资源管理器窗口上的 `explorer-folder` 原先每次启动 PowerShell 并加载 Shell COM，本轮迁到现有一次性 `yu-windows.exe`（新增 `native/windows/src/folder.rs`）。`current-content`、`recent-files`、应用枚举、激活与搜索未动，没有新增常驻进程、端口或可执行文件。详细规则、fixture 与交付要求见[阶段 14 计划](plans/2026-11-04-rust-explorer-folder-dsh.md)。
+
+- [x] 保留冻结 HWND/PID/标题的读前读后校验与“唯一且存在”的目录规则，TS 权限边界不变。
+      按 `resources/windows-tools.ps1:40-49` 逐条对照：Shell 窗口按 HWND 过滤后才取 `Document`，`Document.Folder`（扩展 Folder 对象）→ `Self` → `Path`，大小写不敏感去重，只有唯一且 `Directory::Exists` 才给值，否则 `null`；读前、读后各校验一次窗口。
+- [x] 真实资源管理器对照、非资源管理器窗口、失效窗口与父退出通过。
+      真实 `explorer.exe` 窗口（独立临时目录）两侧输出逐字一致；非 Shell 窗口两侧都返回 `{"folder":null}`；stale 标题与失效句柄两侧同报 `Original window has changed or closed`；父进程退出后 helper 3ms 内以 0 退出。
+- [x] 同机交错每侧至少 20 个有效样本；行为一致且延迟或可比内存收益达到计划门槛，才切换生产路由。
+      每侧 40 个有效样本（PS/Rust/Rust/PS 交错），9 项结构化 checks 全 PASS、退出码 0：整次请求 P50 985 → 39ms、P95 1015 → 44ms（−95.7%，−971ms）；CPU P50 1766 → 31ms（−98.2%）；私有内存 P50 67.6 → 1.7MB（−97.5%）。延迟与内存两项门槛都过，`decision = latency`，已把 `explorer-folder` 加入 `nativeActions`。
+- [x] DSH 自行更新已实现项、实际验证、证据、未测项与提交编号，完成文档和代码收尾。
+
+**阶段 14 结果**：实现新增 `native/windows/src/folder.rs`（Shell 窗口枚举、`IWebBrowser2` HWND 过滤、`Folder2.Self.Path`、去重与存在性判定，含 3 个单测）；`assert_original` 上移到 `operations.rs` 供 `address.rs` 与 `folder.rs` 共用，`window_check` 的“最小化即报错”规则未变；`Cargo.toml` 只补 `Win32_UI_Shell`，未新增依赖。TypeScript 侧只把 `explorer-folder` 加进 `src/main/windows-native.ts` 的 `nativeActions`，PowerShell 分支保留为基准对照与回滚参照。证据 `tests/yu-v2/evidence/rust-explorer-folder-20261104.json`（`generatedAt` 2026-11-04T00:04:26Z，`binary.sha256` `aa9232e5…`），最终 `native/bin/yu-windows.exe` 396800 B / `aa9232e554340e42d13e01f7e99e718f31415ec2a008e7222a2ce9c31f222010`。验证：`cargo fmt -- --check`、`cargo clippy --locked --offline --all-targets -- -D warnings`、`cargo test --locked --offline`（12 单测）、`node scripts/benchmark-explorer-folder.mjs --samples 20` 全部通过；五个 TypeScript 文件 149 用例通过；`pnpm typecheck`、`pnpm test:native`、`pnpm build`、`pnpm test` 237 文件 3535 用例全通过。阶段 13 的三处 P3（构建哈希因果、`address.rs` 行数、PS `browser-url` 分支保留说明）随本轮文档提交修正。
+
+**未测项（阶段 14 后）**：同一 HWND 绑定多个 Shell 文件夹（资源管理器多标签切换后再冻结）未构造；“唯一值”歧义只由单测覆盖。网络共享（UNC）路径、超过 260 字符的长路径、符号链接与 OneDrive 占位目录未测。窗口在请求中途被关闭（而非标题变化）只由失效句柄用例近似覆盖；UAC 提权窗口、锁屏与远程桌面未测。fixture 依赖本机 `explorer.exe`：基准自行打开唯一临时目录窗口并在结束后关闭，不触碰操作者已开的资源管理器窗口，但需要可用桌面会话。
 
 ## 后续阶段的推进规则
 

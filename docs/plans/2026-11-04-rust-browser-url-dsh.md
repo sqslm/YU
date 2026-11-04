@@ -112,7 +112,7 @@
 - [x] 最终实现执行 `pnpm typecheck`、`pnpm test:native`、`pnpm test`、`pnpm build`，按顺序记录退出码、实际测试数和失败详情；通过后不无目标重复全量验证。
       `pnpm typecheck` 0、`pnpm test:native` 0（39 项）、`pnpm build` 0（built in 13.93s）、`pnpm test` 0（237 文件 / 3535 用例通过，3 文件 / 8 用例跳过）。
 - [x] 所有会触发 `build-native` 的验证结束后，再计算最终 `yu-windows.exe` 大小/SHA-256，并核对证据确实测的是交付版本。若最后重建变动了资产，核实来源并修正或复测，不再重复阶段 12 的旧哈希回填。
-      验证链跑完后 `cargo fmt` 改动了源码 → 重新 `node scripts/build-native.mjs`（392704 B / `52266cd4…`）→ 再跑 20 轮基准使证据 `binary.sha256` 与交付版本一致；`build-native` 连跑两次哈希不变。
+      验证链跑完后 `cargo fmt` 改动了源码 → 重新 `node scripts/build-native.mjs`（392704 B / `52266cd4…`）→ 再跑 20 轮基准使证据 `binary.sha256` 与交付版本一致。`build-native` 第二次调用时 cargo 判定无改动、没有重新链接，所以哈希不变；PE 头里嵌了构建时刻（`TimeDateStamp` 与文件 mtime 同秒），一旦重链接（改源码、格式化、clean）哈希必变，因此窗口内哈希一律取最后一次真实构建之后的值。
 - [x] 在本文件勾选实际已完成项，补“实施结果”：实际代码范围、是否接入/依据、对照与性能原始证据、真实/替身测试、失败/未测项、清理情况与提交编号；未完成项保留未勾选并说明原因。
 - [x] 更新 `docs/rust-refactor-plan.md` 阶段 13 状态与结果。若接入，更新中英文 README 对 Windows helper 操作范围/基准命令的描述；PS 的 `current-content` 仍使用地址代码时不得误删相关脚本。
       `resources/current-content.ps1` 与 `resources/windows-tools.ps1` 未改动，`current-content` 仍走 PowerShell。
@@ -123,7 +123,7 @@
 
 ## 7. 实施结果
 
-**代码范围。** 新增 `native/windows/src/address.rs`（约 330 行，含 5 个单测）：`documents()` 取可见前 20 个 Document、`address_bar()` 在 Edit/ComboBox 前 100 个候选中按 ID/名称识别地址栏并要求 ControlView 父链 40 层内经过 ToolBar 且到达根窗口、`document_url()` 处理 `metadataOnly` 跳过与唯一值覆盖、`local_path()` 处理 `file://` 到本地路径（含 `%XX` 解码，文件存在才转 `path`）、`browser_url()` 负责读前读后校验并输出 `{title, truncated: false, url|path}`。`operations.rs` 增加 `browser-url` 分支并复用抽出的 `assert_original`；`Cargo.toml` 只补 `Win32_UI_Accessibility`、`Win32_System_Ole`，未新增或升级依赖。TS 侧 `src/main/windows-native.ts` 把 `browser-url` 加入 `nativeActions`，`src/main/windows-native-transport.test.ts` 相应调整路由断言。
+**代码范围。** 新增 `native/windows/src/address.rs`（379 行，含 5 个单测）：`documents()` 取可见前 20 个 Document、`address_bar()` 在 Edit/ComboBox 前 100 个候选中按 ID/名称识别地址栏并要求 ControlView 父链 40 层内经过 ToolBar 且到达根窗口、`document_url()` 处理 `metadataOnly` 跳过与唯一值覆盖、`local_path()` 处理 `file://` 到本地路径（含 `%XX` 解码，文件存在才转 `path`）、`browser_url()` 负责读前读后校验并输出 `{title, truncated: false, url|path}`。`operations.rs` 增加 `browser-url` 分支并复用抽出的 `assert_original`；`Cargo.toml` 只补 `Win32_UI_Accessibility`、`Win32_System_Ole`，未新增或升级依赖。TS 侧 `src/main/windows-native.ts` 把 `browser-url` 加入 `nativeActions`，`src/main/windows-native-transport.test.ts` 相应调整路由断言。PS 侧 `resources/current-content.ps1:129` 的 `browser-url` 分支保留，仅作为基准对照与回滚参照，生产不再路由到它。
 
 **接入依据。** 行为与 PS 逐字段一致（`title`、`url`、`truncated`），8 项 checks 全 PASS；延迟 P95 −94.4%（−1236ms）且私有内存 P50 −96.7%，达到第 5 节两项门槛，`decision = latency`。
 
