@@ -444,7 +444,8 @@ const thresholds = {
   },
   idleCpu: { metric: 'tray idle CPU per second over a comparable window', ...idleCpu },
   playbackFeature: {
-    metric: 'candidate playback probe reports pass=true for every case',
+    metric:
+      'candidate playback probe passed every case, covered every required scenario with a real-window case, and recorded the build identity',
     ...playback,
     met: playback.met === true
   },
@@ -473,7 +474,7 @@ const evidence = {
       'cpu: user+kernel delta over an explicit window with window length and cores, plus a controlled self-check',
       'latency: cold tree ready, cold pill ready, first open and reopen, kept apart',
       'isolation: the Run key read before and after, read-only, with the suppressed login-item writes counted',
-      'playback: the candidate renderer probe verdict, case by case'
+      'playback: the candidate renderer probe verdict, case by case, with the required scenarios, real-window classification, and build identity'
     ],
     excluded: ['no Vite dev server, no DevTools, no HMR', 'no user profile, no user microphone, no packaged installer', 'no EmptyWorkingSet or manual trimming', 'no forced GC', 'no repair or rewrite of the user Run key']
   },
