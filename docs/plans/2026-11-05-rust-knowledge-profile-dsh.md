@@ -311,6 +311,48 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 - `src/main/knowledge/host.test.ts`（真实管道 stub）：永不 `ready`、`ready` 晚于期限、停机时仍在等 `ready`、`null`/数组垃圾帧、EPIPE、重复子 ID、无父请求的模型调用、父超时 abort、旧代际迟到回包。
 
 
+### 第二次外部复核（2026-11-05，同一 thread，reportId `5e4cbb0a-b702-472c-9605-1bc0c14c02b9`）
+
+基线 HEAD `0597ca4bb486d280d33aff745a977abfcf897cf2`，工作区干净。外部已核实并保留本轮通过的项：6 文件 / 56 项 Vitest；`cargo test --locked` 14 lib + 11 process；完整阶段 `git diff --check`；交付 release 哈希 `42673ca7…` 与报告一致；真实 Rust 锁等待期间取消 `source.save`/`source.invalidate` 均回滚；来源 200000 字符边界；50 张上限卡片实测按字节分为 40+10 项（约 1,024,049 / 256,105 字节）且无重复无遗漏；Rust 夹具确复用生产 `Link`/协议；懒启动 `status` 正确；换代隔离通过（旧 `m1` 答案在新进程 `m1` 仍等待时释放，只有新答案结算）。
+
+仍有下列两项帧边界缺口，因此本阶段暂未验收：
+
+| 探针 | 外部实测输出 | 原因 |
+| --- | --- | --- |
+| `host_utf8_frame_limit`（对端对 `getCard` 回 750000 个 `知`） | `{"frameBytes":2250101,"limitBytes":2097152,"result":{"accepted":true,"bodyChars":750000}}` | `host.ts` 的 stdout 处理用 `buffer.length`/`line.length`，那是 JS 字符数而不是 UTF-8 字节数，中文大帧绕过 2 MiB 上限 |
+| `malformed_error_result`（`{"v":1,"type":"result","id":<在途>,"ok":false}`） | `{"uncaughtExceptions":["Cannot read properties of undefined (reading 'code')"],"parentSettled":false}` | `onLine` 先 `pending.delete` + `clearTimeout`，再读取 `frame.error.code`，抛 TypeError 后该请求再也不会被结算 |
+
+### 第二次复核修复（2026-11-05 第三轮）
+
+- F1 字节帧：`host.ts` 去掉 `stdout.setEncoding('utf8')`，数据通路保留 `Buffer`，按 `NEWLINE (0x0a)` 切帧；每帧用 `line.length`（字节）与 `KNOWLEDGE_LIMITS.frame`（2 MiB）比较，只有完整帧才 `toString('utf8')` 解码，因此跨 chunk 的多字节字符与 emoji 仍完整；多帧同 chunk 逐帧判定，不累加成单帧；循环结束后若残留无换行缓冲已超限，立即回收该进程。超限一律 `discard()` 并拒绝等待者，错误文案独立为 `the knowledge helper wrote an oversized frame`，不冒充业务结果。
+- F2 外壳校验：新增 `isRecord`/`readReady`/`readFailure`，`onLine` 先校验再动状态——`type` 必须是字符串、`v` 必须为 1、`ready` 必须带 `{knowledge,profile}` 对象与布尔 `fts5`/`trigram`（不合格不解除握手，直接回收）、`changed` 要求字符串 `scope`、`result` 要求字符串 `id` 与布尔 `ok`、失败分支在触碰 `pending` **之前**校验 `error.code`/`error.message` 均为字符串、`model.request` 要求 `id`/`parentId` 字符串且 `messages` 是数组。命中在途请求的损坏帧走新私有方法 `settle()` + `protocolBreak()`：结算该请求为有界 `internal` 协议错误再回收进程；未知/孤儿帧保持原有安全忽略；业务正文结构仍由 Rust 校验，TS 不重建业务 schema。
+- `native/knowledge/src/protocol.rs` `ready_frame` 的 `schema` 改为对象 `{"knowledge": KNOWLEDGE_SCHEMA, "profile": PROFILE_SCHEMA}`，与 `src/shared/knowledge.ts` 的 `ready.schema: { knowledge, profile }` 一致；协议版本仍为 1，方法表未变。真实helper与夹具均断言该对象结构（`tests/process.rs` 的 `Helper::start`、`loop.test.ts` 的 `status()`）。
+
+
+实现提交：`c385db7`（`fix(knowledge): enforce byte framing and validate response envelopes`，5 个文件：`src/main/knowledge/host.ts`、`host.test.ts`、`loop.test.ts`、`native/knowledge/src/protocol.rs`、`native/knowledge/tests/process.rs`）；本文档记录随后的 docs 提交。状态：阶段 1 修复已提交，待外部 Codex 复核，阶段 2～7 未开始。
+### 第二次复核修复后验证（2026-11-05 第三轮，实际命令与退出码）
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 | 无差异 |
+| `cargo test --locked` | 0 | 14 lib + 11 process 全通过 |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 | 无告警 |
+| `cargo clippy --locked --all-targets --features fixture -- -D warnings` | 0 | 夹具 bin 一并 lint |
+| `pnpm exec vitest run src/main/knowledge/ src/preload/index.test.ts src/main/ipc-trust.test.ts` | 0 | 6 文件 / 61 项（host 28、loop 6、integration 8、model 8、preload 3、ipc-trust 8） |
+| `pnpm typecheck` | 0 | node + web 两个工程 |
+| `pnpm test:native` | 0 | 7 个 crate |
+| `pnpm test` | 0 | 256 文件通过 / 3 跳过（259），3731 项通过 / 8 跳过（3739），98.55 s |
+| `pnpm build` | 0 | 渲染端 `settings-*.js` 4,687.76 kB，helper 字节未变 |
+
+本轮新增的真实管道回归（不使用 mock 替代边界）：
+
+- `src/main/knowledge/host.test.ts`：`rejects a frame whose UTF-8 bytes exceed the transport limit`（750000 个 `知`，JS 长度 < 2 MiB、UTF-8 2,250,101 字节）、`rejects a frame that never ends with a newline once it passes the limit`（900000 个 `知` 且无换行）、`accepts several complete frames that arrive in one chunk`（`changed` + `result` 同一次写入）、`rejects a failure result that carries no usable error`（缺 `error`、`error: null`、`error` 字段类型错误三种）、`does not release the handshake for an unusable ready frame`（旧数字形态 `schema: 1`）；整套用例安装了 `uncaughtException` 观察器并断言为空，拒绝后断言 `running === false` 且下一次请求由新进程恢复正常。
+- `native/knowledge/tests/process.rs` 的 `Helper::start` 断言真实 helper 的 `ready.schema` 等于 `{"knowledge":1,"profile":1}`；`src/main/knowledge/loop.test.ts` 在真实夹具闭环里额外断言运行中 `status().schema` 为同一对象。
+
+构件与哈希（区分用途）：交付 release `native/bin/yu-knowledge.exe` 2,318,848 字节 / `68ff70bef5d565b411a574612da2215586cab40a773860da0d1c0188ff9112e5`；`cargo test` 使用的 debug `native/knowledge/target/debug/yu-knowledge.exe` 3,407,360 字节 / `d35d2cf1dd8f9520…`；夹具 `native/knowledge/target/debug/yu-knowledge-fixture.exe` 2,412,544 字节 / `afb137a62955913c…`（debug 夹具，不交付）。MSVC 链接器会写入 PE 时间戳，同一源码重复构建的哈希不同，故哈希只标识这一次构建的文件。
+
+未测/限制：`KnowledgeHost` 的字节上限只对单帧生效，未对超长连接的持续压力做基准；中文 1～2 字检索仍走 `LIKE` 分支（trigram 最小 3 字符）；真实付费模型调用未纳入（夹具与注入完成器替代）。
+
 ### 资源
 
 - 保留：`native/bin/yu-knowledge.exe`（2.3 MB，交付产物）、`native/knowledge/Cargo.lock`、`licenses/` 新增 28 个文本、`native/knowledge/target/`（697 MB，可重建构建缓存，被 `.gitignore` 的 `/native/**/target/` 忽略，与其他 crate 的 target 并存保留）。
