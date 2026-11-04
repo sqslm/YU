@@ -99,7 +99,8 @@ Codex 从源码原样提取该函数、用 rustc 编译后，与本机旧 .NET �
 
 ### R1 文件 URL 与输入契约
 
-- `local_path()` 改为 `PathCreateFromUrlW`（`Win32::UI::Shell`，已有 feature）：先按 `file:` 前缀（大小写不敏感）早退，丢弃 `#fragment`，转换后把 `?query` 拼回（API 会丢 query，`.NET [uri]::LocalPath` 会保留），存在性由 `Path::exists()` 改为 `Path::is_file()`（目录不再算命中）。
+- `local_path()` 先按 `file:` 前缀（大小写不敏感）早退，丢弃 `#fragment`，存在性由 `Path::exists()` 改为 `Path::is_file()`（目录不再算命中）。
+- **后续修正（阶段 13 短续做）**：本轮先用 `PathCreateFromUrlW` + 拼回 `?query`，但实测该 API 按 ANSI 解码百分号转义（`%E4%B8%AD` 变成乱码），与 `.NET [uri]::LocalPath` 不一致，因此改为手写 UTF-8 百分号解码并在 `?query` 前后保持一致；对照数据见[读取边界计划](2026-11-04-rust-browser-url-read-boundary-dsh.md) §6。
 - `expectedPath` 非空时在第一次原窗口校验之后、任何 UIA 读取之前抛 `Original Office document is no longer available`，与 `resources/current-content.ps1:85` 一致。
 - 读后的原窗口校验移到候选解析与文件检查之后、输出之前。
 - 单测 `local_path_matches_the_dotnet_conversion` 覆盖 Codex 给出的四行（`%20`、`?x=1#part`、大写 scheme、UNC）加中文路径与仅 fragment；`local_path_keeps_only_files_as_local_paths` 用临时文件/目录区分 `is_file`。
@@ -137,7 +138,7 @@ Codex 从源码原样提取该函数、用 rustc 编译后，与本机旧 .NET �
 
 ### 验证命令与退出码
 
-一次连续执行（日志 `/tmp/verify-correctness2.log`），逐条记录：
+一次连续执行（日志 `/tmp/verify-correctness2.log`，下称首跑）；除此之外只对基准做过一次**无日志复跑**，归档证据出自该复跑，两处差异在下注中写清。
 
 | 命令 | 退出码 | 关键输出 |
 | --- | --- | --- |
@@ -149,11 +150,11 @@ Codex 从源码原样提取该函数、用 rustc 编译后，与本机旧 .NET �
 | `pnpm test:native` | 0 | 39 项通过 |
 | `pnpm build` | 0 | built in 14.5s |
 | `pnpm test` | 0 | 238 文件 / 3542 用例通过，3 文件 8 用例跳过 |
-| `node scripts/benchmark-browser-url.mjs --samples 20` | 0 | 80/80 有效、14 项 checks 全 PASS、`decision=latency` |
+| `node scripts/benchmark-browser-url.mjs --samples 20` | 首跑 1，复跑 0 | 首跑：14 项 checks 全 PASS 后 `ReferenceError: failures is not defined`（脚本末行旧变量），故退出码 1；修复后**无日志复跑**：80/80 有效、14 项 PASS、`decision=latency`，归档证据出自该次（`generatedAt 2026-11-04T01:13:05.793Z`，晚于日志的最后一行） |
 
 收尾校验：`native/bin/yu-windows.exe` 430080 B / `303e2772cba7d29330489f8f3436ad3c5cfcb52f075fedcb26940d4665dc0a0e`，与证据 `binary{}` 一致。
 
-本轮实测暴露并已修复的两处自身缺陷（如实记录，首次链的值不作结论）：`windows-native-browser-url.test.ts` 把采样进程强转成 `ChildProcessWithoutNullStreams` 触发 `TS2352`（`pnpm typecheck` 退出码 2），改为三路 `pipe` 后由类型自然收敛；`benchmark-browser-url.mjs` 末尾残留旧变量 `failures` 触发 `ReferenceError`（基准退出码 1，但 14 项 checks 已全部 PASS），改为读 `cleanupFailures` 后复跑得 0。
+本轮实测暴露并已修复的两处自身缺陷（如实记录，首次链的值不作结论）：`windows-native-browser-url.test.ts` 把采样进程强转成 `ChildProcessWithoutNullStreams` 触发 `TS2352`（`pnpm typecheck` 退出码 2），改为三路 `pipe` 后由类型自然收敛；`benchmark-browser-url.mjs` 末尾残留旧变量 `failures` 触发 `ReferenceError`（基准首跑退出码 1，但 14 项 checks 已全部 PASS），改为读 `cleanupFailures` 后复跑得 0。修复后只重跑了基准一次，没有为该次留日志，归档证据即出自该次；上表中除基准外的行都来自首跑日志。
 
 ### 未测项
 

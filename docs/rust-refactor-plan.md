@@ -24,9 +24,9 @@
 | 10 | Windows 本地 TTS 宿主 | 已接入 `4ad5cdd`；验收缺口由阶段 11 补齐 | [交付记录](plans/2026-11-04-rust-local-tts-dsh.md)：按需 Rust SAPI helper 已接入；原始报告的残留检测、计时与文本边界缺口已在阶段 11 修复并复测；真实声卡听辨未测 |
 | 11 | 本地 TTS 正确性与验收证据校正 | 已完成 `cd4925c`；helper 336896 B / `2bafa91e…` | [交付记录](plans/2026-11-04-rust-local-tts-correctness-dsh.md)：残留探测、采样时机、生产运行器覆盖、NUL 拒绝与 SAPI 失败出口已修，基准改按 close 收尾；校准后 `started` P95 1491→396ms、私有内存 −85%，真实声卡/热插拔未测 |
 | 12 | 本地 TTS 生命周期观测与验收口径对齐 | 已完成 `9c07ce7`；helper 源码未改，重建后 336896 B / `e5664328…` | [开发计划与结果](plans/2026-11-04-rust-speech-lifecycle-dsh.md)：生命周期 CPU 差分与朗读期峰值内存可复现采集；总计划/阶段计划/README 未测项措辞一致；证据落 `rust-speech-lifecycle-<日期>.json` |
-| 13 | 浏览器地址读取 | 已完成（含正确性续做）；430080 B / `303e2772…` | [开发计划与结果](plans/2026-11-04-rust-browser-url-dsh.md)、[正确性计划与结果](plans/2026-11-04-rust-browser-url-correctness-dsh.md)：`browser-url` 迁入一次性 Windows helper；原窗口、地址候选与权限边界一致，自有 UIA fixture 逐 mode 对照 + 每侧 40 样本达标后接入 |
+| 13 | 浏览器地址读取 | 已完成（含正确性续做与读取边界续做）；430592 B / `11994ce3…` | [开发计划与结果](plans/2026-11-04-rust-browser-url-dsh.md)、[正确性计划与结果](plans/2026-11-04-rust-browser-url-correctness-dsh.md)、[读取边界计划与结果](plans/2026-11-04-rust-browser-url-read-boundary-dsh.md)：`browser-url` 迁入一次性 Windows helper；原窗口、地址候选与权限边界一致，自有 UIA fixture 逐 mode 对照 + 每侧 40 样本达标后接入 |
 | 14 | 资源管理器文件夹读取 | 已完成；396800 B / `aa9232e5…` | [开发计划与结果](plans/2026-11-04-rust-explorer-folder-dsh.md)：`explorer-folder` 迁入一次性 Windows helper；Shell 窗口绑定与原窗口校验一致，真实资源管理器对照 + 每侧 40 样本达标后接入 |
-| 15 | 最近文件读取 | 已完成；418816 B / `f822b819…` | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
+| 15 | 最近文件读取 | 已完成；418816 B / `f822b819…`（阶段 15 交付时值；阶段 13 的两次续做重链接同一产物后为 430080 B / `303e2772…` → 后续读取边界续做再重建） | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -325,7 +325,11 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 **阶段 13 正确性续做（R1–R5）**：按[正确性计划](plans/2026-11-04-rust-browser-url-correctness-dsh.md)补齐文件 URL 转换（`PathCreateFromUrlW` + query 拼回 + `is_file` + `expectedPath` 提前拒绝）、UIA 错误全程上抛（`UIA address read failed at {stage} (HRESULT …)`）、自有 UIA provider fixture（19 mode，非激活、不碰用户会话）与生产路径 7 用例（读中改标题/销毁/abort/真实 15s 超时/40 次启停 ≥30 PID）。新证据 `tests/yu-v2/evidence/rust-browser-url-correctness-20261104.json`（`generatedAt` 2026-11-04T01:13:05.793Z，`binary.sha256` `303e2772…`，80 runs 全有效、14 项 checks 全 PASS、`decision = latency`）：整次请求 P95 1183.06 → 59.10 ms（−95.00%，−1123.96 ms）；CPU P50 1953.13 → 31.25 ms（−98.40%）；私有内存 P50 76492 → 2488 KB（−96.75%）。最终 `native/bin/yu-windows.exe` 430080 B / `303e2772cba7d29330489f8f3436ad3c5cfcb52f075fedcb26940d4665dc0a0e`。旧证据 `rust-browser-url-20261104.json` 保留为旧测量。
 
+**阶段 13 读取边界续做（B1–B2）**：按[读取边界计划](plans/2026-11-04-rust-browser-url-read-boundary-dsh.md)修正候选资格判定（先判 `toolbar && chrome` 再读 Value；此前 Rust 元组求值顺序会让被排除的伪地址 Edit 也被读一次，fixture 实测 PS 0 次 / Rust 1 次），`local_path` 改为 UTF-8 百分号解码（`PathCreateFromUrlW` 按 ANSI 解码，`%E4%B8%AD` 会变乱码，与 `[uri]::LocalPath` 不符），并补齐无 ValuePattern、真实中文/空格/百分号文件名、`metadataOnly` 读取边界与「完整请求后父进程退出」四类验收。fixture 增至 23 个 mode、新增 `value-read` / `value-blocked` 事件；生产路径测试 13 用例（连续请求 60 次、观测 ≥30 个不同 PID）。新证据 `tests/yu-v2/evidence/rust-browser-url-read-boundary-20261104.json`（`generatedAt` 2026-11-04T01:36:54.298Z，80 runs 全有效、17 项 checks 全 PASS、`decision = latency`）：整次请求 P50 1158.66 → 45.00 ms、P95 1272.69 → 50.57 ms（−96.0%）；CPU P50 2000 → 31.25 ms（−98.4%）；私有内存 P50 76552 → 2464 KB（−96.8%）。最终 `native/bin/yu-windows.exe` 430592 B / `11994ce36ac6f3ed111dde68746c369486378d6270f32d030853c1a38887f49d`。
+
 **未测项（阶段 13 后）**：Chromium 网页正文的 UIA Document 元素在本机 Edge 上不出现（加 `--force-renderer-accessibility` 也不出现），因此“Document 唯一值覆盖地址栏”“网页内伪地址 Edit”“多 Document URL 歧义”三条只用逻辑单测覆盖，未在真实 provider 上复现；ComboBox 形式的地址栏、密码框与深度上界未在真实浏览器上构造。真实 Chrome/Firefox、UNC 网络路径、中文与空格路径的 `file://` 转换、UAC 提权窗口、锁屏与远程桌面均未测。fixture 依赖本机 Edge：普通 profile 窗口约 45 秒后会恢复用户会话并改写标题，故固定用 `--inprivate`，并在启动后按命令行校验窗口归属，失败即放弃而不操作其他窗口。
+
+**未测项（读取边界续做后）**：客户端侧 UIA/HRESULT 失败注入仍不可得——进程内 provider 抛异常会被 UIA core 吞掉，两侧都表现为空结果 + exit 0；本轮只用单测钉住失败文案与 `HRESULT` 格式，没有「真实 UIA 失败时 helper 非零退出且不输出 JSON」的端到端用例。`metadataOnly` 只在本 fixture 上验 Document Value 的读取次数与覆盖，未接真实 Office/浏览器文档。
 
 ## 阶段 14：资源管理器文件夹读取
 
