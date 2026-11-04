@@ -35,8 +35,8 @@
 | 17 | 应用枚举收口与剩余 Windows 桥接评估 | 已完成；466944 B / `0a1680be…` | [开发计划与结果](plans/2026-11-04-rust-windows-final-assessment-dsh.md)：注册表四档真实端点测试、文化比较失败显式出口；只读测量剩余三个 PS action 并给出「迁移收束」建议，本阶段不新增其生产路由 |
 | 18 | Electron 整应用资源基线与首项优化 | DSH 已交付，外部复核待修 | [开发计划与结果](plans/2026-11-04-electron-whole-app-resources-dsh.md)：初测托盘空闲私有驻留 96.4 → 58.5 MiB；外部复核确认冷启动播放及 CPU/延迟计量缺口，由阶段 19 收口，旧证据保留 |
 | 19 | 窗口回收正确性与整应用计量修复 | 已交付 `880923c`，外部复核待修 | [开发计划与结果](plans/2026-11-04-electron-resource-correctness-dsh.md)：交接 WIP 已入库，就绪与计量已修；隔离样本支持 −36.75% / −33.0 MiB，取消、并发与销毁缺口由阶段 20 收口 |
-| 20 | 播放取消、并发与窗口销毁收口 | 已交付 `392d8bd`，外部复核待修 | [计划与结果](plans/2026-11-04-playback-cancellation-correctness-dsh.md)：播放替换、销毁与崩溃已有修复及真实窗口证据；隔离样本 54.2 MiB；非 play 控制取消与比较判定由阶段 21 收口 |
-| 21 | 未完成的播放控制与证据绑定修复 | 待 DSH 实施 | [修复计划](plans/2026-11-05-playback-control-and-evidence-binding-dsh.md)：停止/替换撤销相关控制、probe 对应被测候选、脚本身份差异必须阻止采纳；不新增性能优化 |
+| 20 | 播放取消、并发与窗口销毁收口 | 已交付 `392d8bd`，复核两处缺口由阶段 21 收口 | [计划与结果](plans/2026-11-04-playback-cancellation-correctness-dsh.md)：播放替换、销毁与崩溃已有修复及真实窗口证据；隔离样本 54.2 MiB；非 play 控制取消与比较判定由阶段 21 收口 |
+| 21 | 未完成的播放控制与证据绑定修复 | 已交付，见下方阶段 21 | [计划与结果](plans/2026-11-05-playback-control-and-evidence-binding-dsh.md)：stop/替换撤销等待中的控制、probe 身份绑定被测候选、脚本身份差异阻止采纳；不新增性能优化 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -429,7 +429,7 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 **外部复核结论**：阶段 19 的隔离样本支持窗口回收收益（−36.75% / −33.0 MiB），冷启动首条命令已有就绪门禁。但生产方法反例仍出现 stop→迟到 play、反序就绪使旧播放覆盖新播放、旧 reply 释放当前忙态，以及销毁时清理异常使就绪等待悬空；播放证据门槛还会接受零用例的 pass=true。故保留该资源测量为阶段 19 的历史证据，功能验收不关单，由[阶段 20](plans/2026-11-04-playback-cancellation-correctness-dsh.md)修复并核对最终产物，不将 `decision=adopted` 等同于全部目标完成。
 
-## 阶段 20：播放取消、并发与窗口销毁收口（已交付，外部复核待修）
+## 阶段 20：播放取消、并发与窗口销毁收口（已交付，复核缺口由阶段 21 修复）
 
 阶段 19 的外部复核确认：Pill 按需创建/回收的收益成立，但播放控制在「停止、替换、窗口销毁」三类边界上会丢命令、反序覆盖或永久占用忙态，且播放证据门槛能接受零用例的 `pass=true`。本阶段只收口这些功能缺口，并复查资源收益是否仍在。
 
@@ -443,6 +443,20 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 **未测项（阶段 20 后）**：页面内 `process.crash()` 不可用（sandbox + 无 Node），崩溃改由 `forcefullyCrashRenderer()` 真实触发，未用 destroy 冒充；真实 TTS/云语音未连；8 s 预算耗尽路径与不可信 sender 拒绝未构造；平台仅 Windows x64；speech 音量/倍速边界未覆盖；主进程崩溃退役只有探针同等接线验证，无独立集成测试。沿用阶段 19 的其余未测项（真实麦克风与设备切换、托盘菜单/全局热键、唤醒词与 ASR、锁屏/RDP、多显示器 DPI、小时级碎片）。
 
 **外部复核结论**：原始输入重新比较仍为 adopted，七文件 67 项定向测试通过，15 例探针记录通过，entry/preload/bar.html 哈希与磁盘一致，54.2 MiB 的隔离样本保留。仍复现 stop 返回 idle 后等待中的 resume 未撤销、ready 后继续投递；仅替换 probe 的合法 entry 哈希或 candidate 的测量脚本哈希，比较器也仍 adopted（后者甚至同时列出规则不同的拒绝理由）。这不证明原始样本不真实，但控制契约与自动判定尚不能关单，由[阶段 21](plans/2026-11-05-playback-control-and-evidence-binding-dsh.md)修复。
+
+## 阶段 21：未完成的播放控制与证据绑定修复（已完成）
+
+阶段 20 的外部复核在真实生产方法上复现三处缺口：stop 只取消 play、等待中的 resume/seek/rate 仍在 ready 后投递；播放证据只校验哈希格式，不与被测候选对照；脚本身份不同只加说明、不阻止采纳。本阶段只修这三项，保留 Pill 按需创建/回收与既有资源收益，不新增优化项。
+
+- [x] R1 停止/替换撤销等待中的控制（`49fb092`，`src/main/note-audio.ts` 221 → 251 行）：`Pending` 改记 `action`，`stop` 使代次前进并取消所有更早的 pending、清空 owner，`pause` 只取消尚未投递的命令，`deliver()` 在发送前复核代次并以 `Playback superseded` 结束；`status` 明确不取消任何命令。旧实现上 6 条新回归真失败（`signals[0].aborted` 为 false、`note-audio:command {action:"resume"}` 被投递、onState 收 `['idle','playing']`），与外部 `{"waitAborted":false,"commandsAfterReady":["resume"]}` 一致；修复后 22/22，真实窗口新例 `r1-stop-cancels-waiting-control`（492 ms）显示 resume 于 0 ms 以 `Playback cancelled` 失败、ready 后只投递 `[status]`。
+- [x] R2 播放证据绑定被测候选（`0130719`）：`playbackGate` 的期望值只取 candidate `meta.build`，缺身份、非 64 hex、逐值不符分别拒绝并点名两个哈希；必要场景增至 6 项（新增 `r1-stop-cancels-waiting-control`）；`preload`/`bar.html` 未被采样记录时如实标注为限制，不倒填。只改 probe entry 为 64×`f` → 比较退出 1、`not-adopted`，原因写明 `ffffffffffff` 与被测 `6b98f392…` 不符。
+- [x] R3 可比性进入最终判定（`0130719`）：`comparable = 场景一致 && 主机一致 && 构建身份已知 && 非同一构建 && 脚本身份已知 && 脚本身份相同`，`adopted = comparable && 九项门槛全部 met`；证据新增 `comparability` 段（两侧 entry/script 身份与各布尔）。只改 candidate 脚本身份 → 退出 1、`comparable:false`、`not-adopted`；真实输入保持 `comparable:true`、`adopted`。
+- [x] 验证：`pnpm typecheck` 0；定向 8 文件 91 例（外部基点 7 文件 67 例，本轮增 `bar-retire` 与新增比较回归）；`pnpm test` 251 文件 3675 例通过（8 跳过）0；`pnpm build` 0；最终产物探针 16/16 全真实窗口、无跳过；`compare` 0。
+- [x] 资源复查（脚本 `5645f616…` 未改，基线 `0cb30d9` 原样本按同口径复用）：托盘空闲 60 s 私有驻留 p50 **89.9 → 54.3 MiB（−39.53% / −35.5 MiB）**，renderer 常驻仍为 0；稳定 4 s 簇 103.0 → 64.1 MiB；20 次开关趋势 −11.12%、开关后静止 97.7 → 66.7 MiB（renderer 0）；首开 p50/p95 601.208/638.689 → 582.457/733.803 ms（20/20、0 失败，+95.114 ms，距 100 ms 门槛仅 4.9 ms），同轮复测 p95 678.969 ms（+40.280）；重开 p95 318.015 ms；冷启动树就绪 759.964 ms、不建 Pill；空闲 CPU 30.2 → 3.906 ms/s（复测 0.26）；Pill 3 次回收 / 3 take / 3 renderer；Run 键 8 项前后一致、抑制标记 27。证据 `tests/yu-v2/evidence/electron-playback-binding-20261105.json`，九项必要条件全部 `met`、`comparable:true`、`decision=adopted`。
+
+**未测项（阶段 21 后）**：真实应用里的随记播放 / 云 TTS 点击全链路、真实 TTS 音频的停止与倍速语义、8 s/20 s 预算耗尽、不可信 sender 拒绝仍未构造；页面内 `process.crash()` 不可用（改用 `forcefullyCrashRenderer()`）；`status` 回执不被取消（代次门槛保证它不改忙态）；首开延迟两轮 p95 相差 55 ms，环境波动明显，单轮不足以断言无回退；开关后静止树相对新建空闲 +22.7%（基线 +8.72%）作为观察项保留。沿用阶段 19/20 的其余未测项（真实麦克风与设备切换、托盘菜单/热键、唤醒词与 ASR、锁屏/RDP、多显示器 DPI、小时级碎片）。
+
+**结论**：三项缺口均已修复并有正反向证据，播放与控制路径的真实窗口用例 16/16；资源收益与阶段 20 同量级（−39.53% / −35.5 MiB），采纳判定现在同时要求可比性与身份绑定。首开 P95 余量偏薄与两轮 55 ms 的波动已如实记录，未调整门槛、未以较好一轮替代较差一轮。
 
 ## 后续阶段的推进规则
 

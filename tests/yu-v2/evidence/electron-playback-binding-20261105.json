@@ -1,0 +1,3150 @@
+{
+  "kind": "electron-whole-app-resources",
+  "version": 2,
+  "generatedAt": "2026-11-04T16:28:13.180Z",
+  "scope": {
+    "included": [
+      "whole application tree: main, gpu, utility, renderer, crashpad, zygote, conhost and the Rust helpers",
+      "memory: private resident, working set and private commit per PID",
+      "cpu: user+kernel delta over an explicit window with window length and cores, plus a controlled self-check",
+      "latency: cold tree ready, cold pill ready, first open and reopen, kept apart",
+      "isolation: the Run key read before and after, read-only, with the suppressed login-item writes counted",
+      "playback: the candidate renderer probe verdict, case by case, with the required scenarios, real-window classification, and build identity"
+    ],
+    "excluded": [
+      "no Vite dev server, no DevTools, no HMR",
+      "no user profile, no user microphone, no packaged installer",
+      "no EmptyWorkingSet or manual trimming",
+      "no forced GC",
+      "no repair or rewrite of the user Run key"
+    ]
+  },
+  "inputs": {
+    "baseline": "E:/code/deepseek-harness/work/t19-run/baseline.json",
+    "candidate": "E:/code/deepseek-harness/work/t21-run/candidate.json",
+    "playback": "E:/code/deepseek-harness/work/t21-probe-final/result.json"
+  },
+  "environment": {
+    "host": {
+      "baseline": {
+        "os": "win32 10.0.26300",
+        "arch": "x64",
+        "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "cores": 16,
+        "totalMemMb": 31801
+      },
+      "candidate": {
+        "os": "win32 10.0.26300",
+        "arch": "x64",
+        "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "cores": 16,
+        "totalMemMb": 31801
+      }
+    },
+    "node": {
+      "baseline": "v24.22.2",
+      "candidate": "v24.22.2"
+    },
+    "electron": {
+      "baseline": {
+        "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\node_modules\\electron\\dist\\electron.exe",
+        "relative": "node_modules/electron/dist/electron.exe",
+        "version": "42.11.18",
+        "sha256": "d91b374ab299b88d406e7e2b6865445a3d795d141a8a36cf2c05b4ec02d0ca4d"
+      },
+      "candidate": {
+        "path": "E:\\code\\deepseek-harness\\rea\\typeless\\node_modules\\electron\\dist\\electron.exe",
+        "relative": "node_modules/electron/dist/electron.exe",
+        "version": "42.11.18",
+        "sha256": "d91b374ab299b88d406e7e2b6865445a3d795d141a8a36cf2c05b4ec02d0ca4d"
+      }
+    },
+    "appRoot": {
+      "baseline": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9",
+      "candidate": "E:\\code\\deepseek-harness\\rea\\typeless"
+    }
+  },
+  "build": {
+    "baseline": {
+      "entry": "out/main/index.js",
+      "entrySha256": "5d5fecb17a630ff240f3a8a9a9a0200c339ca2e2a2e11dfeb01ce92cfa01e0b4",
+      "wrapperSha256": "dfcbfc3a1055de71e5843f98d6830a924c7bbc342eedca75737389617861d0ec",
+      "script": "scripts/benchmark-electron-app.mjs",
+      "scriptSha256": "5645f616de2525e5a0a45e1bb6ba77df18ae837325d12c02e4dbea9dcf0d08ff",
+      "rev": null,
+      "dirty": null,
+      "gitError": "fatal: not a git repository (or any of the parent directories): .git",
+      "source": "0cb30d9",
+      "assets": [
+        {
+          "what": "compiled main entry",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\main\\index.js",
+          "exists": true,
+          "relative": "out/main/index.js"
+        },
+        {
+          "what": "renderer build",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\renderer\\bar.html",
+          "exists": true,
+          "relative": "out/renderer/bar.html"
+        },
+        {
+          "what": "tray icon beside the entry (app.getAppPath() is out/main)",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\main\\resources\\tray\\dark.ico",
+          "exists": true,
+          "relative": "out/main/resources/tray/dark.ico"
+        },
+        {
+          "what": "native helpers beside the entry",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\main\\native\\bin",
+          "exists": true,
+          "relative": "out/main/native/bin"
+        }
+      ]
+    },
+    "candidate": {
+      "entry": "out/main/index.js",
+      "entrySha256": "6b98f39256d8cc36b00a15ec1c4f97ac946d98d138470c7f11997172fef255b4",
+      "wrapperSha256": "dfcbfc3a1055de71e5843f98d6830a924c7bbc342eedca75737389617861d0ec",
+      "script": "scripts/benchmark-electron-app.mjs",
+      "scriptSha256": "5645f616de2525e5a0a45e1bb6ba77df18ae837325d12c02e4dbea9dcf0d08ff",
+      "rev": "84fc62f056d67614c474d24f3064ffda71c498a3",
+      "dirty": true,
+      "source": "HEAD",
+      "assets": [
+        {
+          "what": "compiled main entry",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\main\\index.js",
+          "exists": true,
+          "relative": "out/main/index.js"
+        },
+        {
+          "what": "renderer build",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\renderer\\bar.html",
+          "exists": true,
+          "relative": "out/renderer/bar.html"
+        },
+        {
+          "what": "tray icon beside the entry (app.getAppPath() is out/main)",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\main\\resources\\tray\\dark.ico",
+          "exists": true,
+          "relative": "out/main/resources/tray/dark.ico"
+        },
+        {
+          "what": "native helpers beside the entry",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\main\\native\\bin",
+          "exists": true,
+          "relative": "out/main/native/bin"
+        }
+      ]
+    }
+  },
+  "comparable": true,
+  "comparability": {
+    "metric": "both runs name the same benchmark script and two different builds, with the same scenario parameters on the same machine shape",
+    "met": true,
+    "scenariosMatch": true,
+    "sameHost": true,
+    "buildIdentityKnown": true,
+    "sameBuild": false,
+    "scriptIdentityKnown": true,
+    "sameScript": true,
+    "identities": {
+      "baseline": {
+        "entrySha256": "5d5fecb17a630ff240f3a8a9a9a0200c339ca2e2a2e11dfeb01ce92cfa01e0b4",
+        "scriptSha256": "5645f616de2525e5a0a45e1bb6ba77df18ae837325d12c02e4dbea9dcf0d08ff"
+      },
+      "candidate": {
+        "entrySha256": "6b98f39256d8cc36b00a15ec1c4f97ac946d98d138470c7f11997172fef255b4",
+        "scriptSha256": "5645f616de2525e5a0a45e1bb6ba77df18ae837325d12c02e4dbea9dcf0d08ff"
+      }
+    }
+  },
+  "measurement": {
+    "baseline": {
+      "memory": "K32GetProcessMemoryInfo PROCESS_MEMORY_COUNTERS_EX2 per PID; unavailable reported, never zero",
+      "cpu": "GetProcessTimes user+kernel delta; FILETIME ticks converted once (ticks / 10_000 → ms)",
+      "cpuSelfCheck": {
+        "windowMs": 1008.831,
+        "cores": 16,
+        "expectedMs": 1008.831,
+        "measuredMs": 968.75,
+        "ratio": 0.96,
+        "pass": true,
+        "skipped": false,
+        "note": "coarse self-check: one busy thread versus wall clock, ±35% tolerance"
+      },
+      "timing": {
+        "source": "toolhelp32+enumwindows",
+        "pollMs": {
+          "tree": 20,
+          "hub": 20,
+          "cpuSample": 250,
+          "treeStable": 200
+        },
+        "coldClock": "performance.now()",
+        "wmiCalls": 143,
+        "powerShellInsideWindows": false,
+        "roleClassification": "CommandLine via WMI, outside timing windows only",
+        "resolution": "native snapshot ~9 ms plus a 20 ms sleep, so hub polling resolves to roughly 30 ms"
+      },
+      "scenarios": {
+        "openSamples": 20,
+        "idleRuns": 3,
+        "idleMs": 60000,
+        "toggles": 20,
+        "settleMs": 4000,
+        "coldPillWaitMs": 8000,
+        "lifecycleIdleMs": 40000
+      }
+    },
+    "candidate": {
+      "memory": "K32GetProcessMemoryInfo PROCESS_MEMORY_COUNTERS_EX2 per PID; unavailable reported, never zero",
+      "cpu": "GetProcessTimes user+kernel delta; FILETIME ticks converted once (ticks / 10_000 → ms)",
+      "cpuSelfCheck": {
+        "windowMs": 1015.236,
+        "cores": 16,
+        "expectedMs": 1015.236,
+        "measuredMs": 1000,
+        "ratio": 0.985,
+        "pass": true,
+        "skipped": false,
+        "note": "coarse self-check: one busy thread versus wall clock, ±35% tolerance"
+      },
+      "timing": {
+        "source": "toolhelp32+enumwindows",
+        "pollMs": {
+          "tree": 20,
+          "hub": 20,
+          "cpuSample": 250,
+          "treeStable": 200
+        },
+        "coldClock": "performance.now()",
+        "wmiCalls": 143,
+        "powerShellInsideWindows": false,
+        "roleClassification": "CommandLine via WMI, outside timing windows only",
+        "resolution": "native snapshot ~9 ms plus a 20 ms sleep, so hub polling resolves to roughly 30 ms"
+      },
+      "scenarios": {
+        "openSamples": 20,
+        "idleRuns": 3,
+        "idleMs": 60000,
+        "toggles": 20,
+        "settleMs": 4000,
+        "coldPillWaitMs": 8000,
+        "lifecycleIdleMs": 40000
+      }
+    }
+  },
+  "attribution": {
+    "hypothesis": "a hidden bar renderer was created on every launch and never released while the app rested in the tray",
+    "change": "the bar window is created on demand and destroyed after 30 s of being hidden and idle",
+    "files": [
+      "src/main/bar-retire.ts",
+      "src/main/index.ts",
+      "src/main/note-audio.ts"
+    ]
+  },
+  "baseline": {
+    "idle": {
+      "phase": "idle-60s",
+      "count": 3,
+      "summary": {
+        "count": 3,
+        "min": 93466624,
+        "p50": 94232576,
+        "p95": 97697792,
+        "max": 97697792
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 44371968,
+          "workingSetBytes": 128872448,
+          "committedBytes": 92532736
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 9158656,
+          "workingSetBytes": 64000000,
+          "committedBytes": 16601088
+        },
+        "utility": {
+          "count": 2,
+          "privateResidentBytes": 15511552,
+          "workingSetBytes": 149213184,
+          "committedBytes": 28069888
+        },
+        "renderer": {
+          "count": 1,
+          "privateResidentBytes": 23756800,
+          "workingSetBytes": 91770880,
+          "committedBytes": 35594240
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1433600,
+          "workingSetBytes": 13500416,
+          "committedBytes": 2170880
+        }
+      },
+      "last": {
+        "phase": "idle-60s",
+        "at": "2026-11-04T13:57:12.661Z",
+        "processes": [
+          {
+            "pid": 13944,
+            "ppid": 7360,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 44371968,
+            "workingSetBytes": 128872448,
+            "committedBytes": 92532736
+          },
+          {
+            "pid": 43980,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 9158656,
+            "workingSetBytes": 64000000,
+            "committedBytes": 16601088
+          },
+          {
+            "pid": 50512,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7159808,
+            "workingSetBytes": 55930880,
+            "committedBytes": 12451840
+          },
+          {
+            "pid": 35568,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "renderer",
+            "privateResidentBytes": 23756800,
+            "workingSetBytes": 91770880,
+            "committedBytes": 35594240
+          },
+          {
+            "pid": 18696,
+            "ppid": 13944,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 593920,
+            "workingSetBytes": 5537792,
+            "committedBytes": 950272
+          },
+          {
+            "pid": 12216,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 8351744,
+            "workingSetBytes": 93282304,
+            "committedBytes": 15618048
+          },
+          {
+            "pid": 47968,
+            "ppid": 18696,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 839680,
+            "workingSetBytes": 7962624,
+            "committedBytes": 1220608
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 94232576,
+          "workingSetBytes": 447356928,
+          "committedBytes": 174968832
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 44371968,
+            "workingSetBytes": 128872448,
+            "committedBytes": 92532736
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 9158656,
+            "workingSetBytes": 64000000,
+            "committedBytes": 16601088
+          },
+          "utility": {
+            "count": 2,
+            "privateResidentBytes": 15511552,
+            "workingSetBytes": 149213184,
+            "committedBytes": 28069888
+          },
+          "renderer": {
+            "count": 1,
+            "privateResidentBytes": 23756800,
+            "workingSetBytes": 91770880,
+            "committedBytes": 35594240
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1433600,
+            "workingSetBytes": 13500416,
+            "committedBytes": 2170880
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "settled": {
+      "phase": "settled-4s",
+      "count": 20,
+      "summary": {
+        "count": 20,
+        "min": 105496576,
+        "p50": 108011520,
+        "p95": 109883392,
+        "max": 111968256
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 55406592,
+          "workingSetBytes": 139632640,
+          "committedBytes": 103841792
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 9228288,
+          "workingSetBytes": 63934464,
+          "committedBytes": 16723968
+        },
+        "utility": {
+          "count": 2,
+          "privateResidentBytes": 15753216,
+          "workingSetBytes": 149372928,
+          "committedBytes": 28606464
+        },
+        "renderer": {
+          "count": 1,
+          "privateResidentBytes": 26845184,
+          "workingSetBytes": 94916608,
+          "committedBytes": 40075264
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1499136,
+          "workingSetBytes": 13565952,
+          "committedBytes": 2289664
+        }
+      },
+      "last": {
+        "phase": "settled-4s",
+        "at": "2026-11-04T13:53:44.954Z",
+        "processes": [
+          {
+            "pid": 11188,
+            "ppid": 7360,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 55418880,
+            "workingSetBytes": 139649024,
+            "committedBytes": 103800832
+          },
+          {
+            "pid": 3624,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 9203712,
+            "workingSetBytes": 63934464,
+            "committedBytes": 16719872
+          },
+          {
+            "pid": 54956,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7483392,
+            "workingSetBytes": 56172544,
+            "committedBytes": 12857344
+          },
+          {
+            "pid": 56128,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "renderer",
+            "privateResidentBytes": 26943488,
+            "workingSetBytes": 95002624,
+            "committedBytes": 41320448
+          },
+          {
+            "pid": 43256,
+            "ppid": 11188,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 638976,
+            "workingSetBytes": 5582848,
+            "committedBytes": 1036288
+          },
+          {
+            "pid": 51212,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 8445952,
+            "workingSetBytes": 93396992,
+            "committedBytes": 15863808
+          },
+          {
+            "pid": 33764,
+            "ppid": 43256,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 864256,
+            "workingSetBytes": 7987200,
+            "committedBytes": 1257472
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 108998656,
+          "workingSetBytes": 461725696,
+          "committedBytes": 192856064
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 55418880,
+            "workingSetBytes": 139649024,
+            "committedBytes": 103800832
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 9203712,
+            "workingSetBytes": 63934464,
+            "committedBytes": 16719872
+          },
+          "utility": {
+            "count": 2,
+            "privateResidentBytes": 15929344,
+            "workingSetBytes": 149569536,
+            "committedBytes": 28721152
+          },
+          "renderer": {
+            "count": 1,
+            "privateResidentBytes": 26943488,
+            "workingSetBytes": 95002624,
+            "committedBytes": 41320448
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1503232,
+            "workingSetBytes": 13570048,
+            "committedBytes": 2293760
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "groups": {
+      "main": {
+        "count": 1,
+        "privateResidentBytes": 44371968,
+        "workingSetBytes": 128872448,
+        "committedBytes": 92532736
+      },
+      "gpu": {
+        "count": 1,
+        "privateResidentBytes": 9158656,
+        "workingSetBytes": 64000000,
+        "committedBytes": 16601088
+      },
+      "utility": {
+        "count": 2,
+        "privateResidentBytes": 15511552,
+        "workingSetBytes": 149213184,
+        "committedBytes": 28069888
+      },
+      "renderer": {
+        "count": 1,
+        "privateResidentBytes": 23756800,
+        "workingSetBytes": 91770880,
+        "committedBytes": 35594240
+      },
+      "other": {
+        "count": 2,
+        "privateResidentBytes": 1433600,
+        "workingSetBytes": 13500416,
+        "committedBytes": 2170880
+      }
+    },
+    "idleSamples": [],
+    "settledSamples": [],
+    "openSamples": [
+      601.208,
+      627.245,
+      628.515,
+      578.384,
+      584.013,
+      551.205,
+      566.366,
+      633.275,
+      562.472,
+      578.403,
+      571.903,
+      638.689,
+      599.181,
+      609.967,
+      599.33,
+      605.313,
+      635.209,
+      619.491,
+      604.586,
+      663.732
+    ],
+    "openFailed": [],
+    "cold": [
+      {
+        "valid": true,
+        "spawnedAt": "2026-11-04T13:50:55.657Z",
+        "spawnToTreeReadyMs": 868.524,
+        "spawnToPillReadyMs": 575.562,
+        "pillReason": null,
+        "tree": {
+          "processCount": 7,
+          "gpu": true,
+          "roles": {
+            "gpu": 1,
+            "utility": 2,
+            "renderer": 1,
+            "other": 2
+          }
+        },
+        "validity": {
+          "ready": true,
+          "readyLine": "[app] ready, settings at E:\\CPANQI~1\\Temp\\typeless-cold-agaf1R\\settings.json",
+          "failures": [],
+          "valid": true,
+          "invalidBecause": null
+        },
+        "settleMs": 4000,
+        "memory": {
+          "at": "2026-11-04T13:50:44.592Z",
+          "processes": [
+            {
+              "pid": 43348,
+              "ppid": 7360,
+              "name": "electron.exe",
+              "role": "main",
+              "privateResidentBytes": 55410688,
+              "workingSetBytes": 139571200,
+              "committedBytes": 104886272
+            },
+            {
+              "pid": 2384,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "gpu",
+              "privateResidentBytes": 9269248,
+              "workingSetBytes": 63950848,
+              "committedBytes": 16777216
+            },
+            {
+              "pid": 27160,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "utility",
+              "privateResidentBytes": 7331840,
+              "workingSetBytes": 55984128,
+              "committedBytes": 12767232
+            },
+            {
+              "pid": 11400,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "renderer",
+              "privateResidentBytes": 26853376,
+              "workingSetBytes": 94920704,
+              "committedBytes": 39833600
+            },
+            {
+              "pid": 45712,
+              "ppid": 43348,
+              "name": "yu-hotkey.exe",
+              "role": "other",
+              "privateResidentBytes": 634880,
+              "workingSetBytes": 5578752,
+              "committedBytes": 1032192
+            },
+            {
+              "pid": 47468,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "utility",
+              "privateResidentBytes": 8445952,
+              "workingSetBytes": 93413376,
+              "committedBytes": 15851520
+            },
+            {
+              "pid": 42892,
+              "ppid": 45712,
+              "name": "conhost.exe",
+              "role": "other",
+              "privateResidentBytes": 864256,
+              "workingSetBytes": 7987200,
+              "committedBytes": 1253376
+            }
+          ],
+          "totals": {
+            "privateResidentBytes": 108810240,
+            "workingSetBytes": 461406208,
+            "committedBytes": 192401408
+          },
+          "byRole": {
+            "main": {
+              "count": 1,
+              "privateResidentBytes": 55410688,
+              "workingSetBytes": 139571200,
+              "committedBytes": 104886272
+            },
+            "gpu": {
+              "count": 1,
+              "privateResidentBytes": 9269248,
+              "workingSetBytes": 63950848,
+              "committedBytes": 16777216
+            },
+            "utility": {
+              "count": 2,
+              "privateResidentBytes": 15777792,
+              "workingSetBytes": 149397504,
+              "committedBytes": 28618752
+            },
+            "renderer": {
+              "count": 1,
+              "privateResidentBytes": 26853376,
+              "workingSetBytes": 94920704,
+              "committedBytes": 39833600
+            },
+            "other": {
+              "count": 2,
+              "privateResidentBytes": 1499136,
+              "workingSetBytes": 13565952,
+              "committedBytes": 2285568
+            }
+          },
+          "unavailable": []
+        },
+        "cpu": {
+          "windowMs": 10020.82,
+          "cores": 16,
+          "perPid": [
+            {
+              "pid": 43348,
+              "role": "main",
+              "userMs": 46.875,
+              "kernelMs": 125,
+              "totalMs": 171.875,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 2384,
+              "role": "gpu",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 27160,
+              "role": "utility",
+              "userMs": 15.625,
+              "kernelMs": 0,
+              "totalMs": 15.625,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 11400,
+              "role": "renderer",
+              "userMs": 78.125,
+              "kernelMs": 31.25,
+              "totalMs": 109.375,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 45712,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 47468,
+              "role": "utility",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 42892,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            }
+          ],
+          "totalMs": 296.875,
+          "perSecond": 29.626,
+          "coverage": {
+            "windowMs": 10020.82,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        "elapsedMs": 18145.9,
+        "stderr": ""
+      }
+    ],
+    "reopenSamples": [
+      589.516,
+      261.327,
+      305.901,
+      299.331,
+      250.146,
+      264.591,
+      267.494,
+      253.243,
+      268.546,
+      250.51,
+      273.246,
+      263.441,
+      259.076,
+      275.541,
+      267.63,
+      316.262,
+      265.935,
+      255.085,
+      268.776,
+      303.306
+    ],
+    "toggleCycles": [
+      {
+        "cycle": 1,
+        "privateResidentBytes": 185483264,
+        "renderers": 2
+      },
+      {
+        "cycle": 2,
+        "privateResidentBytes": 186044416,
+        "renderers": 2
+      },
+      {
+        "cycle": 3,
+        "privateResidentBytes": 187600896,
+        "renderers": 2
+      },
+      {
+        "cycle": 4,
+        "privateResidentBytes": 186646528,
+        "renderers": 2
+      },
+      {
+        "cycle": 5,
+        "privateResidentBytes": 184385536,
+        "renderers": 2
+      },
+      {
+        "cycle": 6,
+        "privateResidentBytes": 184147968,
+        "renderers": 2
+      },
+      {
+        "cycle": 7,
+        "privateResidentBytes": 174936064,
+        "renderers": 2
+      },
+      {
+        "cycle": 8,
+        "privateResidentBytes": 175136768,
+        "renderers": 2
+      },
+      {
+        "cycle": 9,
+        "privateResidentBytes": 164732928,
+        "renderers": 2
+      },
+      {
+        "cycle": 10,
+        "privateResidentBytes": 165355520,
+        "renderers": 2
+      },
+      {
+        "cycle": 11,
+        "privateResidentBytes": 165470208,
+        "renderers": 2
+      },
+      {
+        "cycle": 12,
+        "privateResidentBytes": 165933056,
+        "renderers": 2
+      },
+      {
+        "cycle": 13,
+        "privateResidentBytes": 166268928,
+        "renderers": 2
+      },
+      {
+        "cycle": 14,
+        "privateResidentBytes": 166903808,
+        "renderers": 2
+      },
+      {
+        "cycle": 15,
+        "privateResidentBytes": 165044224,
+        "renderers": 2
+      },
+      {
+        "cycle": 16,
+        "privateResidentBytes": 165085184,
+        "renderers": 2
+      },
+      {
+        "cycle": 17,
+        "privateResidentBytes": 166293504,
+        "renderers": 2
+      },
+      {
+        "cycle": 18,
+        "privateResidentBytes": 166006784,
+        "renderers": 2
+      },
+      {
+        "cycle": 19,
+        "privateResidentBytes": 167763968,
+        "renderers": 2
+      },
+      {
+        "cycle": 20,
+        "privateResidentBytes": 168079360,
+        "renderers": 2
+      }
+    ],
+    "open": {
+      "count": 20,
+      "min": 551.205,
+      "p50": 601.208,
+      "p95": 638.689,
+      "max": 663.732
+    },
+    "reopen": {
+      "count": 20,
+      "min": 250.146,
+      "p50": 267.494,
+      "p95": 316.262,
+      "max": 589.516
+    },
+    "afterToggles": {
+      "privateResidentBytes": 102445056,
+      "workingSetBytes": 467234816,
+      "committedBytes": 184795136
+    },
+    "idleCpu": {
+      "windowMs": 60016.199,
+      "cores": 16,
+      "totalMs": 1812.5,
+      "perSecond": 30.2,
+      "runs": [
+        {
+          "windowMs": 60014.808,
+          "totalMs": 1890.625,
+          "perSecond": 31.503,
+          "coverage": {
+            "windowMs": 60014.808,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60016.199,
+          "totalMs": 1812.5,
+          "perSecond": 30.2,
+          "coverage": {
+            "windowMs": 60016.199,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60021.089,
+          "totalMs": 1406.25,
+          "perSecond": 23.429,
+          "coverage": {
+            "windowMs": 60021.089,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        }
+      ],
+      "unavailable": 0
+    },
+    "lifecycle": [
+      {
+        "at": "startup",
+        "renderers": [
+          36752
+        ]
+      },
+      {
+        "at": "hub-open",
+        "renderers": [
+          36752,
+          52180
+        ]
+      },
+      {
+        "at": "after-hide-idle",
+        "renderers": [
+          36752
+        ]
+      }
+    ],
+    "pill": {
+      "valid": true,
+      "observeMs": 130000,
+      "repeatMs": 45000,
+      "retirements": 0,
+      "takes": 1,
+      "distinctRenderers": [
+        19240
+      ],
+      "timeline": [
+        {
+          "atMs": 3075,
+          "rendererPids": [
+            19240
+          ]
+        },
+        {
+          "atMs": 5182,
+          "rendererPids": []
+        }
+      ],
+      "tail": [
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[bar] capture warm",
+        "[selftest] dictation → null",
+        "[selftest] ask → null",
+        "[selftest] ask+web → null",
+        "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Java\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"Minecraft 1.20.4 - 多人游戏（第三方服务器）\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"f2b03a50-5d5d-4b95-b8a0-cf21ca34c942\",\"createdAt\":1793800836191,\"updatedAt\":1793800836191}"
+      ]
+    },
+    "isolation": {
+      "met": true,
+      "unchanged": true,
+      "changedEntries": 0,
+      "markerCount": 27,
+      "valid": true,
+      "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "diff": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "reasons": []
+    },
+    "cpuSelfCheck": {
+      "met": true,
+      "pass": true,
+      "skipped": false,
+      "windowMs": 1008.831,
+      "measuredMs": 968.75,
+      "cores": 16,
+      "ratio": 0.96,
+      "reasons": []
+    }
+  },
+  "candidate": {
+    "idle": {
+      "phase": "idle-60s",
+      "count": 3,
+      "summary": {
+        "count": 3,
+        "min": 56819712,
+        "p50": 56979456,
+        "p95": 57307136,
+        "max": 57307136
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 40574976,
+          "workingSetBytes": 110436352,
+          "committedBytes": 88211456
+        },
+        "utility": {
+          "count": 1,
+          "privateResidentBytes": 7073792,
+          "workingSetBytes": 56180736,
+          "committedBytes": 12414976
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 7905280,
+          "workingSetBytes": 61079552,
+          "committedBytes": 15093760
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1425408,
+          "workingSetBytes": 13385728,
+          "committedBytes": 2158592
+        }
+      },
+      "last": {
+        "phase": "idle-60s",
+        "at": "2026-11-04T16:22:12.836Z",
+        "processes": [
+          {
+            "pid": 6916,
+            "ppid": 51528,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 40837120,
+            "workingSetBytes": 110776320,
+            "committedBytes": 88596480
+          },
+          {
+            "pid": 35172,
+            "ppid": 6916,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 7909376,
+            "workingSetBytes": 59105280,
+            "committedBytes": 15106048
+          },
+          {
+            "pid": 47296,
+            "ppid": 6916,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7127040,
+            "workingSetBytes": 55664640,
+            "committedBytes": 12464128
+          },
+          {
+            "pid": 50736,
+            "ppid": 6916,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 598016,
+            "workingSetBytes": 5595136,
+            "committedBytes": 954368
+          },
+          {
+            "pid": 10056,
+            "ppid": 50736,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 835584,
+            "workingSetBytes": 7798784,
+            "committedBytes": 1216512
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 57307136,
+          "workingSetBytes": 238940160,
+          "committedBytes": 118337536
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 40837120,
+            "workingSetBytes": 110776320,
+            "committedBytes": 88596480
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 7909376,
+            "workingSetBytes": 59105280,
+            "committedBytes": 15106048
+          },
+          "utility": {
+            "count": 1,
+            "privateResidentBytes": 7127040,
+            "workingSetBytes": 55664640,
+            "committedBytes": 12464128
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1433600,
+            "workingSetBytes": 13393920,
+            "committedBytes": 2170880
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "settled": {
+      "phase": "settled-4s",
+      "count": 20,
+      "summary": {
+        "count": 20,
+        "min": 66764800,
+        "p50": 67162112,
+        "p95": 70221824,
+        "max": 70541312
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 50536448,
+          "workingSetBytes": 120184832,
+          "committedBytes": 99708928
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 7991296,
+          "workingSetBytes": 59158528,
+          "committedBytes": 15175680
+        },
+        "utility": {
+          "count": 1,
+          "privateResidentBytes": 7204864,
+          "workingSetBytes": 55701504,
+          "committedBytes": 12619776
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1470464,
+          "workingSetBytes": 13430784,
+          "committedBytes": 2256896
+        }
+      },
+      "last": {
+        "phase": "settled-4s",
+        "at": "2026-11-04T16:18:46.477Z",
+        "processes": [
+          {
+            "pid": 34656,
+            "ppid": 51528,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 50536448,
+            "workingSetBytes": 120184832,
+            "committedBytes": 99708928
+          },
+          {
+            "pid": 53952,
+            "ppid": 34656,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 7991296,
+            "workingSetBytes": 59158528,
+            "committedBytes": 15175680
+          },
+          {
+            "pid": 51864,
+            "ppid": 34656,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7204864,
+            "workingSetBytes": 55701504,
+            "committedBytes": 12619776
+          },
+          {
+            "pid": 50728,
+            "ppid": 34656,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 634880,
+            "workingSetBytes": 5632000,
+            "committedBytes": 1036288
+          },
+          {
+            "pid": 48452,
+            "ppid": 50728,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 835584,
+            "workingSetBytes": 7798784,
+            "committedBytes": 1220608
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 67203072,
+          "workingSetBytes": 248475648,
+          "committedBytes": 129761280
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 50536448,
+            "workingSetBytes": 120184832,
+            "committedBytes": 99708928
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 7991296,
+            "workingSetBytes": 59158528,
+            "committedBytes": 15175680
+          },
+          "utility": {
+            "count": 1,
+            "privateResidentBytes": 7204864,
+            "workingSetBytes": 55701504,
+            "committedBytes": 12619776
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1470464,
+            "workingSetBytes": 13430784,
+            "committedBytes": 2256896
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "groups": {
+      "main": {
+        "count": 1,
+        "privateResidentBytes": 40574976,
+        "workingSetBytes": 110436352,
+        "committedBytes": 88211456
+      },
+      "utility": {
+        "count": 1,
+        "privateResidentBytes": 7073792,
+        "workingSetBytes": 56180736,
+        "committedBytes": 12414976
+      },
+      "gpu": {
+        "count": 1,
+        "privateResidentBytes": 7905280,
+        "workingSetBytes": 61079552,
+        "committedBytes": 15093760
+      },
+      "other": {
+        "count": 2,
+        "privateResidentBytes": 1425408,
+        "workingSetBytes": 13385728,
+        "committedBytes": 2158592
+      }
+    },
+    "idleSamples": [],
+    "settledSamples": [],
+    "openSamples": [
+      667.505,
+      602.413,
+      621.877,
+      563.435,
+      562.486,
+      582.457,
+      568.145,
+      565.322,
+      573.89,
+      571.508,
+      556.861,
+      580.281,
+      554.849,
+      610.745,
+      612.019,
+      935.84,
+      733.803,
+      653.073,
+      668.193,
+      600.634
+    ],
+    "openFailed": [],
+    "cold": [
+      {
+        "valid": true,
+        "spawnedAt": "2026-11-04T16:16:01.069Z",
+        "spawnToTreeReadyMs": 759.964,
+        "spawnToPillReadyMs": null,
+        "pillReason": "the run never logged \"[bar] capture warm\"; this side did not create the pill",
+        "tree": {
+          "processCount": 5,
+          "gpu": true,
+          "roles": {
+            "gpu": 1,
+            "utility": 1,
+            "other": 2
+          }
+        },
+        "validity": {
+          "ready": true,
+          "readyLine": "[app] ready, settings at E:\\CPANQI~1\\Temp\\typeless-cold-zDi6dv\\settings.json",
+          "failures": [],
+          "valid": true,
+          "invalidBecause": null
+        },
+        "settleMs": 4000,
+        "memory": {
+          "at": "2026-11-04T16:15:50.027Z",
+          "processes": [
+            {
+              "pid": 29360,
+              "ppid": 51528,
+              "name": "electron.exe",
+              "role": "main",
+              "privateResidentBytes": 50274304,
+              "workingSetBytes": 119922688,
+              "committedBytes": 98181120
+            },
+            {
+              "pid": 42152,
+              "ppid": 29360,
+              "name": "electron.exe",
+              "role": "gpu",
+              "privateResidentBytes": 7958528,
+              "workingSetBytes": 59084800,
+              "committedBytes": 15110144
+            },
+            {
+              "pid": 55060,
+              "ppid": 29360,
+              "name": "electron.exe",
+              "role": "utility",
+              "privateResidentBytes": 7266304,
+              "workingSetBytes": 55783424,
+              "committedBytes": 12632064
+            },
+            {
+              "pid": 26476,
+              "ppid": 29360,
+              "name": "yu-hotkey.exe",
+              "role": "other",
+              "privateResidentBytes": 630784,
+              "workingSetBytes": 5574656,
+              "committedBytes": 1028096
+            },
+            {
+              "pid": 47000,
+              "ppid": 26476,
+              "name": "conhost.exe",
+              "role": "other",
+              "privateResidentBytes": 847872,
+              "workingSetBytes": 7811072,
+              "committedBytes": 1216512
+            }
+          ],
+          "totals": {
+            "privateResidentBytes": 66977792,
+            "workingSetBytes": 248176640,
+            "committedBytes": 128167936
+          },
+          "byRole": {
+            "main": {
+              "count": 1,
+              "privateResidentBytes": 50274304,
+              "workingSetBytes": 119922688,
+              "committedBytes": 98181120
+            },
+            "gpu": {
+              "count": 1,
+              "privateResidentBytes": 7958528,
+              "workingSetBytes": 59084800,
+              "committedBytes": 15110144
+            },
+            "utility": {
+              "count": 1,
+              "privateResidentBytes": 7266304,
+              "workingSetBytes": 55783424,
+              "committedBytes": 12632064
+            },
+            "other": {
+              "count": 2,
+              "privateResidentBytes": 1478656,
+              "workingSetBytes": 13385728,
+              "committedBytes": 2244608
+            }
+          },
+          "unavailable": []
+        },
+        "cpu": {
+          "windowMs": 10022.098,
+          "cores": 16,
+          "perPid": [
+            {
+              "pid": 29360,
+              "role": "main",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 42152,
+              "role": "gpu",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 55060,
+              "role": "utility",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 26476,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 47000,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            }
+          ],
+          "totalMs": 0,
+          "perSecond": 0,
+          "coverage": {
+            "windowMs": 10022.098,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        "elapsedMs": 26158.897,
+        "stderr": ""
+      }
+    ],
+    "reopenSamples": [
+      562.193,
+      276.784,
+      257.58,
+      264.584,
+      269.685,
+      250.553,
+      246.34,
+      266.097,
+      274.55,
+      268.209,
+      272.156,
+      267.51,
+      283.947,
+      318.015,
+      246.26,
+      279.775,
+      265.306,
+      317.824,
+      262.736,
+      257.522
+    ],
+    "toggleCycles": [
+      {
+        "cycle": 1,
+        "privateResidentBytes": 151117824,
+        "renderers": 1
+      },
+      {
+        "cycle": 2,
+        "privateResidentBytes": 151924736,
+        "renderers": 1
+      },
+      {
+        "cycle": 3,
+        "privateResidentBytes": 154800128,
+        "renderers": 1
+      },
+      {
+        "cycle": 4,
+        "privateResidentBytes": 150913024,
+        "renderers": 1
+      },
+      {
+        "cycle": 5,
+        "privateResidentBytes": 148885504,
+        "renderers": 1
+      },
+      {
+        "cycle": 6,
+        "privateResidentBytes": 150003712,
+        "renderers": 1
+      },
+      {
+        "cycle": 7,
+        "privateResidentBytes": 142913536,
+        "renderers": 1
+      },
+      {
+        "cycle": 8,
+        "privateResidentBytes": 143183872,
+        "renderers": 1
+      },
+      {
+        "cycle": 9,
+        "privateResidentBytes": 132530176,
+        "renderers": 1
+      },
+      {
+        "cycle": 10,
+        "privateResidentBytes": 132911104,
+        "renderers": 1
+      },
+      {
+        "cycle": 11,
+        "privateResidentBytes": 133079040,
+        "renderers": 1
+      },
+      {
+        "cycle": 12,
+        "privateResidentBytes": 133382144,
+        "renderers": 1
+      },
+      {
+        "cycle": 13,
+        "privateResidentBytes": 133947392,
+        "renderers": 1
+      },
+      {
+        "cycle": 14,
+        "privateResidentBytes": 134598656,
+        "renderers": 1
+      },
+      {
+        "cycle": 15,
+        "privateResidentBytes": 135008256,
+        "renderers": 1
+      },
+      {
+        "cycle": 16,
+        "privateResidentBytes": 133230592,
+        "renderers": 1
+      },
+      {
+        "cycle": 17,
+        "privateResidentBytes": 134254592,
+        "renderers": 1
+      },
+      {
+        "cycle": 18,
+        "privateResidentBytes": 134033408,
+        "renderers": 1
+      },
+      {
+        "cycle": 19,
+        "privateResidentBytes": 136507392,
+        "renderers": 1
+      },
+      {
+        "cycle": 20,
+        "privateResidentBytes": 135352320,
+        "renderers": 1
+      }
+    ],
+    "open": {
+      "count": 20,
+      "min": 554.849,
+      "p50": 582.457,
+      "p95": 733.803,
+      "max": 935.84
+    },
+    "reopen": {
+      "count": 20,
+      "min": 246.26,
+      "p50": 267.51,
+      "p95": 318.015,
+      "max": 562.193
+    },
+    "afterToggles": {
+      "privateResidentBytes": 69914624,
+      "workingSetBytes": 279126016,
+      "committedBytes": 131387392
+    },
+    "idleCpu": {
+      "windowMs": 60010.437,
+      "cores": 16,
+      "totalMs": 234.375,
+      "perSecond": 3.906,
+      "runs": [
+        {
+          "windowMs": 60018.353,
+          "totalMs": 218.75,
+          "perSecond": 3.645,
+          "coverage": {
+            "windowMs": 60018.353,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60010.111,
+          "totalMs": 234.375,
+          "perSecond": 3.906,
+          "coverage": {
+            "windowMs": 60010.111,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60010.437,
+          "totalMs": 250,
+          "perSecond": 4.166,
+          "coverage": {
+            "windowMs": 60010.437,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        }
+      ],
+      "unavailable": 0
+    },
+    "lifecycle": [
+      {
+        "at": "startup",
+        "renderers": []
+      },
+      {
+        "at": "hub-open",
+        "renderers": [
+          28428
+        ]
+      },
+      {
+        "at": "after-hide-idle",
+        "renderers": []
+      }
+    ],
+    "pill": {
+      "valid": true,
+      "observeMs": 130000,
+      "repeatMs": 45000,
+      "retirements": 3,
+      "takes": 3,
+      "distinctRenderers": [
+        39080,
+        46136,
+        52388
+      ],
+      "timeline": [
+        {
+          "atMs": 2703,
+          "rendererPids": []
+        },
+        {
+          "atMs": 4708,
+          "rendererPids": [
+            39080
+          ]
+        },
+        {
+          "atMs": 37286,
+          "rendererPids": []
+        },
+        {
+          "atMs": 49523,
+          "rendererPids": [
+            52388
+          ]
+        },
+        {
+          "atMs": 82248,
+          "rendererPids": []
+        },
+        {
+          "atMs": 94460,
+          "rendererPids": [
+            46136
+          ]
+        },
+        {
+          "atMs": 127081,
+          "rendererPids": []
+        }
+      ],
+      "tail": [
+        "[selftest] dictation → null",
+        "[selftest] ask → null",
+        "[selftest] ask+web → null",
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[bar] capture warm",
+        "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Ego\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"抖音创作者中心 - ego\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"225f3b9c-b44b-4496-bdc6-ebcf3d7fe060\",\"createdAt\":1793809535488,\"updatedAt\":1793809535488}",
+        "[selftest] staying for repeated takes",
+        "[bar] retiring the hidden pill window",
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[bar] capture warm",
+        "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Ego\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"抖音创作者中心 - ego\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"722e9ea0-6f80-47f7-83db-af783280d2c5\",\"createdAt\":1793809581290,\"updatedAt\":1793809581290}",
+        "[bar] retiring the hidden pill window",
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[bar] capture warm",
+        "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Ego\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"抖音创作者中心 - ego\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"b4927a75-9d93-4063-a328-a39b515c0053\",\"createdAt\":1793809626277,\"updatedAt\":1793809626277}",
+        "[bar] retiring the hidden pill window"
+      ]
+    },
+    "isolation": {
+      "met": true,
+      "unchanged": true,
+      "changedEntries": 0,
+      "markerCount": 27,
+      "valid": true,
+      "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "diff": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "reasons": []
+    },
+    "cpuSelfCheck": {
+      "met": true,
+      "pass": true,
+      "skipped": false,
+      "windowMs": 1015.236,
+      "measuredMs": 1000,
+      "cores": 16,
+      "ratio": 0.985,
+      "reasons": []
+    }
+  },
+  "comparison": {
+    "memory": {
+      "unit": "bytes",
+      "baseline": 94232576,
+      "candidate": 56979456,
+      "percent": -39.53,
+      "mib": {
+        "baseline": 89.9,
+        "candidate": 54.3
+      }
+    },
+    "settledMemory": {
+      "baseline": 108011520,
+      "candidate": 67162112,
+      "percent": -37.82
+    },
+    "openLatency": {
+      "p50": [
+        601.208,
+        582.457
+      ],
+      "p95": [
+        638.689,
+        733.803
+      ],
+      "deltaMs": 95.114,
+      "samples": {
+        "baseline": 20,
+        "candidate": 20
+      },
+      "failed": {
+        "baseline": 0,
+        "candidate": 0
+      }
+    },
+    "coldToOpen": {
+      "baseline": {
+        "treeReadyMs": 868.524,
+        "pillReadyMs": 575.562
+      },
+      "candidate": {
+        "treeReadyMs": 759.964,
+        "pillReadyMs": null
+      }
+    },
+    "reopen": {
+      "baseline": {
+        "count": 20,
+        "min": 250.146,
+        "p50": 267.494,
+        "p95": 316.262,
+        "max": 589.516
+      },
+      "candidate": {
+        "count": 20,
+        "min": 246.26,
+        "p50": 267.51,
+        "p95": 318.015,
+        "max": 562.193
+      }
+    },
+    "togglesTrendPercent": -11.12,
+    "baselineTogglesTrendPercent": -10.42,
+    "idleCpuMs": {
+      "baseline": 1812.5,
+      "candidate": 234.375
+    },
+    "idleCpuPerSecond": {
+      "baseline": 30.2,
+      "candidate": 3.906
+    },
+    "pill": {
+      "baseline": {
+        "valid": true,
+        "observeMs": 130000,
+        "repeatMs": 45000,
+        "retirements": 0,
+        "takes": 1,
+        "distinctRenderers": [
+          19240
+        ],
+        "timeline": [
+          {
+            "atMs": 3075,
+            "rendererPids": [
+              19240
+            ]
+          },
+          {
+            "atMs": 5182,
+            "rendererPids": []
+          }
+        ],
+        "tail": [
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[bar] capture warm",
+          "[selftest] dictation → null",
+          "[selftest] ask → null",
+          "[selftest] ask+web → null",
+          "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Java\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"Minecraft 1.20.4 - 多人游戏（第三方服务器）\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"f2b03a50-5d5d-4b95-b8a0-cf21ca34c942\",\"createdAt\":1793800836191,\"updatedAt\":1793800836191}"
+        ]
+      },
+      "candidate": {
+        "valid": true,
+        "observeMs": 130000,
+        "repeatMs": 45000,
+        "retirements": 3,
+        "takes": 3,
+        "distinctRenderers": [
+          39080,
+          46136,
+          52388
+        ],
+        "timeline": [
+          {
+            "atMs": 2703,
+            "rendererPids": []
+          },
+          {
+            "atMs": 4708,
+            "rendererPids": [
+              39080
+            ]
+          },
+          {
+            "atMs": 37286,
+            "rendererPids": []
+          },
+          {
+            "atMs": 49523,
+            "rendererPids": [
+              52388
+            ]
+          },
+          {
+            "atMs": 82248,
+            "rendererPids": []
+          },
+          {
+            "atMs": 94460,
+            "rendererPids": [
+              46136
+            ]
+          },
+          {
+            "atMs": 127081,
+            "rendererPids": []
+          }
+        ],
+        "tail": [
+          "[selftest] dictation → null",
+          "[selftest] ask → null",
+          "[selftest] ask+web → null",
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[bar] capture warm",
+          "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Ego\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"抖音创作者中心 - ego\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"225f3b9c-b44b-4496-bdc6-ebcf3d7fe060\",\"createdAt\":1793809535488,\"updatedAt\":1793809535488}",
+          "[selftest] staying for repeated takes",
+          "[bar] retiring the hidden pill window",
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[bar] capture warm",
+          "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Ego\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"抖音创作者中心 - ego\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"722e9ea0-6f80-47f7-83db-af783280d2c5\",\"createdAt\":1793809581290,\"updatedAt\":1793809581290}",
+          "[bar] retiring the hidden pill window",
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[bar] capture warm",
+          "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Ego\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"抖音创作者中心 - ego\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"b4927a75-9d93-4063-a328-a39b515c0053\",\"createdAt\":1793809626277,\"updatedAt\":1793809626277}",
+          "[bar] retiring the hidden pill window"
+        ]
+      }
+    },
+    "rendererLifecycle": {
+      "stages": {
+        "baseline": 3,
+        "candidate": 3
+      },
+      "baselineStartupSurvivors": [
+        36752
+      ],
+      "candidateStartupSurvivors": []
+    },
+    "playback": {
+      "candidate": {
+        "path": "E:/code/deepseek-harness/work/t21-probe-final/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 16,
+        "cases": [
+          {
+            "id": "r3-note-cold-path",
+            "name": "r3-note-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "window #1, playing event at 0ms/450ms, status=playing id=short position=19ms, busy=true"
+          },
+          {
+            "id": "natural-end",
+            "name": "natural-end",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "ended at positionMs=450 durationMs=450; busy released; element=ended"
+          },
+          {
+            "id": "ready-window-play",
+            "name": "ready-window-play",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "playing at 0ms then idle, windows=1 (reused)"
+          },
+          {
+            "id": "pause-resume",
+            "name": "pause-resume",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "paused at 282ms, resumed at 283ms, rate=1"
+          },
+          {
+            "id": "seek-and-rate",
+            "name": "seek-and-rate",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "rate=1.5 seek=1000ms statusRate=1.5"
+          },
+          {
+            "id": "r1-playback-replacement",
+            "name": "r1-playback-replacement",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "old c84f812a (long) replaced by 61f9fa9c (hold); replacement played at 0ms then 495ms; stale ended+error ignored, busy stayed true"
+          },
+          {
+            "id": "long-pause-holds-busy",
+            "name": "long-pause-holds-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "still busy after 5 s paused at 287ms of 3000ms"
+          },
+          {
+            "id": "unknown-duration-busy",
+            "name": "unknown-duration-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "durationMs=0 and busy held for 3 s with no expiry"
+          },
+          {
+            "id": "stale-event-ignored",
+            "name": "stale-event-ignored",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "late ended for 13ef669e ignored; the owned 7e5b2d5c released the flag"
+          },
+          {
+            "id": "r1-stop-before-ready",
+            "name": "r1-stop-before-ready",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "play rejected \"Playback cancelled\" after 0 ms; renderer ordered [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r1-stop-cancels-waiting-control",
+            "name": "r1-stop-cancels-waiting-control",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "resume rejected \"Playback cancelled\" after 0 ms; delivered after ready [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r2-destroy-or-cancel",
+            "name": "r2-destroy-or-cancel",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "in-flight play rejected \"Playback closed\" after 2 ms (not the 8 s budget); rebuilt window #5 played at 0ms"
+          },
+          {
+            "id": "r3-speech-cold-path",
+            "name": "r3-speech-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "cold ok (started=1, window #6); pre-ready abort=cancelled and the renderer saw no play; post-start abort=cancelled with stop for c83a9c78; new speech still ok after the old id's ended+error"
+          },
+          {
+            "id": "r3-renderer-crash",
+            "name": "r3-renderer-crash",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "render-process-gone reason=crashed exitCode=2 for wc=7; window retired; rebuilt window #8 (wc=8) played"
+          },
+          {
+            "id": "recreate-after-destroy",
+            "name": "recreate-after-destroy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=playing on window #9"
+          },
+          {
+            "id": "status-without-window",
+            "name": "status-without-window",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=idle windows=9 (no window was created)"
+          }
+        ],
+        "identity": {
+          "entrySha256": "6b98f39256d8cc36b00a15ec1c4f97ac946d98d138470c7f11997172fef255b4",
+          "preloadSha256": "1179fc9227f0db27c54a56248cb9f4fd27fe4759f8ebd6a40690180231b7fdb1",
+          "barHtmlSha256": "d126110c6ea6b3386bc891a89bfaa457e6af3d3d262289552855bc7b33cc4fec",
+          "sourceRef": "HEAD 84fc62f056d67614c474d24f3064ffda71c498a3 (dirty)",
+          "command": "pnpm exec vitest run src/main/bar-playback.probe.test.ts"
+        },
+        "error": null
+      },
+      "baseline": {
+        "path": "E:/code/deepseek-harness/work/t21-probe-final/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 16,
+        "cases": [
+          {
+            "id": "r3-note-cold-path",
+            "name": "r3-note-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "window #1, playing event at 0ms/450ms, status=playing id=short position=19ms, busy=true"
+          },
+          {
+            "id": "natural-end",
+            "name": "natural-end",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "ended at positionMs=450 durationMs=450; busy released; element=ended"
+          },
+          {
+            "id": "ready-window-play",
+            "name": "ready-window-play",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "playing at 0ms then idle, windows=1 (reused)"
+          },
+          {
+            "id": "pause-resume",
+            "name": "pause-resume",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "paused at 282ms, resumed at 283ms, rate=1"
+          },
+          {
+            "id": "seek-and-rate",
+            "name": "seek-and-rate",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "rate=1.5 seek=1000ms statusRate=1.5"
+          },
+          {
+            "id": "r1-playback-replacement",
+            "name": "r1-playback-replacement",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "old c84f812a (long) replaced by 61f9fa9c (hold); replacement played at 0ms then 495ms; stale ended+error ignored, busy stayed true"
+          },
+          {
+            "id": "long-pause-holds-busy",
+            "name": "long-pause-holds-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "still busy after 5 s paused at 287ms of 3000ms"
+          },
+          {
+            "id": "unknown-duration-busy",
+            "name": "unknown-duration-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "durationMs=0 and busy held for 3 s with no expiry"
+          },
+          {
+            "id": "stale-event-ignored",
+            "name": "stale-event-ignored",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "late ended for 13ef669e ignored; the owned 7e5b2d5c released the flag"
+          },
+          {
+            "id": "r1-stop-before-ready",
+            "name": "r1-stop-before-ready",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "play rejected \"Playback cancelled\" after 0 ms; renderer ordered [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r1-stop-cancels-waiting-control",
+            "name": "r1-stop-cancels-waiting-control",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "resume rejected \"Playback cancelled\" after 0 ms; delivered after ready [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r2-destroy-or-cancel",
+            "name": "r2-destroy-or-cancel",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "in-flight play rejected \"Playback closed\" after 2 ms (not the 8 s budget); rebuilt window #5 played at 0ms"
+          },
+          {
+            "id": "r3-speech-cold-path",
+            "name": "r3-speech-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "cold ok (started=1, window #6); pre-ready abort=cancelled and the renderer saw no play; post-start abort=cancelled with stop for c83a9c78; new speech still ok after the old id's ended+error"
+          },
+          {
+            "id": "r3-renderer-crash",
+            "name": "r3-renderer-crash",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "render-process-gone reason=crashed exitCode=2 for wc=7; window retired; rebuilt window #8 (wc=8) played"
+          },
+          {
+            "id": "recreate-after-destroy",
+            "name": "recreate-after-destroy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=playing on window #9"
+          },
+          {
+            "id": "status-without-window",
+            "name": "status-without-window",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=idle windows=9 (no window was created)"
+          }
+        ],
+        "error": null
+      },
+      "caseVerdicts": [
+        {
+          "id": "r3-note-cold-path",
+          "name": "r3-note-cold-path",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "window #1, playing event at 0ms/450ms, status=playing id=short position=19ms, busy=true"
+        },
+        {
+          "id": "natural-end",
+          "name": "natural-end",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "ended at positionMs=450 durationMs=450; busy released; element=ended"
+        },
+        {
+          "id": "ready-window-play",
+          "name": "ready-window-play",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "playing at 0ms then idle, windows=1 (reused)"
+        },
+        {
+          "id": "pause-resume",
+          "name": "pause-resume",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "paused at 282ms, resumed at 283ms, rate=1"
+        },
+        {
+          "id": "seek-and-rate",
+          "name": "seek-and-rate",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "rate=1.5 seek=1000ms statusRate=1.5"
+        },
+        {
+          "id": "r1-playback-replacement",
+          "name": "r1-playback-replacement",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "old c84f812a (long) replaced by 61f9fa9c (hold); replacement played at 0ms then 495ms; stale ended+error ignored, busy stayed true"
+        },
+        {
+          "id": "long-pause-holds-busy",
+          "name": "long-pause-holds-busy",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "still busy after 5 s paused at 287ms of 3000ms"
+        },
+        {
+          "id": "unknown-duration-busy",
+          "name": "unknown-duration-busy",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "durationMs=0 and busy held for 3 s with no expiry"
+        },
+        {
+          "id": "stale-event-ignored",
+          "name": "stale-event-ignored",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "late ended for 13ef669e ignored; the owned 7e5b2d5c released the flag"
+        },
+        {
+          "id": "r1-stop-before-ready",
+          "name": "r1-stop-before-ready",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "play rejected \"Playback cancelled\" after 0 ms; renderer ordered [status]; status=idle id=null; busy=false"
+        },
+        {
+          "id": "r1-stop-cancels-waiting-control",
+          "name": "r1-stop-cancels-waiting-control",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "resume rejected \"Playback cancelled\" after 0 ms; delivered after ready [status]; status=idle id=null; busy=false"
+        },
+        {
+          "id": "r2-destroy-or-cancel",
+          "name": "r2-destroy-or-cancel",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "in-flight play rejected \"Playback closed\" after 2 ms (not the 8 s budget); rebuilt window #5 played at 0ms"
+        },
+        {
+          "id": "r3-speech-cold-path",
+          "name": "r3-speech-cold-path",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "cold ok (started=1, window #6); pre-ready abort=cancelled and the renderer saw no play; post-start abort=cancelled with stop for c83a9c78; new speech still ok after the old id's ended+error"
+        },
+        {
+          "id": "r3-renderer-crash",
+          "name": "r3-renderer-crash",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "render-process-gone reason=crashed exitCode=2 for wc=7; window retired; rebuilt window #8 (wc=8) played"
+        },
+        {
+          "id": "recreate-after-destroy",
+          "name": "recreate-after-destroy",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "state=playing on window #9"
+        },
+        {
+          "id": "status-without-window",
+          "name": "status-without-window",
+          "kind": "real-window",
+          "pass": true,
+          "skipped": false,
+          "skipReason": null,
+          "reason": null,
+          "detail": "state=idle windows=9 (no window was created)"
+        }
+      ]
+    }
+  },
+  "thresholds": {
+    "memory": {
+      "metric": "tray idle (60 s) whole-tree private resident median",
+      "percentAtMost": -15,
+      "bytesAtMost": -31457280,
+      "baselineMedian": 94232576,
+      "candidateMedian": 56979456,
+      "percent": -39.53,
+      "bytes": -37253120,
+      "idleSamples": {
+        "baseline": 3,
+        "candidate": 3
+      },
+      "unavailable": 0,
+      "met": true
+    },
+    "noSustainedGrowth": {
+      "metric": "same instance: mean private resident of cycles 16-20 vs cycles 1-5, plus the resting tree after the last cycle vs the baseline resting tree",
+      "percent": -11.12,
+      "baselinePercent": -10.42,
+      "atMost": 5,
+      "afterIdleBytes": 69914624,
+      "baselineAfterIdleBytes": 102445056,
+      "afterIdleRenderers": 0,
+      "afterIdleVsFreshIdlePercent": 22.7,
+      "baselineAfterIdleVsFreshIdlePercent": 8.72,
+      "met": true
+    },
+    "openLatency": {
+      "metric": "first open p95",
+      "baselineP95Ms": 638.689,
+      "candidateP95Ms": 733.803,
+      "deltaMs": 95.114,
+      "atMostMs": 100,
+      "samples": {
+        "baseline": 20,
+        "candidate": 20
+      },
+      "minSamples": 20,
+      "failed": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "reasons": [],
+      "met": true
+    },
+    "reopenLatency": {
+      "metric": "reopen p50/p95 (reported, not gated)",
+      "baseline": {
+        "count": 20,
+        "min": 250.146,
+        "p50": 267.494,
+        "p95": 316.262,
+        "max": 589.516
+      },
+      "candidate": {
+        "count": 20,
+        "min": 246.26,
+        "p50": 267.51,
+        "p95": 318.015,
+        "max": 562.193
+      },
+      "failed": {
+        "baseline": 0,
+        "candidate": 0
+      }
+    },
+    "isolation": {
+      "metric": "Run key unchanged and every login-item write suppressed (read-only)",
+      "baseline": {
+        "met": true,
+        "unchanged": true,
+        "changedEntries": 0,
+        "markerCount": 27,
+        "valid": true,
+        "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "diff": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "reasons": []
+      },
+      "candidate": {
+        "met": true,
+        "unchanged": true,
+        "changedEntries": 0,
+        "markerCount": 27,
+        "valid": true,
+        "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "diff": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "reasons": []
+      },
+      "reason": "both runs left the Run key untouched and suppressed every login-item write",
+      "met": true
+    },
+    "cpuSelfCheck": {
+      "metric": "controlled busy-loop CPU check, |ratio-1| ≤ 0.35",
+      "baseline": {
+        "met": true,
+        "pass": true,
+        "skipped": false,
+        "windowMs": 1008.831,
+        "measuredMs": 968.75,
+        "cores": 16,
+        "ratio": 0.96,
+        "reasons": []
+      },
+      "candidate": {
+        "met": true,
+        "pass": true,
+        "skipped": false,
+        "windowMs": 1015.236,
+        "measuredMs": 1000,
+        "cores": 16,
+        "ratio": 0.985,
+        "reasons": []
+      },
+      "reason": "both sides passed the controlled busy-loop check",
+      "met": true
+    },
+    "coldSeparation": {
+      "metric": "cold start reported separately from the first-open distribution",
+      "baseline": {
+        "met": true,
+        "coldSamples": 1,
+        "openValid": 20,
+        "coldIncluded": false,
+        "reasons": []
+      },
+      "candidate": {
+        "met": true,
+        "coldSamples": 1,
+        "openValid": 20,
+        "coldIncluded": false,
+        "reasons": []
+      },
+      "reason": "cold start and first open are separate measurements on both sides",
+      "met": true
+    },
+    "idleCpu": {
+      "metric": "tray idle CPU per second over a comparable window",
+      "met": true,
+      "atMost": 1.2,
+      "ratio": 0.129,
+      "windowMs": {
+        "baseline": 60016.199,
+        "candidate": 60010.437
+      },
+      "windowDiffPercent": 0,
+      "perSecondMs": {
+        "baseline": 30.2,
+        "candidate": 3.906
+      },
+      "totalMs": {
+        "baseline": 1812.5,
+        "candidate": 234.375
+      },
+      "unavailable": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "reasons": []
+    },
+    "playbackFeature": {
+      "metric": "candidate playback probe passed every case, covered every required scenario with a real-window case, recorded the build identity, and that identity matches the measured build",
+      "met": true,
+      "reason": "candidate playback probe passed every case, covered every required scenario with a real window, recorded the build identity, and that identity matches the measured build",
+      "reasons": [],
+      "binding": {
+        "met": true,
+        "reasons": [],
+        "limitations": [
+          "preloadSha256 and barHtmlSha256 are not recorded in the candidate resource sample (meta.build carries entry, entrySha256, wrapperSha256, script, scriptSha256, rev, dirty, source and assets only), so they are not cross-checked here; only the real probe's runtime self-check of the on-disk artifacts covers them"
+        ],
+        "checked": [
+          "entrySha256"
+        ],
+        "expected": {
+          "entrySha256": "6b98f39256d8cc36b00a15ec1c4f97ac946d98d138470c7f11997172fef255b4",
+          "preloadSha256": null,
+          "barHtmlSha256": null
+        },
+        "actual": {
+          "entrySha256": "6b98f39256d8cc36b00a15ec1c4f97ac946d98d138470c7f11997172fef255b4",
+          "preloadSha256": "1179fc9227f0db27c54a56248cb9f4fd27fe4759f8ebd6a40690180231b7fdb1",
+          "barHtmlSha256": "d126110c6ea6b3386bc891a89bfaa457e6af3d3d262289552855bc7b33cc4fec"
+        }
+      },
+      "requiredScenarios": [
+        "r1-stop-before-ready",
+        "r1-stop-cancels-waiting-control",
+        "r1-playback-replacement",
+        "r2-destroy-or-cancel",
+        "r3-note-cold-path",
+        "r3-speech-cold-path"
+      ],
+      "coverage": {
+        "realWindow": [
+          "r3-note-cold-path",
+          "natural-end",
+          "ready-window-play",
+          "pause-resume",
+          "seek-and-rate",
+          "r1-playback-replacement",
+          "long-pause-holds-busy",
+          "unknown-duration-busy",
+          "stale-event-ignored",
+          "r1-stop-before-ready",
+          "r1-stop-cancels-waiting-control",
+          "r2-destroy-or-cancel",
+          "r3-speech-cold-path",
+          "r3-renderer-crash",
+          "recreate-after-destroy",
+          "status-without-window"
+        ],
+        "stub": [],
+        "scenarios": [
+          "r1-stop-before-ready",
+          "r1-stop-cancels-waiting-control",
+          "r1-playback-replacement",
+          "r2-destroy-or-cancel",
+          "r3-note-cold-path",
+          "r3-speech-cold-path"
+        ],
+        "missingScenarios": [],
+        "unclassified": []
+      },
+      "identity": {
+        "entrySha256": "6b98f39256d8cc36b00a15ec1c4f97ac946d98d138470c7f11997172fef255b4",
+        "preloadSha256": "1179fc9227f0db27c54a56248cb9f4fd27fe4759f8ebd6a40690180231b7fdb1",
+        "barHtmlSha256": "d126110c6ea6b3386bc891a89bfaa457e6af3d3d262289552855bc7b33cc4fec",
+        "sourceRef": "HEAD 84fc62f056d67614c474d24f3064ffda71c498a3 (dirty)",
+        "command": "pnpm exec vitest run src/main/bar-playback.probe.test.ts"
+      },
+      "candidate": {
+        "path": "E:/code/deepseek-harness/work/t21-probe-final/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 16,
+        "cases": [
+          {
+            "id": "r3-note-cold-path",
+            "name": "r3-note-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "window #1, playing event at 0ms/450ms, status=playing id=short position=19ms, busy=true"
+          },
+          {
+            "id": "natural-end",
+            "name": "natural-end",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "ended at positionMs=450 durationMs=450; busy released; element=ended"
+          },
+          {
+            "id": "ready-window-play",
+            "name": "ready-window-play",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "playing at 0ms then idle, windows=1 (reused)"
+          },
+          {
+            "id": "pause-resume",
+            "name": "pause-resume",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "paused at 282ms, resumed at 283ms, rate=1"
+          },
+          {
+            "id": "seek-and-rate",
+            "name": "seek-and-rate",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "rate=1.5 seek=1000ms statusRate=1.5"
+          },
+          {
+            "id": "r1-playback-replacement",
+            "name": "r1-playback-replacement",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "old c84f812a (long) replaced by 61f9fa9c (hold); replacement played at 0ms then 495ms; stale ended+error ignored, busy stayed true"
+          },
+          {
+            "id": "long-pause-holds-busy",
+            "name": "long-pause-holds-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "still busy after 5 s paused at 287ms of 3000ms"
+          },
+          {
+            "id": "unknown-duration-busy",
+            "name": "unknown-duration-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "durationMs=0 and busy held for 3 s with no expiry"
+          },
+          {
+            "id": "stale-event-ignored",
+            "name": "stale-event-ignored",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "late ended for 13ef669e ignored; the owned 7e5b2d5c released the flag"
+          },
+          {
+            "id": "r1-stop-before-ready",
+            "name": "r1-stop-before-ready",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "play rejected \"Playback cancelled\" after 0 ms; renderer ordered [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r1-stop-cancels-waiting-control",
+            "name": "r1-stop-cancels-waiting-control",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "resume rejected \"Playback cancelled\" after 0 ms; delivered after ready [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r2-destroy-or-cancel",
+            "name": "r2-destroy-or-cancel",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "in-flight play rejected \"Playback closed\" after 2 ms (not the 8 s budget); rebuilt window #5 played at 0ms"
+          },
+          {
+            "id": "r3-speech-cold-path",
+            "name": "r3-speech-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "cold ok (started=1, window #6); pre-ready abort=cancelled and the renderer saw no play; post-start abort=cancelled with stop for c83a9c78; new speech still ok after the old id's ended+error"
+          },
+          {
+            "id": "r3-renderer-crash",
+            "name": "r3-renderer-crash",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "render-process-gone reason=crashed exitCode=2 for wc=7; window retired; rebuilt window #8 (wc=8) played"
+          },
+          {
+            "id": "recreate-after-destroy",
+            "name": "recreate-after-destroy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=playing on window #9"
+          },
+          {
+            "id": "status-without-window",
+            "name": "status-without-window",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=idle windows=9 (no window was created)"
+          }
+        ],
+        "identity": {
+          "entrySha256": "6b98f39256d8cc36b00a15ec1c4f97ac946d98d138470c7f11997172fef255b4",
+          "preloadSha256": "1179fc9227f0db27c54a56248cb9f4fd27fe4759f8ebd6a40690180231b7fdb1",
+          "barHtmlSha256": "d126110c6ea6b3386bc891a89bfaa457e6af3d3d262289552855bc7b33cc4fec",
+          "sourceRef": "HEAD 84fc62f056d67614c474d24f3064ffda71c498a3 (dirty)",
+          "command": "pnpm exec vitest run src/main/bar-playback.probe.test.ts"
+        },
+        "error": null
+      },
+      "baseline": {
+        "path": "E:/code/deepseek-harness/work/t21-probe-final/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 16,
+        "cases": [
+          {
+            "id": "r3-note-cold-path",
+            "name": "r3-note-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "window #1, playing event at 0ms/450ms, status=playing id=short position=19ms, busy=true"
+          },
+          {
+            "id": "natural-end",
+            "name": "natural-end",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "ended at positionMs=450 durationMs=450; busy released; element=ended"
+          },
+          {
+            "id": "ready-window-play",
+            "name": "ready-window-play",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "playing at 0ms then idle, windows=1 (reused)"
+          },
+          {
+            "id": "pause-resume",
+            "name": "pause-resume",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "paused at 282ms, resumed at 283ms, rate=1"
+          },
+          {
+            "id": "seek-and-rate",
+            "name": "seek-and-rate",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "rate=1.5 seek=1000ms statusRate=1.5"
+          },
+          {
+            "id": "r1-playback-replacement",
+            "name": "r1-playback-replacement",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "old c84f812a (long) replaced by 61f9fa9c (hold); replacement played at 0ms then 495ms; stale ended+error ignored, busy stayed true"
+          },
+          {
+            "id": "long-pause-holds-busy",
+            "name": "long-pause-holds-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "still busy after 5 s paused at 287ms of 3000ms"
+          },
+          {
+            "id": "unknown-duration-busy",
+            "name": "unknown-duration-busy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "durationMs=0 and busy held for 3 s with no expiry"
+          },
+          {
+            "id": "stale-event-ignored",
+            "name": "stale-event-ignored",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "late ended for 13ef669e ignored; the owned 7e5b2d5c released the flag"
+          },
+          {
+            "id": "r1-stop-before-ready",
+            "name": "r1-stop-before-ready",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "play rejected \"Playback cancelled\" after 0 ms; renderer ordered [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r1-stop-cancels-waiting-control",
+            "name": "r1-stop-cancels-waiting-control",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "resume rejected \"Playback cancelled\" after 0 ms; delivered after ready [status]; status=idle id=null; busy=false"
+          },
+          {
+            "id": "r2-destroy-or-cancel",
+            "name": "r2-destroy-or-cancel",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "in-flight play rejected \"Playback closed\" after 2 ms (not the 8 s budget); rebuilt window #5 played at 0ms"
+          },
+          {
+            "id": "r3-speech-cold-path",
+            "name": "r3-speech-cold-path",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "cold ok (started=1, window #6); pre-ready abort=cancelled and the renderer saw no play; post-start abort=cancelled with stop for c83a9c78; new speech still ok after the old id's ended+error"
+          },
+          {
+            "id": "r3-renderer-crash",
+            "name": "r3-renderer-crash",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "render-process-gone reason=crashed exitCode=2 for wc=7; window retired; rebuilt window #8 (wc=8) played"
+          },
+          {
+            "id": "recreate-after-destroy",
+            "name": "recreate-after-destroy",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=playing on window #9"
+          },
+          {
+            "id": "status-without-window",
+            "name": "status-without-window",
+            "kind": "real-window",
+            "pass": true,
+            "skipped": false,
+            "skipReason": null,
+            "reason": null,
+            "detail": "state=idle windows=9 (no window was created)"
+          }
+        ],
+        "error": null
+      },
+      "source": "--playback",
+      "recorded": {
+        "baseline": null,
+        "candidate": "E:/code/deepseek-harness/work/t21-probe-final/result.json"
+      }
+    },
+    "pillRetired": {
+      "met": true,
+      "reason": "created by a take, retired while idle, created again by the next take"
+    }
+  },
+  "decision": "adopted",
+  "reasons": []
+}
