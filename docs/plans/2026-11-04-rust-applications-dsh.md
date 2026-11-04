@@ -74,7 +74,7 @@
 
 ### 7.1 代码范围
 
-- `native/windows/src/applications.rs`（新增）：`app_paths()` 三处 App Paths 注册表来源（`RegEnumKeyExW` + `RegGetValueW`，同时接受 `REG_SZ`/`REG_EXPAND_SZ`）、`start_menu_shortcuts()`（Programs/CommonPrograms Known Folder，BFS 递归、每个根最多 1000 个 `.lnk`、`IPersistFile::Load` + `GetPath` + `GetArguments` 判空）、`packaged_apps()`（`SHParseDisplayName("shell:AppsFolder")` + `SHBindToObject` + `EnumObjects` + `SHCreateItemWithParent`，只保留 AUMID 含 `!` 的项）、固定 `Windows Settings`、`fixed_commands()`（`PATH` 查找 explorer/notepad/calc 并遵守「已有打包项则跳过」）、`finish()`（`CompareStringEx`+`NORM_IGNORECASE` 名称排序、path 序数比较、去重、1500 截断）。
+- `native/windows/src/applications.rs`（新增）：`app_paths()` 三处 App Paths 注册表来源（`RegEnumKeyExW` + `RegGetValueW`，同时接受 `REG_SZ`/`REG_EXPAND_SZ`）、`start_menu_shortcuts()`（Programs/CommonPrograms Known Folder，BFS 递归、每个根最多 1000 个 `.lnk`、`IPersistFile::Load` + `GetPath` + `GetArguments` 判空）、`packaged_apps()`（`SHParseDisplayName("shell:AppsFolder")` + `SHBindToObject` + `EnumObjects` + `SHCreateItemWithParent`，只保留 AUMID 含 `!` 的项）、固定 `Windows Settings`、`fixed_commands()`（`PATH` 查找 explorer/notepad/calc 并遵守「已有打包项则跳过」）、`finish()`（`CompareStringEx`+`NORM_IGNORECASE` 名称与 path 比较、文化平局时序数比较挑代表项、去重、1500 截断；见 [正确性续做](2026-11-04-rust-applications-correctness-dsh.md)）。
 - `native/windows/src/operations.rs`：新增 `applications` 分支（`Runtime::initialize()` 后调用，与其它 Shell action 一致）。
 - `native/windows/Cargo.toml`：只补 `Win32_System_Registry`、`Win32_Storage_EnhancedStorage`、`Win32_Globalization`、`Win32_UI_Shell_Common` 四个 feature，无新 crate、无版本变动。
 - `src/main/windows-native.ts`：`nativeActions` 加入 `applications`；`src/main/windows-native-transport.test.ts` 两个 `it.each` 对称调整（native 8 项，PS 仅剩 `activate`/`search`/`current-content`）。
@@ -130,7 +130,7 @@
 - `CompareStringEx` 未把 `CSTR_EQUAL` 映射为 `Ordering::Equal` 时同名项不相邻、去重失效（单测 `left: 4 right: 3`）。
 - `is_exe` / `strip_exe_suffix` 原先用 `text[len - 4..]` 按字节切尾，非 ASCII 结尾（`C:\工具\程序`、`C:pps\记事`）会 panic；该函数在 `is_file()` 之前对所有 App Paths 值与所有 `.lnk` 目标调用，一条这样的登记就能让整次枚举崩溃且无 JSON 输出，而 PS 只是跳过该项。改为 `exe_tail()`（`checked_sub` + `get(..)` + `eq_ignore_ascii_case(".exe")`）并补了多字节尾部的单测。
 - 删死代码（原 `applications.rs:448` 空 `else if`）时多删一个 `}`，`cargo test` 直接报 `unclosed delimiter`；已修回并复跑。
-- 快捷方式遍历原为 BFS，注释却写「Depth-first」；改为真正的深度优先（先本目录 `.lnk`，再按 `read_dir` 顺序递归子目录），与 PS `Get-ChildItem -Recurse` 的精确交错仍属未测。
+- 快捷方式遍历原为 BFS，注释却写「Depth-first」；已改为真正的深度优先（先本目录 `.lnk`，再按 `read_dir` 顺序递归子目录），限额前的有序前缀由 [正确性续做](2026-11-04-rust-applications-correctness-dsh.md) 的 `keeps_the_folder_order_before_crossing_into_siblings` 固定；与 PS `Get-ChildItem -Recurse` 在超限场景的精确交错仍属未测。
 - 应用测试与浏览器读取测试并行时，`yu-windows.exe` 进程名枚举会串到其他 worker 的 helper，导致「恰好一个新 helper」断言抖动；改为按父进程 PID 归属（`childrenOf`），并让阻塞用例轮询等 helper 出现而不是固定 sleep。
 
 ### 7.7 未测项
