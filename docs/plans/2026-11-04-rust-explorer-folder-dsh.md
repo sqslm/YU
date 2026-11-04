@@ -26,6 +26,8 @@ Assert-OriginalWindow
 
 要点：先按 HWND 过滤（非本窗口的 Shell 窗口不取 `Document`，因此它们的文档类型不影响结果）；命中窗口取 `Document.Folder.Self.Path`；`Sort-Object -Unique` 去重（默认大小写不敏感）；**再次** `Assert-OriginalWindow`；只有“恰好一个且是真实目录”才给 `folder`，否则 `null`（键始终存在）。输出 `ConvertTo-Json -Compress`。
 
+**已知差异（不阻断，未改代码）：** PS 的 `Sort-Object -Unique` 是区域感知的大小写不敏感比较，Rust `select()` 用 `eq_ignore_ascii_case`，只覆盖 ASCII。真实 Windows 路径在同一卷内大小写一致，只有人为构造非 ASCII 大小写变体时才会出现「PS 给值、Rust 给 `null`」；按 fail-closed 处理，最坏结果是少给一个值。
+
 ## 3. 实施条款
 
 - [x] `native/windows/src/folder.rs`：`IShellWindows`（CoCreateInstance + `ShellWindows` CLSID + `CLSCTX_ALL`）枚举 `Count()`/`Item(VARIANT)` → `IWebBrowser2`（`HWND()` 过滤冻结窗口）→ `Document()` → `IShellFolderViewDual` → `Folder()` → `Self_()` → `Path()`。命中窗口内的 COM 失败向上返回，与 PS 的 `$ErrorActionPreference='Stop'` 一致；未命中窗口不触碰其文档。
