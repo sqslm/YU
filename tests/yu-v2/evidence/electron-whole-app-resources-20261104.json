@@ -1,0 +1,394 @@
+{
+  "kind": "electron-whole-app-resources",
+  "version": 1,
+  "generatedAt": "2026-11-04T10:30:35.612Z",
+  "scope": {
+    "included": [
+      "cold start",
+      "first hub open",
+      "hub closed to tray, 60 s idle",
+      "twenty hub toggles then 60 s idle",
+      "pill window lifecycle"
+    ],
+    "excluded": [
+      "real microphone capture (the sandbox cannot record audio)",
+      "tray menu interaction, global hotkey chords (they collide with the running user instance)",
+      "wake word, local ASR model, chat, notes content",
+      "dev server / DevTools / heap snapshot runs (deliberately not part of the measured path)"
+    ]
+  },
+  "environment": {
+    "host": {
+      "os": "win32 10.0.26300",
+      "arch": "x64",
+      "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "cores": 16,
+      "totalMemMb": 31801
+    },
+    "node": "v24.22.2",
+    "electron": "v24.19.0",
+    "build": {
+      "entry": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\main\\index.js"
+    },
+    "profile": {
+      "isolated": true,
+      "variable": "--user-data-dir=<temp>"
+    },
+    "scenarios": {
+      "openSamples": 20,
+      "idleRuns": 3,
+      "idleMs": 60000,
+      "toggles": 20
+    },
+    "measurement": {
+      "memory": "K32GetProcessMemoryInfo PROCESS_MEMORY_COUNTERS_EX2 per PID; unavailable reported, never zero",
+      "cpu": "GetProcessTimes user+kernel delta over an explicit window; cores reported with the window",
+      "openLatency": "performance.now() at spawn(second instance) → settings window (\"语\") first visible in EnumWindows",
+      "tree": "Win32_Process parent chain from the launched main PID"
+    },
+    "settings": "empty isolated profile; the harness writes no settings and imports no user data"
+  },
+  "attribution": {
+    "hypothesis": "The pill (bar) renderer is created at startup and never destroyed, although it is only visible while a take runs; it also pulls in a spare utility process and inflates the main and GPU processes.",
+    "change": "Create the pill window on demand and destroy it once it has been hidden for 30 s (src/main/bar-retire.ts + the pipeline bar sink), leaving every reveal path to recreate it through ensureBarWindow().",
+    "files": [
+      "src/main/index.ts",
+      "src/main/bar-retire.ts",
+      "src/main/bar-retire.test.ts"
+    ]
+  },
+  "baseline": {
+    "trayIdlePrivateResidentBytes": {
+      "samples": [
+        112513024,
+        113221632,
+        109772800,
+        109502464,
+        110198784,
+        115179520,
+        110116864,
+        112881664,
+        112390144,
+        112902144,
+        109969408,
+        109903872,
+        112963584,
+        112500736,
+        109719552,
+        109367296,
+        112812032,
+        109957120,
+        112345088,
+        110321664,
+        98557952,
+        100831232,
+        97955840,
+        97955840
+      ],
+      "median": 110116864
+    },
+    "groups": {
+      "electron": {
+        "privateResidentBytes": 96526336,
+        "workingSetBytes": 438992896,
+        "committedBytes": 177115136,
+        "count": 5
+      },
+      "helper": {
+        "privateResidentBytes": 589824,
+        "workingSetBytes": 5586944,
+        "committedBytes": 950272,
+        "count": 1
+      },
+      "conhost": {
+        "privateResidentBytes": 839680,
+        "workingSetBytes": 7815168,
+        "committedBytes": 1220608,
+        "count": 1
+      }
+    },
+    "togglesPrivateResidentBytes": 104919040,
+    "firstOpenMs": {
+      "samples": [
+        7268,
+        1128.856,
+        1096.171,
+        1111.92,
+        1285.011,
+        1132.623,
+        1282.293,
+        1107.342,
+        1111.123,
+        1126.051,
+        1204.557,
+        1118.398,
+        1120.651,
+        1096.444,
+        1083.397,
+        1072.138,
+        1090.876,
+        1077.723,
+        1093.69,
+        1095.958,
+        1305.349
+      ],
+      "summary": {
+        "count": 21,
+        "min": 1072.138,
+        "p50": 1111.92,
+        "p95": 1305.349,
+        "max": 7268
+      }
+    },
+    "reopenMs": {
+      "count": 20,
+      "min": 1038.461,
+      "p50": 1100.509,
+      "p95": 1148.181,
+      "max": 1179.613
+    },
+    "idleCpu": 0.673,
+    "lifecycle": [
+      {
+        "at": "startup",
+        "renderers": [
+          33620
+        ]
+      },
+      {
+        "at": "hub-open",
+        "renderers": [
+          33620,
+          6252
+        ]
+      },
+      {
+        "at": "after-hide-idle",
+        "renderers": [
+          33620
+        ]
+      }
+    ]
+  },
+  "candidate": {
+    "trayIdlePrivateResidentBytes": {
+      "samples": [
+        70934528,
+        71315456,
+        70750208,
+        74063872,
+        70713344,
+        71057408,
+        70729728,
+        70787072,
+        73879552,
+        71090176,
+        70897664,
+        71413760,
+        73932800,
+        73613312,
+        71098368,
+        74039296,
+        71069696,
+        70942720,
+        70815744,
+        71135232,
+        61014016,
+        60428288,
+        60567552,
+        60567552
+      ],
+      "median": 70942720
+    },
+    "groups": {
+      "electron": {
+        "privateResidentBytes": 59142144,
+        "workingSetBytes": 229019648,
+        "committedBytes": 118009856,
+        "count": 3
+      },
+      "helper": {
+        "privateResidentBytes": 589824,
+        "workingSetBytes": 5586944,
+        "committedBytes": 946176,
+        "count": 1
+      },
+      "conhost": {
+        "privateResidentBytes": 835584,
+        "workingSetBytes": 7811072,
+        "committedBytes": 1208320,
+        "count": 1
+      }
+    },
+    "togglesPrivateResidentBytes": 73293824,
+    "firstOpenMs": {
+      "samples": [
+        7208,
+        1101.869,
+        1104.882,
+        1120.678,
+        1082.739,
+        1104.172,
+        1087.01,
+        1088.804,
+        1185.603,
+        1140.414,
+        1087.309,
+        1125.196,
+        1093.037,
+        1116.477,
+        1096.645,
+        1257.641,
+        1280.739,
+        1101.652,
+        1124.639,
+        1128.017,
+        1335.126
+      ],
+      "summary": {
+        "count": 21,
+        "min": 1082.739,
+        "p50": 1116.477,
+        "p95": 1335.126,
+        "max": 7208
+      }
+    },
+    "reopenMs": {
+      "count": 20,
+      "min": 1048.186,
+      "p50": 1101.306,
+      "p95": 1237.859,
+      "max": 1280.344
+    },
+    "idleCpu": 0,
+    "lifecycle": [
+      {
+        "at": "startup",
+        "renderers": []
+      },
+      {
+        "at": "hub-open",
+        "renderers": [
+          30132
+        ]
+      },
+      {
+        "at": "after-hide-idle",
+        "renderers": []
+      }
+    ]
+  },
+  "comparison": {
+    "trayIdlePrivateResident": {
+      "baselineMedianBytes": 110116864,
+      "candidateMedianBytes": 70942720,
+      "deltaBytes": -39174144,
+      "deltaMiB": -37.4,
+      "deltaPct": -35.58,
+      "byGroupMiB": {
+        "electron": {
+          "baseline": 92.1,
+          "candidate": 56.4,
+          "helperPids": [
+            "electron.exe",
+            "electron.exe",
+            "electron.exe",
+            "electron.exe",
+            "electron.exe"
+          ]
+        },
+        "helper": {
+          "baseline": 0.6,
+          "candidate": 0.6,
+          "helperPids": [
+            "yu-hotkey.exe"
+          ]
+        },
+        "conhost": {
+          "baseline": 0.8,
+          "candidate": 0.8,
+          "helperPids": [
+            "conhost.exe"
+          ]
+        }
+      }
+    },
+    "toggleGrowth": {
+      "baselineBytes": 104919040,
+      "candidateBytes": 73293824,
+      "candidatePctVsIdle": 3.31
+    },
+    "openLatency": {
+      "baselineP95Ms": 1305.349,
+      "candidateP95Ms": 1335.126,
+      "p95DeltaMs": 29.777,
+      "comparable": true,
+      "reason": "same harness, same isolated profile, same build mode on one machine"
+    },
+    "idleCpu": {
+      "baseline": 0.673,
+      "candidate": 0,
+      "windowMs": {
+        "baseline": 62027,
+        "candidate": 62051
+      },
+      "cores": 16
+    },
+    "rendererLifecycle": {
+      "baseline": {
+        "startup": [
+          33620
+        ],
+        "hubOpen": [
+          6252,
+          33620
+        ],
+        "afterHideIdle": [
+          33620
+        ],
+        "startupSurvivorsAfterIdle": [
+          33620
+        ],
+        "hubSurvivorsAfterIdle": []
+      },
+      "candidate": {
+        "startup": [],
+        "hubOpen": [
+          30132
+        ],
+        "afterHideIdle": [],
+        "startupSurvivorsAfterIdle": [],
+        "hubSurvivorsAfterIdle": []
+      },
+      "note": "compared by PID identity, not by renderer count: the hub renderer was already destroyed fifteen seconds after hiding before this change, so a count alone cannot tell which renderer survived"
+    }
+  },
+  "thresholds": {
+    "memory": {
+      "percentAtMost": -15,
+      "bytesAtMost": -31457280,
+      "met": true
+    },
+    "noSustainedGrowth": {
+      "met": true,
+      "observedPctVsIdle": 3.31
+    },
+    "openLatency": {
+      "p95RegressionMsAtMost": 100,
+      "met": true,
+      "observedMs": 29.777
+    },
+    "pillRetired": {
+      "met": true,
+      "detail": "the renderer started with the app (the pill) must be gone once the hub has been closed and the app idles; the hub renderer is expected to go too, which it already did before this change"
+    }
+  },
+  "decision": "adopted",
+  "reasons": [
+    "tray-idle private resident -35.58% / -37.4 MiB (needs <= -15% and <= -30 MiB)",
+    "growth after twenty toggles 3.31% (needs <= 5%)",
+    "hub open P95 29.777 ms (needs <= +100 ms)",
+    "pill renderer retired after idle: yes (startup renderers still alive: none)",
+    "microphone, tray menu and global-chord flows are listed as untested rather than covered"
+  ]
+}

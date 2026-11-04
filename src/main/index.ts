@@ -8,6 +8,7 @@ import { setMemoryService } from './memory/registry'
 import { memoryIdleCheck } from './memory/idle'
 import { onboardingCapabilities } from '@shared/onboarding'
 import { GameMode } from './game-mode'
+import { wireBarRetirement } from './bar-retire'
 import { observeGame, gameProcessAlive } from './game-mode-native'
 import type { GameModeStatus } from '@shared/game-mode'
 import { personalCommand } from './tools/personal'
@@ -1071,6 +1072,14 @@ function ensureBarWindow(): BrowserWindow {
   barWindow.on('closed', () => {
     if (moveTimer) clearTimeout(moveTimer)
     barWindow = null
+  })
+  // The pill lives for the take, not for the session: once it has been hidden
+  // long enough, its renderer is destroyed and the next reveal recreates it
+  // (the renderer's `bar:ready` replays whatever state was sent meanwhile).
+  wireBarRetirement(barWindow, {
+    isBusy: () => Boolean(pipeline?.isBusy) || notesRecording || cardVoice.active || Boolean(wakeSetupMode),
+    isCardVisible: () => Boolean(cardWindow && !cardWindow.isDestroyed() && cardWindow.isVisible()),
+    log
   })
   return barWindow
 }
@@ -2268,7 +2277,7 @@ async function bootstrap(): Promise<void> {
     win.webContents.send('reminders:open', view)
   }, broadcastReminders, log)
 
-  pipeline = new Pipeline(() => store.get(), history, () => barWindow, log, {
+  pipeline = new Pipeline(() => store.get(), history, () => ensureBarWindow(), log, {
     entities: entityMatcher,
     revealBar: revealBarWindow,
     contentTarget: original => original.pid === process.pid ? foregroundWindow(true) : undefined,
@@ -2514,7 +2523,6 @@ async function bootstrap(): Promise<void> {
     },
     log: (line) => log(line)
   })
-  ensureBarWindow()
   if (!process.argv.includes('--background')) ensureSettingsWindow()
 
   hotkeys!.start(store.get())

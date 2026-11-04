@@ -25,6 +25,7 @@
     "benchmark:explorer-folder": "node scripts/build-native.mjs && node scripts/benchmark-explorer-folder.mjs",
     "benchmark:recent-files": "node scripts/build-native.mjs && node scripts/benchmark-recent-files.mjs",
     "benchmark:applications": "node scripts/build-native.mjs && node scripts/benchmark-applications.mjs",
+    "benchmark:app": "node scripts/build-native.mjs && electron-vite build && node scripts/benchmark-electron-app.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "node scripts/build-native.mjs && vitest run",
     "test:watch": "node scripts/build-native.mjs && vitest",
