@@ -293,6 +293,15 @@ fn subkey_names(key: HKEY) -> Result<Vec<String>, Failure> {
     Ok(names)
 }
 
+/// Statuses that mean "this App Paths entry is not a usable string".
+///
+/// `2` is a missing value; `1630` is a present value of the wrong type, which the
+/// baseline reads as text that fails the `.exe` pattern and skips. Anything else,
+/// including access denial, is a real failure.
+fn value_missing(status: u32) -> bool {
+    matches!(status, 2 | 1630)
+}
+
 fn default_string(key: HKEY, name: &str) -> Result<Option<String>, Failure> {
     let name = wide(name);
     let mut size = 0u32;
@@ -308,7 +317,10 @@ fn default_string(key: HKEY, name: &str) -> Result<Option<String>, Failure> {
             Some(&mut size),
         )
     };
-    if status.0 == 2 {
+    // 2: the value is missing. 1630 (ERROR_UNSUPPORTED_TYPE): the default value
+    // is not a string, which the baseline reads as text that fails the `.exe`
+    // pattern and skips. Access denial stays a real failure below.
+    if value_missing(status.0) {
         return Ok(None);
     }
     if status != ERROR_SUCCESS {
@@ -330,6 +342,9 @@ fn default_string(key: HKEY, name: &str) -> Result<Option<String>, Failure> {
             Some(&mut size),
         )
     };
+    if value_missing(status.0) {
+        return Ok(None);
+    }
     if status != ERROR_SUCCESS {
         return Err(failed("App Paths value", win32(status.0)));
     }
@@ -860,6 +875,16 @@ mod tests {
         assert_eq!(kept.len(), 2);
         let paths: Vec<&str> = kept.iter().map(|entry| field(entry, "path")).collect();
         assert!(paths.iter().any(|path| path.ends_with("b.exe")));
+    }
+
+    #[test]
+    fn missing_and_non_string_default_values_are_not_failures() {
+        // Observed on this platform: a REG_DWORD default value makes
+        // RegGetValueW(RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ) report 1630, and the
+        // baseline reads that number as text that fails the `.exe` pattern.
+        assert!(value_missing(2), "ERROR_FILE_NOT_FOUND");
+        assert!(value_missing(1630), "ERROR_UNSUPPORTED_TYPE");
+        assert!(!value_missing(5), "access denied stays fatal");
     }
 
     #[test]
