@@ -26,7 +26,7 @@
 | 12 | 本地 TTS 生命周期观测与验收口径对齐 | 已完成 `9c07ce7`；helper 源码未改，重建后 336896 B / `e5664328…` | [开发计划与结果](plans/2026-11-04-rust-speech-lifecycle-dsh.md)：生命周期 CPU 差分与朗读期峰值内存可复现采集；总计划/阶段计划/README 未测项措辞一致；证据落 `rust-speech-lifecycle-<日期>.json` |
 | 13 | 浏览器地址读取 | 已完成；392704 B / `52266cd4…` | [开发计划与结果](plans/2026-11-04-rust-browser-url-dsh.md)：`browser-url` 迁入一次性 Windows helper；原窗口、地址候选与权限边界一致，真实 Edge 对照 + 每侧 40 样本达标后接入 |
 | 14 | 资源管理器文件夹读取 | 已完成；396800 B / `aa9232e5…` | [开发计划与结果](plans/2026-11-04-rust-explorer-folder-dsh.md)：`explorer-folder` 迁入一次性 Windows helper；Shell 窗口绑定与原窗口校验一致，真实资源管理器对照 + 每侧 40 样本达标后接入 |
-| 15 | 最近文件读取 | 进行中 | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序、`recordedAt` 格式与键序与 PS 逐字一致，真实 Recent 目录对照 + 每侧 40 样本达标后接入 |
+| 15 | 最近文件读取 | 已完成；418816 B / `f822b819…` | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -340,6 +340,22 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 **阶段 14 结果**：实现新增 `native/windows/src/folder.rs`（Shell 窗口枚举、`IWebBrowser2` HWND 过滤、`Folder2.Self.Path`、去重与存在性判定，含 3 个单测）；`assert_original` 上移到 `operations.rs` 供 `address.rs` 与 `folder.rs` 共用，`window_check` 的“最小化即报错”规则未变；`Cargo.toml` 只补 `Win32_UI_Shell`，未新增依赖。TypeScript 侧只把 `explorer-folder` 加进 `src/main/windows-native.ts` 的 `nativeActions`，PowerShell 分支保留为基准对照与回滚参照。证据 `tests/yu-v2/evidence/rust-explorer-folder-20261104.json`（`generatedAt` 2026-11-04T00:04:26Z，`binary.sha256` `aa9232e5…`），最终 `native/bin/yu-windows.exe` 396800 B / `aa9232e554340e42d13e01f7e99e718f31415ec2a008e7222a2ce9c31f222010`。验证：`cargo fmt -- --check`、`cargo clippy --locked --offline --all-targets -- -D warnings`、`cargo test --locked --offline`（12 单测）、`node scripts/benchmark-explorer-folder.mjs --samples 20` 全部通过；五个 TypeScript 文件 149 用例通过；`pnpm typecheck`、`pnpm test:native`、`pnpm build`、`pnpm test` 237 文件 3535 用例全通过。阶段 13 的三处 P3（构建哈希因果、`address.rs` 行数、PS `browser-url` 分支保留说明）随本轮文档提交修正。
 
 **未测项（阶段 14 后）**：同一 HWND 绑定多个 Shell 文件夹（资源管理器多标签切换后再冻结）未构造；“唯一值”歧义只由单测覆盖。网络共享（UNC）路径、超过 260 字符的长路径、符号链接与 OneDrive 占位目录未测。窗口在请求中途被关闭（而非标题变化）只由失效句柄用例近似覆盖；UAC 提权窗口、锁屏与远程桌面未测。fixture 依赖本机 `explorer.exe`：基准自行打开唯一临时目录窗口并在结束后关闭，不触碰操作者已开的资源管理器窗口，但需要可用桌面会话。
+
+## 阶段 15：最近文件读取
+
+`search_file_activity` 的 `recent-files` 原先每次启动 PowerShell、加载 `WScript.Shell` 并为每个 `.lnk` 建一次 COM 对象，本轮迁到现有一次性 `yu-windows.exe`（新增 `native/windows/src/recent.rs`）。`applications`、`activate`、`search`、`current-content` 与 TS 侧的 `pathAllowed`/`realpath`/`stat`/`day` 过滤未动，没有新增常驻进程、端口或可执行文件。详细规则、基准与交付要求见[阶段 15 计划](plans/2026-11-04-rust-recent-files-dsh.md)。
+
+- [x] 按 `resources/windows-tools.ps1:6-18` 逐条对齐：已知文件夹 `FOLDERID_Recent`、只取 `*.lnk` 且是文件、先按 `.lnk` 的 `LastWriteTimeUtc` 降序再截断 300、`TargetPath` 为空跳过、`recordedAt` 是 `.lnk` 的时间。
+      `recordedAt` 用 7 位小数 + `Z` 的 `yyyy-MM-ddTHH:mm:ss.fffffffZ`，由 4 个单测钉住（含纪元、闰日、跨年与 FILETIME 换算）。
+- [x] 键序与字面量对齐。实测 PS 输出为 `source` → `files`、每条 `path` → `source` → `recordedAt`；Rust 用 `serde_json` 默认字典序，键序不同、文档语义相同，基准按解析后结构比较（详见计划 §2）。
+- [x] 基准只读真实 Recent 目录、不写入，并检测运行期漂移。7 项结构化 checks 全 PASS、退出码 0：`result-identical`、`corpus-shape`、`recorded-at-format`、`recent-stable-during-run`、`parent-death-retires-worker`、`samples-per-side`、`measurement-comparable`。
+- [x] 同机交错每侧至少 20 个有效样本；行为一致且延迟或可比内存收益达到计划门槛，才切换生产路由。
+      每侧 40 个有效样本（PS/Rust/Rust/PS 交错）：整次请求 P50 879 → 25ms、P95 913 → 27ms（−97.1%，−886ms）；CPU P50 1578 → 16ms（−99.0%）；私有内存 P50 67.5 → 1.5MB（−97.7%）。延迟与内存两项门槛都过，`decision = latency`，已把 `recent-files` 加入 `nativeActions`。
+- [x] DSH 自行更新已实现项、实际验证、证据、未测项与提交编号，完成文档和代码收尾。
+
+**阶段 15 结果**：实现新增 `native/windows/src/recent.rs`（`SHGetKnownFolderPath(FOLDERID_Recent)` → `FindFirstFileW` 枚举 → 稳定降序排序 → 截断 300 → `IShellLinkW` + `IPersistFile::Load(STGM_READ)` + `GetPath`，含 5 个单测，其中 1 个在临时目录自建 3 个真实 `.lnk` 校验形状、顺序与时间格式）；`operations.rs` 增 `recent-files` 分支，`Cargo.toml` 未新增 crate 或 feature。TypeScript 侧只把 `recent-files` 加进 `src/main/windows-native.ts` 的 `nativeActions` 并同步两个 `it.each`，PowerShell 分支保留为基准对照与回滚参照。证据 `tests/yu-v2/evidence/rust-recent-files-20261104.json`（`generatedAt` 2026-11-04T00:17:38Z，`binary.sha256` `f822b819…`），最终 `native/bin/yu-windows.exe` 418816 B / `f822b8194353582f9172013bec351de82f888078d73fa2fa9b3053cf90ec29c7`。验证：`cargo fmt -- --check`、`cargo clippy --locked --offline --all-targets -- -D warnings`、`cargo test --locked --offline`（17 单测）、`node scripts/benchmark-recent-files.mjs --samples 20` 全部通过；`vitest` 两文件 24 用例；`pnpm typecheck`、`pnpm test:native`、`pnpm build`、`pnpm test` 全通过。
+
+**未测项（阶段 15 后）**：本机 `Recent` 目录 `.lnk` 计数为 0，真实条目内容（`path`/`recordedAt`）的端到端两侧对照不可得，只有派生 PS 输出与单测覆盖；正好 300 条的截断边界、`LastWriteTimeUtc` 并列时的顺序、指向已删除目标或网络共享（UNC）的 `.lnk`、损坏 `.lnk` 未构造。用户运行中途打开文件造成的条目漂移只检测并记录（`recent-stable-during-run`），不阻断。
 
 ## 后续阶段的推进规则
 
