@@ -27,6 +27,7 @@
 | 13 | 浏览器地址读取 | 已完成（含正确性续做与读取边界续做）；430592 B / `11994ce3…` | [开发计划与结果](plans/2026-11-04-rust-browser-url-dsh.md)、[正确性计划与结果](plans/2026-11-04-rust-browser-url-correctness-dsh.md)、[读取边界计划与结果](plans/2026-11-04-rust-browser-url-read-boundary-dsh.md)：`browser-url` 迁入一次性 Windows helper；原窗口、地址候选与权限边界一致，自有 UIA fixture 逐 mode 对照 + 每侧 40 样本达标后接入 |
 | 14 | 资源管理器文件夹读取 | 已完成；396800 B / `aa9232e5…` | [开发计划与结果](plans/2026-11-04-rust-explorer-folder-dsh.md)：`explorer-folder` 迁入一次性 Windows helper；Shell 窗口绑定与原窗口校验一致，真实资源管理器对照 + 每侧 40 样本达标后接入 |
 | 15 | 最近文件读取 | 已完成；418816 B / `f822b819…`（阶段 15 交付时值；阶段 13 的两次续做重链接同一产物后为 430080 B / `303e2772…` → 后续读取边界续做再重建） | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
+| 16 | 已登记应用列表 | 待 DSH 实施，基线 `2b0a399` | [开发计划](plans/2026-11-04-rust-applications-dsh.md)：仅迁移 `applications`；四类来源、排序/截断及安全规则一致，真实只读验收与同机收益达标后才接入 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -362,6 +363,15 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 **阶段 15 结果**：实现新增 `native/windows/src/recent.rs`（`SHGetKnownFolderPath(FOLDERID_Recent)` → `FindFirstFileW` 枚举 → 稳定降序排序 → 截断 300 → `IShellLinkW` + `IPersistFile::Load(STGM_READ)` + `GetPath`，含 5 个单测，其中 1 个在临时目录自建 3 个真实 `.lnk` 校验形状、顺序与时间格式）；`operations.rs` 增 `recent-files` 分支，`Cargo.toml` 未新增 crate 或 feature。TypeScript 侧只把 `recent-files` 加进 `src/main/windows-native.ts` 的 `nativeActions` 并同步两个 `it.each`，PowerShell 分支保留为基准对照与回滚参照。证据 `tests/yu-v2/evidence/rust-recent-files-20261104.json`（`generatedAt` 2026-11-04T00:17:38Z，`binary.sha256` `f822b819…`），最终 `native/bin/yu-windows.exe` 418816 B / `f822b8194353582f9172013bec351de82f888078d73fa2fa9b3053cf90ec29c7`。验证：`cargo fmt -- --check`、`cargo clippy --locked --offline --all-targets -- -D warnings`、`cargo test --locked --offline`（17 单测）、`node scripts/benchmark-recent-files.mjs --samples 20` 全部通过；`vitest` 两文件 24 用例；`pnpm typecheck`、`pnpm test:native`、`pnpm build`、`pnpm test` 全通过。
 
 **未测项（阶段 15 后）**：本机 `Recent` 目录 `.lnk` 计数为 0，真实条目内容（`path`/`recordedAt`）的端到端两侧对照不可得，只有派生 PS 输出与单测覆盖；正好 300 条的截断边界、`LastWriteTimeUtc` 并列时的顺序、指向已删除目标或网络共享（UNC）的 `.lnk`、损坏 `.lnk` 未构造。用户运行中途打开文件造成的条目漂移只检测并记录（`recent-stable-during-run`），不阻断。
+
+## 阶段 16：已登记应用列表（待实施）
+
+`open_application` 每次仍通过 PowerShell 读取 App Paths、Programs/CommonPrograms 快捷方式、Get-StartApps 和系统项，作为下一处候选迁移到现有一次性 Windows helper。只迁移 `applications`，保留 TS 名称/权限/选择逻辑与 PS `activate`；完整名单、排序、参数排除与生命周期一致且性能达标才接入，否则保留原 action。
+
+- [ ] 按[阶段 16 计划](plans/2026-11-04-rust-applications-dsh.md)核对四类来源、完整集合及当前文化排序/去重/截断。
+- [ ] 自有快捷方式与边界测试、真实只读枚举和取消/资源回收通过，不执行应用或改真实登记。
+- [ ] 同机交错每侧至少 20 个有效样本，达到计划采纳条件后再决定生产路由。
+- [ ] DSH 自行回填实施项、验证、证据、限制与提交编号，完成代码及文档收尾。
 
 ## 后续阶段的推进规则
 
