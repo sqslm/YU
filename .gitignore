@@ -18,6 +18,7 @@
 !/docs/plans/2026-11-03-rust-memory-graph-dsh.md
 !/docs/plans/2026-11-03-rust-voice-wake-dsh.md
 !/docs/plans/2026-11-03-rust-wake-correctness-dsh.md
+!/docs/plans/2026-11-05-rust-knowledge-profile-dsh.md
 !/package.json
 !/pnpm-lock.yaml
 !/pnpm-workspace.yaml
