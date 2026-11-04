@@ -33,6 +33,7 @@
 | 15 | 最近文件读取 | 已完成；交付时值 418816 B / `f822b819…`（每次重链接都会变，当前为 480256 B / `a44c2c2e…`） | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
 | 16 | 已登记应用列表 | 已完成（含正确性续做）；480256 B / `a44c2c2e…` | [开发计划](plans/2026-11-04-rust-applications-dsh.md)：仅迁移 `applications`；四类来源、排序/截断及安全规则一致，真实只读验收与同机收益达标后接入；正确性续做见[计划](plans/2026-11-04-rust-applications-correctness-dsh.md) |
 | 17 | 应用枚举收口与剩余 Windows 桥接评估 | 已完成；466944 B / `0a1680be…` | [开发计划与结果](plans/2026-11-04-rust-windows-final-assessment-dsh.md)：注册表四档真实端点测试、文化比较失败显式出口；只读测量剩余三个 PS action 并给出「迁移收束」建议，本阶段不新增其生产路由 |
+| 18 | Electron 整应用资源基线与首项优化 | 待 DSH 实施 | [开发计划](plans/2026-11-04-electron-whole-app-resources-dsh.md)：完整进程树、同场景对照，先归因再做一项最小优化；整应用资源目标仍待验收 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
