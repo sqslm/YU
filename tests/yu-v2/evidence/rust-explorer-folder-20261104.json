@@ -1,0 +1,835 @@
+{
+  "kind": "windows-helper-comparison",
+  "version": 1,
+  "meta": {
+    "generatedAt": "2026-11-04T00:04:26.920Z",
+    "host": {
+      "os": "win32",
+      "cpuModel": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+      "cores": 16
+    },
+    "node": "v24.22.2",
+    "samples": 20,
+    "operation": "explorer-folder",
+    "request": {
+      "action": "explorer-folder",
+      "handleFormat": "decimal HWND",
+      "pid": 42412,
+      "title": "yu-explorer-folder-IhtY9s - 文件资源管理器"
+    },
+    "fixture": {
+      "browser": "explorer.exe",
+      "windowClass": "CabinetWClass",
+      "folder": "unique temp directory with fixture.txt",
+      "titleSuffix": " - 文件资源管理器",
+      "placement": "normal window opened by the benchmark (closed afterwards)"
+    },
+    "measurement": {
+      "method": "job accounting + wall clock",
+      "cpuWindow": "spawn → stdio close",
+      "notes": "Both sides spawn one process per request; PowerShell loads resources/windows-tools.ps1, the native side runs native/bin/yu-windows.exe and reads Document.Folder.Self.Path through Shell automation."
+    }
+  },
+  "binary": {
+    "path": "native/bin/yu-windows.exe",
+    "bytes": 396800,
+    "sha256": "aa9232e554340e42d13e01f7e99e718f31415ec2a008e7222a2ce9c31f222010"
+  },
+  "scope": {
+    "included": [
+      "explorer-folder shell window lookup and folder path",
+      "original window guard",
+      "parent death retirement"
+    ],
+    "excluded": [
+      "current-content",
+      "browser-url",
+      "recent-files",
+      "window enumeration",
+      "activation",
+      "search",
+      "no persistent service"
+    ]
+  },
+  "runs": [
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 990.0883999999996,
+      "cpuMs": 1750,
+      "peakPrivateKb": 67568
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 41.30749999999989,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1708
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.48189999999977,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1788
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 988.3294999999998,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 67464
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1011.5623000000005,
+      "cpuMs": 1765.625,
+      "peakPrivateKb": 67632
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.01050000000032,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1796
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.28759999999966,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1792
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 980.3356999999996,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 67576
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 994.9624000000003,
+      "cpuMs": 1765.625,
+      "peakPrivateKb": 67612
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.1234000000004,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1716
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 40.67530000000079,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1788
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1032.4915,
+      "cpuMs": 1828.125,
+      "peakPrivateKb": 67696
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 982.5089000000007,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 67636
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.02899999999863,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1716
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 37.97099999999955,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 1712
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1011.5804000000007,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 67628
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 995.4298999999992,
+      "cpuMs": 1718.75,
+      "peakPrivateKb": 67644
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.53989999999976,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1724
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 37.79980000000069,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1716
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 985.7551000000003,
+      "cpuMs": 1828.125,
+      "peakPrivateKb": 67768
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 977.9602999999988,
+      "cpuMs": 1703.125,
+      "peakPrivateKb": 67564
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.54030000000057,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1720
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.99439999999959,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 1780
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 978.1875999999975,
+      "cpuMs": 1718.75,
+      "peakPrivateKb": 67676
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 953.3266999999978,
+      "cpuMs": 1718.75,
+      "peakPrivateKb": 67608
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.4400999999998,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1720
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 41.42160000000149,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1716
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 983.210500000001,
+      "cpuMs": 1765.625,
+      "peakPrivateKb": 67560
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1003.266599999999,
+      "cpuMs": 1765.625,
+      "peakPrivateKb": 67372
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 40.36739999999918,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1716
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 40.877300000000105,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1708
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1002.3606,
+      "cpuMs": 1796.875,
+      "peakPrivateKb": 67600
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 967.4284000000007,
+      "cpuMs": 1656.25,
+      "peakPrivateKb": 67448
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 37.16400000000067,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1704
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 36.851699999999255,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1724
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 952.8885999999984,
+      "cpuMs": 1734.375,
+      "peakPrivateKb": 67676
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 971.9036999999989,
+      "cpuMs": 1828.125,
+      "peakPrivateKb": 67416
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.32749999999942,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1696
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.074799999998504,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1708
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 979.0167000000001,
+      "cpuMs": 1734.375,
+      "peakPrivateKb": 67564
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 979.1418999999987,
+      "cpuMs": 1750,
+      "peakPrivateKb": 67404
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.4916000000012,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 1704
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 37.15459999999803,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1712
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 991.9546000000009,
+      "cpuMs": 1781.25,
+      "peakPrivateKb": 67484
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 974.0591999999997,
+      "cpuMs": 1750,
+      "peakPrivateKb": 67556
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 40.177700000000186,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1708
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.51680000000124,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1804
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1009.1991000000016,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 67748
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 979.4485000000022,
+      "cpuMs": 1750,
+      "peakPrivateKb": 67568
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.71680000000197,
+      "cpuMs": 62.5,
+      "peakPrivateKb": 1712
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.429299999999785,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1696
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 983.3687000000027,
+      "cpuMs": 1765.625,
+      "peakPrivateKb": 67484
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 994.5118999999977,
+      "cpuMs": 1781.25,
+      "peakPrivateKb": 67360
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.13969999999972,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1716
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.208999999995285,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 1796
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 985.4395000000004,
+      "cpuMs": 1859.375,
+      "peakPrivateKb": 67552
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1001.7440999999963,
+      "cpuMs": 1890.625,
+      "peakPrivateKb": 67700
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 48.77679999999964,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1800
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 40.91769999999815,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1808
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1124.4372000000003,
+      "cpuMs": 2000,
+      "peakPrivateKb": 67800
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 979.2805000000008,
+      "cpuMs": 1828.125,
+      "peakPrivateKb": 67484
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.18309999999474,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 1708
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.21600000000035,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1696
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 975.8405000000057,
+      "cpuMs": 1765.625,
+      "peakPrivateKb": 67500
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 998.3828999999969,
+      "cpuMs": 1765.625,
+      "peakPrivateKb": 67488
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.15380000000005,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1724
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 39.217499999998836,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1796
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 990.6860000000015,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 67664
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1014.6330999999991,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 67552
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.8608000000022,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1704
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.23960000000079,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1712
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 968.2649999999994,
+      "cpuMs": 1656.25,
+      "peakPrivateKb": 67552
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 1001.1310000000012,
+      "cpuMs": 1734.375,
+      "peakPrivateKb": 67656
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 37.81620000000112,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1716
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 36.696100000001024,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1708
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 977.7549999999974,
+      "cpuMs": 1718.75,
+      "peakPrivateKb": 67560
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 955.2707999999984,
+      "cpuMs": 1781.25,
+      "peakPrivateKb": 67524
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 37.97810000000027,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 1804
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "totalMs": 38.28609999999753,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 1728
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "totalMs": 989.241700000006,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 67580
+    }
+  ],
+  "aggregate": {
+    "powershell": {
+      "side": "powershell",
+      "n": 40,
+      "invalid": [],
+      "totalMs": {
+        "p50": 985.44,
+        "p95": 1014.63
+      },
+      "cpuMs": {
+        "p50": 1765.63,
+        "p95": 1859.38
+      },
+      "peakPrivateKb": {
+        "p50": 67564,
+        "p95": 67748
+      }
+    },
+    "rust": {
+      "side": "rust",
+      "n": 40,
+      "invalid": [],
+      "totalMs": {
+        "p50": 38.86,
+        "p95": 44.01
+      },
+      "cpuMs": {
+        "p50": 31.25,
+        "p95": 46.88
+      },
+      "peakPrivateKb": {
+        "p50": 1716,
+        "p95": 1804
+      }
+    }
+  },
+  "comparison": {
+    "totalMs": {
+      "p50": 38.86,
+      "p95": 44.01,
+      "baselineP50": 985.44,
+      "baselineP95": 1014.63,
+      "p50Pct": -96.06,
+      "p95Pct": -95.66,
+      "p95DeltaMs": -970.62,
+      "comparable": true
+    },
+    "cpuMs": {
+      "p50": 31.25,
+      "p95": 46.88,
+      "baselineP50": 1765.63,
+      "baselineP95": 1859.38,
+      "p50Pct": -98.23,
+      "p95Pct": -97.48,
+      "p95DeltaMs": -1812.5,
+      "comparable": true
+    },
+    "peakPrivateKb": {
+      "p50": 1716,
+      "p95": 1804,
+      "baselineP50": 67564,
+      "baselineP95": 67748,
+      "p50Pct": -97.46,
+      "p95Pct": -97.34,
+      "p95DeltaMs": -65944,
+      "comparable": true
+    }
+  },
+  "checks": [
+    {
+      "name": "result-identical",
+      "pass": true,
+      "detail": "powershell={\"folder\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-explorer-folder-IhtY9s\"} rust={\"folder\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-explorer-folder-IhtY9s\"}"
+    },
+    {
+      "name": "folder-present",
+      "pass": true,
+      "detail": "folder=E:\\CpanQianYi\\Temp\\yu-explorer-folder-IhtY9s"
+    },
+    {
+      "name": "foreign-window-empty",
+      "pass": true,
+      "detail": "powershell={\"folder\":null} rust={\"folder\":null}"
+    },
+    {
+      "name": "stale-title-rejected",
+      "pass": true,
+      "detail": "powershell=Original window has changed or closed\r rust=Original window has changed or closed"
+    },
+    {
+      "name": "missing-window-rejected",
+      "pass": true,
+      "detail": "powershell=Original window has changed or closed\r rust=Original window has changed or closed"
+    },
+    {
+      "name": "parent-death-retires-worker",
+      "pass": true,
+      "detail": "code=0 after 3ms"
+    },
+    {
+      "name": "samples-per-side",
+      "pass": true,
+      "detail": "powershell=40 rust=40"
+    },
+    {
+      "name": "measurement-comparable",
+      "pass": true,
+      "detail": "both sides measured by wall clock and job accounting"
+    },
+    {
+      "name": "fixture-isolated-and-stable",
+      "pass": true,
+      "detail": "handle=17501014 pid=42412 finalTitle=\"yu-explorer-folder-IhtY9s - 文件资源管理器\""
+    }
+  ],
+  "passed": true,
+  "adoption": {
+    "latencyMeets": true,
+    "memoryMeets": true,
+    "decision": "latency"
+  },
+  "raw": {
+    "first": {
+      "powershell": "{\"folder\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-explorer-folder-IhtY9s\"}",
+      "rust": "{\"folder\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-explorer-folder-IhtY9s\"}"
+    },
+    "foreign": {
+      "powershell": "{\"folder\":null}",
+      "rust": "{\"folder\":null}"
+    },
+    "stale": {
+      "powershell": "Original window has changed or closed\r",
+      "rust": "Original window has changed or closed"
+    },
+    "orphan": {
+      "code": 0,
+      "at": 6080.4618
+    }
+  }
+}

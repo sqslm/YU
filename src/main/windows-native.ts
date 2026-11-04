@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { app } from 'electron'
 
-const nativeActions = new Set(['window-check', 'disk-space', 'system-volume', 'ocr', 'browser-url'])
+const nativeActions = new Set(['window-check', 'disk-space', 'system-volume', 'ocr', 'browser-url', 'explorer-folder'])
 
 /** Fixed executables/scripts only. Native failures never retry through PowerShell. */
 export function windowsNative(request: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {

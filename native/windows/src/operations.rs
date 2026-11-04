@@ -24,6 +24,8 @@ use windows::{
 
 #[path = "address.rs"]
 mod address;
+#[path = "folder.rs"]
+mod folder;
 #[path = "ocr.rs"]
 mod ocr;
 
@@ -83,6 +85,10 @@ pub fn run(request: &Value) -> Result<Value, Box<dyn Error>> {
             let _runtime = Runtime::initialize()?;
             address::browser_url(request)
         }
+        Some("explorer-folder") => {
+            let _runtime = Runtime::initialize()?;
+            folder::explorer_folder(request)
+        }
         Some("disk-space") => disk_space(),
         Some("system-volume") => system_volume(request),
         Some("ocr") => {
@@ -90,6 +96,25 @@ pub fn run(request: &Value) -> Result<Value, Box<dyn Error>> {
             ocr::recognize(request)
         }
         _ => Err("Unknown operation".into()),
+    }
+}
+
+/// The frozen HWND/PID/title guard shared by the read-only window actions.
+fn assert_original(window: HWND, request: &Value) -> Result<String, Box<dyn Error>> {
+    // SAFETY: caller-supplied handles are validated by the OS, never dereferenced.
+    unsafe {
+        let mut pid = 0;
+        GetWindowThreadProcessId(window, Some(&mut pid));
+        let mut title = [0u16; 1024];
+        let length = GetWindowTextW(window, &mut title).max(0) as usize;
+        let title = String::from_utf16_lossy(&title[..length]);
+        if !IsWindow(Some(window)).as_bool()
+            || request["pid"].as_u64() != Some(pid as u64)
+            || title != request["title"].as_str().unwrap_or("")
+        {
+            return Err("Original window has changed or closed".into());
+        }
+        Ok(title)
     }
 }
 

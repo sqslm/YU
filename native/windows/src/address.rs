@@ -1,3 +1,4 @@
+use super::assert_original;
 use crate::input;
 use serde_json::{Value, json};
 use std::{error::Error, path::Path};
@@ -8,14 +9,11 @@ use windows::{
             Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
             Variant::VARIANT,
         },
-        UI::{
-            Accessibility::{
-                CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
-                IUIAutomationValuePattern, TreeScope_Descendants, UIA_CONTROLTYPE_ID,
-                UIA_ComboBoxControlTypeId, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
-                UIA_EditControlTypeId, UIA_ToolBarControlTypeId, UIA_ValuePatternId,
-            },
-            WindowsAndMessaging::{GetWindowTextW, GetWindowThreadProcessId, IsWindow},
+        UI::Accessibility::{
+            CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
+            IUIAutomationValuePattern, TreeScope_Descendants, UIA_CONTROLTYPE_ID,
+            UIA_ComboBoxControlTypeId, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
+            UIA_EditControlTypeId, UIA_ToolBarControlTypeId, UIA_ValuePatternId,
         },
     },
     core::Interface,
@@ -291,25 +289,6 @@ pub fn browser_url(request: &Value) -> Result<Value, Box<dyn Error>> {
             None => json!({"title":title,"truncated":false,"url":url}),
         },
     })
-}
-
-/// The frozen HWND/PID/title guard shared with window-check.
-fn assert_original(window: HWND, request: &Value) -> Result<String, Box<dyn Error>> {
-    // SAFETY: caller-supplied handles are validated by the OS, never dereferenced.
-    unsafe {
-        let mut pid = 0;
-        GetWindowThreadProcessId(window, Some(&mut pid));
-        let mut title = [0u16; 1024];
-        let length = GetWindowTextW(window, &mut title).max(0) as usize;
-        let title = String::from_utf16_lossy(&title[..length]);
-        if !IsWindow(Some(window)).as_bool()
-            || request["pid"].as_u64() != Some(pid as u64)
-            || title != request["title"].as_str().unwrap_or("")
-        {
-            return Err("Original window has changed or closed".into());
-        }
-        Ok(title)
-    }
 }
 
 #[cfg(test)]
