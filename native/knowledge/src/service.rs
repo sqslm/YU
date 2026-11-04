@@ -113,8 +113,8 @@ impl Service {
             }),
             "source.save" => {
                 let store = self.store()?;
-                let connection = store.knowledge.lock().map_err(lock_error)?;
-                let source = sources::save(&connection, decode(params)?)?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let source = sources::save(&mut connection, decode(params)?)?;
                 Ok(changed(
                     serde_json::to_value(source).map_err(encode_error)?,
                     "sources",
@@ -133,11 +133,10 @@ impl Service {
             }
             "source.invalidate" => {
                 let store = self.store()?;
-                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
                 let params: InvalidateParams = decode(params)?;
-                ensure_not_cancelled()?;
                 let source =
-                    sources::invalidate(&connection, &params.id, params.reason.as_deref())?;
+                    sources::invalidate(&mut connection, &params.id, params.reason.as_deref())?;
                 Ok(changed(
                     serde_json::to_value(source).map_err(encode_error)?,
                     "sources",

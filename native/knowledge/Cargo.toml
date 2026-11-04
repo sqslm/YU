@@ -8,6 +8,16 @@ publish = false
 name = "yu-knowledge"
 path = "src/main.rs"
 
+# Test-only closed-loop fixture. Never enabled by the native build script, so it
+# is not produced by a packaging build and never reaches native/bin.
+[[bin]]
+name = "yu-knowledge-fixture"
+path = "bin/fixture.rs"
+required-features = ["fixture"]
+
+[features]
+fixture = []
+
 [dependencies]
 # Pinned: the knowledge/profile databases must be readable by any later build.
 rusqlite = { version = "=0.41.1", features = ["bundled", "backup"] }

@@ -5,10 +5,16 @@
  * no listening surface. This class owns its lifetime (lazy start, idle exit,
  * teardown), the frame protocol and the model callback bridge. It never parses
  * knowledge content itself — every storage rule lives in Rust.
+ *
+ * Two rules shape this file:
+ *  - every request has one total deadline, from the call to the answer, so a
+ *    helper that never becomes ready cannot hold a request forever;
+ *  - every frame, timer and model answer is bound to the process generation it
+ *    came from, so a late frame from a replaced helper can never settle a
+ *    request, a model call or a pending table of its successor.
  */
 
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from 'node:child_process'
-import { createInterface } from 'node:readline'
 
 import {
   KNOWLEDGE_LIMITS,
@@ -35,9 +41,27 @@ import {
 import type { KnowledgeCompleter } from './model'
 
 interface Pending {
+  method: string
   resolve: (value: unknown) => void
   reject: (error: Error) => void
   timer: NodeJS.Timeout
+  child: ChildProcessWithoutNullStreams
+  generation: number
+}
+
+interface ModelCall {
+  controller: AbortController
+  parentId: string
+  generation: number
+}
+
+/** The raw `status` result of a running helper. */
+interface HelperStatus {
+  version: number
+  schema: { knowledge: number; profile: number }
+  opened: boolean
+  fts5: boolean
+  trigram: boolean
 }
 
 export interface KnowledgeHostOptions {
@@ -65,10 +89,13 @@ function describe(error: unknown): string {
 
 export class KnowledgeHost {
   private child?: ChildProcessWithoutNullStreams
+  /** Bumped on every start, stop and discard; stale frames carry an older value. */
+  private generation = 0
   private ready?: Promise<void>
+  private readySettled = false
   private settleReady?: { resolve: () => void; reject: (error: Error) => void }
   private readonly pending = new Map<string, Pending>()
-  private readonly models = new Map<string, AbortController>()
+  private readonly models = new Map<string, ModelCall>()
   private counter = 0
   private idleTimer?: NodeJS.Timeout
   /**
@@ -106,16 +133,49 @@ export class KnowledgeHost {
    */
   private start(): void {
     if (this.child || this.closed) return
+    this.generation += 1
+    const generation = this.generation
     const child = (this.options.spawn ?? defaultSpawn)!(this.options.entry, this.options.root)
     this.child = child
+    this.readySettled = false
     this.ready = new Promise<void>((resolve, reject) => {
       this.settleReady = { resolve, reject }
     })
-    const failure = new KnowledgeError('internal', 'the knowledge helper stopped')
     this.ready.catch(() => undefined)
-    const lines = createInterface({ input: child.stdout })
-    lines.on('line', (line) => this.onLine(line, failure))
-    lines.on('close', () => undefined)
+
+    const frameError = new KnowledgeError('internal', 'the knowledge helper broke the frame protocol')
+    let buffer = ''
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => {
+      if (this.child !== child || this.generation !== generation) return
+      buffer += chunk
+      // A line that never ends must be rejected before it grows without bound.
+      if (buffer.length > KNOWLEDGE_LIMITS.frame) {
+        this.log('the knowledge helper wrote more than one frame without a newline')
+        this.discard(child, frameError)
+        return
+      }
+      let index = buffer.indexOf('\n')
+      while (index >= 0) {
+        const line = buffer.slice(0, index)
+        buffer = buffer.slice(index + 1)
+        if (line.trim()) this.onLine(child, generation, line)
+        if (this.child !== child || this.generation !== generation) return
+        index = buffer.indexOf('\n')
+      }
+    })
+    child.stdout.on('error', (error) => {
+      if (this.child !== child) return
+      this.log(`cannot read the knowledge helper output: ${describe(error)}`)
+      this.discard(child, new KnowledgeError('internal', 'cannot read the knowledge helper output'))
+    })
+    // A broken pipe surfaces on stdin, not on the request that caused it.
+    child.stdin.on('error', (error) => {
+      this.log(`the knowledge helper pipe failed: ${describe(error)}`)
+      if (this.child === child) {
+        this.discard(child, new KnowledgeError('internal', 'the knowledge helper pipe failed'))
+      }
+    })
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (chunk: string) => {
       for (const line of chunk.split(/\r?\n/)) {
@@ -125,41 +185,60 @@ export class KnowledgeHost {
     child.on('error', (error) => {
       if (this.child !== child) return
       this.log(`cannot start the knowledge helper: ${describe(error)}`)
-      this.settleReady?.reject(
+      this.discard(
+        child,
         new KnowledgeError('internal', `cannot start the knowledge helper: ${describe(error)}`)
       )
-      this.settleReady = undefined
-      this.failAll(failure)
-      this.child = undefined
     })
     child.on('close', (code) => {
-      lines.close()
       // A replaced process closes after its successor is already current; it must
       // not clear the new child's state or fail the new child's requests.
       if (this.child !== child) return
-      this.child = undefined
-      this.ready = undefined
-      this.settleReady?.reject(failure)
-      this.settleReady = undefined
-      this.clearIdle()
-      for (const controller of this.models.values()) controller.abort()
-      this.models.clear()
-      this.failAll(failure)
       if (code !== 0) this.log(`the knowledge helper exited with code ${code}`)
+      this.discard(child, new KnowledgeError('internal', 'the knowledge helper stopped'))
     })
   }
 
-  private onLine(line: string, failure: KnowledgeError): void {
+  /**
+   * Drops the current process: everything bound to it fails, everything it might
+   * still send is ignored from now on.
+   */
+  private discard(child: ChildProcessWithoutNullStreams, error: Error): void {
+    if (this.child !== child) return
+    this.child = undefined
+    this.generation += 1
+    this.ready = undefined
+    this.readySettled = false
+    this.settleReady?.reject(error)
+    this.settleReady = undefined
+    this.clearIdle()
+    this.failAll(error)
+    if (child.exitCode === null && child.signalCode === null) child.kill()
+  }
+
+  private onLine(child: ChildProcessWithoutNullStreams, generation: number, line: string): void {
     if (line.length > KNOWLEDGE_LIMITS.frame) {
       this.log('the knowledge helper wrote an oversized frame')
-      this.failAll(failure)
+      this.discard(child, new KnowledgeError('internal', 'the knowledge helper wrote an oversized frame'))
       return
     }
-    let frame: HelperFrame
+    let raw: unknown
     try {
-      frame = JSON.parse(line) as HelperFrame
+      raw = JSON.parse(line)
     } catch {
       this.log('the knowledge helper wrote a malformed frame')
+      return
+    }
+    // `null`, arrays and scalars are not frames; they must not throw here.
+    if (raw === null || typeof raw !== 'object') {
+      this.log('the knowledge helper wrote a frame that is not an object')
+      return
+    }
+    const frame = raw as HelperFrame
+    // Objects without a type are not frames: ignore them instead of treating a
+    // stray value as a protocol mismatch and tearing down a healthy helper.
+    if (typeof (raw as { type?: unknown }).type !== 'string') {
+      this.log('the knowledge helper wrote an object without a frame type')
       return
     }
     if (frame.v !== KNOWLEDGE_PROTOCOL_VERSION) {
@@ -169,39 +248,79 @@ export class KnowledgeHost {
     }
     switch (frame.type) {
       case 'ready':
+        if (this.child !== child || this.generation !== generation) return
+        this.readySettled = true
         this.settleReady?.resolve()
         this.settleReady = undefined
+        this.armIdle()
         return
       case 'changed':
+        if (this.child !== child || this.generation !== generation) return
         this.options.onChanged?.(frame.scope)
         return
       case 'result': {
-        const pending = this.pending.get(frame.id)
-        if (!pending) return
+        const entry = this.pending.get(frame.id)
+        if (!entry || entry.child !== child || entry.generation !== generation) return
         this.pending.delete(frame.id)
-        clearTimeout(pending.timer)
-        if (frame.ok) pending.resolve(frame.result)
-        else pending.reject(new KnowledgeError(frame.error.code, frame.error.message))
+        clearTimeout(entry.timer)
+        this.abortModelsOf(frame.id, generation)
+        if (frame.ok) entry.resolve(frame.result)
+        else entry.reject(new KnowledgeError(frame.error.code, frame.error.message))
         this.armIdle()
         return
       }
       case 'model.request':
-        void this.answerModel(frame)
+        void this.answerModel(child, generation, frame)
         return
       default:
         this.log('the knowledge helper sent an unknown frame')
     }
   }
 
-  private write(frame: HostFrame): void {
-    const child = this.child
-    if (!child?.stdin.writable) throw new KnowledgeError('internal', 'the knowledge helper is not running')
+  private writeTo(child: ChildProcessWithoutNullStreams, frame: HostFrame): void {
+    if (this.child !== child) throw new KnowledgeError('cancelled', 'the knowledge helper was stopped')
+    if (!child.stdin.writable) throw new KnowledgeError('internal', 'the knowledge helper is not running')
     child.stdin.write(`${JSON.stringify(frame)}\n`)
   }
 
-  private async answerModel(frame: Extract<HelperFrame, { type: 'model.request' }>): Promise<void> {
+  private rejectPending(id: string, error: Error): void {
+    const entry = this.pending.get(id)
+    if (!entry) return
+    this.pending.delete(id)
+    clearTimeout(entry.timer)
+    this.abortModelsOf(id, entry.generation)
+    entry.reject(error)
+  }
+
+  /** Stops every model call a finished request had started. */
+  private abortModelsOf(parentId: string, generation: number): void {
+    for (const [id, call] of this.models) {
+      if (call.parentId !== parentId || call.generation !== generation) continue
+      this.models.delete(id)
+      call.controller.abort()
+    }
+  }
+
+  private async answerModel(
+    child: ChildProcessWithoutNullStreams,
+    generation: number,
+    frame: Extract<HelperFrame, { type: 'model.request' }>
+  ): Promise<void> {
+    const parent = this.pending.get(frame.parentId)
+    // No in-flight parent, an old process, or a reused sub id: no model call, no
+    // write, no mapping — the helper's own deadline handles the silence.
+    if (!parent || parent.child !== child || parent.generation !== generation) {
+      this.log('dropped a model request whose parent is not in flight')
+      return
+    }
+    if (this.models.has(frame.id)) {
+      this.log(`dropped a duplicate model request ${frame.id}`)
+      return
+    }
     const controller = new AbortController()
-    this.models.set(frame.id, controller)
+    this.models.set(frame.id, { controller, parentId: frame.parentId, generation })
+    const current = (): boolean =>
+      this.child === child && this.generation === generation && !controller.signal.aborted
     try {
       const completer = this.options.completer
       if (!completer) throw new KnowledgeError('model_unavailable', 'no model bridge is configured')
@@ -216,53 +335,89 @@ export class KnowledgeHost {
         maxTokens: frame.maxTokens ?? undefined,
         signal: controller.signal
       })
-      if (controller.signal.aborted) return
-      this.write({ v: KNOWLEDGE_PROTOCOL_VERSION, type: 'model.result', id: frame.id, ok: true, text })
+      if (!current()) return
+      this.writeTo(child, { v: KNOWLEDGE_PROTOCOL_VERSION, type: 'model.result', id: frame.id, ok: true, text })
     } catch (error) {
-      if (controller.signal.aborted) return
+      if (!current()) return
       const code = error instanceof KnowledgeError ? error.code : 'model_unavailable'
-      this.write({
-        v: KNOWLEDGE_PROTOCOL_VERSION,
-        type: 'model.result',
-        id: frame.id,
-        ok: false,
-        error: { code, message: describe(error).slice(0, 300) }
-      })
+      try {
+        this.writeTo(child, {
+          v: KNOWLEDGE_PROTOCOL_VERSION,
+          type: 'model.result',
+          id: frame.id,
+          ok: false,
+          error: { code, message: describe(error).slice(0, 300) }
+        })
+      } catch {
+        // The pipe is gone; the close handler already settles the request.
+      }
     } finally {
-      this.models.delete(frame.id)
+      if (this.models.get(frame.id)?.controller === controller) this.models.delete(frame.id)
       this.armIdle()
     }
   }
 
-  private async call<T>(method: KnowledgeMethod, params: unknown, timeoutMs = this.requestMs): Promise<T> {
+  /**
+   * One deadline covers the whole call: spawn, the ready handshake and the
+   * request itself. It is never restarted when the helper becomes ready.
+   */
+  private call<T>(method: KnowledgeMethod, params: unknown, timeoutMs = this.requestMs): Promise<T> {
+    if (this.closed) {
+      return Promise.reject(new KnowledgeError('internal', 'the knowledge helper is shutting down'))
+    }
     this.start()
     const child = this.child
+    const generation = this.generation
     const ready = this.ready
-    if (!child || !ready) throw new KnowledgeError('internal', 'the knowledge helper is not running')
-    await ready
-    // A stop that lands while this request was waiting for `ready` must fail it
-    // as cancelled instead of letting it write into a dead pipe.
-    if (this.child !== child) throw new KnowledgeError('cancelled', 'the knowledge helper was stopped')
+    if (!child || !ready) {
+      return Promise.reject(new KnowledgeError('internal', 'the knowledge helper is not running'))
+    }
     const id = `r${++this.counter}`
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
-        if (!this.pending.delete(id)) return
-        try {
-          this.write({ v: KNOWLEDGE_PROTOCOL_VERSION, type: 'cancel', id })
-        } catch {
-          // The pipe is already gone; the close handler fails the request.
+        if (!this.pending.has(id)) return
+        this.pending.delete(id)
+        this.abortModelsOf(id, generation)
+        if (this.child === child) {
+          try {
+            this.writeTo(child, { v: KNOWLEDGE_PROTOCOL_VERSION, type: 'cancel', id })
+          } catch {
+            // The pipe is already gone; the close handler fails the request.
+          }
         }
         reject(new KnowledgeError('timeout', `${method} did not answer within ${timeoutMs} ms`))
+        // A helper that never became ready is unusable: tear it down so the next
+        // explicit request starts a fresh process instead of queueing forever.
+        if (!this.readySettled && this.pending.size === 0) void this.stop()
       }, timeoutMs)
       timer.unref?.()
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer })
-      try {
-        this.write({ v: KNOWLEDGE_PROTOCOL_VERSION, type: 'request', id, method, params })
-      } catch (error) {
-        this.pending.delete(id)
-        clearTimeout(timer)
-        reject(error instanceof Error ? error : new Error(describe(error)))
-      }
+      this.pending.set(id, {
+        method,
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        timer,
+        child,
+        generation
+      })
+      ready.then(
+        () => {
+          if (!this.pending.has(id)) return
+          // A stop that landed while this request waited for `ready` must fail it
+          // as cancelled instead of letting it write into a dead pipe.
+          if (this.child !== child || this.generation !== generation) {
+            this.rejectPending(id, new KnowledgeError('cancelled', 'the knowledge helper was stopped'))
+            return
+          }
+          try {
+            this.writeTo(child, { v: KNOWLEDGE_PROTOCOL_VERSION, type: 'request', id, method, params })
+          } catch (error) {
+            this.rejectPending(id, error instanceof Error ? error : new Error(describe(error)))
+          }
+        },
+        (error: unknown) => {
+          this.rejectPending(id, error instanceof Error ? error : new Error(describe(error)))
+        }
+      )
     })
   }
 
@@ -271,6 +426,10 @@ export class KnowledgeHost {
       this.pending.delete(id)
       clearTimeout(pending.timer)
       pending.reject(error)
+    }
+    for (const [id, call] of this.models) {
+      this.models.delete(id)
+      call.controller.abort()
     }
   }
 
@@ -298,12 +457,12 @@ export class KnowledgeHost {
     this.clearIdle()
     const child = this.child
     this.child = undefined
+    this.generation += 1
     this.ready = undefined
+    this.readySettled = false
     this.settleReady?.reject(new KnowledgeError('cancelled', 'the knowledge helper was stopped'))
     this.settleReady = undefined
     this.failAll(new KnowledgeError('cancelled', 'the knowledge helper was stopped'))
-    for (const controller of this.models.values()) controller.abort()
-    this.models.clear()
     if (!child || child.exitCode !== null || child.signalCode !== null) return
     await new Promise<void>((resolve) => {
       const done = setTimeout(() => {
@@ -325,8 +484,31 @@ export class KnowledgeHost {
     await this.stop()
   }
 
-  status(): Promise<KnowledgeStatus> {
-    return this.call<KnowledgeStatus>('status', {})
+  /**
+   * Reports what is known without starting anything: a host that never ran the
+   * helper has no probed capabilities to report, so they stay `null` instead of
+   * being guessed. A running helper answers with its measured values.
+   */
+  async status(): Promise<KnowledgeStatus> {
+    if (!this.child) {
+      return {
+        version: KNOWLEDGE_PROTOCOL_VERSION,
+        running: false,
+        schema: null,
+        opened: false,
+        fts5: null,
+        trigram: null
+      }
+    }
+    const live = await this.call<HelperStatus>('status', {})
+    return {
+      version: live.version,
+      running: true,
+      schema: live.schema,
+      opened: live.opened,
+      fts5: live.fts5,
+      trigram: live.trigram
+    }
   }
 
   saveSource(input: SaveSourceInput): Promise<KnowledgeSource> {

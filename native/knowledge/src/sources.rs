@@ -7,7 +7,7 @@
 use rusqlite::{Connection, Row, params};
 use serde::{Deserialize, Serialize};
 
-use crate::protocol::{ApiError, ApiResult};
+use crate::protocol::{ApiError, ApiResult, MAX_BODY_CHARS};
 use crate::store::SOURCE_KINDS;
 use crate::util::{check_chars, now_ms, optional_text, require_text, sha256_hex};
 
@@ -76,7 +76,7 @@ fn sqlite_error(error: rusqlite::Error) -> ApiError {
 /// Inserts or refreshes the source identified by (kind, originRef, version).
 /// Re-reading the same version refreshes its fingerprint instead of duplicating
 /// the row, and clears a previous invalid mark.
-pub fn save(connection: &Connection, params: SaveParams) -> ApiResult<Source> {
+pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Source> {
     if !SOURCE_KINDS.contains(&params.kind.as_str()) {
         return Err(ApiError::invalid(format!(
             "unknown source kind: {}",
@@ -90,6 +90,9 @@ pub fn save(connection: &Connection, params: SaveParams) -> ApiResult<Source> {
     check_chars("version", &params.version, 200)?;
     check_chars("scope", &params.scope, 1_000)?;
     let locator = optional_text("locator", Some(params.locator), 2_000)?.unwrap_or_default();
+    // The body is in memory only: it is measured and hashed, never stored, but an
+    // unbounded body would still have to be hashed in one piece, so it is capped.
+    check_chars("text", &params.text, MAX_BODY_CHARS)?;
     let fingerprint = sha256_hex(&params.text);
     let size = i64::try_from(params.text.chars().count()).unwrap_or(i64::MAX);
     let now = params.read_at.unwrap_or_else(now_ms);
@@ -109,7 +112,10 @@ pub fn save(connection: &Connection, params: SaveParams) -> ApiResult<Source> {
            updated_at = excluded.updated_at
          RETURNING {COLUMNS}"
     );
-    connection
+    let transaction = connection.transaction().map_err(|error| {
+        ApiError::storage(format!("cannot start the source transaction: {error}"))
+    })?;
+    let source = transaction
         .query_row(
             &sql,
             params![
@@ -127,7 +133,14 @@ pub fn save(connection: &Connection, params: SaveParams) -> ApiResult<Source> {
             ],
             map,
         )
-        .map_err(sqlite_error)
+        .map_err(sqlite_error)?;
+    // A cancelled request must not land its write, so the token is checked at the
+    // commit point, after the statement but before the transaction is durable.
+    crate::util::ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the source: {error}")))?;
+    Ok(source)
 }
 
 pub fn get(connection: &Connection, id: &str) -> ApiResult<Source> {
@@ -145,12 +158,19 @@ pub fn get(connection: &Connection, id: &str) -> ApiResult<Source> {
 
 /// Marks the source as removed or unreadable. Cards that cite it stay intact;
 /// only the source row changes state.
-pub fn invalidate(connection: &Connection, id: &str, reason: Option<&str>) -> ApiResult<Source> {
+pub fn invalidate(
+    connection: &mut Connection,
+    id: &str,
+    reason: Option<&str>,
+) -> ApiResult<Source> {
     check_chars("id", id, 128)?;
     if let Some(reason) = reason {
         check_chars("reason", reason, 500)?;
     }
-    let changed = connection
+    let transaction = connection.transaction().map_err(|error| {
+        ApiError::storage(format!("cannot start the source transaction: {error}"))
+    })?;
+    let changed = transaction
         .execute(
             "UPDATE sources SET state = 'invalid', invalid_reason = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, reason, now_ms()],
@@ -159,6 +179,10 @@ pub fn invalidate(connection: &Connection, id: &str, reason: Option<&str>) -> Ap
     if changed == 0 {
         return Err(ApiError::not_found(format!("unknown source: {id}")));
     }
+    crate::util::ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the source: {error}")))?;
     get(connection, id)
 }
 

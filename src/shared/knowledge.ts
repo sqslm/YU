@@ -81,11 +81,37 @@ export interface KnowledgeCard {
   updatedAt: number
 }
 
+/**
+ * One row of a card listing. A listing never carries the body: a page of legal
+ * cards would otherwise exceed one frame. `bodyChars` tells a caller whether
+ * `card.get` is worth a round trip.
+ */
+export interface KnowledgeCardSummary {
+  id: string
+  kind: CardKind
+  title: string
+  summary: string
+  topics: string[]
+  aliases: string[]
+  sourceIds: string[]
+  bodyChars: number
+  edited: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * `hasMore` and `nextOffset` describe what the helper actually returned. A page
+ * may carry fewer items than `limit` when the byte budget filled up, so the next
+ * request must start at `nextOffset` — never at `offset + limit`.
+ */
 export interface KnowledgeCardPage {
-  items: KnowledgeCard[]
+  items: KnowledgeCardSummary[]
   total: number
   offset: number
   limit: number
+  hasMore: boolean
+  nextOffset: number | null
 }
 
 export interface ProfileEvidence {
@@ -114,14 +140,21 @@ export interface ProfilePage {
   total: number
   offset: number
   limit: number
+  hasMore: boolean
+  nextOffset: number | null
 }
 
+/**
+ * Capability report. Asking for it never starts the helper: an idle host answers
+ * `running: false` with unknown capabilities instead of pretending a probe ran.
+ */
 export interface KnowledgeStatus {
   version: number
-  schema: { knowledge: number; profile: number }
+  running: boolean
+  schema: { knowledge: number; profile: number } | null
   opened: boolean
-  fts5: boolean
-  trigram: boolean
+  fts5: boolean | null
+  trigram: boolean | null
 }
 
 export interface SaveSourceInput {

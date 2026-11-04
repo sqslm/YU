@@ -50,13 +50,24 @@ impl Link {
     /// Writes one frame. The mutex makes a frame atomic against every other
     /// writer, so concurrent requests never interleave inside a line.
     pub fn write(&self, frame: &Value) -> ApiResult<()> {
+        self.write_line(&protocol::frame_line(frame).map_err(|error| {
+            ApiError::new(Code::Internal, format!("cannot encode a frame: {error}"))
+        })?)
+    }
+
+    /// Writes one already-encoded frame, so a caller can measure the exact bytes
+    /// it is about to send.
+    pub fn write_line(&self, line: &str) -> ApiResult<()> {
         let mut out = self
             .out
             .lock()
             .map_err(|_| ApiError::new(Code::Internal, "the stdout writer was poisoned"))?;
-        protocol::write_frame(&mut **out, frame).map_err(|error| {
-            ApiError::new(Code::Internal, format!("cannot write to stdout: {error}"))
-        })
+        out.write_all(line.as_bytes())
+            .and_then(|()| out.write_all(b"\n"))
+            .and_then(|()| out.flush())
+            .map_err(|error| {
+                ApiError::new(Code::Internal, format!("cannot write to stdout: {error}"))
+            })
     }
 
     fn take(&self, id: &str) -> Option<Waiter> {

@@ -22,6 +22,11 @@ pub const MAX_TOPIC_CHARS: usize = 100;
 pub const DEFAULT_PAGE: u32 = 30;
 pub const MAX_PAGE: u32 = 100;
 
+/// Byte budget for the items of one page. A legal page must never grow past the
+/// frame limit, so a list keeps whole items while they fit in this budget and
+/// reports the rest through `nextOffset`.
+pub const RESULT_BUDGET_BYTES: usize = 1024 * 1024;
+
 /// Deadline for a request that never waits on a model callback.
 pub const OP_TIMEOUT_MS: u64 = 15_000;
 /// Deadline for a request that may wait on a model callback.
@@ -321,11 +326,45 @@ pub fn read_frame<R: BufRead>(reader: &mut R) -> io::Result<Frame> {
 }
 
 pub fn write_frame(out: &mut dyn Write, frame: &Value) -> io::Result<()> {
-    let mut bytes = serde_json::to_vec(frame)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let mut bytes = frame_line(frame)?.into_bytes();
     bytes.push(b'\n');
     out.write_all(&bytes)?;
     out.flush()
+}
+
+/// One frame as the exact text that goes on the wire, so a writer can check the
+/// real byte length before committing to the line.
+pub fn frame_line(frame: &Value) -> io::Result<String> {
+    serde_json::to_string(frame).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+/// Keeps whole items while their serialized size stays inside the byte budget,
+/// so one legal page can never exceed the frame limit. `total` is the row count
+/// of the query, so a caller that stops early still learns there is more; the
+/// first item is always kept so a page always makes progress.
+pub fn fit_page<T: serde::Serialize>(
+    items: Vec<T>,
+    total: i64,
+    offset: u32,
+) -> (Vec<T>, bool, Option<u32>) {
+    let mut kept = Vec::new();
+    let mut bytes = 0usize;
+    let mut stopped = false;
+    for item in items {
+        let size = serde_json::to_vec(&item)
+            .map(|value| value.len())
+            .unwrap_or(MAX_FRAME_BYTES);
+        if !kept.is_empty() && bytes + size + 1 > RESULT_BUDGET_BYTES {
+            stopped = true;
+            break;
+        }
+        bytes += size + 1;
+        kept.push(item);
+    }
+    let end = offset + u32::try_from(kept.len()).unwrap_or(u32::MAX);
+    let more = stopped || i64::from(end) < total;
+    let next = if more { Some(end) } else { None };
+    (kept, more, next)
 }
 
 pub fn ready_frame(fts5: bool, trigram: bool) -> Value {
@@ -448,6 +487,33 @@ mod tests {
                 _ => panic!("expected request"),
             }
         }
+    }
+
+    #[test]
+    fn a_page_keeps_whole_items_inside_the_byte_budget() {
+        let items = vec![
+            "x".repeat(400_000),
+            "y".repeat(400_000),
+            "z".repeat(400_000),
+        ];
+        let (kept, more, next) = fit_page(items, 3, 0);
+        assert_eq!(
+            kept.len(),
+            2,
+            "two items fit, the third would exceed the budget"
+        );
+        assert!(more);
+        assert_eq!(next, Some(2));
+        let (kept, more, next) = fit_page(vec!["q".repeat(16)], 1, 0);
+        assert_eq!(kept.len(), 1);
+        assert!(!more);
+        assert_eq!(next, None);
+        // The first item is always kept, so even an oversized one still makes
+        // progress instead of returning an empty page with the same offset.
+        let (kept, more, next) = fit_page(vec!["z".repeat(RESULT_BUDGET_BYTES + 16)], 1, 7);
+        assert_eq!(kept.len(), 1);
+        assert!(!more);
+        assert_eq!(next, None);
     }
 
     #[test]

@@ -9,7 +9,7 @@
 use rusqlite::{Connection, Row, params};
 use serde::{Deserialize, Serialize};
 
-use crate::protocol::{ApiError, ApiResult, Code};
+use crate::protocol::{ApiError, ApiResult, Code, fit_page};
 use crate::store::CATEGORIES;
 use crate::util::{check_chars, new_id, now_ms, page, require_text};
 
@@ -47,6 +47,8 @@ pub struct ProfilePage {
     pub total: i64,
     pub offset: u32,
     pub limit: u32,
+    pub has_more: bool,
+    pub next_offset: Option<u32>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -422,10 +424,13 @@ pub fn list(connection: &Connection, params: ListParams) -> ApiResult<ProfilePag
         .collect::<rusqlite::Result<Vec<ProfileItem>>>()
         .map_err(sqlite_error)?;
     attach_evidence(connection, &mut items)?;
+    let (items, has_more, next_offset) = fit_page(items, total, offset);
     Ok(ProfilePage {
         items,
         total,
         offset,
         limit,
+        has_more,
+        next_offset,
     })
 }

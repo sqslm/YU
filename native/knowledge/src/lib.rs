@@ -134,7 +134,7 @@ pub fn run() -> i32 {
                             };
                             let shutdown = outcome.map(|outcome| outcome.shutdown).unwrap_or(false);
                             let scope = outcome_scope(&request.method);
-                            let _ = worker_link.write(&answer);
+                            let _ = write_answer(&worker_link, &request.id, &answer);
                             if let Some(scope) = scope {
                                 let _ = worker_link.write(&protocol::changed_frame(scope));
                             }
@@ -160,6 +160,25 @@ pub fn run() -> i32 {
     0
 }
 
+/// Writes one result, replacing an oversized answer with a bounded error frame so
+/// a single huge response can never break the stream and strand later requests.
+fn write_answer(link: &Link, id: &str, frame: &serde_json::Value) -> protocol::ApiResult<()> {
+    let encode = |value: &serde_json::Value| {
+        protocol::frame_line(value).map_err(|error| {
+            ApiError::new(Code::Internal, format!("cannot encode a frame: {error}"))
+        })
+    };
+    let line = encode(frame)?;
+    if line.len() < protocol::MAX_FRAME_BYTES {
+        return link.write_line(&line);
+    }
+    let error = ApiError::new(
+        Code::TooLarge,
+        "the response does not fit in one 2 MiB frame; request a narrower page or a shorter body",
+    );
+    link.write_line(&encode(&protocol::error_frame(id, &error))?)
+}
+
 fn outcome_scope(method: &str) -> Option<&'static str> {
     match method {
         "source.save" | "source.invalidate" => Some("sources"),
@@ -171,7 +190,38 @@ fn outcome_scope(method: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::root_from_args;
+    use super::{Link, protocol, root_from_args};
+
+    #[test]
+    fn an_oversized_answer_is_replaced_with_a_bounded_error_frame() {
+        struct Sink(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+        impl std::io::Write for Sink {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let link = Link::new(Box::new(Sink(sink.clone())));
+        let huge = protocol::result_frame(
+            "r1",
+            &serde_json::json!({ "body": "a".repeat(protocol::MAX_FRAME_BYTES) }),
+        );
+        super::write_answer(&link, "r1", &huge).unwrap();
+        let text = String::from_utf8(sink.lock().unwrap().clone()).unwrap();
+        let line = text.lines().next().expect("one frame");
+        assert!(
+            line.len() < protocol::MAX_FRAME_BYTES,
+            "the error frame stays small"
+        );
+        let frame: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(frame["id"], "r1");
+        assert_eq!(frame["ok"], false);
+        assert_eq!(frame["error"]["code"], "too_large");
+    }
 
     #[test]
     fn root_argument_is_required_and_quotes_are_stripped() {

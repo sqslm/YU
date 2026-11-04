@@ -8,11 +8,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
     ApiError, ApiResult, Code, MAX_BODY_CHARS, MAX_QUERY_CHARS, MAX_SUMMARY_CHARS, MAX_TITLE_CHARS,
+    fit_page,
 };
 use crate::store::CARD_KINDS;
 use crate::util::{check_chars, new_id, now_ms, page, require_text};
 
 const CARD_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.body, c.topics, c.aliases, c.edited, c.created_at, c.updated_at,
+       (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids
+  FROM cards c";
+
+/// A listing never carries the body: eleven legal cards of 200,000 characters
+/// would otherwise exceed one frame and fail the whole page. `length(c.body)`
+/// tells a caller whether there is a body worth fetching.
+const CARD_LIST_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.topics, c.aliases, c.edited, c.created_at, c.updated_at,
+       length(c.body) AS body_chars,
        (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids
   FROM cards c";
 
@@ -32,13 +41,35 @@ pub struct Card {
     pub updated_at: i64,
 }
 
+/// One row of a card listing: everything the list view needs, without the body.
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CardSummary {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub summary: String,
+    pub topics: Vec<String>,
+    pub aliases: Vec<String>,
+    pub source_ids: Vec<String>,
+    pub body_chars: i64,
+    pub edited: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// `hasMore` and `nextOffset` describe what the helper actually returned, so a
+/// caller that asked for 100 items never skips the ones dropped by the byte
+/// budget: the next request starts at `nextOffset`, not at `offset + limit`.
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CardPage {
-    pub items: Vec<Card>,
+    pub items: Vec<CardSummary>,
     pub total: i64,
     pub offset: u32,
     pub limit: u32,
+    pub has_more: bool,
+    pub next_offset: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -132,6 +163,32 @@ fn map(row: &Row<'_>) -> rusqlite::Result<Card> {
         edited: row.get::<_, i64>(7)? != 0,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+    })
+}
+
+fn map_summary(row: &Row<'_>) -> rusqlite::Result<CardSummary> {
+    let topics: String = row.get(4)?;
+    let aliases: String = row.get(5)?;
+    let source_ids: Option<String> = row.get(10)?;
+    let mut source_ids: Vec<String> = source_ids
+        .unwrap_or_default()
+        .split(',')
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect();
+    source_ids.sort();
+    Ok(CardSummary {
+        id: row.get(0)?,
+        kind: row.get(1)?,
+        title: row.get(2)?,
+        summary: row.get(3)?,
+        topics: decode_list(&topics),
+        aliases: decode_list(&aliases),
+        edited: row.get::<_, i64>(6)? != 0,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
+        body_chars: row.get(9)?,
+        source_ids,
     })
 }
 
@@ -417,19 +474,25 @@ pub fn list(connection: &Connection, params: ListParams) -> ApiResult<CardPage> 
             .map_err(sqlite_error)?,
     };
     let sql = format!(
-        "{CARD_SELECT} WHERE (?1 IS NULL OR c.kind = ?1) ORDER BY c.updated_at DESC, c.id LIMIT ?2 OFFSET ?3"
+        "{CARD_LIST_SELECT} WHERE (?1 IS NULL OR c.kind = ?1) ORDER BY c.updated_at DESC, c.id LIMIT ?2 OFFSET ?3"
     );
     let mut statement = connection.prepare(&sql).map_err(sqlite_error)?;
-    let items = statement
-        .query_map(params![filter, i64::from(limit), i64::from(offset)], map)
+    let rows = statement
+        .query_map(
+            params![filter, i64::from(limit), i64::from(offset)],
+            map_summary,
+        )
         .map_err(sqlite_error)?
-        .collect::<rusqlite::Result<Vec<Card>>>()
+        .collect::<rusqlite::Result<Vec<CardSummary>>>()
         .map_err(sqlite_error)?;
+    let (items, has_more, next_offset) = fit_page(rows, total, offset);
     Ok(CardPage {
         items,
         total,
         offset,
         limit,
+        has_more,
+        next_offset,
     })
 }
 
@@ -493,23 +556,29 @@ pub fn search(connection: &Connection, params: SearchParams) -> ApiResult<CardPa
             )
             .map_err(sqlite_error)?;
         let sql = format!(
-            "{CARD_SELECT} WHERE c.title LIKE ?1 ESCAPE '\\' OR c.summary LIKE ?1 ESCAPE '\\'
+            "{CARD_LIST_SELECT} WHERE c.title LIKE ?1 ESCAPE '\\' OR c.summary LIKE ?1 ESCAPE '\\'
              OR c.body LIKE ?1 ESCAPE '\\' OR c.topics LIKE ?1 ESCAPE '\\' OR c.aliases LIKE ?1 ESCAPE '\\'
              ORDER BY CASE WHEN c.title LIKE ?1 ESCAPE '\\' OR c.aliases LIKE ?1 ESCAPE '\\'
                 OR c.topics LIKE ?1 ESCAPE '\\' THEN 0 ELSE 1 END, c.updated_at DESC, c.id
              LIMIT ?2 OFFSET ?3"
         );
         let mut statement = connection.prepare(&sql).map_err(sqlite_error)?;
-        let items = statement
-            .query_map(params![pattern, i64::from(limit), i64::from(offset)], map)
+        let rows = statement
+            .query_map(
+                params![pattern, i64::from(limit), i64::from(offset)],
+                map_summary,
+            )
             .map_err(sqlite_error)?
-            .collect::<rusqlite::Result<Vec<Card>>>()
+            .collect::<rusqlite::Result<Vec<CardSummary>>>()
             .map_err(sqlite_error)?;
+        let (items, has_more, next_offset) = fit_page(rows, total, offset);
         return Ok(CardPage {
             items,
             total,
             offset,
             limit,
+            has_more,
+            next_offset,
         });
     }
     let phrase = fts_phrase(&query);
@@ -521,21 +590,27 @@ pub fn search(connection: &Connection, params: SearchParams) -> ApiResult<CardPa
         )
         .map_err(sqlite_error)?;
     let sql = format!(
-        "{CARD_SELECT} JOIN cards_fts ON cards_fts.card_id = c.id
+        "{CARD_LIST_SELECT} JOIN cards_fts ON cards_fts.card_id = c.id
          WHERE cards_fts MATCH ?1
          ORDER BY bm25(cards_fts, 0.0, 10.0, 4.0, 1.0, 8.0, 8.0), c.updated_at DESC, c.id
          LIMIT ?2 OFFSET ?3"
     );
     let mut statement = connection.prepare(&sql).map_err(sqlite_error)?;
-    let items = statement
-        .query_map(params![phrase, i64::from(limit), i64::from(offset)], map)
+    let rows = statement
+        .query_map(
+            params![phrase, i64::from(limit), i64::from(offset)],
+            map_summary,
+        )
         .map_err(sqlite_error)?
-        .collect::<rusqlite::Result<Vec<Card>>>()
+        .collect::<rusqlite::Result<Vec<CardSummary>>>()
         .map_err(sqlite_error)?;
+    let (items, has_more, next_offset) = fit_page(rows, total, offset);
     Ok(CardPage {
         items,
         total,
         offset,
         limit,
+        has_more,
+        next_offset,
     })
 }

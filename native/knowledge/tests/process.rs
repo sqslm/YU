@@ -18,6 +18,36 @@ fn temp_root(tag: &str) -> PathBuf {
     root
 }
 
+/// Removes its directory when it drops. Declare it before the `Helper` so the
+/// process dies first and Windows releases the database files.
+struct TempRoot(PathBuf);
+
+impl TempRoot {
+    fn new(tag: &str) -> TempRoot {
+        TempRoot(temp_root(tag))
+    }
+}
+
+impl std::ops::Deref for TempRoot {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<Path> for TempRoot {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempRoot {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 struct Helper {
     child: Child,
     stdin: Option<ChildStdin>,
@@ -89,6 +119,17 @@ impl Helper {
         }
     }
 
+    /// Waits for the result of a request that was already written, skipping the
+    /// results of other requests.
+    fn await_id(&mut self, id: &str) -> Value {
+        loop {
+            let frame = self.result();
+            if frame["id"] == id {
+                return frame;
+            }
+        }
+    }
+
     fn ok(&mut self, id: &str, method: &str, params: Value) -> Value {
         let frame = self.call(id, method, params);
         assert_eq!(frame["ok"], true, "{method} failed: {frame}");
@@ -117,7 +158,7 @@ fn card_params(title: &str, body: &str) -> Value {
 
 #[test]
 fn ready_then_status_touches_no_storage_until_data_is_requested() {
-    let root = temp_root("lazy");
+    let root = TempRoot::new("lazy");
     let mut helper = Helper::start(&root, None);
     let status = helper.ok("s1", "status", json!({}));
     assert_eq!(status["version"], 1);
@@ -155,7 +196,7 @@ fn ready_then_status_touches_no_storage_until_data_is_requested() {
 
 #[test]
 fn sources_cards_search_and_profile_rules_survive_a_restart() {
-    let root = temp_root("flow");
+    let root = TempRoot::new("flow");
     let card_id;
     let source_id;
     {
@@ -272,7 +313,7 @@ fn sources_cards_search_and_profile_rules_survive_a_restart() {
 
 #[test]
 fn parallel_requests_split_frames_and_recover_from_garbage() {
-    let root = temp_root("frames");
+    let root = TempRoot::new("frames");
     let mut helper = Helper::start(&root, None);
     // Three requests in one write, plus a multi-byte character split across two writes.
     let mut batch = Vec::new();
@@ -349,7 +390,7 @@ fn parallel_requests_split_frames_and_recover_from_garbage() {
 
 #[test]
 fn the_helper_leaves_when_idle() {
-    let root = temp_root("idle");
+    let root = TempRoot::new("idle");
     let mut helper = Helper::start(&root, Some(400));
     let status = helper.ok("i1", "status", json!({}));
     assert_eq!(status["version"], 1);
@@ -366,7 +407,7 @@ fn the_helper_leaves_when_idle() {
 
 #[test]
 fn a_parent_that_disappears_takes_the_helper_with_it() {
-    let root = temp_root("orphan");
+    let root = TempRoot::new("orphan");
     let mut helper = Helper::start(&root, None);
     helper.ok(
         "o1",
@@ -387,4 +428,239 @@ fn a_parent_that_disappears_takes_the_helper_with_it() {
         "the helper is still running: {listing}"
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+fn count_rows(root: &Path, sql: &str) -> i64 {
+    let db = root.join("data").join("knowledge").join("knowledge.db");
+    let connection = rusqlite::Connection::open(db).unwrap();
+    connection.query_row(sql, [], |row| row.get(0)).unwrap()
+}
+
+/// A second connection holds the write lock while the request is cancelled. The
+/// statement may still be waiting on the lock at that moment; the commit-point
+/// check must roll the write back instead of letting a cancelled request land.
+#[test]
+fn cancel_during_a_write_lock_rolls_the_source_save_back() {
+    let root = TempRoot::new("cancel-save");
+    let mut helper = Helper::start(&root, None);
+    helper.ok(
+        "s0",
+        "source.save",
+        json!({ "kind": "note", "originRef": "n1", "text": "初稿" }),
+    );
+
+    let db = root.join("data").join("knowledge").join("knowledge.db");
+    let lock = rusqlite::Connection::open(&db).unwrap();
+    lock.busy_timeout(std::time::Duration::from_secs(10))
+        .unwrap();
+    lock.execute_batch("BEGIN IMMEDIATE").unwrap();
+    lock.execute("UPDATE sources SET updated_at = updated_at", [])
+        .unwrap();
+
+    helper.send(&json!({
+        "v": 1, "type": "request", "id": "w1", "method": "source.save",
+        "params": { "kind": "note", "originRef": "n2", "text": "第二稿" }
+    }));
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    helper.send(&json!({ "v": 1, "type": "cancel", "id": "w1" }));
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    lock.execute_batch("ROLLBACK").unwrap();
+    drop(lock);
+
+    let frame = helper.await_id("w1");
+    assert_eq!(
+        frame["ok"], false,
+        "a cancelled save must not report ok: {frame}"
+    );
+    assert_eq!(frame["error"]["code"], "cancelled");
+    assert_eq!(
+        count_rows(
+            &root,
+            "SELECT count(*) FROM sources WHERE origin_ref = 'n2'"
+        ),
+        0,
+        "the cancelled save must not be in the database"
+    );
+    assert_eq!(
+        count_rows(&root, "SELECT count(*) FROM sources"),
+        1,
+        "the pre-existing source must survive"
+    );
+}
+
+#[test]
+fn cancel_during_a_write_lock_rolls_the_source_invalidate_back() {
+    let root = TempRoot::new("cancel-invalidate");
+    let mut helper = Helper::start(&root, None);
+    let source = helper.ok(
+        "s0",
+        "source.save",
+        json!({ "kind": "web", "originRef": "https://example.invalid/a", "text": "页面正文" }),
+    );
+    let source_id = source["id"].as_str().unwrap().to_string();
+
+    let db = root.join("data").join("knowledge").join("knowledge.db");
+    let lock = rusqlite::Connection::open(&db).unwrap();
+    lock.busy_timeout(std::time::Duration::from_secs(10))
+        .unwrap();
+    lock.execute_batch("BEGIN IMMEDIATE").unwrap();
+    lock.execute("UPDATE sources SET updated_at = updated_at", [])
+        .unwrap();
+
+    helper.send(&json!({
+        "v": 1, "type": "request", "id": "w2", "method": "source.invalidate",
+        "params": { "id": source_id, "reason": "已被替换" }
+    }));
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    helper.send(&json!({ "v": 1, "type": "cancel", "id": "w2" }));
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    lock.execute_batch("ROLLBACK").unwrap();
+    drop(lock);
+
+    let frame = helper.await_id("w2");
+    assert_eq!(
+        frame["ok"], false,
+        "a cancelled invalidate must not report ok: {frame}"
+    );
+    assert_eq!(frame["error"]["code"], "cancelled");
+    assert_eq!(
+        count_rows(&root, "SELECT count(*) FROM sources WHERE state = 'active'"),
+        1,
+        "the cancelled invalidate must leave the source active"
+    );
+    assert_eq!(
+        count_rows(
+            &root,
+            "SELECT count(*) FROM sources WHERE invalid_reason IS NOT NULL"
+        ),
+        0
+    );
+}
+
+/// A cancel that arrives after the result was already written changes nothing and
+/// must not pretend it rolled something back.
+#[test]
+fn cancel_after_the_commit_changes_nothing() {
+    let root = TempRoot::new("cancel-late");
+    let mut helper = Helper::start(&root, None);
+    helper.ok(
+        "s1",
+        "source.save",
+        json!({ "kind": "chat", "originRef": "m1", "text": "已提交" }),
+    );
+    helper.send(&json!({ "v": 1, "type": "cancel", "id": "s1" }));
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    assert_eq!(
+        count_rows(&root, "SELECT count(*) FROM sources"),
+        1,
+        "a late cancel must not remove a committed row"
+    );
+    let status = helper.ok("s2", "status", json!({}));
+    assert_eq!(status["version"], 1);
+}
+
+#[test]
+fn the_source_text_limit_is_measured_in_characters_and_not_truncated() {
+    let root = TempRoot::new("text-limit");
+    let mut helper = Helper::start(&root, None);
+    let exact = "知".repeat(200_000);
+    let saved = helper.ok(
+        "t1",
+        "source.save",
+        json!({ "kind": "note", "originRef": "n-exact", "text": exact }),
+    );
+    assert_eq!(saved["size"], 200_000);
+    let over = format!("{}🌸", "知".repeat(200_000));
+    let frame = helper.call(
+        "t2",
+        "source.save",
+        json!({ "kind": "note", "originRef": "n-over", "text": over }),
+    );
+    assert_eq!(
+        frame["ok"], false,
+        "200,001 characters must be rejected: {frame}"
+    );
+    assert_eq!(frame["error"]["code"], "too_large");
+    assert_eq!(
+        count_rows(&root, "SELECT count(*) FROM sources"),
+        1,
+        "the rejected source must not be stored"
+    );
+}
+
+#[test]
+fn a_full_page_of_maximum_cards_lists_summaries_without_bodies() {
+    let root = TempRoot::new("big-page");
+    let mut helper = Helper::start(&root, None);
+    let body = "a".repeat(200_000);
+    for index in 0..11 {
+        let frame = helper.call(
+            &format!("c{index}"),
+            "card.save",
+            card_params(&format!("上限卡片 {index}"), &body),
+        );
+        assert_eq!(frame["ok"], true, "card {index} must save: {frame}");
+    }
+
+    let page = helper.ok("l1", "card.list", json!({}));
+    assert_eq!(page["total"], 11);
+    assert_eq!(page["hasMore"], false);
+    assert_eq!(page["nextOffset"], Value::Null);
+    let items = page["items"].as_array().unwrap();
+    assert_eq!(items.len(), 11, "the default page still lists every card");
+    for item in items {
+        assert!(
+            item.get("body").is_none(),
+            "a listing must not carry the body"
+        );
+        assert_eq!(item["bodyChars"], 200_000);
+    }
+    let first_id = items[0]["id"].as_str().unwrap().to_string();
+    let detail = helper.ok("g1", "card.get", json!({ "id": first_id }));
+    assert_eq!(detail["body"].as_str().unwrap().len(), 200_000);
+}
+
+#[test]
+fn paging_walks_every_card_once_with_multibyte_content() {
+    let root = TempRoot::new("paging");
+    let mut helper = Helper::start(&root, None);
+    for index in 0..5 {
+        helper.ok(
+            &format!("c{index}"),
+            "card.save",
+            json!({
+                "kind": "method",
+                "title": format!("图谱检索 {index}"),
+                "summary": "多字节摘要 🌸",
+                "body": format!("知识图谱检索的分页用例 {index} 🌸"),
+                "topics": ["检索"],
+                "aliases": []
+            }),
+        );
+    }
+    let mut seen: Vec<String> = Vec::new();
+    let mut offset = 0;
+    loop {
+        let page = helper.ok(
+            &format!("q{offset}"),
+            "card.search",
+            json!({ "query": "图谱", "offset": offset, "limit": 2 }),
+        );
+        assert_eq!(page["total"], 5);
+        for item in page["items"].as_array().unwrap() {
+            seen.push(item["id"].as_str().unwrap().to_string());
+        }
+        if page["hasMore"] == false {
+            break;
+        }
+        offset = page["nextOffset"].as_u64().unwrap();
+        assert!(offset > 0);
+    }
+    seen.sort();
+    seen.dedup();
+    assert_eq!(
+        seen.len(),
+        5,
+        "every card must appear exactly once: {seen:?}"
+    );
 }
