@@ -184,6 +184,12 @@ fn same_key(left: &Value, right: &Value) -> bool {
 
 /// Case-insensitive, culture-aware ordering, matching `Sort-Object` on the
 /// current user locale instead of a byte or ordinal comparison.
+/// Culture-aware, case-insensitive comparison like `Sort-Object`.
+///
+/// `CompareStringEx` reports failure with 0; that cannot be told apart from a
+/// successful ordering here, so a failure falls through to the remaining arms
+/// and finally to `Equal`. The measured baseline sorts identically on this
+/// machine, which is why the failure path is documented instead of guessed at.
 fn culture_compare(left: &str, right: &str) -> std::cmp::Ordering {
     use windows::Win32::Globalization::{
         COMPARE_STRING_FLAGS, CSTR_EQUAL, CSTR_LESS_THAN, CompareStringEx, NORM_IGNORECASE,
@@ -306,33 +312,38 @@ fn known_folder(id: &windows::core::GUID) -> Option<PathBuf> {
     Some(PathBuf::from(text))
 }
 
-/// Depth-first `*.lnk` walk in directory order, capped like the baseline.
+/// Depth-first `*.lnk` walk: files of a folder first, then its subfolders, capped like the baseline.
 fn shortcuts(root: &Path, limit: usize) -> Vec<PathBuf> {
     let mut found = Vec::new();
-    let mut queue = std::collections::VecDeque::from([root.to_path_buf()]);
-    while let Some(folder) = queue.pop_front() {
-        let Ok(entries) = std::fs::read_dir(&folder) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            if found.len() >= limit {
-                return found;
-            }
-            let path = entry.path();
-            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-            if is_dir {
-                queue.push_back(path);
-                continue;
-            }
-            let is_link = path
-                .extension()
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("lnk"));
-            if is_link {
-                found.push(path);
-            }
+    walk(root, limit, &mut found);
+    found
+}
+
+fn walk(folder: &Path, limit: usize, found: &mut Vec<PathBuf>) {
+    if found.len() >= limit {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return;
+    };
+    let mut folders = Vec::new();
+    for entry in entries.flatten() {
+        if found.len() >= limit {
+            return;
+        }
+        let path = entry.path();
+        if path.is_dir() {
+            folders.push(path);
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("lnk"))
+        {
+            found.push(path);
         }
     }
-    found
+    for folder in folders {
+        walk(&folder, limit, found);
+    }
 }
 
 fn shortcut_target(link: &Path) -> Option<String> {
@@ -445,7 +456,6 @@ fn shell_apps_folder() -> Vec<(String, String)> {
                     String::new()
                 };
                 items.push((appid, name));
-            } else if items.len() < 3 {
             }
             CoTaskMemFree(Some(pidl as *const _));
         }
@@ -489,6 +499,12 @@ fn unquote(text: &str) -> String {
     text.trim_matches('"').to_string()
 }
 
+/// The `.exe` tail, matched on a character boundary so a non-ASCII name never panics.
+fn exe_tail(text: &str) -> Option<&str> {
+    text.get(text.len().checked_sub(4)?..)
+        .filter(|tail| tail.eq_ignore_ascii_case(".exe"))
+}
+
 fn is_exe(text: &str) -> bool {
     if text.is_empty() {
         return false;
@@ -498,14 +514,13 @@ fn is_exe(text: &str) -> bool {
     }) {
         return false;
     }
-    text.len() >= 4 && text[text.len() - 4..].eq_ignore_ascii_case(".exe")
+    exe_tail(text).is_some()
 }
 
 fn strip_exe_suffix(text: &str) -> String {
-    if text.len() >= 4 && text[text.len() - 4..].eq_ignore_ascii_case(".exe") {
-        text[..text.len() - 4].to_string()
-    } else {
-        text.to_string()
+    match exe_tail(text) {
+        Some(tail) => text[..text.len() - tail.len()].to_string(),
+        None => text.to_string(),
     }
 }
 
@@ -536,6 +551,10 @@ mod tests {
         assert!(!is_exe(r"C:\a\b|.exe"));
         assert!(!is_exe(r"C:\a\b>.exe"));
         assert!(!is_exe(""));
+        // A multi-byte tail must not be sliced in the middle of a character.
+        assert!(!is_exe(r"C:\工具\程序"));
+        assert!(!is_exe(r"C:pps\记事"));
+        assert!(!is_exe(r"C:\说明.txt"));
     }
 
     #[test]
@@ -543,6 +562,9 @@ mod tests {
         assert_eq!(strip_exe_suffix("Foo.EXE"), "Foo");
         assert_eq!(strip_exe_suffix("Foo.exe.txt"), "Foo.exe.txt");
         assert_eq!(strip_exe_suffix("Foo"), "Foo");
+        // Non-ASCII tails keep their text instead of panicking.
+        assert_eq!(strip_exe_suffix("记事"), "记事");
+        assert_eq!(strip_exe_suffix(r"C:\工具\程序"), r"C:\工具\程序");
     }
 
     #[test]

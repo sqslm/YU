@@ -2,7 +2,7 @@
   "kind": "windows-helper-comparison",
   "version": 1,
   "meta": {
-    "generatedAt": "2026-11-04T02:34:31.634Z",
+    "generatedAt": "2026-11-04T02:46:31.772Z",
     "host": {
       "os": "win32",
       "cpuModel": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
@@ -47,8 +47,8 @@
   },
   "binary": {
     "path": "native/bin/yu-windows.exe",
-    "bytes": 474624,
-    "sha256": "5331a502ff0a4d788e20cf3aac4c3603d8cb3fe8452204bdbd406b0985e61e7a"
+    "bytes": 473600,
+    "sha256": "5ad72247c1558fe9489fbad664974a8b46f56b83e52e9daee6e198981bba15e6"
   },
   "scope": {
     "included": [
@@ -76,529 +76,9 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1584.0381000000002,
-      "cpuMs": 2375,
-      "peakPrivateKb": 105452
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 569.3072999999995,
-      "cpuMs": 343.75,
-      "peakPrivateKb": 6808
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 582.2343000000001,
-      "cpuMs": 343.75,
-      "peakPrivateKb": 6632
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1630.2359999999999,
-      "cpuMs": 2140.625,
-      "peakPrivateKb": 105748
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1604.5866999999998,
-      "cpuMs": 2250,
-      "peakPrivateKb": 105648
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 560.5348999999987,
-      "cpuMs": 375,
-      "peakPrivateKb": 6704
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 533.0659999999989,
-      "cpuMs": 343.75,
-      "peakPrivateKb": 6372
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1609.4382000000005,
-      "cpuMs": 2484.375,
-      "peakPrivateKb": 105680
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1615.107899999999,
-      "cpuMs": 2453.125,
-      "peakPrivateKb": 105748
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 545.0848999999998,
-      "cpuMs": 359.375,
-      "peakPrivateKb": 6420
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 573.1067999999996,
-      "cpuMs": 328.125,
-      "peakPrivateKb": 6564
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1558.9650000000001,
-      "cpuMs": 2140.625,
-      "peakPrivateKb": 105548
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1604.4061000000002,
-      "cpuMs": 2375,
-      "peakPrivateKb": 105552
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 548.9284000000007,
-      "cpuMs": 390.625,
-      "peakPrivateKb": 6384
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 578.829899999997,
-      "cpuMs": 390.625,
-      "peakPrivateKb": 6372
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1616.738300000001,
-      "cpuMs": 2265.625,
-      "peakPrivateKb": 105252
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1594.5591999999997,
-      "cpuMs": 2218.75,
-      "peakPrivateKb": 105284
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 554.1728000000003,
-      "cpuMs": 390.625,
-      "peakPrivateKb": 6552
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 569.8666999999987,
-      "cpuMs": 375,
-      "peakPrivateKb": 6744
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1594.5609000000004,
-      "cpuMs": 2296.875,
-      "peakPrivateKb": 105168
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1595.4527999999991,
-      "cpuMs": 2234.375,
-      "peakPrivateKb": 105312
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 560.1385000000009,
-      "cpuMs": 343.75,
-      "peakPrivateKb": 6660
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 567.1718000000001,
-      "cpuMs": 375,
-      "peakPrivateKb": 6632
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1605.232100000001,
-      "cpuMs": 2406.25,
-      "peakPrivateKb": 105628
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1597.8747999999978,
-      "cpuMs": 2390.625,
-      "peakPrivateKb": 105664
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 549.9232999999986,
-      "cpuMs": 328.125,
-      "peakPrivateKb": 6628
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 554.7099000000017,
-      "cpuMs": 343.75,
-      "peakPrivateKb": 6660
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1615.338200000002,
-      "cpuMs": 2234.375,
-      "peakPrivateKb": 105448
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1603.1054000000004,
-      "cpuMs": 2218.75,
-      "peakPrivateKb": 105584
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 553.4873999999982,
-      "cpuMs": 328.125,
-      "peakPrivateKb": 6432
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 553.3637999999992,
-      "cpuMs": 375,
-      "peakPrivateKb": 6404
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1603.2016000000003,
-      "cpuMs": 2218.75,
-      "peakPrivateKb": 105420
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1595.427499999998,
-      "cpuMs": 2171.875,
-      "peakPrivateKb": 105452
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 556.8616000000038,
-      "cpuMs": 312.5,
-      "peakPrivateKb": 6616
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 562.2456999999995,
-      "cpuMs": 343.75,
-      "peakPrivateKb": 6464
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1585.1655000000028,
-      "cpuMs": 2140.625,
-      "peakPrivateKb": 105676
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1585.8277000000016,
-      "cpuMs": 2328.125,
-      "peakPrivateKb": 105620
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 558.0061999999962,
-      "cpuMs": 375,
-      "peakPrivateKb": 6636
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 592.2759000000005,
-      "cpuMs": 390.625,
-      "peakPrivateKb": 6696
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1595.5436999999947,
-      "cpuMs": 2296.875,
-      "peakPrivateKb": 105600
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1615.0665000000008,
-      "cpuMs": 2406.25,
-      "peakPrivateKb": 105668
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 549.6269000000029,
-      "cpuMs": 359.375,
-      "peakPrivateKb": 6624
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 562.264900000002,
-      "cpuMs": 328.125,
-      "peakPrivateKb": 6616
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1618.737199999996,
-      "cpuMs": 2203.125,
-      "peakPrivateKb": 105732
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1620.0679000000018,
-      "cpuMs": 2359.375,
-      "peakPrivateKb": 105620
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 559.5216999999975,
-      "cpuMs": 453.125,
-      "peakPrivateKb": 6528
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 550.825499999999,
-      "cpuMs": 328.125,
-      "peakPrivateKb": 6464
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1638.4182,
-      "cpuMs": 2296.875,
-      "peakPrivateKb": 105820
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1597.4285000000018,
-      "cpuMs": 2203.125,
-      "peakPrivateKb": 105144
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 552.6682000000001,
-      "cpuMs": 328.125,
-      "peakPrivateKb": 6376
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 556.0617999999959,
-      "cpuMs": 359.375,
-      "peakPrivateKb": 6624
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1582.1919999999955,
-      "cpuMs": 2453.125,
-      "peakPrivateKb": 105532
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1614.9585000000006,
+      "totalMs": 1581.3054000000002,
       "cpuMs": 2281.25,
-      "peakPrivateKb": 105180
+      "peakPrivateKb": 105572
     },
     {
       "side": "rust",
@@ -606,48 +86,8 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 553.8744000000006,
-      "cpuMs": 312.5,
-      "peakPrivateKb": 6632
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 546.9372999999978,
-      "cpuMs": 328.125,
-      "peakPrivateKb": 6732
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1594.0193,
-      "cpuMs": 2203.125,
-      "peakPrivateKb": 105500
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1578.3297999999995,
-      "cpuMs": 2171.875,
-      "peakPrivateKb": 105408
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 544.1843000000008,
-      "cpuMs": 390.625,
+      "totalMs": 582.5542000000005,
+      "cpuMs": 359.375,
       "peakPrivateKb": 6716
     },
     {
@@ -656,89 +96,9 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 576.4835999999996,
-      "cpuMs": 390.625,
-      "peakPrivateKb": 6680
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1602.8539000000019,
-      "cpuMs": 2109.375,
-      "peakPrivateKb": 105244
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1606.0752999999968,
-      "cpuMs": 2265.625,
-      "peakPrivateKb": 105600
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 550.0887999999977,
-      "cpuMs": 296.875,
-      "peakPrivateKb": 6392
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 563.0936999999976,
-      "cpuMs": 281.25,
-      "peakPrivateKb": 6724
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1596.5005000000092,
-      "cpuMs": 2187.5,
-      "peakPrivateKb": 105132
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1610.3815000000031,
-      "cpuMs": 2125,
-      "peakPrivateKb": 105340
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 545.7504000000044,
+      "totalMs": 565.6053000000002,
       "cpuMs": 375,
-      "peakPrivateKb": 6648
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 556.5252000000037,
-      "cpuMs": 312.5,
-      "peakPrivateKb": 6636
+      "peakPrivateKb": 6700
     },
     {
       "side": "powershell",
@@ -746,9 +106,9 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1586.0050999999949,
-      "cpuMs": 2125,
-      "peakPrivateKb": 105348
+      "totalMs": 1629.3759,
+      "cpuMs": 2281.25,
+      "peakPrivateKb": 105256
     },
     {
       "side": "powershell",
@@ -756,9 +116,9 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1593.0759999999864,
-      "cpuMs": 2234.375,
-      "peakPrivateKb": 105448
+      "totalMs": 1618.7996000000003,
+      "cpuMs": 2359.375,
+      "peakPrivateKb": 105196
     },
     {
       "side": "rust",
@@ -766,7 +126,7 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 549.7370000000083,
+      "totalMs": 577.4293999999991,
       "cpuMs": 359.375,
       "peakPrivateKb": 6608
     },
@@ -776,59 +136,49 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 538.3901999999944,
-      "cpuMs": 406.25,
-      "peakPrivateKb": 6636
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1567.5038000000059,
-      "cpuMs": 2296.875,
-      "peakPrivateKb": 105692
-    },
-    {
-      "side": "powershell",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1599.9983000000066,
-      "cpuMs": 2265.625,
-      "peakPrivateKb": 105488
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 550.1814000000013,
-      "cpuMs": 343.75,
-      "peakPrivateKb": 6680
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 546.0712000000058,
+      "totalMs": 627.3320999999996,
       "cpuMs": 375,
+      "peakPrivateKb": 6488
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1638.8824999999997,
+      "cpuMs": 2328.125,
+      "peakPrivateKb": 105792
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1613.0648,
+      "cpuMs": 2375,
+      "peakPrivateKb": 105388
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 564.3906999999999,
+      "cpuMs": 328.125,
       "peakPrivateKb": 6396
     },
     {
-      "side": "powershell",
+      "side": "rust",
       "ok": true,
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1590.4591000000073,
-      "cpuMs": 2281.25,
-      "peakPrivateKb": 105224
+      "totalMs": 562.4537,
+      "cpuMs": 328.125,
+      "peakPrivateKb": 6680
     },
     {
       "side": "powershell",
@@ -836,29 +186,9 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1574.581600000005,
+      "totalMs": 1583.9706000000006,
       "cpuMs": 2250,
-      "peakPrivateKb": 105368
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 561.4285000000091,
-      "cpuMs": 359.375,
-      "peakPrivateKb": 6484
-    },
-    {
-      "side": "rust",
-      "ok": true,
-      "code": 0,
-      "entries": 204,
-      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 561.4719999999943,
-      "cpuMs": 375,
-      "peakPrivateKb": 6724
+      "peakPrivateKb": 105148
     },
     {
       "side": "powershell",
@@ -866,9 +196,679 @@
       "code": 0,
       "entries": 204,
       "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
-      "totalMs": 1585.3173000000097,
+      "totalMs": 1599.2518,
+      "cpuMs": 2421.875,
+      "peakPrivateKb": 105644
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 562.1023999999998,
+      "cpuMs": 343.75,
+      "peakPrivateKb": 6628
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 550.8208000000013,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6616
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1616.9801000000007,
+      "cpuMs": 2343.75,
+      "peakPrivateKb": 105444
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1586.3529000000017,
+      "cpuMs": 2187.5,
+      "peakPrivateKb": 105512
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 582.0974000000024,
+      "cpuMs": 328.125,
+      "peakPrivateKb": 6348
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 561.8833000000013,
+      "cpuMs": 312.5,
+      "peakPrivateKb": 6696
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1605.5384000000013,
+      "cpuMs": 2484.375,
+      "peakPrivateKb": 105400
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1610.3243000000002,
       "cpuMs": 2265.625,
-      "peakPrivateKb": 105200
+      "peakPrivateKb": 105400
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 558.8787000000011,
+      "cpuMs": 343.75,
+      "peakPrivateKb": 6716
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 570.0436999999984,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6456
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1772.921699999999,
+      "cpuMs": 2562.5,
+      "peakPrivateKb": 106308
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1701.5622000000003,
+      "cpuMs": 2468.75,
+      "peakPrivateKb": 105480
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 587.843499999999,
+      "cpuMs": 390.625,
+      "peakPrivateKb": 6616
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 563.6834999999992,
+      "cpuMs": 296.875,
+      "peakPrivateKb": 6624
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1642.488699999998,
+      "cpuMs": 2390.625,
+      "peakPrivateKb": 105352
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1592.1281000000017,
+      "cpuMs": 2406.25,
+      "peakPrivateKb": 105180
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 556.1278999999995,
+      "cpuMs": 390.625,
+      "peakPrivateKb": 6640
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 565.0649000000049,
+      "cpuMs": 375,
+      "peakPrivateKb": 6624
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1707.8953000000038,
+      "cpuMs": 2312.5,
+      "peakPrivateKb": 105280
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1719.8384000000005,
+      "cpuMs": 2515.625,
+      "peakPrivateKb": 105804
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 606.1952000000019,
+      "cpuMs": 312.5,
+      "peakPrivateKb": 6376
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 589.040399999998,
+      "cpuMs": 406.25,
+      "peakPrivateKb": 6664
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1638.1030000000028,
+      "cpuMs": 2218.75,
+      "peakPrivateKb": 105468
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1623.5602,
+      "cpuMs": 2265.625,
+      "peakPrivateKb": 105384
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 558.4144000000015,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6360
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 556.5740000000005,
+      "cpuMs": 406.25,
+      "peakPrivateKb": 6740
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1583.546199999997,
+      "cpuMs": 2203.125,
+      "peakPrivateKb": 105576
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1597.347099999999,
+      "cpuMs": 2265.625,
+      "peakPrivateKb": 105428
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 572.8849999999948,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6596
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 593.1768000000011,
+      "cpuMs": 343.75,
+      "peakPrivateKb": 6772
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1608.0555999999997,
+      "cpuMs": 2406.25,
+      "peakPrivateKb": 105448
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1599.2502000000022,
+      "cpuMs": 2312.5,
+      "peakPrivateKb": 105672
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 553.0349999999962,
+      "cpuMs": 343.75,
+      "peakPrivateKb": 6652
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 552.7683999999936,
+      "cpuMs": 296.875,
+      "peakPrivateKb": 6660
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1613.4170000000013,
+      "cpuMs": 2265.625,
+      "peakPrivateKb": 105080
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1594.4897999999957,
+      "cpuMs": 2312.5,
+      "peakPrivateKb": 105332
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 559.7487999999939,
+      "cpuMs": 421.875,
+      "peakPrivateKb": 6696
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 571.9118000000017,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6696
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1603.2343000000037,
+      "cpuMs": 2156.25,
+      "peakPrivateKb": 105440
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1617.6553000000058,
+      "cpuMs": 2265.625,
+      "peakPrivateKb": 105444
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 568.010000000002,
+      "cpuMs": 343.75,
+      "peakPrivateKb": 6620
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 563.5381999999954,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6668
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1613.1725000000006,
+      "cpuMs": 2250,
+      "peakPrivateKb": 105664
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1629.020500000006,
+      "cpuMs": 2437.5,
+      "peakPrivateKb": 105580
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 570.6883000000089,
+      "cpuMs": 343.75,
+      "peakPrivateKb": 6384
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 574.0740000000078,
+      "cpuMs": 328.125,
+      "peakPrivateKb": 6712
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1596.3555000000051,
+      "cpuMs": 2281.25,
+      "peakPrivateKb": 105484
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1602.4450999999972,
+      "cpuMs": 2328.125,
+      "peakPrivateKb": 105512
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 576.6125999999931,
+      "cpuMs": 437.5,
+      "peakPrivateKb": 6588
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 593.8034000000043,
+      "cpuMs": 421.875,
+      "peakPrivateKb": 6668
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1602.542100000006,
+      "cpuMs": 2312.5,
+      "peakPrivateKb": 105576
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1611.2981,
+      "cpuMs": 2250,
+      "peakPrivateKb": 105752
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 567.0299999999988,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6624
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 556.8106000000116,
+      "cpuMs": 328.125,
+      "peakPrivateKb": 6380
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1609.386400000003,
+      "cpuMs": 2218.75,
+      "peakPrivateKb": 105344
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1653.9447000000073,
+      "cpuMs": 2234.375,
+      "peakPrivateKb": 105832
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 579.8917999999976,
+      "cpuMs": 390.625,
+      "peakPrivateKb": 6400
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 582.8165000000008,
+      "cpuMs": 406.25,
+      "peakPrivateKb": 6676
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1683.080099999992,
+      "cpuMs": 2296.875,
+      "peakPrivateKb": 105728
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1601.0122999999876,
+      "cpuMs": 2203.125,
+      "peakPrivateKb": 105280
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 565.2419000000082,
+      "cpuMs": 296.875,
+      "peakPrivateKb": 6628
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 564.7223999999987,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6388
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1601.613400000002,
+      "cpuMs": 2265.625,
+      "peakPrivateKb": 105428
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1617.3310999999958,
+      "cpuMs": 2296.875,
+      "peakPrivateKb": 105536
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 571.7145000000019,
+      "cpuMs": 359.375,
+      "peakPrivateKb": 6684
+    },
+    {
+      "side": "rust",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 570.6358999999939,
+      "cpuMs": 406.25,
+      "peakPrivateKb": 6572
+    },
+    {
+      "side": "powershell",
+      "ok": true,
+      "code": 0,
+      "entries": 204,
+      "digest": "908e077a40927f0cee14025d6836b6c782514c2d8b0a599d628a462d875e7eb2",
+      "totalMs": 1618.7739000000001,
+      "cpuMs": 2140.625,
+      "peakPrivateKb": 105556
     }
   ],
   "aggregate": {
@@ -878,16 +878,16 @@
       "invalid": [],
       "entries": 204,
       "totalMs": {
-        "p50": 1597.43,
-        "p95": 1620.07
+        "p50": 1611.3,
+        "p95": 1707.9
       },
       "cpuMs": {
-        "p50": 2250,
-        "p95": 2453.13
+        "p50": 2281.25,
+        "p95": 2484.38
       },
       "peakPrivateKb": {
-        "p50": 105488,
-        "p95": 105748
+        "p50": 105448,
+        "p95": 105804
       }
     },
     "rust": {
@@ -896,48 +896,48 @@
       "invalid": [],
       "entries": 204,
       "totalMs": {
-        "p50": 554.71,
-        "p95": 578.83
+        "p50": 567.03,
+        "p95": 593.8
       },
       "cpuMs": {
         "p50": 359.38,
-        "p95": 390.63
+        "p95": 421.88
       },
       "peakPrivateKb": {
         "p50": 6624,
-        "p95": 6732
+        "p95": 6716
       }
     }
   },
   "comparison": {
     "totalMs": {
-      "p50": 554.71,
-      "p95": 578.83,
-      "baselineP50": 1597.43,
-      "baselineP95": 1620.07,
-      "p50Pct": -65.27,
-      "p95Pct": -64.27,
-      "p95DeltaMs": -1041.24,
+      "p50": 567.03,
+      "p95": 593.8,
+      "baselineP50": 1611.3,
+      "baselineP95": 1707.9,
+      "p50Pct": -64.81,
+      "p95Pct": -65.23,
+      "p95DeltaMs": -1114.1,
       "comparable": true
     },
     "cpuMs": {
       "p50": 359.38,
-      "p95": 390.63,
-      "baselineP50": 2250,
-      "baselineP95": 2453.13,
-      "p50Pct": -84.03,
-      "p95Pct": -84.08,
+      "p95": 421.88,
+      "baselineP50": 2281.25,
+      "baselineP95": 2484.38,
+      "p50Pct": -84.25,
+      "p95Pct": -83.02,
       "p95DeltaMs": -2062.5,
       "comparable": true
     },
     "peakPrivateKb": {
       "p50": 6624,
-      "p95": 6732,
-      "baselineP50": 105488,
-      "baselineP95": 105748,
+      "p95": 6716,
+      "baselineP50": 105448,
+      "baselineP95": 105804,
       "p50Pct": -93.72,
-      "p95Pct": -93.63,
-      "p95DeltaMs": -99016,
+      "p95Pct": -93.65,
+      "p95DeltaMs": -99088,
       "comparable": true
     }
   },
@@ -985,7 +985,7 @@
     {
       "name": "performance-threshold",
       "pass": true,
-      "detail": "p95 1620.07 → 578.83ms (-64.27%, -1041.24ms)"
+      "detail": "p95 1707.9 → 593.8ms (-65.23%, -1114.1ms)"
     }
   ],
   "passed": true,
@@ -1007,7 +1007,7 @@
     },
     "orphan": {
       "code": 0,
-      "at": 2727.2307
+      "at": 2676.0949
     }
   }
 }
