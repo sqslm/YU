@@ -172,6 +172,8 @@ const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), eve
 }, () => assistant.localQueries())
 let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
+/** Whether the notes page is playing or holding a recording; keeps the pill alive. */
+let noteAudioPlaying = false
 let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
@@ -200,11 +202,11 @@ let tray: ReturnType<typeof createTray> | null = null
 let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || Boolean(wakeSetupMode) || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
-const noteAudio=new NoteAudioPlayer(()=>barWindow,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null)
+const noteAudio=new NoteAudioPlayer(barSink,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,state=>{noteAudioPlaying=state.state==='playing'||state.state==='paused'})
 let selectionPreview:{target:import('./selection-editor').SelectionTarget;text:string;at:number}|null=null
 function pausePlaybackForRecording(): void {
   void speech?.pause().catch(error => log(`speech pause: ${String(error)}`))
-  if (barWindow && !barWindow.isDestroyed()) void noteAudio.control('pause').catch(error => log(`note audio pause: ${String(error)}`))
+  if (barWindow && !barWindow.isDestroyed()) void noteAudio.control('pause').then(() => { noteAudioPlaying = false }).catch(error => log(`note audio pause: ${String(error)}`))
 }
 async function openScreenshot(): Promise<boolean> {
   if (gameMode.snapshot().active || pipeline?.isBusy || notesRecording || cardVoice.active || assistant.busy || selectionEditor?.isBusy) return false
@@ -267,7 +269,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     copy: text => clipboard.writeText(text),
     readClipboard: () => clipboard.readText(),
     open: (page, noteId) => navigateHub(page, noteId),
-    controlNoteAudio:(action,id)=>noteAudio.control(action,id).then(value=>({...value})),
+    controlNoteAudio:(action,id)=>noteAudio.control(action,id).then(value=>{noteAudioPlaying=value.state==='playing'||value.state==='paused';return {...value}}),
     syncInfo:()=>({enabled:store.get().syncEnabled,signedIn:Boolean(accounts.get()),failures:sync?.noteFailures()??[]})
   },
   /**
@@ -1049,6 +1051,20 @@ async function toggleNotesRecording(): Promise<void> {
   log(`[notes] record toggle from hotkey${reveal ? '' : ' (background)'}`)
 }
 
+/**
+ * Where every subsystem asks for the pill. The window is retired when idle, so
+ * anything that reveals it or talks to its renderer must go through this sink
+ * rather than reading `barWindow`, which is null between takes.
+ *
+ * Game mode and shutdown return `null` on purpose: both have just torn the pill
+ * down and must not have a hidden renderer recreated behind their back (game mode
+ * reclaims resources every five seconds and would miss it).
+ */
+function barSink(): BrowserWindow | null {
+  if (quitting || gameMode.snapshot().active) return null
+  return ensureBarWindow()
+}
+
 function ensureBarWindow(): BrowserWindow {
   if (barWindow && !barWindow.isDestroyed()) return barWindow
   barWindow = createBarWindow(store.get().barPosition)
@@ -1077,7 +1093,7 @@ function ensureBarWindow(): BrowserWindow {
   // long enough, its renderer is destroyed and the next reveal recreates it
   // (the renderer's `bar:ready` replays whatever state was sent meanwhile).
   wireBarRetirement(barWindow, {
-    isBusy: () => Boolean(pipeline?.isBusy) || notesRecording || cardVoice.active || Boolean(wakeSetupMode),
+    isBusy: () => Boolean(pipeline?.isBusy) || notesRecording || cardVoice.active || Boolean(wakeSetupMode) || Boolean(speech?.status().speaking) || noteAudioPlaying,
     isCardVisible: () => Boolean(cardWindow && !cardWindow.isDestroyed() && cardWindow.isVisible()),
     log
   })
@@ -2277,7 +2293,7 @@ async function bootstrap(): Promise<void> {
     win.webContents.send('reminders:open', view)
   }, broadcastReminders, log)
 
-  pipeline = new Pipeline(() => store.get(), history, () => ensureBarWindow(), log, {
+  pipeline = new Pipeline(() => store.get(), history, barSink, log, {
     entities: entityMatcher,
     revealBar: revealBarWindow,
     contentTarget: original => original.pid === process.pid ? foregroundWindow(true) : undefined,
@@ -2413,7 +2429,7 @@ async function bootstrap(): Promise<void> {
     run: createSpeechRunner(app.isPackaged
       ? join(process.resourcesPath, 'native/yu-speech.exe')
       : join(app.getAppPath(), 'native/bin/yu-speech.exe')),
-    cloud: { synthesize: synthesizeSpeech, play: createSpeechPlayback(() => barWindow) },
+    cloud: { synthesize: synthesizeSpeech, play: createSpeechPlayback(barSink) },
     onBackgroundError: text => pipeline?.showAlert({ kind: 'selection', level: 'error', text }),
     log })
   calendarScheduler = new CalendarScheduler({ store: calendar, settings: () => store.get().calendar,
@@ -2641,6 +2657,7 @@ async function bootstrap(): Promise<void> {
     setTimeout(() => {
       void (async () => {
         const mock = (process.env.TYPELESS_MOCK_URL ?? 'http://127.0.0.1:8787').replace(/\/+$/, '')
+        let stay = false
         // Keep the weather shortcut on the local stub too, so the self-test is
         // runnable with no internet at all.
         process.env.TYPELESS_WEATHER_BASE = mock
@@ -2691,11 +2708,31 @@ async function bootstrap(): Promise<void> {
           await store.update({ pipelineMode: 'multimodal' })
           const multimodal = await pipeline!.debugIngest('translate')
           log(`[selftest] multimodal → ${JSON.stringify(multimodal)}`)
+          /**
+           * `TYPELESS_SELFTEST_STAY` keeps the app alive after the takes and
+           * repeats one every `TYPELESS_SELFTEST_REPEAT_MS`, which is how the
+           * resource harness observes the pill being created by a take, retired
+           * when idle, and created again by the next one.
+           */
+          const repeat = Number(process.env.TYPELESS_SELFTEST_REPEAT_MS ?? 0)
+          stay = Boolean(process.env.TYPELESS_SELFTEST_STAY) && repeat > 0
+          if (stay) {
+            log('[selftest] staying for repeated takes')
+            const timer = setInterval(() => {
+              void pipeline!.debugIngest('dictation').then(
+                result => log(`[selftest] repeat → ${JSON.stringify(result)}`),
+                error => log(`[selftest] repeat failed: ${String(error)}`)
+              )
+            }, repeat)
+            timer.unref?.()
+          }
         } catch (err) {
           log(`[selftest] failed: ${err instanceof Error ? err.message : String(err)}`)
         } finally {
-          await store.update(snapshot)
-          setTimeout(() => app.quit(), 500)
+          // The staying variant keeps the mocked settings: reverting them would
+          // point the next take back at the real endpoints.
+          if (!stay) await store.update(snapshot)
+          if (!stay) setTimeout(() => app.quit(), 500)
         }
       })()
     }, 2500)

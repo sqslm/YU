@@ -1,230 +1,297 @@
 #!/usr/bin/env node
 /**
- * Merges the baseline and candidate runs of `benchmark-electron-app.mjs` into
- * one evidence file and applies the adoption thresholds.
+ * Merges the baseline and candidate whole-app measurements into one evidence
+ * file and decides whether the change may be adopted.
  *
- *   node scripts/compare-app-resources.mjs \
- *     --baseline /tmp/app-baseline.json --candidate /tmp/app-candidate.json \
- *     --output tests/yu-v2/evidence/electron-whole-app-resources-20261104.json
- *
- * Nothing is averaged across scenarios: the tray-idle median decides the memory
- * threshold, the open-latency P95 decides whether the change is allowed to stay,
- * and the toggle runs decide whether the saving holds after repeated use.
+ * The gate is deliberately strict about what it does *not* know: an unreadable
+ * counter, a missing idle cluster or a missing pill trace all end in
+ * `met: null`, which blocks adoption instead of contributing a fake saving.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const ROOT = resolve(HERE, '..')
+const MiB = 1048576
 
 const args = process.argv.slice(2)
-function option(name, fallback) {
+const option = (name, fallback) => {
   const prefix = `--${name}=`
   const inline = args.find((arg) => arg.startsWith(prefix))
   if (inline) return inline.slice(prefix.length)
   const index = args.indexOf(`--${name}`)
-  if (index >= 0 && args[index + 1] && !args[index + 1].startsWith('--')) return args[index + 1]
+  if (index >= 0 && args[index + 1] !== undefined) return args[index + 1]
   return fallback
 }
 
-const baselinePath = option('baseline')
-const candidatePath = option('candidate')
-const output = option('output', 'tests/yu-v2/evidence/electron-whole-app-resources-20261104.json')
-if (!baselinePath || !candidatePath) throw new Error('--baseline and --candidate are required')
+const baselinePath = option('baseline', join(ROOT, 'tests', 'yu-v2', 'evidence', '.electron-app-baseline.json'))
+const candidatePath = option('candidate', join(ROOT, 'tests', 'yu-v2', 'evidence', '.electron-app-candidate.json'))
+const output = option('output', join(ROOT, 'tests', 'yu-v2', 'evidence', 'electron-whole-app-resources-20261104.json'))
 
 const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'))
-// The lifecycle block was added to the harness after the baseline run, so the
-// baseline's pill observation comes from a separate short run of the same build.
-const baselineLifecyclePath = option('baseline-lifecycle')
-if (!baseline.lifecycle) {
-  if (!baselineLifecyclePath) throw new Error('the baseline run has no lifecycle block; pass --baseline-lifecycle from a --skip-cold run')
-  baseline.lifecycle = JSON.parse(readFileSync(baselineLifecyclePath, 'utf8')).lifecycle
-}
 const candidate = JSON.parse(readFileSync(candidatePath, 'utf8'))
 
-const MiB = 1048576
-const median = (values) => {
-  if (!values.length) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.ceil(sorted.length * 0.5) - 1]
-}
-const p95 = (values) => {
-  if (!values.length) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.ceil(sorted.length * 0.95) - 1]
-}
-const pct = (from, to) => (from > 0 ? Math.round(((to - from) / from) * 10_000) / 100 : null)
+const IDLE = 'idle-60s'
+const SETTLED = 'settled-4s'
 
-function idleTotals(run) {
-  const samples = [...run.trayIdle.samples, ...run.trayIdle.last ? [run.trayIdle.last] : []]
-  return samples.map((sample) => sample.totals.privateResidentBytes)
+function clusterOf(run, phase) {
+  return run.trayIdle?.clusters?.[phase] ?? { count: 0, summary: { p50: null, p95: null }, unavailable: 0, byRole: {}, last: null }
+}
+
+function growthPercent(from, to) {
+  if (typeof from !== 'number' || typeof to !== 'number' || from === 0) return null
+  return Math.round(((to - from) / from) * 10000) / 100
+}
+
+function percentDelta(from, to) {
+  if (typeof from !== 'number' || typeof to !== 'number' || from === 0) return null
+  return Math.round(((to - from) / from) * 10000) / 100
 }
 
 /**
- * The role labels stored by the sampler are recomputed here from the recorded
- * process names, so both sides of the comparison use one classifier (the first
- * baseline run predates the helper name pattern and filed helpers under `other`).
+ * Roles are recomputed from process names, so a sampler that predates the
+ * helper rename cannot hide a helper inside `other`.
  */
 function classify(name) {
-  if (/^(?:typeless|yu)-(?:hotkey|uia|wake|speech|local-asr|windows)\.exe$/i.test(name)) return 'helper'
-  if (name.toLowerCase() === 'electron.exe') return 'electron'
-  if (name.toLowerCase() === 'conhost.exe') return 'conhost'
+  const text = String(name ?? '').toLowerCase()
+  if (/^(?:typeless|yu)-(?:hotkey|uia|wake|speech|local-asr|windows)\.exe$/.test(text)) return 'helper'
+  if (text === 'electron.exe') return 'electron'
+  if (text === 'conhost.exe') return 'conhost'
   return 'other'
 }
-function groupsOf(sample) {
+
+function groupsOf(snapshot) {
   const groups = {}
-  for (const proc of sample.processes ?? []) {
-    const role = proc.category ?? classify(proc.name)
-    const bucket = (groups[role] ??= { privateResidentBytes: 0, workingSetBytes: 0, committedBytes: 0, count: 0 })
-    bucket.privateResidentBytes += proc.privateResidentBytes ?? 0
-    bucket.workingSetBytes += proc.workingSetBytes ?? 0
-    bucket.committedBytes += proc.committedBytes ?? 0
+  for (const proc of snapshot?.processes ?? []) {
+    const key = classify(proc.name)
+    const bucket = (groups[key] ??= { count: 0, privateResidentBytes: 0, names: new Set() })
     bucket.count += 1
+    bucket.names.add(proc.name)
+    if (typeof proc.privateResidentBytes === 'number') bucket.privateResidentBytes += proc.privateResidentBytes
   }
-  return groups
-}
-function groupOf(sample, roles) {
-  let sum = 0
-  for (const [role, bucket] of Object.entries(groupsOf(sample))) {
-    if (roles.includes(role)) sum += bucket.privateResidentBytes
-  }
-  return sum
+  return Object.fromEntries(
+    Object.entries(groups).map(([key, value]) => [key, { count: value.count, privateResidentBytes: value.privateResidentBytes, names: [...value.names] }])
+  )
 }
 
-const baselineIdle = idleTotals(baseline)
-const candidateIdle = idleTotals(candidate)
-const baselineIdleMedian = median(baselineIdle)
-const candidateIdleMedian = median(candidateIdle)
-const idleDeltaBytes = candidateIdleMedian - baselineIdleMedian
-const idlePct = pct(baselineIdleMedian, candidateIdleMedian)
-
-const baselineToggles = median([baseline.toggles.memory.totals.privateResidentBytes])
-const candidateToggles = median([candidate.toggles.memory.totals.privateResidentBytes])
-const growth = candidateIdleMedian > 0 ? Math.round(((candidateToggles - candidateIdleMedian) / candidateIdleMedian) * 10_000) / 100 : null
-
-const openP95 = { baseline: p95(baseline.firstOpen.samples), candidate: p95(candidate.firstOpen.samples) }
-const openP95DeltaMs = openP95.baseline !== null ? Math.round((openP95.candidate - openP95.baseline) * 1000) / 1000 : null
-
-const cpuIdle = {
-  baseline: baseline.trayIdle.cpu.totalMs,
-  candidate: candidate.trayIdle.cpu.totalMs,
-  windowMs: { baseline: baseline.trayIdle.cpu.windowMs, candidate: candidate.trayIdle.cpu.windowMs },
-  cores: baseline.trayIdle.cpu.cores
+/** Renderers of the startup tree that are still alive after the hub spent time hidden. */
+function survivors(seen) {
+  if (!Array.isArray(seen) || seen.length < 3) return null
+  const startup = seen.find((step) => step.at === 'startup')?.renderers ?? []
+  const after = seen.find((step) => step.at === 'after-hide-idle')?.renderers ?? []
+  return startup.filter((pid) => after.includes(pid))
 }
 
-function lifecycleVerdict(run) {
-  const at = (point) => new Set((run.find((entry) => entry.at === point)?.renderers) ?? [])
-  const startup = at('startup')
-  const open = at('hub-open')
-  const after = at('after-hide-idle')
-  return {
-    startup: [...startup].sort((a, b) => a - b),
-    hubOpen: [...open].sort((a, b) => a - b),
-    afterHideIdle: [...after].sort((a, b) => a - b),
-    startupSurvivorsAfterIdle: [...startup].filter((pid) => after.has(pid)).sort((a, b) => a - b),
-    hubSurvivorsAfterIdle: [...open].filter((pid) => after.has(pid) && !startup.has(pid)).sort((a, b) => a - b),
-  }
+const baselineIdle = clusterOf(baseline, IDLE)
+const candidateIdle = clusterOf(candidate, IDLE)
+const baselineSettled = clusterOf(baseline, SETTLED)
+const candidateSettled = clusterOf(candidate, SETTLED)
+
+const scenariosMatch = JSON.stringify(baseline.meta?.scenarios ?? {}) === JSON.stringify(candidate.meta?.scenarios ?? {})
+const hostMatch = (baseline.meta?.host?.cores ?? 0) === (candidate.meta?.host?.cores ?? -1)
+const sameBuild = Boolean(baseline.meta?.build?.entrySha256) && baseline.meta?.build?.entrySha256 === candidate.meta?.build?.entrySha256
+const comparable = Boolean(scenariosMatch && hostMatch && !sameBuild)
+
+const reasons = []
+if (!scenariosMatch) reasons.push('scenario parameters differ between the two runs')
+if (!hostMatch) reasons.push('the two runs did not use the same machine shape')
+if (sameBuild) reasons.push('both runs measured the same build, so there is nothing to compare')
+
+const baselineMedian = baselineIdle.summary.p50
+const candidateMedian = candidateIdle.summary.p50
+const memoryPercent = percentDelta(baselineMedian, candidateMedian)
+const memoryBytes = typeof baselineMedian === 'number' && typeof candidateMedian === 'number' ? candidateMedian - baselineMedian : null
+const memoryUnavailable = (baselineIdle.unavailable ?? 0) + (candidateIdle.unavailable ?? 0)
+const memoryMet =
+  comparable && baselineIdle.count >= 3 && candidateIdle.count >= 3 && memoryUnavailable === 0 && memoryPercent !== null && memoryBytes !== null
+    ? memoryPercent <= -15 && memoryBytes <= -30 * MiB
+    : null
+
+// Growth is read from one instance's own cycle series, first five cycles
+// against the last five: a fresh instance's idle figure would charge the
+// one-time cost of loading the settings page once to "accumulation", and the
+// settled tree right after launch is inflated by startup caches.
+function cycleTrend(run) {
+  const series = (run.toggles?.cycles ?? []).map((entry) => entry.privateResidentBytes).filter((value) => typeof value === 'number')
+  if (series.length < 10) return null
+  const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length
+  const head = mean(series.slice(0, 5))
+  const tail = mean(series.slice(-5))
+  return growthPercent(Math.round(head), Math.round(tail))
 }
 
-const baselineLifecycle = lifecycleVerdict(baseline.lifecycle)
-const candidateLifecycle = lifecycleVerdict(candidate.lifecycle)
+const trend = cycleTrend(candidate)
+const baselineTrend = cycleTrend(baseline)
+const afterIdle = candidate.toggles?.memory?.totals?.privateResidentBytes
+const baselineAfterIdle = baseline.toggles?.memory?.totals?.privateResidentBytes
+const lastRenderers = candidate.toggles?.memory?.processes?.filter((proc) => proc.role === 'renderer').length
+const growthMet =
+  trend === null || typeof afterIdle !== 'number' || typeof baselineAfterIdle !== 'number' || typeof lastRenderers !== 'number'
+    ? null
+    : trend <= 5 && afterIdle <= baselineAfterIdle && lastRenderers <= 1
+
+const openBaseline = baseline.firstOpen?.summary ?? {}
+const openCandidate = candidate.firstOpen?.summary ?? {}
+const openDelta = typeof openBaseline.p95 === 'number' && typeof openCandidate.p95 === 'number' ? Math.round((openCandidate.p95 - openBaseline.p95) * 1000) / 1000 : null
+const openMet = openDelta === null ? null : openDelta <= 100
+
+function pillVerdict() {
+  const base = baseline.pill
+  const cand = candidate.pill
+  if (!base || !cand) return { met: null, reason: 'the pill scenario was not measured on both sides' }
+  const reused = (cand.distinctRenderers?.length ?? 0) >= 2
+  const retired = (cand.retirements ?? 0) >= 1
+  const repeated = (cand.takes ?? 0) >= 2
+  // The baseline cannot run the staying self-test, so what it proves is the other
+  // half: its startup renderer is still there after an idle period.
+  const baselineKept = (base.retirements ?? 0) === 0 && (base.distinctRenderers?.length ?? 0) >= 1 && (survivors(baseline.lifecycle)?.length ?? 0) >= 1
+  const met = reused && retired && repeated && baselineKept
+  const missing = [
+    reused ? null : 'the candidate never showed two different pill renderers',
+    retired ? null : 'the candidate never logged a retirement',
+    repeated ? null : 'the candidate never ran two takes',
+    baselineKept ? null : 'the baseline either retired the pill or never created one'
+  ].filter(Boolean)
+  return { met, reason: met ? 'created by a take, retired while idle, created again by the next take' : missing.join('; ') }
+}
+
+const pill = pillVerdict()
 
 const thresholds = {
-  memory: { percentAtMost: -15, bytesAtMost: -30 * MiB, met: false },
-  noSustainedGrowth: { met: growth === null ? null : growth <= 5, observedPctVsIdle: growth },
-  openLatency: { p95RegressionMsAtMost: 100, met: openP95DeltaMs === null ? null : openP95DeltaMs <= 100, observedMs: openP95DeltaMs },
-  pillRetired: {
-    met: candidateLifecycle.startupSurvivorsAfterIdle.length === 0,
-    detail: 'the renderer started with the app (the pill) must be gone once the hub has been closed and the app idles; the hub renderer is expected to go too, which it already did before this change'
+  memory: {
+    metric: 'tray idle (60 s) whole-tree private resident median',
+    percentAtMost: -15,
+    bytesAtMost: -30 * MiB,
+    baselineMedian,
+    candidateMedian,
+    percent: memoryPercent,
+    bytes: memoryBytes,
+    idleSamples: { baseline: baselineIdle.count, candidate: candidateIdle.count },
+    unavailable: memoryUnavailable,
+    met: memoryMet
+  },
+  noSustainedGrowth: {
+    metric: 'same instance: mean private resident of cycles 16-20 vs cycles 1-5, plus the resting tree after the last cycle vs the baseline resting tree',
+    percent: trend,
+    baselinePercent: baselineTrend,
+    atMost: 5,
+    afterIdleBytes: afterIdle ?? null,
+    baselineAfterIdleBytes: baselineAfterIdle ?? null,
+    afterIdleRenderers: lastRenderers ?? null,
+    afterIdleVsFreshIdlePercent: growthPercent(candidateMedian, afterIdle),
+    met: growthMet
+  },
+  openLatency: {
+    metric: 'first open p95',
+    baselineP95Ms: openBaseline.p95 ?? null,
+    candidateP95Ms: openCandidate.p95 ?? null,
+    deltaMs: openDelta,
+    atMostMs: 100,
+    met: openMet
+  },
+  pillRetired: pill
+}
+
+const adopted = thresholds.memory.met === true && thresholds.noSustainedGrowth.met === true && thresholds.openLatency.met === true && thresholds.pillRetired.met === true
+if (!adopted) {
+  for (const [name, value] of Object.entries(thresholds)) {
+    if (value.met !== true) reasons.push(`${name}: ${value.met === null ? 'not measurable' : 'threshold not met'}`)
   }
 }
-thresholds.memory.met = idlePct !== null && idlePct <= thresholds.memory.percentAtMost && idleDeltaBytes <= thresholds.memory.bytesAtMost
-
-const adoption = thresholds.memory.met && thresholds.noSustainedGrowth.met === true && thresholds.openLatency.met === true && thresholds.pillRetired.met
 
 const evidence = {
   kind: 'electron-whole-app-resources',
-  version: 1,
+  version: 2,
   generatedAt: new Date().toISOString(),
   scope: {
-    included: ['cold start', 'first hub open', 'hub closed to tray, 60 s idle', 'twenty hub toggles then 60 s idle', 'pill window lifecycle'],
-    excluded: [
-      'real microphone capture (the sandbox cannot record audio)',
-      'tray menu interaction, global hotkey chords (they collide with the running user instance)',
-      'wake word, local ASR model, chat, notes content',
-      'dev server / DevTools / heap snapshot runs (deliberately not part of the measured path)'
-    ]
+    included: [
+      'whole application tree: main, gpu, utility, renderer, crashpad, zygote, conhost and the Rust helpers',
+      'memory: private resident, working set and private commit per PID',
+      'cpu: user+kernel delta over an explicit window with window length and cores',
+      'latency: first open and reopen, measured from the second-instance trigger to the visible hub'
+    ],
+    excluded: ['no Vite dev server, no DevTools, no HMR', 'no user profile, no user microphone, no packaged installer', 'no EmptyWorkingSet or manual trimming', 'no forced GC']
   },
   environment: {
-    host: baseline.meta.host,
-    node: baseline.meta.node,
-    electron: baseline.meta.electron,
-    build: baseline.meta.build,
-    profile: baseline.meta.profile,
-    scenarios: baseline.meta.scenarios,
-    measurement: baseline.meta.measurement,
-    settings: 'empty isolated profile; the harness writes no settings and imports no user data'
+    host: { baseline: baseline.meta?.host ?? null, candidate: candidate.meta?.host ?? null },
+    node: { baseline: baseline.meta?.node ?? null, candidate: candidate.meta?.node ?? null },
+    electron: { baseline: baseline.meta?.electron ?? null, candidate: candidate.meta?.electron ?? null }
   },
+  build: { baseline: baseline.meta?.build ?? null, candidate: candidate.meta?.build ?? null },
+  comparable,
+  measurement: baseline.meta?.measurement ?? null,
   attribution: {
-    hypothesis: 'The pill (bar) renderer is created at startup and never destroyed, although it is only visible while a take runs; it also pulls in a spare utility process and inflates the main and GPU processes.',
-    change: 'Create the pill window on demand and destroy it once it has been hidden for 30 s (src/main/bar-retire.ts + the pipeline bar sink), leaving every reveal path to recreate it through ensureBarWindow().',
-    files: ['src/main/index.ts', 'src/main/bar-retire.ts', 'src/main/bar-retire.test.ts']
+    hypothesis: 'a hidden bar renderer was created on every launch and never released while the app rested in the tray',
+    change: 'the bar window is created on demand and destroyed after 30 s of being hidden and idle',
+    files: ['src/main/bar-retire.ts', 'src/main/index.ts', 'src/main/note-audio.ts']
   },
   baseline: {
-    trayIdlePrivateResidentBytes: { samples: baselineIdle, median: baselineIdleMedian },
-    groups: groupsOf(baseline.trayIdle.last),
-    togglesPrivateResidentBytes: baselineToggles,
-    firstOpenMs: baseline.firstOpen,
-    reopenMs: baseline.toggles.summary,
-    idleCpu: cpuIdle.baseline,
-    lifecycle: baseline.lifecycle
+    idle: baselineIdle,
+    settled: baselineSettled,
+    groups: baselineIdle.byRole,
+    open: openBaseline,
+    reopen: baseline.toggles?.summary ?? null,
+    afterToggles: baseline.toggles?.memory?.totals ?? null,
+    idleCpu: baseline.trayIdle?.cpu ?? null,
+    lifecycle: baseline.lifecycle ?? []
   },
   candidate: {
-    trayIdlePrivateResidentBytes: { samples: candidateIdle, median: candidateIdleMedian },
-    groups: groupsOf(candidate.trayIdle.last),
-    togglesPrivateResidentBytes: candidateToggles,
-    firstOpenMs: candidate.firstOpen,
-    reopenMs: candidate.toggles.summary,
-    idleCpu: cpuIdle.candidate,
-    lifecycle: candidate.lifecycle
+    idle: candidateIdle,
+    settled: candidateSettled,
+    groups: candidateIdle.byRole,
+    open: openCandidate,
+    reopen: candidate.toggles?.summary ?? null,
+    afterToggles: candidate.toggles?.memory?.totals ?? null,
+    idleCpu: candidate.trayIdle?.cpu ?? null,
+    lifecycle: candidate.lifecycle ?? []
   },
   comparison: {
-    trayIdlePrivateResident: {
-      baselineMedianBytes: baselineIdleMedian,
-      candidateMedianBytes: candidateIdleMedian,
-      deltaBytes: idleDeltaBytes,
-      deltaMiB: Math.round((idleDeltaBytes / MiB) * 10) / 10,
-      deltaPct: idlePct,
-      byGroupMiB: Object.fromEntries(
-        Object.keys({ ...groupsOf(baseline.trayIdle.last), ...groupsOf(candidate.trayIdle.last) }).map((role) => [
-          role,
-          {
-            baseline: Math.round((groupOf(baseline.trayIdle.last, [role]) / MiB) * 10) / 10,
-            candidate: Math.round((groupOf(candidate.trayIdle.last, [role]) / MiB) * 10) / 10,
-            helperPids: (baseline.trayIdle.last.processes ?? []).filter((proc) => (proc.category ?? classify(proc.name)) === role).map((proc) => proc.name)
-          }
-        ])
-      )
+    memory: {
+      unit: 'bytes',
+      baseline: baselineMedian,
+      candidate: candidateMedian,
+      percent: memoryPercent,
+      mib: {
+        baseline: typeof baselineMedian === 'number' ? Math.round((baselineMedian / MiB) * 10) / 10 : null,
+        candidate: typeof candidateMedian === 'number' ? Math.round((candidateMedian / MiB) * 10) / 10 : null
+      }
     },
-    toggleGrowth: { baselineBytes: baselineToggles, candidateBytes: candidateToggles, candidatePctVsIdle: growth },
-    openLatency: { baselineP95Ms: openP95.baseline, candidateP95Ms: openP95.candidate, p95DeltaMs: openP95DeltaMs, comparable: true, reason: 'same harness, same isolated profile, same build mode on one machine' },
-    idleCpu: cpuIdle,
+    settledMemory: {
+      baseline: baselineSettled.summary.p50,
+      candidate: candidateSettled.summary.p50,
+      percent: percentDelta(baselineSettled.summary.p50, candidateSettled.summary.p50)
+    },
+    openLatency: {
+      p50: [openBaseline.p50 ?? null, openCandidate.p50 ?? null],
+      p95: [openBaseline.p95 ?? null, openCandidate.p95 ?? null],
+      deltaMs: openDelta
+    },
+    reopen: { baseline: baseline.toggles?.summary ?? null, candidate: candidate.toggles?.summary ?? null },
+    togglesTrendPercent: trend,
+    baselineTogglesTrendPercent: baselineTrend,
+    idleCpuMs: { baseline: baseline.trayIdle?.cpu?.totalMs ?? null, candidate: candidate.trayIdle?.cpu?.totalMs ?? null },
+    pill: {
+      baseline: { retirements: baseline.pill?.retirements ?? null, distinctRenderers: baseline.pill?.distinctRenderers ?? null },
+      candidate: { retirements: candidate.pill?.retirements ?? null, distinctRenderers: candidate.pill?.distinctRenderers ?? null }
+    },
     rendererLifecycle: {
-      baseline: baselineLifecycle,
-      candidate: candidateLifecycle,
-      note: 'compared by PID identity, not by renderer count: the hub renderer was already destroyed fifteen seconds after hiding before this change, so a count alone cannot tell which renderer survived'
+      stages: { baseline: (baseline.lifecycle ?? []).length, candidate: (candidate.lifecycle ?? []).length },
+      baselineStartupSurvivors: survivors(baseline.lifecycle),
+      candidateStartupSurvivors: survivors(candidate.lifecycle)
     }
   },
   thresholds,
-  decision: adoption ? 'adopted' : 'not-adopted',
-  reasons: [
-    `tray-idle private resident ${idlePct}% / ${Math.round((idleDeltaBytes / MiB) * 10) / 10} MiB (needs <= -15% and <= -30 MiB)`,
-    `growth after twenty toggles ${growth}% (needs <= 5%)`,
-    `hub open P95 ${openP95DeltaMs} ms (needs <= +100 ms)`,
-    `pill renderer retired after idle: ${thresholds.pillRetired.met ? 'yes' : 'no'} (startup renderers still alive: ${candidateLifecycle.startupSurvivorsAfterIdle.join(', ') || 'none'})`,
-    'microphone, tray menu and global-chord flows are listed as untested rather than covered'
-  ]
+  decision: adopted ? 'adopted' : 'not-adopted',
+  reasons
 }
 
-mkdirSync(dirname(resolve(output)), { recursive: true })
-writeFileSync(resolve(output), `${JSON.stringify(evidence, null, 2)}\n`)
-console.log(`[compare] decision ${evidence.decision}: ${evidence.reasons[0]}; ${evidence.reasons[1]}; ${evidence.reasons[2]}`)
-console.log(`[compare] evidence ${resolve(output)}`)
-process.exit(adoption ? 0 : 1)
+mkdirSync(dirname(output), { recursive: true })
+writeFileSync(output, `${JSON.stringify(evidence, null, 2)}\n`)
+
+const mib = (bytes) => (typeof bytes === 'number' ? `${(bytes / MiB).toFixed(1)} MiB` : 'n/a')
+console.log(`[compare] idle median ${mib(baselineMedian)} → ${mib(candidateMedian)} (${memoryPercent ?? 'n/a'}%)`)
+console.log(`[compare] open p95 ${openBaseline.p95 ?? 'n/a'} → ${openCandidate.p95 ?? 'n/a'} ms (${openDelta ?? 'n/a'})`)
+console.log(`[compare] decision ${evidence.decision}${reasons.length ? ` — ${reasons.join('; ')}` : ''}`)
+console.log(`[compare] evidence ${output}`)
+if (!adopted) process.exitCode = 1

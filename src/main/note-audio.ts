@@ -6,11 +6,14 @@ import type { NoteAudioAction, NoteAudioReply, NoteAudioRequest, NoteAudioState 
 /** One player in the existing bar renderer, shared by the notes page and voice tools. */
 export class NoteAudioPlayer {
   private pending = new Map<string,{resolve:(state:NoteAudioState)=>void;reject:(error:Error)=>void}>()
-  constructor(private window:()=>BrowserWindow|null, private audioUrl:(id:string)=>string|null) {}
+  constructor(private window:()=>BrowserWindow|null, private audioUrl:(id:string)=>string|null, private onState?:(state:NoteAudioState)=>void) {}
   register(): void {
     handle('note-audio:control',(_event,action:NoteAudioAction,id?:string,options?:{positionMs?:number;rate?:number})=>this.control(action,id,options))
     handle('note-audio:reply',(event,reply:NoteAudioReply)=>{
       if(event.sender!==this.window()?.webContents || !reply || typeof reply.requestId!=='string')throw Error('Playback owner required')
+      // The page drives playback too (play/pause buttons), so the owner has to
+      // hear every reply: the window may not be retired while audio is running.
+      if(reply.state)this.onState?.(reply.state)
       const pending=this.pending.get(reply.requestId)
       if(!pending)return
       if(reply.error)pending.reject(new Error(reply.error))

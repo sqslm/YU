@@ -22,9 +22,10 @@
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus, release as osRelease, tmpdir, totalmem } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
@@ -180,12 +181,21 @@ function appEnv() {
   return env
 }
 
-function launch(profile) {
-  return spawn(ELECTRON, [ENTRY, `--user-data-dir=${profile}`, '--background'], {
+function launch(profile, extraEnv = {}) {
+  const child = spawn(ELECTRON, [ENTRY, `--user-data-dir=${profile}`, '--background'], {
     cwd: ROOT,
-    env: appEnv(),
+    env: { ...appEnv(), ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe']
   })
+  child.__stdout = ''
+  child.__stderr = ''
+  child.stdout?.on('data', (chunk) => {
+    child.__stdout = (child.__stdout + String(chunk)).slice(-200_000)
+  })
+  child.stderr?.on('data', (chunk) => {
+    child.__stderr = (child.__stderr + String(chunk)).slice(-200_000)
+  })
+  return child
 }
 
 function requestOpen(profile) {
@@ -223,11 +233,19 @@ async function waitForHub(pidSetProvider, timeoutMs) {
 }
 
 function restoreRunKey(saved) {
-  const script = saved.length
-    ? saved.map(([name, value]) => `New-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${name}' -Value '${value.replace(/'/g, "''")}' -PropertyType String -Force | Out-Null`).join('; ')
-    : ''
-  if (!script) return
-  spawnSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' })
+  const key = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+  const known = new Set(saved.map(([name]) => name))
+  // Anything this run added is not the user's: drop it so the machine is left
+  // exactly as it was found.
+  const added = readRunKey()
+    .map(([name]) => name)
+    .filter((name) => !known.has(name))
+  const commands = [
+    ...saved.map(([name, value]) => `New-ItemProperty -Path '${key}' -Name '${name}' -Value '${String(value).replace(/'/g, "''")}' -PropertyType String -Force | Out-Null`),
+    ...added.map((name) => `Remove-ItemProperty -Path '${key}' -Name '${name}' -ErrorAction SilentlyContinue`)
+  ]
+  if (!commands.length) return
+  spawnSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', commands.join('; ')], { encoding: 'utf8' })
 }
 
 function readRunKey() {
@@ -241,6 +259,37 @@ function readRunKey() {
     .filter((line) => line.includes('='))
     .map((line) => line.split('=').slice(0, 2))
     .filter(([name]) => /typeless|electron/i.test(name))
+}
+
+function sha256(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex')
+}
+
+function lines(text) {
+  const parts = String(text ?? '').split(String.fromCharCode(10))
+  return parts.map((line) => line.replaceAll(String.fromCharCode(13), '')).filter((line) => line.trim().length > 0)
+}
+
+function cluster(samples, phase) {
+  const picked = samples.filter((sample) => sample.phase === phase)
+  const values = picked.map((sample) => sample.totals.privateResidentBytes)
+  return {
+    phase,
+    count: picked.length,
+    summary: summarise(values),
+    unavailable: picked.reduce((sum, sample) => sum + sample.unavailable.length, 0),
+    // A median snapshot, not the last one: the group split must describe the
+    // typical tree, and `last` is reported separately.
+    byRole: medianByRole(picked),
+    last: picked.at(-1) ?? null
+  }
+}
+
+function medianByRole(samples) {
+  if (samples.length === 0) return {}
+  const ordered = [...samples].sort((a, b) => a.totals.privateResidentBytes - b.totals.privateResidentBytes)
+  const middle = ordered[Math.floor(ordered.length / 2)]
+  return middle.byRole
 }
 
 // ── Sampling ─────────────────────────────────────────────────────────────────
@@ -347,7 +396,7 @@ async function firstOpenLoop(samples) {
     try {
       await waitForTree(child.pid, 60_000)
       await sleep(4_000)
-      idleSamples.push(snapshot(child.pid, undefined))
+      idleSamples.push({ phase: 'settled-4s', ...snapshot(child.pid, undefined) })
       const started = performance.now()
       const opener = requestOpen(profile)
       const hub = await waitForHub(() => new Set(descendants(listProcesses(), child.pid).map((proc) => proc.pid).concat([child.pid])), 30_000)
@@ -386,6 +435,10 @@ async function toggleRun(toggles, idleMs) {
   try {
     await waitForTree(child.pid, 60_000)
     await sleep(4_000)
+    const before = snapshot(child.pid, undefined)
+    // Per-cycle samples answer the question the plan asks — does repeated
+    // toggling accumulate anything — without comparing two different instances.
+    const cycles = []
     for (let index = 0; index < toggles; index += 1) {
       const started = performance.now()
       const opener = requestOpen(profile)
@@ -396,10 +449,17 @@ async function toggleRun(toggles, idleMs) {
       await sleep(1_200)
       PostMessageW(hub.handle, 0x0010, 0, 0)
       await sleep(1_200)
+      const cycle = snapshot(child.pid, undefined)
+      cycles.push({
+        cycle: index + 1,
+        privateResidentBytes: cycle.totals.privateResidentBytes,
+        renderers: cycle.processes.filter((proc) => proc.role === 'renderer').length,
+        utility: cycle.processes.filter((proc) => proc.role === 'utility').length
+      })
     }
     await sleep(idleMs)
-    const memory = snapshot(child.pid, undefined)
-    return { latencies, memory }
+    const memory = { phase: 'after-toggles', ...snapshot(child.pid, undefined) }
+    return { latencies, cycles, before, memory }
   } finally {
     await stopApp(child)
     rmSync(profile, { recursive: true, force: true, maxRetries: 3 })
@@ -477,11 +537,66 @@ function option(name, fallback) {
 
 const label = String(option('label', 'baseline'))
 const openSamples = Number(option('open-samples', 20))
+/**
+ * Pill lifecycle: a take creates the bar renderer, hiding it arms the retire
+ * timer, and the next take must bring it back. Drives real takes through the
+ * self-test harness (no microphone) and only observes process identity and the
+ * retirement log line.
+ */
+async function pillScenario(repeatMs = 45_000, observeMs = 130_000) {
+  const profile = mkdtempSync(join(tmpdir(), 'yu-app-pill-'))
+  const logs = []
+  const mock = spawn(process.execPath, [join(ROOT, 'scripts', 'mock-openai.mjs')], {
+    cwd: ROOT,
+    env: appEnv(),
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  await sleep(1_500)
+  const child = launch(profile, {
+    TYPELESS_SELFTEST: '1',
+    TYPELESS_SELFTEST_STAY: '1',
+    TYPELESS_SELFTEST_REPEAT_MS: String(repeatMs)
+  })
+  const renderers = []
+  const started = performance.now()
+  try {
+    await waitForTree(child.pid, 60_000)
+    while (performance.now() - started < observeMs) {
+      const tree = descendants(listProcesses(), child.pid)
+      const pids = tree.filter((proc) => roleOf(proc) === 'renderer').map((proc) => proc.pid).sort((a, b) => a - b)
+      const sample = { atMs: Math.round(performance.now() - started), rendererPids: pids }
+      const previous = renderers.at(-1)
+      if (!previous || previous.rendererPids.join(',') !== pids.join(',')) renderers.push(sample)
+      await sleep(1_000)
+    }
+  } finally {
+    logs.push(...lines(child.__stderr))
+    logs.push(...lines(child.__stdout))
+    await stopApp(child)
+    mock.kill()
+    rmSync(profile, { recursive: true, force: true, maxRetries: 3 })
+  }
+  const distinct = new Set(renderers.flatMap((sample) => sample.rendererPids))
+  return {
+    observeMs,
+    repeatMs,
+    retirements: logs.filter((line) => line.includes('[bar] retiring the hidden pill window')).length,
+    takes: logs.filter((line) => line.includes('[selftest] repeat →') || line.includes('[selftest] dictation →')).length,
+    distinctRenderers: [...distinct].sort((a, b) => a - b),
+    timeline: renderers,
+    tail: logs.filter((line) => line.includes('[bar]') || line.includes('[selftest]')).slice(-20),
+    aliveAtEnd: descendants(listProcesses(), child.pid).length > 0
+  }
+}
+
 const idleRuns = Number(option('idle-runs', 3))
 const idleMs = Number(option('idle-ms', 60_000))
 const toggles = Number(option('toggles', 20))
 const lifeIdle = Number(option('lifecycle-idle-ms', 40_000))
 const skipCold = args.includes('--skip-cold')
+const withPill = args.includes('--pill')
+// Set when the measured tree is not exactly HEAD (e.g. a reverted baseline).
+const sourceRef = String(option('source', ''))
 const output = String(option('output', join(ROOT, 'tests', 'yu-v2', 'evidence', `.electron-app-${label}.json`)))
 
 if (!Number.isInteger(openSamples) || openSamples < 1) throw new Error('--open-samples must be a positive integer')
@@ -501,10 +616,11 @@ try {
   const opened = await firstOpenLoop(openSamples)
   firstOpen.push(...opened.latencies)
   idleSamples.push(...opened.idleSamples)
-  for (let index = 0; index < idleRuns; index += 1) idleSamples.push((await trayIdleRun(idleMs)).memory)
+  for (let index = 0; index < idleRuns; index += 1) idleSamples.push({ phase: 'idle-60s', ...(await trayIdleRun(idleMs)).memory })
   const idleCpu = await trayIdleRun(idleMs)
   const toggle = await toggleRun(toggles, idleMs)
   const lifecycle = await lifecycleRun(lifeIdle)
+  const pill = withPill ? await pillScenario() : null
   const evidence = {
     kind: 'electron-app-resources',
     version: 1,
@@ -513,8 +629,16 @@ try {
       generatedAt: startedAt,
       host: { os: `${process.platform} ${osRelease()}`,  arch: process.arch, cpuModel: cpus()[0]?.model ?? '', cores: cpus().length, totalMemMb: Math.round(totalmem() / 1048576) },
       node: process.version,
-      electron: spawnSync(ELECTRON, ['--version'], { encoding: 'utf8' }).stdout.trim(),
-      build: { entry: ENTRY },
+      // The probe must not inherit ELECTRON_RUN_AS_NODE: that turns electron into
+      // plain Node and makes --version print the bundled Node version instead.
+      electron: spawnSync(ELECTRON, ['--version'], { encoding: 'utf8', env: appEnv() }).stdout.trim().replace(/^v/, ''),
+      build: {
+        entry: relative(ROOT, ENTRY).split(String.fromCharCode(92)).join('/'),
+        entrySha256: sha256(ENTRY),
+        rev: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim(),
+        source: sourceRef || 'HEAD',
+        dirty: spawnSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim().length > 0
+      },
       profile: { isolated: true, variable: '--user-data-dir=<temp>' },
       scenarios: { openSamples, idleRuns, idleMs, toggles },
       measurement: {
@@ -526,9 +650,21 @@ try {
     },
     cold: coldRuns,
     firstOpen: { samples: firstOpen, summary: summarise(firstOpen) },
-    trayIdle: { samples: idleSamples, summary: summarise(idleSamples.map((sample) => sample.totals.privateResidentBytes)), last: idleSamples.at(-1) ?? null, cpu: idleCpu.cpu },
-    toggles: { reopen: toggle.latencies, summary: summarise(toggle.latencies), memory: toggle.memory },
+    trayIdle: {
+      samples: idleSamples,
+      // The two clusters answer different questions: 'settled-4s' is the tree a
+      // moment after launch, 'idle-60s' is the tray resting state the plan gates on.
+      clusters: {
+        'settled-4s': cluster(idleSamples, 'settled-4s'),
+        'idle-60s': cluster(idleSamples, 'idle-60s')
+      },
+      summary: cluster(idleSamples, 'idle-60s').summary,
+      last: idleSamples.at(-1) ?? null,
+      cpu: idleCpu.cpu
+    },
+    toggles: { reopen: toggle.latencies, summary: summarise(toggle.latencies), before: toggle.before, cycles: toggle.cycles, memory: toggle.memory },
     lifecycle,
+    pill,
     cleanup: { runKeyBefore: runKey }
   }
   mkdirSync(dirname(output), { recursive: true })

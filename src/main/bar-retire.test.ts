@@ -92,6 +92,21 @@ it('holds the window while a take or an anchored card still needs it', () => {
   expect(win.destroy).toHaveBeenCalledOnce()
 })
 
+it('retires once the busy state clears, without waiting for another hide', () => {
+  const win = fakeWindow()
+  let busy = true
+  wireBarRetirement(win as unknown as BrowserWindow, { isBusy: () => busy, isCardVisible: () => false })
+  win.emit('hide')
+  vi.advanceTimersByTime(BAR_RETIRE_MS)
+  expect(win.destroy).not.toHaveBeenCalled()
+
+  // The take ends while the window is hidden: no hide event follows, so the
+  // retirement has to re-check on its own.
+  busy = false
+  vi.advanceTimersByTime(BAR_RETIRE_MS)
+  expect(win.destroy).toHaveBeenCalledOnce()
+})
+
 it('stops everything once the window reports itself closed', () => {
   const win = fakeWindow()
   wireBarRetirement(win as unknown as BrowserWindow, { isBusy: () => false, isCardVisible: () => false })

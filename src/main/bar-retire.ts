@@ -12,10 +12,10 @@ import type { BrowserWindow } from 'electron'
  * demand; the renderer announces itself through `bar:ready`, so a recreated
  * window still receives the state that was sent while it was loading.
  *
- * The retirement is skipped, never postponed, while anything still needs the
+ * The retirement is postponed, never forced, while anything still needs the
  * pill: an active take, an open answer card (the card is anchored to it), or a
- * recording note. A skipped window simply stays; the next hide arms the timer
- * again.
+ * recording note. A skipped window stays and is re-checked after another delay,
+ * so it still retires once that work finishes.
  */
 export interface BarRetireOptions {
   /** How long the pill must stay hidden before its window is destroyed. */
@@ -44,8 +44,14 @@ export function wireBarRetirement(win: BrowserWindow, options: BarRetireOptions)
     cancel()
     timer = setTimeout(() => {
       timer = null
-      if (win.isDestroyed() || win.isVisible()) return
-      if (options.isBusy() || options.isCardVisible()) return
+      if (win.isDestroyed()) return
+      if (win.isVisible()) return
+      // Still needed: keep the window and look again later, because the busy
+      // state can end without another hide event.
+      if (options.isBusy() || options.isCardVisible()) {
+        arm()
+        return
+      }
       options.log?.('[bar] retiring the hidden pill window')
       win.destroy()
     }, delay)
