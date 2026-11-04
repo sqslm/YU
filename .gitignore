@@ -62,6 +62,7 @@
 !/scripts/benchmark-applications.mjs
 !/scripts/lib/
 !/scripts/lib/*.mjs
+!/scripts/compare-app-resources.test.mjs
 !/native/
 /native/bin/
 /native/**/target/

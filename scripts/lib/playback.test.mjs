@@ -6,6 +6,7 @@ import {
   PLAYBACK_CASE_KINDS,
   REQUIRED_PLAYBACK_SCENARIOS,
   loadPlaybackEvidence,
+  playbackBindingProblems,
   playbackGate,
   playbackIdentityProblems
 } from './playback.mjs'
@@ -29,6 +30,18 @@ const identity = {
   command: 'pnpm exec vitest run src/main/bar-playback.probe.test.ts'
 }
 
+/**
+ * The measured build, shaped like phase 20's `meta.build`: an entry digest plus
+ * the wrapper and script digests, and *no* preload/bar.html digest — the
+ * sample never recorded those two, so they may only ever be a limitation.
+ */
+const build = {
+  entry: 'out/main/index.js',
+  entrySha256: identity.entrySha256,
+  wrapperSha256: sha('d'),
+  scriptSha256: sha('e')
+}
+
 const requiredIds = REQUIRED_PLAYBACK_SCENARIOS.map((scenario) => scenario.id)
 
 function realWindowCases(overrides = {}) {
@@ -44,10 +57,10 @@ function passingProbe(extra = {}) {
   return probe([...realWindowCases(), { id: 'r1-stub-reply-order', kind: 'stub', pass: true }], extra)
 }
 
-function loadAndGate(body, name = `probe-${Math.random().toString(36).slice(2)}.json`) {
+function loadAndGate(body, name = `probe-${Math.random().toString(36).slice(2)}.json`, buildRecord = build) {
   const candidate = loadPlaybackEvidence(fileOf(name, body))
   const baseline = loadPlaybackEvidence(fileOf(`${name}.baseline`, passingProbe()))
-  return { candidate, gate: playbackGate(baseline, candidate) }
+  return { candidate, gate: playbackGate(baseline, candidate, buildRecord) }
 }
 
 describe('loadPlaybackEvidence', () => {
@@ -229,5 +242,85 @@ describe('playbackGate rejections', () => {
     expect(Array.isArray(gate.candidate.cases)).toBe(true)
     expect(gate.baseline).toHaveProperty('caseCount')
     expect(gate.requiredScenarios).toEqual(requiredIds)
+    expect(gate.binding).toHaveProperty('met')
+  })
+})
+
+/**
+ * The probe publishing a digest proves nothing when the same file supplies the
+ * expectation. These cases hold every other clause of the gate at `passing` and
+ * vary only the binding between the evidence and the run it claims to measure.
+ */
+describe('playbackGate binds the evidence to the measured build', () => {
+  it('accepts the reproduced phase-20 shape: entry digest equal, preload/bar.html only a limitation', () => {
+    const { gate } = loadAndGate(passingProbe(), 'bind-ok.json')
+    expect(gate.met).toBe(true)
+    expect(gate.binding).toMatchObject({ met: true, checked: ['entrySha256'], reasons: [] })
+    expect(gate.binding.limitations.join(' ')).toContain('preloadSha256 and barHtmlSha256 are not recorded in the candidate resource sample')
+  })
+
+  it('rejects the reproduced tampering: a probe entry digest rewritten to 64 f', () => {
+    const { gate } = loadAndGate(
+      probe(realWindowCases(), { identity: { ...identity, entrySha256: sha('f') } }),
+      'bind-tampered.json'
+    )
+    expect(gate.met).toBe(false)
+    expect(gate.binding.met).toBe(false)
+    const reason = gate.reasons.join('; ')
+    expect(reason).toContain('playback identity.entrySha256 ffffffffffff does not match the measured build entrySha256 aaaaaaaaaaaa')
+  })
+
+  it('rejects evidence with no build to bind to', () => {
+    const { gate } = loadAndGate(passingProbe(), 'bind-nobuild.json', null)
+    expect(gate.met).toBe(false)
+    expect(gate.reasons.join('; ')).toContain('candidate build identity is missing')
+  })
+
+  it('rejects a build whose entry digest is missing or malformed', () => {
+    const missing = loadAndGate(passingProbe(), 'bind-noentry.json', { ...build, entrySha256: undefined }).gate
+    expect(missing.met).toBe(false)
+    expect(missing.reasons.join('; ')).toContain('candidate meta.build.entrySha256 is missing')
+
+    const malformed = loadAndGate(passingProbe(), 'bind-badentry.json', { ...build, entrySha256: 'not-a-digest' }).gate
+    expect(malformed.met).toBe(false)
+    expect(malformed.reasons.join('; ')).toContain('candidate meta.build.entrySha256 is not a 64-character hex digest (not-a-digest)')
+  })
+
+  it('rejects a probe entry digest that is missing or malformed', () => {
+    const missingIdentity = { ...identity }
+    delete missingIdentity.entrySha256
+    const missing = loadAndGate(probe(realWindowCases(), { identity: missingIdentity }), 'bind-noprobeentry.json').gate
+    expect(missing.met).toBe(false)
+    expect(missing.binding.checked).toEqual([])
+    expect(missing.reasons.join('; ')).toContain('build identity is incomplete: missing entrySha256')
+
+    const malformed = loadAndGate(probe(realWindowCases(), { identity: { ...identity, entrySha256: 'zz' } }), 'bind-badprobeentry.json').gate
+    expect(malformed.met).toBe(false)
+    expect(malformed.reasons.join('; ')).toContain('build identity has a malformed sha256 digest: entrySha256')
+  })
+
+  it('cross-checks preload/bar.html only when the build records them', () => {
+    const recorded = { ...build, preloadSha256: identity.preloadSha256, barHtmlSha256: identity.barHtmlSha256 }
+    const ok = loadAndGate(passingProbe(), 'bind-recorded.json', recorded).gate
+    expect(ok.met).toBe(true)
+    expect(ok.binding.checked).toEqual(['entrySha256', 'preloadSha256', 'barHtmlSha256'])
+    expect(ok.binding.limitations).toEqual([])
+
+    const tampered = loadAndGate(
+      probe(realWindowCases(), { identity: { ...identity, barHtmlSha256: sha('f') } }),
+      'bind-tampered-bar.json',
+      recorded
+    ).gate
+    expect(tampered.met).toBe(false)
+    expect(tampered.reasons.join('; ')).toContain(
+      `playback identity.barHtmlSha256 ${'f'.repeat(12)} does not match the measured build barHtmlSha256 ${sha('c').slice(0, 12)}`
+    )
+  })
+
+  it('classifies a recorded but malformed build preload digest as a mismatch, not a pass', () => {
+    const gate = loadAndGate(passingProbe(), 'bind-badbuildpreload.json', { ...build, preloadSha256: 'nope' }).gate
+    expect(gate.met).toBe(false)
+    expect(gate.reasons.join('; ')).toContain('candidate meta.build.preloadSha256 is not a 64-character hex digest (nope)')
+    expect(playbackBindingProblems(identity, build)).toMatchObject({ met: true, checked: ['entrySha256'] })
   })
 })

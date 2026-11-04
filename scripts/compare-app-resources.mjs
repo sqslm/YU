@@ -257,7 +257,9 @@ function playbackVerdict() {
   const baselineFile = playbackPath ?? recorded.baseline
   const base = loadPlaybackEvidence(baselineFile)
   const cand = loadPlaybackEvidence(candidateFile)
-  const gate = playbackGate(base, cand)
+  // The expected identity is the *measured* candidate build, so a probe can no
+  // longer vouch for itself by carrying its own digest.
+  const gate = playbackGate(base, cand, candidate.meta?.build ?? null)
   if (!playbackPath && !recorded.candidate) {
     return { ...gate, met: false, reason: 'no playback evidence: pass --playback=<json> (candidate probe result)', source: 'none' }
   }
@@ -273,15 +275,64 @@ const scenariosMatch =
   JSON.stringify(baseline.meta?.measurement?.scenarios ?? baseline.meta?.scenarios ?? {}) ===
   JSON.stringify(candidate.meta?.measurement?.scenarios ?? candidate.meta?.scenarios ?? {})
 const hostMatch = (baseline.meta?.host?.cores ?? 0) === (candidate.meta?.host?.cores ?? -1)
-const sameBuild = Boolean(baseline.meta?.build?.entrySha256) && baseline.meta?.build?.entrySha256 === candidate.meta?.build?.entrySha256
-const sameScript = !baseline.meta?.build?.scriptSha256 || !candidate.meta?.build?.scriptSha256 || baseline.meta.build.scriptSha256 === candidate.meta.build.scriptSha256
-const comparable = Boolean(scenariosMatch && hostMatch && !sameBuild)
+
+/**
+ * Identities, not prose: a measurement is only comparable when both runs name
+ * the build and the benchmark script they came from, and those names differ in
+ * the build (otherwise there is nothing to compare) and agree in the script
+ * (otherwise the two runs were produced by different measurement rules).
+ *
+ * `comparable` is a necessary condition of `adopted`; before, a script mismatch
+ * only appended a sentence to `reasons`, so every threshold could pass and the
+ * decision stayed `adopted` on numbers that measured different things.
+ */
+const DIGEST = /^[0-9a-f]{64}$/i
+function digestOf(value) {
+  const text = typeof value === 'string' ? value.trim() : ''
+  return DIGEST.test(text) ? text.toLowerCase() : null
+}
+
+const baselineBuild = baseline.meta?.build ?? null
+const candidateBuild = candidate.meta?.build ?? null
+const baselineEntry = digestOf(baselineBuild?.entrySha256)
+const candidateEntry = digestOf(candidateBuild?.entrySha256)
+const baselineScript = digestOf(baselineBuild?.scriptSha256)
+const candidateScript = digestOf(candidateBuild?.scriptSha256)
+
+const buildIdentityKnown = Boolean(baselineEntry && candidateEntry)
+const sameBuild = buildIdentityKnown && baselineEntry === candidateEntry
+const scriptIdentityKnown = Boolean(baselineScript && candidateScript)
+const sameScript = scriptIdentityKnown && baselineScript === candidateScript
+const comparable = Boolean(scenariosMatch && hostMatch && buildIdentityKnown && !sameBuild && sameScript)
 
 const reasons = []
 if (!scenariosMatch) reasons.push('scenario parameters differ between the two runs')
 if (!hostMatch) reasons.push('the two runs did not use the same machine shape')
-if (sameBuild) reasons.push('both runs measured the same build, so there is nothing to compare')
-if (!sameScript) reasons.push('the two runs were produced by different benchmark scripts, so the measurement rules differ')
+if (!buildIdentityKnown)
+  reasons.push(
+    `the build identity is missing or malformed on one side (baseline entrySha256 ${baselineEntry ?? 'absent'}, candidate entrySha256 ${candidateEntry ?? 'absent'}), so the same-build check cannot be made`
+  )
+else if (sameBuild) reasons.push('both runs measured the same build, so there is nothing to compare')
+if (!scriptIdentityKnown)
+  reasons.push(
+    `the benchmark script identity is missing or malformed on one side (baseline scriptSha256 ${baselineScript ?? 'absent'}, candidate scriptSha256 ${candidateScript ?? 'absent'}), so the measurement rules cannot be shown to match`
+  )
+else if (!sameScript) reasons.push('the two runs were produced by different benchmark scripts, so the measurement rules differ')
+
+const comparability = {
+  metric: 'both runs name the same benchmark script and two different builds, with the same scenario parameters on the same machine shape',
+  met: comparable,
+  scenariosMatch,
+  sameHost: hostMatch,
+  buildIdentityKnown,
+  sameBuild,
+  scriptIdentityKnown,
+  sameScript,
+  identities: {
+    baseline: { entrySha256: baselineEntry, scriptSha256: baselineScript },
+    candidate: { entrySha256: candidateEntry, scriptSha256: candidateScript }
+  }
+}
 
 const baselineMedian = baselineIdle.summary.p50
 const candidateMedian = candidateIdle.summary.p50
@@ -336,6 +387,7 @@ if (openBaselineSamples.length < MIN_OPEN_SAMPLES) openReasons.push(`the baselin
 if (openCandidateSamples.length < MIN_OPEN_SAMPLES) openReasons.push(`the candidate has ${openCandidateSamples.length} valid first-open samples (minimum ${MIN_OPEN_SAMPLES})`)
 if (openBaselineFailed > 0) openReasons.push(`the baseline recorded ${openBaselineFailed} failed first-open sample(s)`)
 if (openCandidateFailed > 0) openReasons.push(`the candidate recorded ${openCandidateFailed} failed first-open sample(s)`)
+if (!comparable) openReasons.push('the two runs are not comparable, so the first-open distributions cannot be compared')
 const openMet = comparable && openReasons.length === 0
 
 function pillVerdict() {
@@ -445,7 +497,7 @@ const thresholds = {
   idleCpu: { metric: 'tray idle CPU per second over a comparable window', ...idleCpu },
   playbackFeature: {
     metric:
-      'candidate playback probe passed every case, covered every required scenario with a real-window case, and recorded the build identity',
+      'candidate playback probe passed every case, covered every required scenario with a real-window case, recorded the build identity, and that identity matches the measured build',
     ...playback,
     met: playback.met === true
   },
@@ -453,7 +505,9 @@ const thresholds = {
 }
 
 const decided = ['memory', 'noSustainedGrowth', 'openLatency', 'isolation', 'cpuSelfCheck', 'coldSeparation', 'idleCpu', 'playbackFeature', 'pillRetired']
-const adopted = decided.every((name) => thresholds[name].met === true)
+// Comparable is a precondition, not another per-threshold result: numbers that
+// measured different things must not be adopted just because each gate passed.
+const adopted = comparable && decided.every((name) => thresholds[name].met === true)
 if (!adopted) {
   for (const name of decided) {
     const value = thresholds[name]
@@ -487,6 +541,7 @@ const evidence = {
   },
   build: { baseline: baseline.meta?.build ?? null, candidate: candidate.meta?.build ?? null },
   comparable,
+  comparability,
   measurement: { baseline: baseline.meta?.measurement ?? null, candidate: candidate.meta?.measurement ?? null },
   attribution: {
     hypothesis: 'a hidden bar renderer was created on every launch and never released while the app rested in the tray',
@@ -589,6 +644,7 @@ console.log(`[compare] idle median ${mib(baselineMedian)} → ${mib(candidateMed
 console.log(`[compare] open p95 ${openBaseline.p95 ?? 'n/a'} → ${openCandidate.p95 ?? 'n/a'} ms (${openDelta ?? 'n/a'}), samples ${openBaselineSamples.length}/${openCandidateSamples.length}, failed ${openBaselineFailed}/${openCandidateFailed}`)
 console.log(`[compare] idle cpu/s ${baseline.trayIdle?.cpu?.perSecond ?? 'n/a'} → ${candidate.trayIdle?.cpu?.perSecond ?? 'n/a'} (ratio ${idleCpu.ratio ?? 'n/a'})`)
 console.log(`[compare] isolation ${isolation.met ? 'met' : 'not met'}, cpu self-check ${cpuSelfCheck.met ? 'met' : 'not met'}, playback ${thresholds.playbackFeature.met ? 'met' : 'not met'}`)
+console.log(`[compare] comparable ${comparable}${comparable ? '' : ` — ${reasons.slice(0, 5).join('; ')}`}`)
 console.log(`[compare] decision ${evidence.decision}${reasons.length ? ` — ${reasons.join('; ')}` : ''}`)
 console.log(`[compare] evidence ${output}`)
 if (!adopted) process.exitCode = 1
