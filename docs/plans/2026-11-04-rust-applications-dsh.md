@@ -90,18 +90,18 @@
 
 ### 7.3 真实对照
 
-本机只读枚举：PS 204 项 / Rust 204 项，`missing 0`、`extra 0`、`sameOrder true`，桌面项 163、打包项 41、无位置项 0，完整 JSON 规范化后摘要哈希相同（`908e077a…`）。对照脚本为临时文件，已删除；证据只保存计数与摘要。
+本机只读枚举：PS 204 项 / Rust 204 项，`missing 0`、`extra 0`、`sameOrder true`，桌面项 163、打包项 41、无位置项 0，完整 JSON 规范化后摘要哈希相同（`908e077a…`）。对照脚本为临时文件，已删除；证据只保存计数与摘要。同序与摘要的可复现入口是基准脚本的 `canonical()`（递归键排序后 `JSON.stringify` 再取 sha256），`sha256sum` 之外的比较口径以它为准。
 
 ### 7.4 基准与采纳
 
-证据：`tests/yu-v2/evidence/rust-applications-20261104.json`（`generatedAt` 2026-11-04T02:34:31.634Z，`--samples 20`，PS/Rust 各 40 个有效样本，交错 PS/Rust/Rust/PS，CPU 为 job user+kernel、内存为 job 内核峰值私有提交，区间 spawn → stdio close）。
+证据：`tests/yu-v2/evidence/rust-applications-20261104.json`（`generatedAt` 2026-11-04T02:46:31.772Z，`--samples 20`，PS/Rust 各 40 个有效样本，交错 PS/Rust/Rust/PS，CPU 为 job user+kernel、内存为 job 内核峰值私有提交，区间 spawn → stdio close）。这一轮在 D1–D3 修正、`cargo fmt` 重链接之后重跑，`binary{}` 与实际交付产物同一份构建。
 
 | 指标 | PowerShell | Rust | 变化 |
 | --- | --- | --- | --- |
-| 整次枚举 P50 | 1597.43 ms | 554.71 ms | −65.27% |
-| 整次枚举 P95 | 1620.07 ms | 578.83 ms | −64.27%（−1041.24 ms） |
-| CPU P50/P95 | 2250 / 2453.13 ms | 359.38 / 390.63 ms | −84.03% / −84.08% |
-| 私有内存 P50/P95 | 105488 / 105748 KB | 6624 / 6732 KB | −93.72% / −93.63% |
+| 整次枚举 P50 | 1611.30 ms | 567.03 ms | −64.81% |
+| 整次枚举 P95 | 1707.90 ms | 593.80 ms | −65.23%（−1114.10 ms） |
+| CPU P50/P95 | 2281.25 / 2484.38 ms | 359.38 / 421.88 ms | −84.25% / −83.02% |
+| 私有内存 P50/P95 | 105448 / 105804 KB | 6624 / 6716 KB | −93.72% / −93.65% |
 
 9 项 checks 全通过（`result-identical`、`same-order-and-membership`、`entry-shape`、`every-sample-valid`、`samples-per-side`、`measurement-comparable`、`job-accounting`、`parent-death-retires-worker`、`performance-threshold`），`passed=true`、`adoption.decision=latency`，双门槛同时满足，因此按第 6 节把 `applications` 接入生产路由。
 
@@ -117,9 +117,9 @@
 | `pnpm test:native` | 0 | 各 Rust 二进制测试通过（末个 10 passed，合计 39） |
 | `pnpm build` | 0 | built in 11.40s |
 | `pnpm test` | 0 | 239 files passed / 3 skipped；3552 passed / 8 skipped |
-| `node scripts/benchmark-applications.mjs --samples 20` | 0 | 9 checks PASS，`decision=latency` |
+| `node scripts/benchmark-applications.mjs --samples 20` | 0 | 9 checks PASS，`decision=latency`；本轮 stdout 只存在本地临时文件 `/tmp/apps-bench-final.log`，仓库内以证据文件的数值为准 |
 
-交付产物：`native/bin/yu-windows.exe` 474624 B / `5331a502ff0a4d788e20cf3aac4c3603d8cb3fe8452204bdbd406b0985e61e7a`，与证据 `binary{}` 一致（`pnpm build` 会重建 helper，最后一次真实构建之后取的哈希）。
+交付产物：`native/bin/yu-windows.exe` 473600 B / `5ad72247c1558fe9489fbad664974a8b46f56b83e52e9daee6e198981bba15e6`，与证据 `binary{}` 一致（`pnpm build` 会重建 helper，最后一次真实构建之后取的哈希）。
 
 ### 7.6 失败与修正
 
@@ -128,10 +128,14 @@
 - `SHCreateItemFromParsingName::<IShellItem2>("shell:AppsFolder").cast::<IShellFolder>()` 返回 `0x80004002`，必须改走 `SHParseDisplayName` + `SHBindToObject`。
 - 漏写 `Runtime::initialize()` 时 COM 初始化失败，表现为 shortcuts/packaged 全为 0；已按其它 action 的模式补齐。
 - `CompareStringEx` 未把 `CSTR_EQUAL` 映射为 `Ordering::Equal` 时同名项不相邻、去重失效（单测 `left: 4 right: 3`）。
+- `is_exe` / `strip_exe_suffix` 原先用 `text[len - 4..]` 按字节切尾，非 ASCII 结尾（`C:\工具\程序`、`C:pps\记事`）会 panic；该函数在 `is_file()` 之前对所有 App Paths 值与所有 `.lnk` 目标调用，一条这样的登记就能让整次枚举崩溃且无 JSON 输出，而 PS 只是跳过该项。改为 `exe_tail()`（`checked_sub` + `get(..)` + `eq_ignore_ascii_case(".exe")`）并补了多字节尾部的单测。
+- 删死代码（原 `applications.rs:448` 空 `else if`）时多删一个 `}`，`cargo test` 直接报 `unclosed delimiter`；已修回并复跑。
+- 快捷方式遍历原为 BFS，注释却写「Depth-first」；改为真正的深度优先（先本目录 `.lnk`，再按 `read_dir` 顺序递归子目录），与 PS `Get-ChildItem -Recurse` 的精确交错仍属未测。
 - 应用测试与浏览器读取测试并行时，`yu-windows.exe` 进程名枚举会串到其他 worker 的 helper，导致「恰好一个新 helper」断言抖动；改为按父进程 PID 归属（`childrenOf`），并让阻塞用例轮询等 helper 出现而不是固定 sleep。
 
 ### 7.7 未测项
 
+- 每根目录 1000 条上限命中时的子集选择顺序：Rust 用深度优先、PS 用 `Get-ChildItem -Recurse`，两者在超限场景的精确交错未构造对照。
 - 名称排序只在当前机器当前文化下对照；其他语言/区域设置、`Sort-Object` 平局顺序的跨机差异未测。
 - 1000 个 `.lnk` 上限、1500 条截断、同名不同 AUMID 的边界只用合成 fixture 与单测覆盖，未在真实登记上构造。
 - 打包项名称（`GetDisplayName`）与 `Get-StartApps` 的本地化差异只在本次系统语言下对照。

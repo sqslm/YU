@@ -296,6 +296,7 @@ pnpm benchmark:models         # existing local model; isolated SDK/inference/rec
 pnpm benchmark:browser-url    # browser address read: owned UIA fixture, PowerShell vs Rust field by field
 pnpm benchmark:explorer-folder # explorer folder read: owned window, PowerShell vs Rust
 pnpm benchmark:recent-files    # recent files read: read-only Recent directory, PowerShell vs Rust
+pnpm benchmark:applications    # registered application list: read-only registry and Start menu, PowerShell vs Rust
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
 # dictation, Ask + retrieval, multimodal)
