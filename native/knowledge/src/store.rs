@@ -277,6 +277,8 @@ mod tests {
             )
             .expect("tables");
         assert_eq!(tables, 1);
+        // Windows refuses to delete files a live connection still holds open.
+        drop(reopened);
         let _ = fs::remove_dir_all(&root);
     }
 

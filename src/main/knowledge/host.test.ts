@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 import { KnowledgeError, type KnowledgeCard } from '@shared/knowledge'
 
@@ -71,11 +71,14 @@ lines.on('line', (line) => {
 })
 `
 
+let stubDir: string | undefined
+
 function stubScript(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'yu-knowledge-stub-'))
-  const file = join(dir, 'stub.mjs')
-  writeFileSync(file, STUB)
-  return file
+  if (!stubDir) {
+    stubDir = mkdtempSync(join(tmpdir(), 'yu-knowledge-stub-'))
+    writeFileSync(join(stubDir, 'stub.mjs'), STUB)
+  }
+  return join(stubDir, 'stub.mjs')
 }
 
 function asText(value: KnowledgeCard): string {
@@ -102,6 +105,12 @@ function host(over: Partial<KnowledgeHostOptions> = {}): KnowledgeHost {
 
 afterEach(async () => {
   for (const instance of created.splice(0)) await instance.stop()
+  rmSync(join(tmpdir(), 'yu-knowledge-stub-root'), { recursive: true, force: true })
+})
+
+afterAll(() => {
+  if (stubDir) rmSync(stubDir, { recursive: true, force: true })
+  stubDir = undefined
 })
 
 describe('KnowledgeHost lifetime', () => {

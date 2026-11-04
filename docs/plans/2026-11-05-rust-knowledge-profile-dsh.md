@@ -245,4 +245,4 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 ### 资源
 
 - 保留：`native/bin/yu-knowledge.exe`（2.3 MB，交付产物）、`native/knowledge/Cargo.lock`、`licenses/` 新增 28 个文本、`native/knowledge/target/`（697 MB，可重建构建缓存，被 `.gitignore` 的 `/native/**/target/` 忽略，与其他 crate 的 target 并存保留）。
-- 回收：测试用隔离数据根位于 `%TEMP%` 下并由测试自行删除；本轮未生成其他临时脚本或证据文件，`.gitignore` allowlist 无需改动。
+- 回收：测试用隔离数据根位于 `%TEMP%` 下并由测试自行删除。Windows 上删除会被仍打开的连接挡住，因此 `store.rs` 的重开用例先 `drop(reopened)`、`process.rs` 的懒启动用例先 `shutdown` 再删目录，`host.test.ts` 复用同一个 stub 目录并在 `afterAll` 删除；修好后连续运行 `cargo test --locked` 与 `host.integration.test.ts` 均不再留下目录（实测 `ls -d %TEMP%/yu-knowledge*` 为 0）。本轮未生成其他临时脚本或证据文件，`.gitignore` allowlist 无需改动。

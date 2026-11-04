@@ -148,6 +148,8 @@ fn ready_then_status_touches_no_storage_until_data_is_requested() {
     );
     let reopened = helper.ok("s3", "status", json!({}));
     assert_eq!(reopened["opened"], true);
+    helper.ok("s4", "shutdown", json!({}));
+    assert!(helper.wait().success());
     let _ = std::fs::remove_dir_all(&root);
 }
 
