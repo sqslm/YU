@@ -106,3 +106,11 @@
 - 紧随其后的 docs 提交：本计划、阶段 21 措辞修正、`docs/rust-refactor-plan.md`、`README.md`（+95 / −19）；该提交哈希以 `git log` 为准（本段落与其同一提交）。
 - 未 push、未打包、未重启用户应用；无其他 WIP 混入。
 
+## 6. 外部 Codex 验收（2026-11-05）
+
+- 核对交付基点 `51b70e12ad2ef26c56c64ade0fa28e33ec4291b4`，工作区干净；改动限于探针输出和文档，生产播放实现未扩大范围。
+- 在当前进程环境临时取消 `PROBE_OUT`，独立执行 `pnpm exec vitest run src/main/probe-output.test.ts src/main/bar-playback.probe.test.ts`：两文件 5 项通过、退出 0，14.56 s；结束后恢复原环境变量。测试实际启动了隔离 Electron 探针，没有因缺少产物而跳过。
+- 独立执行 `pnpm typecheck`，退出 0。探针运行前后逐一比较 t19/t20/t21 三个历史 `result.json`，哈希全部不变；运行后 `.tmp/probe` 子项为 0。
+- 保留的显式输出 `work/t22-probe/result-dir/result.json` 为 16 例、全部通过且标为 real-window，entry 哈希与当前磁盘相同。未伪造失败/并发/权限异常的验证结果，§4.6 的未测项继续保留。
+- 第 4 轮自动汇报的当前发送记录只有一条，未重复投递。本阶段按已定义范围验收通过；本轮自动派单收束，不派发阶段 23。资源收益仍引用阶段 21，真实用户配置、设备、长跑及首开延迟波动未因本次收尾而完成验收。
+
