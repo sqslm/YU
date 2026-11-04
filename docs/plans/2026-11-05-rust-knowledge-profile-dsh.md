@@ -243,8 +243,8 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 | `pnpm exec vitest run src/main/knowledge/host.test.ts src/main/knowledge/loop.test.ts src/main/knowledge/host.integration.test.ts src/main/knowledge/model.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 仓库根 | exit 0，6 files / 56 tests passed（host 23、loop 6、integration 8、model 8、preload 3、ipc-trust 8），6.93s |
 | `pnpm typecheck` | 仓库根 | exit 0 |
 | `pnpm test:native` | 仓库根 | exit 0（7 个 crate，含 knowledge 的 14 + 11） |
-| `pnpm test` | 仓库根 | exit 0，256 files passed / 3 skipped（259），3726 tests passed / 8 skipped，98.97s（单独运行，无并行编译负载） |
-| `pnpm build` | 仓库根 | exit 0（renderer `settings-*.js` 4,687.76 kB） |
+| `pnpm test` | 仓库根 | exit 0，256 files passed / 3 skipped（259），3726 tests passed / 8 skipped，98.97s 与提交后复跑 99.15s（两次均单独运行，无并行编译负载） |
+| `pnpm build` | 仓库根 | exit 0（renderer `settings-*.js` 4,687.76 kB）；提交后复跑同样 exit 0，且 release 辅助进程字节未变（增量构建，未触发重新复制） |
 | `git diff --check`（工作区） | 仓库根 | exit 0 |
 | `git diff --check 4e077a3..HEAD`（提交后） | 仓库根 | exit 0（`licenses/rust-vcpkg-0.2.15-MIT` 的 EOF 空行已清理） |
 
@@ -307,7 +307,7 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 ### 复核取证（真实边界，不以 mock 代替）
 
 - `native/knowledge/tests/process.rs`（真实 `yu-knowledge.exe`）：写锁期间取消 `source.save`、写锁期间取消 `source.invalidate`（均断言 `error.code == "cancelled"` 且库内行数与状态不变）、提交后取消不虚报回滚、正文恰好 200000 与超出（含 emoji 边界）、11 张 200000 字符卡片的默认分页（无 `body`、`bodyChars == 200000`、`card.get` 仍给全文）、多字节内容按 `nextOffset` 翻完且无重无漏。
-- `src/main/knowledge/loop.test.ts`：生产 `KnowledgeHost` + 真实 Rust 夹具 + 注入完成器，覆盖成功、provider 失败码回传、父超时 abort、停机后重启、重启后同子 ID 迟到回包不影响新进程。
+- `src/main/knowledge/loop.test.ts`：生产 `KnowledgeHost` + 真实 Rust 夹具 + 注入完成器，覆盖成功、provider 失败码回传、父超时 abort、停机后重启、重启后同子 ID 迟到回包不影响新进程。夹具由该测试在 `beforeAll` 里自建：`cargo build --features fixture --bin yu-knowledge-fixture --manifest-path native/knowledge/Cargo.toml`（工作目录 `native/knowledge`，600 秒上限），产物 `native/knowledge/target/debug/yu-knowledge-fixture.exe`（2,411,520 字节 / `940851fc…`），属 debug 夹具，不是交付构件；单独复跑命令：`pnpm exec vitest run src/main/knowledge/loop.test.ts`。
 - `src/main/knowledge/host.test.ts`（真实管道 stub）：永不 `ready`、`ready` 晚于期限、停机时仍在等 `ready`、`null`/数组垃圾帧、EPIPE、重复子 ID、无父请求的模型调用、父超时 abort、旧代际迟到回包。
 
 
