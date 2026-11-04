@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1 外部复核未通过；两轮复查提出的修复均已提交（`fae7cf8`…`8fa537f`、`c385db7`、`ec405dc`），等待外部复核。阶段 2～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1 已通过外部复核；阶段 2 修复已实现并提交（见「阶段 2 实施记录」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -357,3 +357,104 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 
 - 保留：`native/bin/yu-knowledge.exe`（2.3 MB，交付产物）、`native/knowledge/Cargo.lock`、`licenses/` 新增 28 个文本、`native/knowledge/target/`（697 MB，可重建构建缓存，被 `.gitignore` 的 `/native/**/target/` 忽略，与其他 crate 的 target 并存保留）。
 - 回收：测试用隔离数据根位于 `%TEMP%` 下并由测试自行删除。Windows 上删除会被仍打开的连接挡住，因此 `store.rs` 的重开用例先 `drop(reopened)`、`process.rs` 的懒启动用例先 `shutdown` 再删目录，`host.test.ts` 复用同一个 stub 目录并在 `afterAll` 删除；修好后连续运行 `cargo test --locked` 与 `host.integration.test.ts` 均不再留下目录（实测 `ls -d %TEMP%/yu-knowledge*` 为 0）。本轮未生成其他临时脚本或证据文件，`.gitignore` allowlist 无需改动。
+
+## 阶段 2 实施记录（2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+外部 Codex 已在 HEAD `7186caeb82fc111d23d9ef3ce20d59502c33fac2` 通过阶段 1 验收（复跑 6 文件 61 项 Vitest、`cargo test --locked` 14 lib + 11 process、`pnpm typecheck`、完整阶段 `git diff --check`；交付 release 哈希 `68ff70be…` 一致；两项帧边界探针独立重放通过）。本阶段只做“接收来源 + 持久化待提炼队列”，实际生成卡片数为 0，真实付费模型调用数为 0。
+
+### 渠道、配置与权限
+
+- 配置沿用现有 `Settings`，新增 `knowledge: { enabled, notes, chat, reading }`，默认 `{ false, true, true, true }`：总开关默认关闭，三个渠道默认允许但只有总开关启用后才接收。主进程用总开关快速跳过 spawn/读取/暂存；渠道、临时会话、排除、去重、稳定期与队列状态由 Rust 最终决定（`collect.configure` 同步）。
+- 渠道枚举固定为 `note`、`chat`、`reading`。`reading` 同时覆盖主界面聊天与浮动 Ask 的成功阅读总结；`reading` 关闭时该渠道来源不入队，也不允许经 `chat` 入口绕过（两者由真实来源事实区分：`chat` 只收 `chat` 渠道的问答，阅读总结只记 `reading`）。
+- 排除以稳定来源组为单位：`exclude.add {kind:'note'|'chat'|'reading', key}`，`key` 为随记 ID、对话 ID 或阅读来源引用；排除覆盖该来源各版本，重新允许必须显式 `exclude.remove`，不因新版本自动解除。
+- 渲染端只能发有界控制参数与已知来源引用；不能指定数据库根、文件路径或正文。
+
+### 数据模型（knowledge.db `user_version = 2`）
+
+v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`profile.db` 无职责变化，版本仍为 1。
+
+| 表 | 主键/唯一键 | 用途 |
+| --- | --- | --- |
+| `queue_groups` | `id`；`UNIQUE(channel, group_key)` | 稳定期分组：渠道、组键、`state`、`stable_at`、`reason`、`error`、`attempts` |
+| `queue_items` | `PK(group_id, ordinal)` | 组内来源顺序（一次问答一段），引用 `sources(id)` |
+| `queue_control` | `key` | `paused_manual`、`paused_game`、渠道开关快照 |
+| `history_jobs` | `id` | 一次性历史整理作业：`scopes`、`state`、两个游标、六类计数 |
+
+- 组状态 `state ∈ {stabilizing, ready, needs_reread, failed, cancelled}`；`stabilizing` 且 `now >= stable_at` 时对外一律报告 `ready`（待提炼），因此重启后无需补跑定时器也不会虚报。
+- 来源身份仍是 v1 的 `sources(kind, origin_ref, version)`，`version = sha256(正文)`；同正文重复发布命中同一行，不产生新来源、不产生新任务。
+- 去重与稳定期规则：同一 `(channel, group_key)` 只有一个组；正文指纹变化才把 `stable_at` 推到 `at + 60000`（默认 60 秒，测试注入短时钟），纯标题/访问时间变化既不重复建任务也不延长稳定期；组内 `at` 更旧的事件不覆盖较新的未处理内容；同一 `completed` 事件重复发布不新增任务；已生成的历史卡片不受随记新版本影响。
+- 原文边界：`sources` 只存引用、指纹、大小、范围与时间，不存随记/聊天正文快照；`reading` 正文只留在主进程有界暂存（总上限 16 MiB），逐出或 helper 重启后对应任务置 `needs_reread`，不伪装可恢复。
+- 恢复适配：主进程只对 Rust 通过 `queue.list` 报告的在途任务，按已绑定 ID 从现有 store 做有界只读投影并重新 `source.publish`（指纹一致即去重）；来源已删除/临时/被排除时调用 `queue.invalidate`/`queue.needs_reread`，不新增通用 RPC，也不允许 Rust 请求任意路径/URL。
+
+### 方法表（新增 17 个，协议版本仍为 1）
+
+| 方法 | 参数 | 结果 |
+| --- | --- | --- |
+| `collect.configure` | `{notes, chat, reading, paused:{manual, game}}` | 生效渠道与暂停态 |
+| `source.publish` | `{channel, kind, originRef, groupKey, title, scope, text, at, meta?}` | `{sourceId, version, fingerprint, groupId, state, duplicate}` |
+| `queue.list` | `{offset, limit, state?}` | 任务分页（`hasMore`/`nextOffset`，按 1 MiB 装页）+ 暂停态 |
+| `queue.status` | — | 各有效状态计数、暂停态、组数 |
+| `queue.pause` | `{reason:'manual'\|'game', paused}` | 暂停态 |
+| `queue.cancel` | `{groupId, reason?}` | 任务置 `cancelled` |
+| `queue.retry` | `{groupId}` | `failed`/`needs_reread` 回 `stabilizing` 并重置 `stable_at` |
+| `queue.invalidate` | `{groupId, reason}` | 来源失效并把任务置 `cancelled` |
+| `queue.needs_reread` | `{groupId, reason}` | 任务置 `needs_reread` |
+| `exclude.add` / `exclude.remove` / `exclude.list` | `{kind, key}` / `{kind, key}` / `{}` | 排除项 |
+| `history.begin` | `{notes, chat}` | 作业 ID 与初始游标（重复 begin 返回同一运行中作业） |
+| `history.step` | `{jobId, kind, cursor, rows:[publish 形态]}` | `{cursor, counts, done}` |
+| `history.pause` / `history.resume` / `history.cancel` / `history.status` | `{jobId}` | 作业状态与计数 |
+
+- 并发仍为 1 个任务写入位；`queue.list` 分页与 `card.list` 共用 `protocol::fit_page` 与出站 2 MiB 检查。
+- 手动暂停与游戏暂停互不覆盖：`paused = paused_manual || paused_game`，退出游戏不清除手动暂停；停止功能不删除已有任务元信息。
+- 历史整理只覆盖现有随记与已完成持久聊天，不扫描 `history.sqlite` 听写历史、全盘文件或历史 URL；历史中的网页总结按“历史对话总结”标注范围入队。
+
+### 状态含义
+
+- `stabilizing`：仍在稳定期（不足 60 秒）。
+- `ready`：待提炼，等待阶段 3 消费；本阶段不会把它改成完成。
+- `needs_reread`：正文已不可用（阅读暂存逐出/helper 重启/来源失效），需用户重新发起原阅读任务。
+- `failed`：采集或读取阶段真实失败，可 `queue.retry`。
+- `cancelled`：被删除、排除、临时会话或用户取消。
+- 进度计数（历史作业）区分已扫描、跳过、去重、待提炼、需重读、失败；扫描结束只表示来源收集完成，不等于提炼完成。
+
+### 阶段 2 实现与验证（2026-11-05）
+
+实现提交：`b2fb4d0`（`feat(knowledge): collect sources into a pending extraction queue`）。
+
+**实现落点**
+
+- Rust：`native/knowledge/src/queue.rs`（采集开关、稳定期、去重、排他、暂停、任务状态）、`history.rs`（一次性历史作业与游标）、`store.rs`（`KNOWLEDGE_SCHEMA = 2` 与增量迁移 `QUEUE_SQL`）、`service.rs`/`lib.rs`（20 个新方法注册）、`protocol.rs`（`MAX_GROUP_CHARS`、`channel_disabled`、`excluded`）。
+- TS 投影层：`src/main/knowledge/collector.ts`（笔记/问答/阅读投影、材料上限、阅读正文进程内暂存、历史控制），`src/main/knowledge/host.ts`（新增 20 个薄转发方法与 `TaskTarget`）。
+- 真实写入点：`src/main/notes.ts`（`onSettled`/`onRemoved`：新增文字随记、正文变更、后台转写与润色落地、删除；仅改标题/标签/分类不入队）、`src/main/chat.ts`（`ChatService` 第五个参数 `onCompleted`，仅在 `taskState === 'completed'`、未关闭、非临时会话时触发）、`src/main/assistant.ts`（`deps.onReading`，浮动提问完成且本轮确实读过材料时触发）。
+- 开关：`src/shared/knowledgeSettings.ts` + `Settings.knowledge` + `DEFAULT_SETTINGS.knowledge = { enabled: false, notes: true, chat: true, reading: true }`；`settings:update` 变更时同步，启动时镜像一次，游戏模式进入先 `pauseCollect('game', true)` 再停 helper、退出时恢复。
+- IPC：`knowledge:collect-configure|collect-pause|queue-list|queue-status|task-cancel|task-retry|task-invalidate|task-needs-reread|exclude-add|exclude-remove|exclude-list|history-begin|history-step|history-pause|history-resume|history-cancel|history-status|history-latest`，全部经 `handle()` 与 `knowledgeOwner`（仅设置窗口）；渲染进程不能指定数据根、不能发 SQL。
+- 阅读材料上限：最多 5 条、合计 48000 字符，`scope` 记录实际包含范围与截断；正文只在本进程暂存（16 MiB LRU），逐出或 helper 重启后只能 `needs_reread`，不假装可恢复。
+
+**修复的自身问题（实现期发现）**
+
+- `queue.invalidate|refusal` 原先只接受铸造出的 `groupId`，删除随记时无从反查；`GroupParams` 改为 `groupId` 或 `(channel, groupKey)` 二选一，删除/排除按来源键直接失效。
+- 仅改元数据会重复通知采集：`NotesStore.update` 比较改动前后的正文字段，只有正文变化才 `onSettled`。
+- 夹具 ready 帧仍写死旧架构号，导致 `loop.test.ts` 与真实 helper 不一致；夹具改用 `store::KNOWLEDGE_SCHEMA`/`PROFILE_SCHEMA`。
+
+**验证（依赖顺序执行，未并发）**
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 | — |
+| `cargo test --locked` | 0 | 15 lib + 11 process + 10 queue |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 | — |
+| `pnpm exec vitest run src/main/knowledge` | 0 | 5 文件 / 66 项 |
+| `pnpm exec vitest run src/main/notes.test.ts src/main/chat.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts src/shared` | 0 | 全部通过（notes 50、chat 12、collector 12、integration 12 等） |
+| `pnpm typecheck` | 0 | node + web |
+| `pnpm test:native` | 0 | 7 个 crate |
+| `pnpm test` | 0 | 257 文件通过 / 3 跳过；3750 项通过 / 8 跳过；99.99 s |
+| `pnpm build` | 0 | renderer 与主进程构建通过 |
+
+- 交付 release：`native/bin/yu-knowledge.exe`，2,458,112 字节，SHA-256 `e6456b0f5217765ee256ba225f9b7f7758e4015875f721006e6b066bb5b03fd3`（每次重建都会变，hash 只标识该文件）。
+- debug/fixture 二进制仅用于测试：`target/debug/yu-knowledge.exe`、`target/debug/yu-knowledge-fixture.exe`。
+
+**未测与边界**
+
+- 稳定期只做短窗口验证（`YU_KNOWLEDGE_STABLE_MS` 缩短），未在真实 60 秒窗口下做端到端等待。
+- 本阶段不产生卡片：`ready` 任务只排队，没有消费方；真实模型调用为 0。
+- 未做历史整理的真实大数据量压测（只验证批次游标、去重计数与暂停/恢复/完成流转）。

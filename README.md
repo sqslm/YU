@@ -286,7 +286,7 @@ history.sqlite（SQLite 检索，含来源与链路标记）
 
 Electron 主进程保留 TypeScript；热键、UIA、常驻语音唤醒分别由独立 Rust 程序 `yu-hotkey.exe`、`yu-uia.exe`、`yu-wake.exe` 负责，本地 ASR 和记忆模型继续使用独立 Electron utilityProcess。热键/UIA 通过继承管道收发逐行 JSON，父管道关闭时退出，provider 故障只影响对应子进程。`yu-windows.exe` 与 `yu-speech.exe` 则每次请求启动、操作或一次朗读结束即退出，分别负责窗口校验、磁盘容量、系统音量、本地 OCR、浏览器地址、资源管理器文件夹、最近文件与已登记应用列表读取，以及 Windows 本地朗读，不增加常驻进程；它们也会监视父进程死亡并退出。五个原性能程序位于 `resources/native/`、ASAR 之外，静态链接 CRT。资源面板按实际 PID 计入热键和 UIA，读取失败的指标显示为不可用。后续待办与验收记录集中在[重构计划](docs/rust-refactor-plan.md)。
 
-`yu-knowledge.exe` 是知识与画像的业务进程：按需启动，首次显式知识库请求才拉起，通过继承管道收发逐行 JSON，空闲 120 秒或父管道关闭即退出；数据库位于安装目录 `data/knowledge/knowledge.db` 与 `data/profile/profile.db`（开发模式为工程目录），开发路径 `native/bin/yu-knowledge.exe`，打包后在 `resources/native/`。阶段 1 只完成 Rust 底座、协议契约与桥接：来源/卡片/画像的界面、自动提炼与聊天检索尚未开放，当前不会启动任何后台学习任务。
+`yu-knowledge.exe` 是知识与画像的业务进程：按需启动，首次显式知识库请求才拉起，通过继承管道收发逐行 JSON，空闲 120 秒或父管道关闭即退出；数据库位于安装目录 `data/knowledge/knowledge.db` 与 `data/profile/profile.db`（开发模式为工程目录），开发路径 `native/bin/yu-knowledge.exe`，打包后在 `resources/native/`。阶段 1 完成 Rust 底座、协议契约与桥接；阶段 2 增加了采集：开关打开后，新增或改过正文的随记、真正完成的问答、以及确实读过材料的阅读总结会变成可追溯的来源，并进入待提炼队列（稳定期 60 秒、去重、可排除、可暂停、可重试）。知识库开关默认关闭；卡片生成、画像归纳与聊天检索仍属后续阶段，当前没有任何自动提炼会调用模型。
 
 几个值得单独说明的模块：
 
