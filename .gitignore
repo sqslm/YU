@@ -54,6 +54,8 @@
 !/scripts/benchmark-wake.mjs
 !/scripts/benchmark-speech.mjs
 !/scripts/benchmark-model-workers.mjs
+!/scripts/compare-browser-url.mjs
+!/scripts/uia-fixture-check.mjs
 !/native/
 /native/bin/
 /native/**/target/

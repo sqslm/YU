@@ -1,0 +1,1758 @@
+{
+  "kind": "windows-helper-comparison",
+  "version": 2,
+  "meta": {
+    "generatedAt": "2026-11-04T01:13:05.793Z",
+    "host": {
+      "os": "win32",
+      "arch": "x64",
+      "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "cores": 16,
+      "totalMemMb": 31801
+    },
+    "node": "v24.22.2",
+    "samples": 20,
+    "operation": "browser-url",
+    "timeoutMs": 15000,
+    "note": "bodies are compared after canonicalising key order",
+    "fixture": {
+      "script": "tests/yu-v2/fixtures/uia-provider.ps1",
+      "modes": [
+        "address-edit",
+        "file-url",
+        "no-candidate",
+        "provider-error",
+        "provider-error",
+        "address-edit",
+        "address-edit"
+      ],
+      "timingMode": "address-edit",
+      "expected": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      },
+      "ownership": "fixture-owned window; no user browser or profile is used"
+    },
+    "measurement": {
+      "method": "job accounting + wall clock",
+      "cpuWindow": "spawn → stdio close",
+      "memory": "PeakProcessMemoryUsed of the job",
+      "notes": "Both helpers are timed over the same production request budget."
+    }
+  },
+  "binary": {
+    "path": "native/bin/yu-windows.exe",
+    "bytes": 430080,
+    "sha256": "303e2772cba7d29330489f8f3436ad3c5cfcb52f075fedcb26940d4665dc0a0e"
+  },
+  "scope": {
+    "included": [
+      "browser-url over an owned UIA provider",
+      "https address",
+      "file address with an existing file",
+      "no candidate",
+      "process lifetime and job accounting"
+    ],
+    "excluded": [
+      "real Edge/Chrome/Firefox trees",
+      "password managers",
+      "Document-level forms in real pages",
+      "UNC shares",
+      "UIA provider failures",
+      "locked or remote sessions"
+    ]
+  },
+  "correctness": [
+    {
+      "mode": "address-edit",
+      "kind": "body",
+      "request": {
+        "action": "browser-url",
+        "handle": "29820086",
+        "pid": 7680,
+        "title": "UIA fixture - address-edit"
+      },
+      "powershell": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "title": "UIA fixture - address-edit",
+          "url": "https://example.com/a",
+          "truncated": false
+        },
+        "timedOut": false,
+        "totalMs": 1233.4474
+      },
+      "rust": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "title": "UIA fixture - address-edit",
+          "truncated": false,
+          "url": "https://example.com/a"
+        },
+        "timedOut": false,
+        "totalMs": 54.91330000000016
+      },
+      "injected": [],
+      "expected": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      },
+      "identical": true,
+      "matchesExpected": true,
+      "accepted": true
+    },
+    {
+      "mode": "file-url",
+      "kind": "body",
+      "request": {
+        "action": "browser-url",
+        "handle": "29951158",
+        "pid": 39920,
+        "title": "UIA fixture - file-url"
+      },
+      "powershell": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "title": "UIA fixture - file-url",
+          "truncated": false,
+          "path": "E:\\CpanQianYi\\Temp\\yu-uia-9df9fad9d0504c50b711c4d5f42e62d6.md"
+        },
+        "timedOut": false,
+        "totalMs": 1244.4944
+      },
+      "rust": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "path": "E:\\CpanQianYi\\Temp\\yu-uia-9df9fad9d0504c50b711c4d5f42e62d6.md",
+          "title": "UIA fixture - file-url",
+          "truncated": false
+        },
+        "timedOut": false,
+        "totalMs": 52.26050000000032
+      },
+      "injected": [],
+      "expected": {
+        "title": "UIA fixture - file-url",
+        "path": "E:\\CpanQianYi\\Temp\\yu-uia-9df9fad9d0504c50b711c4d5f42e62d6.md",
+        "truncated": false
+      },
+      "identical": true,
+      "matchesExpected": true
+    },
+    {
+      "mode": "no-candidate",
+      "kind": "body",
+      "request": {
+        "action": "browser-url",
+        "handle": "30082230",
+        "pid": 2092,
+        "title": "UIA fixture - no-candidate"
+      },
+      "powershell": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "truncated": false,
+          "title": "UIA fixture - no-candidate"
+        },
+        "timedOut": false,
+        "totalMs": 1187.5176000000001
+      },
+      "rust": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "title": "UIA fixture - no-candidate",
+          "truncated": false
+        },
+        "timedOut": false,
+        "totalMs": 44.23410000000058
+      },
+      "injected": [],
+      "expected": {
+        "title": "UIA fixture - no-candidate",
+        "truncated": false
+      },
+      "identical": true,
+      "matchesExpected": true
+    },
+    {
+      "mode": "provider-error",
+      "kind": "body",
+      "failStage": "get-property",
+      "request": {
+        "action": "browser-url",
+        "handle": "30213302",
+        "pid": 50204,
+        "title": "UIA fixture - provider-error [get-property]"
+      },
+      "powershell": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "truncated": false,
+          "title": "UIA fixture - provider-error [get-property]"
+        },
+        "timedOut": false,
+        "totalMs": 1215.634000000001
+      },
+      "rust": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "title": "UIA fixture - provider-error [get-property]",
+          "truncated": false
+        },
+        "timedOut": false,
+        "totalMs": 45.5630000000001
+      },
+      "injected": [
+        {
+          "stage": "get-property",
+          "call": "GetPropertyValue(ControlType)"
+        }
+      ],
+      "expected": {
+        "title": "UIA fixture - provider-error [get-property]",
+        "truncated": false
+      },
+      "identical": true,
+      "matchesExpected": true
+    },
+    {
+      "mode": "provider-error",
+      "kind": "body",
+      "failStage": "find-children",
+      "request": {
+        "action": "browser-url",
+        "handle": "30344374",
+        "pid": 44420,
+        "title": "UIA fixture - provider-error [find-children]"
+      },
+      "powershell": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "truncated": false,
+          "title": "UIA fixture - provider-error [find-children]"
+        },
+        "timedOut": false,
+        "totalMs": 1195.9184000000005
+      },
+      "rust": {
+        "code": 0,
+        "stderr": "",
+        "json": {
+          "title": "UIA fixture - provider-error [find-children]",
+          "truncated": false
+        },
+        "timedOut": false,
+        "totalMs": 42.1265999999996
+      },
+      "injected": [
+        {
+          "stage": "find-children",
+          "call": "Navigate(FirstChild)"
+        }
+      ],
+      "expected": {
+        "title": "UIA fixture - provider-error [find-children]",
+        "truncated": false
+      },
+      "identical": true,
+      "matchesExpected": true
+    },
+    {
+      "mode": "address-edit",
+      "kind": "destroyed",
+      "request": {
+        "action": "browser-url",
+        "handle": "30475446",
+        "pid": 46772,
+        "title": "UIA fixture - address-edit"
+      },
+      "powershell": {
+        "code": 1,
+        "stderr": "Original window has changed or closed\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:38 字符: 138\r\n+ ... ing]$request.title) { throw 'Original window has changed or closed' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Original window has changed or closed:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Original window has changed or closed",
+        "timedOut": false,
+        "totalMs": 1034.5962999999992
+      },
+      "rust": {
+        "code": 1,
+        "stderr": "Original window has changed or closed",
+        "timedOut": false,
+        "totalMs": 23.38420000000042
+      },
+      "rejected": true,
+      "identical": true,
+      "matchesExpected": true
+    },
+    {
+      "mode": "address-edit",
+      "kind": "unresponsive",
+      "failStage": "unresponsive",
+      "request": {
+        "action": "browser-url",
+        "handle": "30672054",
+        "pid": 51772,
+        "title": "UIA fixture - address-edit [unresponsive]"
+      },
+      "powershell": {
+        "code": null,
+        "stderr": "",
+        "timedOut": true,
+        "totalMs": 15031.5767
+      },
+      "rust": {
+        "code": null,
+        "stderr": "",
+        "timedOut": true,
+        "totalMs": 15017.843499999995
+      },
+      "timedOut": true,
+      "identical": true,
+      "matchesExpected": true
+    }
+  ],
+  "runs": [
+    {
+      "side": "powershell",
+      "round": 1,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1242.593200000003,
+      "cpuUserMs": 1406.25,
+      "cpuKernelMs": 531.25,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76532,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 2,
+      "ok": true,
+      "code": 0,
+      "totalMs": 43.335299999998824,
+      "cpuUserMs": 46.875,
+      "cpuKernelMs": 0,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2492,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 3,
+      "ok": true,
+      "code": 0,
+      "totalMs": 43.06609999999637,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2472,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 4,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1109.7357000000047,
+      "cpuUserMs": 1484.375,
+      "cpuKernelMs": 484.375,
+      "cpuMs": 1968.75,
+      "peakPrivateKb": 76844,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 5,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1114.3097000000053,
+      "cpuUserMs": 1343.75,
+      "cpuKernelMs": 562.5,
+      "cpuMs": 1906.25,
+      "peakPrivateKb": 76592,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 6,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.94180000000051,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 0,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2496,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 7,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.749900000002526,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2492,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 8,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1100.866599999994,
+      "cpuUserMs": 1203.125,
+      "cpuKernelMs": 640.625,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 76568,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 9,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1108.859900000003,
+      "cpuUserMs": 1281.25,
+      "cpuKernelMs": 671.875,
+      "cpuMs": 1953.125,
+      "peakPrivateKb": 76668,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 10,
+      "ok": true,
+      "code": 0,
+      "totalMs": 54.01180000000022,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2488,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 11,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.86319999999978,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2492,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 12,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1104.7288000000044,
+      "cpuUserMs": 1343.75,
+      "cpuKernelMs": 671.875,
+      "cpuMs": 2015.625,
+      "peakPrivateKb": 76652,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 13,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1115.1973999999973,
+      "cpuUserMs": 1296.875,
+      "cpuKernelMs": 640.625,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76704,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 14,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.90869999999995,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2476,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 15,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.2071999999971,
+      "cpuUserMs": 46.875,
+      "cpuKernelMs": 0,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2560,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 16,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1103.0527999999977,
+      "cpuUserMs": 1343.75,
+      "cpuKernelMs": 593.75,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76348,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 17,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1099.0939999999973,
+      "cpuUserMs": 1281.25,
+      "cpuKernelMs": 546.875,
+      "cpuMs": 1828.125,
+      "peakPrivateKb": 76756,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 18,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.95549999999639,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2484,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 19,
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.54449999999633,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2484,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 20,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1121.7518999999957,
+      "cpuUserMs": 1484.375,
+      "cpuKernelMs": 484.375,
+      "cpuMs": 1968.75,
+      "peakPrivateKb": 76440,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 21,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1074.0391000000018,
+      "cpuUserMs": 1328.125,
+      "cpuKernelMs": 531.25,
+      "cpuMs": 1859.375,
+      "peakPrivateKb": 76756,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 22,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.72009999999864,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2484,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 23,
+      "ok": true,
+      "code": 0,
+      "totalMs": 40.93499999999767,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 0,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2484,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 24,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1088.7304000000004,
+      "cpuUserMs": 1093.75,
+      "cpuKernelMs": 750,
+      "cpuMs": 1843.75,
+      "peakPrivateKb": 76432,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 25,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1106.8797999999952,
+      "cpuUserMs": 1281.25,
+      "cpuKernelMs": 578.125,
+      "cpuMs": 1859.375,
+      "peakPrivateKb": 76284,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 26,
+      "ok": true,
+      "code": 0,
+      "totalMs": 41.55040000000008,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 46.875,
+      "cpuMs": 62.5,
+      "peakPrivateKb": 2496,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 27,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.20479999999952,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2476,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 28,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1140.0341999999946,
+      "cpuUserMs": 1281.25,
+      "cpuKernelMs": 640.625,
+      "cpuMs": 1921.875,
+      "peakPrivateKb": 76632,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 29,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1172.7249999999985,
+      "cpuUserMs": 1218.75,
+      "cpuKernelMs": 750,
+      "cpuMs": 1968.75,
+      "peakPrivateKb": 76700,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 30,
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.34520000000339,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2492,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 31,
+      "ok": true,
+      "code": 0,
+      "totalMs": 65.43659999999363,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 0,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2500,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 32,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1120.7743000000046,
+      "cpuUserMs": 1187.5,
+      "cpuKernelMs": 828.125,
+      "cpuMs": 2015.625,
+      "peakPrivateKb": 76520,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 33,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1146.4442999999956,
+      "cpuUserMs": 1484.375,
+      "cpuKernelMs": 562.5,
+      "cpuMs": 2046.875,
+      "peakPrivateKb": 77060,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 34,
+      "ok": true,
+      "code": 0,
+      "totalMs": 40.42359999999462,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2484,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 35,
+      "ok": true,
+      "code": 0,
+      "totalMs": 41.68869999999879,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2500,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 36,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1133.750899999999,
+      "cpuUserMs": 1296.875,
+      "cpuKernelMs": 515.625,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 76528,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 37,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1173.9504000000015,
+      "cpuUserMs": 1359.375,
+      "cpuKernelMs": 609.375,
+      "cpuMs": 1968.75,
+      "peakPrivateKb": 76352,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 38,
+      "ok": true,
+      "code": 0,
+      "totalMs": 63.55490000000282,
+      "cpuUserMs": 46.875,
+      "cpuKernelMs": 0,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2480,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 39,
+      "ok": true,
+      "code": 0,
+      "totalMs": 55.77030000000377,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 46.875,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2492,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 40,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1144.3424999999988,
+      "cpuUserMs": 1203.125,
+      "cpuKernelMs": 812.5,
+      "cpuMs": 2015.625,
+      "peakPrivateKb": 76448,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 41,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1162.5299999999988,
+      "cpuUserMs": 1343.75,
+      "cpuKernelMs": 687.5,
+      "cpuMs": 2031.25,
+      "peakPrivateKb": 76296,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 42,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.45879999999306,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2552,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 43,
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.66939999999886,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2472,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 44,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1102.0331000000006,
+      "cpuUserMs": 1234.375,
+      "cpuKernelMs": 718.75,
+      "cpuMs": 1953.125,
+      "peakPrivateKb": 76500,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 45,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1130.6935000000085,
+      "cpuUserMs": 1125,
+      "cpuKernelMs": 828.125,
+      "cpuMs": 1953.125,
+      "peakPrivateKb": 76344,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 46,
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.959699999992154,
+      "cpuUserMs": 46.875,
+      "cpuKernelMs": 0,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2504,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 47,
+      "ok": true,
+      "code": 0,
+      "totalMs": 46.704100000002654,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 46.875,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2500,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 48,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1170.8316999999952,
+      "cpuUserMs": 1406.25,
+      "cpuKernelMs": 640.625,
+      "cpuMs": 2046.875,
+      "peakPrivateKb": 76436,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 49,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1130.312300000005,
+      "cpuUserMs": 1171.875,
+      "cpuKernelMs": 812.5,
+      "cpuMs": 1984.375,
+      "peakPrivateKb": 76232,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 50,
+      "ok": true,
+      "code": 0,
+      "totalMs": 48.175600000002305,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2540,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 51,
+      "ok": true,
+      "code": 0,
+      "totalMs": 45.410900000002584,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2464,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 52,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1150.9015000000072,
+      "cpuUserMs": 1343.75,
+      "cpuKernelMs": 687.5,
+      "cpuMs": 2031.25,
+      "peakPrivateKb": 76512,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 53,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1138.3215000000055,
+      "cpuUserMs": 1375,
+      "cpuKernelMs": 500,
+      "cpuMs": 1875,
+      "peakPrivateKb": 76464,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 54,
+      "ok": true,
+      "code": 0,
+      "totalMs": 45.31510000000708,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2496,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 55,
+      "ok": true,
+      "code": 0,
+      "totalMs": 45.57830000000831,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2488,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 56,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1200.9486000000034,
+      "cpuUserMs": 1359.375,
+      "cpuKernelMs": 750,
+      "cpuMs": 2109.375,
+      "peakPrivateKb": 76592,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 57,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1183.0619999999908,
+      "cpuUserMs": 1156.25,
+      "cpuKernelMs": 890.625,
+      "cpuMs": 2046.875,
+      "peakPrivateKb": 76492,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 58,
+      "ok": true,
+      "code": 0,
+      "totalMs": 50.818799999993644,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2588,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 59,
+      "ok": true,
+      "code": 0,
+      "totalMs": 59.09880000000703,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 46.875,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2560,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 60,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1149.9199999999983,
+      "cpuUserMs": 1140.625,
+      "cpuKernelMs": 781.25,
+      "cpuMs": 1921.875,
+      "peakPrivateKb": 76372,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 61,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1119.0966999999946,
+      "cpuUserMs": 1203.125,
+      "cpuKernelMs": 734.375,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76428,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 62,
+      "ok": true,
+      "code": 0,
+      "totalMs": 43.55569999999716,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2480,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 63,
+      "ok": true,
+      "code": 0,
+      "totalMs": 45.38189999999304,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2464,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 64,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1180.3931000000011,
+      "cpuUserMs": 1343.75,
+      "cpuKernelMs": 703.125,
+      "cpuMs": 2046.875,
+      "peakPrivateKb": 76392,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 65,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1151.1195000000007,
+      "cpuUserMs": 1500,
+      "cpuKernelMs": 562.5,
+      "cpuMs": 2062.5,
+      "peakPrivateKb": 76276,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 66,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.42130000000179,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 0,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2488,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 67,
+      "ok": true,
+      "code": 0,
+      "totalMs": 42.04219999999623,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2480,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 68,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1152.4205999999976,
+      "cpuUserMs": 1359.375,
+      "cpuKernelMs": 640.625,
+      "cpuMs": 2000,
+      "peakPrivateKb": 76448,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 69,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1110.0832999999984,
+      "cpuUserMs": 1343.75,
+      "cpuKernelMs": 468.75,
+      "cpuMs": 1812.5,
+      "peakPrivateKb": 76576,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 70,
+      "ok": true,
+      "code": 0,
+      "totalMs": 41.5506999999925,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2468,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 71,
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.074500000002445,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 62.5,
+      "peakPrivateKb": 2480,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 72,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1118.3420000000042,
+      "cpuUserMs": 1312.5,
+      "cpuKernelMs": 625,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76588,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 73,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1137.3773000000074,
+      "cpuUserMs": 1375,
+      "cpuKernelMs": 609.375,
+      "cpuMs": 1984.375,
+      "peakPrivateKb": 76376,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 74,
+      "ok": true,
+      "code": 0,
+      "totalMs": 49.21489999999176,
+      "cpuUserMs": 31.25,
+      "cpuKernelMs": 0,
+      "cpuMs": 31.25,
+      "peakPrivateKb": 2472,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 75,
+      "ok": true,
+      "code": 0,
+      "totalMs": 45.704200000007404,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 31.25,
+      "cpuMs": 46.875,
+      "peakPrivateKb": 2460,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 76,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1118.1286999999866,
+      "cpuUserMs": 1359.375,
+      "cpuKernelMs": 578.125,
+      "cpuMs": 1937.5,
+      "peakPrivateKb": 76676,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 77,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1117.2157000000007,
+      "cpuUserMs": 1265.625,
+      "cpuKernelMs": 609.375,
+      "cpuMs": 1875,
+      "peakPrivateKb": 76252,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    },
+    {
+      "side": "rust",
+      "round": 78,
+      "ok": true,
+      "code": 0,
+      "totalMs": 43.36839999999211,
+      "cpuUserMs": 0,
+      "cpuKernelMs": 15.625,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2572,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "rust",
+      "round": 79,
+      "ok": true,
+      "code": 0,
+      "totalMs": 44.19140000001062,
+      "cpuUserMs": 15.625,
+      "cpuKernelMs": 0,
+      "cpuMs": 15.625,
+      "peakPrivateKb": 2476,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "truncated": false,
+        "url": "https://example.com/a"
+      }
+    },
+    {
+      "side": "powershell",
+      "round": 80,
+      "ok": true,
+      "code": 0,
+      "totalMs": 1118.1523999999918,
+      "cpuUserMs": 1328.125,
+      "cpuKernelMs": 656.25,
+      "cpuMs": 1984.375,
+      "peakPrivateKb": 76452,
+      "body": {
+        "title": "UIA fixture - address-edit",
+        "url": "https://example.com/a",
+        "truncated": false
+      }
+    }
+  ],
+  "aggregate": {
+    "powershell": {
+      "n": 40,
+      "invalid": [],
+      "metrics": {
+        "totalMs": {
+          "n": 40,
+          "p50": 1121.7518999999957,
+          "p95": 1183.0619999999908
+        },
+        "cpuMs": {
+          "n": 40,
+          "p50": 1953.125,
+          "p95": 2046.875
+        },
+        "peakPrivateKb": {
+          "n": 40,
+          "p50": 76492,
+          "p95": 76756
+        }
+      }
+    },
+    "rust": {
+      "n": 40,
+      "invalid": [],
+      "metrics": {
+        "totalMs": {
+          "n": 40,
+          "p50": 43.55569999999716,
+          "p95": 59.09880000000703
+        },
+        "cpuMs": {
+          "n": 40,
+          "p50": 31.25,
+          "p95": 46.875
+        },
+        "peakPrivateKb": {
+          "n": 40,
+          "p50": 2488,
+          "p95": 2560
+        }
+      }
+    }
+  },
+  "comparison": {
+    "totalMs": {
+      "p50Pct": -96.12,
+      "p95Pct": -95,
+      "p95DeltaMs": -1123.96
+    },
+    "cpuMs": {
+      "p50Pct": -98.4,
+      "p95Pct": -97.71,
+      "p95DeltaMs": -2000
+    },
+    "peakPrivateKb": {
+      "p50Pct": -96.75,
+      "p95Pct": -96.66,
+      "p95DeltaMs": null
+    }
+  },
+  "checks": [
+    {
+      "name": "https-address-identical",
+      "pass": true,
+      "detail": "both helpers returned the same body"
+    },
+    {
+      "name": "https-address-expected",
+      "pass": true,
+      "detail": "{\"expected\":{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false},\"powershell\":{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false},\"rust\":{\"title\":\"UIA fixture - address-edit\",\"truncated\":false,\"url\":\"https://example.com/a\"}}"
+    },
+    {
+      "name": "https-address-accepted-by-consumer",
+      "pass": true,
+      "detail": "browserAddress accepts the fixed https address within 2000 characters"
+    },
+    {
+      "name": "file-address-yields-path",
+      "pass": true,
+      "detail": "{\"expected\":{\"title\":\"UIA fixture - file-url\",\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-uia-9df9fad9d0504c50b711c4d5f42e62d6.md\",\"truncated\":false},\"powershell\":{\"title\":\"UIA fixture - file-url\",\"truncated\":false,\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-uia-9df9fad9d0504c50b711c4d5f42e62d6.md\"},\"rust\":{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-uia-9df9fad9d0504c50b711c4d5f42e62d6.md\",\"title\":\"UIA fixture - file-url\",\"truncated\":false}}"
+    },
+    {
+      "name": "no-candidate-returns-no-address",
+      "pass": true,
+      "detail": "{\"expected\":{\"title\":\"UIA fixture - no-candidate\",\"truncated\":false},\"powershell\":{\"truncated\":false,\"title\":\"UIA fixture - no-candidate\"},\"rust\":{\"title\":\"UIA fixture - no-candidate\",\"truncated\":false}}"
+    },
+    {
+      "name": "provider-errors-equal-and-invisible",
+      "pass": true,
+      "detail": "[{\"failStage\":\"get-property\",\"injected\":[{\"stage\":\"get-property\",\"call\":\"GetPropertyValue(ControlType)\"}],\"powershell\":{\"truncated\":false,\"title\":\"UIA fixture - provider-error [get-property]\"},\"rust\":{\"title\":\"UIA fixture - provider-error [get-property]\",\"truncated\":false}},{\"failStage\":\"find-children\",\"injected\":[{\"stage\":\"find-children\",\"call\":\"Navigate(FirstChild)\"}],\"powershell\":{\"truncated\":false,\"title\":\"UIA fixture - provider-error [find-children]\"},\"rust\":{\"title\":\"UIA fixture - provider-error [find-children]\",\"truncated\":false}}]"
+    },
+    {
+      "name": "destroyed-window-rejected",
+      "pass": true,
+      "detail": "{\"powershell\":{\"code\":1,\"stderr\":\"Original window has changed or closed\\r\\n所在位置 E:\\\\code\\\\deepseek-harness\\\\rea\\\\typeless\\\\resources\\\\windows-tools.ps1:38 字符: 138\\r\\n+ ... ing]$request.title) { throw 'Original window has changed or closed' }\\r\\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\\r\\n    + CategoryInfo          : OperationStopped: (Original window has changed or closed:String) [], RuntimeException\\r\\n    + FullyQualifiedErrorId : Original window has changed or closed\",\"timedOut\":false,\"totalMs\":1034.5962999999992},\"rust\":{\"code\":1,\"stderr\":\"Original window has changed or closed\",\"timedOut\":false,\"totalMs\":23.38420000000042}}"
+    },
+    {
+      "name": "unresponsive-read-hits-budget",
+      "pass": true,
+      "detail": "{\"powershell\":{\"code\":null,\"stderr\":\"\",\"timedOut\":true,\"totalMs\":15031.5767},\"rust\":{\"code\":null,\"stderr\":\"\",\"timedOut\":true,\"totalMs\":15017.843499999995}}"
+    },
+    {
+      "name": "every-sample-valid",
+      "pass": true,
+      "detail": "80/80 samples matched the fixture body"
+    },
+    {
+      "name": "samples-per-side",
+      "pass": true,
+      "detail": "powershell 40, rust 40"
+    },
+    {
+      "name": "measurement-comparable",
+      "pass": true,
+      "detail": "every metric has both sides"
+    },
+    {
+      "name": "job-accounting",
+      "pass": true,
+      "detail": "every helper was assigned to its own job and queried"
+    },
+    {
+      "name": "cleanup-complete",
+      "pass": true,
+      "detail": "every fixture process exited; 8 fixtures tracked"
+    },
+    {
+      "name": "performance-threshold",
+      "pass": true,
+      "detail": "latency met, memory met"
+    }
+  ],
+  "passed": true,
+  "adoption": {
+    "latencyMeets": true,
+    "memoryMeets": true,
+    "performanceMeets": true,
+    "decision": "latency"
+  },
+  "cleanup": {
+    "fixturePids": [
+      7680,
+      39920,
+      2092,
+      50204,
+      44420,
+      46772,
+      51772,
+      436
+    ],
+    "failures": []
+  }
+}

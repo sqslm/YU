@@ -9,14 +9,18 @@ use windows::{
             Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
             Variant::VARIANT,
         },
-        UI::Accessibility::{
-            CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
-            IUIAutomationValuePattern, TreeScope_Descendants, UIA_CONTROLTYPE_ID,
-            UIA_ComboBoxControlTypeId, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
-            UIA_EditControlTypeId, UIA_ToolBarControlTypeId, UIA_ValuePatternId,
+        UI::{
+            Accessibility::{
+                CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
+                IUIAutomationValuePattern, TreeScope_Descendants, UIA_CONTROLTYPE_ID,
+                UIA_ComboBoxControlTypeId, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
+                UIA_E_NOTSUPPORTED, UIA_EditControlTypeId, UIA_ToolBarControlTypeId,
+                UIA_ValuePatternId,
+            },
+            Shell::PathCreateFromUrlW,
         },
     },
-    core::Interface,
+    core::{Interface, PCWSTR, PWSTR},
 };
 
 // Same bounds as resources/current-content.ps1: at most 20 exposed documents,
@@ -33,6 +37,18 @@ const ADDRESS_NAMES: [&str; 6] = [
     "搜索或输入",
     "搜尋或輸入",
 ];
+
+type Failure = Box<dyn Error>;
+
+/// UIA failures are reported with the operation stage and the HRESULT: a value
+/// an unknown property could not confirm is never treated as a safe default.
+fn failed(stage: &str, error: windows::core::Error) -> Failure {
+    format!(
+        "UIA address read failed at {stage} (HRESULT 0x{:08X})",
+        error.code().0 as u32
+    )
+    .into()
+}
 
 /// The address bar is the only Edit/ComboBox that may hold the URL: it is never
 /// a password field, must be visible, and must look like browser chrome.
@@ -63,55 +79,94 @@ fn is_document_url(value: &str) -> bool {
         .any(|s| lower.starts_with(s))
 }
 
-/// Mirrors [uri]::LocalPath for the plain file URLs a browser exposes.
-fn local_path(url: &str) -> Option<String> {
-    let rest = url.strip_prefix("file://")?;
-    // A host component means a remote SMB/registry path, not a local file.
-    let path = rest.strip_prefix('/')?;
-    let mut decoded = Vec::with_capacity(path.len());
-    let bytes = path.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%' && index + 2 < bytes.len() {
-            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
-            decoded.push(u8::from_str_radix(hex, 16).ok()?);
-            index += 3;
-            continue;
-        }
-        decoded.push(bytes[index]);
-        index += 1;
+/// Converts a file URL the way `[uri]::LocalPath` does, using the system
+/// converter for the unescaping, drive letters and UNC hosts.
+///
+/// Two differences from `PathCreateFromUrlW` are carried over from .NET: a
+/// fragment is dropped, and a query stays appended to the local path
+/// (`file:///E:/a.html?x=1#part` -> `E:\a.html?x=1`).
+fn local_path(url: &str) -> Result<Option<String>, Failure> {
+    let is_file = url
+        .get(..5)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("file:"));
+    if !is_file {
+        return Ok(None);
     }
-    // file:///E:/page.html -> rest "/E:/page.html" -> path "E:/page.html"
-    String::from_utf8(decoded).ok()
+    let without_fragment = url.split('#').next().unwrap_or(url);
+    let (base, query) = match without_fragment.split_once('?') {
+        Some((base, query)) => (base, Some(query)),
+        None => (without_fragment, None),
+    };
+    let mut wide: Vec<u16> = base.encode_utf16().collect();
+    wide.push(0);
+    let mut buffer = vec![0u16; 32_768];
+    let mut length = buffer.len() as u32;
+    // SAFETY: both buffers are owned here and sized for the call; the URL is
+    // NUL-terminated above.
+    unsafe {
+        PathCreateFromUrlW(
+            PCWSTR(wide.as_ptr()),
+            PWSTR(buffer.as_mut_ptr()),
+            &mut length,
+            0,
+        )
+    }
+    .map_err(|error| failed("file url conversion", error))?;
+    let converted = String::from_utf16_lossy(&buffer[..(length as usize).min(buffer.len())]);
+    Ok(Some(match query {
+        Some(query) => format!("{converted}?{query}"),
+        None => converted,
+    }))
 }
 
-fn text(element: &IUIAutomationElement) -> String {
+fn text(element: &IUIAutomationElement) -> Result<String, Failure> {
     // SAFETY: callers hold the worker thread that owns the element.
     unsafe { element.CurrentName() }
-        .map(|v| v.to_string())
-        .unwrap_or_default()
+        .map(|value| value.to_string())
+        .map_err(|error| failed("element name", error))
 }
 
-fn address(element: &IUIAutomationElement) -> String {
+fn address(element: &IUIAutomationElement) -> Result<String, Failure> {
     // SAFETY: callers hold the worker thread that owns the element.
     unsafe { element.CurrentAutomationId() }
-        .map(|v| v.to_string())
-        .unwrap_or_default()
+        .map(|value| value.to_string())
+        .map_err(|error| failed("element automation id", error))
 }
 
-fn value(element: &IUIAutomationElement) -> Option<String> {
+/// `Ok(None)` means the element genuinely has no ValuePattern or an empty
+/// value; a failed read is an error, not "no value".
+fn value(element: &IUIAutomationElement) -> Result<Option<String>, Failure> {
     // SAFETY: callers hold the worker thread that owns the element.
     let pattern: IUIAutomationValuePattern =
-        unsafe { element.GetCurrentPatternAs(UIA_ValuePatternId) }.ok()?;
-    unsafe { pattern.CurrentValue() }
-        .ok()
-        .map(|v| v.to_string())
-        .filter(|v| !v.is_empty())
+        match unsafe { element.GetCurrentPatternAs(UIA_ValuePatternId) } {
+            Ok(pattern) => pattern,
+            Err(error) if error.code().0 as u32 == UIA_E_NOTSUPPORTED => return Ok(None),
+            Err(error) => return Err(failed("value pattern", error)),
+        };
+    // SAFETY: the pattern above belongs to this thread's element.
+    let text = unsafe { pattern.CurrentValue() }
+        .map_err(|error| failed("value text", error))?
+        .to_string();
+    Ok((!text.is_empty()).then_some(text))
 }
 
-fn control_type(element: &IUIAutomationElement) -> UIA_CONTROLTYPE_ID {
+fn control_type(element: &IUIAutomationElement) -> Result<UIA_CONTROLTYPE_ID, Failure> {
     // SAFETY: callers hold the worker thread that owns the element.
-    unsafe { element.CurrentControlType() }.unwrap_or(UIA_CONTROLTYPE_ID(0))
+    unsafe { element.CurrentControlType() }.map_err(|error| failed("control type", error))
+}
+
+fn password(element: &IUIAutomationElement) -> Result<bool, Failure> {
+    // SAFETY: callers hold the worker thread that owns the element.
+    unsafe { element.CurrentIsPassword() }
+        .map(|value| value.as_bool())
+        .map_err(|error| failed("password flag", error))
+}
+
+fn offscreen(element: &IUIAutomationElement) -> Result<bool, Failure> {
+    // SAFETY: callers hold the worker thread that owns the element.
+    unsafe { element.CurrentIsOffscreen() }
+        .map(|value| value.as_bool())
+        .map_err(|error| failed("offscreen flag", error))
 }
 
 fn unique(values: Vec<String>) -> Vec<String> {
@@ -131,36 +186,35 @@ fn browser_chrome(
     walker: &IUIAutomationTreeWalker,
     element: &IUIAutomationElement,
     edit: &IUIAutomationElement,
-) -> (bool, bool) {
+) -> Result<(bool, bool), Failure> {
     let (mut toolbar, mut chrome) = (false, false);
     let mut ancestor = edit.clone();
     for _ in 0..MAX_DEPTH {
         // SAFETY: elements stay on this initialized worker thread.
-        let Ok(parent) = (unsafe { walker.GetParentElement(&ancestor) }) else {
-            break;
-        };
-        if parent.as_raw().is_null() || control_type(&parent) == UIA_DocumentControlTypeId {
+        let parent = unsafe { walker.GetParentElement(&ancestor) }
+            .map_err(|error| failed("ancestor walk", error))?;
+        if parent.as_raw().is_null() || control_type(&parent)? == UIA_DocumentControlTypeId {
             break;
         }
         if unsafe { automation.CompareElements(element, &parent) }
-            .map(|v| v.as_bool())
-            .unwrap_or(false)
+            .map_err(|error| failed("ancestor identity", error))?
+            .as_bool()
         {
             chrome = true;
             break;
         }
-        if control_type(&parent) == UIA_ToolBarControlTypeId {
+        if control_type(&parent)? == UIA_ToolBarControlTypeId {
             toolbar = true;
         }
         ancestor = parent;
     }
-    (toolbar, chrome)
+    Ok((toolbar, chrome))
 }
 
 fn documents(
     automation: &IUIAutomation,
     element: &IUIAutomationElement,
-) -> Vec<IUIAutomationElement> {
+) -> Result<Vec<IUIAutomationElement>, Failure> {
     let mut out = Vec::new();
     // SAFETY: every interface stays on this initialized worker thread.
     unsafe {
@@ -169,21 +223,18 @@ fn documents(
                 UIA_ControlTypePropertyId,
                 &VARIANT::from(UIA_DocumentControlTypeId.0),
             )
-            .ok();
-        let Some(found) =
-            condition.and_then(|condition| element.FindAll(TreeScope_Descendants, &condition).ok())
-        else {
-            return out;
-        };
-        for index in 0..found.Length().unwrap_or(0) {
-            let Ok(document) = found.GetElement(index) else {
-                continue;
-            };
-            if document
-                .CurrentIsOffscreen()
-                .map(|v| v.as_bool())
-                .unwrap_or(false)
-            {
+            .map_err(|error| failed("document condition", error))?;
+        let found = element
+            .FindAll(TreeScope_Descendants, &condition)
+            .map_err(|error| failed("document search", error))?;
+        let length = found
+            .Length()
+            .map_err(|error| failed("document count", error))?;
+        for index in 0..length {
+            let document = found
+                .GetElement(index)
+                .map_err(|error| failed("document element", error))?;
+            if offscreen(&document)? {
                 continue;
             }
             out.push(document);
@@ -192,10 +243,13 @@ fn documents(
             }
         }
     }
-    out
+    Ok(out)
 }
 
-fn address_bar(automation: &IUIAutomation, element: &IUIAutomationElement) -> Option<String> {
+fn address_bar(
+    automation: &IUIAutomation,
+    element: &IUIAutomationElement,
+) -> Result<Option<String>, Failure> {
     // SAFETY: see documents(); all calls are synchronous on this thread.
     unsafe {
         let edits_condition = automation
@@ -205,46 +259,47 @@ fn address_bar(automation: &IUIAutomation, element: &IUIAutomationElement) -> Op
                         UIA_ControlTypePropertyId,
                         &VARIANT::from(UIA_EditControlTypeId.0),
                     )
-                    .ok()?,
+                    .map_err(|error| failed("edit condition", error))?,
                 &automation
                     .CreatePropertyCondition(
                         UIA_ControlTypePropertyId,
                         &VARIANT::from(UIA_ComboBoxControlTypeId.0),
                     )
-                    .ok()?,
+                    .map_err(|error| failed("combo condition", error))?,
             )
-            .ok()?;
+            .map_err(|error| failed("candidate condition", error))?;
         let edits = element
             .FindAll(TreeScope_Descendants, &edits_condition)
-            .ok()?;
-        let walker = automation.ControlViewWalker().ok()?;
+            .map_err(|error| failed("candidate search", error))?;
+        let length = edits
+            .Length()
+            .map_err(|error| failed("candidate count", error))?;
+        let walker = automation
+            .ControlViewWalker()
+            .map_err(|error| failed("control view walker", error))?;
         let mut addresses = Vec::new();
-        for index in 0..edits.Length().unwrap_or(0).min(MAX_EDITS as i32) {
-            let Ok(edit) = edits.GetElement(index) else {
-                continue;
-            };
+        for index in 0..length.min(MAX_EDITS as i32) {
+            let edit = edits
+                .GetElement(index)
+                .map_err(|error| failed("candidate element", error))?;
+            let id = address(&edit)?;
+            let name = text(&edit)?;
             let facts = EditFacts {
-                id: &address(&edit),
-                name: &text(&edit),
-                password: edit
-                    .CurrentIsPassword()
-                    .map(|v| v.as_bool())
-                    .unwrap_or(false),
-                offscreen: edit
-                    .CurrentIsOffscreen()
-                    .map(|v| v.as_bool())
-                    .unwrap_or(false),
+                id: &id,
+                name: &name,
+                password: password(&edit)?,
+                offscreen: offscreen(&edit)?,
             };
             if !is_address_edit(&facts) {
                 continue;
             }
-            let (toolbar, chrome) = browser_chrome(automation, &walker, element, &edit);
-            if let (true, true, Some(value)) = (toolbar, chrome, value(&edit)) {
+            let (toolbar, chrome) = browser_chrome(automation, &walker, element, &edit)?;
+            if let (true, true, Some(value)) = (toolbar, chrome, value(&edit)?) {
                 addresses.push(value);
             }
         }
         let addresses = unique(addresses);
-        (addresses.len() == 1).then(|| addresses[0].clone())
+        Ok((addresses.len() == 1).then(|| addresses[0].clone()))
     }
 }
 
@@ -252,42 +307,61 @@ fn document_url(
     documents: &[IUIAutomationElement],
     metadata_only: bool,
     address_bar: Option<&String>,
-) -> Option<String> {
-    let urls = unique(
-        documents
-            .iter()
-            .filter(|_| !(metadata_only && address_bar.is_none()))
-            .filter_map(value)
-            .filter(|url| is_document_url(url))
-            .collect(),
-    );
-    (urls.len() == 1).then(|| urls[0].clone())
+) -> Result<Option<String>, Failure> {
+    if metadata_only && address_bar.is_none() {
+        return Ok(None);
+    }
+    let mut urls = Vec::new();
+    for document in documents {
+        if let Some(value) = value(document)?
+            && is_document_url(&value)
+        {
+            urls.push(value);
+        }
+    }
+    let urls = unique(urls);
+    Ok((urls.len() == 1).then(|| urls[0].clone()))
 }
 
-/// Reads the browser address for an unfrozen window and re-asserts the window
-/// afterwards, so a title/PID change is never reported as a valid URL.
-pub fn browser_url(request: &Value) -> Result<Value, Box<dyn Error>> {
+/// Reads the browser address for an unfrozen window. The window is re-checked
+/// once more after every candidate and file check has finished, so a window
+/// that changed mid-read never produces a result.
+pub fn browser_url(request: &Value) -> Result<Value, Failure> {
     let handle = input::window_handle(request)?;
     let window = HWND(handle as *mut _);
     let title = assert_original(window, request)?;
+    if request["expectedPath"]
+        .as_str()
+        .is_some_and(|path| !path.is_empty())
+    {
+        return Err("Original Office document is no longer available".into());
+    }
     let metadata_only = request["metadataOnly"].as_bool().unwrap_or(false);
     // SAFETY: the caller asserts an exact window handle; interfaces stay on this
     // initialized worker thread (Runtime::initialize before this call).
     let url = unsafe {
         let automation: IUIAutomation =
-            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)?;
-        let element = automation.ElementFromHandle(window)?;
-        let documents = documents(&automation, &element);
-        let bar = address_bar(&automation, &element);
-        document_url(&documents, metadata_only, bar.as_ref()).or(bar)
+            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+                .map_err(|error| failed("automation", error))?;
+        let element = automation
+            .ElementFromHandle(window)
+            .map_err(|error| failed("window element", error))?;
+        let documents = documents(&automation, &element)?;
+        let bar = address_bar(&automation, &element)?;
+        document_url(&documents, metadata_only, bar.as_ref())?.or(bar)
+    };
+    let resolved = match url {
+        None => None,
+        Some(url) => match local_path(&url)? {
+            Some(path) if Path::new(&path).is_file() => Some((url, path)),
+            _ => Some((url, String::new())),
+        },
     };
     assert_original(window, request)?;
-    Ok(match url {
+    Ok(match resolved {
         None => json!({"title":title,"truncated":false}),
-        Some(url) => match local_path(&url).filter(|path| Path::new(path).exists()) {
-            Some(path) => json!({"title":title,"truncated":false,"path":path}),
-            None => json!({"title":title,"truncated":false,"url":url}),
-        },
+        Some((url, path)) if path.is_empty() => json!({"title":title,"truncated":false,"url":url}),
+        Some((_, path)) => json!({"title":title,"truncated":false,"path":path}),
     })
 }
 
@@ -343,16 +417,47 @@ mod tests {
     }
 
     #[test]
-    fn local_path_matches_uri_local_path() {
+    fn local_path_matches_the_dotnet_conversion() {
+        let path = |url: &str| local_path(url).unwrap();
         assert_eq!(
-            local_path("file:///E:/page.html").as_deref(),
-            Some("E:/page.html")
+            path("file:///E:/a%20b.html").as_deref(),
+            Some("E:\\a b.html")
         );
         assert_eq!(
-            local_path("file:///C:/a%20b/c.html").as_deref(),
-            Some("C:/a b/c.html")
+            path("file:///E:/a.html?x=1#part").as_deref(),
+            Some("E:\\a.html?x=1")
         );
-        assert_eq!(local_path("file://server/share/a.html"), None);
-        assert_eq!(local_path("https://example.com/a"), None);
+        assert_eq!(path("FILE:///E:/a.html").as_deref(), Some("E:\\a.html"));
+        assert_eq!(
+            path("file://server/share/a.html").as_deref(),
+            Some("\\\\server\\share\\a.html")
+        );
+        assert_eq!(
+            path("file:///E:/a.html#part").as_deref(),
+            Some("E:\\a.html")
+        );
+        assert_eq!(
+            path("file:///E:/中文/文件.html").as_deref(),
+            Some("E:\\中文\\文件.html")
+        );
+        assert_eq!(path("https://example.com/a"), None);
+    }
+
+    #[test]
+    fn local_path_keeps_only_files_as_local_paths() {
+        let directory = std::env::temp_dir().join("yu-address-exists");
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("a b.html");
+        std::fs::write(&file, b"x").unwrap();
+        let file_url = format!(
+            "file:///{}",
+            file.to_string_lossy()
+                .replace('\\', "/")
+                .replace(' ', "%20")
+        );
+        let converted = local_path(&file_url).unwrap().unwrap();
+        assert!(Path::new(&converted).is_file());
+        assert!(!Path::new(&directory).is_file());
+        let _ = std::fs::remove_dir_all(&directory);
     }
 }
