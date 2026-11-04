@@ -143,6 +143,7 @@ B/two.lnk
 - junction/符号链接目录：实现跳过 reparse point，未构造真实 junction 对照 PS 行为。
 - 每根 1000 条上限命中时的子集选择：Rust 深度优先、PS `Get-ChildItem -Recurse`，超限场景的精确交错仍未对照。
 - 名称排序只在当前机器当前文化（`CompareStringEx` 用户默认区域、`NORM_IGNORECASE`）下对照；其他区域设置与 `Sort-Object` 平局顺序的跨机差异未测。
+- App Paths 默认值为非字符串（`REG_DWORD` 等）的端到端用例未构造：`1630`（`ERROR_UNSUPPORTED_TYPE`）由外部探针（C# `RegGetValueW`，自建临时键，未碰真实 App Paths）实测，`value_missing(2 | 1630)` 有单测，但没有在真实 App Paths 键上跑通整次枚举——构造该用例需往真实 App Paths 写非字符串值，与 §5「不得改真实 App Paths」冲突；`RegCreateKeyExW` 另需 `Win32_Security` feature，且自建键只能在 `HKCU\Software\…` 之下，枚举器看不到。故该项结构上留在未测清单。
 - 未执行任何应用启动、未改注册表/开始菜单/默认应用；证据只存计数、摘要与差异类别。
 
 ### 8.6.1 与 PowerShell 错误路径的有意差异
