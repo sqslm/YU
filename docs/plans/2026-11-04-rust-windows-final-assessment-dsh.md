@@ -130,3 +130,13 @@ otepad.exe` → 展开后的路径；`REG_DWORD` 4660 → `Ok(None)`（`ERROR_UN
 
 清理：`/tmp/pscmp.ps1`、上一轮的 `/tmp/verify17.sh` 与 `/tmp/v17.log`、本轮的 `/tmp/verify17b.sh` 与 `/tmp/v17b.log`、`/tmp/s17-*` 等临时脚本与输出；基准脚本收尾只结束自己启动的 fixture/目录，不按进程名强杀。提交见下一节回执（实现+证据、文档两个提交，未 push）。
 
+## 8. Codex 最终复核与本轮收束
+
+Codex 核对 `bf21eea` 的收口代码、交付 SHA-256、应用基准 80 条样本及 9 项通过检查，确认剩余桥接评估的三个场景各 10 个有效样本、无失败，fixture 正常退出、清理无失败。三项数据仅来自 PS：`activate` 只测拒绝路径，`search` 未单独证明索引命中，`current-content` 只覆盖指定 fixture；不是剩余功能已经完成原生迁移的证据。
+
+最终复核额外复现一个测试专用的并发串扰：全局 `FORCE_COMPARE_FAILURE` 可被另一测试线程消费。新增 `comparison_failure_stays_with_its_test_thread` 在修复前失败（`another test consumed the injected failure`），将开关改为 `#[cfg(test)]` 下的线程局部 Cell 后通过；真实注册表端点与原有反例继续通过。Codex 直接执行 `cargo fmt -- --check`、`cargo clippy --locked --offline --all-targets -- -D warnings`、`cargo test --locked --offline`，全部退出 0，最终 **36 项 Rust 测试通过**。上文 DSH 的 35 项是交付链的历史记录，不改写为本次运行数。
+
+这次补丁只影响测试注入及测试用例，未修改生产逻辑或重建 release 资产；复核后的交付仍为 466944 B / `0a1680bedd2f8bdf73014ff0838768e4c51fb47dedba001c23132c984903497e`，与两份证据一致。没有为测试改动重跑全部 TS 套件或伪造新版性能数字。
+
+**本轮结论：已收束。** 保留 `activate`、`search`、`current-content` 的现有 PS 实现；后续只有建立足够隔离、可复现的成功路径/索引/真实文档验收后再重新评估。结束本轮自动派单，保留汇报能力，不为保持接力生成空任务。没有 push、打包、发布或重启用户应用。
+

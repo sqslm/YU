@@ -391,6 +391,8 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 **未测项（阶段 17 后）**：`activate` 成功激活与窗口可见时间、`search` 的索引正向命中（本轮 `backend=windows-search+folder`，未逐条区分索引与目录 fallback）、`current-content` 的 Office/Explorer/真实 TextPattern 分支、注册表访问拒绝等无法安全制造的故障、其他区域设置下的文化排序。
 
+**Codex 最终收口：** 阶段 17 的注册表端点、排序错误出口和评估范围已核对。最终补齐测试故障注入的线程隔离，fmt/clippy 通过，Windows crate 36 项测试通过；该补丁只影响 `cfg(test)`，交付与两份证据的 `0a1680be…` 哈希保持一致。本轮 Rust 迁移在此收束，剩余 `activate`、`search`、`current-content` 保留 PS，未来有隔离验收条件后再评估；关闭本轮自动派单，保留汇报，不推送或发布。详见阶段 17 计划第 8 节。
+
 ## 后续阶段的推进规则
 
 1. 每次只推进一个可独立验收的阶段；性能分析阶段可以得出“保留现实现”的结论。

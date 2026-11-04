@@ -1,13 +1,12 @@
 use serde_json::{Value, json};
-#[cfg(test)]
-use std::sync::atomic::Ordering as AtomicOrdering;
 use std::{
     error::Error,
     path::{Path, PathBuf},
 };
 #[cfg(test)]
-static FORCE_COMPARE_FAILURE: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+thread_local! {
+    static FORCE_COMPARE_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
 use windows::{
     Win32::{
@@ -261,7 +260,7 @@ fn culture_compare(left: &str, right: &str) -> Result<std::cmp::Ordering, Failur
         COMPARE_STRING_FLAGS, CSTR_EQUAL, CSTR_LESS_THAN, CompareStringEx, NORM_IGNORECASE,
     };
     #[cfg(test)]
-    if FORCE_COMPARE_FAILURE.swap(false, AtomicOrdering::SeqCst) {
+    if FORCE_COMPARE_FAILURE.with(|failure| failure.replace(false)) {
         return Err(failed("Application sort", win32(5)));
     }
     if left == right {
@@ -1133,12 +1132,26 @@ mod tests {
     }
 
     #[test]
+    fn comparison_failure_stays_with_its_test_thread() {
+        FORCE_COMPARE_FAILURE.with(|failure| failure.set(true));
+        let other_thread_succeeded =
+            std::thread::spawn(|| culture_compare("alpha", "beta").is_ok())
+                .join()
+                .expect("comparison thread");
+        assert!(
+            other_thread_succeeded,
+            "another test consumed the injected failure"
+        );
+        assert!(culture_compare("alpha", "beta").is_err());
+    }
+
+    #[test]
     fn a_failed_culture_comparison_fails_the_read() {
         let entries = vec![
             json!({ "name": "beta", "path": r"C:.exe" }),
             json!({ "name": "alpha", "path": r"C:.exe" }),
         ];
-        FORCE_COMPARE_FAILURE.store(true, AtomicOrdering::SeqCst);
+        FORCE_COMPARE_FAILURE.with(|failure| failure.set(true));
         let outcome = finish(entries);
         let message = match outcome {
             Ok(_) => panic!("a failed comparison produced a sorted list"),
