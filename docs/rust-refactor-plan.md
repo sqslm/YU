@@ -27,7 +27,7 @@
 | 13 | 浏览器地址读取 | 已完成（含正确性续做与读取边界续做）；430592 B / `11994ce3…` | [开发计划与结果](plans/2026-11-04-rust-browser-url-dsh.md)、[正确性计划与结果](plans/2026-11-04-rust-browser-url-correctness-dsh.md)、[读取边界计划与结果](plans/2026-11-04-rust-browser-url-read-boundary-dsh.md)：`browser-url` 迁入一次性 Windows helper；原窗口、地址候选与权限边界一致，自有 UIA fixture 逐 mode 对照 + 每侧 40 样本达标后接入 |
 | 14 | 资源管理器文件夹读取 | 已完成；396800 B / `aa9232e5…` | [开发计划与结果](plans/2026-11-04-rust-explorer-folder-dsh.md)：`explorer-folder` 迁入一次性 Windows helper；Shell 窗口绑定与原窗口校验一致，真实资源管理器对照 + 每侧 40 样本达标后接入 |
 | 15 | 最近文件读取 | 已完成；418816 B / `f822b819…`（阶段 15 交付时值；阶段 13 的两次续做重链接同一产物后为 430080 B / `303e2772…` → 后续读取边界续做再重建） | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
-| 16 | 已登记应用列表 | 待 DSH 实施，基线 `2b0a399` | [开发计划](plans/2026-11-04-rust-applications-dsh.md)：仅迁移 `applications`；四类来源、排序/截断及安全规则一致，真实只读验收与同机收益达标后才接入 |
+| 16 | 已登记应用列表 | 已完成，474624 B / `5331a502…`；基线 `2b0a399` | [开发计划](plans/2026-11-04-rust-applications-dsh.md)：仅迁移 `applications`；四类来源、排序/截断及安全规则一致，真实只读验收与同机收益达标后才接入 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -364,14 +364,18 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 **未测项（阶段 15 后）**：本机 `Recent` 目录 `.lnk` 计数为 0，真实条目内容（`path`/`recordedAt`）的端到端两侧对照不可得，只有派生 PS 输出与单测覆盖；正好 300 条的截断边界、`LastWriteTimeUtc` 并列时的顺序、指向已删除目标或网络共享（UNC）的 `.lnk`、损坏 `.lnk` 未构造。用户运行中途打开文件造成的条目漂移只检测并记录（`recent-stable-during-run`），不阻断。
 
-## 阶段 16：已登记应用列表（待实施）
+## 阶段 16：已登记应用列表（已完成）
 
-`open_application` 每次仍通过 PowerShell 读取 App Paths、Programs/CommonPrograms 快捷方式、Get-StartApps 和系统项，作为下一处候选迁移到现有一次性 Windows helper。只迁移 `applications`，保留 TS 名称/权限/选择逻辑与 PS `activate`；完整名单、排序、参数排除与生命周期一致且性能达标才接入，否则保留原 action。
+`open_application` 的列表来源已迁移到现有一次性 `yu-windows.exe`，PowerShell 分支保留作对照与回滚。
 
-- [ ] 按[阶段 16 计划](plans/2026-11-04-rust-applications-dsh.md)核对四类来源、完整集合及当前文化排序/去重/截断。
-- [ ] 自有快捷方式与边界测试、真实只读枚举和取消/资源回收通过，不执行应用或改真实登记。
-- [ ] 同机交错每侧至少 20 个有效样本，达到计划采纳条件后再决定生产路由。
-- [ ] DSH 自行回填实施项、验证、证据、限制与提交编号，完成代码及文档收尾。
+- [x] 按[阶段 16 计划](plans/2026-11-04-rust-applications-dsh.md)核对四类来源：App Paths 三处注册表、Programs/CommonPrograms 快捷方式、`shell:AppsFolder` 打包项、固定系统项与 PATH 命令；本机 PS 204 项 / Rust 204 项，`missing 0`、`extra 0`、`sameOrder true`，规范化摘要同为 `908e077a…`。
+- [x] 自有快捷方式与边界测试（目标缺失、目录冒充 exe、中文/空格、非 exe、带参数与空白参数、超长参数、坏链接、每根 1000 上限）、真实只读枚举与取消/回收通过；枚举阶段不执行任何应用。
+- [x] 同机交错各 40 个有效样本：整次枚举 P50 1597.43 → 554.71 ms（−65.27%），P95 1620.07 → 578.83 ms（−64.27%，−1041.24 ms）；CPU P50 2250 → 359.38 ms；私有内存 P50 105488 → 6624 KB（−93.72%）。9 项 checks 全通过，按门槛接入 `nativeActions`。
+- [x] 交付产物 `native/bin/yu-windows.exe` 474624 B / `5331a502ff0a4d788e20cf3aac4c3603d8cb3fe8452204bdbd406b0985e61e7a`，与证据 `tests/yu-v2/evidence/rust-applications-20261104.json` 的 `binary{}` 一致。
+
+**阶段 16 结果**：`native/windows/src/applications.rs` 实现四类来源与 `CompareStringEx` 文化排序、去重、1500 截断；`operations.rs`/`Cargo.toml` 只加必要接线与四个 feature，无新 crate；`src/main/windows-native.ts` 的 `nativeActions` 加入 `applications`，PS 路由只剩 `activate`/`search`/`current-content`。证据只存计数、摘要与差异类别，不含应用名或路径。详细差异、失败修正与验证命令见计划第 7 节。
+
+**未测项（阶段 16 后）**：名称排序只在当前机器当前文化下对照，其它区域设置与 `Sort-Object` 平局顺序未测；1000/1500 边界只用合成 fixture 与单测覆盖；打包项显示名与 `Get-StartApps` 的本地化差异只在本次系统语言下对照；损坏注册表值、权限受限键、组策略重定向开始菜单、多用户并发未测；`activate` 仍走 PowerShell，打开链路未完全去除 PS。
 
 ## 后续阶段的推进规则
 

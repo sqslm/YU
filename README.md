@@ -284,7 +284,7 @@ pipeline：静音判断 → 拼接 WAV → trim → 路由
 history.sqlite（SQLite 检索，含来源与链路标记）
 ```
 
-Electron 主进程保留 TypeScript；热键、UIA、常驻语音唤醒分别由独立 Rust 程序 `yu-hotkey.exe`、`yu-uia.exe`、`yu-wake.exe` 负责，本地 ASR 和记忆模型继续使用独立 Electron utilityProcess。热键/UIA 通过继承管道收发逐行 JSON，父管道关闭时退出，provider 故障只影响对应子进程。`yu-windows.exe` 与 `yu-speech.exe` 则每次请求启动、操作或一次朗读结束即退出，分别负责窗口校验、磁盘容量、系统音量、本地 OCR、浏览器地址、资源管理器文件夹与最近文件读取，以及 Windows 本地朗读，不增加常驻进程；它们也会监视父进程死亡并退出。五个程序位于 `resources/native/`、ASAR 之外，静态链接 CRT。资源面板按实际 PID 计入热键和 UIA，读取失败的指标显示为不可用。后续待办与验收记录集中在[重构计划](docs/rust-refactor-plan.md)。
+Electron 主进程保留 TypeScript；热键、UIA、常驻语音唤醒分别由独立 Rust 程序 `yu-hotkey.exe`、`yu-uia.exe`、`yu-wake.exe` 负责，本地 ASR 和记忆模型继续使用独立 Electron utilityProcess。热键/UIA 通过继承管道收发逐行 JSON，父管道关闭时退出，provider 故障只影响对应子进程。`yu-windows.exe` 与 `yu-speech.exe` 则每次请求启动、操作或一次朗读结束即退出，分别负责窗口校验、磁盘容量、系统音量、本地 OCR、浏览器地址、资源管理器文件夹、最近文件与已登记应用列表读取，以及 Windows 本地朗读，不增加常驻进程；它们也会监视父进程死亡并退出。五个程序位于 `resources/native/`、ASAR 之外，静态链接 CRT。资源面板按实际 PID 计入热键和 UIA，读取失败的指标显示为不可用。后续待办与验收记录集中在[重构计划](docs/rust-refactor-plan.md)。
 
 几个值得单独说明的模块：
 
