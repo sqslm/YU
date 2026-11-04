@@ -494,6 +494,8 @@ export interface TypelessApi {
     onSpeechPlayback(callback:(request:import('./speech').SpeechPlaybackRequest)=>void):()=>void
     replySpeechPlayback(reply:import('./speech').SpeechPlaybackReply):Promise<void>
     replyNoteAudio(reply:import('./noteAudio').NoteAudioReply):Promise<void>
+    /** Fire-and-forget playback state, so main never has to guess the remaining duration. */
+    reportNoteAudio(state:import('./noteAudio').NoteAudioEvent):void
     onLayout(callback: (layout: import('./types').BarWindowLayout) => void): () => void
     captionVisible(visible: boolean): void
     onState(callback: (state: BarState) => void): () => void

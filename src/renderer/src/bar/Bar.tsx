@@ -66,7 +66,7 @@ export function Bar(): JSX.Element {
     return () => { off(); player.dispose() }
   }, [])
   useEffect(()=>{
-    const player=createNoteAudioPlayer()
+    const player=createNoteAudioPlayer(new Audio(),{report:state=>window.api.bar.reportNoteAudio(state)})
     const off=window.api.bar.onNoteAudio(request=>{
       void player.run(request).then(state=>window.api.bar.replyNoteAudio({requestId:request.requestId,state}),error=>window.api.bar.replyNoteAudio({requestId:request.requestId,error:error instanceof Error?error.message:String(error)}))
     })

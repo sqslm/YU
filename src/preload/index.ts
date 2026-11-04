@@ -402,6 +402,7 @@ const api: TypelessApi = {
       return ()=>ipcRenderer.removeListener('note-audio:command',listener)
     },
     replyNoteAudio:reply=>ipcRenderer.invoke('note-audio:reply',reply),
+    reportNoteAudio:state=>ipcRenderer.send('note-audio:event',state),
     onLayout: (callback) => {
       const listener = (_event: unknown, layout: import('@shared/types').BarWindowLayout): void => callback(layout)
       ipcRenderer.on('bar:layout', listener)

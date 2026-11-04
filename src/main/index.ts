@@ -21,6 +21,7 @@ import { dirname, join, resolve } from 'node:path'
 import os from 'node:os'
 import type { BrowserWindow } from 'electron'
 import type { BarActionId, BarState, CardAction, ModelListResult, Settings } from '@shared/types'
+import type { NoteAudioEvent } from '@shared/noteAudio'
 import type { AnswerCardPayload } from '@shared/api'
 import { SettingsStore } from './settings'
 import { HistoryStore } from './history'
@@ -56,6 +57,8 @@ import { registerLocalAsrIpc } from './local-asr/ipc'
 import { collectResources } from './resources'
 import { SelectionEditor } from './selection-editor'
 import { NoteAudioPlayer } from './note-audio'
+import { createNoteAudioBusy } from './note-audio-busy'
+import { createBarReadiness } from './bar-ready'
 import { captureSelectionTarget, applyAnswerSelection } from './selection-target'
 import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
@@ -172,21 +175,10 @@ const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), eve
 }, () => assistant.localQueries())
 let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
+/** Which pill renderer has finished loading and subscribed to its channels. */
+const barReadiness = createBarReadiness()
 /** Whether the notes page is playing or holding a recording; keeps the pill alive. */
-let noteAudioPlaying = false
-let noteAudioTimer:ReturnType<typeof setTimeout>|undefined
-// The page owns playback and may finish without reporting "ended" (a tool can
-// start it while the notes page is not mounted), so the flag also expires on
-// the remaining duration instead of pinning the pill window resident forever.
-function trackNoteAudioPlayback(state:{state:string;positionMs?:number;durationMs?:number;rate?:number}):void{
-  noteAudioPlaying=state.state==='playing'||state.state==='paused'
-  if(noteAudioTimer)clearTimeout(noteAudioTimer)
-  noteAudioTimer=undefined
-  if(state.state!=='playing')return
-  const rate=state.rate&&state.rate>0?state.rate:1
-  const remaining=Math.max(0,(state.durationMs??0)-(state.positionMs??0))/rate+1500
-  noteAudioTimer=setTimeout(()=>{noteAudioPlaying=false;noteAudioTimer=undefined},remaining)
-}
+const noteAudioBusy = createNoteAudioBusy()
 let cardWindow: BrowserWindow | null = null
 let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
@@ -215,11 +207,12 @@ let tray: ReturnType<typeof createTray> | null = null
 let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || Boolean(wakeSetupMode) || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
-const noteAudio=new NoteAudioPlayer(barSink,id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,trackNoteAudioPlayback)
+const noteAudio=new NoteAudioPlayer({peek:barPeek,ensure:barEnsure},id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,noteAudioBusy.track)
 let selectionPreview:{target:import('./selection-editor').SelectionTarget;text:string;at:number}|null=null
 function pausePlaybackForRecording(): void {
   void speech?.pause().catch(error => log(`speech pause: ${String(error)}`))
-  if (barWindow && !barWindow.isDestroyed()) void noteAudio.control('pause').then(() => { noteAudioPlaying = false }).catch(error => log(`note audio pause: ${String(error)}`))
+  // A retired pill has nothing playing, and asking for one here would create it.
+  if (barPeek()) void noteAudio.control('pause').catch(error => log(`note audio pause: ${String(error)}`))
 }
 async function openScreenshot(): Promise<boolean> {
   if (gameMode.snapshot().active || pipeline?.isBusy || notesRecording || cardVoice.active || assistant.busy || selectionEditor?.isBusy) return false
@@ -282,7 +275,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
     copy: text => clipboard.writeText(text),
     readClipboard: () => clipboard.readText(),
     open: (page, noteId) => navigateHub(page, noteId),
-    controlNoteAudio:(action,id)=>noteAudio.control(action,id).then(value=>{noteAudioPlaying=value.state==='playing'||value.state==='paused';return {...value}}),
+    controlNoteAudio:(action,id)=>noteAudio.control(action,id).then(value=>({...value})),
     syncInfo:()=>({enabled:store.get().syncEnabled,signedIn:Boolean(accounts.get()),failures:sync?.noteFailures()??[]})
   },
   /**
@@ -1078,10 +1071,48 @@ function barSink(): BrowserWindow | null {
   return ensureBarWindow()
 }
 
+/** The pill as it is, without creating one: queries and replies must not resurrect it. */
+function barPeek(): BrowserWindow | null {
+  return barWindow && !barWindow.isDestroyed() ? barWindow : null
+}
+
+/**
+ * The pill, created and already listening.
+ *
+ * The renderer only subscribes to `note-audio:command` / `speech:playback` once
+ * its React effects have run, which is a few hundred milliseconds after the
+ * window object exists. Sending earlier is what lost the first command after a
+ * (re)create, so everything that needs a renderer waits for its `bar:ready`.
+ */
+async function barEnsure(): Promise<BrowserWindow | null> {
+  if (quitting || gameMode.snapshot().active) return null
+  const win = ensureBarWindow()
+  if (!win || win.isDestroyed()) return null
+  try {
+    await barReadiness.wait(win).promise
+    return win.isDestroyed() ? null : win
+  } catch (error) {
+    // The window died on the way — a failed load or a crash, not a command error.
+    log(`[bar] playback window did not become ready: ${String(error)}`)
+    return null
+  }
+}
+
+/**
+ * The renderer that held playback is gone: nothing it kept busy can still be
+ * playing, and its readiness must not be inherited by the next window.
+ */
+function forgetBarPlayback(win: BrowserWindow): void {
+  barReadiness.forget(win)
+  noteAudioBusy.reset()
+  noteAudio.dispose()
+}
+
 function ensureBarWindow(): BrowserWindow {
   if (barWindow && !barWindow.isDestroyed()) return barWindow
-  barWindow = createBarWindow(store.get().barPosition)
-  rememberBarBounds(recordingBarBounds(barWindow))
+  const win = createBarWindow(store.get().barPosition)
+  barWindow = win
+  rememberBarBounds(recordingBarBounds(win))
   // Persist where the user dragged the bar so it comes back to the same spot.
   let moveTimer: NodeJS.Timeout | null = null
   let lastPosition = recordingBarBounds(barWindow)
@@ -1100,13 +1131,17 @@ function ensureBarWindow(): BrowserWindow {
   })
   barWindow.on('closed', () => {
     if (moveTimer) clearTimeout(moveTimer)
-    barWindow = null
+    if (barWindow === win) barWindow = null
+    forgetBarPlayback(win)
   })
+  // A crashed renderer takes its audio with it but leaves the window object
+  // alive, so the busy flag has to be released here as well.
+  win.webContents.on('render-process-gone', () => forgetBarPlayback(win))
   // The pill lives for the take, not for the session: once it has been hidden
   // long enough, its renderer is destroyed and the next reveal recreates it
   // (the renderer's `bar:ready` replays whatever state was sent meanwhile).
   wireBarRetirement(barWindow, {
-    isBusy: () => Boolean(pipeline?.isBusy) || notesRecording || cardVoice.active || Boolean(wakeSetupMode) || Boolean(speech?.status().speaking) || noteAudioPlaying,
+    isBusy: () => Boolean(pipeline?.isBusy) || notesRecording || cardVoice.active || Boolean(wakeSetupMode) || Boolean(speech?.status().speaking) || noteAudioBusy.isBusy(),
     isCardVisible: () => Boolean(cardWindow && !cardWindow.isDestroyed() && cardWindow.isVisible()),
     log
   })
@@ -2135,10 +2170,23 @@ function registerIpc(): void {
     setBarCaptionVisible(visible === true)
   })
   subscribe('bar:ready', event => {
-    if (event.sender !== barWindow?.webContents) return
+    const win = barWindow
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) return
+    // Open the gate first: a command waiting for this very window has to see it
+    // as ready, and the replay below is not what makes it usable.
+    barReadiness.markReady(win)
     setBarCaptionVisible(false)
     pipeline?.replayBarState()
-    if (deviceListRequest) barWindow?.webContents.send('media:request-devices')
+    if (deviceListRequest) win.webContents.send('media:request-devices')
+  })
+  // The renderer reports real playback transitions; the busy flag follows those
+  // instead of an estimated remaining duration.
+  subscribe('note-audio:event', (event, state: NoteAudioEvent) => {
+    const win = barPeek()
+    if (!win || event.sender !== win.webContents) return
+    const accepted = noteAudio.acceptEvent(state)
+    if (!accepted) return
+    noteAudioBusy.track(accepted)
   })
   subscribe('bar:start-cue-finished', (event, taskId: string) => {
     if (event.sender === barWindow?.webContents && typeof taskId === 'string') pipeline?.startCueFinished(taskId)
@@ -2442,7 +2490,7 @@ async function bootstrap(): Promise<void> {
     run: createSpeechRunner(app.isPackaged
       ? join(process.resourcesPath, 'native/yu-speech.exe')
       : join(app.getAppPath(), 'native/bin/yu-speech.exe')),
-    cloud: { synthesize: synthesizeSpeech, play: createSpeechPlayback(barSink) },
+    cloud: { synthesize: synthesizeSpeech, play: createSpeechPlayback({ peek: barPeek, ensure: barEnsure }) },
     onBackgroundError: text => pipeline?.showAlert({ kind: 'selection', level: 'error', text }),
     log })
   calendarScheduler = new CalendarScheduler({ store: calendar, settings: () => store.get().calendar,
@@ -2933,6 +2981,7 @@ if (!gotLock) {
     briefingDelivery?.stop()
     speech?.stop()
     noteAudio.dispose()
+    noteAudioBusy.reset()
     hotkeys?.stop()
     uia.stop()
     localAsr.release()
