@@ -92,7 +92,7 @@ B/two.lnk
 - **A1 Unicode 后缀**：新增 `exe_tail(text) -> Option<&str>`（`text.len().checked_sub(4)?` + `text.get(..)` + `eq_ignore_ascii_case(".exe")`），`is_exe()` 与 `strip_exe_suffix()` 都改用它；不再有 `text[len - 4..]` 这类可能落在字符中间的切片。双字节尾部（`C:\工具\程序`、`C:\apps\记事`、`C:\a\说明.txt`、`记事`）在 `rejects_quotes_redirection_and_non_executables` 与 `strips_only_a_trailing_exe` 里固定。
 - **A2 排序键关系**：`finish()` 的 path 比较先走 `culture_compare`（与 `same_key` 同一关系，保证等键相邻），文化相等时以 `left_path.cmp(right_path)` 序数比较挑一个稳定代表项。序数只用于文化平局时的代表项选择，不承担全局顺序承诺。`culture_compare` 在 `CompareStringEx` 返回 0（调用失败）时回退序数比较，不再把失败当 `Greater`。
 - **A3 遍历顺序**：`walk()` 为深度优先——先收集本目录 `.lnk`，再按 `read_dir` 顺序递归子目录；不再使用 `VecDeque` 广度优先。每个根仍最多 1000 条。目录项读取错误与会话循环（junction/symlink）显式处理：`read_dir` 与单项错误上抛为 `Start menu scan` 失败，reparse point 直接跳过。
-- **A4 失败出口**：`collect()` 改为 `Result<Vec<Value>, Failure>`，`applications()` 用 `?` 传播；新增 `Failure`/`failed(stage, detail)`/`win32(code)`/`hresult(&Error)`。`open_key` 在 Win32 2/3（无该视图/键）时返回 `Ok(None)`、其余错误上抛；`subkey_names` 非 `ERROR_NO_MORE_ITEMS` 即失败；`default_string` 在 Win32 2 时 `Ok(None)`；`known_folder`、`shortcuts`/`walk`、`has_arguments` 全部 `Result`；`shortcut_target` 的 `IPersistFile::Load` 失败（坏链接）与 `GetPath` 无目标都返回 `Ok(None)`——基线的 `CreateShortcut` 对坏链接给出空 `TargetPath` 后跳过该项，实测不抛异常；COM 创建与 cast 失败仍上抛；`walk` 遇到整棵根目录缺失（`NotFound`）返回空、不报错（基线 `Test-Path` 为假即 `continue`），单条目录项或 `symlink_metadata` 失败按基线 `-ErrorAction SilentlyContinue` 跳过；`shell_apps_folder` 的解析/绑定/`EnumObjects`/`Next`/`GetDisplayName` 失败上抛，AUMID 缺失仍按空处理。错误文本形如 `applications read failed at App Paths open: Win32 error 5`、`applications read failed at Start menu scan: <路径>: <错误>`，走既有 stderr + 非零退出，不先输出部分 JSON。
+- **A4 失败出口**：`collect()` 改为 `Result<Vec<Value>, Failure>`，`applications()` 用 `?` 传播；新增 `Failure`/`failed(stage, detail)`/`win32(code)`/`hresult(&Error)`。`open_key` 在 Win32 2/3（无该视图/键）时返回 `Ok(None)`、其余错误上抛；`subkey_names` 非 `ERROR_NO_MORE_ITEMS` 即失败；`default_string` 把 Win32 2（缺失）与 1630（`ERROR_UNSUPPORTED_TYPE`，即默认值不是字符串）都视为 `Ok(None)`——基线把非字符串读成文本后不匹配 `.exe` 而跳过该项，访问拒绝（5）仍是失败；`known_folder`、`shortcuts`/`walk`、`has_arguments` 全部 `Result`；`shortcut_target` 的 `IPersistFile::Load` 失败（坏链接）与 `GetPath` 无目标都返回 `Ok(None)`——基线的 `CreateShortcut` 对坏链接给出空 `TargetPath` 后跳过该项，实测不抛异常；COM 创建与 cast 失败仍上抛；`walk` 遇到整棵根目录缺失（`NotFound`）返回空、不报错（基线 `Test-Path` 为假即 `continue`），单条目录项或 `symlink_metadata` 失败按基线 `-ErrorAction SilentlyContinue` 跳过；`shell_apps_folder` 的解析/绑定/`EnumObjects`/`Next`/`GetDisplayName` 失败上抛，AUMID 缺失仍按空处理。错误文本形如 `applications read failed at App Paths open: Win32 error 5`、`applications read failed at Start menu scan: <路径>: <错误>`，走既有 stderr + 非零退出，不先输出部分 JSON。
 
 ### 8.2 反例（修复前失败、修复后通过）
 
@@ -113,13 +113,13 @@ B/two.lnk
 
 ### 8.4 性能（新证据）
 
-`tests/yu-v2/evidence/rust-applications-correctness-20261104.json`，`generatedAt` 2026-11-04T03:10:55.767Z，80 runs（PS 40 / Rust 40，invalid 0），9 项 checks 全通过，`decision=latency`、`passed=true`。产物 `native/bin/yu-windows.exe` 480768 B / `3fd74dd8f7690584cbe4026a544f38323d4cbf0865e9f409e93bc33d1f35ae55`，与证据 `binary{}` 一致。
+`tests/yu-v2/evidence/rust-applications-correctness-20261104.json`，`generatedAt` 2026-11-04T03:17:09.783Z，80 runs（PS 40 / Rust 40，invalid 0），9 项 checks 全通过，`decision=latency`、`passed=true`。产物 `native/bin/yu-windows.exe` 480256 B / `a44c2c2ed2cb8ef6511bf8998e2472041fc0dc0ab9c85bf2a22275e3426a5a0e`，与证据 `binary{}` 一致。
 
 | 指标 | PowerShell P50/P95 | Rust P50/P95 | 变化 |
 | --- | --- | --- | --- |
-| 整次枚举 | 1600.09 / 1652.19 ms | 569.49 / 589.36 ms | −64.41% / −64.33%（P95 −1062.83 ms） |
-| 进程 CPU（job 记账） | 2250 / 2421.88 ms | 359.38 / 437.5 ms | −84.03% / −81.94% |
-| 私有内存峰值 | 105508 / 105868 KB | 6628 / 6720 KB | −93.72% / −93.65% |
+| 整次枚举 | 1592.33 / 1619.36 ms | 566.94 / 586.04 ms | −64.40% / −63.81%（P95 −1033.32 ms） |
+| 进程 CPU（job 记账） | 2296.88 / 2406.25 ms | 343.75 / 406.25 ms | −85.03% / −83.12% |
+| 私有内存峰值 | 105468 / 105752 KB | 6604 / 6684 KB | −93.74% / −93.68% |
 
 旧证据 `tests/yu-v2/evidence/rust-applications-20261104.json`（474624 B / `5331a502…`）原样保留，数字属上一轮交付。
 
@@ -129,13 +129,13 @@ B/two.lnk
 | --- | --- | --- |
 | `cargo fmt -- --check`（`native/windows`） | 0 | 格式化无差异 |
 | `cargo clippy --locked --offline --all-targets -- -D warnings` | 0 | 无警告 |
-| `cargo test --locked --offline` | 0 | 32 passed |
-| `pnpm exec vitest run`（7 个 windows/工具测试文件） | 0 | 7 files / 166 tests |
+| `cargo test --locked --offline` | 0 | 本续做最终一轮：33 passed |
+| `pnpm exec vitest run`（7 个 windows/工具测试文件） | 0 | 阶段 16 交付时跑过：7 files / 166 tests |
 | `pnpm typecheck` | 0 | — |
 | `pnpm test:native` | 0 | 多二进制合计 39 passed |
 | `pnpm build` | 0 | — |
-| `pnpm test` | 0 | 239 files / 3552 passed、8 skipped |
-| `node scripts/benchmark-applications.mjs --samples 20 --output tests/yu-v2/evidence/rust-applications-correctness-20261104.json` | 0 | 9 checks 全 pass；stdout 另存本地 `/tmp/apps8-bench.log`（不入库） |
+| `pnpm test` | 0 | 阶段 16 交付时跑过：239 files / 3552 passed、8 skipped |
+| `node scripts/benchmark-applications.mjs --samples 20 --output tests/yu-v2/evidence/rust-applications-correctness-20261104.json` | 0 | 9 checks 全 pass；stdout 另存本地 `/tmp/apps10-bench.log`（不入库） |
 
 ### 8.6 未测项与限制
 
@@ -156,7 +156,9 @@ B/two.lnk
 | 开始菜单目录不可读（非 `NotFound`） | 静默跳过 | `applications read failed at Start menu scan: …`，非零退出 | 有意失败 |
 | `Get-ChildItem` 递归中的读取错误 | 静默跳过 | 同上（目录级）或跳过（条目级） | 部分有意失败 |
 | App Paths 根键访问拒绝（Win32 5） | `Test-Path` 为假 → 跳过 | `applications read failed at App Paths open: Win32 error 5` | 有意失败（派单要求核心来源失败不得退化成残缺成功） |
-| App Paths 值被拒 / 非 `REG_SZ`/`REG_EXPAND_SZ` | 跳过该值 | `default_string` 只把 Win32 2 当缺失，其余上抛 | 有意失败 |
+| App Paths 值是非字符串（`REG_DWORD` 等） | `[string]` 转换后不匹配 `.exe` → 跳过该项 | `RegGetValueW` 返回 1630 → `Ok(None)`，跳过该项 | 一致 |
+| App Paths 值被拒（访问拒绝） | `Test-Path`/取值失败 → 跳过 | 显式失败 | 有意失败 |
+| 已知文件夹解析失败（`SHGetKnownFolderPath`） | `GetFolderPath` 返回 `""` → `Test-Path ""` 为假 → 跳过 | `known_folder` 上抛 | 有意失败 |
 
 失败出口在 TS 层的呈现不变：`windowsNative()` 以 `close code !== 0` 抛 `Error(stderr || 'Windows operation failed')`，因此用户看到的是 helper stderr 里的 `applications read failed at …`（`open_application` 工具据此报错），未在 TS 侧改写或吞掉。
 
