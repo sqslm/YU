@@ -33,7 +33,7 @@
 | 15 | 最近文件读取 | 已完成；交付时值 418816 B / `f822b819…`（每次重链接都会变，当前为 480256 B / `a44c2c2e…`） | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
 | 16 | 已登记应用列表 | 已完成（含正确性续做）；480256 B / `a44c2c2e…` | [开发计划](plans/2026-11-04-rust-applications-dsh.md)：仅迁移 `applications`；四类来源、排序/截断及安全规则一致，真实只读验收与同机收益达标后接入；正确性续做见[计划](plans/2026-11-04-rust-applications-correctness-dsh.md) |
 | 17 | 应用枚举收口与剩余 Windows 桥接评估 | 已完成；466944 B / `0a1680be…` | [开发计划与结果](plans/2026-11-04-rust-windows-final-assessment-dsh.md)：注册表四档真实端点测试、文化比较失败显式出口；只读测量剩余三个 PS action 并给出「迁移收束」建议，本阶段不新增其生产路由 |
-| 18 | Electron 整应用资源基线与首项优化 | 待 DSH 实施 | [开发计划](plans/2026-11-04-electron-whole-app-resources-dsh.md)：完整进程树、同场景对照，先归因再做一项最小优化；整应用资源目标仍待验收 |
+| 18 | Electron 整应用资源基线与首项优化 | 已完成（`decision=adopted`） | [开发计划与结果](plans/2026-11-04-electron-whole-app-resources-dsh.md)：完整进程树前后对照；托盘空闲私有驻留 105.0 → 67.7 MiB（−35.58% / −37.4 MiB），开窗 P95 +29.78 ms；证据 `electron-whole-app-resources-20261104.json` |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -397,6 +397,20 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 **未测项（阶段 17 后）**：`activate` 成功激活与窗口可见时间、`search` 的索引正向命中（本轮 `backend=windows-search+folder`，未逐条区分索引与目录 fallback）、`current-content` 的 Office/Explorer/真实 TextPattern 分支、注册表访问拒绝等无法安全制造的故障、其他区域设置下的文化排序。
 
 **Codex 最终收口：** 阶段 17 的注册表端点、排序错误出口和评估范围已核对。最终补齐测试故障注入的线程隔离，fmt/clippy 通过，Windows crate 36 项测试通过；该补丁只影响 `cfg(test)`，交付与两份证据的 `0a1680be…` 哈希保持一致。本轮 Rust 迁移在此收束，剩余 `activate`、`search`、`current-content` 保留 PS，未来有隔离验收条件后再评估；关闭本轮自动派单，保留汇报，不推送或发布。详见阶段 17 计划第 8 节。
+
+## 阶段 18：Electron 整应用资源基线与首项优化（已完成）
+
+阶段 1–17 只证明单个 helper 的收益，本阶段第一次测整个应用（main + 全部 renderer + GPU + utility + helper + conhost），并把「Pill 渲染器常驻」确定为可避免的大头。
+
+- [x] 计量：`scripts/benchmark-electron-app.mjs`（采样器在应用树之外）用 `Win32_Process` 父子链取整棵树，`K32GetProcessMemoryInfo` + `PROCESS_MEMORY_COUNTERS_EX2` 分列私有驻留 / 工作集 / 私有提交，`GetProcessTimes` 求同窗口 user+kernel 增量并报窗口时长与核数；场景为冷启动、首开、关闭到托盘后空闲 60 s、同进程开关 20 次后再空闲 60 s，另有 Pill 生命周期三点。
+- [x] 归因：基线（`0cb30d9`）托盘空闲 105.0 MiB，Electron 组 92.1 MiB，其中 renderer 只有 Pill 一个（23.0 MiB）且带着一个 spare utility（15.0 MiB）；`ensureBarWindow()` 在 boot 无条件创建（`show:false` + `backgroundThrottling:false`）。hub 渲染器早已在隐藏 15 s 后被销毁，故可省项只有 Pill。
+- [x] 最小改动：`src/main/bar-retire.ts` 在 Pill 隐藏 30 s 后且窗口不可见、无录音/卡片占用时销毁；boot 的无条件创建删除；`Pipeline` 的 bar 出口改为 `() => ensureBarWindow()`，让复查能重新拿到窗口；`src/main/bar-retire.test.ts` 6 个用例覆盖取消、占用跳过与「创建即隐藏也起表」。
+- [x] 结果：托盘空闲私有驻留 **105.0 → 67.7 MiB（−35.58% / −37.4 MiB）**，helper 与 conhost 不变（0.6 / 0.8 MiB）；20 次开关后相对空闲 +3.31%（无持续增长）；首开 p50 1111.92 → 1116.48 ms、p95 1305.35 → 1335.13 ms（+29.78 ms，门槛 ≤ +100）；重开 p50 1100.51 → 1101.31 ms；空闲 CPU 0.673 → 0 ms（62 s 窗、16 核）。证据 `tests/yu-v2/evidence/electron-whole-app-resources-20261104.json`，`decision=adopted`。
+- [x] 功能：`TYPELESS_SELFTEST=1` + 假后端跑通整条 take（`[bar] capture … capture warm`、`multimodal → status=completed`），证明 Pill 在真实录入流程中按需创建；`pnpm typecheck`、`vitest` 相关三文件 161 用例通过。
+
+**未测项（阶段 18 后）**：真实麦克风录音与设备切换、托盘菜单与全局热键（与用户实例冲突）、唤醒词与本地 ASR、聊天/网络等待、锁屏与远程桌面、多显示器与不同 DPI、`closeBehavior=quit`、小时级运行后的碎片与句柄增长、`backgroundThrottling:false` 是否可去掉；Pill 回收后第一次 take 需重建窗口与渲染器的额外延迟（只验证了 take 仍能完成，未量化）。
+
+**结论**：保留 Electron 的前提下，整应用常驻内存的第一项收益来自「窗口生命周期」而不是 Chromium 参数或缓存开关；后续阶段应先看是否还有同类的「创建即常驻」窗口，再考虑渲染器内部优化。
 
 ## 后续阶段的推进规则
 

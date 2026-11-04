@@ -297,6 +297,7 @@ pnpm benchmark:browser-url    # browser address read: owned UIA fixture, PowerSh
 pnpm benchmark:explorer-folder # explorer folder read: owned window, PowerShell vs Rust
 pnpm benchmark:recent-files    # recent files read: read-only Recent directory, PowerShell vs Rust
 pnpm benchmark:applications    # registered application list: read-only registry and Start menu, PowerShell vs Rust
+pnpm benchmark:app           # whole-app resources: cold start, first open, tray idle, repeated toggles (one side per run; compare-app-resources.mjs applies the thresholds)
 
 # End to end (silence gate skipped, everything pointed at the fake backend:
 # dictation, Ask + retrieval, multimodal)
