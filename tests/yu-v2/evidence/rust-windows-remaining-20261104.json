@@ -1,0 +1,674 @@
+{
+  "kind": "windows-helper-comparison",
+  "version": 1,
+  "meta": {
+    "generatedAt": "2026-11-04T03:39:08.510Z",
+    "host": {
+      "os": "win32 x64",
+      "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "cores": 16,
+      "totalMemMb": 31801
+    },
+    "node": "v24.22.2",
+    "samples": 10,
+    "action": "activate | search | current-content",
+    "measurement": {
+      "method": "wall clock from spawn to stdio close, plus job accounting where the job was assigned",
+      "cpuWindow": "spawn → stdio close",
+      "memory": "job peak process memory (kernel) sampled at close",
+      "timeoutMs": 15000,
+      "notes": "No native route exists for these actions, so every number is the PowerShell bridge only. No Rust comparison is implied."
+    },
+    "fixture": {
+      "search": "temporary tree created by this script, removed afterwards",
+      "currentContent": "tests/yu-v2/fixtures/uia-provider.ps1 (address-edit)",
+      "ownership": "no user window, browser profile, Office document or real application is used"
+    },
+    "helper": {
+      "path": "native/bin/yu-windows.exe",
+      "bytes": 466944,
+      "sha256": "3fae60815f41d3ee827fe49016f2fba0a0767eaf0f407c6527b715f61e42adb3"
+    },
+    "closure": "stage 17 C1/C2 closure build; native route for these actions is out of scope"
+  },
+  "scenarios": [
+    {
+      "id": "activate-unregistered-appid",
+      "action": "activate",
+      "input": "synthetic AppID that is not registered",
+      "expectation": "exit 1 with \"Registered app is no longer available\"",
+      "covers": "AppID lookup and rejection only; excludes ShellExecute and window visibility",
+      "samples": [
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1372.28,
+          "cpuUserMs": 1328.125,
+          "cpuKernelMs": 750,
+          "cpuMs": 2078.125,
+          "peakPrivateKb": 70620
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1346.24,
+          "cpuUserMs": 1390.625,
+          "cpuKernelMs": 625,
+          "cpuMs": 2015.625,
+          "peakPrivateKb": 70436
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1319.2,
+          "cpuUserMs": 1468.75,
+          "cpuKernelMs": 484.375,
+          "cpuMs": 1953.125,
+          "peakPrivateKb": 70184
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1319.53,
+          "cpuUserMs": 1500,
+          "cpuKernelMs": 421.875,
+          "cpuMs": 1921.875,
+          "peakPrivateKb": 70396
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1346.68,
+          "cpuUserMs": 1421.875,
+          "cpuKernelMs": 578.125,
+          "cpuMs": 2000,
+          "peakPrivateKb": 70176
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1327.43,
+          "cpuUserMs": 1343.75,
+          "cpuKernelMs": 609.375,
+          "cpuMs": 1953.125,
+          "peakPrivateKb": 70392
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1334.5,
+          "cpuUserMs": 1343.75,
+          "cpuKernelMs": 578.125,
+          "cpuMs": 1921.875,
+          "peakPrivateKb": 70676
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1356.73,
+          "cpuUserMs": 1296.875,
+          "cpuKernelMs": 640.625,
+          "cpuMs": 1937.5,
+          "peakPrivateKb": 70688
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1432.41,
+          "cpuUserMs": 1265.625,
+          "cpuKernelMs": 750,
+          "cpuMs": 2015.625,
+          "peakPrivateKb": 70468
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1400.58,
+          "cpuUserMs": 1625,
+          "cpuKernelMs": 578.125,
+          "cpuMs": 2203.125,
+          "peakPrivateKb": 70548
+        }
+      ],
+      "stats": {
+        "totalMs": {
+          "n": 10,
+          "p50": 1346.24,
+          "p95": 1432.41,
+          "min": 1319.2,
+          "max": 1432.41
+        },
+        "cpuMs": {
+          "n": 10,
+          "p50": 1953.125,
+          "p95": 2203.125,
+          "min": 1921.875,
+          "max": 2203.125
+        },
+        "peakPrivateKb": {
+          "n": 10,
+          "p50": 70436,
+          "p95": 70688,
+          "min": 70176,
+          "max": 70688
+        }
+      },
+      "failures": [],
+      "valid": 10
+    },
+    {
+      "id": "search-own-tree",
+      "action": "search",
+      "input": "temporary tree with 5 files (4 .txt, 1 .md), recursive, name filter \"sample\"",
+      "expectation": "exit 0, 4 paths, all inside the temporary root",
+      "backend": "windows-search+folder",
+      "indexUnavailable": false,
+      "covers": "windows-search availability on this machine and the folder fallback; indexed positive hits: observed",
+      "samples": [
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1008.48,
+          "cpuUserMs": 1375,
+          "cpuKernelMs": 453.125,
+          "cpuMs": 1828.125,
+          "peakPrivateKb": 67532
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1000.16,
+          "cpuUserMs": 1328.125,
+          "cpuKernelMs": 515.625,
+          "cpuMs": 1843.75,
+          "peakPrivateKb": 67716
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1024,
+          "cpuUserMs": 1515.625,
+          "cpuKernelMs": 296.875,
+          "cpuMs": 1812.5,
+          "peakPrivateKb": 67664
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1020.94,
+          "cpuUserMs": 1250,
+          "cpuKernelMs": 578.125,
+          "cpuMs": 1828.125,
+          "peakPrivateKb": 67432
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1025.61,
+          "cpuUserMs": 1390.625,
+          "cpuKernelMs": 484.375,
+          "cpuMs": 1875,
+          "peakPrivateKb": 67676
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1033.95,
+          "cpuUserMs": 1359.375,
+          "cpuKernelMs": 609.375,
+          "cpuMs": 1968.75,
+          "peakPrivateKb": 67624
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1022.8,
+          "cpuUserMs": 1359.375,
+          "cpuKernelMs": 625,
+          "cpuMs": 1984.375,
+          "peakPrivateKb": 67440
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1049.38,
+          "cpuUserMs": 1359.375,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 1906.25,
+          "peakPrivateKb": 67620
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1035.19,
+          "cpuUserMs": 1390.625,
+          "cpuKernelMs": 468.75,
+          "cpuMs": 1859.375,
+          "peakPrivateKb": 67516
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1042.22,
+          "cpuUserMs": 1359.375,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 1906.25,
+          "peakPrivateKb": 67284
+        }
+      ],
+      "stats": {
+        "totalMs": {
+          "n": 10,
+          "p50": 1024,
+          "p95": 1049.38,
+          "min": 1000.16,
+          "max": 1049.38
+        },
+        "cpuMs": {
+          "n": 10,
+          "p50": 1859.375,
+          "p95": 1984.375,
+          "min": 1812.5,
+          "max": 1984.375
+        },
+        "peakPrivateKb": {
+          "n": 10,
+          "p50": 67532,
+          "p95": 67716,
+          "min": 67284,
+          "max": 67716
+        }
+      },
+      "failures": [],
+      "valid": 10
+    },
+    {
+      "id": "current-content-own-fixture",
+      "action": "current-content",
+      "input": "repository UIA fixture (address-edit mode): one ToolBar, one Edit with a value, no Document",
+      "expectation": "exit 0 and the frozen window title echoed back",
+      "body": {
+        "keys": [
+          "title",
+          "url",
+          "truncated"
+        ]
+      },
+      "covers": "the reachable branch for a window without a Document element; Office, Explorer and real TextPattern paths are untested",
+      "samples": [
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1081.97,
+          "cpuUserMs": 1203.125,
+          "cpuKernelMs": 671.875,
+          "cpuMs": 1875,
+          "peakPrivateKb": 76864
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1087.31,
+          "cpuUserMs": 1359.375,
+          "cpuKernelMs": 468.75,
+          "cpuMs": 1828.125,
+          "peakPrivateKb": 76808
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1115.06,
+          "cpuUserMs": 1343.75,
+          "cpuKernelMs": 703.125,
+          "cpuMs": 2046.875,
+          "peakPrivateKb": 76976
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1114.57,
+          "cpuUserMs": 1359.375,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 1906.25,
+          "peakPrivateKb": 76664
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1096.91,
+          "cpuUserMs": 1328.125,
+          "cpuKernelMs": 562.5,
+          "cpuMs": 1890.625,
+          "peakPrivateKb": 76624
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1070.44,
+          "cpuUserMs": 1390.625,
+          "cpuKernelMs": 500,
+          "cpuMs": 1890.625,
+          "peakPrivateKb": 76724
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1083.75,
+          "cpuUserMs": 1265.625,
+          "cpuKernelMs": 562.5,
+          "cpuMs": 1828.125,
+          "peakPrivateKb": 76560
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1091.84,
+          "cpuUserMs": 1578.125,
+          "cpuKernelMs": 453.125,
+          "cpuMs": 2031.25,
+          "peakPrivateKb": 76884
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1075.3,
+          "cpuUserMs": 1468.75,
+          "cpuKernelMs": 421.875,
+          "cpuMs": 1890.625,
+          "peakPrivateKb": 76848
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1071.28,
+          "cpuUserMs": 1375,
+          "cpuKernelMs": 515.625,
+          "cpuMs": 1890.625,
+          "peakPrivateKb": 76948
+        }
+      ],
+      "stats": {
+        "totalMs": {
+          "n": 10,
+          "p50": 1083.75,
+          "p95": 1115.06,
+          "min": 1070.44,
+          "max": 1115.06
+        },
+        "cpuMs": {
+          "n": 10,
+          "p50": 1890.625,
+          "p95": 2046.875,
+          "min": 1828.125,
+          "max": 2046.875
+        },
+        "peakPrivateKb": {
+          "n": 10,
+          "p50": 76808,
+          "p95": 76976,
+          "min": 76560,
+          "max": 76976
+        }
+      },
+      "failures": [],
+      "valid": 10
+    }
+  ],
+  "cleanup": {
+    "directories": [
+      "E:\\CPANQI~1\\Temp\\yu-search-7f72CV"
+    ],
+    "fixtures": [
+      {
+        "mode": "address-edit",
+        "child": {
+          "_events": {},
+          "_eventsCount": 1,
+          "_closesNeeded": 3,
+          "_closesGot": 3,
+          "connected": false,
+          "signalCode": null,
+          "exitCode": 0,
+          "killed": false,
+          "spawnfile": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "_handle": null,
+          "spawnargs": [
+            "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "E:\\code\\deepseek-harness\\rea\\typeless\\tests\\yu-v2\\fixtures\\uia-provider.ps1",
+            "-Mode",
+            "address-edit"
+          ],
+          "pid": 54968,
+          "stdin": {
+            "connecting": false,
+            "_hadError": false,
+            "_parent": null,
+            "_host": null,
+            "_closeAfterHandlingError": false,
+            "_events": {},
+            "_readableState": {
+              "highWaterMark": 16384,
+              "buffer": [],
+              "bufferIndex": 0,
+              "length": 0,
+              "pipes": [],
+              "awaitDrainWriters": null,
+              "readable": false
+            },
+            "_writableState": {
+              "highWaterMark": 16384,
+              "length": 0,
+              "corked": 0,
+              "writelen": 0,
+              "bufferedIndex": 0,
+              "pendingcb": 0
+            },
+            "allowHalfOpen": false,
+            "_eventsCount": 2,
+            "_sockname": null,
+            "_pendingData": null,
+            "_pendingEncoding": "",
+            "server": null,
+            "_server": null
+          },
+          "stdout": {
+            "connecting": false,
+            "_hadError": false,
+            "_parent": null,
+            "_host": null,
+            "_closeAfterHandlingError": false,
+            "_events": {},
+            "_readableState": {
+              "highWaterMark": 16384,
+              "buffer": [],
+              "bufferIndex": 0,
+              "length": 0,
+              "pipes": [],
+              "awaitDrainWriters": null
+            },
+            "_writableState": {
+              "highWaterMark": 16384,
+              "length": 0,
+              "corked": 0,
+              "writelen": 0,
+              "bufferedIndex": 0,
+              "pendingcb": 0
+            },
+            "allowHalfOpen": false,
+            "_eventsCount": 3,
+            "_sockname": null,
+            "_pendingData": null,
+            "_pendingEncoding": "",
+            "server": null,
+            "_server": null
+          },
+          "stderr": {
+            "connecting": false,
+            "_hadError": false,
+            "_parent": null,
+            "_host": null,
+            "_closeAfterHandlingError": false,
+            "_events": {},
+            "_readableState": {
+              "highWaterMark": 16384,
+              "buffer": [],
+              "bufferIndex": 0,
+              "length": 0,
+              "pipes": [],
+              "awaitDrainWriters": null
+            },
+            "_writableState": {
+              "highWaterMark": 16384,
+              "length": 0,
+              "corked": 0,
+              "writelen": 0,
+              "bufferedIndex": 0,
+              "pendingcb": 0
+            },
+            "allowHalfOpen": false,
+            "_eventsCount": 2,
+            "_sockname": null,
+            "_pendingData": null,
+            "_pendingEncoding": "",
+            "server": null,
+            "_server": null
+          },
+          "stdio": [
+            {
+              "connecting": false,
+              "_hadError": false,
+              "_parent": null,
+              "_host": null,
+              "_closeAfterHandlingError": false,
+              "_events": {},
+              "_readableState": {
+                "highWaterMark": 16384,
+                "buffer": [],
+                "bufferIndex": 0,
+                "length": 0,
+                "pipes": [],
+                "awaitDrainWriters": null,
+                "readable": false
+              },
+              "_writableState": {
+                "highWaterMark": 16384,
+                "length": 0,
+                "corked": 0,
+                "writelen": 0,
+                "bufferedIndex": 0,
+                "pendingcb": 0
+              },
+              "allowHalfOpen": false,
+              "_eventsCount": 2,
+              "_sockname": null,
+              "_pendingData": null,
+              "_pendingEncoding": "",
+              "server": null,
+              "_server": null
+            },
+            {
+              "connecting": false,
+              "_hadError": false,
+              "_parent": null,
+              "_host": null,
+              "_closeAfterHandlingError": false,
+              "_events": {},
+              "_readableState": {
+                "highWaterMark": 16384,
+                "buffer": [],
+                "bufferIndex": 0,
+                "length": 0,
+                "pipes": [],
+                "awaitDrainWriters": null
+              },
+              "_writableState": {
+                "highWaterMark": 16384,
+                "length": 0,
+                "corked": 0,
+                "writelen": 0,
+                "bufferedIndex": 0,
+                "pendingcb": 0
+              },
+              "allowHalfOpen": false,
+              "_eventsCount": 3,
+              "_sockname": null,
+              "_pendingData": null,
+              "_pendingEncoding": "",
+              "server": null,
+              "_server": null
+            },
+            {
+              "connecting": false,
+              "_hadError": false,
+              "_parent": null,
+              "_host": null,
+              "_closeAfterHandlingError": false,
+              "_events": {},
+              "_readableState": {
+                "highWaterMark": 16384,
+                "buffer": [],
+                "bufferIndex": 0,
+                "length": 0,
+                "pipes": [],
+                "awaitDrainWriters": null
+              },
+              "_writableState": {
+                "highWaterMark": 16384,
+                "length": 0,
+                "corked": 0,
+                "writelen": 0,
+                "bufferedIndex": 0,
+                "pendingcb": 0
+              },
+              "allowHalfOpen": false,
+              "_eventsCount": 2,
+              "_sockname": null,
+              "_pendingData": null,
+              "_pendingEncoding": "",
+              "server": null,
+              "_server": null
+            }
+          ]
+        },
+        "handle": "64621720",
+        "pid": 54968,
+        "title": "UIA fixture - address-edit"
+      }
+    ],
+    "failures": []
+  }
+}
