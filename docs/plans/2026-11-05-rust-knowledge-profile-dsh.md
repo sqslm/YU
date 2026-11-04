@@ -227,7 +227,7 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 | `pnpm build` | 仓库根 | exit 0（`electron-vite build` 完成，含 renderer/settings 4.69 MB 产物） |
 | `git diff --check` | 仓库根 | 无空白错误 |
 
-真实辅助进程证据（非 mock）：`native/bin/yu-knowledge.exe`，2,302,464 字节，SHA-256 `131620348e36fa7093f998715fd83052ac1c2d5c817304da85f7f96a93baa2cc`。`native/knowledge/tests/process.rs` 用 `env!("CARGO_BIN_EXE_yu-knowledge")` 拉起同一二进制，覆盖：懒启动（`status` 不建目录，首次写库才建 `data/knowledge/knowledge.db`）、跨重启持久化、来源失效后卡片保留、卡片更新/删除、画像固定项保护、并行与拆包 UTF-8、垃圾帧、超长帧、未知方法与错误版本、`YU_KNOWLEDGE_IDLE_MS=400` 空闲退出、父进程 EOF 后自身退出（`tasklist` 校验 PID 已消失）。`src/main/knowledge/host.integration.test.ts` 用生产 `KnowledgeHost` 驱动该二进制完成同一批业务调用；`host.test.ts` 用真实管道的 Node stub 覆盖启动失败、ready、连续/并行、emoji 拆包、超时+取消后恢复、迟到回包、崩溃重启、空闲退出、`stop()` 与模型回调传递。Rust 侧 `probe_capabilities()` 在真实二进制初始化时实测 FTS5 与 trigram 均为可用（`ready` 帧回报 `fts5:true, trigram:true`）。
+真实辅助进程证据（非 mock）：`native/bin/yu-knowledge.exe`，2,302,464 字节，本次交付构件 SHA-256 `e1019b4b95f782a594e829d8472181c09868139ec17524a570bb3c6bd90db794`。实测同一份源码连续三次 `cargo build --release --locked` 会得到三个不同哈希（MSVC 链接器写入 PE 时间戳/调试信息），因此该哈希标识的是这一份构件文件，不是源码版本的指纹；重建后请重新取哈希。`native/knowledge/tests/process.rs` 用 `env!("CARGO_BIN_EXE_yu-knowledge")` 拉起同一二进制，覆盖：懒启动（`status` 不建目录，首次写库才建 `data/knowledge/knowledge.db`）、跨重启持久化、来源失效后卡片保留、卡片更新/删除、画像固定项保护、并行与拆包 UTF-8、垃圾帧、超长帧、未知方法与错误版本、`YU_KNOWLEDGE_IDLE_MS=400` 空闲退出、父进程 EOF 后自身退出（`tasklist` 校验 PID 已消失）。`src/main/knowledge/host.integration.test.ts` 用生产 `KnowledgeHost` 驱动该二进制完成同一批业务调用；`host.test.ts` 用真实管道的 Node stub 覆盖启动失败、ready、连续/并行、emoji 拆包、超时+取消后恢复、迟到回包、崩溃重启、空闲退出、`stop()` 与模型回调传递。Rust 侧 `probe_capabilities()` 在真实二进制初始化时实测 FTS5 与 trigram 均为可用（`ready` 帧回报 `fts5:true, trigram:true`）。
 
 ### 复核自查发现并修正的问题
 
