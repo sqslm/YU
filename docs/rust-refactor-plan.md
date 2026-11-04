@@ -26,6 +26,7 @@
 | 12 | 本地 TTS 生命周期观测与验收口径对齐 | 已完成 `9c07ce7`；helper 源码未改，重建后 336896 B / `e5664328…` | [开发计划与结果](plans/2026-11-04-rust-speech-lifecycle-dsh.md)：生命周期 CPU 差分与朗读期峰值内存可复现采集；总计划/阶段计划/README 未测项措辞一致；证据落 `rust-speech-lifecycle-<日期>.json` |
 | 13 | 浏览器地址读取 | 已完成；392704 B / `52266cd4…` | [开发计划与结果](plans/2026-11-04-rust-browser-url-dsh.md)：`browser-url` 迁入一次性 Windows helper；原窗口、地址候选与权限边界一致，真实 Edge 对照 + 每侧 40 样本达标后接入 |
 | 14 | 资源管理器文件夹读取 | 已完成；396800 B / `aa9232e5…` | [开发计划与结果](plans/2026-11-04-rust-explorer-folder-dsh.md)：`explorer-folder` 迁入一次性 Windows helper；Shell 窗口绑定与原窗口校验一致，真实资源管理器对照 + 每侧 40 样本达标后接入 |
+| 15 | 最近文件读取 | 进行中 | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序、`recordedAt` 格式与键序与 PS 逐字一致，真实 Recent 目录对照 + 每侧 40 样本达标后接入 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
