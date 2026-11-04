@@ -28,7 +28,7 @@
 | 14 | 资源管理器文件夹读取 | 已完成；396800 B / `aa9232e5…` | [开发计划与结果](plans/2026-11-04-rust-explorer-folder-dsh.md)：`explorer-folder` 迁入一次性 Windows helper；Shell 窗口绑定与原窗口校验一致，真实资源管理器对照 + 每侧 40 样本达标后接入 |
 | 15 | 最近文件读取 | 已完成；交付时值 418816 B / `f822b819…`（每次重链接都会变，当前为 480256 B / `a44c2c2e…`） | [开发计划与结果](plans/2026-11-04-rust-recent-files-dsh.md)：`recent-files` 迁入一次性 Windows helper；`.lnk` 枚举、排序与 `recordedAt` 格式与 PS 一致（键序差异见计划 §2），真实 Recent 目录只读对照 + 每侧 40 样本达标后接入 |
 | 16 | 已登记应用列表 | 已完成（含正确性续做）；480256 B / `a44c2c2e…` | [开发计划](plans/2026-11-04-rust-applications-dsh.md)：仅迁移 `applications`；四类来源、排序/截断及安全规则一致，真实只读验收与同机收益达标后接入；正确性续做见[计划](plans/2026-11-04-rust-applications-correctness-dsh.md) |
-| 17 | 应用枚举收口与剩余 Windows 桥接评估 | 待 DSH 实施，基线 `ff22acb` | [开发计划](plans/2026-11-04-rust-windows-final-assessment-dsh.md)：补真实注册表类型验证及排序失败出口；只读测量剩余三个 PS action，提出有证据的下一轮范围，不新增其生产路由 |
+| 17 | 应用枚举收口与剩余 Windows 桥接评估 | 已完成；466944 B / `3fae6081…` | [开发计划与结果](plans/2026-11-04-rust-windows-final-assessment-dsh.md)：注册表四档真实端点测试、文化比较失败显式出口；只读测量剩余三个 PS action 并给出「迁移收束」建议，本阶段不新增其生产路由 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -378,11 +378,18 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 **未测项（阶段 16 后）**：名称排序只在当前机器当前文化下对照，其它区域设置与 `Sort-Object` 平局顺序未测；1000/1500 边界只用合成 fixture 与单测覆盖；打包项显示名与 `Get-StartApps` 的本地化差异只在本次系统语言下对照；损坏注册表值、权限受限键、组策略重定向开始菜单、多用户并发未测；`activate` 仍走 PowerShell，打开链路未完全去除 PS。
 
-**正确性续做（阶段 16 之后）**：外部派单针对本阶段暴露的四类问题做了续做——Unicode 尾 panic、排序/去重键关系不一致、限额前遍历顺序、关键来源失败退化成残缺成功。实现与证据见 [正确性续做计划](plans/2026-11-04-rust-applications-correctness-dsh.md) 与 `tests/yu-v2/evidence/rust-applications-correctness-20261104.json`；当前交付产物为 480256 B / `a44c2c2ed2cb8ef6511bf8998e2472041fc0dc0ab9c85bf2a22275e3426a5a0e`，旧证据 `rust-applications-20261104.json`（473600 B / `5ad72247…`）作为上一轮记录保留。path 也使用与文化排序相同的比较关系，仅在文化平局时序数比较挑代表项；`CompareStringEx` 调用失败回退序数比较，不再当作 `Greater`。
+**正确性续做（阶段 16 之后）**：外部派单针对本阶段暴露的四类问题做了续做——Unicode 尾 panic、排序/去重键关系不一致、限额前遍历顺序、关键来源失败退化成残缺成功。实现与证据见 [正确性续做计划](plans/2026-11-04-rust-applications-correctness-dsh.md) 与 `tests/yu-v2/evidence/rust-applications-correctness-20261104.json`；当前交付产物为 480256 B / `a44c2c2ed2cb8ef6511bf8998e2472041fc0dc0ab9c85bf2a22275e3426a5a0e`，旧证据 `rust-applications-20261104.json`（473600 B / `5ad72247…`）作为上一轮记录保留。path 也使用与文化排序相同的比较关系，仅在文化平局时序数比较挑代表项。`CompareStringEx` 返回 0（失败）当时的「回退序数比较」已由阶段 17 取消：比较器改为可失败，失败即整次枚举以 `applications read failed at Application sort: Win32 error …` 报错，不再产出按另一种排序的成功名单。阶段 17 后的交付产物为 466944 B / `3fae6081…`。
 
-## 阶段 17：应用枚举收口与剩余桥接评估（待实施）
+## 阶段 17：应用枚举收口与剩余桥接评估（已完成）
 
-已复现的 Unicode panic、路径去重与遍历差异已修复，Codex 本轮应用模块 12 项 Rust 测试通过。剩余收口为真实非字符串默认值读取测试、文化比较 API 失败的显式出口，并纠正“新增 SDK feature 等于引入新依赖”的误解。随后只读评估 `activate`、`search`、`current-content` 的实际包装成本与验收边界；本轮不新增其生产 Rust 路由。详见[阶段 17 计划](plans/2026-11-04-rust-windows-final-assessment-dsh.md)，由 DSH 回填结果、限制与提交编号。
+- [x] C1：`default_string` 的真实端点测试 `reads_real_registry_values_like_the_baseline` 走 `RegCreateKeyExW` + 自有 `HKCU\Software\yu-applications-test-<pid>-<nanos>` 临时键，覆盖缺失 / `REG_SZ`（带引号）/ `REG_EXPAND_SZ` / `REG_DWORD` 四档；PS 基线对同样四档跑同值管线，逐项一致（`accepted` 分别 false/true/true/false）。`Cargo.toml` 只补既有 `windows` crate 的 `Win32_Security` feature，无新 crate。
+- [x] C2：`culture_compare` 返回 `Result`，`CompareStringEx` 返回 0 时按失败上抛（`applications read failed at Application sort: Win32 error …`）；`finish()` 改为可失败比较器的稳定归并排序，文化平局只用 path 序数挑稳定代表项；`#[cfg(test)]` 失败钩子 + `a_failed_culture_comparison_fails_the_read` 断言不产出成功名单。
+- [x] E1：`scripts/benchmark-windows-remaining.mjs` 只读测量三个 PS action（各 1 次 warmup + 10 有效样本、spawn → stdio close、koffi job 记账）：`activate` 仅测到 AppID 校验拒绝 1346.24/1432.41 ms（不含 ShellExecute 与窗口可见）、`search` 自有临时树 1024.00/1049.38 ms、`current-content` 自有 UIA fixture 1083.75/1115.06 ms。
+- [x] E2：三项均建议**暂保留 PS**（`activate` 成功路径无法在不启动应用的前提下验收；`search` 的索引语义无法用自有树证明、只改写目录 fallback 会变成双进程；`current-content` 依赖真实 Office/Explorer/浏览器与 TextPattern）。因此建议 Rust 迁移在此收束，不制造空任务。
+
+阶段 17 结果：交付产物 466944 B / `3fae6081…`；收口证据 `tests/yu-v2/evidence/rust-applications-closure-20261104.json`（80 runs、9/9 checks、`decision=latency`，总数 1596.55/1626.74 → 575.88/595.74 ms），评估证据 `tests/yu-v2/evidence/rust-windows-remaining-20261104.json`。`cargo test` 35 passed，vitest 7 files / 166 tests、`pnpm test` 239 files / 3552 passed，均本轮重跑。详见[阶段 17 计划](plans/2026-11-04-rust-windows-final-assessment-dsh.md)第 7 节。
+
+**未测项（阶段 17 后）**：`activate` 成功激活与窗口可见时间、`search` 的索引正向命中（本轮 `backend=windows-search+folder`，未逐条区分索引与目录 fallback）、`current-content` 的 Office/Explorer/真实 TextPattern 分支、注册表访问拒绝等无法安全制造的故障、其他区域设置下的文化排序。
 
 ## 后续阶段的推进规则
 
