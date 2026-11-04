@@ -414,7 +414,7 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 
 **结论**：保留 Electron 的前提下，整应用常驻内存的第一项收益来自「窗口生命周期」而不是 Chromium 参数或缓存开关；后续阶段应先看是否还有同类的「创建即常驻」窗口，再考虑渲染器内部优化。
 
-## 阶段 19：窗口回收正确性与整应用计量修复（已交付，外部复核待修）
+## 阶段 19：窗口回收正确性与整应用计量修复（已交付，功能缺口由阶段 20 修正）
 
 阶段 18 的方向（按需 Pill + 空闲回收）经外部复核保留，但它的四项缺陷使「已采纳」不能关单：基准会污染用户环境、回收后重建的 Pill 丢首条播放命令、播放忙态靠推算时长释放、CPU 单位与开窗计时错误。本阶段只修这些，不做新迁移、不找第二项优化。
 
@@ -424,9 +424,24 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 - [x] R3 计量：`cpuMsFromTicks` 单次换算（10,000,000 tick = 1000 ms，忙等对照 ratio 0.96 / 0.996），Toolhelp32 原生进程表把 WMI 移出计时区（`wmiCalls` 全部在窗外，hub 分辨率 ≈30 ms），冷启动 / Pill ready / 首开 / 重开分开记录，20 个有效样本、失败单列，`compare` 增 `isolation`、`cpuSelfCheck`、`coldSeparation`、`idleCpu`、`playbackFeature` 五个必要条件。
 - [x] 重测（基线 `0cb30d9` 隔离构建 vs 候选 HEAD+WIP，同封装、同原生资产，先基线后候选串行）：托盘空闲 60 s 私有驻留 p50 **89.9 → 56.8 MiB（−36.75% / −33.0 MiB）**，renderer 22.7 → 0、utility 14.8(2) → 6.7(1)、main 42.3 → 41.3、gpu 8.7 → 7.5 MiB；启动后 4 s 簇 103.0 → 64.3 MiB；20 次开关趋势 −10.42% → −14.21%，开关后静止 97.7 → 66.4 MiB（候选 renderer 0）；首开 p50 601.208 → 600.259 ms、p95 638.689 → 624.981 ms（−13.708 ms，20+20 样本、0 失败）；重开 p50 267.494 → 313.041 ms、p95 316.262 → 352.456 ms（+36.2 ms，未设门槛，仍 < +100 ms）；冷启动树就绪 868.524 → 700.581 ms（基线 7 进程含 Pill，候选 5 进程无 Pill，Pill ready 侧记 `pillReason`）；空闲 CPU 30.2 → 3.385 ms/s（ratio 0.112）；Pill 场景 0 次回收 → 3 次回收 / 3 个不同 renderer / 3 次 take 成功。证据 `tests/yu-v2/evidence/electron-resource-correctness-20261104.json`，九道门全过，`decision=adopted`。
 
-**未测项（阶段 19 后）**：播放接线只在隔离的真实窗口验证，未在真实应用里走完随记播放 / 云 TTS 的点击全链路；真实渲染器崩溃只以 `destroy()` 替身覆盖；录音中暂停随记播放、语音播放渲染器探针、迟到 speech 回执未单独验证；窗口存在但尚未 ready 时 `pause`/`stop` 仍等满 8 s。真实麦克风与设备切换、托盘菜单/全局热键、唤醒词与本地 ASR、锁屏/RDP、多显示器与混合 DPI、`closeBehavior=quit`、小时级碎片、长录音与流式播放仍未测。CPU 是 250 ms 采样的进程树（首个采样点前的突发、采样间退出不计），hub 轮询分辨率约 30 ms。阶段 18 与本阶段口径不同，数字不可混用。
+**未测项（阶段 19 后）**：播放接线只在隔离的真实窗口验证，未在真实应用里走完随记播放 / 云 TTS 的点击全链路；真实渲染器崩溃只以 `destroy()` 替身覆盖；录音中暂停随记播放、语音播放渲染器探针、迟到 speech 回执未单独验证；窗口存在但尚未 ready 时 `pause`/`stop` 仍等满 8 s（**阶段 20 已修**：无就绪窗口的 `status/pause/stop` 立即返回、不发送、零定时器）。真实麦克风与设备切换、托盘菜单/全局热键、唤醒词与本地 ASR、锁屏/RDP、多显示器与混合 DPI、`closeBehavior=quit`、小时级碎片、长录音与流式播放仍未测。CPU 是 250 ms 采样的进程树（首个采样点前的突发、采样间退出不计），hub 轮询分辨率约 30 ms。阶段 18 与本阶段口径不同，数字不可混用。
 
 **外部复核结论**：阶段 19 的隔离样本支持窗口回收收益（−36.75% / −33.0 MiB），冷启动首条命令已有就绪门禁。但生产方法反例仍出现 stop→迟到 play、反序就绪使旧播放覆盖新播放、旧 reply 释放当前忙态，以及销毁时清理异常使就绪等待悬空；播放证据门槛还会接受零用例的 pass=true。故保留该资源测量为阶段 19 的历史证据，功能验收不关单，由[阶段 20](plans/2026-11-04-playback-cancellation-correctness-dsh.md)修复并核对最终产物，不将 `decision=adopted` 等同于全部目标完成。
+
+## 阶段 20：播放取消、并发与窗口销毁收口（已完成）
+
+阶段 19 的外部复核确认：Pill 按需创建/回收的收益成立，但播放控制在「停止、替换、窗口销毁」三类边界上会丢命令、反序覆盖或永久占用忙态，且播放证据门槛能接受零用例的 `pass=true`。本阶段只收口这些功能缺口，并复查资源收益是否仍在。
+
+- [x] R1 停止/替换/回执归属（`src/main/note-audio.ts` 重写 221 行）：每次 `play` 自增 `gen` 与 `playId`，旧准备中播放被替代时立即以 `Playback superseded` 结束，旧就绪/回执/错误都不能再发送或覆盖；`stop` 取消全部未结算 play 并清 owner，`pause` 只取消尚未发送的 play；`receive()` 依次校验窗口归属 → pending → generation 才更新忙态。旧代码上 9 条新回归真失败（反序发送 `['note-2','note-1']`、忙态 `['playing','ended']`、stop 后残留 2 个定时器、`Object has been destroyed`、子框架失败吃掉唯一监听等），修复后全绿。
+- [x] R2 就绪等待清理与崩溃重建：`bar-ready.ts` 缓存 `webContents` 引用（销毁后 getter 抛错曾使清理中断、等待永久 pending）、`did-fail-load` 改 `on` 并忽略子框架、新增 `isReady`；新增 `src/main/bar-playback-host.ts` 作为唯一窗口下口（`peek/ready/ensure(signal)`），随记与 speech 共用；`index.ts` 以窗口身份限定 `closed`/`render-process-gone` 清理，崩溃后销毁坏窗口使下一播放拿到新窗口；`speech-playback.ts` 每次播放一个 `AbortController`。
+- [x] R3 真实窗口补证：探针重写为 747 行 15 例，0 拷贝生产接线（`createBarPlaybackHost` + `createBarReadiness` + 两个播放器 + `trustWindow`），真实 `bar.html`/preload、隔离 userData、拒绝麦克风、合成 WAV；**15/15 真实窗口通过、无跳过**，含 stop-before-ready（play 于 1 ms 内取消、页面从未收到 play）、乱序替换（旧回执被丢弃、新 owner 保持）、真实 `win.destroy()`（`Playback closed` 1 ms 失败后重建成功）、真实 `forcefullyCrashRenderer()` 崩溃（`render-process-gone` reason `crashed`，窗口回收后重建成功）、speech 冷路径与就绪前/开始后 abort。
+- [x] R4 门槛：`playbackGate` 现要求必要场景清单（`r1-stop-before-ready`/`r1-playback-replacement`/`r2-destroy-or-cancel`/`r3-note-cold-path`/`r3-speech-cold-path`）各有真实窗口通过例、`kind` 合法、identity 五项哈希齐全；`{pass:true,cases:[]}` 由 `met:true` 变为 `met:false`，阶段 19 的旧格式结果被新 `compare` 判为 `not-adopted` 并退出 1。
+- [x] 复查（基线原始样本复用：脚本 `5645f616…`、封装 `dfcbfc3a…`、场景与主机 `meta` 逐项一致）：托盘空闲 60 s 私有驻留 p50 **89.9 → 54.2 MiB（−39.67% / −35.7 MiB）**，renderer 常驻仍为 0；稳定 4 s 簇 103.0 → 64.0 MiB；20 次开关趋势 −12.06%、开关后静止 97.7 → 63.3 MiB（renderer 0）；首开 p50 601.208 → 566.095 ms、p95 638.689 → 591.762 ms（−46.927 ms，20+20、0 失败）；重开 p50 267.494 → 275.014 ms、p95 316.262 → 304.021 ms；冷启动树就绪 868.524 → 689.423 ms（不建 Pill）；空闲 CPU 30.2 → 1.302 ms/s（ratio 0.043）；Pill 3 次回收 / 3 次 take / 3 个 renderer；Run 键 8 项前后一致、抑制标记 27 条。证据 `tests/yu-v2/evidence/electron-playback-correctness-20261104.json`，九项必要条件全部 `met`，`decision=adopted`。
+- [x] 验证：`pnpm typecheck` 0；相关 8 文件 68 例通过；`pnpm test` 250 文件 3651 例通过（8 跳过）；`pnpm build` 0；最终产物上探针 15/15（`totalMs 13068`）；`compare` 退出 0。
+
+**未测项（阶段 20 后）**：页面内 `process.crash()` 不可用（sandbox + 无 Node），崩溃改由 `forcefullyCrashRenderer()` 真实触发，未用 destroy 冒充；真实 TTS/云语音未连；8 s 预算耗尽路径与不可信 sender 拒绝未构造；平台仅 Windows x64；speech 音量/倍速边界未覆盖；主进程崩溃退役只有探针同等接线验证，无独立集成测试。沿用阶段 19 的其余未测项（真实麦克风与设备切换、托盘菜单/全局热键、唤醒词与 ASR、锁屏/RDP、多显示器 DPI、小时级碎片）。
+
+**结论**：Pill 的按需创建/回收收益在补齐播放控制后仍成立，且比阶段 19 更低（54.2 MiB）；停止、替换、销毁与崩溃路径已由真实窗口反例覆盖。后续若再改窗口生命周期，仍需用「真实渲染器 + 真实崩溃」验证，不能只靠替身。
 
 ## 后续阶段的推进规则
 
