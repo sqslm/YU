@@ -34,21 +34,29 @@ const MAX_APPLICATIONS: usize = 1500;
 /// App Paths, Start menu shortcuts, packaged Start apps and three fixed system
 /// commands, deduplicated and ordered exactly like `Sort-Object name,path`.
 pub fn applications(_request: &Value) -> Result<Value, Box<dyn Error>> {
-    Ok(json!({ "applications": collect() }))
+    Ok(json!({ "applications": collect()? }))
 }
 
-fn collect() -> Vec<Value> {
+type Failure = Box<dyn Error>;
+
+/// A source that cannot be read must fail the whole read instead of yielding a
+/// shorter list, because the caller treats the list as the complete registry.
+fn failed(stage: &str, detail: String) -> Failure {
+    format!("applications read failed at {stage}: {detail}").into()
+}
+
+fn collect() -> Result<Vec<Value>, Failure> {
     let mut entries = Vec::new();
-    entries.extend(app_paths());
-    entries.extend(start_menu_shortcuts());
-    entries.extend(packaged_apps());
+    entries.extend(app_paths()?);
+    entries.extend(start_menu_shortcuts()?);
+    entries.extend(packaged_apps()?);
     entries.push(json!({ "name": "Windows Settings", "path": "", "appId": "system:settings" }));
     entries.extend(fixed_commands(&entries));
-    finish(entries)
+    Ok(finish(entries))
 }
 
 /// Registry `App Paths` in the same three views the 64-bit PowerShell reads.
-fn app_paths() -> Vec<Value> {
+fn app_paths() -> Result<Vec<Value>, Failure> {
     const BASES: [(HKEY, &str); 3] = [
         (
             HKEY_CURRENT_USER,
@@ -65,11 +73,11 @@ fn app_paths() -> Vec<Value> {
     ];
     let mut items = Vec::new();
     for (root, base) in BASES {
-        let Some(key) = open_key(root, base) else {
+        let Some(key) = open_key(root, base)? else {
             continue;
         };
-        for name in subkey_names(key) {
-            let Some(raw) = default_string(key, &name) else {
+        for name in subkey_names(key)? {
+            let Some(raw) = default_string(key, &name)? else {
                 continue;
             };
             let target = unquote(&expand_environment(&raw));
@@ -81,25 +89,25 @@ fn app_paths() -> Vec<Value> {
         // SAFETY: the handle came from `RegOpenKeyExW` above.
         let _ = unsafe { RegCloseKey(key) };
     }
-    items
+    Ok(items)
 }
 
 /// Recursive `.lnk` scan of the two Start menu programs folders, capped per
 /// folder, with every shortcut that carries arguments rejected.
-fn start_menu_shortcuts() -> Vec<Value> {
-    let roots: Vec<PathBuf> = [FOLDERID_Programs, FOLDERID_CommonPrograms]
-        .iter()
-        .filter_map(known_folder)
-        .collect();
+fn start_menu_shortcuts() -> Result<Vec<Value>, Failure> {
+    let mut roots = Vec::new();
+    for id in [FOLDERID_Programs, FOLDERID_CommonPrograms] {
+        roots.push(known_folder(&id)?);
+    }
     start_menu_in(&roots, MAX_SHORTCUTS_PER_FOLDER)
 }
 
-fn start_menu_in(roots: &[PathBuf], limit: usize) -> Vec<Value> {
+fn start_menu_in(roots: &[PathBuf], limit: usize) -> Result<Vec<Value>, Failure> {
     let mut items = Vec::new();
     for root in roots {
-        let links = shortcuts(root, limit);
+        let links = shortcuts(root, limit)?;
         for link in links {
-            let Some(target) = shortcut_target(&link) else {
+            let Some(target) = shortcut_target(&link)? else {
                 continue;
             };
             let target = expand_environment(&target);
@@ -112,18 +120,18 @@ fn start_menu_in(roots: &[PathBuf], limit: usize) -> Vec<Value> {
             items.push(json!({ "name": name, "path": target }));
         }
     }
-    items
+    Ok(items)
 }
 
 /// Packaged Start menu entries: the AppID carries a `!` for packaged apps.
-fn packaged_apps() -> Vec<Value> {
+fn packaged_apps() -> Result<Vec<Value>, Failure> {
     let mut items = Vec::new();
-    for (appid, name) in shell_apps_folder() {
+    for (appid, name) in shell_apps_folder()? {
         if appid.contains('!') {
             items.push(json!({ "name": name, "path": "", "appId": appid }));
         }
     }
-    items
+    Ok(items)
 }
 
 /// The three commands the baseline resolves through the application PATH,
@@ -163,10 +171,20 @@ fn finish(mut entries: Vec<Value>) -> Vec<Value> {
         if by_name != std::cmp::Ordering::Equal {
             return by_name;
         }
-        // The baseline's tie order between paths that differ only in case is
-        // not stable; ordering them ordinally keeps the uppercase spelling,
-        // which is the order PowerShell produced on the reference machine.
-        field(left, "path").cmp(field(right, "path"))
+        // `same_key` compares paths with the same culture rule, so the path
+        // order has to use it too; otherwise equal keys are not adjacent and
+        // `dedup_by` merges fewer entries than `Sort-Object -Unique`.
+        let (left_path, right_path) = (field(left, "path"), field(right, "path"));
+        let by_path = culture_compare(left_path, right_path);
+        if by_path != std::cmp::Ordering::Equal {
+            return by_path;
+        }
+        // Paths that are equal apart from case are one key. Their order among
+        // themselves is not defined by the culture rule, and the baseline's
+        // kept spelling is not stable across locales; ordinal order makes the
+        // choice deterministic and keeps the uppercase spelling here, which is
+        // what `Sort-Object -Unique` produced on the reference machine.
+        left_path.cmp(right_path)
     });
     entries.dedup_by(|right, left| same_key(left, right));
     entries.truncate(MAX_APPLICATIONS);
@@ -184,12 +202,10 @@ fn same_key(left: &Value, right: &Value) -> bool {
 
 /// Case-insensitive, culture-aware ordering, matching `Sort-Object` on the
 /// current user locale instead of a byte or ordinal comparison.
-/// Culture-aware, case-insensitive comparison like `Sort-Object`.
 ///
-/// `CompareStringEx` reports failure with 0; that cannot be told apart from a
-/// successful ordering here, so a failure falls through to the remaining arms
-/// and finally to `Equal`. The measured baseline sorts identically on this
-/// machine, which is why the failure path is documented instead of guessed at.
+/// `CompareStringEx` reports failure with 0. A failed call must not be mistaken
+/// for "greater", which would break the ordering relation and still look
+/// successful, so it falls back to ordinal comparison of the same two strings.
 fn culture_compare(left: &str, right: &str) -> std::cmp::Ordering {
     use windows::Win32::Globalization::{
         COMPARE_STRING_FLAGS, CSTR_EQUAL, CSTR_LESS_THAN, CompareStringEx, NORM_IGNORECASE,
@@ -197,14 +213,14 @@ fn culture_compare(left: &str, right: &str) -> std::cmp::Ordering {
     if left == right {
         return std::cmp::Ordering::Equal;
     }
-    let (left, right) = (wide(left), wide(right));
+    let (left_wide, right_wide) = (wide(left), wide(right));
     // SAFETY: both slices are NUL terminated and outlive the call.
     let result = unsafe {
         CompareStringEx(
             windows::core::PCWSTR::null(),
             COMPARE_STRING_FLAGS(NORM_IGNORECASE.0),
-            &left,
-            &right,
+            &left_wide,
+            &right_wide,
             None,
             None,
             None,
@@ -214,6 +230,9 @@ fn culture_compare(left: &str, right: &str) -> std::cmp::Ordering {
         std::cmp::Ordering::Less
     } else if result == CSTR_EQUAL {
         std::cmp::Ordering::Equal
+    } else if result.0 == 0 {
+        // The call failed; ordinal order keeps the relation consistent.
+        left.cmp(right)
     } else {
         std::cmp::Ordering::Greater
     }
@@ -223,16 +242,28 @@ fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-fn open_key(root: HKEY, path: &str) -> Option<HKEY> {
-    let path = wide(path);
-    let mut key = HKEY::default();
-    // SAFETY: the buffer is NUL terminated; the handle is closed by the caller
-    // via `RegKey`. A missing key is not an error, exactly like `Test-Path`.
-    let status = unsafe { RegOpenKeyExW(root, PCWSTR(path.as_ptr()), None, KEY_READ, &mut key) };
-    (status == ERROR_SUCCESS).then_some(key)
+fn win32(code: u32) -> String {
+    format!("Win32 error {code}")
 }
 
-fn subkey_names(key: HKEY) -> Vec<String> {
+fn hresult(error: &windows::core::Error) -> String {
+    format!("HRESULT 0x{:08X}", error.code().0 as u32)
+}
+
+fn open_key(root: HKEY, path: &str) -> Result<Option<HKEY>, Failure> {
+    let path = wide(path);
+    let mut key = HKEY::default();
+    // SAFETY: the buffer is NUL terminated; the handle is closed by the caller.
+    let status = unsafe { RegOpenKeyExW(root, PCWSTR(path.as_ptr()), None, KEY_READ, &mut key) };
+    match status.0 {
+        // A missing view is normal on machines where the product key is absent.
+        2 | 3 => Ok(None),
+        0 => Ok(Some(key)),
+        code => Err(failed("App Paths open", win32(code))),
+    }
+}
+
+fn subkey_names(key: HKEY) -> Result<Vec<String>, Failure> {
     let mut names = Vec::new();
     for index in 0..u32::MAX {
         let mut buffer = vec![0u16; 512];
@@ -254,15 +285,15 @@ fn subkey_names(key: HKEY) -> Vec<String> {
             break;
         }
         if status != ERROR_SUCCESS {
-            break;
+            return Err(failed("App Paths subkeys", win32(status.0)));
         }
         buffer.truncate(length as usize);
         names.push(String::from_utf16_lossy(&buffer));
     }
-    names
+    Ok(names)
 }
 
-fn default_string(key: HKEY, name: &str) -> Option<String> {
+fn default_string(key: HKEY, name: &str) -> Result<Option<String>, Failure> {
     let name = wide(name);
     let mut size = 0u32;
     // SAFETY: the first call only asks for the required size.
@@ -277,8 +308,14 @@ fn default_string(key: HKEY, name: &str) -> Option<String> {
             Some(&mut size),
         )
     };
-    if status != ERROR_SUCCESS || size < 2 {
-        return None;
+    if status.0 == 2 {
+        return Ok(None);
+    }
+    if status != ERROR_SUCCESS {
+        return Err(failed("App Paths value size", win32(status.0)));
+    }
+    if size < 2 {
+        return Ok(None);
     }
     let mut buffer = vec![0u16; size as usize / 2];
     // SAFETY: the buffer matches the size reported by the previous call.
@@ -294,44 +331,55 @@ fn default_string(key: HKEY, name: &str) -> Option<String> {
         )
     };
     if status != ERROR_SUCCESS {
-        return None;
+        return Err(failed("App Paths value", win32(status.0)));
     }
     let length = buffer
         .iter()
         .position(|unit| *unit == 0)
         .unwrap_or(buffer.len());
-    Some(String::from_utf16_lossy(&buffer[..length]))
+    Ok(Some(String::from_utf16_lossy(&buffer[..length])))
 }
 
-fn known_folder(id: &windows::core::GUID) -> Option<PathBuf> {
+fn known_folder(id: &windows::core::GUID) -> Result<PathBuf, Failure> {
     // SAFETY: the returned pointer is freed with `CoTaskMemFree` below.
-    let path = unsafe { SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None) }.ok()?;
-    let text = unsafe { path.to_string() }.ok()?;
+    let path = unsafe { SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None) }
+        .map_err(|error| failed("known folder", hresult(&error)))?;
+    let text = unsafe { path.to_string() }
+        .map_err(|error| failed("known folder text", error.to_string()))?;
     // SAFETY: the string owns the allocation returned by the API.
     unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(path.0 as *const _)) };
-    Some(PathBuf::from(text))
+    Ok(PathBuf::from(text))
 }
 
 /// Depth-first `*.lnk` walk: files of a folder first, then its subfolders, capped like the baseline.
-fn shortcuts(root: &Path, limit: usize) -> Vec<PathBuf> {
+fn shortcuts(root: &Path, limit: usize) -> Result<Vec<PathBuf>, Failure> {
     let mut found = Vec::new();
-    walk(root, limit, &mut found);
-    found
+    walk(root, limit, &mut found)?;
+    Ok(found)
 }
 
-fn walk(folder: &Path, limit: usize, found: &mut Vec<PathBuf>) {
+/// Files of a folder come before its subfolders, matching the order the
+/// baseline's `Get-ChildItem -Recurse` produced on the reference tree.
+fn walk(folder: &Path, limit: usize, found: &mut Vec<PathBuf>) -> Result<(), Failure> {
     if found.len() >= limit {
-        return;
+        return Ok(());
     }
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return;
-    };
+    let entries = std::fs::read_dir(folder)
+        .map_err(|error| failed("Start menu scan", format!("{}: {error}", folder.display())))?;
     let mut folders = Vec::new();
-    for entry in entries.flatten() {
+    for entry in entries {
         if found.len() >= limit {
-            return;
+            return Ok(());
         }
+        let entry = entry
+            .map_err(|error| failed("Start menu scan", format!("{}: {error}", folder.display())))?;
         let path = entry.path();
+        // Junctions and symlinks can loop; the baseline never follows them here.
+        let metadata = std::fs::symlink_metadata(&path)
+            .map_err(|error| failed("Start menu scan", format!("{}: {error}", path.display())))?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
         if path.is_dir() {
             folders.push(path);
         } else if path
@@ -342,61 +390,84 @@ fn walk(folder: &Path, limit: usize, found: &mut Vec<PathBuf>) {
         }
     }
     for folder in folders {
-        walk(&folder, limit, found);
+        walk(&folder, limit, found)?;
     }
+    Ok(())
 }
 
-fn shortcut_target(link: &Path) -> Option<String> {
+fn shortcut_target(link: &Path) -> Result<Option<String>, Failure> {
     // SAFETY: the shell link object is created and released on this thread.
     unsafe {
-        let object: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).ok()?;
-        let file: windows::Win32::System::Com::IPersistFile = object.cast().ok()?;
+        let object: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)
+            .map_err(|error| failed("shortcut object", hresult(&error)))?;
+        let file: windows::Win32::System::Com::IPersistFile = object
+            .cast()
+            .map_err(|error| failed("shortcut cast", hresult(&error)))?;
+        // The baseline lets `CreateShortcut` throw for unreadable links, which
+        // stops the whole action, so a load failure is not skipped here.
         file.Load(
             &windows::core::HSTRING::from(link.as_os_str()),
             Default::default(),
         )
-        .ok()?;
+        .map_err(|error| {
+            failed(
+                "shortcut load",
+                format!("{}: {}", link.display(), hresult(&error)),
+            )
+        })?;
         let mut buffer = vec![0u16; 32_768];
-        object.GetPath(&mut buffer, std::ptr::null_mut(), 0).ok()?;
+        // A link without a target is normal (links to shell folders); the
+        // baseline then reads an empty `TargetPath` and skips the entry.
+        if object
+            .GetPath(&mut buffer, std::ptr::null_mut(), 0)
+            .is_err()
+        {
+            return Ok(None);
+        }
         let length = buffer.iter().position(|unit| *unit == 0).unwrap_or(0);
         let target = String::from_utf16_lossy(&buffer[..length]);
         if has_arguments(&object)? {
-            return None;
+            return Ok(None);
         }
-        Some(target)
+        Ok(Some(target))
     }
 }
 
 /// Reports whether the link carries any argument text, which is the only thing
 /// the baseline looks at: `if (!$shortcut.Arguments) { … }`.
-fn has_arguments(arguments: &IShellLinkW) -> Option<bool> {
+fn has_arguments(arguments: &IShellLinkW) -> Result<bool, Failure> {
     let mut buffer = vec![0u16; 1024];
     // SAFETY: the buffer is valid for its own length.
-    unsafe { arguments.GetArguments(&mut buffer) }.ok()?;
+    unsafe { arguments.GetArguments(&mut buffer) }
+        .map_err(|error| failed("shortcut arguments", hresult(&error)))?;
     let length = buffer
         .iter()
         .position(|unit| *unit == 0)
         .unwrap_or(buffer.len());
     // A filled buffer is a truncated argument string, which is still non-empty.
-    Some(length > 0)
+    Ok(length > 0)
 }
 
 /// Enumerates the Start menu's `AppsFolder`, which the baseline reads through
 /// `Get-StartApps`: display name plus AppUserModelID, packaged or not.
-fn shell_apps_folder() -> Vec<(String, String)> {
+fn shell_apps_folder() -> Result<Vec<(String, String)>, Failure> {
     let mut items = Vec::new();
     // SAFETY: every interface and PIDL is released inside this scope.
     unsafe {
         let mut pidl = std::ptr::null_mut();
-        let parsed = SHParseDisplayName(
+        SHParseDisplayName(
             &windows::core::HSTRING::from("shell:AppsFolder"),
             None,
             &mut pidl,
             0,
             None,
-        );
-        if parsed.is_err() || pidl.is_null() {
-            return items;
+        )
+        .map_err(|error| failed("AppsFolder parse", hresult(&error)))?;
+        if pidl.is_null() {
+            return Err(failed(
+                "AppsFolder parse",
+                "shell:AppsFolder resolved to no item".to_string(),
+            ));
         }
         let bound: windows::core::Result<IShellFolder> = SHBindToObject(
             None::<&IShellFolder>,
@@ -404,26 +475,24 @@ fn shell_apps_folder() -> Vec<(String, String)> {
             None::<&windows::Win32::System::Com::IBindCtx>,
         );
         CoTaskMemFree(Some(pidl as *const _));
-        let folder = match bound {
-            Ok(folder) => folder,
-            Err(_error) => {
-                return items;
-            }
-        };
+        let folder = bound.map_err(|error| failed("AppsFolder bind", hresult(&error)))?;
         let mut enumerator = None;
         let flags = (SHCONTF_FOLDERS.0 | SHCONTF_NONFOLDERS.0) as u32;
-        let status = folder.EnumObjects(HWND::default(), flags, &mut enumerator);
-        if status.is_err() {
-            return items;
-        }
+        folder
+            .EnumObjects(HWND::default(), flags, &mut enumerator)
+            .ok()
+            .map_err(|error| failed("AppsFolder enumerate", hresult(&error)))?;
         let Some(enumerator) = enumerator else {
-            return items;
+            return Ok(items);
         };
         loop {
             let mut pidls = [std::ptr::null_mut()];
             let mut fetched = 0u32;
-            let step = enumerator.Next(&mut pidls, Some(&mut fetched));
-            if step.is_err() || fetched == 0 {
+            enumerator
+                .Next(&mut pidls, Some(&mut fetched))
+                .ok()
+                .map_err(|error| failed("AppsFolder next", hresult(&error)))?;
+            if fetched == 0 {
                 break;
             }
             let pidl = pidls[0];
@@ -443,15 +512,12 @@ fn shell_apps_folder() -> Vec<(String, String)> {
                 // Display names are only needed for packaged entries, and each
                 // read costs a cross-process call, so defer until required.
                 let name = if appid.contains('!') {
-                    entry
+                    let text = entry
                         .GetDisplayName(SIGDN_NORMALDISPLAY)
-                        .ok()
-                        .map(|text| {
-                            let value = text.to_string().unwrap_or_default();
-                            CoTaskMemFree(Some(text.0 as *const _));
-                            value
-                        })
-                        .unwrap_or_default()
+                        .map_err(|error| failed("AppsFolder display name", hresult(&error)))?;
+                    let value = text.to_string().unwrap_or_default();
+                    CoTaskMemFree(Some(text.0 as *const _));
+                    value
                 } else {
                     String::new()
                 };
@@ -460,7 +526,7 @@ fn shell_apps_folder() -> Vec<(String, String)> {
             CoTaskMemFree(Some(pidl as *const _));
         }
     }
-    items
+    Ok(items)
 }
 
 fn which(command: &str) -> Option<String> {
@@ -686,12 +752,11 @@ mod tests {
         );
         link(&scratch.root, "directory", &directory, None);
         link(&scratch.root, "script", &script, None);
-        std::fs::write(scratch.root.join("broken.lnk"), b"not a shell link").expect("broken link");
-
         let entries = start_menu_in(
             std::slice::from_ref(&scratch.root),
             MAX_SHORTCUTS_PER_FOLDER,
-        );
+        )
+        .expect("readable Start menu tree");
         let mut names: Vec<&str> = entries.iter().map(|entry| field(entry, "name")).collect();
         names.sort_unstable();
         assert_eq!(names, vec!["good", "spaced"]);
@@ -717,8 +782,84 @@ mod tests {
             link(&scratch.root, &format!("app{index}"), &target, None);
         }
         assert_eq!(
-            start_menu_in(std::slice::from_ref(&scratch.root), 3).len(),
+            start_menu_in(std::slice::from_ref(&scratch.root), 3)
+                .expect("readable tree")
+                .len(),
             3
+        );
+    }
+
+    #[test]
+    fn unreadable_links_fail_the_whole_read() {
+        let _apartment = Apartment::new();
+        let scratch = Scratch::new("broken");
+        std::fs::write(scratch.root.join("broken.lnk"), b"not a shell link").expect("broken link");
+        // `CreateShortcut` throws for an unreadable link, which stops the
+        // baseline action; the helper must not report a shorter list instead.
+        let error = start_menu_in(
+            std::slice::from_ref(&scratch.root),
+            MAX_SHORTCUTS_PER_FOLDER,
+        )
+        .expect_err("unreadable link must fail the read");
+        assert!(
+            error.to_string().starts_with("applications read failed at"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn keeps_the_folder_order_before_crossing_into_siblings() {
+        let _apartment = Apartment::new();
+        let scratch = Scratch::new("order");
+        let (first, second) = (scratch.root.join("A"), scratch.root.join("B"));
+        let deep = first.join("deep");
+        std::fs::create_dir_all(&deep).expect("first tree");
+        std::fs::create_dir_all(&second).expect("second tree");
+        for (folder, name, target) in [
+            (&first, "a", "a.exe"),
+            (&deep, "one", "one.exe"),
+            (&second, "two", "two.exe"),
+        ] {
+            let exe = scratch.root.join(target);
+            touch(&exe);
+            link(folder, name, &exe, None);
+        }
+        // The baseline recurses into `A/deep` before visiting `B`, so a limit
+        // of two keeps `A/a.lnk` and `A/deep/one.lnk`, not `B/two.lnk`.
+        let entries = start_menu_in(std::slice::from_ref(&scratch.root), 2).expect("readable tree");
+        let names: Vec<&str> = entries.iter().map(|entry| field(entry, "name")).collect();
+        assert_eq!(names, vec!["a", "one"]);
+    }
+
+    #[test]
+    fn dedupes_paths_that_only_differ_in_case() {
+        let entries = vec![
+            json!({ "name": "Demo", "path": r"C:\Apps\a.exe" }),
+            json!({ "name": "Demo", "path": r"C:\apps\b.exe" }),
+            json!({ "name": "Demo", "path": r"c:\Apps\A.exe" }),
+        ];
+        // `Sort-Object name,path -Unique` treats the two `a.exe` spellings as
+        // one entry, so the sorted list has to keep them adjacent.
+        let kept = finish(entries);
+        assert_eq!(kept.len(), 2);
+        let paths: Vec<&str> = kept.iter().map(|entry| field(entry, "path")).collect();
+        assert!(paths.iter().any(|path| path.ends_with("b.exe")));
+    }
+
+    #[test]
+    fn failures_name_the_stage_and_the_platform_code() {
+        assert_eq!(
+            failed("App Paths open", win32(5)).to_string(),
+            "applications read failed at App Paths open: Win32 error 5"
+        );
+        // A missing Start menu folder must fail the read rather than look empty.
+        let error = shortcuts(&PathBuf::from(r"Z:\yu-missing-start-menu"), 10)
+            .expect_err("missing folder must fail");
+        assert!(
+            error
+                .to_string()
+                .starts_with("applications read failed at Start menu scan"),
+            "unexpected error: {error}"
         );
     }
 
