@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1 外部复核未通过；复核提出的修复已提交（`fae7cf8`…`8fa537f`），等待外部复核。阶段 2～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1 外部复核未通过；两轮复查提出的修复均已提交（`fae7cf8`…`8fa537f`、`c385db7`、`ec405dc`），等待外部复核。阶段 2～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -329,7 +329,7 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 - `native/knowledge/src/protocol.rs` `ready_frame` 的 `schema` 改为对象 `{"knowledge": KNOWLEDGE_SCHEMA, "profile": PROFILE_SCHEMA}`，与 `src/shared/knowledge.ts` 的 `ready.schema: { knowledge, profile }` 一致；协议版本仍为 1，方法表未变。真实helper与夹具均断言该对象结构（`tests/process.rs` 的 `Helper::start`、`loop.test.ts` 的 `status()`）。
 
 
-实现提交：`c385db7`（`fix(knowledge): enforce byte framing and validate response envelopes`，5 个文件：`src/main/knowledge/host.ts`、`host.test.ts`、`loop.test.ts`、`native/knowledge/src/protocol.rs`、`native/knowledge/tests/process.rs`）；本文档记录随后的 docs 提交。状态：阶段 1 修复已提交，待外部 Codex 复核，阶段 2～7 未开始。
+实现提交：`c385db7`（`fix(knowledge): enforce byte framing and validate response envelopes`，5 个文件：`src/main/knowledge/host.ts`、`host.test.ts`、`loop.test.ts`、`native/knowledge/src/protocol.rs`、`native/knowledge/tests/process.rs`），本节与验证表由 `ec405dc` 记录，其后的 docs 提交只补交付哈希。状态：阶段 1 修复已提交，待外部 Codex 复核，阶段 2～7 未开始。
 ### 第二次复核修复后验证（2026-11-05 第三轮，实际命令与退出码）
 
 | 命令 | 退出码 | 结果 |
