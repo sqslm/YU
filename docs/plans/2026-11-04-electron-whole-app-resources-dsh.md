@@ -63,7 +63,7 @@
 
 ### 6.2 基线与归因
 
-基线 `idle-60s` 中位私有驻留 **101 036 032 B（96.4 MiB）**，角色分布 main 45.7 + renderer 25.7（**只有 Pill 一个**）+ utility 14.9（两个）+ gpu 8.7 + other 1.4 MiB；`settled-4s` 簇 105.3 MiB。启动即创建 Pill 渲染器（`ensureBarWindow()` 在 boot 无条件执行，`show:false` + `backgroundThrottling:false`），它同时拖着一个 spare utility 进程并抬高 main/gpu；hub 渲染器早已在隐藏 15 s 后被 `hubRetireTimer` 销毁，所以**能省的只有 Pill**。临时删掉 boot 的无条件创建做消融，上界 66.3 MiB（−37%~−39%），与最终实现吻合。
+基线 `idle-60s` 中位私有驻留 **101 036 032 B（96.4 MiB）**，角色分布 main 45.7 + renderer 25.7（**只有 Pill 一个**）+ utility 14.9（两个）+ gpu 8.7 + other 1.4 MiB；`settled-4s` 簇 105.3 MiB。启动即创建 Pill 渲染器（`ensureBarWindow()` 在 boot 无条件执行，`show:false` + `backgroundThrottling:false`），它同时拖着一个 spare utility 进程并抬高 main/gpu；hub 渲染器早已在隐藏 15 s 后被 `hubRetireTimer` 销毁，所以**能省的只有 Pill**。临时删掉 boot 的无条件创建做**早期消融探索**，上界 66.3 MiB（−37%~−39%），与最终实现吻合；该消融只是一次临时改动后的手工观察，未进入证据文件，正式数字以 §6.4 为准。
 
 ### 6.3 最小改动
 
@@ -80,28 +80,29 @@
 | 托盘空闲 60 s 私有驻留 p50 | 101 036 032 B（96.4 MiB） | 61 313 024 B（58.5 MiB） | **−39.7 MB / −37.9 MiB / −39.32%** |
 | 其中 main / renderer / utility / gpu | 45.7 / 25.7 / 14.9 / 8.7 MiB | 42.8 / 0 / 6.8 / 7.6 MiB | renderer 归零、utility 少一个 |
 | 启动后 4 s（`settled-4s`，不参与门槛） | 105.3 MiB | 67.9 MiB | −35.5% |
-| 20 次开关后静止 | 104 251 392 B（99.4 MiB） | 73 150 464 B（69.8 MiB） | −30.0%，静止时 renderer 0 个 |
+| 20 次开关后静止 | 104 251 392 B（99.4 MiB） | 73 150 464 B（69.8 MiB） | −29.83%，静止时 renderer 0 个 |
 | 20 次开关的累积趋势（第 16–20 轮均值 vs 第 1–5 轮） | −8.82% | −10.39% | 未随开关次数增长 |
+| 开关后静止相对自身新实例空闲 | +3.18%（96.4 → 99.4 MiB） | +19.31%（58.5 → 69.8 MiB） | 候选抬升 +11.2 MiB，集中在 main（42.8 → 49.9）与 gpu（7.6 → 11.8） |
 | 首次开窗 p50 / p95 | 1096.10 / 1110.80 ms | 1097.37 / 1199.75 ms | +1.3 / **+88.95 ms**（门槛 ≤ +100） |
 | 重开 p50 | 1071.89 ms | 1073.54 ms | +1.7 ms |
 | 空闲 CPU（62 s 窗、16 核） | 0.875 ms | 0.156 ms | 未升高 |
-| Pill 生命周期（自检 3 次 take） | 无回收日志，同一 renderer `[37636]` | 回收 3 次，renderer `[41292, 50440, 55164]` | 创建→回收→再创建 |
+| Pill 生命周期（`--pill` 场景，observe 130 s、repeat 45 s） | 无回收日志，同一 renderer `[37636]`，`takes=1` | 回收 3 次，renderer `[41292, 50440, 55164]`，`takes=3`＝1 次初始 dictation（同文本去重为 null）+ 2 次 `[selftest] repeat →` | 创建→回收→再创建 |
 | 生命周期 renderer（hub 场景） | startup `[48216]` 隐藏后仍在 | startup `[]` | Pill 不再常驻 |
 
-门槛判定（全部来自证据 `thresholds`）：私有驻留 −39.32% 且 −37.9 MiB（要求 ≤ −15% 且 ≤ −30 MiB）；同实例 20 次开关无持续增长（趋势 −10.39%，且开关后静止树 69.8 MiB < 基线 99.4 MiB，静止 renderer 0 个）；开窗 P95 回退 +88.95 ms（≤ +100 ms）；Pill 创建后确实被回收并再次创建（基线侧为 0 次回收、startup renderer 仍在）→ 四项全过，`decision=adopted`。证据 `tests/yu-v2/evidence/electron-whole-app-resources-20261104.json`（version 2，含两侧每次启动、进程归属、原始样本、分簇、周期序列、构建身份、可比性、归因与门槛）。
+门槛判定（全部来自证据 `thresholds`）：私有驻留 −39.32% 且 −37.9 MiB（要求 ≤ −15% 且 ≤ −30 MiB）；同实例 20 次开关无持续增长（趋势 −10.39%，且开关后静止树 69.8 MiB < 基线 99.4 MiB，静止 renderer 0 个）；开窗 P95 回退 +88.95 ms（≤ +100 ms）；Pill 创建后确实被回收并再次创建（基线侧为 0 次回收、startup renderer 仍在）→ 四项全过，`decision=adopted`。证据 `tests/yu-v2/evidence/electron-whole-app-resources-20261104.json`（version 2，含两侧每次启动、进程归属、逐次原始读数 `idleSamples`/`settledSamples`/`openSamples`/`reopenSamples`/`toggleCycles`、分簇、周期序列、构建身份、可比性、归因与门槛）。
 
-**读数说明：**单位是二进制 MiB（1 MiB = 1 048 576 B），括号里的十进制 MB 与 MiB 不同，上一版把 73.3/70.9 的十进制 MB 写成 MiB 已在本版修正；本次开窗 p95 的上界 +100 ms 是唯一与延迟有关的门槛，实测 +88.95 ms 虽在界内但已接近，换成忙机可能翻转，见 §6.6。
+**读数说明：**单位是二进制 MiB（1 MiB = 1 048 576 B），括号里的十进制 MB 与 MiB 不同，上一版把 73.3/70.9 的十进制 MB 写成 MiB 已在本版修正；本次开窗 p95 的上界 +100 ms 是唯一与延迟有关的门槛，实测 +88.95 ms 虽在界内但已接近；n=21 时最近秩的 p95 落在**第二个最慢样本**上（基线 1110.801、候选 1199.752，两侧各只有一个 >2 s 的冷启动异常值被排除），所以这 +88.95 ms 由一个样本决定，见 §6.6。开关后的 +19.31% 是单快照（每次独立启动的 `idle-60s` 与同实例末次快照相比），基线同类值是 +3.18%；候选的抬升集中在 main 与 gpu，可能来自设置页首载、窗口 churn 与 GC 时点，本阶段未解释，但总量门槛不受影响（69.8 MiB 仍远低于基线 99.4 MiB）。另：两侧 `build.rev` 都记作测量时的 HEAD（`23efa58`），基线实际是 `0cb30d9` 的源码回工作树后重建，真正区分两侧的是 `entrySha256`（`2561ea29…` vs `b52966db…`）与 `build.source` 文案——**rev 相等不代表同一份代码**。
 
 ### 6.5 功能与测试
 
 - 真实链路自检（`TYPELESS_SELFTEST=1` + `scripts/mock-openai.mjs` + 独立资料 + `--background`，须 `env -u ELECTRON_RUN_AS_NODE`，否则 electron 以纯 Node 运行）：`[bar] capture input=48000Hz … capture warm` 说明 Pill 在真实录入流程中按需创建并完成采集，`[selftest] multimodal → {"status":"completed","wordCount":19}` 说明整条 take 走通并写库；`dictation/ask/ask+web → null` 属同文本去重。Pill 场景进一步证明回收后下一次 take 仍能重新创建（`[selftest] repeat →` 后仍出现 `capture warm`）。
 - 未打包运行需把 `native/bin`、`resources` 放进 `out/main`（`app.getAppPath()` 指向 `out/main`），否则 helper 全 `ENOENT`、托盘图标加载失败；两侧都在补齐资产后测量，helper 计入证据，未靠漏计子进程达标。
-验证（本轮最后一次全量，逐条记退出码）：`pnpm typecheck` → 0；`pnpm exec vitest run src/main/bar-retire.test.ts src/main/note-audio.test.ts src/main/pipeline.test.ts src/main/resources.test.ts` → 0（4 文件 / 165 用例）；`pnpm test` → 0（241 文件通过 / 3 跳过，3562 用例通过 / 8 跳过，97.50 s）；`pnpm build` → 0（12.48 s）。
+验证（本轮最后一次全量，逐条记退出码）：`pnpm typecheck` → 0；`pnpm exec vitest run src/main/bar-retire.test.ts src/main/note-audio.test.ts src/main/pipeline.test.ts` → 0（3 文件 / 159 用例；含 `resources.test.ts` 时 4 文件 / 165 用例同样为 0）；`pnpm test` → 0（241 文件通过 / 3 跳过，3562 用例通过 / 8 跳过）；`pnpm build` → 0（12.28 s）。
 
 ### 6.6 未测边界
 
-真实麦克风录音与音频设备切换、托盘菜单交互与全局热键（会与用户实例冲突）、唤醒词与本地 ASR 模型、聊天/笔记/网络等待、锁屏与远程桌面、多显示器与不同 DPI、`closeBehavior=quit`、小时级长跑的碎片与句柄增长；`backgroundThrottling:false` 能否去掉未验证；Pill 回收后第一次 reveal 的**视觉空白时长未量化**（只以整次 take 仍能完成 + 重开 p50 未退化为边界）；开窗 p95 余量只有 11 ms，忙机或冷页缓存下可能越过门槛；基线侧的 Pill「未被回收」由 `[bar]` 无回收日志 + startup renderer 存活证明，基线无法运行 `TYPELESS_SELFTEST_STAY`（该钩子是本轮新增），因此它的对比证据是生命周期场景而不是同一 3 次 take 的时间线。
+真实麦克风录音与音频设备切换、托盘菜单交互与全局热键（会与用户实例冲突）、唤醒词与本地 ASR 模型、聊天/笔记/网络等待、锁屏与远程桌面、多显示器与不同 DPI、`closeBehavior=quit`、小时级长跑的碎片与句柄增长；`backgroundThrottling:false` 能否去掉未验证；随记播放标志除页面回复外还有「按剩余时长兜底清除」的定时器（`trackNoteAudioPlayback`），工具起播且笔记页未挂载时不再把 Pill 永久钉住，但「页面既不上报结束、时长也不可靠（流式/变速）」的组合未测；Pill 回收后第一次 reveal 的**视觉空白时长未量化**（只以整次 take 仍能完成 + 重开 p50 未退化为边界）；开窗 p95 余量只有 11 ms，且 n=21 时 p95 取第二个最慢样本（一个 1199.752 ms 的样本决定该值），忙机或冷页缓存下可能越过门槛；基线侧的 Pill「未被回收」由 `[bar]` 无回收日志 + startup renderer 存活证明，基线无法运行 `TYPELESS_SELFTEST_STAY`（该钩子是本轮新增），因此它的对比证据是生命周期场景而不是同一 3 次 take 的时间线。
 
 ### 6.7 清理与提交
 
-`%TEMP%\yu-app-*` 隔离资料、`out/main` 下复制的资产、`/tmp/t18-*.log`、`.tmp-measure18.sh` 均按本轮自有产物清理；两侧原始样本已并入证据（`/tmp/app-baseline4.json`、`/tmp/app-candidate4.json` 为过程产物，关键数字与分簇都在证据内）。提交见本轮 feat/docs 两个提交（不 push）。`restoreRunKey` 现在会删除本轮新增的登录项，只还原用户原有的值。
+`%TEMP%\yu-app-*` 隔离资料、`out/main` 下复制的资产、`/tmp/t18-*.log`、`.tmp-measure18.sh` 均按本轮自有产物清理；两侧原始样本已并入证据（`baseline.idleSamples`/`settledSamples`/`openSamples`/`reopenSamples`/`toggleCycles` 与 `candidate` 同名字段，均为逐次读数）；`%TEMP%` 下的 run 文件是过程产物，可重建，不入库。提交见本轮 feat/docs 两个提交（不 push）。`restoreRunKey` 现在会删除本轮新增的登录项，只还原用户原有的值。

@@ -1,7 +1,7 @@
 {
   "kind": "electron-whole-app-resources",
   "version": 2,
-  "generatedAt": "2026-11-04T11:58:31.824Z",
+  "generatedAt": "2026-11-04T12:13:52.127Z",
   "scope": {
     "included": [
       "whole application tree: main, gpu, utility, renderer, crashpad, zygote, conhost and the Rust helpers",
@@ -411,6 +411,180 @@
         "committedBytes": 2170880
       }
     },
+    "idleSamples": [
+      101134336,
+      101036032,
+      99065856
+    ],
+    "settledSamples": [
+      115408896,
+      109871104,
+      113881088,
+      112893952,
+      110235648,
+      110301184,
+      112652288,
+      112783360,
+      110399488,
+      109731840,
+      109752320,
+      109723648,
+      115363840,
+      112545792,
+      115408896,
+      113176576,
+      109985792,
+      110047232,
+      109674496,
+      115437568
+    ],
+    "openSamples": [
+      7229,
+      1094.541,
+      1104.486,
+      1098.486,
+      1072.158,
+      1094.453,
+      1071.579,
+      1076.697,
+      1104.255,
+      1096.104,
+      1079.193,
+      1104.263,
+      1093.723,
+      1096.938,
+      1076.923,
+      1109.098,
+      1100.16,
+      1097.806,
+      1085.039,
+      1110.801,
+      1073.644
+    ],
+    "reopenSamples": [
+      1104.915,
+      1067.792,
+      1087.855,
+      1071.888,
+      1176.91,
+      1093.648,
+      1075.027,
+      1041.802,
+      1083.638,
+      1058.761,
+      1057.443,
+      1090.118,
+      1074.011,
+      1047.655,
+      1055.487,
+      1071.734,
+      1053.417,
+      1075.159,
+      1046.578,
+      1105.078
+    ],
+    "toggleCycles": [
+      {
+        "cycle": 1,
+        "privateResidentBytes": 186892288,
+        "renderers": 2
+      },
+      {
+        "cycle": 2,
+        "privateResidentBytes": 187269120,
+        "renderers": 2
+      },
+      {
+        "cycle": 3,
+        "privateResidentBytes": 185483264,
+        "renderers": 2
+      },
+      {
+        "cycle": 4,
+        "privateResidentBytes": 184123392,
+        "renderers": 2
+      },
+      {
+        "cycle": 5,
+        "privateResidentBytes": 184291328,
+        "renderers": 2
+      },
+      {
+        "cycle": 6,
+        "privateResidentBytes": 175235072,
+        "renderers": 2
+      },
+      {
+        "cycle": 7,
+        "privateResidentBytes": 165781504,
+        "renderers": 2
+      },
+      {
+        "cycle": 8,
+        "privateResidentBytes": 167383040,
+        "renderers": 2
+      },
+      {
+        "cycle": 9,
+        "privateResidentBytes": 168677376,
+        "renderers": 2
+      },
+      {
+        "cycle": 10,
+        "privateResidentBytes": 168792064,
+        "renderers": 2
+      },
+      {
+        "cycle": 11,
+        "privateResidentBytes": 169758720,
+        "renderers": 2
+      },
+      {
+        "cycle": 12,
+        "privateResidentBytes": 167575552,
+        "renderers": 2
+      },
+      {
+        "cycle": 13,
+        "privateResidentBytes": 167411712,
+        "renderers": 2
+      },
+      {
+        "cycle": 14,
+        "privateResidentBytes": 167223296,
+        "renderers": 2
+      },
+      {
+        "cycle": 15,
+        "privateResidentBytes": 168415232,
+        "renderers": 2
+      },
+      {
+        "cycle": 16,
+        "privateResidentBytes": 169074688,
+        "renderers": 2
+      },
+      {
+        "cycle": 17,
+        "privateResidentBytes": 169467904,
+        "renderers": 2
+      },
+      {
+        "cycle": 18,
+        "privateResidentBytes": 169775104,
+        "renderers": 2
+      },
+      {
+        "cycle": 19,
+        "privateResidentBytes": 168718336,
+        "renderers": 2
+      },
+      {
+        "cycle": 20,
+        "privateResidentBytes": 169152512,
+        "renderers": 2
+      }
+    ],
     "open": {
       "count": 21,
       "min": 1071.579,
@@ -779,6 +953,180 @@
         "committedBytes": 2162688
       }
     },
+    "idleSamples": [
+      61313024,
+      60870656,
+      63356928
+    ],
+    "settledSamples": [
+      70754304,
+      71847936,
+      70430720,
+      71200768,
+      71065600,
+      71385088,
+      73564160,
+      71245824,
+      70668288,
+      71147520,
+      71225344,
+      71081984,
+      74018816,
+      71421952,
+      71065600,
+      71172096,
+      70955008,
+      70569984,
+      71315456,
+      71122944
+    ],
+    "openSamples": [
+      7211,
+      1123.729,
+      1079.961,
+      1127.569,
+      1092.598,
+      1091.661,
+      1094.855,
+      1090.377,
+      1093.943,
+      1097.371,
+      1078.419,
+      1094.72,
+      1114.645,
+      1106.933,
+      1145.852,
+      1085.986,
+      1098.027,
+      1078.266,
+      1098.018,
+      1128.772,
+      1199.752
+    ],
+    "reopenSamples": [
+      1077.95,
+      1074.285,
+      1082.666,
+      1054.554,
+      1068.702,
+      1066.236,
+      1054.469,
+      1110.567,
+      1116.191,
+      1087.905,
+      1112.264,
+      1047.709,
+      1070.157,
+      1060.43,
+      1138.138,
+      1094.531,
+      1073.373,
+      1071.556,
+      1092.685,
+      1073.543
+    ],
+    "toggleCycles": [
+      {
+        "cycle": 1,
+        "privateResidentBytes": 157437952,
+        "renderers": 1
+      },
+      {
+        "cycle": 2,
+        "privateResidentBytes": 159625216,
+        "renderers": 1
+      },
+      {
+        "cycle": 3,
+        "privateResidentBytes": 156434432,
+        "renderers": 1
+      },
+      {
+        "cycle": 4,
+        "privateResidentBytes": 154959872,
+        "renderers": 1
+      },
+      {
+        "cycle": 5,
+        "privateResidentBytes": 155480064,
+        "renderers": 1
+      },
+      {
+        "cycle": 6,
+        "privateResidentBytes": 146382848,
+        "renderers": 1
+      },
+      {
+        "cycle": 7,
+        "privateResidentBytes": 136650752,
+        "renderers": 1
+      },
+      {
+        "cycle": 8,
+        "privateResidentBytes": 138031104,
+        "renderers": 1
+      },
+      {
+        "cycle": 9,
+        "privateResidentBytes": 139313152,
+        "renderers": 1
+      },
+      {
+        "cycle": 10,
+        "privateResidentBytes": 139591680,
+        "renderers": 1
+      },
+      {
+        "cycle": 11,
+        "privateResidentBytes": 140619776,
+        "renderers": 1
+      },
+      {
+        "cycle": 12,
+        "privateResidentBytes": 138313728,
+        "renderers": 1
+      },
+      {
+        "cycle": 13,
+        "privateResidentBytes": 138661888,
+        "renderers": 1
+      },
+      {
+        "cycle": 14,
+        "privateResidentBytes": 138444800,
+        "renderers": 1
+      },
+      {
+        "cycle": 15,
+        "privateResidentBytes": 139841536,
+        "renderers": 1
+      },
+      {
+        "cycle": 16,
+        "privateResidentBytes": 140476416,
+        "renderers": 1
+      },
+      {
+        "cycle": 17,
+        "privateResidentBytes": 140898304,
+        "renderers": 1
+      },
+      {
+        "cycle": 18,
+        "privateResidentBytes": 141037568,
+        "renderers": 1
+      },
+      {
+        "cycle": 19,
+        "privateResidentBytes": 139829248,
+        "renderers": 1
+      },
+      {
+        "cycle": 20,
+        "privateResidentBytes": 140230656,
+        "renderers": 1
+      }
+    ],
     "open": {
       "count": 21,
       "min": 1078.266,
@@ -911,7 +1259,11 @@
         "retirements": 0,
         "distinctRenderers": [
           37636
-        ]
+        ],
+        "takes": 1,
+        "observeMs": 130000,
+        "repeatMs": 45000,
+        "aliveAtEnd": false
       },
       "candidate": {
         "retirements": 3,
@@ -919,7 +1271,11 @@
           41292,
           50440,
           55164
-        ]
+        ],
+        "takes": 3,
+        "observeMs": 130000,
+        "repeatMs": 45000,
+        "aliveAtEnd": false
       }
     },
     "rendererLifecycle": {
@@ -958,6 +1314,7 @@
       "baselineAfterIdleBytes": 104251392,
       "afterIdleRenderers": 0,
       "afterIdleVsFreshIdlePercent": 19.31,
+      "baselineAfterIdleVsFreshIdlePercent": 3.18,
       "met": true
     },
     "openLatency": {

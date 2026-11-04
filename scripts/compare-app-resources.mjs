@@ -39,6 +39,20 @@ function clusterOf(run, phase) {
   return run.trayIdle?.clusters?.[phase] ?? { count: 0, summary: { p50: null, p95: null }, unavailable: 0, byRole: {}, last: null }
 }
 
+/**
+ * Snapshot totals per phase, so the evidence keeps the raw readings instead of
+ * only the percentiles the thresholds read.
+ */
+function phaseTotals(run, phase) {
+  return (run.trayIdle?.samples ?? [])
+    .filter((sample) => sample.phase === phase)
+    .map((sample) => (sample.processes ?? []).reduce((sum, entry) => sum + (entry.privateResidentBytes ?? 0), 0))
+}
+
+function numbers(list) {
+  return (list ?? []).filter((value) => typeof value === 'number')
+}
+
 function growthPercent(from, to) {
   if (typeof from !== 'number' || typeof to !== 'number' || from === 0) return null
   return Math.round(((to - from) / from) * 10000) / 100
@@ -180,6 +194,7 @@ const thresholds = {
     baselineAfterIdleBytes: baselineAfterIdle ?? null,
     afterIdleRenderers: lastRenderers ?? null,
     afterIdleVsFreshIdlePercent: growthPercent(candidateMedian, afterIdle),
+    baselineAfterIdleVsFreshIdlePercent: growthPercent(baselineMedian, baselineAfterIdle),
     met: growthMet
   },
   openLatency: {
@@ -230,6 +245,11 @@ const evidence = {
     idle: baselineIdle,
     settled: baselineSettled,
     groups: baselineIdle.byRole,
+    idleSamples: phaseTotals(baseline, IDLE),
+    settledSamples: phaseTotals(baseline, SETTLED),
+    openSamples: numbers(baseline.firstOpen?.samples),
+    reopenSamples: numbers(baseline.toggles?.reopen),
+    toggleCycles: (baseline.toggles?.cycles ?? []).map((cycle) => ({ cycle: cycle.cycle, privateResidentBytes: cycle.privateResidentBytes ?? null, renderers: cycle.renderers ?? null })),
     open: openBaseline,
     reopen: baseline.toggles?.summary ?? null,
     afterToggles: baseline.toggles?.memory?.totals ?? null,
@@ -240,6 +260,11 @@ const evidence = {
     idle: candidateIdle,
     settled: candidateSettled,
     groups: candidateIdle.byRole,
+    idleSamples: phaseTotals(candidate, IDLE),
+    settledSamples: phaseTotals(candidate, SETTLED),
+    openSamples: numbers(candidate.firstOpen?.samples),
+    reopenSamples: numbers(candidate.toggles?.reopen),
+    toggleCycles: (candidate.toggles?.cycles ?? []).map((cycle) => ({ cycle: cycle.cycle, privateResidentBytes: cycle.privateResidentBytes ?? null, renderers: cycle.renderers ?? null })),
     open: openCandidate,
     reopen: candidate.toggles?.summary ?? null,
     afterToggles: candidate.toggles?.memory?.totals ?? null,
@@ -272,8 +297,22 @@ const evidence = {
     baselineTogglesTrendPercent: baselineTrend,
     idleCpuMs: { baseline: baseline.trayIdle?.cpu?.totalMs ?? null, candidate: candidate.trayIdle?.cpu?.totalMs ?? null },
     pill: {
-      baseline: { retirements: baseline.pill?.retirements ?? null, distinctRenderers: baseline.pill?.distinctRenderers ?? null },
-      candidate: { retirements: candidate.pill?.retirements ?? null, distinctRenderers: candidate.pill?.distinctRenderers ?? null }
+      baseline: {
+        retirements: baseline.pill?.retirements ?? null,
+        distinctRenderers: baseline.pill?.distinctRenderers ?? null,
+        takes: baseline.pill?.takes ?? null,
+        observeMs: baseline.pill?.observeMs ?? null,
+        repeatMs: baseline.pill?.repeatMs ?? null,
+        aliveAtEnd: baseline.pill?.aliveAtEnd ?? null
+      },
+      candidate: {
+        retirements: candidate.pill?.retirements ?? null,
+        distinctRenderers: candidate.pill?.distinctRenderers ?? null,
+        takes: candidate.pill?.takes ?? null,
+        observeMs: candidate.pill?.observeMs ?? null,
+        repeatMs: candidate.pill?.repeatMs ?? null,
+        aliveAtEnd: candidate.pill?.aliveAtEnd ?? null
+      }
     },
     rendererLifecycle: {
       stages: { baseline: (baseline.lifecycle ?? []).length, candidate: (candidate.lifecycle ?? []).length },
