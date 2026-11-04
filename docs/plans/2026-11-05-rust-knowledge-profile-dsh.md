@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1 已实现，待外部 Codex 复核。阶段 2～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1 外部复核未通过，修复中。阶段 2～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -166,13 +166,13 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 | Rust→宿主模型请求 | `{v:1,type:"model.request",id,parentId,profileId,effort,messages,maxTokens}` |
 | 宿主→Rust 模型结果 | `{v:1,type:"model.result",id,ok:true,text}` 或 `{...ok:false,error}` |
 
-模型子请求 `id`（`m<N>`）与父请求 `id` 分开；过期、取消或被替换进程的迟到回包不结算任何在途请求。`TS`/`Rust` 共用 `src/shared/knowledge.ts` 的固定夹具 `KNOWLEDGE_FIXTURES` 验证结构。
+模型子请求 `id`（`m<N>`）与父请求 `id` 分开；宿主只在该父请求仍于当前进程代际在途时才发起模型调用，重复子 ID 丢弃，父请求结束、超时、`cancel`、停机或进程退出都会 abort 对应模型并清理映射；旧进程的 `ready`/`result`/`model.request` 与重启后同子 ID 的迟到回包不结算任何在途请求（2026-11-05 复核后修复，见文末）。`TS`/`Rust` 共用 `src/shared/knowledge.ts` 的固定夹具 `KNOWLEDGE_FIXTURES` 验证结构。
 
 方法表（`params` → `result`）：
 
 | method | params | result |
 | --- | --- | --- |
-| `status` | `{}` | `{version,schema:{knowledge,profile},opened,fts5,trigram}`；不创建目录或数据库 |
+| `status` | `{}` | `{version,schema:{knowledge,profile},opened,fts5,trigram}`；不创建目录或数据库。宿主在停机时本地返回 `{running:false,schema:null,fts5:null,trigram:null}`，不启动进程 |
 | `shutdown` | `{}` | `{stopping:true}` 后进程以 0 退出 |
 | `source.save` | `{kind,originRef,locator?,title?,version?,scope?,readAt?,text}` | `KnowledgeSource`（`fingerprint` 由 Rust 计算，`text` 只在本次内存使用） |
 | `source.get` | `{id}` | `KnowledgeSource` |
@@ -181,24 +181,24 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 | `card.update` | `{id,...同上任一字段,edited?}` | `KnowledgeCard`（未显式传 `edited` 时记为人工编辑） |
 | `card.get` | `{id}` | `KnowledgeCard` |
 | `card.delete` | `{id}` | `{removed:true}`（写排除信息，失败不留半张卡片） |
-| `card.list` | `{offset?,limit?}` | `{items,total,offset,limit}` |
+| `card.list` | `{offset?,limit?}` | `{items,total,offset,limit,hasMore,nextOffset}`，`items` 为 `CardSummary`（无正文，含 `bodyChars`） |
 | `card.search` | `{query,offset?,limit?}` | 同上；空查询等价 `card.list` |
 | `profile.save` | `{dimension,value,category,origin?,pinned?,corrected?,evidence?}` | `ProfileItem`（`origin:"auto"` 不覆盖固定/已更正项） |
 | `profile.update` | `{id,dimension?,value?,category?,pinned?,corrected?,evidence?}` | `ProfileItem` |
 | `profile.get` | `{id}` | `ProfileItem` |
 | `profile.delete` | `{id}` | `{removed:true}`（写排除信息） |
-| `profile.list` | `{offset?,limit?}` | `{items,total,offset,limit}` |
+| `profile.list` | `{offset?,limit?}` | `{items,total,offset,limit,hasMore,nextOffset}` |
 
 错误码：`invalid_request`、`unsupported_version`、`unknown_method`、`invalid_params`、`too_large`、`not_found`、`protected_item`、`storage_error`、`storage_schema_newer`、`cancelled`、`timeout`、`model_unavailable`、`internal`。
 
-固定上限：单帧 2 MiB（UTF-8）、`id` 128 字符、标题 200、摘要 2000、正文 200000（超限报错，不静默截断）、搜索词 200、主题 32×100、分页默认 30/最大 100；普通操作期限 15 秒、含模型回调的父操作期限 120 秒（总期限，不按消息刷新）；空闲退出 120 秒（`YU_KNOWLEDGE_IDLE_MS` 仅供测试注入更短期限）。
+固定上限：单帧 2 MiB（按实际 UTF-8 字节，含封装）、`id` 128 字符、标题 200、摘要 2000、正文 200000（超限报错，不静默截断）、搜索词 200、主题 32×100、分页默认 30/最大 100；出站列表页另受 `RESULT_BUDGET_BYTES`（1 MiB 序列化字节）约束，按整条装入并显式给出 `hasMore`/`nextOffset`，装不下的单条详情返回有界 `too_large`，不拖累其他请求；普通操作期限 15 秒、含模型回调的父操作期限 120 秒（总期限，从调用开始计，覆盖 spawn/`ready`/执行，不按消息刷新）；空闲退出 120 秒（`YU_KNOWLEDGE_IDLE_MS` 仅供测试注入更短期限）。
 
 ### 数据根、schema 与边界
 
 - 数据根由主进程计算：打包模式 `dirname(app.getPath('exe'))`，开发模式 `app.getAppPath()`，经 `--root` 在初始化时绑定；renderer 与资料内容不能指定。库文件为 `<root>/data/knowledge/knowledge.db` 与 `<root>/data/profile/profile.db`。
 - `knowledge.db`（`user_version = 1`）：`sources`、`cards`、`card_sources`、`cards_fts`（FTS5 `tokenize='trigram'`）、`exclusions`。`profile.db`（`user_version = 1`）：`profile_items`、`profile_evidence`、`exclusions`。建表与版本号在同一事务内完成；遇到比程序更新的 `user_version` 以 `storage_schema_newer` 拒绝，不降级、不重建。
 - 两库与原 `chats.db`、随记存储、Mem0 `assistant/style.db`、用户模型缓存完全独立；画像证据保存原来源引用，不依赖卡片，清空知识不级联清空画像。
-- 取消在提交点生效：`cards.rs` 3 处、`profile.rs` 3 处 `transaction.commit()` 前调用 `ensure_not_cancelled()`，取消后不会落库；已提交的写入如实返回结果，不虚报回滚。
+- 取消在提交点生效：`cards.rs` 3 处、`profile.rs` 3 处、`sources.rs` 2 处（`source.save`/`source.invalidate`，复核后补）在 `transaction.commit()` 前调用 `ensure_not_cancelled()`，取消后回滚不落库；已提交的写入如实返回结果，不虚报回滚。入口处检查不算数，真正生效的是提交点检查。
 - 搜索由 Rust 执行：`≥3` 字符走 FTS5 `MATCH`（查询串整体加引号，操作符一律当字面），标题/别名/主题命中优先于正文；`1～2` 字符与短查询走转义后的 `LIKE` 字面分支——实测 SQLite trigram 以 3 字符为索引粒度，`MATCH '"识图"'` 命中为空，这一点已写入 `store::probe_capabilities` 的注释与探针（探针改用 `"识图谱"`）。
 
 ### 依赖与许可证
@@ -207,13 +207,16 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 
 ### 改动
 
-- 新增 crate `native/knowledge/`：`Cargo.toml`、`.cargo/config.toml`（静态 CRT）、`Cargo.lock`、`src/{main,lib,protocol,store,util,sources,cards,profile,link,service}.rs`（2,737 行）、`tests/process.rs`（388 行）。
-- 新增 `src/shared/knowledge.ts`（290 行，契约与夹具）、`src/main/knowledge/host.ts`（378 行，进程与管道）、`src/main/knowledge/model.ts`（62 行，模型回调）、`src/main/knowledge/{host,model,host.integration}.test.ts`。
+- 新增 crate `native/knowledge/`：`Cargo.toml`、`.cargo/config.toml`（静态 CRT）、`Cargo.lock`、`src/{main,lib,protocol,store,util,sources,cards,profile,link,service}.rs`、`tests/process.rs`；复核后新增 `bin/fixture.rs`（`--features fixture` 才构建的闭环夹具，不打包、不在生产方法表内）。
+- 新增 `src/shared/knowledge.ts`（契约与夹具）、`src/main/knowledge/host.ts`（进程、管道、期限与代际）、`src/main/knowledge/model.ts`（模型回调）、`src/main/knowledge/{host,model,host.integration}.test.ts`，复核后新增 `src/main/knowledge/loop.test.ts`（真实 Rust 夹具闭环）。
 - 接入：`src/main/index.ts`（helper 实例、15 个 `knowledge:*`/`profile:*` 通道、资源统计、游戏模式与 `before-quit` 停止）、`src/main/resources.ts`（`knowledge` PID）、`src/main/ipc-trust.test.ts`（结构性校验：`index.ts` 不得直接使用 `ipcMain.handle/on`，15 个通道必须经 `handle()`）、`src/shared/api.ts` 与 `src/preload/index.ts`（有限类型化方法，不暴露 helper、路径、SQL 或 prompt）。
 - 构建与打包：`scripts/build-native.mjs` 增加 `knowledge`；`electron-builder.yml` 增加 `native/bin/yu-knowledge.exe` → `resources/native/yu-knowledge.exe`。
+- 复核轮改动：`protocol.rs`（`RESULT_BUDGET_BYTES` + `fit_page`）、`cards.rs`（`CardSummary` 列表与摘要查询）、`profile.rs`（分页字段）、`sources.rs`（提交点取消 + 正文字符上限）、`service.rs`（来源分支改用可变连接）、`lib.rs`（`write_answer` 出站越界降级）、`link.rs`（行尾修复）、`tests/process.rs`（`TempRoot` 守卫与 6 个真实边界回归）、`host.ts`（总期限、模型父子绑定、进程代际、本地 `status`）、`host.test.ts`（23 项）、`host.integration.test.ts`（8 项）、`loop.test.ts`（6 项）、`src/shared/knowledge.ts`（`KnowledgeCardSummary`/`hasMore`/`nextOffset`/`KnowledgeStatus.running`）。
 - 文档：README/README.en 各补一段底座说明并注明用户功能未开放；`THIRD_PARTY_NOTICES.md` 与 `licenses/` 新增条目。
 
 ### 验证（实际命令与结果）
+
+阶段 1 初次交付（2026-11-05 第一轮，HEAD 至 `2ea246f`）：
 
 | 命令 | 工作目录 | 结果 |
 | --- | --- | --- |
@@ -223,11 +226,39 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 | `pnpm exec vitest run src/main/knowledge/host.test.ts src/main/knowledge/model.test.ts src/main/knowledge/host.integration.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 仓库根 | exit 0，5 files / 37 tests passed（host 13、model 8、integration 5、preload 3、ipc-trust 8） |
 | `pnpm typecheck` | 仓库根 | exit 0 |
 | `pnpm test:native` | 仓库根 | exit 0（7 个 crate 的 `cargo test --locked`） |
-| `pnpm test` | 仓库根 | exit 0，255 files / 3707 tests passed，8 skipped，98.27s（机器空闲时的一次完整运行） |
-| `pnpm build` | 仓库根 | exit 0（`electron-vite build` 完成，含 renderer/settings 4.69 MB 产物） |
-| `git diff --check` | 仓库根 | 无空白错误 |
+| `pnpm test` | 仓库根 | exit 0，255 files / 3707 tests passed，8 skipped，98.27s |
+| `pnpm build` | 仓库根 | exit 0（含 renderer/settings 4.69 MB 产物） |
+| `git diff --check` | 仓库根 | 无空白错误（当时对空工作区执行；本节修正为对 `4e077a3..HEAD` 复核，见第二轮） |
 
-真实辅助进程证据（非 mock）：`native/bin/yu-knowledge.exe`，2,302,464 字节，本次交付构件 SHA-256 `e1019b4b95f782a594e829d8472181c09868139ec17524a570bb3c6bd90db794`。实测同一份源码连续三次 `cargo build --release --locked` 会得到三个不同哈希（MSVC 链接器写入 PE 时间戳/调试信息），因此该哈希标识的是这一份构件文件，不是源码版本的指纹；重建后请重新取哈希。`native/knowledge/tests/process.rs` 用 `env!("CARGO_BIN_EXE_yu-knowledge")` 拉起同一二进制，覆盖：懒启动（`status` 不建目录，首次写库才建 `data/knowledge/knowledge.db`）、跨重启持久化、来源失效后卡片保留、卡片更新/删除、画像固定项保护、并行与拆包 UTF-8、垃圾帧、超长帧、未知方法与错误版本、`YU_KNOWLEDGE_IDLE_MS=400` 空闲退出、父进程 EOF 后自身退出（`tasklist` 校验 PID 已消失）。`src/main/knowledge/host.integration.test.ts` 用生产 `KnowledgeHost` 驱动该二进制完成同一批业务调用；`host.test.ts` 用真实管道的 Node stub 覆盖启动失败、ready、连续/并行、emoji 拆包、超时+取消后恢复、迟到回包、崩溃重启、空闲退出、`stop()` 与模型回调传递。Rust 侧 `probe_capabilities()` 在真实二进制初始化时实测 FTS5 与 trigram 均为可用（`ready` 帧回报 `fts5:true, trigram:true`）。
+第一轮报告宣称的构件哈希 `e1019b4b…` 标识的是那份文件；同一源码重复构建哈希会变（MSVC 写入 PE 时间戳），第二轮交付改用新哈希，见下表。
+
+## 阶段 1 复核修复后验证（2026-11-05 第二轮）
+
+| 命令 | 工作目录 | 结果 |
+| --- | --- | --- |
+| `cargo fmt -- --check` | `native/knowledge` | exit 0，无差异 |
+| `cargo test --locked` | `native/knowledge` | exit 0，25 passed（14 lib + 11 process），0 failed |
+| `cargo clippy --locked --all-targets -- -D warnings` | `native/knowledge` | exit 0，无告警 |
+| `cargo clippy --locked --all-targets --features fixture -- -D warnings` | `native/knowledge` | exit 0，含夹具 bin |
+| `pnpm exec vitest run src/main/knowledge/host.test.ts src/main/knowledge/loop.test.ts src/main/knowledge/host.integration.test.ts src/main/knowledge/model.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 仓库根 | exit 0，6 files / 56 tests passed（host 23、loop 6、integration 8、model 8、preload 3、ipc-trust 8），6.93s |
+| `pnpm typecheck` | 仓库根 | exit 0 |
+| `pnpm test:native` | 仓库根 | exit 0（7 个 crate，含 knowledge 的 14 + 11） |
+| `pnpm test` | 仓库根 | exit 0，256 files passed / 3 skipped（259），3726 tests passed / 8 skipped，98.97s（单独运行，无并行编译负载） |
+| `pnpm build` | 仓库根 | exit 0（renderer `settings-*.js` 4,687.76 kB） |
+| `git diff --check`（工作区） | 仓库根 | exit 0 |
+| `git diff --check 4e077a3..HEAD`（提交后） | 仓库根 | exit 0（`licenses/rust-vcpkg-0.2.15-MIT` 的 EOF 空行已清理） |
+
+构件与哈希（本轮重新测量）：
+
+| 文件 | 类型 | 字节 | SHA-256 |
+| --- | --- | --- | --- |
+| `native/bin/yu-knowledge.exe` | 交付用 release 构件（`scripts/build-native.mjs` 从 `cargo build --release --locked` 复制） | 2,318,336 | `42673ca79c8122837d90527123a20322e34395c0a41263fe0850237c293cfbd5` |
+| `native/knowledge/target/debug/yu-knowledge.exe` | `cargo test` 使用的 debug 二进制，**不是**交付件 | 3,406,848 | `35700f65c7478ce8e5dddd706a0eae9e7024f11e7f475ee07ebe5d22f88319d5` |
+| `native/knowledge/target/debug/yu-knowledge-fixture.exe` | 复核闭环用 debug 夹具（`--features fixture`，不打包） | 2,411,520 | `940851fceb214be3d1f3812952b3c186d4057e91c0bb0cf5d3be27ed21ef630c` |
+
+`native/bin/yu-knowledge.exe` 的哈希仍只在“这一份文件”意义上有效：MSVC 链接器写入 PE 时间戳，重复构建会得到不同哈希；重建后需重新取哈希。
+
+资源与回收：`native/knowledge/target` 1.1 GB（被 `.gitignore:69` 忽略，与其余 crate 保留编译缓存的做法一致）；`%TEMP%/yu-knowledge*` 在本轮结束前实测 **0 个**——`native/knowledge/tests/process.rs` 新增 `TempRoot` 守卫（`Drop` 删除目录，声明在 `Helper` 之前，进程先退出再删库），上一轮遗留的 45 个临时根已清理。
 
 ### 复核自查发现并修正的问题
 
@@ -238,9 +269,47 @@ DSH 每阶段报告：实际改动、验证命令与退出码、失败/未测项
 
 ### 失败与未测
 
+- 复核第一轮暴露的真实缺陷（非环境问题）：来源两个写入口缺提交点取消检查、宿主期限未覆盖 `ready`、模型子请求未绑定父请求与进程代际、`source.text` 缺字符上限、列表返回完整正文无出站长度检查。均已修复并有真实边界回归，见上两节。
+- 实测发现：SQLite trigram 以 3 字符为粒度，2 字 `MATCH` 无命中 → 探针改用 3 字样本，短查询走字面 `LIKE`（已在代码注释与本节记录）。
+- 实测发现：`changed` 通知帧会让按行读取的断言错位 → 测试辅助函数先跳过非结果帧再匹配 `id`（实现不改）。
+- 负载抖动（保留可复现依据）：全量 `pnpm test` 与 CPU 密集型任务并行时，出现过 `src/main/providers/asr/cn.test.ts`、`realtime.test.ts` 的本地 mock 连接失败与 `src/main/windows-native-browser-url.test.ts` 的 30 PID 观测失败；单独运行全绿。本轮另修正了本阶段新增测试自身过紧的期限（`late` 回包从 250 ms 改为 2500 ms，相应断言等待加长），属于测试侧对负载的鲁棒性，不是产品行为放宽。
+- 未测/未做（属阶段 2～7）：真实付费模型调用（本阶段外部 LLM 调用数 0）、自动输入挂钩、历史扫描、七类卡片提炼与语义去重、画像归纳、知识图谱、侧栏页面、聊天检索工具、待办/工作流联动、备份格式 v2、安装器与卸载交互。
+
 - 实测发现：SQLite trigram 以 3 字符为粒度，2 字 `MATCH` 无命中 → 探针改用 3 字样本，短查询走字面 `LIKE`（已在代码注释与本节记录）。
 - 实测发现：`changed` 通知帧会让按行读取的断言错位 → 测试辅助函数先跳过非结果帧再匹配 `id`（实现不改）。
 - 未测/未做（属阶段 2～7）：真实付费模型调用（本阶段外部 LLM 调用数 0，模型回调只用 stub 完成器验证通路）、自动输入挂钩、历史扫描、七类卡片提炼与语义去重、画像归纳、知识图谱、侧栏页面、聊天检索工具、待办/工作流联动、备份格式 v2、安装器与卸载交互。
+
+### 外部复核（2026-11-05，Codex thread `01a1a846-2e68-7062-89a9-bc2ed962ce86`，reportId `820b0b7b-423c-46ff-97ac-a0764c41a649`）
+
+结论：阶段 1 **未通过**。外部复跑了本次报告的 5 个 Vitest 文件（37 项）与 `cargo test --locked`（12 lib + 5 process），也核对了 `native/bin/yu-knowledge.exe` 的 SHA-256；但下列边界探针真实失败，测试通过不能代替未覆盖的行为：
+
+| 探针 | 外部实测输出 | 结论 |
+| --- | --- | --- |
+| `cancel_source_while_busy` | `{"probe":"cancel_source_while_busy","resultOk":true,"persisted":1}` | 外部连接持写锁时取消 `source.save` 仍然落库；`source.invalidate` 同样在取消后把状态改成 `invalid` |
+| `ready_deadline`（`requestMs=60`，对端永不发 `ready`） | `{"probe":"ready_deadline","requestMs":60,"observationAfterMs":300,"result":"still_pending"}` | `call()` 先 await `ready` 再建计时器，期限没覆盖握手 |
+| `parent_model_timeout` | `{"parentResult":"timeout","modelStarted":true,"modelAbortedAtParentTimeout":false,"modelAbortedAfterStop":true}` | 模型子请求只按子 ID 记录，父请求超时不 abort 模型 |
+| `source_text_limit` | `{"probe":"source_text_limit","characters":200001,"resultOk":true,"error":null}` | `source.text` 未做 200000 字符上限检查 |
+| `legal_cards_default_page`（11 张、每张 200000 字符正文） | `{"ok":false,"code":"internal","message":"the knowledge helper stopped"}` | 列表返回完整正文且无出站长度检查，合法输入即可撑爆单帧 |
+
+另有事实修正：`git diff --check 4e077a3..HEAD` 因 `licenses/rust-vcpkg-0.2.15-MIT:26` 的多余 EOF 空行退出 1；本节此前“所有取消都不会落库”“模型取消通路完整”“旧进程迟到回包不影响在途请求”属于**超出实测范围的概括**，实际验证范围见下文修复记录。
+
+### 复核问题修复（2026-11-05 第二轮）
+
+- A 取消原子性：`source.save`/`source.invalidate` 改为显式事务，写语句之后、`commit()` 之前检查取消 token；取消即回滚。六个卡片/画像写入口在写锁等待与既有 token 下复核过，规则不变。
+- B1 总期限：`call()` 在 await `ready` 之前创建唯一计时器，覆盖 spawn、`ready` 与执行，收到 `ready` 不重新计时；到期拒绝等待者、abort 该父请求的模型、写 `cancel`，未就绪且无在途请求时回收该进程，不伤及已替换的新进程。
+- B2 模型回调绑定：模型子请求同时记录父请求与 `child`/`generation`；父请求结束、超时、取消、Rust 等待结束、进程退出都 abort 并清理映射（`finally`）。无在途父请求、旧进程、重复子 ID 的 `model.request` 不发起模型调用。模型期限仍沿用父请求的 120 秒总预算，不在回调里另起可续期计时器。
+- B3 进程代际：stdout/stderr/stdin 回调先校验 `this.child === child && this.generation === generation`；旧 `ready` 不能解除新 ready，旧 `model.request` 不会写到新管道，重启后复用的子 ID 不受旧回包影响；单帧累积超过 2 MiB 或出现流错误（EPIPE、非法 JSON、`null`、非对象帧）走 `discard()` 清理该进程与等待者，不把异常抛进主进程。
+- C1 正文上限：来源正文在指纹计算与写入前统一按 200000 字符检查，超限返回 `too_large`，不截断。
+- C2 出站分页：`card.list`/`card.search` 返回 `CardSummary`（无正文、带 `bodyChars`）与 `hasMore`/`nextOffset`；`protocol::fit_page` 按 `RESULT_BUDGET_BYTES`（1 MiB 序列化字节）装整条、至少保留一条，调用方按 `nextOffset` 翻页不会漏项；`lib.rs::write_answer` 在整帧超过 2 MiB 时替换为有界 `too_large` 错误帧；单条详情不截断。`src/shared/knowledge.ts` 的 `KnowledgeCardPage`/`KnowledgeCardSummary`/`ProfilePage` 同步修改。
+- D 闭环：新增 `native/knowledge/bin/fixture.rs`（仅 `--features fixture` 构建，不打包、不安装、不进生产方法表），复用生产 `Link`/协议；`card.search`/`card.get` 触发 `model.request`，子 ID 固定 `m1` 以覆盖重启复用。
+- E 懒启动：停机时 `KnowledgeHost.status()` 本地返回 `{running:false,schema:null,fts5:null,trigram:null}`，不 spawn、不谎报能力；运行中才转发真实值。`KnowledgeStatus` 增加 `running` 与可空能力字段。
+
+### 复核取证（真实边界，不以 mock 代替）
+
+- `native/knowledge/tests/process.rs`（真实 `yu-knowledge.exe`）：写锁期间取消 `source.save`、写锁期间取消 `source.invalidate`（均断言 `error.code == "cancelled"` 且库内行数与状态不变）、提交后取消不虚报回滚、正文恰好 200000 与超出（含 emoji 边界）、11 张 200000 字符卡片的默认分页（无 `body`、`bodyChars == 200000`、`card.get` 仍给全文）、多字节内容按 `nextOffset` 翻完且无重无漏。
+- `src/main/knowledge/loop.test.ts`：生产 `KnowledgeHost` + 真实 Rust 夹具 + 注入完成器，覆盖成功、provider 失败码回传、父超时 abort、停机后重启、重启后同子 ID 迟到回包不影响新进程。
+- `src/main/knowledge/host.test.ts`（真实管道 stub）：永不 `ready`、`ready` 晚于期限、停机时仍在等 `ready`、`null`/数组垃圾帧、EPIPE、重复子 ID、无父请求的模型调用、父超时 abort、旧代际迟到回包。
+
 
 ### 资源
 
