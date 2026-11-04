@@ -94,9 +94,9 @@ otepad.exe` → 展开后的路径；`REG_DWORD` 4660 → `Ok(None)`（`ERROR_UN
 
 | 场景 | 覆盖 | P50 / P95 | CPU P50/P95 | 私有峰值 P50/P95 | 有效 |
 | --- | --- | --- | --- | --- | --- |
-| `activate`（合成 AppID `yu-remaining-missing-appid`） | 仅 AppID 校验直到拒绝；**不含** `ShellExecute` 与窗口可见 | 1346.24 / 1432.41 ms | 1953.13 / 2203.13 ms | 70436 / 70688 KB | 10/10（均 exit 1 + 同一文案） |
-| `search`（自有临时树：4 × `.txt` + 1 × `.md`，`recursive`、name 过滤 `sample`） | `backend=windows-search+folder`、`indexUnavailable=false`，返回 4 条且都在本轮临时根下 | 1024.00 / 1049.38 ms | 1859.38 / 1984.38 ms | 67532 / 67716 KB | 10/10 |
-| `current-content`（仓库自有 UIA fixture `address-edit`） | 无 Document 元素的分支；Office/Explorer/真实 `TextPattern` 未测 | 1083.75 / 1115.06 ms | 1890.63 / 2046.88 ms | 76808 / 76976 KB | 10/10 |
+| `activate`（合成 AppID `yu-remaining-missing-appid`） | 仅 AppID 校验直到拒绝；**不含** `ShellExecute` 与窗口可见 | 1329.48 / 1387.51 ms | 2000.00 / 2062.50 ms | 70292 / 70616 KB | 10/10（均 exit 1 + 同一文案） |
+| `search`（自有临时树：4 × `.txt` + 1 × `.md`，`recursive`、name 过滤 `sample`） | `backend=windows-search+folder`、`indexUnavailable=false`，返回 4 条且都在本轮临时根下 | 991.03 / 1017.52 ms | 1796.88 / 1875.00 ms | 67524 / 67724 KB | 10/10 |
+| `current-content`（仓库自有 UIA fixture `address-edit`） | 无 Document 元素的分支；Office/Explorer/真实 `TextPattern` 未测 | 1077.76 / 1100.29 ms | 1859.38 / 1953.13 ms | 76692 / 76896 KB | 10/10 |
 
 限制：三项都只测到 PowerShell helper 的包装成本，没有 Rust 对照，故不构成「Rust 提升」。`search` 的命中没有逐条区分索引与目录 fallback，索引正向未被单独证明；`activate` 的数字排除了成功激活与窗口出现时间。
 
@@ -109,7 +109,7 @@ otepad.exe` → 展开后的路径；`REG_DWORD` 4660 → `Ok(None)`（`ERROR_UN
 
 ### 7.5 验证与产出
 
-命令与退出码（`/tmp/verify17.sh` → `/tmp/v17.log`，逐条记录）：
+命令与退出码（`/tmp/verify17b.sh` → `/tmp/v17b.log`，逐条记录；按阶段 12 的教训，日志作为临时产物在结题时清理，下表是当轮记录。复现只需按顺序执行同样的六条命令 + 两条基准，命令原文见本行上方的脚本内容或 §6）：
 
 | 命令 | 退出码 | 关键输出 |
 | --- | --- | --- |
@@ -121,8 +121,10 @@ otepad.exe` → 展开后的路径；`REG_DWORD` 4660 → `Ok(None)`（`ERROR_UN
 | `pnpm test:native` | 0 | 39 passed |
 | `pnpm build` | 0 | built |
 | `pnpm test` | 0 | 239 files passed / 3 skipped；3552 passed / 8 skipped |
+| `node scripts/benchmark-applications.mjs --samples 20` | 0 | 80 runs、9/9 checks、`decision=latency`、entries 204 |
+| `node scripts/benchmark-windows-remaining.mjs --samples 10` | 0 | 三场景各 10/10 有效、`cleanup.failures` 为空 |
 
-产物与证据：`native/bin/yu-windows.exe` 466944 B / `3fae60815f41d3ee827fe49016f2fba0a0767eaf0f407c6527b715f61e42adb3`，与两份本轮证据的 `binary`/`helper` 字段一致。真实对照 Rust 204 / PS 204、`sameOrder true`、两侧 exit 0、stderr 空。收口基准 `tests/yu-v2/evidence/rust-applications-closure-20261104.json`（`generatedAt` 2026-11-04T03:36:07.780Z，80 runs、9/9 checks、`decision=latency`，总数 −63.93% / P95 −1031 ms，CPU −84.25%，私有内存 −93.73%）；评估证据 `tests/yu-v2/evidence/rust-windows-remaining-20261104.json`（`generatedAt` 2026-11-04T03:39:08.510Z，三场景共 30 个有效样本，`cleanup.failures` 为空）。旧证据 `rust-applications-20261104.json` 与 `rust-applications-correctness-20261104.json` 原样保留。
+产物与证据：`native/bin/yu-windows.exe` 466944 B / `0a1680bedd2f8bdf73014ff0838768e4c51fb47dedba001c23132c984903497e`（删掉 `compare_entries` 的测试期调试打印后重链接得到），与两份本轮证据的 `binary`/`helper` 字段一致。真实对照 Rust 204 / PS 204、`sameOrder true`、两侧 exit 0、stderr 空。收口基准 `tests/yu-v2/evidence/rust-applications-closure-20261104.json`（`generatedAt` 2026-11-04T03:51:16.884Z，80 runs、9/9 checks、`decision=latency`、两侧 204 项；总数 1580.03/1610.69 → 566.60/587.53 ms，−64.14%/−63.52%、P95 −1023.16 ms；CPU 2265.63/2437.50 → 359.38/421.88 ms，−84.14%/−82.69%；私有内存 105364/105656 → 6612/6712 KB，−93.72%/−93.65%）；评估证据 `tests/yu-v2/evidence/rust-windows-remaining-20261104.json`（`generatedAt` 2026-11-04T03:51:56.501Z，三场景共 30 个有效样本，`cleanup` 只记 `{mode,pid,handle,title,exitCode}` 与临时目录路径，`failures` 为空）。旧证据 `rust-applications-20261104.json` 与 `rust-applications-correctness-20261104.json` 原样保留。
 
 ### 7.6 清理与提交
 
