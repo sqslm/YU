@@ -24,6 +24,9 @@ use windows::{
 
 #[path = "address.rs"]
 mod address;
+
+#[path = "applications.rs"]
+mod applications;
 #[path = "folder.rs"]
 mod folder;
 #[path = "ocr.rs"]
@@ -86,6 +89,10 @@ pub fn run(request: &Value) -> Result<Value, Box<dyn Error>> {
         Some("browser-url") => {
             let _runtime = Runtime::initialize()?;
             address::browser_url(request)
+        }
+        Some("applications") => {
+            let _runtime = Runtime::initialize()?;
+            applications::applications(request)
         }
         Some("explorer-folder") => {
             let _runtime = Runtime::initialize()?;

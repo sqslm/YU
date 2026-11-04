@@ -72,13 +72,35 @@ function settle(fixtureRun: Fixture, type: string): Promise<void> {
 /** Helper processes that were already running before this suite started. */
 const preexisting = new Set<number>()
 
-const owned = (): number[] => {
-  const result = spawnSync('tasklist', ['/FI', 'IMAGENAME eq yu-windows.exe', '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true })
-  return lines(String(result.stdout)).map(line => Number(line.split('","')[1]?.replace(/"/g, ''))).filter(pid => Number.isInteger(pid) && pid > 0)
+/**
+ * Helpers spawned by this test worker. Filtering on the parent pid keeps the assertions stable
+ * when other test files on the same machine run their own helpers at the same time.
+ */
+const childrenOf = (parentPid: number): number[] => {
+  const script = "Get-CimInstance Win32_Process -Filter \"Name='yu-windows.exe'\" | ForEach-Object { \"$($_.ProcessId),$($_.ParentProcessId)\" }"
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true })
+  return lines(String(result.stdout))
+    .map(line => line.trim().split(','))
+    .filter(parts => parts.length === 2 && Number(parts[1]) === parentPid)
+    .map(parts => Number(parts[0]))
+    .filter(pid => Number.isInteger(pid) && pid > 0)
 }
+
+const owned = (): number[] => childrenOf(process.pid)
 
 const alive = (pid: number): boolean => {
   try { process.kill(pid, 0); return true } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
+}
+
+/** Waits for the helper started by the pending request, so a blocked provider is released promptly. */
+const waitForHelper = async (before: Set<number>, timeoutMs = 20_000): Promise<number[]> => {
+  const deadline = performance.now() + timeoutMs
+  for (;;) {
+    const running = owned().filter(pid => !before.has(pid))
+    if (running.length > 0) return running
+    if (performance.now() > deadline) return []
+    await new Promise(done => setTimeout(done, 250))
+  }
 }
 
 afterEach(async () => {
@@ -111,8 +133,8 @@ it.skipIf(process.platform !== 'win32')('rechecks the window after a slow read a
   await settle(fixtureRun, 'blocking')
   const before = new Set(owned())
   const pending = windowsNative({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
-  await new Promise(done => setTimeout(done, 1_000))
-  const running = owned().filter(pid => !before.has(pid))
+  pending.catch(() => {})
+  const running = await waitForHelper(before)
   expect(running).toHaveLength(1)
   fixtureRun.send({ command: 'retitle', title: 'uia fixture - changed during read' })
   fixtureRun.send({ command: 'unblock' })
@@ -126,7 +148,8 @@ it.skipIf(process.platform !== 'win32')('refuses a window destroyed while the pr
   await settle(fixtureRun, 'blocking')
   const before = new Set(owned())
   const pending = windowsNative({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
-  await new Promise(done => setTimeout(done, 1_000))
+  pending.catch(() => {})
+  await waitForHelper(before)
   fixtureRun.send({ command: 'destroy' })
   fixtureRun.send({ command: 'unblock' })
   await expect(pending).rejects.toThrow()
@@ -140,8 +163,8 @@ it.skipIf(process.platform !== 'win32')('cancels a blocked read, kills that help
   const before = new Set(owned())
   const controller = new AbortController()
   const pending = windowsNative({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title }, controller.signal)
-  await new Promise(done => setTimeout(done, 1_000))
-  const running = owned().filter(pid => !before.has(pid))
+  pending.catch(() => {})
+  const running = await waitForHelper(before)
   expect(running).toHaveLength(1)
   controller.abort()
   await expect(pending).rejects.toThrow('Cancelled')
@@ -210,7 +233,6 @@ it.skipIf(process.platform !== 'win32')('retires the helper when its own parent 
   const fixtureRun = await start('address-edit')
   fixtureRun.send({ command: 'block' })
   await settle(fixtureRun, 'blocking')
-  const before = new Set(owned())
   const body = JSON.stringify({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
   const parent = spawn(process.execPath, ['-e', [
     'const { spawn } = require("node:child_process")',
@@ -221,7 +243,7 @@ it.skipIf(process.platform !== 'win32')('retires the helper when its own parent 
   ].join('\n'), resolve('native/bin/yu-windows.exe'), body], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
   children.push(parent)
   await settle(fixtureRun, 'blocked')
-  const helper = owned().filter(pid => !before.has(pid))
+  const helper = childrenOf(parent.pid as number)
   expect(helper).toHaveLength(1)
   expect(alive(helper[0])).toBe(true)
   expect(alive(parent.pid as number)).toBe(true)

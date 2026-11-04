@@ -13,7 +13,7 @@ function child() {
 beforeEach(() => { mock.spawn.mockReset(); mock.packaged = false })
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals() })
 
-it.each(['window-check', 'disk-space', 'system-volume', 'ocr', 'browser-url', 'explorer-folder', 'recent-files'])('routes %s only to the owned native executable', async action => {
+it.each(['window-check', 'disk-space', 'system-volume', 'ocr', 'browser-url', 'explorer-folder', 'recent-files', 'applications'])('routes %s only to the owned native executable', async action => {
   const proc = child(); mock.spawn.mockReturnValue(proc)
   let input = ''; proc.stdin.on('data', data => { input += data })
   const result = windowsNative({ action, text: '中文 " $() ; data' })
@@ -26,7 +26,7 @@ it.each(['window-check', 'disk-space', 'system-volume', 'ocr', 'browser-url', 'e
   expect(await result).toEqual({ value: '中文' })
 })
 
-it.each(['applications', 'activate', 'search', 'current-content'])('retains the explicit PowerShell backend for %s', async action => {
+it.each(['activate', 'search', 'current-content'])('retains the explicit PowerShell backend for %s', async action => {
   const proc = child(); mock.spawn.mockReturnValue(proc)
   const result = windowsNative({ action })
   expect(mock.spawn.mock.calls[0][0]).toMatch(/powershell\.exe$/)
