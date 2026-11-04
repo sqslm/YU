@@ -60,6 +60,8 @@
 !/scripts/benchmark-explorer-folder.mjs
 !/scripts/benchmark-recent-files.mjs
 !/scripts/benchmark-applications.mjs
+!/scripts/lib/
+!/scripts/lib/*.mjs
 !/native/
 /native/bin/
 /native/**/target/
