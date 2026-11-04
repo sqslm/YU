@@ -65,6 +65,22 @@ it('ignores a reply from a window that is not the owner', async () => {
   h.reply({ id, event: 'ended' })
   expect(await pending).toMatchObject({ ok: true })
 })
+/** 回归：取消/替换/超时都要终结就绪等待本身，而不是留着监听等一个没人要的窗口。 */
+it('cancels the readiness wait when the command is cancelled', async () => {
+  const contents = Object.assign(new EventEmitter(), { send: vi.fn() })
+  const win = { webContents: contents, isDestroyed: () => false } as unknown as BrowserWindow
+  const signals: Array<AbortSignal | undefined> = []
+  const ensure = vi.fn((signal?: AbortSignal) => { signals.push(signal); return new Promise<BrowserWindow | null>(() => undefined) })
+  const run = createSpeechPlayback({ peek: () => win, ensure })
+  const controller = new AbortController()
+  const pending = run({ action: 'speak', audio: { bytes: new Uint8Array([1]), mime: 'audio/mpeg' } }, controller.signal)
+  controller.abort()
+  expect(await pending).toMatchObject({ ok: false })
+  expect(signals[0]).toBeInstanceOf(AbortSignal)
+  expect(signals[0]!.aborted).toBe(true)
+  expect(contents.send).not.toHaveBeenCalled()
+})
+
 it('reports missing readiness instead of keeping the caller waiting', async () => {
   const run = createSpeechPlayback({ peek: () => null, ensure: async () => null })
   await expect(run({ action: 'speak', audio: { bytes: new Uint8Array([1]), mime: 'audio/mpeg' } })).resolves.toEqual({ ok: false, error: 'Speech playback is not ready' })

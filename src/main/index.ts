@@ -59,6 +59,7 @@ import { SelectionEditor } from './selection-editor'
 import { NoteAudioPlayer } from './note-audio'
 import { createNoteAudioBusy } from './note-audio-busy'
 import { createBarReadiness } from './bar-ready'
+import { createBarPlaybackHost } from './bar-playback-host'
 import { captureSelectionTarget, applyAnswerSelection } from './selection-target'
 import { ReminderService } from './reminder-service'
 import { recordingLog } from './recordingLog'
@@ -207,7 +208,7 @@ let tray: ReturnType<typeof createTray> | null = null
 let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || Boolean(wakeSetupMode) || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
-const noteAudio=new NoteAudioPlayer({peek:barPeek,ensure:barEnsure},id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,noteAudioBusy.track)
+const noteAudio=new NoteAudioPlayer({peek:barPeek,ensure:barEnsure,ready:barReady},id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,noteAudioBusy.track)
 let selectionPreview:{target:import('./selection-editor').SelectionTarget;text:string;at:number}|null=null
 function pausePlaybackForRecording(): void {
   void speech?.pause().catch(error => log(`speech pause: ${String(error)}`))
@@ -1071,31 +1072,37 @@ function barSink(): BrowserWindow | null {
   return ensureBarWindow()
 }
 
-/** The pill as it is, without creating one: queries and replies must not resurrect it. */
-function barPeek(): BrowserWindow | null {
-  return barWindow && !barWindow.isDestroyed() ? barWindow : null
-}
-
 /**
  * The pill, created and already listening.
  *
  * The renderer only subscribes to `note-audio:command` / `speech:playback` once
  * its React effects have run, which is a few hundred milliseconds after the
  * window object exists. Sending earlier is what lost the first command after a
- * (re)create, so everything that needs a renderer waits for its `bar:ready`.
+ * (re)create, so everything that needs a renderer waits for its `bar:ready` —
+ * and a command that is stopped or replaced stops waiting (`signal`) instead of
+ * leaving a listener on a window nobody asks about.
  */
-async function barEnsure(): Promise<BrowserWindow | null> {
-  if (quitting || gameMode.snapshot().active) return null
-  const win = ensureBarWindow()
-  if (!win || win.isDestroyed()) return null
-  try {
-    await barReadiness.wait(win).promise
-    return win.isDestroyed() ? null : win
-  } catch (error) {
-    // The window died on the way — a failed load or a crash, not a command error.
-    log(`[bar] playback window did not become ready: ${String(error)}`)
-    return null
-  }
+const barHost = createBarPlaybackHost({
+  window: () => (barWindow && !barWindow.isDestroyed() ? barWindow : null),
+  create: () => ensureBarWindow(),
+  readiness: barReadiness,
+  blocked: () => quitting || gameMode.snapshot().active,
+  log: line => log(line)
+})
+
+/** The pill as it is, without creating one: queries and replies must not resurrect it. */
+function barPeek(): BrowserWindow | null {
+  return barHost.peek()
+}
+
+/** True once that exact window's renderer is listening for commands. */
+function barReady(win: BrowserWindow): boolean {
+  return barHost.ready(win)
+}
+
+/** The pill, created if needed and ready to hear `win`-bound commands. */
+function barEnsure(signal?: AbortSignal): Promise<BrowserWindow | null> {
+  return barHost.ensure(signal)
 }
 
 /**
@@ -1131,12 +1138,23 @@ function ensureBarWindow(): BrowserWindow {
   })
   barWindow.on('closed', () => {
     if (moveTimer) clearTimeout(moveTimer)
-    if (barWindow === win) barWindow = null
+    // A window that was retired earlier (a crash, a rebuild) closes last: its
+    // late `closed` must not tear down the playback of whoever owns the pill now.
+    if (barWindow !== win) return
+    barWindow = null
     forgetBarPlayback(win)
   })
   // A crashed renderer takes its audio with it but leaves the window object
-  // alive, so the busy flag has to be released here as well.
-  win.webContents.on('render-process-gone', () => forgetBarPlayback(win))
+  // alive, and a window whose renderer is gone can never report ready again:
+  // keeping it would make the next play wait out its whole budget for a page
+  // that will never listen. Retire it so the next command gets a fresh one.
+  win.webContents.on('render-process-gone', () => {
+    if (barWindow !== win) return
+    if (moveTimer) clearTimeout(moveTimer)
+    barWindow = null
+    forgetBarPlayback(win)
+    if (!win.isDestroyed()) win.destroy()
+  })
   // The pill lives for the take, not for the session: once it has been hidden
   // long enough, its renderer is destroyed and the next reveal recreates it
   // (the renderer's `bar:ready` replays whatever state was sent meanwhile).

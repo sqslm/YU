@@ -7,11 +7,13 @@ import type { SpeechResult, SpeechRunner } from './speech'
 /**
  * Where the pill can be reached. `peek` must not create the window (a late reply
  * from a retired renderer must not resurrect it); `ensure` may, and only
- * resolves once that window can receive `speech:playback`.
+ * resolves once that window can receive `speech:playback`. Its signal is the
+ * playback's own cancellation: a cancelled, replaced or expired playback stops
+ * waiting for a window instead of leaving a listener on one.
  */
 export interface SpeechPlaybackHost {
   peek: () => BrowserWindow | null
-  ensure: () => Promise<BrowserWindow | null>
+  ensure: (signal?: AbortSignal) => Promise<BrowserWindow | null>
 }
 
 /** Uses the existing always-alive bar, without a new window or files containing speech. */
@@ -37,11 +39,15 @@ export function createSpeechPlayback(host: SpeechPlaybackHost): SpeechRunner {
     if (!request.audio) { resolve({ ok: false, error: 'Speech playback is not ready' }); return }
     current?.finish({ ok: false, error: 'Speech interrupted' })
     const id = randomUUID()
+    // The window wait is part of this playback: cancelling, replacing or timing
+    // it out has to end that wait as well.
+    const gate = new AbortController()
     let settled = false
     const finish = (result: SpeechResult): void => {
       if (settled) return
       settled = true
       clearTimeout(timer); signal?.removeEventListener('abort', cancel)
+      gate.abort()
       const win = current?.id === id ? current.win : null
       if (win && !win.isDestroyed()) {
         win.webContents.removeListener('destroyed', closed)
@@ -62,7 +68,7 @@ export function createSpeechPlayback(host: SpeechPlaybackHost): SpeechRunner {
     const timer = setTimeout(() => { cancel() }, 20_000)
     signal?.addEventListener('abort', cancel, { once: true })
     void (async () => {
-      const win = await host.ensure()
+      const win = await host.ensure(gate.signal)
       if (settled) return
       if (!win || win.isDestroyed()) { finish({ ok: false, error: 'Speech playback is not ready' }); return }
       if (current?.id === id) current.win = win

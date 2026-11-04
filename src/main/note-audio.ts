@@ -9,11 +9,19 @@ import type { NoteAudioAction, NoteAudioEvent, NoteAudioReply, NoteAudioRequest,
  * `peek` must never create the window: a status query, a pause or a late reply
  * has no business resurrecting a window that was just retired. `ensure` may
  * create it, but only resolves once that window's renderer is listening for
- * `note-audio:command` — sending earlier loses the command outright.
+ * `note-audio:command` — sending earlier loses the command outright. Its signal
+ * is the calling command's own cancellation, so a command that was stopped or
+ * replaced stops waiting for a window instead of holding listeners on one.
  */
 export interface NoteAudioHost {
   peek: () => BrowserWindow | null
-  ensure: () => Promise<BrowserWindow | null>
+  /**
+   * Whether that exact window is listening yet. A window that exists but has not
+   * announced `bar:ready` drops everything sent to it, so a command that can be
+   * answered from the preparation state must not be sent there.
+   */
+  ready?: (win: BrowserWindow) => boolean
+  ensure: (signal?: AbortSignal) => Promise<BrowserWindow | null>
 }
 
 const IDLE: NoteAudioState = { id: null, state: 'idle', positionMs: 0, durationMs: 0, rate: 1 }
@@ -21,34 +29,67 @@ const COMMAND_TIMEOUT_MS = 8000
 /** Actions the renderer can only answer once it is actually listening. */
 const NEEDS_WINDOW = new Set<NoteAudioAction>(['play', 'resume', 'seek', 'rate'])
 const ACTIONS = new Set<NoteAudioAction>(['play', 'pause', 'resume', 'stop', 'status', 'seek', 'rate'])
+const SUPERSEDED = 'Playback superseded'
+const CANCELLED = 'Playback cancelled'
+
+interface Pending {
+  /** The play generation this command belongs to; older commands may not speak for newer ones. */
+  gen: number
+  /** A `play`: the only command that can be replaced or cancelled by the next one. */
+  play: boolean
+  /** True once the command actually reached the renderer. */
+  sent: boolean
+  resolve: (state: NoteAudioState) => void
+  reject: (error: Error) => void
+  abort: (error: Error) => void
+}
 
 /** One player in the existing bar renderer, shared by the notes page and voice tools. */
 export class NoteAudioPlayer {
-  private pending = new Map<string,{resolve:(state:NoteAudioState)=>void;reject:(error:Error)=>void}>()
+  private pending = new Map<string, Pending>()
   private playId: string | null = null
-  constructor(private host:NoteAudioHost, private audioUrl:(id:string)=>string|null, private onState?:(state:NoteAudioState)=>void, private log?:(line:string)=>void) {}
+  /** The last window a command was actually sent to; its replies are still ours. */
+  private asked: BrowserWindow | null = null
+  /** Bumped by every `play`: a reply tagged with an older generation is stale. */
+  private gen = 0
+  constructor(private host: NoteAudioHost, private audioUrl: (id: string) => string | null, private onState?: (state: NoteAudioState) => void, private log?: (line: string) => void) {}
 
   /** The `play` command the pill currently owes; events for any other one are stale. */
   get activePlayId(): string | null { return this.playId }
 
   register(): void {
-    handle('note-audio:control',(_event,action:NoteAudioAction,id?:string,options?:{positionMs?:number;rate?:number})=>this.control(action,id,options))
-    handle('note-audio:reply',(event,reply:NoteAudioReply)=>{
-      if(!reply || typeof reply.requestId!=='string')return
-      // Replies come from whichever window holds playback at that moment, and
-      // only `peek` may answer that: asking the sink here used to recreate the
-      // pill whenever a late reply arrived after retirement.
-      const owner=this.host.peek()
-      if(!owner || owner.isDestroyed() || event.sender!==owner.webContents){this.log?.('[note-audio] ignored a reply from a window that does not own playback');return}
-      // The page drives playback too (play/pause buttons), so the owner has to
-      // hear every reply: the window may not be retired while audio is running.
-      if(reply.state)this.onState?.(reply.state)
-      const pending=this.pending.get(reply.requestId)
-      if(!pending)return
-      if(reply.error)pending.reject(new Error(reply.error))
-      else if(reply.state)pending.resolve(reply.state)
-      else pending.reject(new Error('Invalid playback reply'))
-    })
+    handle('note-audio:control', (_event, action: NoteAudioAction, id?: string, options?: { positionMs?: number; rate?: number }) => this.control(action, id, options))
+    handle('note-audio:reply', (event, reply: NoteAudioReply) => this.receive(event, reply))
+  }
+
+  /**
+   * A reply may only settle a command that is still owed an answer — and only
+   * move the playback state when it speaks for the newest play. Anything else is
+   * a leftover: a timeout, a replaced play, or a renderer from a window that no
+   * longer owns playback.
+   */
+  private receive(event: { sender: unknown }, reply: NoteAudioReply): void {
+    if (!reply || typeof reply.requestId !== 'string') return
+    // Replies come from whichever window holds playback at that moment, and only
+    // `peek` may answer that: asking the sink here used to recreate the pill
+    // whenever a late reply arrived after retirement. A window this player has
+    // already sent to counts as its own even if `peek` no longer reports it —
+    // it is still the renderer that was asked.
+    const owner = this.replyWindow()
+    if (!owner || event.sender !== owner.webContents) { this.log?.('[note-audio] ignored a reply from a window that does not own playback'); return }
+    const pending = this.pending.get(reply.requestId)
+    // The command is settled (timeout, cancellation, replacement) or was never
+    // issued here: a late reply from the same renderer must not resolve anything
+    // and must not touch the busy flag, or a replaced playback releases the pill
+    // that replaced it.
+    if (!pending) return
+    if (reply.error) { pending.reject(new Error(reply.error)); return }
+    if (!reply.state) { pending.reject(new Error('Invalid playback reply')); return }
+    // Playback the page drives on its own reports through `note-audio:event`,
+    // which is already tagged with the play that owns it; a reply is a snapshot
+    // of the command, so only the newest play may pass it on.
+    if (pending.gen >= this.gen) this.onState?.(reply.state)
+    pending.resolve(reply.state)
   }
 
   /**
@@ -56,60 +97,125 @@ export class NoteAudioPlayer {
    * `error`/`stop`). Only the play that is currently owned may move the busy
    * flag, so a late `ended` from a replaced playback cannot release the new one.
    */
-  acceptEvent(event:NoteAudioEvent|null|undefined): NoteAudioEvent|null {
-    if(!event || typeof event.requestId!=='string')return null
-    if(!this.playId || event.requestId!==this.playId)return null
+  acceptEvent(event: NoteAudioEvent | null | undefined): NoteAudioEvent | null {
+    if (!event || typeof event.requestId !== 'string') return null
+    if (!this.playId || event.requestId !== this.playId) return null
     return event
   }
 
-  async control(action:NoteAudioAction,id?:string,options:{positionMs?:number;rate?:number}={}):Promise<NoteAudioState> {
-    if(!ACTIONS.has(action))throw Error('Invalid playback action')
-    if(options.positionMs!==undefined && (!Number.isFinite(options.positionMs)||options.positionMs<0))throw Error('Invalid playback position')
-    if(options.rate!==undefined && (!Number.isFinite(options.rate)||options.rate<0.5||options.rate>3))throw Error('Playback rate must be 0.5-3')
-    const url=action==='play' && id ? this.audioUrl(id) : undefined
-    if(action==='play' && !url)throw Error('随记没有可播放的录音')
-    // Queries and stops answer from whatever window exists: they must not be the
-    // reason a pill is created, so a retired window simply reads as idle.
-    if(!NEEDS_WINDOW.has(action)){
-      const win=this.host.peek()
-      if(!win || win.isDestroyed())return {...IDLE}
+  async control(action: NoteAudioAction, id?: string, options: { positionMs?: number; rate?: number } = {}): Promise<NoteAudioState> {
+    if (!ACTIONS.has(action)) throw Error('Invalid playback action')
+    if (options.positionMs !== undefined && (!Number.isFinite(options.positionMs) || options.positionMs < 0)) throw Error('Invalid playback position')
+    if (options.rate !== undefined && (!Number.isFinite(options.rate) || options.rate < 0.5 || options.rate > 3)) throw Error('Playback rate must be 0.5-3')
+    const url = action === 'play' && id ? this.audioUrl(id) : undefined
+    if (action === 'play' && !url) throw Error('随记没有可播放的录音')
+
+    const requestId = randomUUID()
+    if (action === 'play') {
+      // The newest effective play wins: the previous one is dropped *before* this
+      // one is issued, so the page can only ever be told about the last of them.
+      this.cancelPlays(SUPERSEDED)
+      this.playId = requestId
+      this.gen += 1
     }
-    const requestId=randomUUID()
-    if(action==='play')this.playId=requestId
-    const request:NoteAudioRequest={requestId,action,id,...options,...(url?{url}:{})}
-    return await new Promise<NoteAudioState>((resolve,reject)=>{
-      let settled=false
-      const finish=(error?:Error,state?:NoteAudioState):void=>{
-        if(settled)return
-        settled=true
+    const win = this.window()
+    if (!win && !NEEDS_WINDOW.has(action)) {
+      // Nothing can hear this command, and a page that never received anything
+      // would only spend the whole budget here. A paused or stopped request must
+      // not start playing later on its own, so it cancels the play that was
+      // still being prepared — a query must not: `status` only reports.
+      if (action === 'pause' || action === 'stop') this.cancelPlays(CANCELLED)
+      if (action === 'stop') this.playId = null
+      return { ...IDLE }
+    }
+    // A play that has not reached the renderer yet would start *after* this
+    // command: cancel it so the page's command order stays honest. `stop` also
+    // drops an already queued one; the page is told to stop rather than to pause.
+    if (action === 'pause') this.cancelPlays(CANCELLED, true)
+    if (action === 'stop') { this.cancelPlays(CANCELLED); this.playId = null }
+
+    const request: NoteAudioRequest = { requestId, action, id, ...options, ...(url ? { url } : {}) }
+    return await this.issue(request, NEEDS_WINDOW.has(action), action === 'play')
+  }
+
+  private issue(request: NoteAudioRequest, needsWindow: boolean, play: boolean): Promise<NoteAudioState> {
+    return new Promise<NoteAudioState>((resolve, reject) => {
+      const controller = new AbortController()
+      let settled = false
+      const finish = (error?: Error, state?: NoteAudioState): void => {
+        if (settled) return
+        settled = true
         clearTimeout(timer)
-        this.pending.delete(requestId)
-        if(error)reject(error)
-        else resolve(state as NoteAudioState)
+        this.pending.delete(request.requestId)
+        // The window wait belongs to this command: ending the command has to end
+        // that wait too, or it stays attached to a window nobody asks about.
+        controller.abort()
+        if (!error) { resolve(state as NoteAudioState); return }
+        if (this.playId === request.requestId) this.playId = null
+        reject(error)
       }
       // One budget covers creation, readiness and the reply. Waiting for the
       // window is part of the command, so it may not be given extra time.
-      const timer=setTimeout(()=>finish(new Error('录音播放没有响应')),COMMAND_TIMEOUT_MS)
-      this.pending.set(requestId,{
-        resolve:state=>finish(undefined,state),
-        reject:error=>finish(error)
+      const timer = setTimeout(() => finish(new Error('录音播放没有响应')), COMMAND_TIMEOUT_MS)
+      this.pending.set(request.requestId, {
+        gen: this.gen,
+        play,
+        sent: false,
+        resolve: state => finish(undefined, state),
+        reject: error => finish(error),
+        abort: error => finish(error)
       })
-      void this.deliver(requestId,request,NEEDS_WINDOW.has(action)).then(
-        ()=>undefined,
-        error=>finish(error instanceof Error?error:new Error(String(error)))
+      // A query or a stop goes to the window that exists right now (`win` was
+      // already checked above); only the actions that need a listening renderer
+      // may create one.
+      const deliver = (target: BrowserWindow | null): void => {
+        const pending = this.pending.get(request.requestId)
+        if (!target || target.isDestroyed()) {
+          if (pending) finish(new Error('录音播放服务尚未就绪'))
+          return
+        }
+        // Replaced, stopped or timed out while the pill was still starting: the
+        // command is gone and must not be sent to the renderer.
+        if (!pending) return
+        pending.sent = true
+        this.asked = target
+        target.webContents.send('note-audio:command', request)
+      }
+      if (!needsWindow) { deliver(this.window()); return }
+      void this.host.ensure(controller.signal).then(
+        deliver,
+        error => finish(error instanceof Error ? error : new Error(String(error)))
       )
     })
   }
 
-  /** Route one command to a window that can hear it, or fail instead of sending into the void. */
-  private async deliver(requestId:string,request:NoteAudioRequest,needsWindow:boolean):Promise<void>{
-    const win=needsWindow ? await this.host.ensure() : this.host.peek()
-    if(!win || win.isDestroyed())throw Error('录音播放服务尚未就绪')
-    // The command was cancelled (timeout, dispose, window gone) while the pill was
-    // still starting up: drop it instead of playing something nobody asked for.
-    if(!this.pending.has(requestId))return
-    win.webContents.send('note-audio:command',request)
+  /** Cancel queued plays; `onlyUnsent` keeps the one the page is already working on. */
+  private cancelPlays(error: string, onlyUnsent = false): void {
+    for (const pending of [...this.pending.values()]) {
+      if (!pending.play || (onlyUnsent && pending.sent)) continue
+      pending.abort(new Error(error))
+    }
   }
 
-  dispose():void {for(const request of this.pending.values())request.reject(new Error('Playback closed'));this.pending.clear()}
+  /** The window that can hear commands right now, or null. Never creates one. */
+  private window(): BrowserWindow | null {
+    const win = this.host.peek()
+    if (!win || win.isDestroyed()) return null
+    if (this.host.ready && !this.host.ready(win)) return null
+    return win
+  }
+
+  /** The renderer a reply may come from: the current pill, else the last one asked. */
+  private replyWindow(): BrowserWindow | null {
+    const win = this.host.peek()
+    if (win && !win.isDestroyed()) return win
+    const asked = this.asked
+    return asked && !asked.isDestroyed() ? asked : null
+  }
+
+  dispose(): void {
+    for (const pending of [...this.pending.values()]) pending.reject(new Error('Playback closed'))
+    this.playId = null
+    this.asked = null
+  }
 }

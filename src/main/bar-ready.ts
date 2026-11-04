@@ -11,13 +11,14 @@ import type { BrowserWindow } from 'electron'
  * `webContents.id`, so only the window that really reported `bar:ready` can be
  * used, and a window recreated later starts from scratch.
  *
- * Only `webContents.id`, `once`/`removeListener` and `isDestroyed()` are touched,
+ * Only `webContents.id`, the listener methods and `isDestroyed()` are touched,
  * so a test can drive this with a plain fake object.
  */
 export interface ReadyWindow {
   readonly webContents: {
     readonly id: number
     once(event: string, listener: (...args: unknown[]) => void): unknown
+    on(event: string, listener: (...args: unknown[]) => void): unknown
     removeListener(event: string, listener: (...args: unknown[]) => void): unknown
   }
   once(event: string, listener: (...args: unknown[]) => void): unknown
@@ -46,6 +47,8 @@ const CLOSED = 'Playback window closed'
 export function createBarReadiness(): {
   /** Called from the `bar:ready` handler with the window that event came from. */
   markReady(win: BrowserWindow): void
+  /** True while that exact window's renderer is listening for commands. */
+  isReady(win: BrowserWindow): boolean
   /** Resolves when that exact window reports ready; rejects if it dies first. */
   wait(win: BrowserWindow): BarReadinessWait
   forget(win: BrowserWindow): void
@@ -99,6 +102,11 @@ export function createBarReadiness(): {
       for (const waiter of [...entry.waiters]) settle(entry, id, waiter)
     },
 
+    isReady(win) {
+      const id = idOf(win as unknown as ReadyWindow)
+      return id !== null && entries.get(id)?.ready === true
+    },
+
     wait(win) {
       const gate = win as unknown as ReadyWindow
       const id = idOf(gate)
@@ -110,25 +118,32 @@ export function createBarReadiness(): {
         waiter.resolve = resolve
         waiter.reject = reject
       })
+      // The listeners are attached to the objects, not looked up again later:
+      // `forget` runs from the window's own `closed` handler, i.e. exactly when
+      // `win.webContents` already throws. Reading the getter in `detach` aborted
+      // the cleanup halfway and left the waiter pending forever.
+      const contents = gate.webContents
       // A window that goes away can never report ready. `render-process-gone`
-      // covers a crash, `did-fail-load` a navigation that never produced a page
-      // (only the main frame matters), `closed` the pill being retired.
+      // covers a crash, `did-fail-load` a navigation that never produced a page,
+      // `closed` the pill being retired.
       const onClosed = (): void => settle(entry, id, waiter, new Error(CLOSED))
       const onGone = (): void => settle(entry, id, waiter, new Error(CLOSED))
+      // Not `once`: a sub-frame that fails to load (an inline image, a frame in a
+      // page) would otherwise eat the only listener and the main frame's failure
+      // would go unnoticed.
       const onFail = (...args: unknown[]): void => {
-        const mainFrame = args[4]
-        if (mainFrame === false) return
+        if (args[4] === false) return
         settle(entry, id, waiter, new Error(CLOSED))
       }
       waiter.detach = () => {
         gate.removeListener('closed', onClosed)
-        gate.webContents.removeListener('render-process-gone', onGone)
-        gate.webContents.removeListener('did-fail-load', onFail)
+        contents.removeListener('render-process-gone', onGone)
+        contents.removeListener('did-fail-load', onFail)
       }
       entry.waiters.add(waiter)
       gate.once('closed', onClosed)
-      gate.webContents.once('render-process-gone', onGone)
-      gate.webContents.once('did-fail-load', onFail)
+      contents.once('render-process-gone', onGone)
+      contents.on('did-fail-load', onFail)
       return {
         promise,
         // Cancelling rejects instead of leaving the promise pending: the caller's

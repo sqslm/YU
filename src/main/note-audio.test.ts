@@ -60,13 +60,22 @@ it('asks the current window on every command instead of closing over one', async
   expect(await status).toMatchObject({ state: 'idle' })
 })
 
-/** The owner has to hear playback that the page started on its own. */
-it('reports the page-driven state so the window can be kept alive', async () => {
+/**
+ * The owner has to hear the state a play settles in — and nothing else. A reply
+ * for a request this player never issued used to move the busy flag as well, so a
+ * stale renderer could keep the pill alive or drop it.
+ */
+it('reports the state of a play it asked for and ignores a reply nobody asked for', async () => {
   const h = windowHarness()
   const seen: string[] = []
-  const player = new NoteAudioPlayer({ peek: () => h.win, ensure: async () => h.win }, () => null, state => seen.push(state.state))
+  const player = new NoteAudioPlayer({ peek: () => h.win, ensure: async () => h.win }, () => 'typeless-audio://note/a', state => seen.push(state.state))
   player.register()
   handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: 'unknown', state: PLAYING })
+  expect(seen).toEqual([])
+  const play = player.control('play', 'note-1')
+  await tick()
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: h.contents.send.mock.calls[0][1].requestId, state: PLAYING })
+  await expect(play).resolves.toEqual(PLAYING)
   expect(seen).toEqual(['playing'])
 })
 
@@ -104,12 +113,125 @@ it('releases pending commands on dispose', async () => {
   await expect(play).rejects.toThrow('Playback closed')
 })
 
+/**
+ * 回归：pill 还在启动时收到的 stop 必须先把这次 play 取消掉。旧实现在窗口对象
+ * 一出现就发送，于是页面依次收到 stop、play —— 用户按了停止，几秒后却还是起播了。
+ */
+it('cancels a play that is still waiting for the pill when stop arrives', async () => {
+  const h = windowHarness()
+  let readyWindow: (win: BrowserWindow | null) => void = () => undefined
+  const ensure = vi.fn(() => new Promise<BrowserWindow | null>(resolve => { readyWindow = resolve }))
+  const player = new NoteAudioPlayer({ peek: () => h.win, ready: () => false, ensure }, () => 'typeless-audio://note/a')
+  player.register()
+  const play = player.control('play', 'note-1')
+  const playRejected = expect(play).rejects.toThrow('Playback cancelled')
+  await expect(player.control('stop')).resolves.toMatchObject({ state: 'idle' })
+  readyWindow(h.win)
+  await tick()
+  expect(h.contents.send.mock.calls.map(call => call[1].action)).toEqual([])
+  await playRejected
+})
+
+/**
+ * 回归：两个 play 的准备完成顺序不可控。旧实现各自等自己的 ensure，后到的
+ * 先就绪就先发，页面因此按「新 → 旧」的顺序收到命令，旧录音反而最后胜出。
+ */
+it('sends only the newest play when two requests reach the pill out of order', async () => {
+  const h = windowHarness()
+  const waiting: Array<(win: BrowserWindow | null) => void> = []
+  const ensure = vi.fn(() => new Promise<BrowserWindow | null>(resolve => { waiting.push(resolve) }))
+  const player = new NoteAudioPlayer({ peek: () => null, ensure }, () => 'typeless-audio://note/a')
+  player.register()
+  const old = player.control('play', 'note-1')
+  const fresh = player.control('play', 'note-2')
+  const oldRejected = expect(old).rejects.toThrow('Playback superseded')
+  waiting[1](h.win)
+  waiting[0](h.win)
+  await tick()
+  expect(h.contents.send.mock.calls.map(call => call[1].id)).toEqual(['note-2'])
+  const requestId = h.contents.send.mock.calls[0][1].requestId as string
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId, state: PLAYING })
+  await expect(fresh).resolves.toEqual(PLAYING)
+  await oldRejected
+})
+
+/**
+ * 回归：新播放已经回 playing 之后，被替代的旧播放仍会回一条 ended。旧实现先改
+ * 忙态再查归属，于是忙态被旧请求释放，pill 在还在放的时候退场。
+ */
+it('ignores a reply from a play that a newer one already replaced', async () => {
+  const h = windowHarness()
+  const seen: string[] = []
+  const player = new NoteAudioPlayer({ peek: () => h.win, ensure: async () => h.win }, () => 'typeless-audio://note/a', state => seen.push(state.state))
+  player.register()
+  const old = player.control('play', 'note-1')
+  const oldRejected = expect(old).rejects.toThrow('Playback superseded')
+  await tick()
+  const stale = h.contents.send.mock.calls[0][1].requestId as string
+  const fresh = player.control('play', 'note-2')
+  await tick()
+  const live = h.contents.send.mock.calls[1][1].requestId as string
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: live, state: PLAYING })
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: stale, state: { ...PLAYING, state: 'ended' } })
+  expect(seen).toEqual(['playing'])
+  await expect(fresh).resolves.toEqual(PLAYING)
+  await oldRejected
+})
+
+/** A pause that lands before the pill is listening cancels the queued play. */
+it('does not start a play that was paused before the pill became ready', async () => {
+  const h = windowHarness()
+  const waiting: Array<(win: BrowserWindow | null) => void> = []
+  const ensure = vi.fn(() => new Promise<BrowserWindow | null>(resolve => { waiting.push(resolve) }))
+  const player = new NoteAudioPlayer({ peek: () => h.win, ready: () => false, ensure }, () => 'typeless-audio://note/a')
+  const play = player.control('play', 'note-1')
+  const playRejected = expect(play).rejects.toThrow('Playback cancelled')
+  const paused = player.control('pause')
+  await tick()
+  expect(h.contents.send).not.toHaveBeenCalled()
+  await expect(paused).resolves.toMatchObject({ state: 'idle' })
+  waiting[0](h.win)
+  await tick()
+  expect(h.contents.send).not.toHaveBeenCalled()
+  await playRejected
+})
+
+/** A command nobody waits for any more must not hold a readiness wait open. */
+it('cancels the readiness wait of a command it stopped waiting for', async () => {
+  const h = windowHarness()
+  const signals: Array<AbortSignal | undefined> = []
+  const ensure = vi.fn((signal?: AbortSignal) => { signals.push(signal); return new Promise<BrowserWindow | null>(() => undefined) })
+  const player = new NoteAudioPlayer({ peek: () => h.win, ready: () => false, ensure }, () => 'typeless-audio://note/a')
+  const play = player.control('play', 'note-1')
+  const playRejected = expect(play).rejects.toThrow('Playback cancelled')
+  await player.control('stop')
+  expect(signals[0]).toBeInstanceOf(AbortSignal)
+  expect(signals[0]!.aborted).toBe(true)
+  await playRejected
+})
+
+/** A cold pill must not turn stop into an 8 s wait for a page that never heard it. */
+it('answers stop from the preparation state instead of waiting on a page that is not listening', async () => {
+  vi.useFakeTimers()
+  const h = windowHarness()
+  const player = new NoteAudioPlayer({ peek: () => h.win, ready: () => false, ensure: () => new Promise<BrowserWindow | null>(() => undefined) }, () => 'typeless-audio://note/a')
+  const play = player.control('play', 'note-1')
+  const playRejected = expect(play).rejects.toThrow('Playback cancelled')
+  const stopped = player.control('stop')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(vi.getTimerCount()).toBe(0)
+  expect(h.contents.send).not.toHaveBeenCalled()
+  await expect(stopped).resolves.toMatchObject({ state: 'idle' })
+  await playRejected
+})
+
 /** Only the play that currently owns the element may move the busy flag. */
 it('filters playback events by the active play', async () => {
   const h = windowHarness()
   const player = new NoteAudioPlayer({ peek: () => h.win, ensure: async () => h.win }, () => 'typeless-audio://note/a')
   player.register()
   const first = player.control('play', 'note-1')
+  const firstRejected = expect(first).rejects.toThrow('Playback superseded')
   await tick()
   const stale = h.contents.send.mock.calls[0][1].requestId as string
   const second = player.control('play', 'note-1')
@@ -120,6 +242,25 @@ it('filters playback events by the active play', async () => {
   expect(player.acceptEvent(null)).toBeNull()
   handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: stale, error: 'Playback superseded' })
   handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: live, state: PLAYING })
-  await expect(first).rejects.toThrow('Playback superseded')
   await expect(second).resolves.toEqual(PLAYING)
+  await firstRejected
+})
+
+/**
+ * 回归：只读的 status 不得打断正在准备的播放。旧实现把「没有就绪窗口」当成
+ * 「取消所有未结算 play」，于是一次状态查询会让冷启动的播放被悄悄取消。
+ */
+it('does not cancel a play that is still starting when status is queried', async () => {
+  const h = windowHarness()
+  let readyWindow: (win: BrowserWindow | null) => void = () => undefined
+  const ensure = vi.fn(() => new Promise<BrowserWindow | null>(resolve => { readyWindow = resolve }))
+  const player = new NoteAudioPlayer({ peek: () => h.win, ready: () => false, ensure }, () => 'typeless-audio://note/a')
+  player.register()
+  const play = player.control('play', 'note-1')
+  await expect(player.control('status')).resolves.toMatchObject({ state: 'idle' })
+  readyWindow(h.win)
+  await tick()
+  expect(h.contents.send.mock.calls.map(call => call[1].action)).toEqual(['play'])
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: h.contents.send.mock.calls[0][1].requestId, state: PLAYING })
+  await expect(play).resolves.toEqual(PLAYING)
 })
