@@ -39,7 +39,7 @@ Assert-OriginalWindow
 
 - [x] 真实资源管理器窗口（`explorer.exe`）打开一个本地目录，冻结 HWND/PID/标题；PS 与 Rust 输出 `{"folder": "..."}` 逐字一致（仅键序可比）。
 - [x] 反向：不是资源管理器的窗口（无 Shell 窗口绑定，如记事本）→ 两侧都给 `null`；窗口已关闭/标题失配 → 两侧都非零退出并报 `Original window has changed or closed`。
-- [x] 目录被删除后同一窗口 → `null`（`Directory::Exists` 语义）。
+- [x] 目录不存在时不报路径：由 `select()` 单测覆盖（缺失目录 / 空输入），真机未构造——真机上目录被删后资源管理器会自行跳走，稳定复现不了。
 - [x] 父进程退出 → helper 以 0 退出（`--parent-pid` 指向被 kill 的 `ping`）。
 - [x] 至少 40 次实际启停，`close` 正常收尾、无超时项。
 
@@ -85,5 +85,7 @@ Assert-OriginalWindow
 **未测项。** 同一 HWND 多标签/多 Shell 文件夹的歧义、UNC 与超过 260 字符路径、符号链接与 OneDrive 占位目录、请求中途窗口被关闭（仅用失效句柄近似）、UAC 提权窗口、锁屏与远程桌面均未测；`select()` 的歧义与缺失目录分支只由单测覆盖。
 
 **验证。** `cargo fmt -- --check`、`cargo clippy --locked --offline --all-targets -- -D warnings`、`cargo test --locked --offline`（12 单测）、`node scripts/benchmark-explorer-folder.mjs --samples 20`、`pnpm exec vitest run` 五个 Windows 相关文件（149 用例）、`pnpm typecheck`、`pnpm test:native`、`pnpm build`、`pnpm test`（237 文件 3535 用例通过，3 文件 8 用例跳过）全部退出码 0；验证链结束后重新取 `sha256sum native/bin/yu-windows.exe` 仍为 `aa9232e5…`（cargo 未重新链接）。
+
+**失败现场。** 若收尾时按 marker 找不到 fixture 窗口，`fixture-isolated-and-stable` 判 false、脚本以 1 退出，同时跳过关闭动作——那扇窗口会留在桌面上作为失败现场，需要人工关闭；正常路径只对基准自己打开的那个 handle 发 `WM_CLOSE`。
 
 **清理。** 删除 `.tmp-explorer-probe.mjs`、`.tmp-verify14.sh`、`tests/yu-v2/evidence/.smoke-explorer.json` 与临时目录；基准结束自行关闭 fixture 窗口。
