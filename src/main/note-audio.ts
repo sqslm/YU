@@ -35,8 +35,8 @@ const CANCELLED = 'Playback cancelled'
 interface Pending {
   /** The play generation this command belongs to; older commands may not speak for newer ones. */
   gen: number
-  /** A `play`: the only command that can be replaced or cancelled by the next one. */
-  play: boolean
+  /** What was asked. `status` is a query: it owns nothing and may not be cancelled. */
+  action: NoteAudioAction
   /** True once the command actually reached the renderer. */
   sent: boolean
   resolve: (state: NoteAudioState) => void
@@ -112,33 +112,71 @@ export class NoteAudioPlayer {
 
     const requestId = randomUUID()
     if (action === 'play') {
-      // The newest effective play wins: the previous one is dropped *before* this
-      // one is issued, so the page can only ever be told about the last of them.
-      this.cancelPlays(SUPERSEDED)
-      this.playId = requestId
+      // The newest effective play wins: the previous generation is dropped
+      // *before* this one is issued, so the page can only ever be told about the
+      // last of them. The whole generation goes with it — a resume/seek/rate that
+      // was still waiting for the pill used to survive the replacement and be
+      // delivered once that window became ready.
       this.gen += 1
+      this.cancelBefore(this.gen, SUPERSEDED)
+      this.playId = requestId
     }
     const win = this.window()
     if (!win && !NEEDS_WINDOW.has(action)) {
       // Nothing can hear this command, and a page that never received anything
       // would only spend the whole budget here. A paused or stopped request must
-      // not start playing later on its own, so it cancels the play that was
+      // not start playing later on its own, so it ends the commands that were
       // still being prepared — a query must not: `status` only reports.
-      if (action === 'pause' || action === 'stop') this.cancelPlays(CANCELLED)
-      if (action === 'stop') this.playId = null
+      this.cancelPending(action)
       return { ...IDLE }
     }
-    // A play that has not reached the renderer yet would start *after* this
-    // command: cancel it so the page's command order stays honest. `stop` also
-    // drops an already queued one; the page is told to stop rather than to pause.
-    if (action === 'pause') this.cancelPlays(CANCELLED, true)
-    if (action === 'stop') { this.cancelPlays(CANCELLED); this.playId = null }
+    // A command that has not reached the renderer yet would start *after* this
+    // one: cancel it so the page's command order stays honest. `stop` also drops
+    // an already queued one; the page is told to stop rather than to pause.
+    this.cancelPending(action)
 
     const request: NoteAudioRequest = { requestId, action, id, ...options, ...(url ? { url } : {}) }
-    return await this.issue(request, NEEDS_WINDOW.has(action), action === 'play')
+    return await this.issue(request, NEEDS_WINDOW.has(action))
   }
 
-  private issue(request: NoteAudioRequest, needsWindow: boolean, play: boolean): Promise<NoteAudioState> {
+  /**
+   * What a `pause` or `stop` interrupts.
+   *
+   * A `pause` only drops the commands the renderer has not received yet: a
+   * resume that is still waiting for the pill must not resume playback after it,
+   * while a playback that already started keeps its recording, position and rate
+   * so it can be resumed.
+   *
+   * A `stop` ends the generation: the play *and* every resume/seek/rate that was
+   * still preparing belong to it, so each settles now instead of arriving after
+   * the stop. A `status` is a query and cancels nothing.
+   */
+  private cancelPending(action: NoteAudioAction): void {
+    if (action === 'pause') { this.cancelUnsent(CANCELLED); return }
+    if (action !== 'stop') return
+    this.gen += 1
+    this.cancelBefore(this.gen, CANCELLED)
+    this.playId = null
+  }
+
+  /** Cancel every command of a generation older than `gen` — the whole exchange. */
+  private cancelBefore(gen: number, error: string): void {
+    for (const pending of [...this.pending.values()]) {
+      // A query only reports what the page sees and never owns playback; let its
+      // answer come back instead of rejecting a read.
+      if (pending.action === 'status' || pending.gen >= gen) continue
+      pending.abort(new Error(error))
+    }
+  }
+
+  /** Cancel the commands the renderer has not received yet. */
+  private cancelUnsent(error: string): void {
+    for (const pending of [...this.pending.values()]) {
+      if (!pending.sent) pending.abort(new Error(error))
+    }
+  }
+
+  private issue(request: NoteAudioRequest, needsWindow: boolean): Promise<NoteAudioState> {
     return new Promise<NoteAudioState>((resolve, reject) => {
       const controller = new AbortController()
       let settled = false
@@ -159,7 +197,7 @@ export class NoteAudioPlayer {
       const timer = setTimeout(() => finish(new Error('录音播放没有响应')), COMMAND_TIMEOUT_MS)
       this.pending.set(request.requestId, {
         gen: this.gen,
-        play,
+        action: request.action,
         sent: false,
         resolve: state => finish(undefined, state),
         reject: error => finish(error),
@@ -170,13 +208,13 @@ export class NoteAudioPlayer {
       // may create one.
       const deliver = (target: BrowserWindow | null): void => {
         const pending = this.pending.get(request.requestId)
-        if (!target || target.isDestroyed()) {
-          if (pending) finish(new Error('录音播放服务尚未就绪'))
-          return
-        }
         // Replaced, stopped or timed out while the pill was still starting: the
         // command is gone and must not be sent to the renderer.
         if (!pending) return
+        // A generation that lost ownership owns nothing either: a window that
+        // becomes ready late must not receive the command it was discarded with.
+        if (pending.gen < this.gen) { finish(new Error(SUPERSEDED)); return }
+        if (!target || target.isDestroyed()) { finish(new Error('录音播放服务尚未就绪')); return }
         pending.sent = true
         this.asked = target
         target.webContents.send('note-audio:command', request)
@@ -187,14 +225,6 @@ export class NoteAudioPlayer {
         error => finish(error instanceof Error ? error : new Error(String(error)))
       )
     })
-  }
-
-  /** Cancel queued plays; `onlyUnsent` keeps the one the page is already working on. */
-  private cancelPlays(error: string, onlyUnsent = false): void {
-    for (const pending of [...this.pending.values()]) {
-      if (!pending.play || (onlyUnsent && pending.sent)) continue
-      pending.abort(new Error(error))
-    }
   }
 
   /** The window that can hear commands right now, or null. Never creates one. */

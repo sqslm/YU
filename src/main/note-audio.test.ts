@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
 import { NoteAudioPlayer } from './note-audio'
-import type { NoteAudioEvent, NoteAudioState } from '@shared/noteAudio'
+import type { NoteAudioAction, NoteAudioEvent, NoteAudioState } from '@shared/noteAudio'
 
 const handlers = vi.hoisted(() => new Map<string, (event: unknown, reply: unknown) => void>())
 vi.mock('./ipc-trust', () => ({ handle: (name: string, fn: (event: unknown, reply: unknown) => void) => handlers.set(name, fn) }))
@@ -244,6 +244,110 @@ it('filters playback events by the active play', async () => {
   handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: live, state: PLAYING })
   await expect(second).resolves.toEqual(PLAYING)
   await firstRejected
+})
+
+/**
+ * 回归（R1）：resume/seek/rate 还在等 pill 就绪时收到 stop。旧实现只取消
+ * `pending.play`，等待中的控制不在取消范围里：stop 已经回了 idle，旧 resume
+ * 仍在等 `ensure()`，窗口就绪那一刻照样投给渲染器，用户按下停止后录音又续播。
+ */
+const WAITING_CONTROLS: Array<[NoteAudioAction, { positionMs?: number; rate?: number }]> = [
+  ['resume', {}],
+  ['seek', { positionMs: 250 }],
+  ['rate', { rate: 1.5 }]
+]
+for (const [action, options] of WAITING_CONTROLS) {
+  it(`cancels a ${action} that is still waiting for the pill when stop arrives`, async () => {
+    vi.useFakeTimers()
+    const h = windowHarness()
+    const waiting: Array<(win: BrowserWindow | null) => void> = []
+    const signals: Array<AbortSignal | undefined> = []
+    const ensure = vi.fn((signal?: AbortSignal) => {
+      signals.push(signal)
+      return new Promise<BrowserWindow | null>(resolve => { waiting.push(resolve) })
+    })
+    const player = new NoteAudioPlayer({ peek: () => h.win, ready: () => false, ensure }, () => 'typeless-audio://note/a')
+    player.register()
+    const control = player.control(action, undefined, options)
+    /** 旧实现在这里等不到拒绝：命令一直挂着，窗口就绪后照样投递。 */
+    const failure = control.then(() => 'resolved', (error: Error) => error.message)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(player.control('stop')).resolves.toMatchObject({ state: 'idle' })
+    // The readiness wait belonged to the discarded command: it is aborted, not
+    // left listening for a window nobody asks about any more.
+    expect(signals[0]!.aborted).toBe(true)
+    // Ready finally arrives after the stop; the old command must not be sent.
+    waiting[0](h.win)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.contents.send).not.toHaveBeenCalled()
+    expect(await failure).toBe('Playback cancelled')
+    // The 8 s budget went with the command instead of outliving it.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+}
+
+/** 回归（R1）：替换 play 同样要结束旧代控制，旧窗口迟到的 ready 不得投递旧 seek。 */
+it('cancels a waiting seek when a newer play replaces the generation', async () => {
+  const h = windowHarness()
+  const waiting: Array<(win: BrowserWindow | null) => void> = []
+  const signals: Array<AbortSignal | undefined> = []
+  const ensure = vi.fn((signal?: AbortSignal) => {
+    signals.push(signal)
+    return new Promise<BrowserWindow | null>(resolve => { waiting.push(resolve) })
+  })
+  const player = new NoteAudioPlayer({ peek: () => null, ensure }, () => 'typeless-audio://note/a')
+  player.register()
+  const seek = player.control('seek', undefined, { positionMs: 250 })
+  const seekFailure = seek.then(() => 'resolved', (error: Error) => error.message)
+  const play = player.control('play', 'note-1')
+  expect(signals[0]!.aborted).toBe(true)
+  // The stale ready resolves first: it may only deliver the play that replaced it.
+  waiting[0](h.win)
+  waiting[1](h.win)
+  await tick()
+  expect(h.contents.send.mock.calls.map(call => call[1].action)).toEqual(['play'])
+  const requestId = h.contents.send.mock.calls[0][1].requestId as string
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId, state: PLAYING })
+  await expect(play).resolves.toEqual(PLAYING)
+  expect(await seekFailure).toBe('Playback superseded')
+})
+
+/** 回归（R1）：pause 落在准备阶段时，等待中的 resume 不得随后把录音续起来。 */
+it('cancels a resume that was still waiting when a pause arrives', async () => {
+  const h = windowHarness()
+  const waiting: Array<(win: BrowserWindow | null) => void> = []
+  const ensure = vi.fn(() => new Promise<BrowserWindow | null>(resolve => { waiting.push(resolve) }))
+  const player = new NoteAudioPlayer({ peek: () => h.win, ready: () => false, ensure }, () => 'typeless-audio://note/a')
+  player.register()
+  const resume = player.control('resume')
+  const resumeFailure = resume.then(() => 'resolved', (error: Error) => error.message)
+  await expect(player.control('pause')).resolves.toMatchObject({ state: 'idle' })
+  waiting[0](h.win)
+  await tick()
+  expect(h.contents.send).not.toHaveBeenCalled()
+  expect(await resumeFailure).toBe('Playback cancelled')
+})
+
+/**
+ * 回归（R1）：stop 之后迟到的回执不得把 idle 改回 playing/暂停态。旧实现只在
+ * 投递前认代次，代次并不随 stop 前进，于是 stop 前发出的 status 快照仍能改忙态。
+ */
+it('does not let a reply from before the stop move the playback state', async () => {
+  const h = windowHarness()
+  const seen: string[] = []
+  const player = new NoteAudioPlayer({ peek: () => h.win, ensure: async () => h.win }, () => 'typeless-audio://note/a', state => seen.push(state.state))
+  player.register()
+  const status = player.control('status')
+  const statusId = h.contents.send.mock.calls[0][1].requestId as string
+  const stop = player.control('stop')
+  const stopId = h.contents.send.mock.calls[1][1].requestId as string
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: stopId, state: { id: null, state: 'idle', positionMs: 0, durationMs: 0, rate: 1 } })
+  await expect(stop).resolves.toMatchObject({ state: 'idle' })
+  // The snapshot was taken before the stop and still says the old play is going.
+  handlers.get('note-audio:reply')!({ sender: h.contents }, { requestId: statusId, state: PLAYING })
+  // Only the stop's own answer reports; the pre-stop snapshot must not revive it.
+  expect(seen).toEqual(['idle'])
+  await expect(status).resolves.toEqual(PLAYING)
 })
 
 /**

@@ -25,7 +25,7 @@ const ELECTRON = join(repo, 'node_modules/electron/dist/electron.exe')
 const missing = [BAR_HTML, PRELOAD, MAIN_ENTRY, ELECTRON].filter(path => !existsSync(path))
 
 /** The phase-20 scenarios R4's `playbackGate` refuses to accept without. */
-const REQUIRED_IDS = ['r1-stop-before-ready', 'r1-playback-replacement', 'r2-destroy-or-cancel', 'r3-note-cold-path', 'r3-speech-cold-path']
+const REQUIRED_IDS = ['r1-stop-before-ready', 'r1-stop-cancels-waiting-control', 'r1-playback-replacement', 'r2-destroy-or-cancel', 'r3-note-cold-path', 'r3-speech-cold-path']
 
 /** The workspace ships esbuild only inside the pnpm store, so resolve it by hand. */
 function loadEsbuild(): { build: (options: Record<string, unknown>) => Promise<unknown>; version: string } {

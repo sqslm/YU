@@ -567,6 +567,44 @@ async function probe(): Promise<void> {
     return `play rejected "${outcome.error}" after ${outcome.ms} ms; renderer ordered [${seen.map(entry => entry.action).join(',')}]; status=idle id=null; busy=false`
   })
 
+  // ── R1: stop while a resume — not a play — is still waiting for the cold window ──
+  await step('r1-stop-cancels-waiting-control', async () => {
+    await destroyWindow()
+    holdReady = true
+    const resume = player.control('resume')
+    const settling = settleSoon('the resume stopped before ready', resume, 6000)
+    const waiting = await eventually('the window the resume is waiting for', () => host.peek(), 4000)
+    if (readiness.isReady(waiting)) throw Error('the window was already ready; this case needs a cold one')
+    const before = windowsCreated()
+    const stopped = await player.control('stop')
+    if (stopped.state !== 'idle' || stopped.id !== null) throw Error(`stop answered ${JSON.stringify(stopped)}`)
+    if (windowsCreated() !== before) throw Error(`stop created a window (${before} -> ${windowsCreated()})`)
+    // The control that was waiting on that window has to be gone, not left to
+    // fire the moment the window finally reports ready.
+    const outcome = await settling
+    if (outcome.ok) throw Error('the stopped resume still resolved as if the pill had heard it')
+    if (outcome.error !== 'Playback cancelled') throw Error(`expected "Playback cancelled", got "${outcome.error}"`)
+    if (outcome.ms > 3000) throw Error(`the stopped resume took ${outcome.ms} ms to settle`)
+    if (player.activePlayId !== null) throw Error(`a stopped control still owns playback (${player.activePlayId})`)
+    // Record what the page receives from here on, then let it report ready: only
+    // commands issued *after* the stop may reach it, and none of them is a resume.
+    await installRecorder(waiting)
+    releaseReady()
+    await eventually('the released window to report ready', () => readiness.isReady(waiting), 5000)
+    const status = await player.control('status')
+    if (status.state !== 'idle' || status.id !== null) throw Error(`the released window is not idle: ${JSON.stringify(status)}`)
+    await delay(400)
+    const seen = await seenNotes(waiting)
+    const delivered = seen.map(entry => entry.action)
+    if (delivered.includes('resume')) throw Error(`the cancelled resume was still delivered: [${delivered.join(',')}]`)
+    // The recorder has to have seen *something*: an empty list would make the
+    // check above pass for the wrong reason.
+    if (!delivered.includes('status')) throw Error(`the recorder saw nothing after ready: [${delivered.join(',')}]`)
+    if (busy.isBusy()) throw Error('the cancelled resume left the pill busy')
+    if (player.activePlayId !== null) throw Error(`the stopped resume took playback back (${player.activePlayId})`)
+    return `resume rejected "${outcome.error}" after ${outcome.ms} ms; delivered after ready [${delivered.join(',')}]; status=${status.state} id=${status.id}; busy=false`
+  })
+
   // ── R2: destroying the window a play is waiting for settles it, and a rebuild plays ──
   await step('r2-destroy-or-cancel', async () => {
     await destroyWindow()
