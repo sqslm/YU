@@ -393,6 +393,10 @@ mod tests {
                 .unwrap();
             assert_eq!(exists, 1, "{table} must exist after the upgrade");
         }
+        // Windows keeps every file of the database open while the store lives.
+        drop(connection);
+        drop(store);
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
