@@ -13,8 +13,62 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 1;
+pub const KNOWLEDGE_SCHEMA: i64 = 2;
 pub const PROFILE_SCHEMA: i64 = 1;
+
+/// Phase 2 adds the pending-extraction queue. It only creates tables, so a
+/// phase-1 database keeps every source, card and exclusion it already had.
+const QUEUE_SQL: &str = r#"
+CREATE TABLE queue_groups (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL CHECK (channel IN ('note','chat','reading')),
+  group_key TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  scope TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL CHECK (state IN ('stabilizing','ready','needs_reread','failed','cancelled')),
+  stable_at INTEGER NOT NULL,
+  reason TEXT,
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (channel, group_key)
+);
+CREATE INDEX queue_groups_state ON queue_groups (state, stable_at);
+
+CREATE TABLE queue_items (
+  group_id TEXT NOT NULL REFERENCES queue_groups(id) ON DELETE CASCADE,
+  ordinal INTEGER NOT NULL,
+  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (group_id, ordinal)
+);
+CREATE INDEX queue_items_source ON queue_items (source_id);
+
+CREATE TABLE queue_control (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE history_jobs (
+  id TEXT PRIMARY KEY,
+  scopes TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('running','paused','completed','cancelled')),
+  note_cursor TEXT,
+  chat_cursor TEXT,
+  note_done INTEGER NOT NULL DEFAULT 0,
+  chat_done INTEGER NOT NULL DEFAULT 0,
+  scanned INTEGER NOT NULL DEFAULT 0,
+  skipped INTEGER NOT NULL DEFAULT 0,
+  deduped INTEGER NOT NULL DEFAULT 0,
+  ready INTEGER NOT NULL DEFAULT 0,
+  needs_reread INTEGER NOT NULL DEFAULT 0,
+  failed INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+"#;
 
 pub const CARD_KINDS: [&str; 7] = [
     "concept",
@@ -136,8 +190,12 @@ impl Store {
     pub fn open(root: &Path) -> ApiResult<Store> {
         let knowledge_path = root.join("data").join("knowledge").join("knowledge.db");
         let profile_path = root.join("data").join("profile").join("profile.db");
-        let knowledge = open_db(&knowledge_path, KNOWLEDGE_SCHEMA, KNOWLEDGE_SQL)?;
-        let profile = open_db(&profile_path, PROFILE_SCHEMA, PROFILE_SQL)?;
+        let knowledge = open_db(
+            &knowledge_path,
+            KNOWLEDGE_SCHEMA,
+            &[KNOWLEDGE_SQL, QUEUE_SQL],
+        )?;
+        let profile = open_db(&profile_path, PROFILE_SCHEMA, &[PROFILE_SQL])?;
         Ok(Store {
             knowledge: Mutex::new(knowledge),
             profile: Mutex::new(profile),
@@ -147,7 +205,7 @@ impl Store {
     }
 }
 
-fn open_db(path: &Path, schema: i64, schema_sql: &str) -> ApiResult<Connection> {
+fn open_db(path: &Path, schema: i64, migrations: &[&str]) -> ApiResult<Connection> {
     if let Some(directory) = path.parent() {
         fs::create_dir_all(directory).map_err(|error| {
             ApiError::storage(format!(
@@ -167,13 +225,13 @@ fn open_db(path: &Path, schema: i64, schema_sql: &str) -> ApiResult<Connection> 
     connection
         .execute_batch("PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;")
         .map_err(|error| ApiError::storage(format!("cannot configure the connection: {error}")))?;
-    migrate(&mut connection, schema, schema_sql)?;
+    migrate(&mut connection, schema, migrations)?;
     Ok(connection)
 }
 
 /// Creates or upgrades the schema inside one transaction. A database written by
 /// a newer build is refused instead of rebuilt, so no data is silently dropped.
-fn migrate(connection: &mut Connection, target: i64, schema_sql: &str) -> ApiResult<()> {
+fn migrate(connection: &mut Connection, target: i64, migrations: &[&str]) -> ApiResult<()> {
     let current: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(|error| ApiError::storage(format!("cannot read the schema version: {error}")))?;
@@ -189,10 +247,14 @@ fn migrate(connection: &mut Connection, target: i64, schema_sql: &str) -> ApiRes
     let transaction = connection.transaction().map_err(|error| {
         ApiError::storage(format!("cannot start the schema transaction: {error}"))
     })?;
-    if current < 1 {
-        transaction
-            .execute_batch(schema_sql)
-            .map_err(|error| ApiError::storage(format!("cannot create the schema: {error}")))?;
+    // Each entry upgrades the database by exactly one version, so a phase-1
+    // file picks up the phase-2 tables without rebuilding what it already has.
+    for (index, migration) in migrations.iter().enumerate() {
+        if current <= index as i64 {
+            transaction.execute_batch(migration).map_err(|error| {
+                ApiError::storage(format!("cannot apply schema {}: {error}", index + 1))
+            })?;
+        }
     }
     transaction
         .execute_batch(&format!("PRAGMA user_version = {target}"))
@@ -280,6 +342,57 @@ mod tests {
         // Windows refuses to delete files a live connection still holds open.
         drop(reopened);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_phase_one_database_keeps_its_rows_and_gains_the_queue() {
+        let root = temp_root("upgrade");
+        fs::create_dir_all(root.join("data").join("knowledge")).unwrap();
+        let path = root.join("data").join("knowledge").join("knowledge.db");
+        {
+            // A database exactly as phase 1 shipped it: schema 1, one source.
+            let connection = Connection::open(&path).unwrap();
+            connection.execute_batch(KNOWLEDGE_SQL).unwrap();
+            connection
+                .execute_batch("PRAGMA user_version = 1;")
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO sources (id, kind, origin_ref, version, fingerprint, read_at,
+                       created_at, updated_at) VALUES ('src_old', 'note', 'n', 'v', 'f', 1, 1, 1)",
+                    [],
+                )
+                .unwrap();
+        }
+        let store = Store::open(&root).expect("upgrade");
+        let connection = store.knowledge.lock().unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, KNOWLEDGE_SCHEMA, "the file reports the new schema");
+        let kept: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM sources WHERE id = 'src_old'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(kept, 1, "an upgrade must not drop what phase 1 stored");
+        for table in [
+            "queue_groups",
+            "queue_items",
+            "queue_control",
+            "history_jobs",
+        ] {
+            let exists: i64 = connection
+                .query_row(
+                    "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(exists, 1, "{table} must exist after the upgrade");
+        }
     }
 
     #[test]

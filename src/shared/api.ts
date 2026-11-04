@@ -109,6 +109,30 @@ export interface TypelessApi {
     deleteCard(id: string): Promise<{ removed: boolean }>
     listCards(query?: import('./knowledge').CardQuery): Promise<import('./knowledge').KnowledgeCardPage>
     searchCards(query: import('./knowledge').CardSearchQuery): Promise<import('./knowledge').KnowledgeCardPage>
+    configureCollect(input: { notes?: boolean; chat?: boolean; reading?: boolean }): Promise<import('./knowledge').CollectChannels>
+    pauseCollect(reason: 'manual' | 'game', paused: boolean): Promise<import('./knowledge').CollectChannels>
+    listQueue(query?: { state?: string; offset?: number; limit?: number }): Promise<import('./knowledge').QueuePage>
+    queueStatus(): Promise<import('./knowledge').QueueStatus>
+    cancelTask(target: import('./knowledge').TaskTarget): Promise<{ groupId: string; state: string }>
+    retryTask(target: import('./knowledge').TaskTarget): Promise<{ groupId: string; state: string }>
+    invalidateTask(target: import('./knowledge').TaskTarget, reason?: string): Promise<{ groupId: string; state: string }>
+    needsReread(target: import('./knowledge').TaskTarget, reason?: string): Promise<{ groupId: string; state: string }>
+    exclude(kind: string, key: string, reason?: string): Promise<import('./knowledge').ExclusionEntry>
+    unexclude(kind: string, key: string): Promise<{ removed: boolean }>
+    listExclusions(): Promise<import('./knowledge').ExclusionEntry[]>
+    beginHistory(scopes: { notes: boolean; chat: boolean }): Promise<{ job: import('./knowledge').HistoryJob; resumed: boolean }>
+    stepHistory(input: {
+      jobId: string
+      kind: 'note' | 'chat'
+      cursor?: string | null
+      rows: import('./knowledge').PublishInput[]
+      done: boolean
+    }): Promise<{ job: import('./knowledge').HistoryJob }>
+    pauseHistory(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
+    resumeHistory(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
+    cancelHistory(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
+    historyStatus(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
+    latestHistory(): Promise<{ job: import('./knowledge').HistoryJob | null }>
   }
   profile: {
     save(input: import('./knowledge').SaveProfileInput): Promise<import('./knowledge').ProfileItem>

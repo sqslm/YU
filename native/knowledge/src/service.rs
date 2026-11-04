@@ -17,7 +17,7 @@ use serde::Deserialize;
 use crate::protocol::{ApiError, ApiResult, Code};
 use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA, Store};
 use crate::util::ensure_not_cancelled;
-use crate::{cards, profile, sources};
+use crate::{cards, history, profile, queue, sources};
 
 #[derive(Deserialize)]
 struct IdParams {
@@ -240,6 +240,144 @@ impl Service {
                 let page = profile::list(&connection, decode(params)?)?;
                 Ok(Outcome {
                     result: serde_json::to_value(page).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            // ---------------------------------------------------------- stage 2
+            "collect.configure" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::configure(&mut connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "queue.pause" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::pause(&connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "source.publish" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::publish(&mut connection, decode(params)?)?;
+                Ok(changed(
+                    serde_json::to_value(result).map_err(encode_error)?,
+                    "queue",
+                ))
+            }
+            "queue.list" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let page = queue::list(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(page).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "queue.status" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let status = queue::status(&connection)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(status).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "queue.cancel" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::cancel(&connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "queue.retry" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::retry(&connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "queue.invalidate" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::invalidate(&mut connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "queue.needs_reread" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::needs_reread(&connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "exclude.add" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::exclude_add(&mut connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "exclude.remove" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::exclude_remove(&connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
+            "exclude.list" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::exclude_list(&connection)?;
+                Ok(Outcome {
+                    result,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "history.begin" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = history::begin(&mut connection, decode(params)?)?;
+                Ok(changed(result, "history"))
+            }
+            "history.step" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = history::step(&mut connection, decode(params)?)?;
+                Ok(changed(result, "history"))
+            }
+            "history.pause" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = history::pause(&connection, decode(params)?)?;
+                Ok(changed(result, "history"))
+            }
+            "history.resume" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = history::resume(&connection, decode(params)?)?;
+                Ok(changed(result, "history"))
+            }
+            "history.cancel" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = history::cancel(&connection, decode(params)?)?;
+                Ok(changed(result, "history"))
+            }
+            "history.status" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = history::status(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "history.latest" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = history::latest(&connection)?;
+                Ok(Outcome {
+                    result,
                     scope: None,
                     shutdown: false,
                 })

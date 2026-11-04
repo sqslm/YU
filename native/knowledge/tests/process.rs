@@ -56,6 +56,12 @@ struct Helper {
 
 impl Helper {
     fn start(root: &Path, idle_ms: Option<u64>) -> Helper {
+        Helper::start_with(root, idle_ms, None)
+    }
+
+    /// `stable_ms` shortens the settling window so a test can watch a task turn
+    /// from `stabilizing` into `ready` without waiting a real minute.
+    fn start_with(root: &Path, idle_ms: Option<u64>, stable_ms: Option<u64>) -> Helper {
         let mut command = Command::new(env!("CARGO_BIN_EXE_yu-knowledge"));
         command
             .arg("--root")
@@ -65,6 +71,9 @@ impl Helper {
             .stderr(Stdio::piped());
         if let Some(idle) = idle_ms {
             command.env("YU_KNOWLEDGE_IDLE_MS", idle.to_string());
+        }
+        if let Some(stable) = stable_ms {
+            command.env("YU_KNOWLEDGE_STABLE_MS", stable.to_string());
         }
         let mut child = command.spawn().unwrap();
         let stdin = child.stdin.take();
@@ -77,7 +86,7 @@ impl Helper {
         // src/shared/knowledge.ts types ready.schema as { knowledge, profile }.
         assert_eq!(
             ready["schema"],
-            serde_json::json!({ "knowledge": 1, "profile": 1 }),
+            serde_json::json!({ "knowledge": 2, "profile": 1 }),
             "ready schema: {ready}"
         );
         helper

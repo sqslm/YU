@@ -34,6 +34,9 @@ export const HISTORY_RETENTIONS = [-1, 0, 86_400, 604_800, 2_592_000, 31_536_000
 export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   speechEnhancement: false,
   memory: { enabled: false, autoLearn: true, profileId: null, effort: 'high' },
+  // Collection starts off: no helper, no database and no queue until the user
+  // turns it on. The channels are pre-allowed but inert while the switch is off.
+  knowledge: { enabled: false, notes: true, chat: true, reading: true },
   hotkeys: {
     enabled: true,
     // Mirrors the vendor defaults discovered on disk so muscle memory carries

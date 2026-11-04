@@ -37,6 +37,9 @@ import { HotkeyHost, type HotkeyHostEvent } from './hotkey/host'
 import { UiaHost } from './uia/host'
 import { KnowledgeHost } from './knowledge/host'
 import { createKnowledgeCompleter } from './knowledge/model'
+import { KnowledgeCollector } from './knowledge/collector'
+import type { TaskTarget } from '@shared/knowledge'
+
 import {
   knowledgeId,
   type CardQuery,
@@ -185,7 +188,7 @@ const stats = new StatsStore()
 let settingsWindow: BrowserWindow | null = null
 const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
-}, () => assistant.localQueries())
+}, () => assistant.localQueries(), turn => collectChatTurn(turn))
 let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
 /** Which pill renderer has finished loading and subscribed to its channels. */
@@ -211,6 +214,35 @@ const knowledge = new KnowledgeHost({
   completer: createKnowledgeCompleter({ settings: () => store.get() }),
   log: line => log(line)
 })
+/**
+ * Turns finished notes, questions and readings into sources and pending tasks.
+ * It holds no state of its own except the reading bodies: the queue, its window
+ * and every dedupe rule live in the Rust helper.
+ */
+const knowledgeCollector = new KnowledgeCollector({
+  settings: () => store.get(),
+  host: () => knowledge,
+  log: line => log(line)
+})
+
+/** A finished chat turn: a reading summary never also becomes a plain task. */
+function collectChatTurn(turn: import('./knowledge/collector').ChatTurnDone): void {
+  if (turn.materials.length) {
+    knowledgeCollector.readingFinished({
+      originRef: `chat:${turn.threadId}:${turn.answerId}`,
+      groupKey: `chat:${turn.threadId}:${turn.answerId}`,
+      title: turn.threadTitle ?? turn.question.slice(0, 40),
+      scope: '主界面问答',
+      request: turn.question,
+      materials: turn.materials,
+      answer: turn.answer,
+      sources: [],
+      at: turn.at
+    })
+    return
+  }
+  knowledgeCollector.threadFinished(turn)
+}
 let reminders: ReminderService | null = null
 /**
  * The four stores behind the assistant's "life" tools. Created in `ready()`, not
@@ -261,6 +293,7 @@ const windowsTools = new WindowsTools({
   ,access:()=>store.get().assistantAccess
 })
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
+  onReading: reading => knowledgeCollector.readingFinished(reading),
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
     const target = await captureSelectionTarget(store.get(), context, signal)
@@ -580,6 +613,8 @@ function saveFeeds(feeds: ExternalCalendar[]): ExternalCalendar[] {
  */
 const notes = new NotesStore({
   log: (line) => log(line),
+  onSettled: note => knowledgeCollector.noteSettled(note),
+  onRemoved: id => knowledgeCollector.noteRemoved(id),
   getSettings: () => store.get(),
   notify: () => broadcastNotes(),
   localAsr: {
@@ -750,7 +785,9 @@ function applyGameMode(status: GameModeStatus): void {
   log(`[game-mode] ${status.active ? 'entered' : 'left'} source=${status.source} game=${status.game}`)
   if (status.active) {
     chats.cancel(); explanationController?.abort()
-    void knowledge.stop()
+    // The pause has to reach the database before the helper goes away, otherwise
+    // the flag would be lost with the process and collection would resume itself.
+    void knowledge.pauseCollect('game', true).catch(() => undefined).finally(() => knowledge.stop())
     hotkeys?.stop()
     refreshWakeWord()
     cancelAssistant()
@@ -1427,6 +1464,55 @@ function registerIpc(): void {
   handle('profile:get', (event, id: string) => { knowledgeOwner(event); return knowledge.getProfile(knowledgeId(id, '画像 ID')) })
   handle('profile:delete', (event, id: string) => { knowledgeOwner(event); return knowledge.deleteProfile(knowledgeId(id, '画像 ID')) })
   handle('profile:list', (event, query: CardQuery = {}) => { knowledgeOwner(event); return knowledge.listProfiles(query) })
+  // ---------------------------------------------------------- collection (stage 2)
+  //
+  // These only forward; the queue, its settling window and every dedupe rule stay
+  // in the helper. No channel lets the renderer pick a data root or send SQL.
+  handle('knowledge:collect-configure', (event, input: { notes?: boolean; chat?: boolean; reading?: boolean }) => {
+    knowledgeOwner(event)
+    return knowledge.configureCollect(input ?? {})
+  })
+  handle('knowledge:collect-pause', (event, reason: 'manual' | 'game', paused: boolean) => {
+    knowledgeOwner(event)
+    return knowledge.pauseCollect(reason === 'game' ? 'game' : 'manual', Boolean(paused))
+  })
+  handle('knowledge:queue-list', (event, query: { state?: string; offset?: number; limit?: number } = {}) => {
+    knowledgeOwner(event)
+    return knowledge.listQueue(query)
+  })
+  handle('knowledge:queue-status', event => { knowledgeOwner(event); return knowledge.queueStatus() })
+  handle('knowledge:task-cancel', (event, target: TaskTarget) => { knowledgeOwner(event); return knowledge.cancelTask(target) })
+  handle('knowledge:task-retry', (event, target: TaskTarget) => { knowledgeOwner(event); return knowledge.retryTask(target) })
+  handle('knowledge:task-invalidate', (event, target: TaskTarget, reason?: string) => {
+    knowledgeOwner(event)
+    return knowledge.invalidateTask(target, typeof reason === 'string' ? reason : 'user deleted')
+  })
+  handle('knowledge:task-needs-reread', (event, target: TaskTarget, reason?: string) => {
+    knowledgeOwner(event)
+    return knowledge.needsReread(target, typeof reason === 'string' ? reason : 'body unavailable')
+  })
+  handle('knowledge:exclude-add', (event, kind: string, key: string, reason?: string) => {
+    knowledgeOwner(event)
+    return knowledge.exclude(String(kind), knowledgeId(key, '排除键'), typeof reason === 'string' ? reason : undefined)
+  })
+  handle('knowledge:exclude-remove', (event, kind: string, key: string) => {
+    knowledgeOwner(event)
+    return knowledge.unexclude(String(kind), knowledgeId(key, '排除键'))
+  })
+  handle('knowledge:exclude-list', event => { knowledgeOwner(event); return knowledge.listExclusions() })
+  handle('knowledge:history-begin', (event, scopes: { notes: boolean; chat: boolean }) => {
+    knowledgeOwner(event)
+    return knowledge.beginHistory(scopes ?? { notes: false, chat: false })
+  })
+  handle('knowledge:history-step', (event, input: Parameters<KnowledgeHost['stepHistory']>[0]) => {
+    knowledgeOwner(event)
+    return knowledge.stepHistory(input)
+  })
+  handle('knowledge:history-pause', (event, id: string) => { knowledgeOwner(event); return knowledge.pauseHistory(knowledgeId(id, '任务 ID')) })
+  handle('knowledge:history-resume', (event, id: string) => { knowledgeOwner(event); return knowledge.resumeHistory(knowledgeId(id, '任务 ID')) })
+  handle('knowledge:history-cancel', (event, id: string) => { knowledgeOwner(event); return knowledge.cancelHistory(knowledgeId(id, '任务 ID')) })
+  handle('knowledge:history-status', (event, id: string) => { knowledgeOwner(event); return knowledge.historyStatus(knowledgeId(id, '任务 ID')) })
+  handle('knowledge:history-latest', event => { knowledgeOwner(event); return knowledge.latestHistory() })
   let selectedBackup: string | null = null, backupWorking = false
   const roots = (): BackupRoots => ({ user: app.getPath('userData'), notes: store.get().notesDir || app.getPath('userData'), chat: chatRoot })
   const assertBackupIdle = (): void => {
@@ -1622,6 +1708,7 @@ function registerIpc(): void {
     const previous = store.get()
     const next = await store.update(patch)
     if (previous.memory.enabled !== next.memory.enabled || previous.memory.autoLearn !== next.memory.autoLearn) void memory.configure()
+    if (JSON.stringify(previous.knowledge) !== JSON.stringify(next.knowledge)) void knowledgeCollector.sync()
     if (!next.tts.enabled) speech?.stop()
     setMainLanguage(next.uiLanguage)
     gameMode.configure(next.gameMode)
@@ -2396,6 +2483,8 @@ async function bootstrap(): Promise<void> {
     if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('recording:changed')
   })
   const settings = await store.load()
+  // Only mirrors the switches; nothing spawns and nothing is scanned.
+  void knowledgeCollector.sync()
   // Chromium's network stack is the only transport that reads the OS proxy/PAC,
   // so the mode is pushed in before any window exists and before any request.
   setEgressLog(log)

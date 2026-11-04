@@ -30,8 +30,15 @@ import {
   type KnowledgeErrorCode,
   type KnowledgeSource,
   type KnowledgeStatus,
+  type CollectChannels,
+  type ExclusionEntry,
+  type HistoryJob,
+  type PublishInput,
+  type PublishResult,
   type ProfileItem,
   type ProfilePage,
+  type QueuePage,
+  type QueueStatus,
   type SaveCardInput,
   type SaveProfileInput,
   type SaveSourceInput,
@@ -40,6 +47,10 @@ import {
 } from '@shared/knowledge'
 
 import type { KnowledgeCompleter } from './model'
+import type { TaskRefusal, TaskTarget } from '@shared/knowledge'
+
+export type { TaskTarget, TaskRefusal } from '@shared/knowledge'
+
 
 interface Pending {
   method: string
@@ -655,5 +666,94 @@ export class KnowledgeHost {
 
   listProfiles(query: CardQuery = {}): Promise<ProfilePage> {
     return this.call<ProfilePage>('profile.list', query)
+  }
+  // ---------------------------------------------------------------- stage 2
+
+  configureCollect(input: {
+    notes?: boolean
+    chat?: boolean
+    reading?: boolean
+    paused?: { manual?: boolean; game?: boolean }
+  }): Promise<CollectChannels> {
+    return this.call<CollectChannels>('collect.configure', input)
+  }
+
+  pauseCollect(reason: 'manual' | 'game', paused: boolean): Promise<CollectChannels> {
+    return this.call<CollectChannels>('queue.pause', { reason, paused })
+  }
+
+  publishSource(input: PublishInput): Promise<PublishResult> {
+    return this.call<PublishResult>('source.publish', input)
+  }
+
+  listQueue(query: { state?: string; offset?: number; limit?: number } = {}): Promise<QueuePage> {
+    return this.call<QueuePage>('queue.list', query)
+  }
+
+  queueStatus(): Promise<QueueStatus> {
+    return this.call<QueueStatus>('queue.status', {})
+  }
+
+  /** A task is addressed by its id, or by the channel and key that minted it. */
+  cancelTask(target: TaskTarget): Promise<TaskRefusal> {
+    return this.call<TaskRefusal>('queue.cancel', target)
+  }
+
+  retryTask(target: TaskTarget): Promise<TaskRefusal> {
+    return this.call<TaskRefusal>('queue.retry', target)
+  }
+
+  invalidateTask(target: TaskTarget, reason: string): Promise<TaskRefusal> {
+    return this.call<TaskRefusal>('queue.invalidate', { ...target, reason })
+  }
+
+  needsReread(target: TaskTarget, reason: string): Promise<TaskRefusal> {
+    return this.call<TaskRefusal>('queue.needs_reread', { ...target, reason })
+  }
+
+  exclude(kind: string, key: string, reason = ''): Promise<{ kind: string; key: string; excluded: boolean }> {
+    return this.call<{ kind: string; key: string; excluded: boolean }>('exclude.add', { kind, key, reason })
+  }
+
+  unexclude(kind: string, key: string): Promise<{ kind: string; key: string; excluded: boolean }> {
+    return this.call<{ kind: string; key: string; excluded: boolean }>('exclude.remove', { kind, key })
+  }
+
+  listExclusions(): Promise<ExclusionEntry[]> {
+    return this.call<ExclusionEntry[]>('exclude.list', {})
+  }
+
+  beginHistory(scopes: { notes: boolean; chat: boolean }): Promise<{ job: HistoryJob; resumed: boolean }> {
+    return this.call<{ job: HistoryJob; resumed: boolean }>('history.begin', scopes)
+  }
+
+  stepHistory(input: {
+    jobId: string
+    kind: 'note' | 'chat'
+    cursor?: string | null
+    rows: PublishInput[]
+    done: boolean
+  }): Promise<{ job: HistoryJob; done: boolean }> {
+    return this.call<{ job: HistoryJob; done: boolean }>('history.step', input)
+  }
+
+  pauseHistory(jobId: string): Promise<{ job: HistoryJob }> {
+    return this.call<{ job: HistoryJob }>('history.pause', { jobId })
+  }
+
+  resumeHistory(jobId: string): Promise<{ job: HistoryJob }> {
+    return this.call<{ job: HistoryJob }>('history.resume', { jobId })
+  }
+
+  cancelHistory(jobId: string): Promise<{ job: HistoryJob }> {
+    return this.call<{ job: HistoryJob }>('history.cancel', { jobId })
+  }
+
+  historyStatus(jobId: string): Promise<{ job: HistoryJob }> {
+    return this.call<{ job: HistoryJob }>('history.status', { jobId })
+  }
+
+  latestHistory(): Promise<{ job: HistoryJob | null }> {
+    return this.call<{ job: HistoryJob | null }>('history.latest', {})
   }
 }

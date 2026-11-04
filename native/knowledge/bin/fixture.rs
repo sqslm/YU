@@ -128,7 +128,7 @@ fn main() {
                                 &request.id,
                                 &json!({
                                     "version": 1,
-                                    "schema": { "knowledge": 1, "profile": 1 },
+                                    "schema": { "knowledge": yu_knowledge::store::KNOWLEDGE_SCHEMA, "profile": yu_knowledge::store::PROFILE_SCHEMA },
                                     "opened": false,
                                     "fts5": true,
                                     "trigram": true

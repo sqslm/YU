@@ -83,7 +83,7 @@ describe('compiled helper over the production host', () => {
       opened: true,
       fts5: true,
       trigram: true,
-      schema: { knowledge: 1, profile: 1 }
+      schema: { knowledge: 2, profile: 1 }
     })
     const card = await instance.saveCard({
       kind: 'concept',
@@ -188,6 +188,87 @@ describe('compiled helper over the production host', () => {
     })
     expect(instance.running).toBe(false)
     await expect(instance.listCards({})).resolves.toMatchObject({ total: 1 })
+    await instance.stop()
+  })
+
+  it('collects a note into a pending task and dedupes the same body', async () => {
+    const instance = host()
+    await expect(instance.configureCollect({ notes: true })).resolves.toMatchObject({ note: true })
+    const input = {
+      channel: 'note' as const,
+      kind: 'note' as const,
+      originRef: 'note-1',
+      groupKey: 'note-1',
+      title: '随记',
+      scope: '笔记',
+      text: '同一段正文',
+      at: Date.now()
+    }
+    const first = await instance.publishSource(input)
+    expect(first).toMatchObject({ version: expect.any(String), state: 'stabilizing', duplicate: false })
+    expect(first.fingerprint).toHaveLength(64)
+    const again = await instance.publishSource(input)
+    expect(again).toMatchObject({ sourceId: first.sourceId, groupId: first.groupId, duplicate: true })
+    const page = await instance.listQueue({})
+    expect(page.total).toBe(1)
+    expect(page.items[0]).toMatchObject({ channel: 'note', groupKey: 'note-1', state: 'stabilizing' })
+    expect(page.items[0].items[0]).toMatchObject({ sourceId: first.sourceId, ordinal: 0 })
+    const status = await instance.queueStatus()
+    expect(status.counts.stabilizing).toBe(1)
+    await instance.stop()
+  })
+
+  it('refuses an excluded group and allows it again', async () => {
+    const instance = host()
+    await instance.exclude('note', 'note-2', 'kept out')
+    await expect(
+      instance.publishSource({ channel: 'note', kind: 'note', originRef: 'note-2', groupKey: 'note-2', text: '正文', at: Date.now() })
+    ).rejects.toMatchObject({ code: 'excluded' })
+    await expect(instance.listExclusions()).resolves.toMatchObject([{ kind: 'note', key: 'note-2' }])
+    await instance.unexclude('note', 'note-2')
+    await expect(
+      instance.publishSource({ channel: 'note', kind: 'note', originRef: 'note-2', groupKey: 'note-2', text: '正文', at: Date.now() })
+    ).resolves.toMatchObject({ state: 'stabilizing' })
+    await instance.stop()
+  })
+
+  it('drops a deleted note by channel and key', async () => {
+    const instance = host()
+    await instance.publishSource({ channel: 'note', kind: 'note', originRef: 'note-3', groupKey: 'note-3', text: '正文', at: Date.now() })
+    await expect(instance.invalidateTask({ channel: 'note', groupKey: 'note-3' }, 'note deleted')).resolves.toMatchObject({ state: 'cancelled' })
+    const page = await instance.listQueue({ state: 'cancelled' })
+    expect(page.total).toBe(1)
+    await instance.stop()
+  })
+
+  it('walks a history job to completion through batches', async () => {
+    const instance = host()
+    const begun = await instance.beginHistory({ notes: true, chat: false })
+    expect(begun).toMatchObject({ resumed: false, job: { state: 'running' } })
+    const first = await instance.stepHistory({
+      jobId: begun.job.id,
+      kind: 'note',
+      cursor: 'n1',
+      rows: [{ channel: 'note', kind: 'note', originRef: 'n1', groupKey: 'n1', text: '历史一', at: Date.now() }],
+      done: false
+    })
+    expect(first.job).toMatchObject({ scanned: 1, ready: 1, noteCursor: 'n1', state: 'running' })
+    const second = await instance.stepHistory({
+      jobId: begun.job.id,
+      kind: 'note',
+      cursor: 'n2',
+      rows: [
+        { channel: 'note', kind: 'note', originRef: 'n1', groupKey: 'n1', text: '历史一', at: Date.now() },
+        { channel: 'note', kind: 'note', originRef: 'n2', groupKey: 'n2', text: '历史二', at: Date.now() }
+      ],
+      done: true
+    })
+    expect(second.job).toMatchObject({ scanned: 3, ready: 2, deduped: 1, noteDone: true, state: 'completed' })
+    // A finished job is finished: a new start opens a new one, and only an
+    // active one is reused.
+    const next = await instance.beginHistory({ notes: true, chat: false })
+    expect(next.resumed).toBe(false)
+    expect(next.job.id).not.toBe(begun.job.id)
     await instance.stop()
   })
 

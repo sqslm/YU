@@ -126,3 +126,18 @@ it('stores the answer without the appended source list and keeps the source card
   expect(answer.text).toBe('答案正文')
   expect(answer.sources.map(source => source.url)).toEqual(['https://a.example/1', 'https://b.example/2'])
 })
+
+it('hands a completed turn to the collector and skips a failed one', async () => {
+  const done: import('./knowledge/collector').ChatTurnDone[] = []
+  const collecting = new ChatService(join(root, 'collect.db'), () => settings, () => {}, () => ({}), turn => done.push(turn))
+  try {
+    const thread = collecting.create(null)
+    await collecting.send(thread.id, '问题一')
+    expect(done).toHaveLength(1)
+    expect(done[0]).toMatchObject({ threadId: thread.id, question: '问题一', answer: '回答', materials: [] })
+    expect(done[0].userId).toBeTruthy(); expect(done[0].answerId).toBeTruthy()
+    vi.mocked(askAgent).mockRejectedValueOnce(new Error('provider down'))
+    await collecting.send(thread.id, '问题二').catch(() => undefined)
+    expect(done).toHaveLength(1)
+  } finally { collecting.close() }
+})

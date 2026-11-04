@@ -27,6 +27,10 @@ pub const MAX_PAGE: u32 = 100;
 /// reports the rest through `nextOffset`.
 pub const RESULT_BUDGET_BYTES: usize = 1024 * 1024;
 
+/// A queue group key is a note id, a thread id or a reading reference: never a
+/// body, so a small bound keeps every listing frame honest.
+pub const MAX_GROUP_CHARS: usize = 200;
+
 /// Deadline for a request that never waits on a model callback.
 pub const OP_TIMEOUT_MS: u64 = 15_000;
 /// Deadline for a request that may wait on a model callback.
@@ -46,6 +50,8 @@ pub enum Code {
     Cancelled,
     Timeout,
     ModelUnavailable,
+    ChannelDisabled,
+    Excluded,
     Internal,
 }
 
@@ -64,6 +70,8 @@ impl Code {
             Code::Cancelled => "cancelled",
             Code::Timeout => "timeout",
             Code::ModelUnavailable => "model_unavailable",
+            Code::ChannelDisabled => "channel_disabled",
+            Code::Excluded => "excluded",
             Code::Internal => "internal",
         }
     }

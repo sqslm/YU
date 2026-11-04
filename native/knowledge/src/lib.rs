@@ -6,9 +6,11 @@
 //! shared writer so frames never interleave.
 
 pub mod cards;
+pub mod history;
 pub mod link;
 pub mod profile;
 pub mod protocol;
+pub mod queue;
 pub mod service;
 pub mod sources;
 pub mod store;

@@ -11,6 +11,7 @@ import { CHAT_IDENTITY_PROMPT } from '@shared/prompts'
 import { ChatStore } from './chat-store'
 import { LOCAL_QUERY_TOOLS, recordsFromTool, type LocalRecord } from '@shared/workspace'
 import type { AgentOptions } from './agent'
+import { isReadingTool, readingMaterial } from './knowledge/collector'
 
 /**
  * Only the wire fields a thread's chosen profile owns.
@@ -45,7 +46,13 @@ export class ChatService {
   private titles = new Set<AbortController>()
   private closing = false
   constructor(path: string, private settings: () => Settings, private changed: (event: ChatEvent) => void,
-    private localQueries: () => Pick<AgentOptions, 'personal' | 'life' | 'toolAccess'> = () => ({})) { this.store = new ChatStore(path) }
+    private localQueries: () => Pick<AgentOptions, 'personal' | 'life' | 'toolAccess'> = () => ({}),
+    /**
+     * Told about a turn that really completed. The knowledge collector decides
+     * whether the answer becomes a chat source or a reading one; nothing here
+     * touches storage or the model.
+     */
+    private onCompleted?: (turn: import('./knowledge/collector').ChatTurnDone) => void) { this.store = new ChatStore(path) }
   get busy(): boolean { return Boolean(this.active) }
   list(): ChatIndex { return { ...this.store.list(), busyThreadId: this.active?.threadId ?? null } }
   get(id: string, limit?: number, messageId?: string): ChatDetail {
@@ -76,6 +83,7 @@ export class ChatService {
     const effective: Settings = { ...settings, polish: { ...settings.polish, ...pickProfileFields(profile), effort: (detail.effort ?? 'high').trim() } }
     const first = !detail.messages.some(message => message.role === 'assistant' && message.state === 'done'), messages = chatContext(detail)
     const conversation: import('./agent').AgentConversation = { messages, toolNotes: '', memoryTemporary: Boolean(detail.memoryTemporary) }
+    const materials: import('./knowledge/collector').ReadingMaterial[] = []
     const { userId, answerId } = this.store.begin(id, question.trim())
     const active = { threadId: id, messageId: answerId, text: '', controller: new AbortController() }; this.active = active
     const progress = (status = ''): void => this.changed({ type: 'progress', threadId: id, messageId: answerId, text: active.text, status })
@@ -100,7 +108,13 @@ export class ChatService {
       const allowedTools = [...(summarizing ? ['get_weather', 'get_datetime', 'calculate'] : ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate']), ...queryTools]
       const pending = askAgent(effective, question.trim(), {}, active.controller.signal, () => {}, {
         ...local,
-        onToolResult: (name, result) => { if (result.ok) for (const row of recordsFromTool(name, result.data)) if (!records.some(item => item.kind === row.kind && item.id === row.id)) records.push(row) },
+        onToolResult: (name, result) => {
+          if (result.ok && isReadingTool(name)) {
+            const material = readingMaterial(name, result.data)
+            if (material) materials.push(material)
+          }
+          if (result.ok) for (const row of recordsFromTool(name, result.data)) if (!records.some(item => item.kind === row.kind && item.id === row.id)) records.push(row)
+        },
         reset: false, conversation, allowedTools, timeouts: { llm: 90000 }, fetchImpl: egressFetch,
         // 「语」 answers as itself in the chat page; the voice bar stays generic.
         identity: CHAT_IDENTITY_PROMPT,
@@ -114,6 +128,25 @@ export class ChatService {
       // dropped before storing: otherwise every answer, and every later export, repeats it.
       this.store.finish(answerId, stripAppendedSources(result.text), result.taskState === 'failed' ? 'error' : 'done', dedupeSources(result.sources), records.slice(0, 40))
       if (first && result.taskState !== 'failed') void this.title(id, question, result.text)
+      // Only a real completion is worth keeping: a failed or cancelled answer has
+      // no body, and a temporary thread was never stored to begin with.
+      if (result.taskState !== 'failed' && !this.closing && !conversation.memoryTemporary) {
+        try {
+          this.onCompleted?.({
+            threadId: id,
+            threadTitle: this.store.get(id).title,
+            userId,
+            answerId,
+            question,
+            answer: stripAppendedSources(result.text),
+            at: Date.now(),
+            materials
+          })
+        } catch (error) {
+          // Collection is a side effect: it must never fail the answer.
+          void error
+        }
+      }
     } catch (error) {
       const imageHint = conversation.reference?.images?.length ? '图片回答失败，请确认当前 LLM 支持视觉输入。' : ''
       if (!this.closing) this.store.finish(answerId, active.text || (active.controller.signal.aborted ? '生成已停止' : imageHint + (error instanceof Error ? error.message : '回答失败，请重试')), active.controller.signal.aborted ? 'cancelled' : 'error')

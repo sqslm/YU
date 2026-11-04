@@ -71,6 +71,14 @@ const POLISH_STATUSES: readonly NoteEntry['polishStatus'][] = ['pending', 'ok', 
 export interface NotesStoreOptions {
   localAsr?: { enabled: () => boolean; prepare: () => Promise<void>; transcribeWav: (wav: Uint8Array) => Promise<string> }
   log: (line: string) => void
+  /**
+   * Called when a note reached a body worth keeping: a transcript landed, the
+   * user edited the text, a polish or retranscription replaced it, or a text note
+   * was created. The knowledge collector decides whether it wants it.
+   */
+  onSettled?: (note: NoteEntry) => void
+  /** Called when a note is gone, so pending extraction can be dropped. */
+  onRemoved?: (id: string) => void
   getSettings: () => Settings
   /** Called after any persisted change so the UI can refresh. */
   notify?: () => void
@@ -481,6 +489,7 @@ export class NotesStore {
       `[notes] 新随记 ${id} 已保存（${stored.format}, ${Math.round(stored.data.byteLength / 1024)} KB, ${durationMs} ms）`
     )
 
+    if (transcript && transcript.trim()) this.settled(entry)
     // Detached on purpose: `create` returns as soon as the note is safe on disk.
     if (!input.recovery) void this.run(id, wav, signal, transcript)
     return cloneNote(entry)
@@ -505,6 +514,7 @@ export class NotesStore {
       this.data.notes.splice(this.data.notes.indexOf(entry), 1)
       throw error
     }
+    this.settled(entry)
     return cloneNote(entry)
   }
 
@@ -517,6 +527,9 @@ export class NotesStore {
     const note = this.find(id)
     if (!note) return undefined
     const before = cloneNote(note)
+    // Only a body change is worth collecting: renaming or retagging a note must
+    // not look like new material.
+    const bodyBefore = note.polished || note.transcript
 
     if (patch.title !== undefined) {
       const title = patch.title.trim().slice(0, 200)
@@ -548,6 +561,7 @@ export class NotesStore {
     note.pending = true
     try { this.save(true) }
     catch (error) { this.data.notes[this.data.notes.indexOf(note)] = before; throw error }
+    if ((note.polished || note.transcript) !== bodyBefore) this.settled(note)
     return cloneNote(note)
   }
 
@@ -583,6 +597,8 @@ export class NotesStore {
           this.bump(note.id)
           if (note.audioPath) this.unlinkAudio(join(this.root(), note.audioPath))
           this.removeAttachments(note.id)
+          try { this.options.onRemoved?.(note.id) }
+          catch (error) { this.options.log(`[notes] 删除通知失败：${describeError(error)}`) }
         }
         this.options.log(`[notes] 批量删除 ${removed.length} 条随记`)
       }
@@ -1416,6 +1432,20 @@ export class NotesStore {
     // Transcript and polish land here, so the row has to reach the server too.
     note.pending = true
     this.save()
+    this.settled(note)
+  }
+
+  /**
+   * Tells the collector that this note's body changed. Collection is optional and
+   * must never break a save, so a throwing listener is only logged.
+   */
+  private settled(note: NoteEntry): void {
+    if (!this.options.onSettled) return
+    try {
+      this.options.onSettled(note)
+    } catch (error) {
+      this.options.log(`[notes] 采集通知失败：${describeError(error)}`)
+    }
   }
 
   private save(reportFailure = false): void {

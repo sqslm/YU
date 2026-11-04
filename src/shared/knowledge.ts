@@ -237,6 +237,25 @@ export type KnowledgeMethod =
   | 'profile.list'
   | 'profile.update'
   | 'profile.delete'
+  | 'collect.configure'
+  | 'source.publish'
+  | 'queue.list'
+  | 'queue.status'
+  | 'queue.pause'
+  | 'queue.cancel'
+  | 'queue.retry'
+  | 'queue.invalidate'
+  | 'queue.needs_reread'
+  | 'exclude.add'
+  | 'exclude.remove'
+  | 'exclude.list'
+  | 'history.begin'
+  | 'history.step'
+  | 'history.pause'
+  | 'history.resume'
+  | 'history.cancel'
+  | 'history.status'
+  | 'history.latest'
 
 export type KnowledgeErrorCode =
   | 'invalid_request'
@@ -251,6 +270,8 @@ export type KnowledgeErrorCode =
   | 'cancelled'
   | 'timeout'
   | 'model_unavailable'
+  | 'channel_disabled'
+  | 'excluded'
   | 'internal'
 
 /** Ids are opaque, but they are always short, ASCII and minted by the helper. */
@@ -271,6 +292,138 @@ export class KnowledgeError extends Error {
     super(message)
     this.name = 'KnowledgeError'
   }
+}
+
+
+/** The three collection channels. A reading summary never also counts as chat. */
+export type CollectChannel = 'note' | 'chat' | 'reading'
+
+/**
+ * A task waits in `stabilizing` until its window elapses, then reads as
+ * `ready`. Phase 2 never marks a task extracted, so `ready` is the end state
+ * this stage can reach.
+ */
+export type QueueState = 'stabilizing' | 'ready' | 'needs_reread' | 'failed' | 'cancelled'
+
+export interface QueueItem {
+  sourceId: string
+  ordinal: number
+  kind: SourceKind
+  originRef: string
+  title: string
+  locator: string
+  scope: string
+  size: number
+  readAt: number
+}
+
+/** One pending-extraction unit: a note version, a thread, or a reading. */
+export interface QueueTask {
+  id: string
+  channel: CollectChannel
+  groupKey: string
+  title: string
+  scope: string
+  state: QueueState
+  stableAt: number
+  reason?: string
+  error?: string
+  attempts: number
+  items: QueueItem[]
+  updatedAt: number
+}
+
+export interface CollectChannels {
+  note: boolean
+  chat: boolean
+  reading: boolean
+  pausedManual: boolean
+  pausedGame: boolean
+}
+
+export interface QueuePage {
+  items: QueueTask[]
+  total: number
+  offset: number
+  limit: number
+  hasMore: boolean
+  nextOffset: number | null
+  paused: boolean
+  channels: CollectChannels
+}
+
+export interface QueueStatus {
+  counts: Record<QueueState, number>
+  total: number
+  paused: boolean
+  pausedReasons: { manual: boolean; game: boolean }
+  channels: CollectChannels
+  windowMs: number
+}
+
+export interface ExclusionEntry {
+  kind: CollectChannel
+  key: string
+  reason: string
+  createdAt: number
+}
+
+export type HistoryState = 'running' | 'paused' | 'completed' | 'cancelled'
+
+/** Progress of one one-off history collection. */
+export interface HistoryJob {
+  id: string
+  scopes: { notes: boolean; chat: boolean }
+  state: HistoryState
+  noteCursor: string | null
+  chatCursor: string | null
+  noteDone: boolean
+  chatDone: boolean
+  scanned: number
+  skipped: number
+  deduped: number
+  ready: number
+  needsReread: number
+  failed: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** What a channel projects into a source: the body plus its honest range. */
+/**
+ * A queue task is addressed by its minted id, or by the channel and key that
+ * produced it — a caller that knows the note id never has to track the group id.
+ */
+export type TaskTarget =
+  | { groupId: string }
+  | { channel: CollectChannel; groupKey: string }
+
+export interface TaskRefusal {
+  groupId: string
+  state: string
+}
+
+export interface PublishInput {
+  channel: CollectChannel
+  kind: SourceKind
+  originRef: string
+  groupKey: string
+  title?: string
+  scope?: string
+  locator?: string
+  readAt?: number
+  text: string
+  /** When the user produced the content, in milliseconds since the epoch. */
+  at: number
+}
+
+export interface PublishResult {
+  sourceId: string
+  version: string
+  fingerprint: string
+  groupId: string
+  state: QueueState
+  duplicate: boolean
 }
 
 /** One model message the helper may send for a callback. */

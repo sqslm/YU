@@ -456,6 +456,7 @@ export interface BarWindowLayout {
 export interface Settings {
   speechEnhancement: boolean
   memory: import('./memory').MemorySettings
+  knowledge: import('./knowledgeSettings').KnowledgeSettings
   gameMode: GameModeSettings
   briefingDelivery: import('./briefingDelivery').BriefingDeliverySettings
   assistantAccess: import('./assistantAccess').AssistantAccessSettings

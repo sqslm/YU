@@ -4,6 +4,7 @@ import { unresolvedToolFailure, type AssistantState, type AssistantTurn } from '
 import type { Settings } from '@shared/types'
 import type { PromptContext } from '@shared/prompts'
 import { mt } from '@shared/mainI18n'
+import { isReadingTool, readingMaterial } from './knowledge/collector'
 import { askAgent, resetThread, type AgentConversation, type AgentOptions, type AgentResult } from './agent'
 import { chainFor } from './providers/chain'
 import { WINDOWS_TOOLS, type WindowsTools } from './tools/windows'
@@ -400,6 +401,12 @@ export class AssistantSession {
 
   constructor(private readonly deps: {
     settings: () => Settings
+    /**
+     * Called when a floating answer really completed and read something on the
+     * way. The collector owns every later decision; a throwing callback cannot
+     * break an answer that already succeeded.
+     */
+    onReading?: (reading: import('./knowledge/collector').ReadingProjection) => void
     changed: (state: AssistantState) => void
     log: (line: string) => void
     now?: () => number
@@ -563,6 +570,8 @@ export class AssistantSession {
     this.controller = controller
     this.task = task
     const turn: AssistantTurn = { id: ++this.nextId, taskId: task.id, taskState: 'running', question: input.trim(), answer: '', sources: [], state: 'working', localResults: [] }
+    // Only what this turn really read: the collector never re-fetches a page.
+    const materials: import('./knowledge/collector').ReadingMaterial[] = []
     this.turns = [...this.turns, turn].slice(-12)
     this.lastUsed = this.now()
     this.status = mt('正在思考…')
@@ -587,6 +596,11 @@ export class AssistantSession {
         conversation: this.conversation, allowedTools,
         windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, submittedAt,
         onLocalResult: receipt => { if (this.controller === controller && !taskSignal.aborted) { turn.localResults!.push(receipt); this.notify() } },
+        onToolResult: (name, result) => {
+          if (!result.ok || !isReadingTool(name)) return
+          const material = readingMaterial(name, result.data)
+          if (material) materials.push(material)
+        },
         onStatus: status => {
           if (this.controller !== controller) return
           this.status = mt(status); this.notify()
@@ -668,6 +682,23 @@ export class AssistantSession {
       this.deps.log('[assistant] request failed')
     } finally {
       if (task.state === 'running') task.state = controller.signal.aborted ? 'cancelled' : turn.state === 'done' ? 'completed' : 'failed'
+      if (task.state === 'completed' && materials.length) {
+        try {
+          this.deps.onReading?.({
+            originRef: `ask:${task.id}`,
+            groupKey: `ask:${task.id}`,
+            title: turn.question.slice(0, 40),
+            scope: '浮动提问',
+            request: turn.question,
+            materials,
+            answer: turn.answer,
+            sources: turn.sources.map(item => ({ title: item.title, url: item.url })),
+            at: this.now()
+          })
+        } catch {
+          // A failed hand-off must not turn a good answer into an error.
+        }
+      }
       turn.taskState = task.state
       if (task.source === 'text') finishTaskTrace(task, this.deps.log)
       if (this.task === task) this.task = null

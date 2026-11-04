@@ -829,3 +829,40 @@ describe('batch operations', () => {
     expect(store.list().notes).toHaveLength(1)
   })
 })
+
+describe('collection hooks', () => {
+  it('hands a typed note and an edited note to the collector', async () => {
+    const settled: string[] = []
+    const store = new NotesStore({
+      log: () => undefined,
+      getSettings: () => settings,
+      notify: () => undefined,
+      onSettled: note => settled.push(`${note.id}:${note.polished || note.transcript}`)
+    })
+    await store.load()
+    const note = await store.createText({ text: '第一段' })
+    expect(settled).toEqual([`${note.id}:第一段`])
+    await store.update(note.id, { transcript: '第二段' })
+    expect(settled).toEqual([`${note.id}:第一段`, `${note.id}:第二段`])
+    // A metadata-only change is not a new body.
+    await store.update(note.id, { title: '标题' })
+    expect(settled).toHaveLength(2)
+  })
+
+  it('reports a deleted note and never lets a throwing hook break the save', async () => {
+    const removed: string[] = []
+    const store = new NotesStore({
+      log: () => undefined,
+      getSettings: () => settings,
+      notify: () => undefined,
+      onSettled: () => { throw new Error('collector exploded') },
+      onRemoved: id => removed.push(id)
+    })
+    await store.load()
+    const note = await store.createText({ text: '要删除' })
+    expect(note.id).toBeTruthy()
+    await store.remove(note.id)
+    expect(removed).toEqual([note.id])
+    expect(store.list().notes).toHaveLength(0)
+  })
+})
