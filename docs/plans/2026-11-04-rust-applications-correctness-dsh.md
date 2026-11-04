@@ -92,7 +92,7 @@ B/two.lnk
 - **A1 Unicode 后缀**：新增 `exe_tail(text) -> Option<&str>`（`text.len().checked_sub(4)?` + `text.get(..)` + `eq_ignore_ascii_case(".exe")`），`is_exe()` 与 `strip_exe_suffix()` 都改用它；不再有 `text[len - 4..]` 这类可能落在字符中间的切片。双字节尾部（`C:\工具\程序`、`C:\apps\记事`、`C:\a\说明.txt`、`记事`）在 `rejects_quotes_redirection_and_non_executables` 与 `strips_only_a_trailing_exe` 里固定。
 - **A2 排序键关系**：`finish()` 的 path 比较先走 `culture_compare`（与 `same_key` 同一关系，保证等键相邻），文化相等时以 `left_path.cmp(right_path)` 序数比较挑一个稳定代表项。序数只用于文化平局时的代表项选择，不承担全局顺序承诺。`culture_compare` 在 `CompareStringEx` 返回 0（调用失败）时回退序数比较，不再把失败当 `Greater`。
 - **A3 遍历顺序**：`walk()` 为深度优先——先收集本目录 `.lnk`，再按 `read_dir` 顺序递归子目录；不再使用 `VecDeque` 广度优先。每个根仍最多 1000 条。目录项读取错误与会话循环（junction/symlink）显式处理：`read_dir` 与单项错误上抛为 `Start menu scan` 失败，reparse point 直接跳过。
-- **A4 失败出口**：`collect()` 改为 `Result<Vec<Value>, Failure>`，`applications()` 用 `?` 传播；新增 `Failure`/`failed(stage, detail)`/`win32(code)`/`hresult(&Error)`。`open_key` 在 Win32 2/3（无该视图/键）时返回 `Ok(None)`、其余错误上抛；`subkey_names` 非 `ERROR_NO_MORE_ITEMS` 即失败；`default_string` 在 Win32 2 时 `Ok(None)`；`known_folder`、`shortcuts`/`walk`、`has_arguments` 全部 `Result`；`shortcut_target`/`GetPath` 无目标仍视为 `Ok(None)`，但 COM 创建、`IPersistFile::Load`、cast 失败上抛；`shell_apps_folder` 的解析/绑定/`EnumObjects`/`Next`/`GetDisplayName` 失败上抛，AUMID 缺失仍按空处理。错误文本形如 `applications read failed at App Paths open: Win32 error 5`、`applications read failed at Start menu scan: <路径>: <错误>`，走既有 stderr + 非零退出，不先输出部分 JSON。
+- **A4 失败出口**：`collect()` 改为 `Result<Vec<Value>, Failure>`，`applications()` 用 `?` 传播；新增 `Failure`/`failed(stage, detail)`/`win32(code)`/`hresult(&Error)`。`open_key` 在 Win32 2/3（无该视图/键）时返回 `Ok(None)`、其余错误上抛；`subkey_names` 非 `ERROR_NO_MORE_ITEMS` 即失败；`default_string` 在 Win32 2 时 `Ok(None)`；`known_folder`、`shortcuts`/`walk`、`has_arguments` 全部 `Result`；`shortcut_target` 的 `IPersistFile::Load` 失败（坏链接）与 `GetPath` 无目标都返回 `Ok(None)`——基线的 `CreateShortcut` 对坏链接给出空 `TargetPath` 后跳过该项，实测不抛异常；COM 创建与 cast 失败仍上抛；`walk` 遇到整棵根目录缺失（`NotFound`）返回空、不报错（基线 `Test-Path` 为假即 `continue`），单条目录项或 `symlink_metadata` 失败按基线 `-ErrorAction SilentlyContinue` 跳过；`shell_apps_folder` 的解析/绑定/`EnumObjects`/`Next`/`GetDisplayName` 失败上抛，AUMID 缺失仍按空处理。错误文本形如 `applications read failed at App Paths open: Win32 error 5`、`applications read failed at Start menu scan: <路径>: <错误>`，走既有 stderr + 非零退出，不先输出部分 JSON。
 
 ### 8.2 反例（修复前失败、修复后通过）
 
@@ -101,9 +101,9 @@ B/two.lnk
 | 非 ASCII 尾部 `is_exe`/`strip_exe_suffix` | panic（字节边界） | 断言通过 |
 | 同键不同大小写 path 插入另一项后的去重 | 3 项（`left: 3, right: 2`） | 2 项 |
 | `A/a.lnk` + `A/deep/one.lnk` + `B/two.lnk`、limit 2 | `["a","two"]`（BFS） | `["a","one"]`（DFS） |
-| 坏 `.lnk` | 静默跳过、整体成功 | `Err`，以 `applications read failed at` 开头 |
+| 坏 `.lnk` | 本续做中途版本把 `Load` 失败上抛，整次枚举非零退出（与基线不同） | 与基线一致：跳过该项、其余照常返回 |
 
-前三行在修复前分别以临时回退实现复现（A2 把 path 排序回退成序数、A3 把 `walk` 换回 `VecDeque` BFS），输出与上表一致后还原。
+前三行在修复前分别以临时回退实现复现（A2 把 path 排序回退成序数、A3 把 `walk` 换回 `VecDeque` BFS），输出与上表一致后还原。第四行由内部复核实测纠偏：PowerShell 的 `WScript.Shell.CreateShortcut` 对 19 字节垃圾内容与 0 字节 `.lnk` 都返回空 `TargetPath` 而非抛异常，因此「坏链接整次失败」并不能声称对齐基线，已改为跳过；改后单测 `skips_unreadable_links_and_keeps_the_rest` 断言坏链接被跳过、其余条目仍在。
 
 ### 8.3 真实与替身边界
 
@@ -113,13 +113,13 @@ B/two.lnk
 
 ### 8.4 性能（新证据）
 
-`tests/yu-v2/evidence/rust-applications-correctness-20261104.json`，`generatedAt` 2026-11-04T03:01:35.967Z，80 runs（PS 40 / Rust 40，invalid 0），9 项 checks 全通过，`decision=latency`、`passed=true`。产物 `native/bin/yu-windows.exe` 481792 B / `83cd04c8c09267fde6d8e6b2975945108d160265a626cc7fa57acc065bc9badc`，与证据 `binary{}` 一致。
+`tests/yu-v2/evidence/rust-applications-correctness-20261104.json`，`generatedAt` 2026-11-04T03:10:55.767Z，80 runs（PS 40 / Rust 40，invalid 0），9 项 checks 全通过，`decision=latency`、`passed=true`。产物 `native/bin/yu-windows.exe` 480768 B / `3fd74dd8f7690584cbe4026a544f38323d4cbf0865e9f409e93bc33d1f35ae55`，与证据 `binary{}` 一致。
 
 | 指标 | PowerShell P50/P95 | Rust P50/P95 | 变化 |
 | --- | --- | --- | --- |
-| 整次枚举 | 1596.73 / 1618.76 ms | 565.83 / 588.04 ms | −64.56% / −63.67%（P95 −1030.72 ms） |
-| 进程 CPU（job 记账） | 2296.88 / 2375 ms | 375 / 406.25 ms | −83.67% / −82.89% |
-| 私有内存峰值 | 105520 / 105820 KB | 6624 / 6736 KB | −93.72% / −93.63% |
+| 整次枚举 | 1600.09 / 1652.19 ms | 569.49 / 589.36 ms | −64.41% / −64.33%（P95 −1062.83 ms） |
+| 进程 CPU（job 记账） | 2250 / 2421.88 ms | 359.38 / 437.5 ms | −84.03% / −81.94% |
+| 私有内存峰值 | 105508 / 105868 KB | 6628 / 6720 KB | −93.72% / −93.65% |
 
 旧证据 `tests/yu-v2/evidence/rust-applications-20261104.json`（474624 B / `5331a502…`）原样保留，数字属上一轮交付。
 
@@ -135,7 +135,7 @@ B/two.lnk
 | `pnpm test:native` | 0 | 多二进制合计 39 passed |
 | `pnpm build` | 0 | — |
 | `pnpm test` | 0 | 239 files / 3552 passed、8 skipped |
-| `node scripts/benchmark-applications.mjs --samples 20 --output tests/yu-v2/evidence/rust-applications-correctness-20261104.json` | 0 | 9 checks 全 pass；stdout 另存本地 `/tmp/apps6-bench.log`（不入库） |
+| `node scripts/benchmark-applications.mjs --samples 20 --output tests/yu-v2/evidence/rust-applications-correctness-20261104.json` | 0 | 9 checks 全 pass；stdout 另存本地 `/tmp/apps8-bench.log`（不入库） |
 
 ### 8.6 未测项与限制
 
@@ -144,6 +144,21 @@ B/two.lnk
 - 每根 1000 条上限命中时的子集选择：Rust 深度优先、PS `Get-ChildItem -Recurse`，超限场景的精确交错仍未对照。
 - 名称排序只在当前机器当前文化（`CompareStringEx` 用户默认区域、`NORM_IGNORECASE`）下对照；其他区域设置与 `Sort-Object` 平局顺序的跨机差异未测。
 - 未执行任何应用启动、未改注册表/开始菜单/默认应用；证据只存计数、摘要与差异类别。
+
+### 8.6.1 与 PowerShell 错误路径的有意差异
+
+基线的 PowerShell 在这些点上静默跳过，Rust 侧保留显式失败——这是有意的取舍，不是「与 PS 完全一致」：
+
+| 场景 | PS 行为 | Rust 行为 | 取向 |
+| --- | --- | --- | --- |
+| 开始菜单根目录缺失 | `Test-Path` 为假 → `continue` | `NotFound` → 空列表 | 一致 |
+| 单条目录项 / `symlink_metadata` 失败 | `-ErrorAction SilentlyContinue` 跳过 | 跳过该项 | 一致 |
+| 开始菜单目录不可读（非 `NotFound`） | 静默跳过 | `applications read failed at Start menu scan: …`，非零退出 | 有意失败 |
+| `Get-ChildItem` 递归中的读取错误 | 静默跳过 | 同上（目录级）或跳过（条目级） | 部分有意失败 |
+| App Paths 根键访问拒绝（Win32 5） | `Test-Path` 为假 → 跳过 | `applications read failed at App Paths open: Win32 error 5` | 有意失败（派单要求核心来源失败不得退化成残缺成功） |
+| App Paths 值被拒 / 非 `REG_SZ`/`REG_EXPAND_SZ` | 跳过该值 | `default_string` 只把 Win32 2 当缺失，其余上抛 | 有意失败 |
+
+失败出口在 TS 层的呈现不变：`windowsNative()` 以 `close code !== 0` 抛 `Error(stderr || 'Windows operation failed')`，因此用户看到的是 helper stderr 里的 `applications read failed at …`（`open_application` 工具据此报错），未在 TS 侧改写或吞掉。
 
 ### 8.7 清理与提交
 
