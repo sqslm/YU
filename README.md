@@ -328,6 +328,10 @@ pnpm benchmark:recent-files    # 最近文件读取：只读 Recent 目录、PS 
 pnpm benchmark:applications    # 已登记应用列表：只读注册表与开始菜单、PS 与 Rust 对照
 pnpm benchmark:app           # 整应用资源：冷启动/Pill 就绪/首开/重开/托盘空闲/多次开关的进程树内存与 CPU（单侧采样，经诊断封装启动；配合 compare-app-resources.mjs 判定九道门槛）
 
+# 真实渲染器播放探针：随 pnpm test 一起跑；不设 PROBE_OUT 时每次运行在 .tmp/probe/run-* 下分配独占目录，
+# 通过后自动清理；需要保留取证结果时显式指定 PROBE_OUT=<目录>，该目录不会被删除
+PROBE_OUT=E:\path\to\evidence pnpm exec vitest run src/main/bar-playback.probe.test.ts
+
 # 端到端（跳过静音门槛，全程指向假后端：听写 / Ask+检索 / 多模态 三条链路）
 pnpm mock
 node_modules\electron\dist\electron.exe .        # 启动前按 README 顶部的环境变量打开自检

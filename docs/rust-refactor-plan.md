@@ -37,7 +37,7 @@
 | 19 | 窗口回收正确性与整应用计量修复 | 已交付 `880923c`，外部复核待修 | [开发计划与结果](plans/2026-11-04-electron-resource-correctness-dsh.md)：交接 WIP 已入库，就绪与计量已修；隔离样本支持 −36.75% / −33.0 MiB，取消、并发与销毁缺口由阶段 20 收口 |
 | 20 | 播放取消、并发与窗口销毁收口 | 已交付 `392d8bd`，复核两处缺口由阶段 21 收口 | [计划与结果](plans/2026-11-04-playback-cancellation-correctness-dsh.md)：播放替换、销毁与崩溃已有修复及真实窗口证据；隔离样本 54.2 MiB；非 play 控制取消与比较判定由阶段 21 收口 |
 | 21 | 未完成的播放控制与证据绑定修复 | 已完成，`0c7036d`；外部复核通过 | [计划与结果](plans/2026-11-05-playback-control-and-evidence-binding-dsh.md)：控制取消、证据绑定与可比性已修；外部八文件 91 项通过、产物哈希一致；历史默认探针输出覆盖由阶段 22 修复 |
-| 22 | 播放探针输出隔离与本轮收尾 | 待 DSH 实施 | [收尾计划](plans/2026-11-05-playback-probe-output-isolation-dsh.md)：默认输出按运行隔离、保护历史结果、明确证据出处；复用阶段 21 资源测量，不新增优化项 |
+| 22 | 播放探针输出隔离与本轮收尾 | 已完成；外部复核通过 | [收尾计划与结果](plans/2026-11-05-playback-probe-output-isolation-dsh.md)：无 `PROBE_OUT` 时按运行分配 `.tmp/probe/run-*` 并在成功后清理，显式路径保留取证；历史 `result.json` 哈希前后一致；复用阶段 21 资源测量，不新增优化项 |
 
 聊天、笔记、日历、存储和网络编排目前保留 TypeScript。查询算法、同步阻塞、模型加载、隐藏窗口和缓存生命周期优先通过原架构优化。保持既有数据格式、持久化位置与记忆学习范围；本计划不进行数据库迁移。
 
@@ -452,7 +452,7 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 - [x] R1 停止/替换撤销等待中的控制（`49fb092`，`src/main/note-audio.ts` 221 → 251 行）：`Pending` 改记 `action`，`stop` 使代次前进并取消所有更早的 pending、清空 owner，`pause` 只取消尚未投递的命令，`deliver()` 在发送前复核代次并以 `Playback superseded` 结束；`status` 明确不取消任何命令。旧实现上 6 条新回归真失败（`signals[0].aborted` 为 false、`note-audio:command {action:"resume"}` 被投递、onState 收 `['idle','playing']`），与外部 `{"waitAborted":false,"commandsAfterReady":["resume"]}` 一致；修复后 22/22，真实窗口新例 `r1-stop-cancels-waiting-control`（492 ms）显示 resume 于 0 ms 以 `Playback cancelled` 失败、ready 后只投递 `[status]`。
 - [x] R2 播放证据绑定被测候选（`0130719`）：`playbackGate` 的期望值只取 candidate `meta.build`，缺身份、非 64 hex、逐值不符分别拒绝并点名两个哈希；必要场景增至 6 项（新增 `r1-stop-cancels-waiting-control`）；`preload`/`bar.html` 未被采样记录时如实标注为限制，不倒填。只改 probe entry 为 64×`f` → 比较退出 1、`not-adopted`，原因写明 `ffffffffffff` 与被测 `6b98f392…` 不符。
 - [x] R3 可比性进入最终判定（`0130719`）：`comparable = 场景一致 && 主机一致 && 构建身份已知 && 非同一构建 && 脚本身份已知 && 脚本身份相同`，`adopted = comparable && 九项门槛全部 met`；证据新增 `comparability` 段（两侧 entry/script 身份与各布尔）。只改 candidate 脚本身份 → 退出 1、`comparable:false`、`not-adopted`；真实输入保持 `comparable:true`、`adopted`。
-- [x] 验证：`pnpm typecheck` 0；定向 8 文件 91 例（外部基点 7 文件 67 例，本轮增 `bar-retire` 与新增比较回归）；`pnpm test` 251 文件 3675 例通过（8 跳过）0；`pnpm build` 0；最终产物探针 16/16 全真实窗口、无跳过；`compare` 0。
+- [x] 验证：`pnpm typecheck` 0；定向 8 文件 91 例（外部基点同样是 7 文件 67 例且已含 `bar-retire`，本轮唯一新增文件是 `scripts/compare-app-resources.test.mjs` 11 例）；`pnpm test` 251 文件 3675 例通过（8 跳过）0；`pnpm build` 0；最终产物探针 16/16 全真实窗口、无跳过；`compare` 0。
 - [x] 资源复查（脚本 `5645f616…` 未改，基线 `0cb30d9` 原样本按同口径复用）：托盘空闲 60 s 私有驻留 p50 **89.9 → 54.3 MiB（−39.53% / −35.5 MiB）**，renderer 常驻仍为 0；稳定 4 s 簇 103.0 → 64.1 MiB；20 次开关趋势 −11.12%、开关后静止 97.7 → 66.7 MiB（renderer 0）；首开 p50/p95 601.208/638.689 → 582.457/733.803 ms（20/20、0 失败，+95.114 ms，距 100 ms 门槛仅 4.9 ms），同轮复测 p95 678.969 ms（+40.280）；重开 p95 318.015 ms；冷启动树就绪 759.964 ms、不建 Pill；空闲 CPU 30.2 → 3.906 ms/s（复测 0.26）；Pill 3 次回收 / 3 take / 3 renderer；Run 键 8 项前后一致、抑制标记 27。证据 `tests/yu-v2/evidence/electron-playback-binding-20261105.json`，九项必要条件全部 `met`、`comparable:true`、`decision=adopted`。
 
 **未测项（阶段 21 后）**：真实应用里的随记播放 / 云 TTS 点击全链路、真实 TTS 音频的停止与倍速语义、8 s/20 s 预算耗尽、不可信 sender 拒绝仍未构造；页面内 `process.crash()` 不可用（改用 `forcefullyCrashRenderer()`）；`status` 回执不被取消（代次门槛保证它不改忙态）；首开延迟两轮 p95 相差 55 ms，环境波动明显，单轮不足以断言无回退；开关后静止树相对新建空闲 +22.7%（基线 +8.72%）作为观察项保留。沿用阶段 19/20 的其余未测项（真实麦克风与设备切换、托盘菜单/热键、唤醒词与 ASR、锁屏/RDP、多显示器 DPI、小时级碎片）。
@@ -460,6 +460,20 @@ SAPI 语法竞争按产品缺陷修复，不是环境问题：`DictationGrammar{
 **结论**：三项缺口均已修复并有正反向证据，播放与控制路径的真实窗口用例 16/16；资源收益与阶段 20 同量级（−39.53% / −35.5 MiB），采纳判定现在同时要求可比性与身份绑定。首开 P95 余量偏薄与两轮 55 ms 的波动已如实记录，未调整门槛、未以较好一轮替代较差一轮。
 
 **阶段 21 外部复核：** 八文件 91 项定向测试独立重跑通过；16 例探针记录通过，entry/preload/bar.html 与磁盘逐值相同，候选证据九项门槛为 met。三项修复按本轮范围通过。尚有测试副作用：未设置 `PROBE_OUT` 的全量测试固定删除/改写 `work/t19-probe/result.json`，原工作区探针结果已被覆盖，不能再当作阶段 19 原始输入。入库证据与资源原始样本保留，阶段 22 处理默认输出隔离及文档收尾。
+
+## 阶段 22：播放探针输出隔离与本轮收尾
+
+阶段 21 的副作用是真实缺陷：探针测试与探针本体都把默认输出写死到 `../../work/t19-probe`，于是普通 `pnpm test`（不设 `PROBE_OUT`）先删除再改写工作区的历史结果。本阶段只修输出路径与文档收尾，生产播放实现、测量口径与阶段 21 证据不动。
+
+- [x] 输出按运行隔离（`src/main/probe-output.ts`）：无 `PROBE_OUT` 时 `mkdtempSync` 在 `.tmp/probe/` 下分配本轮独有目录并把同一绝对路径交给 Electron 子进程；显式路径只 `resolve`、不创建不删除；删除前校验目标位于暂存区内，同前缀兄弟目录与历史 `work/` 目录一律拒绝。
+- [x] 探针本体不再有隐式回退：`bar-playback.probe.ts` 缺 `PROBE_OUT` 时打印原因并退出 2，不会静默写任何历史目录。
+- [x] 验证：`probe-output.test.ts` 4 例通过；无 `PROBE_OUT` 连跑两次得到 `.tmp\probe\run-kXKdBp` 与 `run-pWCsyf` 两个不同路径，成功后暂存区清空；显式 `PROBE_OUT` 仍产出 16 例 `pass:true` 结果并原样保留；`pnpm typecheck` 0；`pnpm test` 252 文件 3679 例通过（8 跳过、3 skipped）、99.64 s（= 3675 + 新增 4 例）。
+- [x] 旧文件保护：`work/t19-probe/result.json`（`ec927f02401e…`）、`work/t20-probe/result.json`（`35abedc6058e…`）、`work/t21-probe-final/result.json`（`1b84bdb13361…`）在四次探针运行后逐一 `sha256sum -c` 均 OK。**`work/t19-probe/result.json` 的原阶段 19 内容已在阶段 21 被覆盖，不能视作阶段 19 原始探针**；入库证据 `tests/yu-v2/evidence/electron-resource-correctness-20261104.json` 与其原始资源样本仍是阶段 19 的真实出处。
+- [x] 资源数字引用阶段 21 历史测量（89.9 → 54.3 MiB、首开 p95 733.8 ms、空闲 CPU 3.906 ms/s），本轮未重测；产物隔离属测试副作用修复，不计入内存或延迟收益。
+
+**未测项（阶段 22 后）**：真实并发 worker 同时跑两份探针（互斥由 `mkdtempSync` 保证，未实测）；失败现场的目录保留只由断言中断路径保证，未人为制造一次失败运行；其他盘符与权限异常、显式传入不可写目录。阶段 19–21 的其余未测项继续保留（真实麦克风与设备切换、真实 TTS、托盘菜单/热键、唤醒词与 ASR、锁屏/RDP、多显示器 DPI、小时级长跑、首开延迟两轮 55 ms 波动）。
+
+**结论**：普通 `pnpm test` 不再触碰任何历史探针结果，同一命令连跑两次互不覆盖，取证路径语义保持不变。本轮无生产行为与测量口径改动，阶段 21 的采纳结论与证据继续有效。
 
 ## 后续阶段的推进规则
 

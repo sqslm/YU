@@ -121,13 +121,13 @@
 | 命令 | 结果 |
 | --- | --- |
 | `pnpm typecheck` | 0 |
-| `pnpm exec vitest run src/main/note-audio.test.ts src/main/note-audio-busy.test.ts src/main/bar-ready.test.ts src/main/bar-playback-host.test.ts src/main/bar-retire.test.ts src/main/speech-playback.test.ts scripts/lib/playback.test.mjs scripts/compare-app-resources.test.mjs` | 0；8 文件 91 例（22/5/10/6/7/6/24/11）。外部基点是 7 文件 67 例；本轮增 `bar-retire.test.ts` 与新增比较回归 |
+| `pnpm exec vitest run src/main/note-audio.test.ts src/main/note-audio-busy.test.ts src/main/bar-ready.test.ts src/main/bar-playback-host.test.ts src/main/bar-retire.test.ts src/main/speech-playback.test.ts scripts/lib/playback.test.mjs scripts/compare-app-resources.test.mjs` | 0；8 文件 91 例（22/5/10/6/7/6/24/11）。外部基点同样包含 `bar-retire.test.ts`，为 7 文件 67 例；本轮唯一新增文件是 `scripts/compare-app-resources.test.mjs`（11 例），其余七个文件与基点相同 |
 | `pnpm test` | 0；251 文件通过 / 3 skipped，3675 通过 / 8 skipped，101.78 s（日志 `work/t21-run/test.log`） |
 | `pnpm build` | 0；14.21 s |
 | `PROBE_OUT=work/t21-probe-final pnpm exec vitest run src/main/bar-playback.probe.test.ts` | 0；16/16 全 `real-window`、无跳过，13.9 s |
 | `node scripts/compare-app-resources.mjs --baseline=work/t19-run/baseline.json --candidate=work/t21-run/candidate.json --playback=work/t21-probe-final/result.json --output=tests/yu-v2/evidence/electron-playback-binding-20261105.json` | 0；`adopted`、`comparable true` |
 
-如实记录一处副作用：全量 `pnpm test` 会执行探针测试且未带 `PROBE_OUT`，因此覆盖了工作区产物 `work/t19-probe/result.json`（现为 16 例，00:13）。已入库的证据文件与 `work/t20-probe/result.json` 未受影响；本轮正式采样改用独立目录 `work/t21-probe-final`。
+如实记录一处副作用：全量 `pnpm test` 会执行探针测试且未带 `PROBE_OUT`，因此覆盖了工作区产物 `work/t19-probe/result.json`（现为 16 例，00:13）。已入库的证据文件与 `work/t20-probe/result.json` 未受影响；本轮正式采样改用独立目录 `work/t21-probe-final`。**（阶段 22 已修复：无 `PROBE_OUT` 时改为 `.tmp/probe/run-*` 独有目录并在成功后清理，见 `2026-11-05-playback-probe-output-isolation-dsh.md`。）**
 
 ### 6.6 资源复查（基线 `0cb30d9` 原样本 + 本轮候选实测）
 
