@@ -364,19 +364,29 @@ fn walk(folder: &Path, limit: usize, found: &mut Vec<PathBuf>) -> Result<(), Fai
     if found.len() >= limit {
         return Ok(());
     }
-    let entries = std::fs::read_dir(folder)
-        .map_err(|error| failed("Start menu scan", format!("{}: {error}", folder.display())))?;
+    let entries = match std::fs::read_dir(folder) {
+        Ok(entries) => entries,
+        // The baseline skips a Start menu folder that is not present at all.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(failed(
+                "Start menu scan",
+                format!("{}: {error}", folder.display()),
+            ));
+        }
+    };
     let mut folders = Vec::new();
     for entry in entries {
         if found.len() >= limit {
             return Ok(());
         }
-        let entry = entry
-            .map_err(|error| failed("Start menu scan", format!("{}: {error}", folder.display())))?;
+        // The baseline reads the tree with `-ErrorAction SilentlyContinue`.
+        let Ok(entry) = entry else { continue };
         let path = entry.path();
         // Junctions and symlinks can loop; the baseline never follows them here.
-        let metadata = std::fs::symlink_metadata(&path)
-            .map_err(|error| failed("Start menu scan", format!("{}: {error}", path.display())))?;
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
         if metadata.file_type().is_symlink() {
             continue;
         }
@@ -403,18 +413,19 @@ fn shortcut_target(link: &Path) -> Result<Option<String>, Failure> {
         let file: windows::Win32::System::Com::IPersistFile = object
             .cast()
             .map_err(|error| failed("shortcut cast", hresult(&error)))?;
-        // The baseline lets `CreateShortcut` throw for unreadable links, which
-        // stops the whole action, so a load failure is not skipped here.
-        file.Load(
-            &windows::core::HSTRING::from(link.as_os_str()),
-            Default::default(),
-        )
-        .map_err(|error| {
-            failed(
-                "shortcut load",
-                format!("{}: {}", link.display(), hresult(&error)),
+        // `WScript.Shell.CreateShortcut` returns an object with an empty
+        // `TargetPath` for a corrupt link, so the baseline skips that entry and
+        // still returns the rest of the list. A load failure is skipped here for
+        // the same reason; it is not a failure of the whole enumeration.
+        if file
+            .Load(
+                &windows::core::HSTRING::from(link.as_os_str()),
+                Default::default(),
             )
-        })?;
+            .is_err()
+        {
+            return Ok(None);
+        }
         let mut buffer = vec![0u16; 32_768];
         // A link without a target is normal (links to shell folders); the
         // baseline then reads an empty `TargetPath` and skips the entry.
@@ -619,8 +630,8 @@ mod tests {
         assert!(!is_exe(""));
         // A multi-byte tail must not be sliced in the middle of a character.
         assert!(!is_exe(r"C:\工具\程序"));
-        assert!(!is_exe(r"C:pps\记事"));
-        assert!(!is_exe(r"C:\说明.txt"));
+        assert!(!is_exe(r"C:\apps\记事"));
+        assert!(!is_exe(r"C:\a\说明.txt"));
     }
 
     #[test]
@@ -790,20 +801,25 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_links_fail_the_whole_read() {
+    fn skips_unreadable_links_and_keeps_the_rest() {
         let _apartment = Apartment::new();
         let scratch = Scratch::new("broken");
+        let target = scratch.root.join("good.exe");
+        touch(&target);
+        link(&scratch.root, "good.lnk", &target, None);
         std::fs::write(scratch.root.join("broken.lnk"), b"not a shell link").expect("broken link");
-        // `CreateShortcut` throws for an unreadable link, which stops the
-        // baseline action; the helper must not report a shorter list instead.
-        let error = start_menu_in(
+        // `CreateShortcut` yields an empty `TargetPath` for a corrupt link, so the
+        // baseline skips that entry and still returns the rest of the list.
+        let kept = start_menu_in(
             std::slice::from_ref(&scratch.root),
             MAX_SHORTCUTS_PER_FOLDER,
         )
-        .expect_err("unreadable link must fail the read");
+        .expect("corrupt link must not fail the read");
+        assert_eq!(kept.len(), 1, "kept: {kept:?}");
+        let kept_path = kept[0]["path"].as_str().expect("path");
         assert!(
-            error.to_string().starts_with("applications read failed at"),
-            "unexpected error: {error}"
+            kept_path.ends_with("good.exe"),
+            "unexpected target: {kept_path}"
         );
     }
 
@@ -852,15 +868,10 @@ mod tests {
             failed("App Paths open", win32(5)).to_string(),
             "applications read failed at App Paths open: Win32 error 5"
         );
-        // A missing Start menu folder must fail the read rather than look empty.
-        let error = shortcuts(&PathBuf::from(r"Z:\yu-missing-start-menu"), 10)
-            .expect_err("missing folder must fail");
-        assert!(
-            error
-                .to_string()
-                .starts_with("applications read failed at Start menu scan"),
-            "unexpected error: {error}"
-        );
+        // A Start menu folder that is absent is not an error for the baseline.
+        let missing = shortcuts(&PathBuf::from(r"Z:\yu-missing-start-menu"), 10)
+            .expect("missing folder must read as empty");
+        assert!(missing.is_empty(), "unexpected: {missing:?}");
     }
 
     #[test]
