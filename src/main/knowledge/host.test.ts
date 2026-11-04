@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { KnowledgeError, type KnowledgeCard } from '@shared/knowledge'
 
@@ -47,6 +47,26 @@ lines.on('line', (line) => {
   if (id === 'slow') return
   if (id === 'crash') return void process.exit(3)
   if (id === 'late') return void setTimeout(() => reply(card('late')), 2500)
+  if (id === 'huge') {
+    // 750000 Chinese characters: fewer than 2 MiB as a JS string, more as UTF-8.
+    return reply({ ...card('huge'), title: '知'.repeat(750000) })
+  }
+  if (id === 'huge-no-newline') {
+    process.stdout.write('{"v":1,"type":"result","id":"' + frame.id + '","ok":true,"result":{"title":"' + '知'.repeat(900000))
+    return
+  }
+  if (id === 'two-frames') {
+    // Two complete frames in a single chunk: the byte limit is per frame.
+    process.stdout.write(
+      JSON.stringify({ v: 1, type: 'changed', scope: 'cards' }) + '\\n' +
+        JSON.stringify({ v: 1, type: 'result', id: frame.id, ok: true, result: card('two-frames') }) + '\\n'
+    )
+    return
+  }
+  if (id === 'bad-error') return write({ v: 1, type: 'result', id: frame.id, ok: false })
+  if (id === 'null-error') return write({ v: 1, type: 'result', id: frame.id, ok: false, error: null })
+  if (id === 'typed-error')
+    return write({ v: 1, type: 'result', id: frame.id, ok: false, error: { code: 1, message: [] } })
   if (id === 'null-frame') {
     process.stdout.write('null\\n')
     process.stdout.write('[1,2]\\n')
@@ -107,6 +127,13 @@ import { createInterface } from 'node:readline'
 createInterface({ input: process.stdin }).on('line', () => {})
 `
 
+/** Announces readiness with the old numeric schema: the handshake must not settle. */
+const PARTIAL_READY = `
+import { createInterface } from 'node:readline'
+process.stdout.write(JSON.stringify({ v: 1, type: 'ready', schema: 1, fts5: true, trigram: true }) + '\\n')
+createInterface({ input: process.stdin }).on('line', () => {})
+`
+
 /** A helper that dies during startup: the pipe breaks under the first request. */
 const EXIT = `process.exit(4)`
 
@@ -128,6 +155,27 @@ function asText(value: KnowledgeCard): string {
 }
 
 const created: KnowledgeHost[] = []
+
+/**
+ * A broken frame must never reach the Electron main process as an uncaught
+ * exception, so the suite records them instead of letting Node print them.
+ */
+const thrown: unknown[] = []
+const observe = (error: unknown): void => {
+  thrown.push(error)
+}
+
+beforeAll(() => {
+  process.on('uncaughtException', observe)
+})
+
+beforeEach(() => {
+  thrown.length = 0
+})
+
+afterAll(() => {
+  process.off('uncaughtException', observe)
+})
 
 function host(over: Partial<KnowledgeHostOptions> = {}, stub = STUB, name = 'stub'): KnowledgeHost {
   const script = stubScript(stub, name)
@@ -403,5 +451,60 @@ describe('KnowledgeHost model callbacks', () => {
     release?.('迟到的答案')
     await new Promise((done) => setTimeout(done, 60))
     expect(asText(await instance.getCard('still-fine'))).toBe('still-fine')
+  })
+})
+
+describe('KnowledgeHost framing and envelopes', () => {
+  it('rejects a frame whose UTF-8 bytes exceed the transport limit', async () => {
+    const instance = host({ requestMs: 8_000 })
+    const failure = await instance.getCard('huge').catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(KnowledgeError)
+    expect((failure as KnowledgeError).code).toBe('internal')
+    expect((failure as KnowledgeError).message).toMatch(/oversized frame/)
+    expect(thrown).toEqual([])
+    // The process that broke the limit is gone, and a new one answers.
+    expect(instance.running).toBe(false)
+    expect(asText(await instance.getCard('after-huge'))).toBe('after-huge')
+  })
+
+  it('rejects a frame that never ends with a newline once it passes the limit', async () => {
+    const instance = host({ requestMs: 8_000 })
+    await expect(instance.getCard('huge-no-newline')).rejects.toMatchObject({
+      code: 'internal',
+      message: expect.stringMatching(/oversized frame/)
+    })
+    expect(thrown).toEqual([])
+    expect(instance.running).toBe(false)
+    expect(asText(await instance.getCard('after-noise'))).toBe('after-noise')
+  })
+
+  it('accepts several complete frames that arrive in one chunk', async () => {
+    const scopes: string[] = []
+    const instance = host({ onChanged: (scope) => scopes.push(scope) })
+    expect(asText(await instance.getCard('two-frames'))).toBe('two-frames')
+    expect(scopes).toEqual(['cards'])
+    expect(instance.running).toBe(true)
+  })
+
+  it('rejects a failure result that carries no usable error', async () => {
+    for (const probe of ['bad-error', 'null-error', 'typed-error']) {
+      const instance = host()
+      await expect(instance.getCard(probe)).rejects.toMatchObject({
+        code: 'internal',
+        message: expect.stringMatching(/usable error/)
+      })
+      expect(instance.running).toBe(false)
+    }
+    expect(thrown).toEqual([])
+  })
+
+  it('does not release the handshake for an unusable ready frame', async () => {
+    const instance = host({ requestMs: 2_000 }, PARTIAL_READY, 'partial-ready')
+    await expect(instance.getCard('any')).rejects.toMatchObject({
+      code: 'internal',
+      message: expect.stringMatching(/unusable ready/)
+    })
+    expect(thrown).toEqual([])
+    expect(instance.running).toBe(false)
   })
 })

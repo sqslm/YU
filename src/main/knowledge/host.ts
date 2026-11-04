@@ -27,6 +27,7 @@ import {
   type KnowledgeCard,
   type KnowledgeCardPage,
   type KnowledgeMethod,
+  type KnowledgeErrorCode,
   type KnowledgeSource,
   type KnowledgeStatus,
   type ProfileItem,
@@ -87,6 +88,32 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+const NEWLINE = 0x0a
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The `ready` frame carries the schema versions and the probing results. */
+function readReady(frame: Record<string, unknown>): HelperStatus['schema'] | undefined {
+  const schema = frame.schema
+  if (!isRecord(schema)) return undefined
+  const { knowledge, profile } = schema
+  if (typeof knowledge !== 'number' || typeof profile !== 'number') return undefined
+  if (typeof frame.fts5 !== 'boolean' || typeof frame.trigram !== 'boolean') return undefined
+  return { knowledge, profile }
+}
+
+/** A failed result must carry a usable error; a broken one is not a result. */
+function readFailure(
+  frame: Record<string, unknown>
+): { code: KnowledgeErrorCode; message: string } | undefined {
+  const error = frame.error
+  if (!isRecord(error)) return undefined
+  if (typeof error.code !== 'string' || typeof error.message !== 'string') return undefined
+  return { code: error.code as KnowledgeErrorCode, message: error.message }
+}
+
 export class KnowledgeHost {
   private child?: ChildProcessWithoutNullStreams
   /** Bumped on every start, stop and discard; stale frames carry an older value. */
@@ -143,25 +170,32 @@ export class KnowledgeHost {
     })
     this.ready.catch(() => undefined)
 
-    const frameError = new KnowledgeError('internal', 'the knowledge helper broke the frame protocol')
-    let buffer = ''
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
+    const oversizeError = new KnowledgeError('internal', 'the knowledge helper wrote an oversized frame')
+    // The transport limit is two megabytes of UTF-8, so the frames are split on
+    // raw bytes and only decoded once a frame is complete: a string length is a
+    // character count, and Chinese text would slip past the limit.
+    let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0)
+    child.stdout.on('data', (chunk: Buffer) => {
       if (this.child !== child || this.generation !== generation) return
-      buffer += chunk
-      // A line that never ends must be rejected before it grows without bound.
+      buffer = buffer.length === 0 ? chunk : Buffer.concat([buffer, chunk])
+      let index = buffer.indexOf(NEWLINE)
+      while (index >= 0) {
+        const line = buffer.subarray(0, index)
+        buffer = buffer.subarray(index + 1)
+        if (line.length > KNOWLEDGE_LIMITS.frame) {
+          this.log('the knowledge helper wrote an oversized frame')
+          this.discard(child, oversizeError)
+          return
+        }
+        if (line.length > 0) this.onLine(child, generation, line.toString('utf8'))
+        if (this.child !== child || this.generation !== generation) return
+        index = buffer.indexOf(NEWLINE)
+      }
+      // No newline left: the helper is accumulating one frame. Refuse before the
+      // buffer grows without bound, even if that frame never ends.
       if (buffer.length > KNOWLEDGE_LIMITS.frame) {
         this.log('the knowledge helper wrote more than one frame without a newline')
-        this.discard(child, frameError)
-        return
-      }
-      let index = buffer.indexOf('\n')
-      while (index >= 0) {
-        const line = buffer.slice(0, index)
-        buffer = buffer.slice(index + 1)
-        if (line.trim()) this.onLine(child, generation, line)
-        if (this.child !== child || this.generation !== generation) return
-        index = buffer.indexOf('\n')
+        this.discard(child, oversizeError)
       }
     })
     child.stdout.on('error', (error) => {
@@ -217,11 +251,6 @@ export class KnowledgeHost {
   }
 
   private onLine(child: ChildProcessWithoutNullStreams, generation: number, line: string): void {
-    if (line.length > KNOWLEDGE_LIMITS.frame) {
-      this.log('the knowledge helper wrote an oversized frame')
-      this.discard(child, new KnowledgeError('internal', 'the knowledge helper wrote an oversized frame'))
-      return
-    }
     let raw: unknown
     try {
       raw = JSON.parse(line)
@@ -230,14 +259,14 @@ export class KnowledgeHost {
       return
     }
     // `null`, arrays and scalars are not frames; they must not throw here.
-    if (raw === null || typeof raw !== 'object') {
+    if (!isRecord(raw)) {
       this.log('the knowledge helper wrote a frame that is not an object')
       return
     }
-    const frame = raw as HelperFrame
+    const frame = raw as unknown as HelperFrame
     // Objects without a type are not frames: ignore them instead of treating a
     // stray value as a protocol mismatch and tearing down a healthy helper.
-    if (typeof (raw as { type?: unknown }).type !== 'string') {
+    if (typeof raw.type !== 'string') {
       this.log('the knowledge helper wrote an object without a frame type')
       return
     }
@@ -247,34 +276,95 @@ export class KnowledgeHost {
       return
     }
     switch (frame.type) {
-      case 'ready':
+      case 'ready': {
         if (this.child !== child || this.generation !== generation) return
+        const schema = readReady(raw)
+        if (!schema) {
+          this.log('the knowledge helper wrote an unusable ready frame')
+          this.discard(child, new KnowledgeError('internal', 'the knowledge helper wrote an unusable ready frame'))
+          return
+        }
         this.readySettled = true
         this.settleReady?.resolve()
         this.settleReady = undefined
         this.armIdle()
         return
+      }
       case 'changed':
         if (this.child !== child || this.generation !== generation) return
+        if (typeof (raw as { scope?: unknown }).scope !== 'string') {
+          this.log('the knowledge helper wrote a change notification without a scope')
+          return
+        }
         this.options.onChanged?.(frame.scope)
         return
       case 'result': {
-        const entry = this.pending.get(frame.id)
+        const id = (raw as { id?: unknown }).id
+        if (typeof id !== 'string') {
+          this.log('the knowledge helper wrote a result without a request id')
+          return
+        }
+        const entry = this.pending.get(id)
         if (!entry || entry.child !== child || entry.generation !== generation) return
-        this.pending.delete(frame.id)
-        clearTimeout(entry.timer)
-        this.abortModelsOf(frame.id, generation)
-        if (frame.ok) entry.resolve(frame.result)
-        else entry.reject(new KnowledgeError(frame.error.code, frame.error.message))
-        this.armIdle()
+        // Validate the envelope before touching the pending entry: a broken
+        // failure frame used to throw after the request was already removed.
+        if (typeof (raw as { ok?: unknown }).ok !== 'boolean') {
+          this.protocolBreak(child, id, entry, 'a result without an ok flag')
+          return
+        }
+        if (raw.ok === false) {
+          const failure = readFailure(raw)
+          if (!failure) {
+            this.protocolBreak(child, id, entry, 'a failure without a usable error')
+            return
+          }
+          this.settle(id, entry)
+          entry.reject(new KnowledgeError(failure.code, failure.message))
+          return
+        }
+        this.settle(id, entry)
+        entry.resolve((raw as { result?: unknown }).result)
         return
       }
       case 'model.request':
+        if (
+          typeof (raw as { id?: unknown }).id !== 'string' ||
+          typeof (raw as { parentId?: unknown }).parentId !== 'string' ||
+          !Array.isArray((raw as { messages?: unknown }).messages)
+        ) {
+          this.log('the knowledge helper wrote an unusable model request')
+          return
+        }
         void this.answerModel(child, generation, frame)
         return
       default:
         this.log('the knowledge helper sent an unknown frame')
     }
+  }
+
+  /** Removes one pending request and the model calls it owned. */
+  private settle(id: string, entry: Pending): void {
+    this.pending.delete(id)
+    clearTimeout(entry.timer)
+    this.abortModelsOf(id, entry.generation)
+    this.armIdle()
+  }
+
+  /**
+   * A frame that cannot be understood makes the whole stream untrustworthy: the
+   * matched request fails with a bounded error and the process is replaced.
+   */
+  private protocolBreak(
+    child: ChildProcessWithoutNullStreams,
+    id: string,
+    entry: Pending,
+    what: string
+  ): void {
+    this.log(`the knowledge helper wrote ${what}`)
+    const error = new KnowledgeError('internal', `the knowledge helper wrote ${what}`)
+    this.settle(id, entry)
+    entry.reject(error)
+    this.discard(child, error)
   }
 
   private writeTo(child: ChildProcessWithoutNullStreams, frame: HostFrame): void {

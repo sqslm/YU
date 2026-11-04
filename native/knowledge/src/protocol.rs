@@ -368,7 +368,16 @@ pub fn fit_page<T: serde::Serialize>(
 }
 
 pub fn ready_frame(fts5: bool, trigram: bool) -> Value {
-    json!({ "v": VERSION, "type": "ready", "schema": crate::store::KNOWLEDGE_SCHEMA, "fts5": fts5, "trigram": trigram })
+    json!({
+        "v": VERSION,
+        "type": "ready",
+        "schema": {
+            "knowledge": crate::store::KNOWLEDGE_SCHEMA,
+            "profile": crate::store::PROFILE_SCHEMA,
+        },
+        "fts5": fts5,
+        "trigram": trigram,
+    })
 }
 
 pub fn result_frame(id: &str, result: &Value) -> Value {

@@ -73,6 +73,13 @@ impl Helper {
         let ready = helper.recv();
         assert_eq!(ready["v"], 1, "ready frame: {ready}");
         assert_eq!(ready["type"], "ready");
+        // The handshake carries the declared object, not a bare schema number:
+        // src/shared/knowledge.ts types ready.schema as { knowledge, profile }.
+        assert_eq!(
+            ready["schema"],
+            serde_json::json!({ "knowledge": 1, "profile": 1 }),
+            "ready schema: {ready}"
+        );
         helper
     }
 

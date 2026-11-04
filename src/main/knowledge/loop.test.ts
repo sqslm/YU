@@ -77,6 +77,11 @@ describe('the Rust helper and the host around a real model callback', () => {
     expect(call.profileId).toBe('fixture-profile')
     expect(call.effort).toBe('high')
     expect(call.messages).toEqual([{ role: 'user', content: '夹具的合成问题' }])
+    // The production ready frame must declare the shared object shape.
+    await expect(instance.status()).resolves.toMatchObject({
+      running: true,
+      schema: { knowledge: 1, profile: 1 }
+    })
   }, 60_000)
 
   it('carries a provider failure back into the Rust request', async () => {
