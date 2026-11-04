@@ -9,18 +9,15 @@ use windows::{
             Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
             Variant::VARIANT,
         },
-        UI::{
-            Accessibility::{
-                CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
-                IUIAutomationValuePattern, TreeScope_Descendants, UIA_CONTROLTYPE_ID,
-                UIA_ComboBoxControlTypeId, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
-                UIA_E_NOTSUPPORTED, UIA_EditControlTypeId, UIA_ToolBarControlTypeId,
-                UIA_ValuePatternId,
-            },
-            Shell::PathCreateFromUrlW,
+        UI::Accessibility::{
+            CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
+            IUIAutomationValuePattern, TreeScope_Descendants, UIA_CONTROLTYPE_ID,
+            UIA_ComboBoxControlTypeId, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
+            UIA_E_NOTSUPPORTED, UIA_EditControlTypeId, UIA_ToolBarControlTypeId,
+            UIA_ValuePatternId,
         },
     },
-    core::{Interface, PCWSTR, PWSTR},
+    core::Interface,
 };
 
 // Same bounds as resources/current-content.ps1: at most 20 exposed documents,
@@ -79,12 +76,13 @@ fn is_document_url(value: &str) -> bool {
         .any(|s| lower.starts_with(s))
 }
 
-/// Converts a file URL the way `[uri]::LocalPath` does, using the system
-/// converter for the unescaping, drive letters and UNC hosts.
+/// Converts a file URL the way `[uri]::LocalPath` does.
 ///
-/// Two differences from `PathCreateFromUrlW` are carried over from .NET: a
-/// fragment is dropped, and a query stays appended to the local path
-/// (`file:///E:/a.html?x=1#part` -> `E:\a.html?x=1`).
+/// Percent escapes are decoded as UTF-8 (`%E4%B8%AD` is 中, `%25` is %, and a
+/// literal `+` stays `+`), every separator becomes a backslash, a fragment is
+/// dropped and a query stays appended (`file:///E:/a.html?x=1#part` becomes
+/// `E:\a.html?x=1`). A share name becomes a UNC path and an empty path is the
+/// root `/`, both as .NET reports them.
 fn local_path(url: &str) -> Result<Option<String>, Failure> {
     let is_file = url
         .get(..5)
@@ -93,30 +91,58 @@ fn local_path(url: &str) -> Result<Option<String>, Failure> {
         return Ok(None);
     }
     let without_fragment = url.split('#').next().unwrap_or(url);
-    let (base, query) = match without_fragment.split_once('?') {
-        Some((base, query)) => (base, Some(query)),
+    let (body, query) = match without_fragment.split_once('?') {
+        Some((body, query)) => (body, Some(query)),
         None => (without_fragment, None),
     };
-    let mut wide: Vec<u16> = base.encode_utf16().collect();
-    wide.push(0);
-    let mut buffer = vec![0u16; 32_768];
-    let mut length = buffer.len() as u32;
-    // SAFETY: both buffers are owned here and sized for the call; the URL is
-    // NUL-terminated above.
-    unsafe {
-        PathCreateFromUrlW(
-            PCWSTR(wide.as_ptr()),
-            PWSTR(buffer.as_mut_ptr()),
-            &mut length,
-            0,
-        )
+    let after_scheme = &body[5..];
+    let after_slashes = after_scheme.strip_prefix("//").unwrap_or(after_scheme);
+    let (path, unc) = match after_slashes.strip_prefix('/') {
+        Some(local) => (local, false),
+        None => (after_slashes, true),
+    };
+    let mut decoded = Vec::with_capacity(path.len());
+    let raw = path.as_bytes();
+    let mut index = 0;
+    while index < raw.len() {
+        if raw[index] == b'%'
+            && index + 2 < raw.len()
+            && let (Some(high), Some(low)) = (hex_digit(raw[index + 1]), hex_digit(raw[index + 2]))
+        {
+            decoded.push(high * 16 + low);
+            index += 3;
+            continue;
+        }
+        decoded.push(raw[index]);
+        index += 1;
     }
-    .map_err(|error| failed("file url conversion", error))?;
-    let converted = String::from_utf16_lossy(&buffer[..(length as usize).min(buffer.len())]);
+    let decoded =
+        String::from_utf8(decoded).map_err(|_| Failure::from("File URL is not valid UTF-8"))?;
+    let mut converted = String::with_capacity(decoded.len() + 2);
+    if unc {
+        converted.push_str("\\\\");
+    }
+    converted.extend(
+        decoded
+            .chars()
+            .map(|character| if character == '/' { '\\' } else { character }),
+    );
+    if converted.is_empty() {
+        converted.push('/');
+    }
     Ok(Some(match query {
         Some(query) => format!("{converted}?{query}"),
         None => converted,
     }))
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn text(element: &IUIAutomationElement) -> Result<String, Failure> {
@@ -134,13 +160,17 @@ fn address(element: &IUIAutomationElement) -> Result<String, Failure> {
 }
 
 /// `Ok(None)` means the element genuinely has no ValuePattern or an empty
-/// value; a failed read is an error, not "no value".
+/// value; a failed read is an error, not "no value". UIA reports the absent
+/// pattern either as `UIA_E_NOTSUPPORTED` or as `S_OK` with a null interface,
+/// and only those two codes are treated as "no pattern".
 fn value(element: &IUIAutomationElement) -> Result<Option<String>, Failure> {
     // SAFETY: callers hold the worker thread that owns the element.
     let pattern: IUIAutomationValuePattern =
         match unsafe { element.GetCurrentPatternAs(UIA_ValuePatternId) } {
             Ok(pattern) => pattern,
-            Err(error) if error.code().0 as u32 == UIA_E_NOTSUPPORTED => return Ok(None),
+            Err(error) if matches!(error.code().0 as u32, UIA_E_NOTSUPPORTED | 0) => {
+                return Ok(None);
+            }
             Err(error) => return Err(failed("value pattern", error)),
         };
     // SAFETY: the pattern above belongs to this thread's element.
@@ -294,7 +324,10 @@ fn address_bar(
                 continue;
             }
             let (toolbar, chrome) = browser_chrome(automation, &walker, element, &edit)?;
-            if let (true, true, Some(value)) = (toolbar, chrome, value(&edit)?) {
+            if !(toolbar && chrome) {
+                continue;
+            }
+            if let Some(value) = value(&edit)? {
                 addresses.push(value);
             }
         }
@@ -444,6 +477,39 @@ mod tests {
     }
 
     #[test]
+    fn local_path_keeps_the_other_dotnet_edges() {
+        let path = |url: &str| local_path(url).unwrap();
+        // A decoded separator becomes a backslash, as .NET reports it.
+        assert_eq!(path("file:///E:/a%2Fb.md").as_deref(), Some(r"E:\a\b.md"));
+        // Any host, including localhost, turns the path into a UNC path.
+        assert_eq!(
+            path("file://localhost/E:/x.md").as_deref(),
+            Some(r"\\localhost\E:\x.md")
+        );
+        assert_eq!(
+            path("file://server/share/a.md?q=1").as_deref(),
+            Some(r"\\server\share\a.md?q=1")
+        );
+        // A literal percent survives, and a space stays a space.
+        assert_eq!(path("file:///E:/a%25b.md").as_deref(), Some(r"E:\a%b.md"));
+        assert_eq!(
+            path("file:///E:/%E4%B8%AD%20x.md").as_deref(),
+            Some(r"E:\中 x.md")
+        );
+        // The bare root is reported as a forward slash by .NET.
+        assert_eq!(path("file:///").as_deref(), Some("/"));
+    }
+
+    #[test]
+    fn failures_report_the_stage_and_hresult() {
+        let error = windows::core::Error::from_hresult(windows::Win32::Foundation::E_FAIL);
+        assert_eq!(
+            failed("address bar value", error).to_string(),
+            "UIA address read failed at address bar value (HRESULT 0x80004005)"
+        );
+    }
+
+    #[test]
     fn local_path_keeps_only_files_as_local_paths() {
         let directory = std::env::temp_dir().join("yu-address-exists");
         std::fs::create_dir_all(&directory).unwrap();
@@ -458,6 +524,37 @@ mod tests {
         let converted = local_path(&file_url).unwrap().unwrap();
         assert!(Path::new(&converted).is_file());
         assert!(!Path::new(&directory).is_file());
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    fn percent_encode(path: &str) -> String {
+        let mut out = String::new();
+        for byte in path.bytes() {
+            match byte {
+                b'/' | b':' | b'.' | b'-' | b'_' | b'~' => out.push(byte as char),
+                byte if byte.is_ascii_alphanumeric() => out.push(byte as char),
+                byte => out.push_str(&format!("%{byte:02X}")),
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn local_path_resolves_a_percent_encoded_unicode_name() {
+        let directory = std::env::temp_dir().join("yu-address-unicode");
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("中文 100% 名称.md");
+        std::fs::write(&file, b"x").unwrap();
+        let url = |path: &std::path::Path| {
+            let plain = path.to_string_lossy().replace('\\', "/");
+            format!("file:///{}", percent_encode(&plain))
+        };
+        let resolved = |path: &std::path::Path| local_path(&url(path)).unwrap().unwrap();
+
+        assert_eq!(resolved(&file), file.to_string_lossy());
+        assert!(Path::new(&resolved(&file)).is_file());
+        assert!(!Path::new(&resolved(&directory)).is_file());
+        assert!(!Path::new(&resolved(&directory.join("不存在 100% 名称.md"))).is_file());
         let _ = std::fs::remove_dir_all(&directory);
     }
 }

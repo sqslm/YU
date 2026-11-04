@@ -15,7 +15,8 @@ param(
   [ValidateSet('address-edit', 'address-combo', 'no-candidate', 'duplicate', 'ambiguous',
     'document-overrides', 'document-ambiguous', 'pseudo-address', 'password', 'offscreen',
     'no-toolbar', 'deep-40', 'deep-41', 'documents-20', 'documents-21', 'edits-100', 'edits-101',
-    'provider-error', 'file-url')]
+    'provider-error', 'file-url', 'excluded-value-blocked', 'no-value-pattern',
+    'metadata-document', 'metadata-override')]
   [string]$Mode = 'address-edit',
 
   # Only meaningful with -Mode provider-error: which provider callback fails for real.
@@ -30,7 +31,8 @@ $ErrorActionPreference = 'Stop'
 if ($ListModes) {
   'address-edit','address-combo','no-candidate','duplicate','ambiguous','document-overrides',
   'document-ambiguous','pseudo-address','password','offscreen','no-toolbar','deep-40','deep-41',
-  'documents-20','documents-21','edits-100','edits-101','provider-error','file-url'
+  'documents-20','documents-21','edits-100','edits-101','provider-error','file-url',
+  'excluded-value-blocked','no-value-pattern','metadata-document','metadata-override'
   return
 }
 

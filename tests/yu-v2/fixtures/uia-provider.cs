@@ -47,6 +47,9 @@ namespace UiaProviderFixture
         public string Value; // null => no ValuePattern for this element
         public bool IsPassword;
         public bool IsOffscreen;
+        // The getter blocks before answering, so "was the value evaluated at all?"
+        // becomes observable instead of a timing guess.
+        public bool BlockValueOnRead;
         public bool IsControlElement = true;
         public Node Parent;
         public readonly List<Node> Children = new List<Node>();
@@ -365,6 +368,7 @@ namespace UiaProviderFixture
 
         private readonly Dictionary<Node, Provider> providers = new Dictionary<Node, Provider>();
         private readonly ManualResetEventSlim blockGate = new ManualResetEventSlim(true);
+        private readonly ManualResetEventSlim valueGate = new ManualResetEventSlim(false);
         private readonly object stateLock = new object();
 
         private volatile bool blocking;
@@ -463,8 +467,10 @@ namespace UiaProviderFixture
         // path at a user document.
         private static string CreateTempFile()
         {
+            // Non-ASCII, space and a literal percent sign: the file:// URI has to carry
+            // the same escaping a real browser produces, so the name must exercise it.
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
-                "yu-uia-" + Guid.NewGuid().ToString("N") + ".md");
+                "yu-uia-中文 100% " + Guid.NewGuid().ToString("N") + ".md");
             System.IO.File.WriteAllText(path, "# uia fixture file url" + Environment.NewLine, new UTF8Encoding(false));
             return LongPath(path);
         }
@@ -563,6 +569,37 @@ namespace UiaProviderFixture
                     toolbar = ToolBar(root, "Browser chrome", "browserToolbar");
                     AddressEdit(toolbar, "addressEditBox", "Address and search bar",
                         new Uri(FilePath).AbsoluteUri);
+                    break;
+
+                case "excluded-value-blocked":
+                {
+                    // pseudo-address shape, but the excluded field blocks on read: a reader
+                    // that evaluates excluded candidates anyway will stall or touch it.
+                    Node blockedDoc = Document(root, "evil page", "evil page");
+                    Node blockedToolbar = ToolBar(blockedDoc, "Page toolbar", "pageToolbar");
+                    AddressEdit(blockedToolbar, "", AddressNameLiteral,
+                        "https://example.com/pseudo").BlockValueOnRead = true;
+                    break;
+                }
+
+                case "no-value-pattern":
+                    // A candidate with a real chrome ancestry but no ValuePattern at all:
+                    // GetPatternProvider returns null, so there is no address to read.
+                    toolbar = ToolBar(root, "Browser chrome", "browserToolbar");
+                    AddressEdit(toolbar, "addressEditBox", "Address and search bar", null);
+                    break;
+
+                case "metadata-document":
+                    // One Document, no address bar: metadataOnly=true must not read its value.
+                    Document(root, "page", "https://example.com/doc");
+                    break;
+
+                case "metadata-override":
+                    // Both sources present: the Document still overrides the address bar.
+                    toolbar = ToolBar(root, "Browser chrome", "browserToolbar");
+                    AddressEdit(toolbar, "addressEditBox", "Address and search bar",
+                        "https://example.com/from-bar");
+                    Document(root, "page", "https://example.com/from-doc");
                     break;
 
                 case "provider-error":
@@ -685,7 +722,8 @@ namespace UiaProviderFixture
             "address-edit", "address-combo", "no-candidate", "duplicate", "ambiguous",
             "document-overrides", "document-ambiguous", "pseudo-address", "password",
             "offscreen", "no-toolbar", "deep-40", "deep-41", "documents-20",
-            "documents-21", "edits-100", "edits-101", "provider-error", "file-url"
+            "documents-21", "edits-100", "edits-101", "provider-error", "file-url",
+            "excluded-value-blocked", "no-value-pattern", "metadata-document", "metadata-override"
         };
 
         public static bool IsMode(string mode)
@@ -746,6 +784,22 @@ namespace UiaProviderFixture
 
         // ---------- block gate ----------
 
+        // Unconditional: emitted for every Value getter call, never for pattern
+        // lookups, so a reader that inspects structure without reading a value
+        // stays distinguishable from one that does.
+        public void NoteValueRead(Node node)
+        {
+            WriteEvent("{\"type\":\"value-read\",\"id\":" + Json.Quote(node.AutomationId) +
+                       ",\"name\":" + Json.Quote(node.Name) +
+                       ",\"controlType\":" + Json.Quote(node.ControlTypeName) + "}");
+        }
+
+        public void WaitValueBlocked()
+        {
+            // Bounded: a forgotten unblock can never wedge the fixture.
+            valueGate.Wait(2000);
+        }
+
         public void NoteProviderCall(Node node)
         {
             if (!blocking || node == Root) return;
@@ -763,6 +817,7 @@ namespace UiaProviderFixture
             if (value)
             {
                 blockGate.Reset();
+                valueGate.Reset();
                 Interlocked.Exchange(ref blockSignalled, 0);
                 blocking = true;
             }
@@ -770,6 +825,7 @@ namespace UiaProviderFixture
             {
                 blocking = false;
                 blockGate.Set();
+                valueGate.Set();
             }
         }
 
@@ -1261,6 +1317,13 @@ namespace UiaProviderFixture
             get
             {
                 fixture.NoteProviderCall(node);
+                fixture.NoteValueRead(node);
+                if (node.BlockValueOnRead)
+                {
+                    Fixture.WriteEvent("{\"type\":\"value-blocked\",\"id\":" +
+                                       Json.Quote(node.AutomationId) + "}");
+                    fixture.WaitValueBlocked();
+                }
                 return node.Value ?? "";
             }
         }

@@ -1,4 +1,5 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { isPackaged: false, getAppPath: () => process.cwd() } }))
@@ -9,13 +10,23 @@ const powershell = resolve(process.env.SystemRoot || 'C:\\Windows', 'System32/Wi
 const children: ChildProcessWithoutNullStreams[] = []
 const lines = (text: string): string[] => text.split(/\r?\n/)
 
-interface Fixture { handle: string; pid: number; title: string; send: (command: object) => void; events: { type: string }[] }
+interface Fixture {
+  handle: string
+  pid: number
+  title: string
+  file?: string
+  send: (command: object) => void
+  events: { type: string; id?: string; name?: string; controlType?: string }[]
+}
+
+/** Value getter calls the fixture actually observed, one event per read. */
+const reads = (fixtureRun: Fixture): Fixture['events'] => fixtureRun.events.filter(event => event.type === 'value-read')
 
 /** Owned, non-activating provider: the fixture creates and owns this window. */
 function start(mode: string): Promise<Fixture> {
   const child = spawn(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', fixture, '-Mode', mode], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
   children.push(child)
-  const events: { type: string }[] = []
+  const events: { type: string; id?: string; name?: string; controlType?: string }[] = []
   let buffered = ''
   return new Promise((ready, fail) => {
     const timer = setTimeout(() => fail(new Error(`fixture ${mode} did not become ready`)), 30_000)
@@ -26,7 +37,7 @@ function start(mode: string): Promise<Fixture> {
       buffered = parts.pop() ?? ''
       for (const line of parts) {
         if (!line.trim()) continue
-        let event: { type: string; handle?: string; pid?: number; title?: string }
+        let event: { type: string; handle?: string; pid?: number; title?: string; file?: string }
         try { event = JSON.parse(line) } catch { continue }
         events.push(event)
         if (event.type !== 'ready') continue
@@ -35,6 +46,7 @@ function start(mode: string): Promise<Fixture> {
           handle: String(Number(BigInt(event.handle ?? '0'))),
           pid: Number(event.pid),
           title: String(event.title),
+          file: event.file,
           events,
           send: command => child.stdin.write(`${JSON.stringify(command)}\n`),
         })
@@ -177,7 +189,9 @@ it.skipIf(process.platform !== 'win32')('retires the helper of consecutive reque
       if (Number.isInteger(pid) && pid > 0 && !preexisting.has(pid)) seen.add(pid)
     }
   })
-  for (let index = 0; index < 40; index++) {
+  // Sixty requests leave headroom: the sampler misses a few helpers when the
+  // machine is busy, and the contract is thirty observed pids, not every one.
+  for (let index = 0; index < 60; index++) {
     const result = await windowsNative({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
     expect(result).toMatchObject({ url: 'https://example.com/edit', truncated: false })
   }
@@ -188,4 +202,90 @@ it.skipIf(process.platform !== 'win32')('retires the helper of consecutive reque
   expect(seen.size).toBeGreaterThanOrEqual(30)
   expect([...seen].filter(pid => alive(pid))).toHaveLength(0)
   expect(owned().filter(pid => !preexisting.has(pid) && alive(pid))).toHaveLength(0)
-}, 120_000)
+}, 180_000)
+
+it.skipIf(process.platform !== 'win32')('retires the helper when its own parent dies after a complete request', async () => {
+  // The helper is given a request and an EOF on stdin before its parent dies,
+  // so this is the parent-death path, not the "stdin never closed" one.
+  const fixtureRun = await start('address-edit')
+  fixtureRun.send({ command: 'block' })
+  await settle(fixtureRun, 'blocking')
+  const before = new Set(owned())
+  const body = JSON.stringify({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
+  const parent = spawn(process.execPath, ['-e', [
+    'const { spawn } = require("node:child_process")',
+    'const child = spawn(process.argv[1], ["--parent-pid", String(process.pid)], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] })',
+    'child.stdout.on("data", () => {})',
+    'child.stdin.end(process.argv[2] + String.fromCharCode(10))',
+    'setInterval(() => {}, 1000)',
+  ].join('\n'), resolve('native/bin/yu-windows.exe'), body], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+  children.push(parent)
+  await settle(fixtureRun, 'blocked')
+  const helper = owned().filter(pid => !before.has(pid))
+  expect(helper).toHaveLength(1)
+  expect(alive(helper[0])).toBe(true)
+  expect(alive(parent.pid as number)).toBe(true)
+  process.kill(parent.pid as number)
+  const deadline = performance.now() + 10_000
+  while (alive(helper[0]) && performance.now() < deadline) await new Promise(done => setTimeout(done, 100))
+  expect(alive(helper[0])).toBe(false)
+  fixtureRun.send({ command: 'unblock' })
+  await settle(fixtureRun, 'unblocked')
+}, 90_000)
+
+it.skipIf(process.platform !== 'win32')('reads the address bar value once and never an excluded candidate', async () => {
+  const address = await start('address-edit')
+  expect(await windowsNative({ action: 'browser-url', handle: address.handle, pid: address.pid, title: address.title })).toMatchObject({ url: 'https://example.com/a' })
+  expect(reads(address).filter(event => event.id === 'addressEditBox')).toHaveLength(1)
+
+  // A page-level field that names itself like the address bar sits behind the
+  // Document boundary: the walk rejects it, so its value must never be read.
+  const pseudo = await start('pseudo-address')
+  const result = await windowsNative({ action: 'browser-url', handle: pseudo.handle, pid: pseudo.pid, title: pseudo.title })
+  expect(result).toEqual({ title: pseudo.title, truncated: false })
+  expect(reads(pseudo).filter(event => event.controlType === 'Edit')).toHaveLength(0)
+}, 90_000)
+
+it.skipIf(process.platform !== 'win32')('never touches an excluded candidate whose value blocks', async () => {
+  const fixtureRun = await start('excluded-value-blocked')
+  const started = performance.now()
+  const result = await windowsNative({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
+  const elapsed = performance.now() - started
+  expect(result).toEqual({ title: fixtureRun.title, truncated: false })
+  // Reading that value would wait out the fixture's two-second gate.
+  expect(elapsed).toBeLessThan(1_500)
+  expect(reads(fixtureRun).filter(event => event.controlType === 'Edit')).toHaveLength(0)
+  expect(fixtureRun.events.some(event => event.type === 'value-blocked')).toBe(false)
+}, 60_000)
+
+it.skipIf(process.platform !== 'win32')('ignores a candidate that exposes no ValuePattern at all', async () => {
+  const fixtureRun = await start('no-value-pattern')
+  const result = await windowsNative({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
+  expect(result).toEqual({ title: fixtureRun.title, truncated: false })
+  // Structure was inspected, but no value could be read.
+  expect(reads(fixtureRun)).toHaveLength(0)
+}, 60_000)
+
+it.skipIf(process.platform !== 'win32')('skips the document value in metadata mode without an address bar', async () => {
+  const bare = await start('metadata-document')
+  const skipped = await windowsNative({ action: 'browser-url', handle: bare.handle, pid: bare.pid, title: bare.title, metadataOnly: true })
+  expect(skipped).toEqual({ title: bare.title, truncated: false })
+  expect(reads(bare)).toHaveLength(0)
+
+  // With an address bar present the old rule still lets one unique document URL win.
+  const both = await start('metadata-override')
+  const overridden = await windowsNative({ action: 'browser-url', handle: both.handle, pid: both.pid, title: both.title, metadataOnly: true })
+  expect(overridden).toEqual({ title: both.title, url: 'https://example.com/from-doc', truncated: false })
+  expect(reads(both).filter(event => event.controlType === 'Document')).toHaveLength(1)
+}, 90_000)
+
+it.skipIf(process.platform !== 'win32')('turns a file address into the exact local path of a real file', async () => {
+  const fixtureRun = await start('file-url')
+  expect(fixtureRun.file).toBeTruthy()
+  const expected = String(fixtureRun.file)
+  const result = await windowsNative({ action: 'browser-url', handle: fixtureRun.handle, pid: fixtureRun.pid, title: fixtureRun.title })
+  expect(result).toEqual({ title: fixtureRun.title, path: expected, truncated: false })
+  // The fixture names the file with Chinese, a space and a literal percent sign.
+  expect(expected).toContain('中文 100%')
+  expect(existsSync(expected)).toBe(true)
+}, 60_000)

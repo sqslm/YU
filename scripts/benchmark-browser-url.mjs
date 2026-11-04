@@ -124,8 +124,16 @@ function run(side, body) {
   const child = spawn(executable, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
   const jobState = openJob(child.pid)
   return new Promise(resolveRun => {
-    let stdout = '', stderr = '', spawnError, writeError, timedOut = false
+    let stdout = '', stderr = '', spawnError, writeError, timedOut = false, settled = false
+    let timer, watchdog
     const finish = () => {
+      // A helper that exits can still leave a pipe held elsewhere, so the
+      // measurement also settles on its own watchdog instead of waiting on
+      // "close" alone.
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      clearTimeout(watchdog)
       const totalMs = performance.now() - started
       const usage = jobState.job ? accounting(jobState.job) : undefined
       if (jobState.job) CloseHandle(jobState.job)
@@ -134,8 +142,9 @@ function run(side, body) {
     child.on('error', error => { spawnError = String(error); finish() })
     child.stdout.on('data', chunk => { stdout += chunk })
     child.stderr.on('data', chunk => { stderr += chunk.slice(0, 2000) })
-    const timer = setTimeout(() => { timedOut = true; child.kill() }, options.timeoutMs)
-    child.once('close', code => { clearTimeout(timer); child.exitCode = code; finish() })
+    timer = setTimeout(() => { timedOut = true; child.kill() }, options.timeoutMs)
+    watchdog = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL') } catch {} finish() }, options.timeoutMs + 5_000)
+    child.once('close', code => { child.exitCode = code; finish() })
     child.stdin.on('error', error => { writeError = String(error) })
     child.stdin.end(Buffer.from(`${JSON.stringify(body)}\n`, 'utf8'))
   })
@@ -174,6 +183,11 @@ const specs = [
   { mode: 'no-candidate', kind: 'body', expected: ready => ({ title: ready.title, truncated: false }) },
   { mode: 'provider-error', kind: 'body', args: ['-FailStage', 'get-property'], expected: ready => ({ title: ready.title, truncated: false }) },
   { mode: 'provider-error', kind: 'body', args: ['-FailStage', 'find-children'], expected: ready => ({ title: ready.title, truncated: false }) },
+  { mode: 'pseudo-address', kind: 'body', expected: ready => ({ title: ready.title, truncated: false }) },
+  { mode: 'excluded-value-blocked', kind: 'body', expected: ready => ({ title: ready.title, truncated: false }) },
+  { mode: 'no-value-pattern', kind: 'body', expected: ready => ({ title: ready.title, truncated: false }) },
+  { mode: 'metadata-document', kind: 'body', metadataOnly: true, expected: ready => ({ title: ready.title, truncated: false }) },
+  { mode: 'metadata-override', kind: 'body', metadataOnly: true, expected: ready => ({ title: ready.title, url: 'https://example.com/from-doc', truncated: false }) },
   { mode: 'address-edit', kind: 'destroyed' },
   { mode: 'address-edit', kind: 'unresponsive', args: ['-FailStage', 'unresponsive'] },
 ]
@@ -181,10 +195,24 @@ const specs = [
 async function correctness(spec) {
   const fixture = await startFixture(spec.mode, spec.args ?? [])
   const request = { action: 'browser-url', handle: String(Number(BigInt(fixture.ready.handle))), pid: fixture.ready.pid, title: fixture.ready.title }
-  const result = { mode: spec.mode, kind: spec.kind, failStage: spec.args?.[1], request }
+  if (spec.metadataOnly) request.metadataOnly = true
+  const result = { mode: spec.mode, kind: spec.kind, failStage: spec.args?.[1], metadataOnly: spec.metadataOnly === true, request }
   if (spec.kind === 'destroyed') fixture.send({ command: 'destroy' })
   if (spec.kind === 'unresponsive') await new Promise(done => setTimeout(done, 500))
-  const [left, right] = [await run('powershell', request), await run('rust', request)]
+  // Value getter calls are attributed per side: the fixture emits one event for
+  // every read, so a reader that touches a rejected candidate is visible here.
+  const mark = { powershell: fixture.events.length }
+  const left = await run('powershell', request)
+  mark.rust = fixture.events.length
+  const right = await run('rust', request)
+  const readsBetween = (from, to) => fixture.events.slice(from, to).filter(event => event.type === 'value-read')
+  const count = (events, type) => events.filter(event => event.controlType === type).length
+  const leftReads = readsBetween(mark.powershell, mark.rust)
+  const rightReads = readsBetween(mark.rust, fixture.events.length)
+  result.reads = {
+    powershell: { edit: count(leftReads, 'Edit'), document: count(leftReads, 'Document') },
+    rust: { edit: count(rightReads, 'Edit'), document: count(rightReads, 'Document') },
+  }
   const [a, b] = [parse(left.stdout), parse(right.stdout)]
   result.powershell = { code: left.code, stderr: left.stderr, json: a, timedOut: left.timedOut, totalMs: left.totalMs }
   result.rust = { code: right.code, stderr: right.stderr, json: b, timedOut: right.timedOut, totalMs: right.totalMs }
@@ -228,6 +256,14 @@ const empty = correctnessReports.find(entry => entry.mode === 'no-candidate')
 const providerErrors = correctnessReports.filter(entry => entry.mode === 'provider-error')
 const destroyed = correctnessReports.find(entry => entry.kind === 'destroyed')
 const unresponsive = correctnessReports.find(entry => entry.kind === 'unresponsive')
+const pseudo = correctnessReports.find(entry => entry.mode === 'pseudo-address')
+const blocked = correctnessReports.find(entry => entry.mode === 'excluded-value-blocked')
+const bare = correctnessReports.find(entry => entry.mode === 'no-value-pattern')
+const metaBare = correctnessReports.find(entry => entry.mode === 'metadata-document')
+const metaBoth = correctnessReports.find(entry => entry.mode === 'metadata-override')
+const readsOf = entry => ({ powershell: entry?.reads?.powershell ?? {}, rust: entry?.reads?.rust ?? {} })
+const editReads = (entry, side) => readsOf(entry)[side].edit
+const documentReads = (entry, side) => readsOf(entry)[side].document
 
 // --- timed pass ------------------------------------------------------------
 const fixture = await startFixture('address-edit')
@@ -319,6 +355,9 @@ const checks = [
   { name: 'provider-errors-equal-and-invisible', pass: providerErrors.length === 2 && providerErrors.every(entry => entry.identical === true && entry.matchesExpected === true && (entry.injected?.length ?? 0) > 0), detail: JSON.stringify(providerErrors.map(entry => ({ failStage: entry.failStage, injected: entry.injected, powershell: entry.powershell?.json, rust: entry.rust?.json }))) },
   { name: 'destroyed-window-rejected', pass: destroyed?.rejected === true, detail: JSON.stringify({ powershell: destroyed?.powershell, rust: destroyed?.rust }) },
   { name: 'unresponsive-read-hits-budget', pass: unresponsive?.timedOut === true, detail: JSON.stringify({ powershell: unresponsive?.powershell, rust: unresponsive?.rust }) },
+  { name: 'excluded-candidates-never-read', pass: [pseudo, blocked, bare].every(entry => entry?.identical === true && entry?.matchesExpected === true && editReads(entry, 'powershell') === 0 && editReads(entry, 'rust') === 0) && editReads(https, 'powershell') === 1 && editReads(https, 'rust') === 1, detail: JSON.stringify({ addressEdit: readsOf(https), pseudoAddress: readsOf(pseudo), excludedBlocked: readsOf(blocked), noValuePattern: readsOf(bare) }) },
+  { name: 'blocked-excluded-candidate-is-not-touched', pass: blocked?.powershell?.totalMs < 1500 && blocked?.rust?.totalMs < 1500 && !blocked?.error, detail: JSON.stringify({ powershellMs: blocked?.powershell?.totalMs, rustMs: blocked?.rust?.totalMs, note: 'a read of that value would wait out the fixture two-second gate' }) },
+  { name: 'metadata-only-read-boundary', pass: metaBare?.identical === true && metaBare?.matchesExpected === true && documentReads(metaBare, 'powershell') === 0 && documentReads(metaBare, 'rust') === 0 && metaBoth?.identical === true && metaBoth?.matchesExpected === true && documentReads(metaBoth, 'powershell') === 1 && documentReads(metaBoth, 'rust') === 1, detail: JSON.stringify({ withoutAddressBar: { powershell: metaBare?.powershell?.json, rust: metaBare?.rust?.json, reads: readsOf(metaBare) }, withAddressBar: { expected: metaBoth?.expected, powershell: metaBoth?.powershell?.json, rust: metaBoth?.rust?.json, reads: readsOf(metaBoth) } }) },
   { name: 'every-sample-valid', pass: runs.every(entry => entry.ok), detail: `${runs.filter(entry => entry.ok).length}/${runs.length} samples matched the fixture body` },
   { name: 'samples-per-side', pass: aggregate.powershell.n >= 40 && aggregate.rust.n >= 40, detail: `powershell ${aggregate.powershell.n}, rust ${aggregate.rust.n}` },
   { name: 'measurement-comparable', pass: comparable, detail: comparable ? 'every metric has both sides' : 'a metric is missing on one side' },

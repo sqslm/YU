@@ -88,6 +88,8 @@ class FixtureSession {
     this.child = child
     this.pending = []
     this.waiters = []
+    // Every event ever seen, for "what did this particular read touch?" assertions.
+    this.log = []
     this.stderr = ''
     this.exit = null
     this.handle = null
@@ -104,7 +106,9 @@ class FixtureSession {
         buffer = buffer.slice(index + 1)
         if (!line) continue
         try {
-          this.pending.push(JSON.parse(line))
+          const event = JSON.parse(line)
+          this.pending.push(event)
+          this.log.push(event)
         } catch {
           this.stderr += `\nunparsable stdout line: ${line}`
         }
@@ -331,10 +335,47 @@ function checkMode(mode, tree) {
     case 'file-url': {
       expectCount(edits, 1, 'Edit')
       expect(
-        edits[0] !== undefined && /^file:\/\/\/.*yu-uia-[0-9a-f]{32}\.md$/i.test(edits[0].value || ''),
+        edits[0] !== undefined &&
+          /^file:\/\/\/.*yu-uia-%E4%B8%AD%E6%96%87%20100%25%20[0-9a-f]{32}\.md$/i.test(edits[0].value || ''),
         `Edit value must be the fixture's file:// URI, got ${edits[0] && edits[0].value}`,
       )
       expect(edits[0] !== undefined && hasAncestorType(tree, edits[0], 'ToolBar'), 'Edit needs a ToolBar ancestor')
+      break
+    }
+    case 'excluded-value-blocked': {
+      expectCount(documents, 1, 'Document')
+      expectCount(edits, 1, 'Edit')
+      expect(edits[0] !== undefined && edits[0].name === '地址和搜索栏', `Edit name must be 地址和搜索栏, got ${edits[0] && edits[0].name}`)
+      expectValue(edits[0], 'https://example.com/pseudo', 'Edit')
+      expect(
+        edits[0] !== undefined && hasAncestorType(tree, edits[0], 'Document'),
+        'Edit must sit inside a Document so the ancestor walk stops before the window',
+      )
+      break
+    }
+    case 'no-value-pattern': {
+      expectCount(edits, 1, 'Edit')
+      expectCount(combos, 0, 'ComboBox')
+      expect(
+        edits[0] !== undefined && edits[0].hasValue === false,
+        `Edit must expose no ValuePattern, got hasValue=${edits[0] && edits[0].hasValue}`,
+      )
+      expect(edits[0] !== undefined && hasAncestorType(tree, edits[0], 'ToolBar'), 'Edit needs a ToolBar ancestor')
+      break
+    }
+    case 'metadata-document': {
+      expectCount(documents, 1, 'Document')
+      expectCount(edits, 0, 'Edit')
+      expectCount(combos, 0, 'ComboBox')
+      expectValue(documents[0], 'https://example.com/doc', 'Document')
+      break
+    }
+    case 'metadata-override': {
+      expectCount(edits, 1, 'Edit')
+      expectValue(edits[0], 'https://example.com/from-bar', 'Edit')
+      expect(edits[0] !== undefined && hasAncestorType(tree, edits[0], 'ToolBar'), 'Edit needs a ToolBar ancestor')
+      expectCount(documents, 1, 'Document')
+      expectValue(documents[0], 'https://example.com/from-doc', 'Document')
       break
     }
     case 'no-toolbar': {
@@ -398,11 +439,12 @@ function runReader(command, args, request, timeoutMs) {
   return { ok: result.status === 0, timedOut: false, status: result.status, stdout, stderr }
 }
 
-const browserUrlRequest = (session) => ({
+const browserUrlRequest = (session, extra = {}) => ({
   action: 'browser-url',
   handle: String(BigInt(session.handle)),
   pid: session.pid,
   title: session.title,
+  ...extra,
 })
 
 function startReader(command, args, request) {
@@ -412,11 +454,11 @@ function startReader(command, args, request) {
   return child
 }
 
-const runRustHelper = (session, timeoutMs = HELPER_TIMEOUT_MS) =>
-  runReader(helperExe, [], browserUrlRequest(session), timeoutMs)
+const runRustHelper = (session, timeoutMs = HELPER_TIMEOUT_MS, extra = {}) =>
+  runReader(helperExe, [], browserUrlRequest(session, extra), timeoutMs)
 
-const runPowerShellBaseline = (session, timeoutMs = HELPER_TIMEOUT_MS) =>
-  runReader(POWERSHELL, [...PS_ARGS, bridgeScript], browserUrlRequest(session), timeoutMs)
+const runPowerShellBaseline = (session, timeoutMs = HELPER_TIMEOUT_MS, extra = {}) =>
+  runReader(POWERSHELL, [...PS_ARGS, bridgeScript], browserUrlRequest(session, extra), timeoutMs)
 
 function describeReader(name, result) {
   const parts = [`${name}: ${result.timedOut ? 'timeout' : `exit=${result.status}`}`]
@@ -550,7 +592,7 @@ async function runFileUrlProbe() {
     else {
       notes.push(`ready file=${JSON.stringify(file)}`)
       if (!existsSync(file)) details.push(`advertised file does not exist: ${file}`)
-      if (!/(^|[\\/])yu-uia-[0-9a-f]{32}\.md$/i.test(file)) details.push(`temp file name is unexpected: ${file}`)
+      if (!/(^|[\\/])yu-uia-中文 100% [0-9a-f]{32}\.md$/i.test(file)) details.push(`temp file name is unexpected: ${file}`)
       if (file.includes('~')) details.push(`path looks like an 8.3 short name: ${file}`)
 
       const tree = await session.dumpTree()
@@ -701,16 +743,181 @@ async function runProviderErrorProbe() {
   return { mode: 'provider-error', ok: details.length === 0, elements: 0, components: '', problems: details, notes }
 }
 
+// ---------- value-read event probe ----------
+//
+// `value-read` is emitted only from the IValueProvider.Value getter, so the event
+// stream records who actually evaluated a value (as opposed to merely walking the
+// tree). This probe pins that boundary:
+//   * excluded-value-blocked - a reader that skips the excluded candidate never enters
+//     the getter; a full tree read (the positive control) does, and says so.
+//   * no-value-pattern - a candidate without ValuePattern is never read.
+//   * metadata-document / metadata-override - metadataOnly decides whether Documents
+//     are read at all.
+
+const VALUE_READ = 'value-read'
+const VALUE_BLOCKED = 'value-blocked'
+
+const readerLabel = (reader) => (reader === 'helper' ? 'yu-windows.exe' : 'windows-tools.ps1')
+
+async function attemptRead(mode, reader, extra = {}) {
+  const session = await FixtureSession.launch(mode)
+  try {
+    await session.describe()
+    const mark = session.log.length
+    const startedAt = Date.now()
+    const result =
+      reader === 'helper' ? runRustHelper(session, undefined, extra) : runPowerShellBaseline(session, undefined, extra)
+    const elapsed = Date.now() - startedAt
+    // The fixture writes events from its stdin thread; give the pipe a moment to drain.
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    const events = session.log.slice(mark).filter((event) => event.type === VALUE_READ || event.type === VALUE_BLOCKED)
+    return { result, elapsed, events }
+  } finally {
+    await session.close()
+  }
+}
+
+function describeEvents(events) {
+  if (events.length === 0) return '(none)'
+  return events.map((event) => `${event.type}:${event.id === undefined ? '?' : event.id || '<no id>'}`).join(', ')
+}
+
+async function runEventsProbe() {
+  const details = []
+  const notes = []
+  const readers = ['baseline', 'helper']
+
+  // 1) The excluded candidate must not be evaluated by anyone who skips it.
+  for (const reader of readers) {
+    try {
+      const run = await attemptRead('excluded-value-blocked', reader)
+      notes.push(`excluded-value-blocked | ${readerLabel(reader)}: ${describeReader(readerLabel(reader), run.result)}`)
+      notes.push(`excluded-value-blocked | ${readerLabel(reader)} events: ${describeEvents(run.events)} (${run.elapsed}ms)`)
+      if (run.events.some((event) => event.type === VALUE_BLOCKED)) {
+        details.push(`excluded-value-blocked: ${readerLabel(reader)} evaluated the excluded field (value-blocked seen)`)
+      }
+      if (run.events.some((event) => event.type === VALUE_READ && event.controlType === 'Edit')) {
+        details.push(`excluded-value-blocked: ${readerLabel(reader)} read the excluded Edit value`)
+      }
+      if (!run.result.ok) details.push(`excluded-value-blocked: ${readerLabel(reader)} failed`)
+      if (run.elapsed > 8000) {
+        details.push(
+          `excluded-value-blocked: ${readerLabel(reader)} took ${run.elapsed}ms - the skipped candidate must not block the read`,
+        )
+      }
+    } catch (error) {
+      details.push(`excluded-value-blocked (${readerLabel(reader)}): ${error.message}`)
+    }
+  }
+
+  // 1b) Positive control: a full tree read does read that value, so the gate fires.
+  {
+    const session = await FixtureSession.launch('excluded-value-blocked')
+    try {
+      const mark = session.log.length
+      const tree = await session.dumpTree()
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      const blocked = session.log.slice(mark).filter((event) => event.type === VALUE_BLOCKED)
+      const readIds = session.log
+        .slice(mark)
+        .filter((event) => event.type === VALUE_READ)
+        .map((event) => event.id)
+      notes.push(
+        `excluded-value-blocked | uia-tree.ps1 positive control: value-blocked=${blocked.length} value-read ids=[${readIds.join(', ')}]`,
+      )
+      if (tree.length === 0) details.push('excluded-value-blocked: the tree dump was empty')
+      if (blocked.length === 0) details.push('excluded-value-blocked: the value gate never fired even for a full tree read')
+      for (const event of blocked) {
+        if (event.id !== '') {
+          details.push(`excluded-value-blocked: value-blocked id=${JSON.stringify(event.id)}, expected the anonymous page field`)
+        }
+      }
+    } catch (error) {
+      details.push(`excluded-value-blocked (positive control): ${error.message}`)
+    } finally {
+      await session.close()
+    }
+  }
+
+  // 2) A candidate without ValuePattern is never read.
+  for (const reader of readers) {
+    try {
+      const run = await attemptRead('no-value-pattern', reader)
+      const json = parseReaderJson(run.result)
+      notes.push(`no-value-pattern | ${readerLabel(reader)}: ${describeReader(readerLabel(reader), run.result)}`)
+      notes.push(`no-value-pattern | ${readerLabel(reader)} events: ${describeEvents(run.events)}`)
+      if (run.events.some((event) => event.type === VALUE_READ)) {
+        details.push(`no-value-pattern: ${readerLabel(reader)} read a value from a candidate without ValuePattern`)
+      }
+      if (json && typeof json.url === 'string' && json.url) {
+        details.push(`no-value-pattern: ${readerLabel(reader)} returned url=${JSON.stringify(json.url)}`)
+      }
+      if (!run.result.ok && reader === 'baseline') {
+        details.push('no-value-pattern: the PowerShell baseline must exit 0 on a candidate without ValuePattern')
+      }
+      if (!run.result.ok && reader === 'helper') {
+        const firstLine = run.result.stderr.trim().split('\n')[0]
+        notes.push(`no-value-pattern | DIVERGENCE: yu-windows.exe failed where the baseline returned an empty result: ${firstLine}`)
+      }
+    } catch (error) {
+      details.push(`no-value-pattern (${readerLabel(reader)}): ${error.message}`)
+    }
+  }
+
+  // 3) metadataOnly decides whether Documents are read.
+  const expectations = {
+    'metadata-document': { false: ['Document:document'], true: [] },
+    'metadata-override': { false: ['Edit:addressEditBox', 'Document:document'], true: ['Edit:addressEditBox', 'Document:document'] },
+  }
+  for (const mode of ['metadata-document', 'metadata-override']) {
+    for (const metadataOnly of [false, true]) {
+      for (const reader of readers) {
+        try {
+          const run = await attemptRead(mode, reader, { metadataOnly })
+          const json = parseReaderJson(run.result)
+          const sequence = run.events
+            .filter((event) => event.type === VALUE_READ)
+            .map((event) => `${event.controlType}:${event.id || '(no id)'}`)
+          notes.push(
+            `${mode} | metadataOnly=${metadataOnly} ${readerLabel(reader)}: ${describeReader(readerLabel(reader), run.result)}`,
+          )
+          notes.push(`${mode} | metadataOnly=${metadataOnly} ${readerLabel(reader)} value-read order=[${sequence.join(', ')}]`)
+          const expected = expectations[mode][metadataOnly]
+          if (sequence.join('|') !== expected.join('|')) {
+            details.push(
+              `${mode}: ${readerLabel(reader)} metadataOnly=${metadataOnly} value-read order [${sequence.join(', ')}] != [${expected.join(', ')}]`,
+            )
+          }
+          const expectedUrl =
+            mode === 'metadata-document' ? (metadataOnly ? undefined : 'https://example.com/doc') : 'https://example.com/from-doc'
+          const actualUrl = json && typeof json.url === 'string' ? json.url : undefined
+          if (actualUrl !== expectedUrl) {
+            details.push(
+              `${mode}: ${readerLabel(reader)} metadataOnly=${metadataOnly} url=${JSON.stringify(actualUrl)} != ${JSON.stringify(expectedUrl)}`,
+            )
+          }
+          if (!run.result.ok) details.push(`${mode}: ${readerLabel(reader)} metadataOnly=${metadataOnly} failed`)
+        } catch (error) {
+          details.push(`${mode} (${readerLabel(reader)} metadataOnly=${metadataOnly}): ${error.message}`)
+        }
+      }
+    }
+  }
+
+  return { mode: 'value-events', ok: details.length === 0, elements: 0, components: '', problems: details, notes }
+}
+
 // ---------- main ----------
 
 function parseArgv(argv) {
-  const options = { only: null, helper: false, block: false, unicode: false, file: false, error: false }
+  const options = { only: null, helper: false, block: false, unicode: false, file: false, error: false, events: false }
   for (const argument of argv) {
     if (argument === '--helper') options.helper = true
     else if (argument === '--block') options.block = true
     else if (argument === '--unicode') options.unicode = true
     else if (argument === '--file') options.file = true
     else if (argument === '--error') options.error = true
+    else if (argument === '--events') options.events = true
     else if (argument.startsWith('--only=')) options.only = argument.slice('--only='.length)
     else if (argument === '--only') options.only = null
     else if (options.only === null && !argument.startsWith('--')) options.only = argument
@@ -722,7 +929,7 @@ async function main() {
   const options = parseArgv(process.argv.slice(2))
   const modes = runPowerShell(fixtureScript, ['-ListModes']).split('\n').map((line) => line.trim()).filter(Boolean)
   const selected =
-    (options.block || options.unicode || options.file || options.error) && !options.only
+    (options.block || options.unicode || options.file || options.error || options.events) && !options.only
       ? []
       : options.only
         ? modes.filter((mode) => mode === options.only)
@@ -765,8 +972,16 @@ async function main() {
 
       if (options.helper) {
         const probe = probeHelper(session)
-        if (!probe.ok) details.push(`helper probe: ${probe.detail}`)
-        else notes.push(`helper probe: ${probe.detail}`)
+        if (probe.ok) {
+          notes.push(`helper probe: ${probe.detail}`)
+        } else {
+          // A helper failure only counts against the fixture if the baseline fails too;
+          // otherwise it is a reader divergence and belongs in the report, not in the
+          // fixture's verdict.
+          const baseline = runPowerShellBaseline(session)
+          if (baseline.ok) notes.push(`DIVERGENCE helper vs baseline: ${probe.detail} | ${describeReader('windows-tools.ps1', baseline)}`)
+          else details.push(`helper probe: ${probe.detail}`)
+        }
       }
     } catch (error) {
       details.push(error.message)
@@ -833,6 +1048,7 @@ async function main() {
   const extraProbes = []
   if (options.file) extraProbes.push(['file-url', runFileUrlProbe])
   if (options.error) extraProbes.push(['provider-error', runProviderErrorProbe])
+  if (options.events) extraProbes.push(['value-events', runEventsProbe])
   for (const [label, probe] of extraProbes) {
     const result = await probe()
     report.push(result)
