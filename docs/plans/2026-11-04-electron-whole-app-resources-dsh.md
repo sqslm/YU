@@ -52,50 +52,56 @@
 
 ## 6. 实施结果
 
-**状态：DSH 已实施并通过采纳门槛（`decision=adopted`）。** 环境：Electron 42.11.18、Node v24.22.2、Windows 10/11 x64、16 核、1920×1080 / 32 bpp；`pnpm build` 产物直接以 `node_modules/electron/dist/electron.exe out/main/index.js` 启动，每次运行使用独立 `--user-data-dir`，不接 Vite HMR/DevTools。所有数据来自空配置隔离资料（未复制真实聊天、音频、凭据、模型目录），因此结论只代表该配置。
+**状态：DSH 已实施并通过采纳门槛（`decision=adopted`）。** 环境：Electron 42.11.18、Node v24.22.2、Windows 10/11 x64、16 核。测量对象是 `pnpm build` 产物（`electron.exe out/main/index.js`，每次独立 `--user-data-dir`，不接 Vite HMR/DevTools），基线是 `0cb30d9` 的源码（`git checkout` 回工作树后重新构建，证据 `build.source` 注明），候选是本轮工作树（`23efa58` 之上，`build.candidate.entrySha256=b52966db…`，基线 `2561ea29…`）；两侧 `build.rev` 与入口哈希都记入证据，`comparable` 由「同一台机器 + 同一组场景参数 + 两侧构建不同」判定，不再硬编码。数据全部来自空配置隔离资料（未复制真实聊天、音频、凭据、模型目录），结论只代表该配置。
 
 ### 6.1 计量方式
 
-- 新增 `scripts/benchmark-electron-app.mjs`（采样器独立进程，不在应用树内）：进程树由 `Win32_Process` 的父子链取得，角色按名字与 `--type=` 划分（main / renderer / gpu / utility / crashpad / zygote / helper / conhost）；内存用 `K32GetProcessMemoryInfo` + `PROCESS_MEMORY_COUNTERS_EX2`（私有驻留、工作集、私有提交三项分列，读不到记 `null` 并计入 `unavailable`）；CPU 用 `GetProcessTimes` 在同一窗口首尾各取一次求 user+kernel 增量，同时报窗口毫秒与核数。
-- 场景：冷启动、首次打开主界面、关闭到托盘后空闲 60 s、同进程开关 20 次后再空闲 60 s，另有 Pill 窗口生命周期（startup / hub-open / 隐藏后空闲三点的 renderer PID）。开窗延迟定义 = 启动第二个实例（走真实 `second-instance` → `ensureSettingsWindow()`）到 EnumWindows 首次看到可见的主窗口；关窗 = 对主窗口投 `WM_CLOSE`（与标题栏 X 等价，进程内 `close` 处理器隐藏到托盘）。
-- 记忆/CPU 场景各 3 次独立启动（托盘空闲 24 个快照参与中位数），首开与重开各 21 / 20 个样本。
+- `scripts/benchmark-electron-app.mjs`（采样器独立进程，不在应用树内）：进程树按 `Win32_Process` 的父子链取得，角色按名字与 `--type=` 划分（main / renderer / gpu / utility / crashpad / zygote / helper / conhost）；内存用 `K32GetProcessMemoryInfo` + `PROCESS_MEMORY_COUNTERS_EX2`（私有驻留、工作集、私有提交分列，读不到写 `null` 并计入 `unavailable`，**不当 0**）；CPU 用 `GetProcessTimes` 在同一窗口首尾各取一次求 user+kernel 增量，同时报窗口毫秒与核数。
+- 场景：冷启动；首次打开主界面并静置；关闭到托盘后空闲 60 s；同进程开关 20 次后再空闲 60 s；另有 Pill 生命周期场景。开窗延迟 = 启动第二个实例（真实 `second-instance` → `ensureSettingsWindow()`）到 EnumWindows 首次看到可见主窗口；关窗 = 向主窗口投 `WM_CLOSE`（与标题栏 X 等价，进程内处理器隐藏到托盘）。
+- 快照按阶段分簇记录：`settled-4s`（启动后 4 s，20 个）与 `idle-60s`（真空闲，3 个）。**门槛只读 `idle-60s`**，`settled-4s` 单列，避免把「启动刚稳定」冒充「托盘空闲」。
+- 空闲 CPU 与内存各 3 次独立启动；首开 21 个样本、重开 20 个样本。
 
 ### 6.2 基线与归因
 
-基线（`0cb30d9`）：托盘空闲整树私有驻留 **105.0 MiB**（110 116 864 B，24 快照中位数），Electron 组 92.1 + helper 0.6 + conhost 0.8 MiB；其中 main 56.5、renderer 23.0（**只有 Pill 一个**）、utility 15.0（两个）、gpu 8.8。启动即创建 Pill 渲染器（`ensureBarWindow()` 在 boot 无条件执行，`show:false` + `backgroundThrottling:false`），它同时拖着一个 spare utility 进程并抬高 main/gpu。hub 渲染器则早已在隐藏 15 s 后被 `hubRetireTimer` 销毁，因此**能省的只有 Pill**——把 boot 的无条件创建临时删掉做消融上界，得到 66.3 MiB（−37%~−39%），与最终实现的 67.7 MiB 吻合。
+基线 `idle-60s` 中位私有驻留 **101 036 032 B（96.4 MiB）**，角色分布 main 45.7 + renderer 25.7（**只有 Pill 一个**）+ utility 14.9（两个）+ gpu 8.7 + other 1.4 MiB；`settled-4s` 簇 105.3 MiB。启动即创建 Pill 渲染器（`ensureBarWindow()` 在 boot 无条件执行，`show:false` + `backgroundThrottling:false`），它同时拖着一个 spare utility 进程并抬高 main/gpu；hub 渲染器早已在隐藏 15 s 后被 `hubRetireTimer` 销毁，所以**能省的只有 Pill**。临时删掉 boot 的无条件创建做消融，上界 66.3 MiB（−37%~−39%），与最终实现吻合。
 
 ### 6.3 最小改动
 
-- `src/main/bar-retire.ts`：`wireBarRetirement(win, {delayMs=30_000, isBusy, isCardVisible, log})` —— `hide` 时起表、`show`/`closed` 取消，到期且 `!isDestroyed() && !isVisible() && !isBusy() && !isCardVisible()` 时 `destroy()`；**创建即隐藏的窗口也起表**（Pill 会为麦克风列表请求被创建却从不 show）。
-- `src/main/index.ts`：删除 boot 的无条件 `ensureBarWindow()`；`ensureBarWindow()` 末尾接线；`Pipeline` 的 bar 出口从 `() => barWindow` 改为 `() => ensureBarWindow()`——退休后复查必须能重新拿到窗口。其余按需入口（game-mode 退出、`media:devices`、诊断截图）原样保留。
-- `src/main/bar-retire.test.ts`：6 个用例覆盖「到期销毁 / 期间 show 取消 / 可见不销毁 / 录音或卡片占用时跳过 / closed 取消 / 创建即隐藏也起表」。
+- `src/main/bar-retire.ts`：`wireBarRetirement(win, {delayMs=30_000, isBusy, isCardVisible, log})`——`hide` 起表、`show`/`closed` 取消；到期且 `!isDestroyed() && !isVisible()` 时，若 `isBusy()` 或 `isCardVisible()` 为真则**重新起表**（忙碌可以在没有新 `hide` 的情况下结束），否则 `destroy()` 并记 `[bar] retiring the hidden pill window`；创建即隐藏的窗口也起表。
+- `src/main/index.ts`：删除 boot 的无条件 `ensureBarWindow()`；新增 `barSink()`（`quitting` 或游戏模式返回 `null`，否则 `ensureBarWindow()`），`Pipeline` 的 bar 出口、`NoteAudioPlayer`、`createSpeechPlayback`、`controlNoteAudio` 全部改走它——原来后三者直接读裸 `barWindow`，Pill 被回收后随记播放会抛 `录音播放服务尚未就绪`、云端 TTS 报 `Speech playback is not ready`。`isBusy` 纳入 `speech.status().speaking` 与随记播放态（页面自行驱动的播放经 `note-audio:reply` 上报）。
+- `src/main/note-audio.ts`：构造签名加 `onState` 回调，把页面驱动的播放状态也上报给主进程。
+- `src/main/index.ts` 自检块：支持 `TYPELESS_SELFTEST_STAY` + `TYPELESS_SELFTEST_REPEAT_MS`，让无麦克风的合成 take 周期性重跑并保持进程存活，用于观察 Pill 的创建→回收→再创建。
+- 测试：`bar-retire.test.ts` 7 用例（到期销毁 / show 取消 / 可见不销毁 / 忙碌或卡片占用时推迟并复检 / closed 取消 / 创建即隐藏也起表 / 忙碌结束后无需新 `hide` 也能回收）；`note-audio.test.ts` 3 用例（每次命令都向 sink 取窗口 / 回复上报状态 / sink 为 null 时抛错）。
 
 ### 6.4 前后结果（同一脚本、同一构建模式、同机）
 
-| 指标 | 基线 | 候选 | 差 |
+| 指标 | 基线 `0cb30d9` | 候选（工作树） | 差 |
 | --- | --- | --- | --- |
-| 托盘空闲私有驻留 p50 | 105.0 MiB | 67.7 MiB | **−37.4 MiB / −35.58%** |
-| 其中 Electron 组 | 92.1 MiB | 56.4 MiB | −35.7 MiB |
-| 其中 helper / conhost | 0.6 / 0.8 MiB | 0.6 / 0.8 MiB | 不变 |
-| 开机 renderer 数 | 1（Pill） | 0 | Pill 不再常驻 |
-| 20 次开关后 vs 空闲 | — | +3.31%（73.3 vs 70.9 MiB） | 未持续增长 |
-| 首次开窗 p50 / p95 | 1111.92 / 1305.35 ms | 1116.48 / 1335.13 ms | +4.6 / **+29.78 ms**（门槛 ≤ +100） |
-| 重开 p50 | 1100.51 ms | 1101.31 ms | +0.8 ms |
-| 空闲 CPU（62 s 窗、16 核） | 0.673 ms | 0 ms | 未升高 |
-| 生命周期 renderer | startup `[33620]` 隐藏后仍在 | startup `[]`，hub 隐藏后也消失 | Pill 已回收 |
+| 托盘空闲 60 s 私有驻留 p50 | 101 036 032 B（96.4 MiB） | 61 313 024 B（58.5 MiB） | **−39.7 MB / −37.9 MiB / −39.32%** |
+| 其中 main / renderer / utility / gpu | 45.7 / 25.7 / 14.9 / 8.7 MiB | 42.8 / 0 / 6.8 / 7.6 MiB | renderer 归零、utility 少一个 |
+| 启动后 4 s（`settled-4s`，不参与门槛） | 105.3 MiB | 67.9 MiB | −35.5% |
+| 20 次开关后静止 | 104 251 392 B（99.4 MiB） | 73 150 464 B（69.8 MiB） | −30.0%，静止时 renderer 0 个 |
+| 20 次开关的累积趋势（第 16–20 轮均值 vs 第 1–5 轮） | −8.82% | −10.39% | 未随开关次数增长 |
+| 首次开窗 p50 / p95 | 1096.10 / 1110.80 ms | 1097.37 / 1199.75 ms | +1.3 / **+88.95 ms**（门槛 ≤ +100） |
+| 重开 p50 | 1071.89 ms | 1073.54 ms | +1.7 ms |
+| 空闲 CPU（62 s 窗、16 核） | 0.875 ms | 0.156 ms | 未升高 |
+| Pill 生命周期（自检 3 次 take） | 无回收日志，同一 renderer `[37636]` | 回收 3 次，renderer `[41292, 50440, 55164]` | 创建→回收→再创建 |
+| 生命周期 renderer（hub 场景） | startup `[48216]` 隐藏后仍在 | startup `[]` | Pill 不再常驻 |
 
-门槛判定：私有驻留 −35.58% 且 −37.4 MiB（要求 ≤ −15% 且 ≤ −30 MiB）、多次开关无持续增长（≤ 5%）、开窗 P95 回退 +29.78 ms（≤ +100 ms）、Pill 已回收，四项全部通过 → `decision=adopted`。证据 `tests/yu-v2/evidence/electron-whole-app-resources-20261104.json`（含两侧每次启动、进程归属、原始样本、可比性说明、归因与门槛）。
+门槛判定（全部来自证据 `thresholds`）：私有驻留 −39.32% 且 −37.9 MiB（要求 ≤ −15% 且 ≤ −30 MiB）；同实例 20 次开关无持续增长（趋势 −10.39%，且开关后静止树 69.8 MiB < 基线 99.4 MiB，静止 renderer 0 个）；开窗 P95 回退 +88.95 ms（≤ +100 ms）；Pill 创建后确实被回收并再次创建（基线侧为 0 次回收、startup renderer 仍在）→ 四项全过，`decision=adopted`。证据 `tests/yu-v2/evidence/electron-whole-app-resources-20261104.json`（version 2，含两侧每次启动、进程归属、原始样本、分簇、周期序列、构建身份、可比性、归因与门槛）。
+
+**读数说明：**单位是二进制 MiB（1 MiB = 1 048 576 B），括号里的十进制 MB 与 MiB 不同，上一版把 73.3/70.9 的十进制 MB 写成 MiB 已在本版修正；本次开窗 p95 的上界 +100 ms 是唯一与延迟有关的门槛，实测 +88.95 ms 虽在界内但已接近，换成忙机可能翻转，见 §6.6。
 
 ### 6.5 功能与测试
 
-- 真实链路自检（`TYPELESS_SELFTEST=1` + `scripts/mock-openai.mjs`、独立资料、`--background`）：`[bar] capture input=48000Hz … capture warm` 说明 Pill 渲染器在真实录入流程中按需创建并完成音频采集；`[selftest] multimodal → {status:"completed", wordCount:19}` 说明整条 take 走通并写入历史。`dictation/ask/ask+web` 返回 `null` 属同文本去重。
-- 未打包运行需把 `native/bin`、`resources` 放进 `out/main`（`app.getAppPath()` 在未打包时指向 `out/main`），否则 helper 全部 `ENOENT`、托盘图标加载失败；两侧都在补齐资产后测量，helper 计入证据，未靠漏计子进程达标。
-- `pnpm typecheck` 0；`pnpm exec vitest run src/main/bar-retire.test.ts src/main/pipeline.test.ts src/main/resources.test.ts` 3 文件 161 用例通过；`pnpm test`、`pnpm build` 在本轮末尾各跑一次（结果见提交说明）。
+- 真实链路自检（`TYPELESS_SELFTEST=1` + `scripts/mock-openai.mjs` + 独立资料 + `--background`，须 `env -u ELECTRON_RUN_AS_NODE`，否则 electron 以纯 Node 运行）：`[bar] capture input=48000Hz … capture warm` 说明 Pill 在真实录入流程中按需创建并完成采集，`[selftest] multimodal → {"status":"completed","wordCount":19}` 说明整条 take 走通并写库；`dictation/ask/ask+web → null` 属同文本去重。Pill 场景进一步证明回收后下一次 take 仍能重新创建（`[selftest] repeat →` 后仍出现 `capture warm`）。
+- 未打包运行需把 `native/bin`、`resources` 放进 `out/main`（`app.getAppPath()` 指向 `out/main`），否则 helper 全 `ENOENT`、托盘图标加载失败；两侧都在补齐资产后测量，helper 计入证据，未靠漏计子进程达标。
+验证（本轮最后一次全量，逐条记退出码）：`pnpm typecheck` → 0；`pnpm exec vitest run src/main/bar-retire.test.ts src/main/note-audio.test.ts src/main/pipeline.test.ts src/main/resources.test.ts` → 0（4 文件 / 165 用例）；`pnpm test` → 0（241 文件通过 / 3 跳过，3562 用例通过 / 8 跳过，97.50 s）；`pnpm build` → 0（12.48 s）。
 
 ### 6.6 未测边界
 
-真实麦克风录音与音频设备切换、托盘菜单交互与全局热键（会与用户正在运行的实例冲突）、唤醒词与本地 ASR 模型、聊天/笔记/网络等待、锁屏与远程桌面、多显示器与不同 DPI、`closeBehavior=quit` 配置、长时间（小时级）运行后的碎片与句柄增长；`backgroundThrottling:false` 是否可去掉未验证（Pill 只在录音期可见，未获得可安全对照的动画证据）；Pill 被回收后第一次 take 需要重建窗口与渲染器，本轮只验证整条 take 仍能完成，**没有单独量化这次重建对「开始录音」延迟的影响**。
+真实麦克风录音与音频设备切换、托盘菜单交互与全局热键（会与用户实例冲突）、唤醒词与本地 ASR 模型、聊天/笔记/网络等待、锁屏与远程桌面、多显示器与不同 DPI、`closeBehavior=quit`、小时级长跑的碎片与句柄增长；`backgroundThrottling:false` 能否去掉未验证；Pill 回收后第一次 reveal 的**视觉空白时长未量化**（只以整次 take 仍能完成 + 重开 p50 未退化为边界）；开窗 p95 余量只有 11 ms，忙机或冷页缓存下可能越过门槛；基线侧的 Pill「未被回收」由 `[bar]` 无回收日志 + startup renderer 存活证明，基线无法运行 `TYPELESS_SELFTEST_STAY`（该钩子是本轮新增），因此它的对比证据是生命周期场景而不是同一 3 次 take 的时间线。
 
 ### 6.7 清理与提交
 
-临时资料目录（`%TEMP%\yu-app-*`）、`out/main` 下复制的资产、`/tmp/t18-*.log` 均按本轮自有产物处理；两侧原始样本已并入证据。提交见本轮 feat/docs 两个提交（不 push）。
+`%TEMP%\yu-app-*` 隔离资料、`out/main` 下复制的资产、`/tmp/t18-*.log`、`.tmp-measure18.sh` 均按本轮自有产物清理；两侧原始样本已并入证据（`/tmp/app-baseline4.json`、`/tmp/app-candidate4.json` 为过程产物，关键数字与分簇都在证据内）。提交见本轮 feat/docs 两个提交（不 push）。`restoreRunKey` 现在会删除本轮新增的登录项，只还原用户原有的值。
