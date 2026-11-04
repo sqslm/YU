@@ -41,6 +41,8 @@ extraResources:
     to: native/yu-wake.exe
   - from: native/bin/yu-speech.exe
     to: native/yu-speech.exe
+  - from: native/bin/yu-knowledge.exe
+    to: native/yu-knowledge.exe
   - from: resources/voice-wake.ps1
     to: voice-wake.ps1
   - from: resources/windows-tools.ps1

@@ -49,6 +49,25 @@ const api: TypelessApi = {
     delete: (kind, id) => ipcRenderer.invoke('memory:delete', kind, id),
     clear: () => ipcRenderer.invoke('memory:clear')
   },
+  knowledge: {
+    status: () => ipcRenderer.invoke('knowledge:status'),
+    saveSource: input => ipcRenderer.invoke('knowledge:source-save', input),
+    getSource: id => ipcRenderer.invoke('knowledge:source-get', id),
+    invalidateSource: (id, reason) => ipcRenderer.invoke('knowledge:source-invalidate', id, reason),
+    saveCard: input => ipcRenderer.invoke('knowledge:card-save', input),
+    updateCard: input => ipcRenderer.invoke('knowledge:card-update', input),
+    getCard: id => ipcRenderer.invoke('knowledge:card-get', id),
+    deleteCard: id => ipcRenderer.invoke('knowledge:card-delete', id),
+    listCards: (query = {}) => ipcRenderer.invoke('knowledge:card-list', query),
+    searchCards: query => ipcRenderer.invoke('knowledge:card-search', query)
+  },
+  profile: {
+    save: input => ipcRenderer.invoke('profile:save', input),
+    update: input => ipcRenderer.invoke('profile:update', input),
+    get: id => ipcRenderer.invoke('profile:get', id),
+    delete: id => ipcRenderer.invoke('profile:delete', id),
+    list: (query = {}) => ipcRenderer.invoke('profile:list', query)
+  },
   entities: {
     list: () => ipcRenderer.invoke('entities:list'),
     save: (input, id) => ipcRenderer.invoke('entities:save', input, id),

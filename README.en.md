@@ -257,6 +257,8 @@ history.sqlite (SQLite search, with sources and pipeline markers)
 
 The Electron main process remains TypeScript. Keyboard hooks, UIA and the resident wake-word listener run in separate Rust executables with inherited JSON pipes and EOF cleanup. Local ASR and memory retain separate Electron utility processes. `yu-windows.exe` and `yu-speech.exe` start per request and exit after one operation or one utterance — window checks, disk queries, system volume, local OCR, browser address, Explorer folder, recent file and registered application list reading, or Windows local speech; they add no resident daemon and monitor owner death. All five live in `resources/native/`, outside ASAR, with a static CRT. Resource accounting includes the hotkey/UIA PIDs. Progress, evidence and remaining work are tracked in the [Rust refactor plan](docs/rust-refactor-plan.md).
 
+`yu-knowledge.exe` owns knowledge and profile storage. It starts on the first explicit knowledge request, exchanges line-delimited JSON over inherited pipes, and exits after 120 idle seconds or when the parent closes the pipe. Its databases are `data/knowledge/knowledge.db` and `data/profile/profile.db` under the install directory (the project directory in development); the dev binary is `native/bin/yu-knowledge.exe` and it ships in `resources/native/`. Stage 1 covers only the Rust foundation, the pipe contract and the bridge: the pages, automatic extraction and chat retrieval are not shipped, and no background learning runs.
+
 Modules worth calling out:
 
 - `native/hotkey/` + `src/main/hotkey/host.ts` — the Rust keyboard hook and Electron lifecycle. Gestures run directly on keyboard events; idle waits indefinitely instead of polling every 4 ms. Only held keys require 25 ms lost-release reconciliation. Hook events remain authoritative; `GetAsyncKeyState` may only remove entries. Restart, suspension, shortcut capture and activity acknowledgements retain their existing interface.
@@ -282,8 +284,8 @@ Modules worth calling out:
 ```powershell
 pnpm test                     # unit tests plus integration tests that start a real local server
 pnpm typecheck                # both the main-process and renderer projects
-pnpm test:native              # Rust hotkey, UIA, Windows bridge and scroll matching tests
-pnpm build:native             # five native helpers (hotkey/UIA/Windows/wake/speech) plus the scroll DLL; also run by dev/build/test/package
+pnpm test:native              # Rust hotkey, UIA, Windows bridge, scroll matching and knowledge helper tests
+pnpm build:native             # six native helpers (hotkey/UIA/Windows/wake/speech/knowledge) plus the scroll DLL; also run by dev/build/test/package
 pnpm benchmark:hotkey         # isolated old/new worker comparison; briefly uses F8
 pnpm benchmark:uia            # synthetic real UIA controls; briefly focuses a test form
 pnpm benchmark:windows        # four full-request comparisons; no focus or audio changes

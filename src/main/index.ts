@@ -35,6 +35,18 @@ import { CloudClient, SyncEngine } from './cloud'
 import { StatsStore, statsAccountKey } from './stats'
 import { HotkeyHost, type HotkeyHostEvent } from './hotkey/host'
 import { UiaHost } from './uia/host'
+import { KnowledgeHost } from './knowledge/host'
+import { createKnowledgeCompleter } from './knowledge/model'
+import {
+  knowledgeId,
+  type CardQuery,
+  type CardSearchQuery,
+  type SaveCardInput,
+  type SaveProfileInput,
+  type SaveSourceInput,
+  type UpdateCardInput,
+  type UpdateProfileInput
+} from '@shared/knowledge'
 import { Updater } from './updater'
 import { Pipeline } from './pipeline'
 import { checkAsrReadiness } from './asr-readiness'
@@ -185,6 +197,20 @@ let hotkeys: HotkeyHost | null = null
 let pipeline: Pipeline | null = null
 const memory = new MemoryService(join(app.getPath('userData'), 'memory'), () => store.get(), () => Boolean(pipeline?.isBusy || assistant.busy || notesRecording || cardVoice.active || selectionEditor?.isBusy), line => log(line), memoryIdleCheck(() => powerMonitor.getSystemIdleTime()))
 setMemoryService(memory)
+/**
+ * The knowledge helper owns `data/knowledge/knowledge.db` and
+ * `data/profile/profile.db` under the same root the chat database uses. The
+ * root is computed here and handed over on the command line, so no renderer can
+ * choose where the data lives. Constructing this starts nothing: the first
+ * explicit knowledge request spawns the helper, and it leaves after two idle
+ * minutes.
+ */
+const knowledge = new KnowledgeHost({
+  entry: app.isPackaged ? join(process.resourcesPath, 'native', 'yu-knowledge.exe') : join(app.getAppPath(), 'native', 'bin', 'yu-knowledge.exe'),
+  root: app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(),
+  completer: createKnowledgeCompleter({ settings: () => store.get() }),
+  log: line => log(line)
+})
 let reminders: ReminderService | null = null
 /**
  * The four stores behind the assistant's "life" tools. Created in `ready()`, not
@@ -724,6 +750,7 @@ function applyGameMode(status: GameModeStatus): void {
   log(`[game-mode] ${status.active ? 'entered' : 'left'} source=${status.source} game=${status.game}`)
   if (status.active) {
     chats.cancel(); explanationController?.abort()
+    void knowledge.stop()
     hotkeys?.stop()
     refreshWakeWord()
     cancelAssistant()
@@ -1373,6 +1400,33 @@ async function bumpRuleHits(hits: Record<string, number>): Promise<void> {
 
 function registerIpc(): void {
   const chatOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从语聊天页操作对话') }
+  // Knowledge and profile data belong to the helper. Each channel forwards one
+  // typed request; none of them accepts a path, SQL, or a model prompt.
+  const knowledgeOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从主界面管理知识库') }
+  handle('knowledge:status', event => { knowledgeOwner(event); return knowledge.status() })
+  handle('knowledge:source-save', (event, input: SaveSourceInput) => { knowledgeOwner(event); return knowledge.saveSource(input) })
+  handle('knowledge:source-get', (event, id: string) => { knowledgeOwner(event); return knowledge.getSource(knowledgeId(id, '来源 ID')) })
+  handle('knowledge:source-invalidate', (event, id: string, reason?: string) => {
+    knowledgeOwner(event)
+    return knowledge.invalidateSource(knowledgeId(id, '来源 ID'), typeof reason === 'string' ? reason : undefined)
+  })
+  handle('knowledge:card-save', (event, input: SaveCardInput) => { knowledgeOwner(event); return knowledge.saveCard(input) })
+  handle('knowledge:card-update', (event, input: UpdateCardInput) => {
+    knowledgeOwner(event)
+    return knowledge.updateCard({ ...input, id: knowledgeId(input?.id, '卡片 ID') })
+  })
+  handle('knowledge:card-get', (event, id: string) => { knowledgeOwner(event); return knowledge.getCard(knowledgeId(id, '卡片 ID')) })
+  handle('knowledge:card-delete', (event, id: string) => { knowledgeOwner(event); return knowledge.deleteCard(knowledgeId(id, '卡片 ID')) })
+  handle('knowledge:card-list', (event, query: CardQuery = {}) => { knowledgeOwner(event); return knowledge.listCards(query) })
+  handle('knowledge:card-search', (event, query: CardSearchQuery) => { knowledgeOwner(event); return knowledge.searchCards(query) })
+  handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })
+  handle('profile:update', (event, input: UpdateProfileInput) => {
+    knowledgeOwner(event)
+    return knowledge.updateProfile({ ...input, id: knowledgeId(input?.id, '画像 ID') })
+  })
+  handle('profile:get', (event, id: string) => { knowledgeOwner(event); return knowledge.getProfile(knowledgeId(id, '画像 ID')) })
+  handle('profile:delete', (event, id: string) => { knowledgeOwner(event); return knowledge.deleteProfile(knowledgeId(id, '画像 ID')) })
+  handle('profile:list', (event, query: CardQuery = {}) => { knowledgeOwner(event); return knowledge.listProfiles(query) })
   let selectedBackup: string | null = null, backupWorking = false
   const roots = (): BackupRoots => ({ user: app.getPath('userData'), notes: store.get().notesDir || app.getPath('userData'), chat: chatRoot })
   const assertBackupIdle = (): void => {
@@ -1912,7 +1966,7 @@ function registerIpc(): void {
     await shell.openPath(app.getPath('userData'))
   })
   const resources = (): ReturnType<typeof collectResources> =>
-    ({ ...collectResources(app.getAppMetrics(), localAsr.memoryState(), undefined, hotkeys?.pid, uia.pid), gameMode: gameMode.snapshot() })
+    ({ ...collectResources(app.getAppMetrics(), localAsr.memoryState(), undefined, hotkeys?.pid, uia.pid, knowledge.pid), gameMode: gameMode.snapshot() })
   handle('app:resources', resources)
   handle('app:gameMode', (_event, active: unknown) => {
     if (typeof active !== 'boolean') throw new Error('Invalid game mode')
@@ -2984,6 +3038,7 @@ if (!gotLock) {
     wakeWord.stop()
     wakeWord.cancelLearning()
     memory.shutdown()
+    void knowledge.shutdown()
     entityStore.close()
     if (hubRetireTimer) clearTimeout(hubRetireTimer)
     cancelAssistant()

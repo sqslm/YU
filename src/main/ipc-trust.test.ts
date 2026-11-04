@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 import { allowsIpc } from './ipc-trust'
 
@@ -36,5 +38,39 @@ describe('allowsIpc', () => {
   it('refuses everything once the register is empty', () => {
     expect(allowsIpc({ sender: sender(7), senderFrame: mainFrame }, ids())).toBe(false)
     expect(allowsIpc({ sender: sender(7), senderFrame: null }, ids())).toBe(false)
+  })
+})
+
+describe('the register every channel goes through', () => {
+  // `handle()` is the only path that runs `assertTrusted`, so a channel
+  // registered straight on `ipcMain` would be reachable from any frame. Reading
+  // the source is the cheapest way to keep that true as channels are added.
+  const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+
+  it('never registers a channel straight on ipcMain', () => {
+    expect(source).not.toContain('ipcMain.handle(')
+    expect(source).not.toContain('ipcMain.on(')
+  })
+
+  it('registers the knowledge and profile channels through handle', () => {
+    for (const channel of [
+      'knowledge:status',
+      'knowledge:source-save',
+      'knowledge:source-get',
+      'knowledge:source-invalidate',
+      'knowledge:card-save',
+      'knowledge:card-update',
+      'knowledge:card-get',
+      'knowledge:card-delete',
+      'knowledge:card-list',
+      'knowledge:card-search',
+      'profile:save',
+      'profile:update',
+      'profile:get',
+      'profile:delete',
+      'profile:list'
+    ]) {
+      expect(source).toContain(`handle('${channel}'`)
+    }
   })
 })

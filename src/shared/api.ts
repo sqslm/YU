@@ -98,6 +98,25 @@ export interface TypelessApi {
     delete(kind: import('./memory').MemoryKind, id: string): Promise<void>
     clear(): Promise<void>
   }
+  knowledge: {
+    status(): Promise<import('./knowledge').KnowledgeStatus>
+    saveSource(input: import('./knowledge').SaveSourceInput): Promise<import('./knowledge').KnowledgeSource>
+    getSource(id: string): Promise<import('./knowledge').KnowledgeSource>
+    invalidateSource(id: string, reason?: string): Promise<import('./knowledge').KnowledgeSource>
+    saveCard(input: import('./knowledge').SaveCardInput): Promise<import('./knowledge').KnowledgeCard>
+    updateCard(input: import('./knowledge').UpdateCardInput): Promise<import('./knowledge').KnowledgeCard>
+    getCard(id: string): Promise<import('./knowledge').KnowledgeCard>
+    deleteCard(id: string): Promise<{ removed: boolean }>
+    listCards(query?: import('./knowledge').CardQuery): Promise<import('./knowledge').KnowledgeCardPage>
+    searchCards(query: import('./knowledge').CardSearchQuery): Promise<import('./knowledge').KnowledgeCardPage>
+  }
+  profile: {
+    save(input: import('./knowledge').SaveProfileInput): Promise<import('./knowledge').ProfileItem>
+    update(input: import('./knowledge').UpdateProfileInput): Promise<import('./knowledge').ProfileItem>
+    get(id: string): Promise<import('./knowledge').ProfileItem>
+    delete(id: string): Promise<{ removed: boolean }>
+    list(query?: import('./knowledge').CardQuery): Promise<import('./knowledge').ProfilePage>
+  }
   entities: {
     list(): Promise<import('./entities').EntityTerm[]>
     save(input: import('./entities').EntityInput, id?: string): Promise<void>

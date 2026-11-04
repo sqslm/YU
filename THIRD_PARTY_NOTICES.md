@@ -36,6 +36,39 @@ The project's Rust scroll-matching library (`native/scroll/`) has no third-party
 | syn | 2.0.119 | [MIT](licenses/rust-syn-2.0.119-MIT) |
 | unicode-ident | 1.0.26 | [MIT](licenses/rust-unicode-ident-1.0.26-MIT), [Unicode-3.0](licenses/rust-unicode-ident-1.0.26-UNICODE) |
 
+The Rust knowledge helper (`native/knowledge/`) links a bundled SQLite amalgamation (public domain) through `rusqlite` and uses the MIT option of the dual MIT/Apache-2.0 crates below; `foldhash` is Zlib licensed, and `unicode-ident` also carries the Unicode-3.0 data terms. Versions and checksums are locked in `native/knowledge/Cargo.lock`.
+
+| Native crate | Version | License text |
+| --- | --- | --- |
+| rusqlite | 0.41.1 | [MIT](licenses/rust-rusqlite-0.41.1-MIT) |
+| libsqlite3-sys | 0.39.1 | [MIT](licenses/rust-libsqlite3-sys-0.39.1-MIT) |
+| SQLite (bundled amalgamation) | 3.x | Public domain |
+| hashlink | 0.12.2 | [MIT](licenses/rust-hashlink-0.12.2-MIT) |
+| hashbrown | 0.17.1 | [MIT](licenses/rust-hashbrown-0.17.1-MIT) |
+| foldhash | 0.2.0 | [Zlib](licenses/rust-foldhash-0.2.0-Zlib) |
+| fallible-iterator | 0.3.0 | [MIT](licenses/rust-fallible-iterator-0.3.0-MIT) |
+| fallible-streaming-iterator | 0.1.9 | [MIT](licenses/rust-fallible-streaming-iterator-0.1.9-MIT) |
+| smallvec | 1.16.4 | [MIT](licenses/rust-smallvec-1.16.4-MIT) |
+| bitflags | 2.13.2 | [MIT](licenses/rust-bitflags-2.13.2-MIT) |
+| cfg-if | 1.0.5 | [MIT](licenses/rust-cfg-if-1.0.5-MIT) |
+| cc | 1.11.0 | [MIT](licenses/rust-cc-1.11.0-MIT) |
+| find-msvc-tools | 0.1.15 | [MIT](licenses/rust-find-msvc-tools-0.1.15-MIT) |
+| pkg-config | 0.3.34 | [MIT](licenses/rust-pkg-config-0.3.34-MIT) |
+| vcpkg | 0.2.15 | [MIT](licenses/rust-vcpkg-0.2.15-MIT) |
+| shlex | 2.0.1 | [MIT](licenses/rust-shlex-2.0.1-MIT) |
+| serde | 1.0.229 | [MIT](licenses/rust-serde-1.0.229-MIT) |
+| serde_derive | 1.0.229 | [MIT](licenses/rust-serde_derive-1.0.229-MIT) |
+| sha2 | 0.10.9 | [MIT](licenses/rust-sha2-0.10.9-MIT) |
+| digest | 0.10.7 | [MIT](licenses/rust-digest-0.10.7-MIT) |
+| crypto-common | 0.1.7 | [MIT](licenses/rust-crypto-common-0.1.7-MIT) |
+| block-buffer | 0.10.4 | [MIT](licenses/rust-block-buffer-0.10.4-MIT) |
+| generic-array | 0.14.7 | [MIT](licenses/rust-generic-array-0.14.7-MIT) |
+| typenum | 1.20.1 | [MIT](licenses/rust-typenum-1.20.1-MIT) |
+| cpufeatures | 0.2.17 | [MIT](licenses/rust-cpufeatures-0.2.17-MIT) |
+| version_check | 0.9.5 | [MIT](licenses/rust-version_check-0.9.5-MIT) |
+| syn | 3.0.9 | [MIT](licenses/rust-syn-3.0.9-MIT) |
+| unicode-ident | 1.0.27 | [MIT](licenses/rust-unicode-ident-1.0.27-MIT), [Unicode-3.0](licenses/rust-unicode-ident-1.0.27-UNICODE) |
+
 | Package | Version | License | License texts |
 | --- | --- | --- | --- |
 | pinyin-pro | 3.29.5 | MIT | [LICENSE](licenses/pinyin-pro-3.29.5-LICENSE) |

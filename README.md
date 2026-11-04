@@ -284,7 +284,9 @@ pipeline：静音判断 → 拼接 WAV → trim → 路由
 history.sqlite（SQLite 检索，含来源与链路标记）
 ```
 
-Electron 主进程保留 TypeScript；热键、UIA、常驻语音唤醒分别由独立 Rust 程序 `yu-hotkey.exe`、`yu-uia.exe`、`yu-wake.exe` 负责，本地 ASR 和记忆模型继续使用独立 Electron utilityProcess。热键/UIA 通过继承管道收发逐行 JSON，父管道关闭时退出，provider 故障只影响对应子进程。`yu-windows.exe` 与 `yu-speech.exe` 则每次请求启动、操作或一次朗读结束即退出，分别负责窗口校验、磁盘容量、系统音量、本地 OCR、浏览器地址、资源管理器文件夹、最近文件与已登记应用列表读取，以及 Windows 本地朗读，不增加常驻进程；它们也会监视父进程死亡并退出。五个程序位于 `resources/native/`、ASAR 之外，静态链接 CRT。资源面板按实际 PID 计入热键和 UIA，读取失败的指标显示为不可用。后续待办与验收记录集中在[重构计划](docs/rust-refactor-plan.md)。
+Electron 主进程保留 TypeScript；热键、UIA、常驻语音唤醒分别由独立 Rust 程序 `yu-hotkey.exe`、`yu-uia.exe`、`yu-wake.exe` 负责，本地 ASR 和记忆模型继续使用独立 Electron utilityProcess。热键/UIA 通过继承管道收发逐行 JSON，父管道关闭时退出，provider 故障只影响对应子进程。`yu-windows.exe` 与 `yu-speech.exe` 则每次请求启动、操作或一次朗读结束即退出，分别负责窗口校验、磁盘容量、系统音量、本地 OCR、浏览器地址、资源管理器文件夹、最近文件与已登记应用列表读取，以及 Windows 本地朗读，不增加常驻进程；它们也会监视父进程死亡并退出。五个原性能程序位于 `resources/native/`、ASAR 之外，静态链接 CRT。资源面板按实际 PID 计入热键和 UIA，读取失败的指标显示为不可用。后续待办与验收记录集中在[重构计划](docs/rust-refactor-plan.md)。
+
+`yu-knowledge.exe` 是知识与画像的业务进程：按需启动，首次显式知识库请求才拉起，通过继承管道收发逐行 JSON，空闲 120 秒或父管道关闭即退出；数据库位于安装目录 `data/knowledge/knowledge.db` 与 `data/profile/profile.db`（开发模式为工程目录），开发路径 `native/bin/yu-knowledge.exe`，打包后在 `resources/native/`。阶段 1 只完成 Rust 底座、协议契约与桥接：来源/卡片/画像的界面、自动提炼与聊天检索尚未开放，当前不会启动任何后台学习任务。
 
 几个值得单独说明的模块：
 
@@ -311,8 +313,8 @@ Electron 主进程保留 TypeScript；热键、UIA、常驻语音唤醒分别由
 ```powershell
 pnpm test                     # 单元测试 + 自动拉起真实本地服务端的联调测试
 pnpm typecheck                # 主进程与渲染层两套 project 都查
-pnpm test:native              # Rust 热键、UIA、Windows 桥接和截图计算回归
-pnpm build:native             # 编译五个原生程序（热键/UIA/Windows/唤醒/本地朗读）和截图 DLL；dev / build / test / package 自动执行
+pnpm test:native              # Rust 热键、UIA、Windows 桥接、截图计算与知识库助手回归
+pnpm build:native             # 编译六个原生程序（热键/UIA/Windows/唤醒/本地朗读/知识库）和截图 DLL；dev / build / test / package 自动执行
 pnpm benchmark:hotkey         # 隔离比较重构前后辅助进程，测试期间短暂使用 F8
 pnpm benchmark:uia            # 真实合成控件验收及新旧对比，短暂激活专用测试窗
 pnpm benchmark:windows        # 四项桥接的完整请求对比，不切换前台、不修改音量

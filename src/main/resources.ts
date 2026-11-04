@@ -66,7 +66,8 @@ export function collectResources(
   localModel: ResourceUsage['localModel'],
   readMemory: (pid: number) => ProcessMemory | null = windowsMemory,
   hotkeyPid?: number,
-  uiaPid?: number
+  uiaPid?: number,
+  knowledgePid?: number
 ): ResourceUsage {
   const processes: ResourceUsage['processes'] = metrics.map((metric) => {
     const memory = readMemory(metric.pid)
@@ -78,7 +79,7 @@ export function collectResources(
       committedBytes: memory?.committedBytes ?? (metric.memory.privateBytes === undefined ? null : metric.memory.privateBytes * 1024)
     }
   })
-  for (const [pid, role] of [[hotkeyPid, 'hotkeys'], [uiaPid, 'context']] as const) {
+  for (const [pid, role] of [[hotkeyPid, 'hotkeys'], [uiaPid, 'context'], [knowledgePid, 'knowledge']] as const) {
     if (pid === undefined || processes.some(p => p.pid === pid)) continue
     const memory = readMemory(pid)
     processes.push({
