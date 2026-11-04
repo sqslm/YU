@@ -70,6 +70,7 @@
 - `src/main/bar-retire.ts`：`wireBarRetirement(win, {delayMs=30_000, isBusy, isCardVisible, log})`——`hide` 起表、`show`/`closed` 取消；到期且 `!isDestroyed() && !isVisible()` 时，若 `isBusy()` 或 `isCardVisible()` 为真则**重新起表**（忙碌可以在没有新 `hide` 的情况下结束），否则 `destroy()` 并记 `[bar] retiring the hidden pill window`；创建即隐藏的窗口也起表。
 - `src/main/index.ts`：删除 boot 的无条件 `ensureBarWindow()`；新增 `barSink()`（`quitting` 或游戏模式返回 `null`，否则 `ensureBarWindow()`），`Pipeline` 的 bar 出口、`NoteAudioPlayer`、`createSpeechPlayback`、`controlNoteAudio` 全部改走它——原来后三者直接读裸 `barWindow`，Pill 被回收后随记播放会抛 `录音播放服务尚未就绪`、云端 TTS 报 `Speech playback is not ready`。`isBusy` 纳入 `speech.status().speaking` 与随记播放态（页面自行驱动的播放经 `note-audio:reply` 上报）。
 - `src/main/note-audio.ts`：构造签名加 `onState` 回调，把页面驱动的播放状态也上报给主进程。
+- `src/main/note-audio-busy.ts`：播放占用标志独立成可单测模块。运行中的音轨按「剩余时长 / 速率 + 1.5 s」自动失效（页面经工具起播、又从不上报结束时不会把 Pill 永久钉住）；**暂停态按有意保持处理、不设到期**（用户暂停属开放会话）；**时长取不到（`durationMs` 为 0 或非有限）时不挂短到期**——播放器就在 bar 渲染器里，提前销毁窗口会掐断播放，因此宁可多占用也不早退。4 个单测覆盖状态跟踪、按剩余时长到期、暂停不设到期、时长未知不早退。
 - `src/main/index.ts` 自检块：支持 `TYPELESS_SELFTEST_STAY` + `TYPELESS_SELFTEST_REPEAT_MS`，让无麦克风的合成 take 周期性重跑并保持进程存活，用于观察 Pill 的创建→回收→再创建。
 - 测试：`bar-retire.test.ts` 7 用例（到期销毁 / show 取消 / 可见不销毁 / 忙碌或卡片占用时推迟并复检 / closed 取消 / 创建即隐藏也起表 / 忙碌结束后无需新 `hide` 也能回收）；`note-audio.test.ts` 3 用例（每次命令都向 sink 取窗口 / 回复上报状态 / sink 为 null 时抛错）。
 
@@ -101,8 +102,18 @@
 
 ### 6.6 未测边界
 
-真实麦克风录音与音频设备切换、托盘菜单交互与全局热键（会与用户实例冲突）、唤醒词与本地 ASR 模型、聊天/笔记/网络等待、锁屏与远程桌面、多显示器与不同 DPI、`closeBehavior=quit`、小时级长跑的碎片与句柄增长；`backgroundThrottling:false` 能否去掉未验证；随记播放标志除页面回复外还有「按剩余时长兜底清除」的定时器（`trackNoteAudioPlayback`），工具起播且笔记页未挂载时不再把 Pill 永久钉住，但「页面既不上报结束、时长也不可靠（流式/变速）」的组合未测；Pill 回收后第一次 reveal 的**视觉空白时长未量化**（只以整次 take 仍能完成 + 重开 p50 未退化为边界）；开窗 p95 余量只有 11 ms，且 n=21 时 p95 取第二个最慢样本（一个 1199.752 ms 的样本决定该值），忙机或冷页缓存下可能越过门槛；基线侧的 Pill「未被回收」由 `[bar]` 无回收日志 + startup renderer 存活证明，基线无法运行 `TYPELESS_SELFTEST_STAY`（该钩子是本轮新增），因此它的对比证据是生命周期场景而不是同一 3 次 take 的时间线。
+真实麦克风录音与音频设备切换、托盘菜单交互与全局热键（会与用户实例冲突）、唤醒词与本地 ASR 模型、聊天/笔记/网络等待、锁屏与远程桌面、多显示器与不同 DPI、`closeBehavior=quit`、小时级长跑的碎片与句柄增长；`backgroundThrottling:false` 能否去掉未验证；随记播放占用标志的行为边界：运行中按「剩余时长 / 速率 + 1.5 s」到期；**暂停态无到期**（视为开放会话，会一直保持 Pill，直到恢复或停止）；`durationMs` 为 0（页面还没拿到元数据）时**不挂到期**，此时若页面始终不上报结束，Pill 会保持常驻——这是为避免掐断播放而选的失败方向，流式/变速播放的剩余时长推算未测；Pill 回收后第一次 reveal 的**视觉空白时长未量化**（只以整次 take 仍能完成 + 重开 p50 未退化为边界）；开窗 p95 余量只有 11 ms，且 n=21 时 p95 取第二个最慢样本（一个 1199.752 ms 的样本决定该值），忙机或冷页缓存下可能越过门槛；基线侧的 Pill「未被回收」由 `[bar]` 无回收日志 + startup renderer 存活证明，基线无法运行 `TYPELESS_SELFTEST_STAY`（该钩子是本轮新增），因此它的对比证据是生命周期场景而不是同一 3 次 take 的时间线。
 
 ### 6.7 清理与提交
 
 `%TEMP%\yu-app-*` 隔离资料、`out/main` 下复制的资产、`/tmp/t18-*.log`、`.tmp-measure18.sh` 均按本轮自有产物清理；两侧原始样本已并入证据（`baseline.idleSamples`/`settledSamples`/`openSamples`/`reopenSamples`/`toggleCycles` 与 `candidate` 同名字段，均为逐次读数）；`%TEMP%` 下的 run 文件是过程产物，可重建，不入库。提交见本轮 feat/docs 两个提交（不 push）。`restoreRunKey` 现在会删除本轮新增的登录项，只还原用户原有的值。
+
+### 6.8 阶段 19 复核修订（取代本节以下旧结论）
+
+阶段 19 按外部复核逐项重做了计量与播放接线，本节部分结论已过期，以[阶段 19 计划](2026-11-04-electron-resource-correctness-dsh.md) §4 为准：
+
+- **本节的“采纳”不是最终关单。** 阶段 19 复核发现四项缺口：R0 基准的环境隔离不完整、R1 冷创建/回收后重建的 Pill 会丢首条播放命令、R2 播放忙态靠推算时长释放、R3 CPU 单位错误且开窗计时把 WMI 开销算进延迟。
+- **§6.7 的 `restoreRunKey` 描述是错的，且是危险的那一侧**：它并非“只还原用户原有的值”，而是按 `/typeless|electron/i` 匹配、删除本轮采样期间出现的同名项——另一个 Electron 程序在此期间新增的启动项会被误删，值中含 `=` 时还会被截断写回。阶段 19 已删除全部写入/删除逻辑，改为只读比对 + 两侧相同的诊断启动封装（抑制 `setLoginItemSettings`）。
+- **§6.4 的延迟与 CPU 数字换了口径，不可与新数字混用**：旧“首次开窗 p50 ≈1096 ms”里约 500 ms 是每次轮询同步启动 PowerShell/WMI 的开销，`n=21` 还是冷启动样本混进开窗分位数；旧 `readCpuMs` 把秒标成毫秒（10,000,000 个 100 ns tick 返回 1 ms）。阶段 19 用 Toolhelp32 原生进程表把 WMI 移出计时区、修正换算，并把冷启动 / Pill ready / 首开 / 重开分开记录（20 个有效样本，失败单列）。
+- **§6.6 的随记播放边界作废**：“运行中按剩余时长 / 速率 + 1.5 s 到期”“`durationMs=0` 时一直保持 Pill”——阶段 19 删除了定时到期，忙态改由渲染器真实 `playing/paused/ended/error/stop` 事件驱动，未知时长与长暂停不再靠猜测释放或常驻。
+- 阶段 19 在修正口径下重测两侧：托盘空闲私有驻留 89.9 → 56.8 MiB（−36.75% / −33.0 MiB），首开 p95 638.689 → 624.981 ms，空闲 CPU 30.2 → 3.385 ms/s，九道门全过，证据 `tests/yu-v2/evidence/electron-resource-correctness-20261104.json`。本节证据文件保持原样，不覆盖。

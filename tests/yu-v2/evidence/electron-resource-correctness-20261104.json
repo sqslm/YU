@@ -1,0 +1,2499 @@
+{
+  "kind": "electron-whole-app-resources",
+  "version": 2,
+  "generatedAt": "2026-11-04T14:15:33.541Z",
+  "scope": {
+    "included": [
+      "whole application tree: main, gpu, utility, renderer, crashpad, zygote, conhost and the Rust helpers",
+      "memory: private resident, working set and private commit per PID",
+      "cpu: user+kernel delta over an explicit window with window length and cores, plus a controlled self-check",
+      "latency: cold tree ready, cold pill ready, first open and reopen, kept apart",
+      "isolation: the Run key read before and after, read-only, with the suppressed login-item writes counted",
+      "playback: the candidate renderer probe verdict, case by case"
+    ],
+    "excluded": [
+      "no Vite dev server, no DevTools, no HMR",
+      "no user profile, no user microphone, no packaged installer",
+      "no EmptyWorkingSet or manual trimming",
+      "no forced GC",
+      "no repair or rewrite of the user Run key"
+    ]
+  },
+  "inputs": {
+    "baseline": "E:/code/deepseek-harness/work/t19-run/baseline.json",
+    "candidate": "E:/code/deepseek-harness/work/t19-run/candidate.json",
+    "playback": "E:/code/deepseek-harness/work/t19-probe/result.json"
+  },
+  "environment": {
+    "host": {
+      "baseline": {
+        "os": "win32 10.0.26300",
+        "arch": "x64",
+        "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "cores": 16,
+        "totalMemMb": 31801
+      },
+      "candidate": {
+        "os": "win32 10.0.26300",
+        "arch": "x64",
+        "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "cores": 16,
+        "totalMemMb": 31801
+      }
+    },
+    "node": {
+      "baseline": "v24.22.2",
+      "candidate": "v24.22.2"
+    },
+    "electron": {
+      "baseline": {
+        "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\node_modules\\electron\\dist\\electron.exe",
+        "relative": "node_modules/electron/dist/electron.exe",
+        "version": "42.11.18",
+        "sha256": "d91b374ab299b88d406e7e2b6865445a3d795d141a8a36cf2c05b4ec02d0ca4d"
+      },
+      "candidate": {
+        "path": "E:\\code\\deepseek-harness\\rea\\typeless\\node_modules\\electron\\dist\\electron.exe",
+        "relative": "node_modules/electron/dist/electron.exe",
+        "version": "42.11.18",
+        "sha256": "d91b374ab299b88d406e7e2b6865445a3d795d141a8a36cf2c05b4ec02d0ca4d"
+      }
+    },
+    "appRoot": {
+      "baseline": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9",
+      "candidate": "E:\\code\\deepseek-harness\\rea\\typeless"
+    }
+  },
+  "build": {
+    "baseline": {
+      "entry": "out/main/index.js",
+      "entrySha256": "5d5fecb17a630ff240f3a8a9a9a0200c339ca2e2a2e11dfeb01ce92cfa01e0b4",
+      "wrapperSha256": "dfcbfc3a1055de71e5843f98d6830a924c7bbc342eedca75737389617861d0ec",
+      "script": "scripts/benchmark-electron-app.mjs",
+      "scriptSha256": "5645f616de2525e5a0a45e1bb6ba77df18ae837325d12c02e4dbea9dcf0d08ff",
+      "rev": null,
+      "dirty": null,
+      "gitError": "fatal: not a git repository (or any of the parent directories): .git",
+      "source": "0cb30d9",
+      "assets": [
+        {
+          "what": "compiled main entry",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\main\\index.js",
+          "exists": true,
+          "relative": "out/main/index.js"
+        },
+        {
+          "what": "renderer build",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\renderer\\bar.html",
+          "exists": true,
+          "relative": "out/renderer/bar.html"
+        },
+        {
+          "what": "tray icon beside the entry (app.getAppPath() is out/main)",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\main\\resources\\tray\\dark.ico",
+          "exists": true,
+          "relative": "out/main/resources/tray/dark.ico"
+        },
+        {
+          "what": "native helpers beside the entry",
+          "path": "E:\\code\\deepseek-harness\\work\\t19-baseline-0cb30d9\\out\\main\\native\\bin",
+          "exists": true,
+          "relative": "out/main/native/bin"
+        }
+      ]
+    },
+    "candidate": {
+      "entry": "out/main/index.js",
+      "entrySha256": "07d2fcdf84d1bb4037611b8f6ed96619dc9606ff80a0cb318663e584982c94a8",
+      "wrapperSha256": "dfcbfc3a1055de71e5843f98d6830a924c7bbc342eedca75737389617861d0ec",
+      "script": "scripts/benchmark-electron-app.mjs",
+      "scriptSha256": "5645f616de2525e5a0a45e1bb6ba77df18ae837325d12c02e4dbea9dcf0d08ff",
+      "rev": "c8a6a5a79ca699128701d8524490583ebffc9e7c",
+      "dirty": true,
+      "source": "HEAD",
+      "assets": [
+        {
+          "what": "compiled main entry",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\main\\index.js",
+          "exists": true,
+          "relative": "out/main/index.js"
+        },
+        {
+          "what": "renderer build",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\renderer\\bar.html",
+          "exists": true,
+          "relative": "out/renderer/bar.html"
+        },
+        {
+          "what": "tray icon beside the entry (app.getAppPath() is out/main)",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\main\\resources\\tray\\dark.ico",
+          "exists": true,
+          "relative": "out/main/resources/tray/dark.ico"
+        },
+        {
+          "what": "native helpers beside the entry",
+          "path": "E:\\code\\deepseek-harness\\rea\\typeless\\out\\main\\native\\bin",
+          "exists": true,
+          "relative": "out/main/native/bin"
+        }
+      ]
+    }
+  },
+  "comparable": true,
+  "measurement": {
+    "baseline": {
+      "memory": "K32GetProcessMemoryInfo PROCESS_MEMORY_COUNTERS_EX2 per PID; unavailable reported, never zero",
+      "cpu": "GetProcessTimes user+kernel delta; FILETIME ticks converted once (ticks / 10_000 → ms)",
+      "cpuSelfCheck": {
+        "windowMs": 1008.831,
+        "cores": 16,
+        "expectedMs": 1008.831,
+        "measuredMs": 968.75,
+        "ratio": 0.96,
+        "pass": true,
+        "skipped": false,
+        "note": "coarse self-check: one busy thread versus wall clock, ±35% tolerance"
+      },
+      "timing": {
+        "source": "toolhelp32+enumwindows",
+        "pollMs": {
+          "tree": 20,
+          "hub": 20,
+          "cpuSample": 250,
+          "treeStable": 200
+        },
+        "coldClock": "performance.now()",
+        "wmiCalls": 143,
+        "powerShellInsideWindows": false,
+        "roleClassification": "CommandLine via WMI, outside timing windows only",
+        "resolution": "native snapshot ~9 ms plus a 20 ms sleep, so hub polling resolves to roughly 30 ms"
+      },
+      "scenarios": {
+        "openSamples": 20,
+        "idleRuns": 3,
+        "idleMs": 60000,
+        "toggles": 20,
+        "settleMs": 4000,
+        "coldPillWaitMs": 8000,
+        "lifecycleIdleMs": 40000
+      }
+    },
+    "candidate": {
+      "memory": "K32GetProcessMemoryInfo PROCESS_MEMORY_COUNTERS_EX2 per PID; unavailable reported, never zero",
+      "cpu": "GetProcessTimes user+kernel delta; FILETIME ticks converted once (ticks / 10_000 → ms)",
+      "cpuSelfCheck": {
+        "windowMs": 1003.543,
+        "cores": 16,
+        "expectedMs": 1003.543,
+        "measuredMs": 1000,
+        "ratio": 0.996,
+        "pass": true,
+        "skipped": false,
+        "note": "coarse self-check: one busy thread versus wall clock, ±35% tolerance"
+      },
+      "timing": {
+        "source": "toolhelp32+enumwindows",
+        "pollMs": {
+          "tree": 20,
+          "hub": 20,
+          "cpuSample": 250,
+          "treeStable": 200
+        },
+        "coldClock": "performance.now()",
+        "wmiCalls": 140,
+        "powerShellInsideWindows": false,
+        "roleClassification": "CommandLine via WMI, outside timing windows only",
+        "resolution": "native snapshot ~9 ms plus a 20 ms sleep, so hub polling resolves to roughly 30 ms"
+      },
+      "scenarios": {
+        "openSamples": 20,
+        "idleRuns": 3,
+        "idleMs": 60000,
+        "toggles": 20,
+        "settleMs": 4000,
+        "coldPillWaitMs": 8000,
+        "lifecycleIdleMs": 40000
+      }
+    }
+  },
+  "attribution": {
+    "hypothesis": "a hidden bar renderer was created on every launch and never released while the app rested in the tray",
+    "change": "the bar window is created on demand and destroyed after 30 s of being hidden and idle",
+    "files": [
+      "src/main/bar-retire.ts",
+      "src/main/index.ts",
+      "src/main/note-audio.ts"
+    ]
+  },
+  "baseline": {
+    "idle": {
+      "phase": "idle-60s",
+      "count": 3,
+      "summary": {
+        "count": 3,
+        "min": 93466624,
+        "p50": 94232576,
+        "p95": 97697792,
+        "max": 97697792
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 44371968,
+          "workingSetBytes": 128872448,
+          "committedBytes": 92532736
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 9158656,
+          "workingSetBytes": 64000000,
+          "committedBytes": 16601088
+        },
+        "utility": {
+          "count": 2,
+          "privateResidentBytes": 15511552,
+          "workingSetBytes": 149213184,
+          "committedBytes": 28069888
+        },
+        "renderer": {
+          "count": 1,
+          "privateResidentBytes": 23756800,
+          "workingSetBytes": 91770880,
+          "committedBytes": 35594240
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1433600,
+          "workingSetBytes": 13500416,
+          "committedBytes": 2170880
+        }
+      },
+      "last": {
+        "phase": "idle-60s",
+        "at": "2026-11-04T13:57:12.661Z",
+        "processes": [
+          {
+            "pid": 13944,
+            "ppid": 7360,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 44371968,
+            "workingSetBytes": 128872448,
+            "committedBytes": 92532736
+          },
+          {
+            "pid": 43980,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 9158656,
+            "workingSetBytes": 64000000,
+            "committedBytes": 16601088
+          },
+          {
+            "pid": 50512,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7159808,
+            "workingSetBytes": 55930880,
+            "committedBytes": 12451840
+          },
+          {
+            "pid": 35568,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "renderer",
+            "privateResidentBytes": 23756800,
+            "workingSetBytes": 91770880,
+            "committedBytes": 35594240
+          },
+          {
+            "pid": 18696,
+            "ppid": 13944,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 593920,
+            "workingSetBytes": 5537792,
+            "committedBytes": 950272
+          },
+          {
+            "pid": 12216,
+            "ppid": 13944,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 8351744,
+            "workingSetBytes": 93282304,
+            "committedBytes": 15618048
+          },
+          {
+            "pid": 47968,
+            "ppid": 18696,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 839680,
+            "workingSetBytes": 7962624,
+            "committedBytes": 1220608
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 94232576,
+          "workingSetBytes": 447356928,
+          "committedBytes": 174968832
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 44371968,
+            "workingSetBytes": 128872448,
+            "committedBytes": 92532736
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 9158656,
+            "workingSetBytes": 64000000,
+            "committedBytes": 16601088
+          },
+          "utility": {
+            "count": 2,
+            "privateResidentBytes": 15511552,
+            "workingSetBytes": 149213184,
+            "committedBytes": 28069888
+          },
+          "renderer": {
+            "count": 1,
+            "privateResidentBytes": 23756800,
+            "workingSetBytes": 91770880,
+            "committedBytes": 35594240
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1433600,
+            "workingSetBytes": 13500416,
+            "committedBytes": 2170880
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "settled": {
+      "phase": "settled-4s",
+      "count": 20,
+      "summary": {
+        "count": 20,
+        "min": 105496576,
+        "p50": 108011520,
+        "p95": 109883392,
+        "max": 111968256
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 55406592,
+          "workingSetBytes": 139632640,
+          "committedBytes": 103841792
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 9228288,
+          "workingSetBytes": 63934464,
+          "committedBytes": 16723968
+        },
+        "utility": {
+          "count": 2,
+          "privateResidentBytes": 15753216,
+          "workingSetBytes": 149372928,
+          "committedBytes": 28606464
+        },
+        "renderer": {
+          "count": 1,
+          "privateResidentBytes": 26845184,
+          "workingSetBytes": 94916608,
+          "committedBytes": 40075264
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1499136,
+          "workingSetBytes": 13565952,
+          "committedBytes": 2289664
+        }
+      },
+      "last": {
+        "phase": "settled-4s",
+        "at": "2026-11-04T13:53:44.954Z",
+        "processes": [
+          {
+            "pid": 11188,
+            "ppid": 7360,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 55418880,
+            "workingSetBytes": 139649024,
+            "committedBytes": 103800832
+          },
+          {
+            "pid": 3624,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 9203712,
+            "workingSetBytes": 63934464,
+            "committedBytes": 16719872
+          },
+          {
+            "pid": 54956,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7483392,
+            "workingSetBytes": 56172544,
+            "committedBytes": 12857344
+          },
+          {
+            "pid": 56128,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "renderer",
+            "privateResidentBytes": 26943488,
+            "workingSetBytes": 95002624,
+            "committedBytes": 41320448
+          },
+          {
+            "pid": 43256,
+            "ppid": 11188,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 638976,
+            "workingSetBytes": 5582848,
+            "committedBytes": 1036288
+          },
+          {
+            "pid": 51212,
+            "ppid": 11188,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 8445952,
+            "workingSetBytes": 93396992,
+            "committedBytes": 15863808
+          },
+          {
+            "pid": 33764,
+            "ppid": 43256,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 864256,
+            "workingSetBytes": 7987200,
+            "committedBytes": 1257472
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 108998656,
+          "workingSetBytes": 461725696,
+          "committedBytes": 192856064
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 55418880,
+            "workingSetBytes": 139649024,
+            "committedBytes": 103800832
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 9203712,
+            "workingSetBytes": 63934464,
+            "committedBytes": 16719872
+          },
+          "utility": {
+            "count": 2,
+            "privateResidentBytes": 15929344,
+            "workingSetBytes": 149569536,
+            "committedBytes": 28721152
+          },
+          "renderer": {
+            "count": 1,
+            "privateResidentBytes": 26943488,
+            "workingSetBytes": 95002624,
+            "committedBytes": 41320448
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1503232,
+            "workingSetBytes": 13570048,
+            "committedBytes": 2293760
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "groups": {
+      "main": {
+        "count": 1,
+        "privateResidentBytes": 44371968,
+        "workingSetBytes": 128872448,
+        "committedBytes": 92532736
+      },
+      "gpu": {
+        "count": 1,
+        "privateResidentBytes": 9158656,
+        "workingSetBytes": 64000000,
+        "committedBytes": 16601088
+      },
+      "utility": {
+        "count": 2,
+        "privateResidentBytes": 15511552,
+        "workingSetBytes": 149213184,
+        "committedBytes": 28069888
+      },
+      "renderer": {
+        "count": 1,
+        "privateResidentBytes": 23756800,
+        "workingSetBytes": 91770880,
+        "committedBytes": 35594240
+      },
+      "other": {
+        "count": 2,
+        "privateResidentBytes": 1433600,
+        "workingSetBytes": 13500416,
+        "committedBytes": 2170880
+      }
+    },
+    "idleSamples": [],
+    "settledSamples": [],
+    "openSamples": [
+      601.208,
+      627.245,
+      628.515,
+      578.384,
+      584.013,
+      551.205,
+      566.366,
+      633.275,
+      562.472,
+      578.403,
+      571.903,
+      638.689,
+      599.181,
+      609.967,
+      599.33,
+      605.313,
+      635.209,
+      619.491,
+      604.586,
+      663.732
+    ],
+    "openFailed": [],
+    "cold": [
+      {
+        "valid": true,
+        "spawnedAt": "2026-11-04T13:50:55.657Z",
+        "spawnToTreeReadyMs": 868.524,
+        "spawnToPillReadyMs": 575.562,
+        "pillReason": null,
+        "tree": {
+          "processCount": 7,
+          "gpu": true,
+          "roles": {
+            "gpu": 1,
+            "utility": 2,
+            "renderer": 1,
+            "other": 2
+          }
+        },
+        "validity": {
+          "ready": true,
+          "readyLine": "[app] ready, settings at E:\\CPANQI~1\\Temp\\typeless-cold-agaf1R\\settings.json",
+          "failures": [],
+          "valid": true,
+          "invalidBecause": null
+        },
+        "settleMs": 4000,
+        "memory": {
+          "at": "2026-11-04T13:50:44.592Z",
+          "processes": [
+            {
+              "pid": 43348,
+              "ppid": 7360,
+              "name": "electron.exe",
+              "role": "main",
+              "privateResidentBytes": 55410688,
+              "workingSetBytes": 139571200,
+              "committedBytes": 104886272
+            },
+            {
+              "pid": 2384,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "gpu",
+              "privateResidentBytes": 9269248,
+              "workingSetBytes": 63950848,
+              "committedBytes": 16777216
+            },
+            {
+              "pid": 27160,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "utility",
+              "privateResidentBytes": 7331840,
+              "workingSetBytes": 55984128,
+              "committedBytes": 12767232
+            },
+            {
+              "pid": 11400,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "renderer",
+              "privateResidentBytes": 26853376,
+              "workingSetBytes": 94920704,
+              "committedBytes": 39833600
+            },
+            {
+              "pid": 45712,
+              "ppid": 43348,
+              "name": "yu-hotkey.exe",
+              "role": "other",
+              "privateResidentBytes": 634880,
+              "workingSetBytes": 5578752,
+              "committedBytes": 1032192
+            },
+            {
+              "pid": 47468,
+              "ppid": 43348,
+              "name": "electron.exe",
+              "role": "utility",
+              "privateResidentBytes": 8445952,
+              "workingSetBytes": 93413376,
+              "committedBytes": 15851520
+            },
+            {
+              "pid": 42892,
+              "ppid": 45712,
+              "name": "conhost.exe",
+              "role": "other",
+              "privateResidentBytes": 864256,
+              "workingSetBytes": 7987200,
+              "committedBytes": 1253376
+            }
+          ],
+          "totals": {
+            "privateResidentBytes": 108810240,
+            "workingSetBytes": 461406208,
+            "committedBytes": 192401408
+          },
+          "byRole": {
+            "main": {
+              "count": 1,
+              "privateResidentBytes": 55410688,
+              "workingSetBytes": 139571200,
+              "committedBytes": 104886272
+            },
+            "gpu": {
+              "count": 1,
+              "privateResidentBytes": 9269248,
+              "workingSetBytes": 63950848,
+              "committedBytes": 16777216
+            },
+            "utility": {
+              "count": 2,
+              "privateResidentBytes": 15777792,
+              "workingSetBytes": 149397504,
+              "committedBytes": 28618752
+            },
+            "renderer": {
+              "count": 1,
+              "privateResidentBytes": 26853376,
+              "workingSetBytes": 94920704,
+              "committedBytes": 39833600
+            },
+            "other": {
+              "count": 2,
+              "privateResidentBytes": 1499136,
+              "workingSetBytes": 13565952,
+              "committedBytes": 2285568
+            }
+          },
+          "unavailable": []
+        },
+        "cpu": {
+          "windowMs": 10020.82,
+          "cores": 16,
+          "perPid": [
+            {
+              "pid": 43348,
+              "role": "main",
+              "userMs": 46.875,
+              "kernelMs": 125,
+              "totalMs": 171.875,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 2384,
+              "role": "gpu",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 27160,
+              "role": "utility",
+              "userMs": 15.625,
+              "kernelMs": 0,
+              "totalMs": 15.625,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 11400,
+              "role": "renderer",
+              "userMs": 78.125,
+              "kernelMs": 31.25,
+              "totalMs": 109.375,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 45712,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 47468,
+              "role": "utility",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 42892,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            }
+          ],
+          "totalMs": 296.875,
+          "perSecond": 29.626,
+          "coverage": {
+            "windowMs": 10020.82,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        "elapsedMs": 18145.9,
+        "stderr": ""
+      }
+    ],
+    "reopenSamples": [
+      589.516,
+      261.327,
+      305.901,
+      299.331,
+      250.146,
+      264.591,
+      267.494,
+      253.243,
+      268.546,
+      250.51,
+      273.246,
+      263.441,
+      259.076,
+      275.541,
+      267.63,
+      316.262,
+      265.935,
+      255.085,
+      268.776,
+      303.306
+    ],
+    "toggleCycles": [
+      {
+        "cycle": 1,
+        "privateResidentBytes": 185483264,
+        "renderers": 2
+      },
+      {
+        "cycle": 2,
+        "privateResidentBytes": 186044416,
+        "renderers": 2
+      },
+      {
+        "cycle": 3,
+        "privateResidentBytes": 187600896,
+        "renderers": 2
+      },
+      {
+        "cycle": 4,
+        "privateResidentBytes": 186646528,
+        "renderers": 2
+      },
+      {
+        "cycle": 5,
+        "privateResidentBytes": 184385536,
+        "renderers": 2
+      },
+      {
+        "cycle": 6,
+        "privateResidentBytes": 184147968,
+        "renderers": 2
+      },
+      {
+        "cycle": 7,
+        "privateResidentBytes": 174936064,
+        "renderers": 2
+      },
+      {
+        "cycle": 8,
+        "privateResidentBytes": 175136768,
+        "renderers": 2
+      },
+      {
+        "cycle": 9,
+        "privateResidentBytes": 164732928,
+        "renderers": 2
+      },
+      {
+        "cycle": 10,
+        "privateResidentBytes": 165355520,
+        "renderers": 2
+      },
+      {
+        "cycle": 11,
+        "privateResidentBytes": 165470208,
+        "renderers": 2
+      },
+      {
+        "cycle": 12,
+        "privateResidentBytes": 165933056,
+        "renderers": 2
+      },
+      {
+        "cycle": 13,
+        "privateResidentBytes": 166268928,
+        "renderers": 2
+      },
+      {
+        "cycle": 14,
+        "privateResidentBytes": 166903808,
+        "renderers": 2
+      },
+      {
+        "cycle": 15,
+        "privateResidentBytes": 165044224,
+        "renderers": 2
+      },
+      {
+        "cycle": 16,
+        "privateResidentBytes": 165085184,
+        "renderers": 2
+      },
+      {
+        "cycle": 17,
+        "privateResidentBytes": 166293504,
+        "renderers": 2
+      },
+      {
+        "cycle": 18,
+        "privateResidentBytes": 166006784,
+        "renderers": 2
+      },
+      {
+        "cycle": 19,
+        "privateResidentBytes": 167763968,
+        "renderers": 2
+      },
+      {
+        "cycle": 20,
+        "privateResidentBytes": 168079360,
+        "renderers": 2
+      }
+    ],
+    "open": {
+      "count": 20,
+      "min": 551.205,
+      "p50": 601.208,
+      "p95": 638.689,
+      "max": 663.732
+    },
+    "reopen": {
+      "count": 20,
+      "min": 250.146,
+      "p50": 267.494,
+      "p95": 316.262,
+      "max": 589.516
+    },
+    "afterToggles": {
+      "privateResidentBytes": 102445056,
+      "workingSetBytes": 467234816,
+      "committedBytes": 184795136
+    },
+    "idleCpu": {
+      "windowMs": 60016.199,
+      "cores": 16,
+      "totalMs": 1812.5,
+      "perSecond": 30.2,
+      "runs": [
+        {
+          "windowMs": 60014.808,
+          "totalMs": 1890.625,
+          "perSecond": 31.503,
+          "coverage": {
+            "windowMs": 60014.808,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60016.199,
+          "totalMs": 1812.5,
+          "perSecond": 30.2,
+          "coverage": {
+            "windowMs": 60016.199,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60021.089,
+          "totalMs": 1406.25,
+          "perSecond": 23.429,
+          "coverage": {
+            "windowMs": 60021.089,
+            "cores": 16,
+            "pids": {
+              "seen": 7,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        }
+      ],
+      "unavailable": 0
+    },
+    "lifecycle": [
+      {
+        "at": "startup",
+        "renderers": [
+          36752
+        ]
+      },
+      {
+        "at": "hub-open",
+        "renderers": [
+          36752,
+          52180
+        ]
+      },
+      {
+        "at": "after-hide-idle",
+        "renderers": [
+          36752
+        ]
+      }
+    ],
+    "pill": {
+      "valid": true,
+      "observeMs": 130000,
+      "repeatMs": 45000,
+      "retirements": 0,
+      "takes": 1,
+      "distinctRenderers": [
+        19240
+      ],
+      "timeline": [
+        {
+          "atMs": 3075,
+          "rendererPids": [
+            19240
+          ]
+        },
+        {
+          "atMs": 5182,
+          "rendererPids": []
+        }
+      ],
+      "tail": [
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[bar] capture warm",
+        "[selftest] dictation → null",
+        "[selftest] ask → null",
+        "[selftest] ask+web → null",
+        "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Java\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"Minecraft 1.20.4 - 多人游戏（第三方服务器）\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"f2b03a50-5d5d-4b95-b8a0-cf21ca34c942\",\"createdAt\":1793800836191,\"updatedAt\":1793800836191}"
+      ]
+    },
+    "isolation": {
+      "met": true,
+      "unchanged": true,
+      "changedEntries": 0,
+      "markerCount": 27,
+      "valid": true,
+      "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "diff": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "reasons": []
+    },
+    "cpuSelfCheck": {
+      "met": true,
+      "pass": true,
+      "skipped": false,
+      "windowMs": 1008.831,
+      "measuredMs": 968.75,
+      "cores": 16,
+      "ratio": 0.96,
+      "reasons": []
+    }
+  },
+  "candidate": {
+    "idle": {
+      "phase": "idle-60s",
+      "count": 3,
+      "summary": {
+        "count": 3,
+        "min": 57266176,
+        "p50": 59600896,
+        "p95": 61173760,
+        "max": 61173760
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 43253760,
+          "workingSetBytes": 113176576,
+          "committedBytes": 92004352
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 7897088,
+          "workingSetBytes": 59105280,
+          "committedBytes": 15101952
+        },
+        "utility": {
+          "count": 1,
+          "privateResidentBytes": 7016448,
+          "workingSetBytes": 55574528,
+          "committedBytes": 12300288
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1433600,
+          "workingSetBytes": 13406208,
+          "committedBytes": 2174976
+        }
+      },
+      "last": {
+        "phase": "idle-60s",
+        "at": "2026-11-04T14:09:36.195Z",
+        "processes": [
+          {
+            "pid": 32268,
+            "ppid": 39756,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 43253760,
+            "workingSetBytes": 113176576,
+            "committedBytes": 92004352
+          },
+          {
+            "pid": 49696,
+            "ppid": 32268,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 7897088,
+            "workingSetBytes": 59105280,
+            "committedBytes": 15101952
+          },
+          {
+            "pid": 52756,
+            "ppid": 32268,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7016448,
+            "workingSetBytes": 55574528,
+            "committedBytes": 12300288
+          },
+          {
+            "pid": 30652,
+            "ppid": 32268,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 593920,
+            "workingSetBytes": 5591040,
+            "committedBytes": 954368
+          },
+          {
+            "pid": 41316,
+            "ppid": 30652,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 839680,
+            "workingSetBytes": 7815168,
+            "committedBytes": 1220608
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 59600896,
+          "workingSetBytes": 241262592,
+          "committedBytes": 121581568
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 43253760,
+            "workingSetBytes": 113176576,
+            "committedBytes": 92004352
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 7897088,
+            "workingSetBytes": 59105280,
+            "committedBytes": 15101952
+          },
+          "utility": {
+            "count": 1,
+            "privateResidentBytes": 7016448,
+            "workingSetBytes": 55574528,
+            "committedBytes": 12300288
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1433600,
+            "workingSetBytes": 13406208,
+            "committedBytes": 2174976
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "settled": {
+      "phase": "settled-4s",
+      "count": 20,
+      "summary": {
+        "count": 20,
+        "min": 67088384,
+        "p50": 67407872,
+        "p95": 69791744,
+        "max": 70176768
+      },
+      "unavailable": 0,
+      "byRole": {
+        "main": {
+          "count": 1,
+          "privateResidentBytes": 50757632,
+          "workingSetBytes": 120287232,
+          "committedBytes": 98729984
+        },
+        "gpu": {
+          "count": 1,
+          "privateResidentBytes": 7921664,
+          "workingSetBytes": 59084800,
+          "committedBytes": 15110144
+        },
+        "utility": {
+          "count": 1,
+          "privateResidentBytes": 7270400,
+          "workingSetBytes": 55738368,
+          "committedBytes": 12656640
+        },
+        "other": {
+          "count": 2,
+          "privateResidentBytes": 1482752,
+          "workingSetBytes": 13443072,
+          "committedBytes": 2269184
+        }
+      },
+      "last": {
+        "phase": "settled-4s",
+        "at": "2026-11-04T14:06:09.865Z",
+        "processes": [
+          {
+            "pid": 49528,
+            "ppid": 39756,
+            "name": "electron.exe",
+            "role": "main",
+            "privateResidentBytes": 52744192,
+            "workingSetBytes": 122294272,
+            "committedBytes": 102440960
+          },
+          {
+            "pid": 40964,
+            "ppid": 49528,
+            "name": "electron.exe",
+            "role": "gpu",
+            "privateResidentBytes": 7917568,
+            "workingSetBytes": 59084800,
+            "committedBytes": 15093760
+          },
+          {
+            "pid": 49068,
+            "ppid": 49528,
+            "name": "electron.exe",
+            "role": "utility",
+            "privateResidentBytes": 7380992,
+            "workingSetBytes": 55853056,
+            "committedBytes": 12771328
+          },
+          {
+            "pid": 2832,
+            "ppid": 49528,
+            "name": "yu-hotkey.exe",
+            "role": "other",
+            "privateResidentBytes": 630784,
+            "workingSetBytes": 5607424,
+            "committedBytes": 1032192
+          },
+          {
+            "pid": 52180,
+            "ppid": 2832,
+            "name": "conhost.exe",
+            "role": "other",
+            "privateResidentBytes": 839680,
+            "workingSetBytes": 7815168,
+            "committedBytes": 1212416
+          }
+        ],
+        "totals": {
+          "privateResidentBytes": 69513216,
+          "workingSetBytes": 250654720,
+          "committedBytes": 132550656
+        },
+        "byRole": {
+          "main": {
+            "count": 1,
+            "privateResidentBytes": 52744192,
+            "workingSetBytes": 122294272,
+            "committedBytes": 102440960
+          },
+          "gpu": {
+            "count": 1,
+            "privateResidentBytes": 7917568,
+            "workingSetBytes": 59084800,
+            "committedBytes": 15093760
+          },
+          "utility": {
+            "count": 1,
+            "privateResidentBytes": 7380992,
+            "workingSetBytes": 55853056,
+            "committedBytes": 12771328
+          },
+          "other": {
+            "count": 2,
+            "privateResidentBytes": 1470464,
+            "workingSetBytes": 13422592,
+            "committedBytes": 2244608
+          }
+        },
+        "unavailable": []
+      }
+    },
+    "groups": {
+      "main": {
+        "count": 1,
+        "privateResidentBytes": 43253760,
+        "workingSetBytes": 113176576,
+        "committedBytes": 92004352
+      },
+      "gpu": {
+        "count": 1,
+        "privateResidentBytes": 7897088,
+        "workingSetBytes": 59105280,
+        "committedBytes": 15101952
+      },
+      "utility": {
+        "count": 1,
+        "privateResidentBytes": 7016448,
+        "workingSetBytes": 55574528,
+        "committedBytes": 12300288
+      },
+      "other": {
+        "count": 2,
+        "privateResidentBytes": 1433600,
+        "workingSetBytes": 13406208,
+        "committedBytes": 2174976
+      }
+    },
+    "idleSamples": [],
+    "settledSamples": [],
+    "openSamples": [
+      614.302,
+      652.617,
+      586.424,
+      624.981,
+      582.72,
+      598.303,
+      606.024,
+      607.076,
+      609.777,
+      618.549,
+      600.259,
+      581.13,
+      593.784,
+      575.675,
+      574.15,
+      620.875,
+      595.917,
+      601.628,
+      606.594,
+      553.63
+    ],
+    "openFailed": [],
+    "cold": [
+      {
+        "valid": true,
+        "spawnedAt": "2026-11-04T14:03:27.350Z",
+        "spawnToTreeReadyMs": 700.581,
+        "spawnToPillReadyMs": null,
+        "pillReason": "the run never logged \"[bar] capture warm\"; this side did not create the pill",
+        "tree": {
+          "processCount": 5,
+          "gpu": true,
+          "roles": {
+            "gpu": 1,
+            "utility": 1,
+            "other": 2
+          }
+        },
+        "validity": {
+          "ready": true,
+          "readyLine": "[app] ready, settings at E:\\CPANQI~1\\Temp\\typeless-cold-RjLZQS\\settings.json",
+          "failures": [],
+          "valid": true,
+          "invalidBecause": null
+        },
+        "settleMs": 4000,
+        "memory": {
+          "at": "2026-11-04T14:03:16.308Z",
+          "processes": [
+            {
+              "pid": 47808,
+              "ppid": 39756,
+              "name": "electron.exe",
+              "role": "main",
+              "privateResidentBytes": 51195904,
+              "workingSetBytes": 120758272,
+              "committedBytes": 99328000
+            },
+            {
+              "pid": 37572,
+              "ppid": 47808,
+              "name": "electron.exe",
+              "role": "gpu",
+              "privateResidentBytes": 7954432,
+              "workingSetBytes": 59092992,
+              "committedBytes": 15130624
+            },
+            {
+              "pid": 54488,
+              "ppid": 47808,
+              "name": "electron.exe",
+              "role": "utility",
+              "privateResidentBytes": 7225344,
+              "workingSetBytes": 55713792,
+              "committedBytes": 12599296
+            },
+            {
+              "pid": 29108,
+              "ppid": 47808,
+              "name": "yu-hotkey.exe",
+              "role": "other",
+              "privateResidentBytes": 638976,
+              "workingSetBytes": 5636096,
+              "committedBytes": 1040384
+            },
+            {
+              "pid": 36924,
+              "ppid": 29108,
+              "name": "conhost.exe",
+              "role": "other",
+              "privateResidentBytes": 843776,
+              "workingSetBytes": 7819264,
+              "committedBytes": 1224704
+            }
+          ],
+          "totals": {
+            "privateResidentBytes": 67858432,
+            "workingSetBytes": 249020416,
+            "committedBytes": 129323008
+          },
+          "byRole": {
+            "main": {
+              "count": 1,
+              "privateResidentBytes": 51195904,
+              "workingSetBytes": 120758272,
+              "committedBytes": 99328000
+            },
+            "gpu": {
+              "count": 1,
+              "privateResidentBytes": 7954432,
+              "workingSetBytes": 59092992,
+              "committedBytes": 15130624
+            },
+            "utility": {
+              "count": 1,
+              "privateResidentBytes": 7225344,
+              "workingSetBytes": 55713792,
+              "committedBytes": 12599296
+            },
+            "other": {
+              "count": 2,
+              "privateResidentBytes": 1482752,
+              "workingSetBytes": 13455360,
+              "committedBytes": 2265088
+            }
+          },
+          "unavailable": []
+        },
+        "cpu": {
+          "windowMs": 10017.766,
+          "cores": 16,
+          "perPid": [
+            {
+              "pid": 47808,
+              "role": "main",
+              "userMs": 15.625,
+              "kernelMs": 0,
+              "totalMs": 15.625,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 37572,
+              "role": "gpu",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 54488,
+              "role": "utility",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 29108,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            },
+            {
+              "pid": 36924,
+              "role": "other",
+              "userMs": 0,
+              "kernelMs": 0,
+              "totalMs": 0,
+              "exitedMidWindow": false
+            }
+          ],
+          "totalMs": 15.625,
+          "perSecond": 1.56,
+          "coverage": {
+            "windowMs": 10017.766,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        "elapsedMs": 26088.062,
+        "stderr": ""
+      }
+    ],
+    "reopenSamples": [
+      701.489,
+      352.456,
+      329.424,
+      324.052,
+      290.843,
+      318.807,
+      315.412,
+      309.796,
+      265.224,
+      300.5,
+      313.041,
+      287.231,
+      318.997,
+      268.229,
+      322.511,
+      321.988,
+      295.726,
+      276.439,
+      284.945,
+      318.577
+    ],
+    "toggleCycles": [
+      {
+        "cycle": 1,
+        "privateResidentBytes": 151158784,
+        "renderers": 1
+      },
+      {
+        "cycle": 2,
+        "privateResidentBytes": 151629824,
+        "renderers": 1
+      },
+      {
+        "cycle": 3,
+        "privateResidentBytes": 149323776,
+        "renderers": 1
+      },
+      {
+        "cycle": 4,
+        "privateResidentBytes": 148086784,
+        "renderers": 1
+      },
+      {
+        "cycle": 5,
+        "privateResidentBytes": 148258816,
+        "renderers": 1
+      },
+      {
+        "cycle": 6,
+        "privateResidentBytes": 139710464,
+        "renderers": 1
+      },
+      {
+        "cycle": 7,
+        "privateResidentBytes": 139231232,
+        "renderers": 1
+      },
+      {
+        "cycle": 8,
+        "privateResidentBytes": 128962560,
+        "renderers": 1
+      },
+      {
+        "cycle": 9,
+        "privateResidentBytes": 131301376,
+        "renderers": 1
+      },
+      {
+        "cycle": 10,
+        "privateResidentBytes": 132808704,
+        "renderers": 1
+      },
+      {
+        "cycle": 11,
+        "privateResidentBytes": 128749568,
+        "renderers": 1
+      },
+      {
+        "cycle": 12,
+        "privateResidentBytes": 128241664,
+        "renderers": 1
+      },
+      {
+        "cycle": 13,
+        "privateResidentBytes": 128806912,
+        "renderers": 1
+      },
+      {
+        "cycle": 14,
+        "privateResidentBytes": 129658880,
+        "renderers": 1
+      },
+      {
+        "cycle": 15,
+        "privateResidentBytes": 127823872,
+        "renderers": 1
+      },
+      {
+        "cycle": 16,
+        "privateResidentBytes": 127700992,
+        "renderers": 1
+      },
+      {
+        "cycle": 17,
+        "privateResidentBytes": 127717376,
+        "renderers": 1
+      },
+      {
+        "cycle": 18,
+        "privateResidentBytes": 128520192,
+        "renderers": 1
+      },
+      {
+        "cycle": 19,
+        "privateResidentBytes": 129163264,
+        "renderers": 1
+      },
+      {
+        "cycle": 20,
+        "privateResidentBytes": 129032192,
+        "renderers": 1
+      }
+    ],
+    "open": {
+      "count": 20,
+      "min": 553.63,
+      "p50": 600.259,
+      "p95": 624.981,
+      "max": 652.617
+    },
+    "reopen": {
+      "count": 20,
+      "min": 265.224,
+      "p50": 313.041,
+      "p95": 352.456,
+      "max": 701.489
+    },
+    "afterToggles": {
+      "privateResidentBytes": 69591040,
+      "workingSetBytes": 275533824,
+      "committedBytes": 130764800
+    },
+    "idleCpu": {
+      "windowMs": 60012.673,
+      "cores": 16,
+      "totalMs": 203.125,
+      "perSecond": 3.385,
+      "runs": [
+        {
+          "windowMs": 60016.167,
+          "totalMs": 203.125,
+          "perSecond": 3.385,
+          "coverage": {
+            "windowMs": 60016.167,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60011.685,
+          "totalMs": 531.25,
+          "perSecond": 8.852,
+          "coverage": {
+            "windowMs": 60011.685,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        },
+        {
+          "windowMs": 60012.673,
+          "totalMs": 93.75,
+          "perSecond": 1.562,
+          "coverage": {
+            "windowMs": 60012.673,
+            "cores": 16,
+            "pids": {
+              "seen": 5,
+              "exitedMidWindow": 0,
+              "unavailable": 0
+            },
+            "unavailablePids": [],
+            "limitation": "CPU burned by a process before its first sample (250 ms grid) is not counted; a process that exits between samples contributes only up to its last reading. This is a sampled tree, not exact process-tree accounting."
+          }
+        }
+      ],
+      "unavailable": 0
+    },
+    "lifecycle": [
+      {
+        "at": "startup",
+        "renderers": []
+      },
+      {
+        "at": "hub-open",
+        "renderers": [
+          19256
+        ]
+      },
+      {
+        "at": "after-hide-idle",
+        "renderers": []
+      }
+    ],
+    "pill": {
+      "valid": true,
+      "observeMs": 130000,
+      "repeatMs": 45000,
+      "retirements": 3,
+      "takes": 3,
+      "distinctRenderers": [
+        19840,
+        45272,
+        51152
+      ],
+      "timeline": [
+        {
+          "atMs": 3007,
+          "rendererPids": []
+        },
+        {
+          "atMs": 5187,
+          "rendererPids": [
+            51152
+          ]
+        },
+        {
+          "atMs": 37461,
+          "rendererPids": []
+        },
+        {
+          "atMs": 50410,
+          "rendererPids": [
+            19840
+          ]
+        },
+        {
+          "atMs": 82704,
+          "rendererPids": []
+        },
+        {
+          "atMs": 95563,
+          "rendererPids": [
+            45272
+          ]
+        },
+        {
+          "atMs": 127884,
+          "rendererPids": []
+        }
+      ],
+      "tail": [
+        "[selftest] dictation → null",
+        "[selftest] ask → null",
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[selftest] ask+web → null",
+        "[bar] capture warm",
+        "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"资源管理器\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"27dbdade-891f-49ca-aeff-d1e51dc78297\",\"createdAt\":1793801583154,\"updatedAt\":1793801583154}",
+        "[selftest] staying for repeated takes",
+        "[bar] retiring the hidden pill window",
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[bar] capture warm",
+        "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"资源管理器\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"3e43f2ed-9347-4cf8-8c0d-7161ee428868\",\"createdAt\":1793801628938,\"updatedAt\":1793801628938}",
+        "[bar] retiring the hidden pill window",
+        "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+        "[bar] capture warm",
+        "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"资源管理器\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"f31b39ed-e95c-4562-a27c-9c4c6b2c0e80\",\"createdAt\":1793801673948,\"updatedAt\":1793801673948}",
+        "[bar] retiring the hidden pill window"
+      ]
+    },
+    "isolation": {
+      "met": true,
+      "unchanged": true,
+      "changedEntries": 0,
+      "markerCount": 27,
+      "valid": true,
+      "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "diff": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "reasons": []
+    },
+    "cpuSelfCheck": {
+      "met": true,
+      "pass": true,
+      "skipped": false,
+      "windowMs": 1003.543,
+      "measuredMs": 1000,
+      "cores": 16,
+      "ratio": 0.996,
+      "reasons": []
+    }
+  },
+  "comparison": {
+    "memory": {
+      "unit": "bytes",
+      "baseline": 94232576,
+      "candidate": 59600896,
+      "percent": -36.75,
+      "mib": {
+        "baseline": 89.9,
+        "candidate": 56.8
+      }
+    },
+    "settledMemory": {
+      "baseline": 108011520,
+      "candidate": 67407872,
+      "percent": -37.59
+    },
+    "openLatency": {
+      "p50": [
+        601.208,
+        600.259
+      ],
+      "p95": [
+        638.689,
+        624.981
+      ],
+      "deltaMs": -13.708,
+      "samples": {
+        "baseline": 20,
+        "candidate": 20
+      },
+      "failed": {
+        "baseline": 0,
+        "candidate": 0
+      }
+    },
+    "coldToOpen": {
+      "baseline": {
+        "treeReadyMs": 868.524,
+        "pillReadyMs": 575.562
+      },
+      "candidate": {
+        "treeReadyMs": 700.581,
+        "pillReadyMs": null
+      }
+    },
+    "reopen": {
+      "baseline": {
+        "count": 20,
+        "min": 250.146,
+        "p50": 267.494,
+        "p95": 316.262,
+        "max": 589.516
+      },
+      "candidate": {
+        "count": 20,
+        "min": 265.224,
+        "p50": 313.041,
+        "p95": 352.456,
+        "max": 701.489
+      }
+    },
+    "togglesTrendPercent": -14.21,
+    "baselineTogglesTrendPercent": -10.42,
+    "idleCpuMs": {
+      "baseline": 1812.5,
+      "candidate": 203.125
+    },
+    "idleCpuPerSecond": {
+      "baseline": 30.2,
+      "candidate": 3.385
+    },
+    "pill": {
+      "baseline": {
+        "valid": true,
+        "observeMs": 130000,
+        "repeatMs": 45000,
+        "retirements": 0,
+        "takes": 1,
+        "distinctRenderers": [
+          19240
+        ],
+        "timeline": [
+          {
+            "atMs": 3075,
+            "rendererPids": [
+              19240
+            ]
+          },
+          {
+            "atMs": 5182,
+            "rendererPids": []
+          }
+        ],
+        "tail": [
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[bar] capture warm",
+          "[selftest] dictation → null",
+          "[selftest] ask → null",
+          "[selftest] ask+web → null",
+          "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"Java\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"Minecraft 1.20.4 - 多人游戏（第三方服务器）\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"f2b03a50-5d5d-4b95-b8a0-cf21ca34c942\",\"createdAt\":1793800836191,\"updatedAt\":1793800836191}"
+        ]
+      },
+      "candidate": {
+        "valid": true,
+        "observeMs": 130000,
+        "repeatMs": 45000,
+        "retirements": 3,
+        "takes": 3,
+        "distinctRenderers": [
+          19840,
+          45272,
+          51152
+        ],
+        "timeline": [
+          {
+            "atMs": 3007,
+            "rendererPids": []
+          },
+          {
+            "atMs": 5187,
+            "rendererPids": [
+              51152
+            ]
+          },
+          {
+            "atMs": 37461,
+            "rendererPids": []
+          },
+          {
+            "atMs": 50410,
+            "rendererPids": [
+              19840
+            ]
+          },
+          {
+            "atMs": 82704,
+            "rendererPids": []
+          },
+          {
+            "atMs": 95563,
+            "rendererPids": [
+              45272
+            ]
+          },
+          {
+            "atMs": 127884,
+            "rendererPids": []
+          }
+        ],
+        "tail": [
+          "[selftest] dictation → null",
+          "[selftest] ask → null",
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[selftest] ask+web → null",
+          "[bar] capture warm",
+          "[selftest] multimodal → {\"mode\":\"translate\",\"transcript\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"资源管理器\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":19,\"focusedWindowTitle\":\"\",\"category\":\"translate\",\"promptKind\":\"translate\",\"promptId\":\"builtin\",\"promptName\":\"内置翻译\",\"id\":\"27dbdade-891f-49ca-aeff-d1e51dc78297\",\"createdAt\":1793801583154,\"updatedAt\":1793801583154}",
+          "[selftest] staying for repeated takes",
+          "[bar] retiring the hidden pill window",
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[bar] capture warm",
+          "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"资源管理器\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"3e43f2ed-9347-4cf8-8c0d-7161ee428868\",\"createdAt\":1793801628938,\"updatedAt\":1793801628938}",
+          "[bar] retiring the hidden pill window",
+          "[bar] capture input=48000Hz channels=2 noise=false gain=false echo=false",
+          "[bar] capture warm",
+          "[selftest] repeat → {\"mode\":\"dictation\",\"transcript\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"final\":\"[gemini:polish] 我们今天下午三点开个会，讨论复刻的事情。\",\"durationMs\":1600,\"app\":\"资源管理器\",\"route\":\"multimodal\",\"status\":\"completed\",\"wordCount\":20,\"focusedWindowTitle\":\"\",\"category\":\"dictation\",\"promptKind\":\"polish\",\"promptId\":\"builtin\",\"promptName\":\"内置润色\",\"id\":\"f31b39ed-e95c-4562-a27c-9c4c6b2c0e80\",\"createdAt\":1793801673948,\"updatedAt\":1793801673948}",
+          "[bar] retiring the hidden pill window"
+        ]
+      }
+    },
+    "rendererLifecycle": {
+      "stages": {
+        "baseline": 3,
+        "candidate": 3
+      },
+      "baselineStartupSurvivors": [
+        36752
+      ],
+      "candidateStartupSurvivors": []
+    },
+    "playback": {
+      "candidate": {
+        "path": "E:/code/deepseek-harness/work/t19-probe/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 10,
+        "cases": [
+          {
+            "name": "cold-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "natural-end",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "ready-window-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "pause-resume",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "seek-and-rate",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "recreate-after-destroy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "long-pause-holds-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "unknown-duration-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "stale-event-ignored",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "status-without-window",
+            "pass": true,
+            "reason": null
+          }
+        ],
+        "error": null
+      },
+      "baseline": {
+        "path": "E:/code/deepseek-harness/work/t19-probe/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 10,
+        "cases": [
+          {
+            "name": "cold-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "natural-end",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "ready-window-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "pause-resume",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "seek-and-rate",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "recreate-after-destroy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "long-pause-holds-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "unknown-duration-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "stale-event-ignored",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "status-without-window",
+            "pass": true,
+            "reason": null
+          }
+        ],
+        "error": null
+      },
+      "caseVerdicts": [
+        {
+          "name": "cold-play",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "natural-end",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "ready-window-play",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "pause-resume",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "seek-and-rate",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "recreate-after-destroy",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "long-pause-holds-busy",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "unknown-duration-busy",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "stale-event-ignored",
+          "pass": true,
+          "reason": null
+        },
+        {
+          "name": "status-without-window",
+          "pass": true,
+          "reason": null
+        }
+      ]
+    }
+  },
+  "thresholds": {
+    "memory": {
+      "metric": "tray idle (60 s) whole-tree private resident median",
+      "percentAtMost": -15,
+      "bytesAtMost": -31457280,
+      "baselineMedian": 94232576,
+      "candidateMedian": 59600896,
+      "percent": -36.75,
+      "bytes": -34631680,
+      "idleSamples": {
+        "baseline": 3,
+        "candidate": 3
+      },
+      "unavailable": 0,
+      "met": true
+    },
+    "noSustainedGrowth": {
+      "metric": "same instance: mean private resident of cycles 16-20 vs cycles 1-5, plus the resting tree after the last cycle vs the baseline resting tree",
+      "percent": -14.21,
+      "baselinePercent": -10.42,
+      "atMost": 5,
+      "afterIdleBytes": 69591040,
+      "baselineAfterIdleBytes": 102445056,
+      "afterIdleRenderers": 0,
+      "afterIdleVsFreshIdlePercent": 16.76,
+      "baselineAfterIdleVsFreshIdlePercent": 8.72,
+      "met": true
+    },
+    "openLatency": {
+      "metric": "first open p95",
+      "baselineP95Ms": 638.689,
+      "candidateP95Ms": 624.981,
+      "deltaMs": -13.708,
+      "atMostMs": 100,
+      "samples": {
+        "baseline": 20,
+        "candidate": 20
+      },
+      "minSamples": 20,
+      "failed": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "reasons": [],
+      "met": true
+    },
+    "reopenLatency": {
+      "metric": "reopen p50/p95 (reported, not gated)",
+      "baseline": {
+        "count": 20,
+        "min": 250.146,
+        "p50": 267.494,
+        "p95": 316.262,
+        "max": 589.516
+      },
+      "candidate": {
+        "count": 20,
+        "min": 265.224,
+        "p50": 313.041,
+        "p95": 352.456,
+        "max": 701.489
+      },
+      "failed": {
+        "baseline": 0,
+        "candidate": 0
+      }
+    },
+    "isolation": {
+      "metric": "Run key unchanged and every login-item write suppressed (read-only)",
+      "baseline": {
+        "met": true,
+        "unchanged": true,
+        "changedEntries": 0,
+        "markerCount": 27,
+        "valid": true,
+        "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "diff": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "reasons": []
+      },
+      "candidate": {
+        "met": true,
+        "unchanged": true,
+        "changedEntries": 0,
+        "markerCount": 27,
+        "valid": true,
+        "keyPath": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "diff": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "reasons": []
+      },
+      "reason": "both runs left the Run key untouched and suppressed every login-item write",
+      "met": true
+    },
+    "cpuSelfCheck": {
+      "metric": "controlled busy-loop CPU check, |ratio-1| ≤ 0.35",
+      "baseline": {
+        "met": true,
+        "pass": true,
+        "skipped": false,
+        "windowMs": 1008.831,
+        "measuredMs": 968.75,
+        "cores": 16,
+        "ratio": 0.96,
+        "reasons": []
+      },
+      "candidate": {
+        "met": true,
+        "pass": true,
+        "skipped": false,
+        "windowMs": 1003.543,
+        "measuredMs": 1000,
+        "cores": 16,
+        "ratio": 0.996,
+        "reasons": []
+      },
+      "reason": "both sides passed the controlled busy-loop check",
+      "met": true
+    },
+    "coldSeparation": {
+      "metric": "cold start reported separately from the first-open distribution",
+      "baseline": {
+        "met": true,
+        "coldSamples": 1,
+        "openValid": 20,
+        "coldIncluded": false,
+        "reasons": []
+      },
+      "candidate": {
+        "met": true,
+        "coldSamples": 1,
+        "openValid": 20,
+        "coldIncluded": false,
+        "reasons": []
+      },
+      "reason": "cold start and first open are separate measurements on both sides",
+      "met": true
+    },
+    "idleCpu": {
+      "metric": "tray idle CPU per second over a comparable window",
+      "met": true,
+      "atMost": 1.2,
+      "ratio": 0.112,
+      "windowMs": {
+        "baseline": 60016.199,
+        "candidate": 60012.673
+      },
+      "windowDiffPercent": 0,
+      "perSecondMs": {
+        "baseline": 30.2,
+        "candidate": 3.385
+      },
+      "totalMs": {
+        "baseline": 1812.5,
+        "candidate": 203.125
+      },
+      "unavailable": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "reasons": []
+    },
+    "playbackFeature": {
+      "metric": "candidate playback probe reports pass=true for every case",
+      "met": true,
+      "reason": "candidate playback probe reported pass=true for every case",
+      "candidate": {
+        "path": "E:/code/deepseek-harness/work/t19-probe/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 10,
+        "cases": [
+          {
+            "name": "cold-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "natural-end",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "ready-window-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "pause-resume",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "seek-and-rate",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "recreate-after-destroy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "long-pause-holds-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "unknown-duration-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "stale-event-ignored",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "status-without-window",
+            "pass": true,
+            "reason": null
+          }
+        ],
+        "error": null
+      },
+      "baseline": {
+        "path": "E:/code/deepseek-harness/work/t19-probe/result.json",
+        "ok": true,
+        "pass": true,
+        "caseCount": 10,
+        "cases": [
+          {
+            "name": "cold-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "natural-end",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "ready-window-play",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "pause-resume",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "seek-and-rate",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "recreate-after-destroy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "long-pause-holds-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "unknown-duration-busy",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "stale-event-ignored",
+            "pass": true,
+            "reason": null
+          },
+          {
+            "name": "status-without-window",
+            "pass": true,
+            "reason": null
+          }
+        ],
+        "error": null
+      },
+      "source": "--playback",
+      "recorded": {
+        "baseline": null,
+        "candidate": "E:/code/deepseek-harness/work/t19-probe/result.json"
+      }
+    },
+    "pillRetired": {
+      "met": true,
+      "reason": "created by a take, retired while idle, created again by the next take"
+    }
+  },
+  "decision": "adopted",
+  "reasons": []
+}
