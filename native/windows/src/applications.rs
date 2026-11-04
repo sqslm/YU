@@ -226,13 +226,6 @@ fn merge(left: Vec<Value>, right: Vec<Value>) -> Result<Vec<Value>, Failure> {
 /// a substitute for a failed culture comparison.
 fn compare_entries(left: &Value, right: &Value) -> Result<std::cmp::Ordering, Failure> {
     let by_name = culture_compare(field(left, "name"), field(right, "name"))?;
-    #[cfg(test)]
-    eprintln!(
-        "cmp {} vs {} -> {:?}",
-        field(left, "name"),
-        field(right, "name"),
-        by_name
-    );
     if by_name != std::cmp::Ordering::Equal {
         return Ok(by_name);
     }

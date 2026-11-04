@@ -2,7 +2,7 @@
   "kind": "windows-helper-comparison",
   "version": 1,
   "meta": {
-    "generatedAt": "2026-11-04T03:39:08.510Z",
+    "generatedAt": "2026-11-04T03:51:56.501Z",
     "host": {
       "os": "win32 x64",
       "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor             ",
@@ -27,7 +27,7 @@
     "helper": {
       "path": "native/bin/yu-windows.exe",
       "bytes": 466944,
-      "sha256": "3fae60815f41d3ee827fe49016f2fba0a0767eaf0f407c6527b715f61e42adb3"
+      "sha256": "0a1680bedd2f8bdf73014ff0838768e4c51fb47dedba001c23132c984903497e"
     },
     "closure": "stage 17 C1/C2 closure build; native route for these actions is out of scope"
   },
@@ -43,124 +43,124 @@
           "code": 1,
           "stdout": "",
           "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1372.28,
+          "totalMs": 1344.85,
           "cpuUserMs": 1328.125,
-          "cpuKernelMs": 750,
-          "cpuMs": 2078.125,
-          "peakPrivateKb": 70620
+          "cpuKernelMs": 656.25,
+          "cpuMs": 1984.375,
+          "peakPrivateKb": 70204
         },
         {
           "code": 1,
           "stdout": "",
           "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1346.24,
+          "totalMs": 1353.69,
+          "cpuUserMs": 1359.375,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 1906.25,
+          "peakPrivateKb": 70472
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1340.79,
           "cpuUserMs": 1390.625,
           "cpuKernelMs": 625,
           "cpuMs": 2015.625,
-          "peakPrivateKb": 70436
+          "peakPrivateKb": 70400
         },
         {
           "code": 1,
           "stdout": "",
           "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1319.2,
-          "cpuUserMs": 1468.75,
-          "cpuKernelMs": 484.375,
-          "cpuMs": 1953.125,
-          "peakPrivateKb": 70184
-        },
-        {
-          "code": 1,
-          "stdout": "",
-          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1319.53,
-          "cpuUserMs": 1500,
-          "cpuKernelMs": 421.875,
-          "cpuMs": 1921.875,
-          "peakPrivateKb": 70396
-        },
-        {
-          "code": 1,
-          "stdout": "",
-          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1346.68,
-          "cpuUserMs": 1421.875,
-          "cpuKernelMs": 578.125,
-          "cpuMs": 2000,
-          "peakPrivateKb": 70176
-        },
-        {
-          "code": 1,
-          "stdout": "",
-          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1327.43,
-          "cpuUserMs": 1343.75,
-          "cpuKernelMs": 609.375,
-          "cpuMs": 1953.125,
-          "peakPrivateKb": 70392
-        },
-        {
-          "code": 1,
-          "stdout": "",
-          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1334.5,
-          "cpuUserMs": 1343.75,
-          "cpuKernelMs": 578.125,
-          "cpuMs": 1921.875,
-          "peakPrivateKb": 70676
-        },
-        {
-          "code": 1,
-          "stdout": "",
-          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1356.73,
-          "cpuUserMs": 1296.875,
-          "cpuKernelMs": 640.625,
-          "cpuMs": 1937.5,
-          "peakPrivateKb": 70688
-        },
-        {
-          "code": 1,
-          "stdout": "",
-          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1432.41,
+          "totalMs": 1329.48,
           "cpuUserMs": 1265.625,
-          "cpuKernelMs": 750,
-          "cpuMs": 2015.625,
-          "peakPrivateKb": 70468
+          "cpuKernelMs": 734.375,
+          "cpuMs": 2000,
+          "peakPrivateKb": 70068
         },
         {
           "code": 1,
           "stdout": "",
           "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
-          "totalMs": 1400.58,
-          "cpuUserMs": 1625,
-          "cpuKernelMs": 578.125,
-          "cpuMs": 2203.125,
-          "peakPrivateKb": 70548
+          "totalMs": 1369.77,
+          "cpuUserMs": 1296.875,
+          "cpuKernelMs": 734.375,
+          "cpuMs": 2031.25,
+          "peakPrivateKb": 70616
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1387.51,
+          "cpuUserMs": 1515.625,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 2062.5,
+          "peakPrivateKb": 70008
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1322.04,
+          "cpuUserMs": 1343.75,
+          "cpuKernelMs": 671.875,
+          "cpuMs": 2015.625,
+          "peakPrivateKb": 70388
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1325.05,
+          "cpuUserMs": 1250,
+          "cpuKernelMs": 750,
+          "cpuMs": 2000,
+          "peakPrivateKb": 70476
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1325.29,
+          "cpuUserMs": 1281.25,
+          "cpuKernelMs": 640.625,
+          "cpuMs": 1921.875,
+          "peakPrivateKb": 70180
+        },
+        {
+          "code": 1,
+          "stdout": "",
+          "stderr": "Registered app is no longer available\r\n所在位置 E:\\code\\deepseek-harness\\rea\\typeless\\resources\\windows-tools.ps1:58 字符: 36\r\n+ ... stered.Count -ne 1) { throw 'Registered app is no longer available' }\r\n+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Registered app is no longer available:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Registered app is no longer available\r\n \r\n",
+          "totalMs": 1323.28,
+          "cpuUserMs": 1406.25,
+          "cpuKernelMs": 593.75,
+          "cpuMs": 2000,
+          "peakPrivateKb": 70292
         }
       ],
       "stats": {
         "totalMs": {
           "n": 10,
-          "p50": 1346.24,
-          "p95": 1432.41,
-          "min": 1319.2,
-          "max": 1432.41
+          "p50": 1329.48,
+          "p95": 1387.51,
+          "min": 1322.04,
+          "max": 1387.51
         },
         "cpuMs": {
           "n": 10,
-          "p50": 1953.125,
-          "p95": 2203.125,
-          "min": 1921.875,
-          "max": 2203.125
+          "p50": 2000,
+          "p95": 2062.5,
+          "min": 1906.25,
+          "max": 2062.5
         },
         "peakPrivateKb": {
           "n": 10,
-          "p50": 70436,
-          "p95": 70688,
-          "min": 70176,
-          "max": 70688
+          "p50": 70292,
+          "p95": 70616,
+          "min": 70008,
+          "max": 70616
         }
       },
       "failures": [],
@@ -173,130 +173,130 @@
       "expectation": "exit 0, 4 paths, all inside the temporary root",
       "backend": "windows-search+folder",
       "indexUnavailable": false,
-      "covers": "windows-search availability on this machine and the folder fallback; indexed positive hits: observed",
+      "covers": "windows-search connection availability (backend=windows-search+folder, indexUnavailable=false) and the folder fallback; indexed positive hits are not proven individually: the helper output carries no indexed count, and this tree was created moments ago so the index cannot have picked it up",
       "samples": [
         {
           "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
           "stderr": "",
-          "totalMs": 1008.48,
-          "cpuUserMs": 1375,
-          "cpuKernelMs": 453.125,
-          "cpuMs": 1828.125,
-          "peakPrivateKb": 67532
-        },
-        {
-          "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1000.16,
-          "cpuUserMs": 1328.125,
-          "cpuKernelMs": 515.625,
-          "cpuMs": 1843.75,
-          "peakPrivateKb": 67716
-        },
-        {
-          "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1024,
-          "cpuUserMs": 1515.625,
-          "cpuKernelMs": 296.875,
-          "cpuMs": 1812.5,
-          "peakPrivateKb": 67664
-        },
-        {
-          "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1020.94,
-          "cpuUserMs": 1250,
+          "totalMs": 978.55,
+          "cpuUserMs": 1234.375,
           "cpuKernelMs": 578.125,
-          "cpuMs": 1828.125,
-          "peakPrivateKb": 67432
+          "cpuMs": 1812.5,
+          "peakPrivateKb": 67568
         },
         {
           "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
           "stderr": "",
-          "totalMs": 1025.61,
-          "cpuUserMs": 1390.625,
-          "cpuKernelMs": 484.375,
+          "totalMs": 991.03,
+          "cpuUserMs": 1234.375,
+          "cpuKernelMs": 531.25,
+          "cpuMs": 1765.625,
+          "peakPrivateKb": 67724
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 982.12,
+          "cpuUserMs": 1203.125,
+          "cpuKernelMs": 500,
+          "cpuMs": 1703.125,
+          "peakPrivateKb": 67508
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1008.08,
+          "cpuUserMs": 1218.75,
+          "cpuKernelMs": 656.25,
           "cpuMs": 1875,
-          "peakPrivateKb": 67676
+          "peakPrivateKb": 67524
         },
         {
           "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
           "stderr": "",
-          "totalMs": 1033.95,
-          "cpuUserMs": 1359.375,
-          "cpuKernelMs": 609.375,
-          "cpuMs": 1968.75,
-          "peakPrivateKb": 67624
+          "totalMs": 1017.52,
+          "cpuUserMs": 1500,
+          "cpuKernelMs": 359.375,
+          "cpuMs": 1859.375,
+          "peakPrivateKb": 67500
         },
         {
           "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
           "stderr": "",
-          "totalMs": 1022.8,
-          "cpuUserMs": 1359.375,
-          "cpuKernelMs": 625,
-          "cpuMs": 1984.375,
+          "totalMs": 994.64,
+          "cpuUserMs": 1437.5,
+          "cpuKernelMs": 375,
+          "cpuMs": 1812.5,
+          "peakPrivateKb": 67472
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 999.56,
+          "cpuUserMs": 1250,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 1796.875,
+          "peakPrivateKb": 67540
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 993.07,
+          "cpuUserMs": 1328.125,
+          "cpuKernelMs": 437.5,
+          "cpuMs": 1765.625,
+          "peakPrivateKb": 67572
+        },
+        {
+          "code": 0,
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stderr": "",
+          "totalMs": 985.44,
+          "cpuUserMs": 1250,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 1796.875,
           "peakPrivateKb": 67440
         },
         {
           "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
+          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:51:31.9145755Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-CgJQAx\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:51:31.9135723Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
           "stderr": "",
-          "totalMs": 1049.38,
-          "cpuUserMs": 1359.375,
-          "cpuKernelMs": 546.875,
-          "cpuMs": 1906.25,
-          "peakPrivateKb": 67620
-        },
-        {
-          "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1035.19,
-          "cpuUserMs": 1390.625,
-          "cpuKernelMs": 468.75,
-          "cpuMs": 1859.375,
-          "peakPrivateKb": 67516
-        },
-        {
-          "code": 0,
-          "stdout": "{\"backend\":\"windows-search+folder\",\"files\":[{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\deep\\\\sample-four.txt\",\"name\":\"sample-four.txt\",\"bytes\":4,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\nested\\\\sample-three.txt\",\"name\":\"sample-three.txt\",\"bytes\":5,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-one.txt\",\"name\":\"sample-one.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"},{\"path\":\"E:\\\\CpanQianYi\\\\Temp\\\\yu-search-7f72CV\\\\sample-two.txt\",\"name\":\"sample-two.txt\",\"bytes\":3,\"modified\":\"2026-11-04T03:38:43.5103151Z\"}],\"indexUnavailable\":false,\"partial\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1042.22,
-          "cpuUserMs": 1359.375,
-          "cpuKernelMs": 546.875,
-          "cpuMs": 1906.25,
-          "peakPrivateKb": 67284
+          "totalMs": 990.86,
+          "cpuUserMs": 1250,
+          "cpuKernelMs": 500,
+          "cpuMs": 1750,
+          "peakPrivateKb": 67540
         }
       ],
       "stats": {
         "totalMs": {
           "n": 10,
-          "p50": 1024,
-          "p95": 1049.38,
-          "min": 1000.16,
-          "max": 1049.38
+          "p50": 991.03,
+          "p95": 1017.52,
+          "min": 978.55,
+          "max": 1017.52
         },
         "cpuMs": {
           "n": 10,
-          "p50": 1859.375,
-          "p95": 1984.375,
-          "min": 1812.5,
-          "max": 1984.375
+          "p50": 1796.875,
+          "p95": 1875,
+          "min": 1703.125,
+          "max": 1875
         },
         "peakPrivateKb": {
           "n": 10,
-          "p50": 67532,
-          "p95": 67716,
-          "min": 67284,
-          "max": 67716
+          "p50": 67524,
+          "p95": 67724,
+          "min": 67440,
+          "max": 67724
         }
       },
       "failures": [],
@@ -320,124 +320,124 @@
           "code": 0,
           "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
           "stderr": "",
-          "totalMs": 1081.97,
-          "cpuUserMs": 1203.125,
-          "cpuKernelMs": 671.875,
-          "cpuMs": 1875,
-          "peakPrivateKb": 76864
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1087.31,
-          "cpuUserMs": 1359.375,
-          "cpuKernelMs": 468.75,
-          "cpuMs": 1828.125,
-          "peakPrivateKb": 76808
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1115.06,
-          "cpuUserMs": 1343.75,
-          "cpuKernelMs": 703.125,
-          "cpuMs": 2046.875,
-          "peakPrivateKb": 76976
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1114.57,
-          "cpuUserMs": 1359.375,
-          "cpuKernelMs": 546.875,
-          "cpuMs": 1906.25,
-          "peakPrivateKb": 76664
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1096.91,
-          "cpuUserMs": 1328.125,
-          "cpuKernelMs": 562.5,
-          "cpuMs": 1890.625,
-          "peakPrivateKb": 76624
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1070.44,
-          "cpuUserMs": 1390.625,
-          "cpuKernelMs": 500,
-          "cpuMs": 1890.625,
-          "peakPrivateKb": 76724
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1083.75,
-          "cpuUserMs": 1265.625,
-          "cpuKernelMs": 562.5,
-          "cpuMs": 1828.125,
-          "peakPrivateKb": 76560
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1091.84,
-          "cpuUserMs": 1578.125,
-          "cpuKernelMs": 453.125,
-          "cpuMs": 2031.25,
-          "peakPrivateKb": 76884
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1075.3,
-          "cpuUserMs": 1468.75,
-          "cpuKernelMs": 421.875,
-          "cpuMs": 1890.625,
-          "peakPrivateKb": 76848
-        },
-        {
-          "code": 0,
-          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
-          "stderr": "",
-          "totalMs": 1071.28,
-          "cpuUserMs": 1375,
+          "totalMs": 1077.76,
+          "cpuUserMs": 1296.875,
           "cpuKernelMs": 515.625,
-          "cpuMs": 1890.625,
-          "peakPrivateKb": 76948
+          "cpuMs": 1812.5,
+          "peakPrivateKb": 76896
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1100.29,
+          "cpuUserMs": 1281.25,
+          "cpuKernelMs": 640.625,
+          "cpuMs": 1921.875,
+          "peakPrivateKb": 76860
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1091.15,
+          "cpuUserMs": 1437.5,
+          "cpuKernelMs": 515.625,
+          "cpuMs": 1953.125,
+          "peakPrivateKb": 76592
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1088.83,
+          "cpuUserMs": 1234.375,
+          "cpuKernelMs": 625,
+          "cpuMs": 1859.375,
+          "peakPrivateKb": 76364
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1077.35,
+          "cpuUserMs": 1109.375,
+          "cpuKernelMs": 812.5,
+          "cpuMs": 1921.875,
+          "peakPrivateKb": 76544
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1071.24,
+          "cpuUserMs": 1312.5,
+          "cpuKernelMs": 515.625,
+          "cpuMs": 1828.125,
+          "peakPrivateKb": 76760
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1085.04,
+          "cpuUserMs": 1390.625,
+          "cpuKernelMs": 406.25,
+          "cpuMs": 1796.875,
+          "peakPrivateKb": 76868
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1084.7,
+          "cpuUserMs": 1437.5,
+          "cpuKernelMs": 437.5,
+          "cpuMs": 1875,
+          "peakPrivateKb": 76852
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1076.84,
+          "cpuUserMs": 1312.5,
+          "cpuKernelMs": 546.875,
+          "cpuMs": 1859.375,
+          "peakPrivateKb": 76504
+        },
+        {
+          "code": 0,
+          "stdout": "{\"title\":\"UIA fixture - address-edit\",\"url\":\"https://example.com/a\",\"truncated\":false}\r\n",
+          "stderr": "",
+          "totalMs": 1073.83,
+          "cpuUserMs": 1453.125,
+          "cpuKernelMs": 375,
+          "cpuMs": 1828.125,
+          "peakPrivateKb": 76692
         }
       ],
       "stats": {
         "totalMs": {
           "n": 10,
-          "p50": 1083.75,
-          "p95": 1115.06,
-          "min": 1070.44,
-          "max": 1115.06
+          "p50": 1077.76,
+          "p95": 1100.29,
+          "min": 1071.24,
+          "max": 1100.29
         },
         "cpuMs": {
           "n": 10,
-          "p50": 1890.625,
-          "p95": 2046.875,
-          "min": 1828.125,
-          "max": 2046.875
+          "p50": 1859.375,
+          "p95": 1953.125,
+          "min": 1796.875,
+          "max": 1953.125
         },
         "peakPrivateKb": {
           "n": 10,
-          "p50": 76808,
-          "p95": 76976,
-          "min": 76560,
-          "max": 76976
+          "p50": 76692,
+          "p95": 76896,
+          "min": 76364,
+          "max": 76896
         }
       },
       "failures": [],
@@ -446,227 +446,15 @@
   ],
   "cleanup": {
     "directories": [
-      "E:\\CPANQI~1\\Temp\\yu-search-7f72CV"
+      "E:\\CPANQI~1\\Temp\\yu-search-CgJQAx"
     ],
     "fixtures": [
       {
         "mode": "address-edit",
-        "child": {
-          "_events": {},
-          "_eventsCount": 1,
-          "_closesNeeded": 3,
-          "_closesGot": 3,
-          "connected": false,
-          "signalCode": null,
-          "exitCode": 0,
-          "killed": false,
-          "spawnfile": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-          "_handle": null,
-          "spawnargs": [
-            "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            "E:\\code\\deepseek-harness\\rea\\typeless\\tests\\yu-v2\\fixtures\\uia-provider.ps1",
-            "-Mode",
-            "address-edit"
-          ],
-          "pid": 54968,
-          "stdin": {
-            "connecting": false,
-            "_hadError": false,
-            "_parent": null,
-            "_host": null,
-            "_closeAfterHandlingError": false,
-            "_events": {},
-            "_readableState": {
-              "highWaterMark": 16384,
-              "buffer": [],
-              "bufferIndex": 0,
-              "length": 0,
-              "pipes": [],
-              "awaitDrainWriters": null,
-              "readable": false
-            },
-            "_writableState": {
-              "highWaterMark": 16384,
-              "length": 0,
-              "corked": 0,
-              "writelen": 0,
-              "bufferedIndex": 0,
-              "pendingcb": 0
-            },
-            "allowHalfOpen": false,
-            "_eventsCount": 2,
-            "_sockname": null,
-            "_pendingData": null,
-            "_pendingEncoding": "",
-            "server": null,
-            "_server": null
-          },
-          "stdout": {
-            "connecting": false,
-            "_hadError": false,
-            "_parent": null,
-            "_host": null,
-            "_closeAfterHandlingError": false,
-            "_events": {},
-            "_readableState": {
-              "highWaterMark": 16384,
-              "buffer": [],
-              "bufferIndex": 0,
-              "length": 0,
-              "pipes": [],
-              "awaitDrainWriters": null
-            },
-            "_writableState": {
-              "highWaterMark": 16384,
-              "length": 0,
-              "corked": 0,
-              "writelen": 0,
-              "bufferedIndex": 0,
-              "pendingcb": 0
-            },
-            "allowHalfOpen": false,
-            "_eventsCount": 3,
-            "_sockname": null,
-            "_pendingData": null,
-            "_pendingEncoding": "",
-            "server": null,
-            "_server": null
-          },
-          "stderr": {
-            "connecting": false,
-            "_hadError": false,
-            "_parent": null,
-            "_host": null,
-            "_closeAfterHandlingError": false,
-            "_events": {},
-            "_readableState": {
-              "highWaterMark": 16384,
-              "buffer": [],
-              "bufferIndex": 0,
-              "length": 0,
-              "pipes": [],
-              "awaitDrainWriters": null
-            },
-            "_writableState": {
-              "highWaterMark": 16384,
-              "length": 0,
-              "corked": 0,
-              "writelen": 0,
-              "bufferedIndex": 0,
-              "pendingcb": 0
-            },
-            "allowHalfOpen": false,
-            "_eventsCount": 2,
-            "_sockname": null,
-            "_pendingData": null,
-            "_pendingEncoding": "",
-            "server": null,
-            "_server": null
-          },
-          "stdio": [
-            {
-              "connecting": false,
-              "_hadError": false,
-              "_parent": null,
-              "_host": null,
-              "_closeAfterHandlingError": false,
-              "_events": {},
-              "_readableState": {
-                "highWaterMark": 16384,
-                "buffer": [],
-                "bufferIndex": 0,
-                "length": 0,
-                "pipes": [],
-                "awaitDrainWriters": null,
-                "readable": false
-              },
-              "_writableState": {
-                "highWaterMark": 16384,
-                "length": 0,
-                "corked": 0,
-                "writelen": 0,
-                "bufferedIndex": 0,
-                "pendingcb": 0
-              },
-              "allowHalfOpen": false,
-              "_eventsCount": 2,
-              "_sockname": null,
-              "_pendingData": null,
-              "_pendingEncoding": "",
-              "server": null,
-              "_server": null
-            },
-            {
-              "connecting": false,
-              "_hadError": false,
-              "_parent": null,
-              "_host": null,
-              "_closeAfterHandlingError": false,
-              "_events": {},
-              "_readableState": {
-                "highWaterMark": 16384,
-                "buffer": [],
-                "bufferIndex": 0,
-                "length": 0,
-                "pipes": [],
-                "awaitDrainWriters": null
-              },
-              "_writableState": {
-                "highWaterMark": 16384,
-                "length": 0,
-                "corked": 0,
-                "writelen": 0,
-                "bufferedIndex": 0,
-                "pendingcb": 0
-              },
-              "allowHalfOpen": false,
-              "_eventsCount": 3,
-              "_sockname": null,
-              "_pendingData": null,
-              "_pendingEncoding": "",
-              "server": null,
-              "_server": null
-            },
-            {
-              "connecting": false,
-              "_hadError": false,
-              "_parent": null,
-              "_host": null,
-              "_closeAfterHandlingError": false,
-              "_events": {},
-              "_readableState": {
-                "highWaterMark": 16384,
-                "buffer": [],
-                "bufferIndex": 0,
-                "length": 0,
-                "pipes": [],
-                "awaitDrainWriters": null
-              },
-              "_writableState": {
-                "highWaterMark": 16384,
-                "length": 0,
-                "corked": 0,
-                "writelen": 0,
-                "bufferedIndex": 0,
-                "pendingcb": 0
-              },
-              "allowHalfOpen": false,
-              "_eventsCount": 2,
-              "_sockname": null,
-              "_pendingData": null,
-              "_pendingEncoding": "",
-              "server": null,
-              "_server": null
-            }
-          ]
-        },
-        "handle": "64621720",
-        "pid": 54968,
-        "title": "UIA fixture - address-edit"
+        "pid": 51848,
+        "handle": "38997608",
+        "title": "UIA fixture - address-edit",
+        "exitCode": 0
       }
     ],
     "failures": []

@@ -219,6 +219,13 @@ function startFixture(mode) {
   })
 }
 
+/** Evidence only needs the identity, never the Node streams inside the child. */
+function recordFixture(fixture) {
+  const record = { mode: fixture.mode, pid: fixture.pid, handle: fixture.handle, title: fixture.title, exitCode: null }
+  cleanup.fixtures.push(record)
+  return record
+}
+
 async function stopFixture(fixture) {
   try {
     fixture.send({ command: 'quit' })
@@ -226,6 +233,7 @@ async function stopFixture(fixture) {
   } catch {}
   await new Promise((done) => setTimeout(done, 500))
   if (fixture.child.exitCode === null) fixture.child.kill('SIGKILL')
+  fixture.record.exitCode = fixture.child.exitCode
 }
 
 /** A temporary tree with a fixed, synthetic shape. */
@@ -286,9 +294,8 @@ for (let warmup = 0; warmup < 1; warmup += 1) {
     expectation: 'exit 0, 4 paths, all inside the temporary root',
     backend: first.backend,
     indexUnavailable: first.indexUnavailable,
-    covers: `windows-search availability on this machine and the folder fallback; indexed positive hits: ${
-      first.backend === 'windows-search+folder' && first.files.length > 0 ? 'observed' : 'not observed'
-    }`,
+    covers:
+      'windows-search connection availability (backend=windows-search+folder, indexUnavailable=false) and the folder fallback; indexed positive hits are not proven individually: the helper output carries no indexed count, and this tree was created moments ago so the index cannot have picked it up',
     validate: (sample) => {
       if (sample.code !== 0) return false
       const body = JSON.parse(sample.stdout)
@@ -305,7 +312,7 @@ for (let warmup = 0; warmup < 1; warmup += 1) {
 // 3. `current-content` against the repository's own UIA fixture.
 {
   const fixture = await startFixture('address-edit')
-  cleanup.fixtures.push(fixture)
+  fixture.record = recordFixture(fixture)
   const body = { action: 'current-content', handle: fixture.handle, pid: fixture.pid, title: fixture.title }
   await run(body)
   const samples = []
@@ -350,6 +357,14 @@ const binarySha = createHash('sha256')
   .update(readFileSync(join(root, 'native/bin/yu-windows.exe')))
   .digest('hex')
 
+for (const directory of cleanup.directories) {
+  try {
+    rmSync(directory, { recursive: true, force: true })
+  } catch (error) {
+    cleanup.failures.push(`${directory}: ${error.message}`)
+  }
+}
+
 const report = {
   kind: 'windows-helper-comparison',
   version: 1,
@@ -386,17 +401,18 @@ const report = {
 
 writeFileSync(options.output, JSON.stringify(report, null, 2) + '\n')
 
-for (const directory of cleanup.directories) {
-  try {
-    rmSync(directory, { recursive: true, force: true })
-  } catch (error) {
-    cleanup.failures.push(`${directory}: ${error.message}`)
-  }
-}
-
 for (const scenario of scenarios) {
   console.log(
     `${scenario.id}: n=${scenario.valid}/${scenario.valid + scenario.failures.length} total P50/P95 ${scenario.stats.totalMs?.p50}/${scenario.stats.totalMs?.p95} ms, cpu ${scenario.stats.cpuMs?.p50}/${scenario.stats.cpuMs?.p95} ms, private ${scenario.stats.peakPrivateKb?.p50}/${scenario.stats.peakPrivateKb?.p95} KB, failures ${scenario.failures.length}`,
   )
+}
+const incomplete = scenarios.filter(
+  (scenario) => scenario.valid < options.samples || scenario.failures.length > 0,
+)
+if (incomplete.length > 0 || cleanup.failures.length > 0) {
+  console.error(
+    `incomplete: ${incomplete.map((scenario) => scenario.id).join(', ') || 'none'}; cleanup failures: ${cleanup.failures.length}`,
+  )
+  process.exitCode = 1
 }
 console.log(`output: ${options.output}`)
