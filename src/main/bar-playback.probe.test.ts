@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
+import { discardProbeOutput, resolveProbeOutput } from './probe-output'
 
 /**
  * Runs the real-renderer probe in a separate Electron process.
@@ -16,7 +17,7 @@ import { join, resolve } from 'node:path'
  * identity R4's `playbackGate` needs.
  */
 const repo = process.cwd()
-const OUT = process.env.PROBE_OUT ?? resolve(repo, '../../work/t19-probe')
+const EXPLICIT_OUT = process.env.PROBE_OUT?.trim() || undefined
 const PROBE_TIMEOUT_MS = 180_000
 const BAR_HTML = join(repo, 'out/renderer/bar.html')
 const PRELOAD = join(repo, 'out/preload/index.js')
@@ -64,9 +65,12 @@ function run(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<{
 describe.skipIf(missing.length > 0)(`real bar playback probe${missing.length > 0 ? ` (skipped: missing ${missing.join(', ')})` : ''}`, () => {
   it('plays, replaces, cancels, speaks and ends audio in the built pill', async () => {
     const esbuild = loadEsbuild()
-    mkdirSync(OUT, { recursive: true })
-    const bundle = join(OUT, 'probe.cjs')
-    const resultFile = join(OUT, 'result.json')
+    const output = resolveProbeOutput({ repo, explicit: EXPLICIT_OUT })
+    const out = output.dir
+    mkdirSync(out, { recursive: true })
+    const bundle = join(out, 'probe.cjs')
+    const resultFile = join(out, 'result.json')
+    console.log(`[probe] output ${out}${output.temporary ? ' (temporary, removed after a passing run)' : ' (explicit PROBE_OUT, kept)'}`)
     // A previous run must not be able to hand back its pass.
     rmSync(resultFile, { force: true })
     await esbuild.build({
@@ -80,7 +84,7 @@ describe.skipIf(missing.length > 0)(`real bar playback probe${missing.length > 0
       alias: { '@shared': join(repo, 'src/shared') },
       logLevel: 'silent'
     })
-    const env = { ...process.env }
+    const env: NodeJS.ProcessEnv = { ...process.env, PROBE_OUT: out }
     delete env.ELECTRON_RUN_AS_NODE
     const run_ = await run(ELECTRON, [bundle], env)
     const raw = existsSync(resultFile) ? readFileSync(resultFile, 'utf8') : ''
@@ -106,5 +110,9 @@ describe.skipIf(missing.length > 0)(`real bar playback probe${missing.length > 0
     expect(identity?.barHtmlSha256).toBe(sha256(BAR_HTML))
     expect(identity?.sourceRef?.length ?? 0).toBeGreaterThan(0)
     expect(identity?.command?.length ?? 0).toBeGreaterThan(0)
+    // The result has been read and every assertion above holds, so a directory
+    // this run created can go. A failing run keeps its directory for triage, and
+    // an explicit PROBE_OUT is evidence, so it is never removed.
+    if (output.temporary) expect(discardProbeOutput(out, repo), `probe output ${out} is outside the staging area`).toBe(true)
   }, PROBE_TIMEOUT_MS + 30_000)
 })

@@ -15,10 +15,11 @@
  * `positionMs`/`id` snapshot it answers `status` with — never on the number of
  * `webContents.send` calls.
  *
- * Bundled by `bar-playback.probe.test.ts` into `work/t19-probe/probe.cjs` and run
- * with the repo's Electron binary. Exit code 0 means every case passed; the
- * result file carries the case list plus the build identity R4's `playbackGate`
- * requires.
+ * Bundled by `bar-playback.probe.test.ts` into `$PROBE_OUT/probe.cjs` and run
+ * with the repo's Electron binary. `PROBE_OUT` is required: the test entry
+ * assigns a per-run staging directory unless an explicit one is given for
+ * evidence. Exit code 0 means every case passed; the result file carries the
+ * case list plus the build identity R4's `playbackGate` requires.
  */
 import { app, BrowserWindow, ipcMain, protocol, session } from 'electron'
 import { createHash } from 'node:crypto'
@@ -35,7 +36,13 @@ import { createNoteAudioBusy } from './note-audio-busy'
 import { subscribe, trustWindow } from './ipc-trust'
 
 const REPO = process.cwd()
-const OUT = process.env.PROBE_OUT ?? join(REPO, '../../work/t19-probe')
+// No implicit fallback: a plain `pnpm test` used to write into the recorded
+// stage-19 directory that way. The Vitest entry assigns a per-run directory.
+const OUT = process.env.PROBE_OUT?.trim() ?? ''
+if (!OUT) {
+  console.error('PROBE_OUT is required: the probe writes its result.json and Electron profile there. Pass a directory; the Vitest entry assigns a per-run one.')
+  process.exit(2)
+}
 const BAR_HTML = join(REPO, 'out/renderer/bar.html')
 const PRELOAD = join(REPO, 'out/preload/index.js')
 const MAIN_ENTRY = join(REPO, 'out/main/index.js')
