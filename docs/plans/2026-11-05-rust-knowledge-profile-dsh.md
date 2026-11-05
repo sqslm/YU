@@ -1422,10 +1422,10 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 | `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture` 变体） |
 | `node scripts/build-native.mjs` | 0；release `native/bin/yu-knowledge.exe` 3,162,112 字节 `d14e7e397396e2045ee1221f3f473dc6046f231f2c1c16857e5d32a08fe447c7` |
 | `pnpm typecheck` | 0（node + web） |
-| 定向 vitest（`src/main/knowledge`、chat/notes/notes-ipc/assistant/workspace、`src/main/tools`、preload、ipc-trust、`src/renderer/src/settings`） | 78 文件 / 1119 项 |
+| 定向 vitest（`src/main/knowledge`、chat/notes/notes-ipc/assistant/workspace、`src/main/tools`、preload、ipc-trust、`src/renderer/src/settings`） | 78 文件 / 1121 项 |
 | `pnpm test:native` | 0（7 个 crate） |
-| `pnpm test` | 0（276 文件通过 / 3 跳过，3937 项通过 / 8 跳过，96.03 s） |
-| `pnpm build` | 0（`KnowledgePage-B1B150_h.js` 200.28 kB，`settings-BQOcJqrR.js` 4,708.92 kB） |
+| `pnpm test` | 0（276 文件通过 / 3 跳过，3940 项通过 / 8 跳过，96.13 s） |
+| `pnpm build` | 0（`KnowledgePage-B1B150_h.js` 200.28 kB，`settings-BQOcJqrR.js` 4,708.92 kB，11.59 s） |
 | `git diff --check`、`git diff --check 0178d20..HEAD` | 0 / 0 |
 
 ### 未测与边界
@@ -1441,4 +1441,6 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 ### 提交
 
 - `c9d3fb5` `feat(knowledge): link retrieval, citations and record deletion to the helper` —— 44 个文件（+2482/−62），含 `native/knowledge/src/purge.rs`、`src/main/tools/knowledge.ts` 两个新文件与全部回归。
+- `5a98e43` `feat(knowledge): read the bounded user profile into every answer` —— 8 个文件：`src/shared/prompts.ts`（`PromptContext.profile` 与 `profileContext()`）、`src/main/chat.ts`、`src/main/assistant.ts`、`src/main/index.ts`（`profileText` 提供者）与三处测试。
+- 说明：`pnpm test` 首轮出现 1 项失败，重跑两次均为 276 文件 / 3940 项通过；首轮失败项的名称未被保留，`src/main/chat.test.ts` 随后连续三次单独重跑 16/16 通过。
 - 本节由随后的 docs 提交记录。
