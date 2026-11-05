@@ -20,7 +20,7 @@ import { DEFAULT_SETTINGS, mergeSettings } from '@shared/defaults'
 import { ChatStore } from '../chat-store'
 import { KnowledgeCollector, readingKey, readingMaterial } from './collector'
 import { KnowledgeHost } from './host'
-import { releaseRecord } from './release'
+import { RecordReleaser } from './release'
 
 const ENTRY = join(process.cwd(), 'native', 'bin', 'yu-knowledge.exe')
 const roots: string[] = []
@@ -249,15 +249,14 @@ describe('deleting a record without touching cards', () => {
     })
 
     // The path the app takes when the user does not tick 「同时删除关联知识」.
-    const released = await releaseRecord(
-      knowledge,
-      { channel: 'chat', groupKey: first },
+    const released = await new RecordReleaser(() => knowledge).release(
       { channel: 'chat', groupKey: first },
       '记录已删除'
     )
     expect(released.failures).toEqual([])
-    expect(released.sources).toContain(page.id)
-    expect(released.detached).toEqual([page.id])
+    // Its own turn row is retired; the page is only given up, so it stays live.
+    expect(released.retired).toBe(1)
+    expect(released.detached).toBeGreaterThanOrEqual(1)
     expect((await knowledge.getSource(page.id)).state).toBe('active')
     await expect(knowledge.getCard(card.id)).resolves.toMatchObject({ id: card.id, sourceIds: [page.id] })
 
@@ -270,33 +269,27 @@ describe('deleting a record without touching cards', () => {
     )
 
     // Deleting the same record again finds nothing left to release.
-    const again = await releaseRecord(
-      knowledge,
-      { channel: 'chat', groupKey: first },
+    const again = await new RecordReleaser(() => knowledge).release(
       { channel: 'chat', groupKey: first },
       '记录已删除'
     )
-    expect(again.sources).toEqual([])
-    expect(again.detached).toEqual([])
+    expect(again.retired).toBe(0)
+    expect(again.detached).toBe(0)
 
     // A note that published nothing settles nothing: the note branch stays a no-op.
-    const note = await releaseRecord(
-      knowledge,
-      { channel: 'note', originRef: 'note_without_sources' },
+    const note = await new RecordReleaser(() => knowledge).release(
       { channel: 'note', originRef: 'note_without_sources' },
       '记录已删除'
     )
-    expect(note).toEqual({ sources: [], detached: [], cancelled: [], failures: [] })
+    expect(note).toEqual({ retired: 0, detached: 0, cancelled: [], failures: [] })
 
     // The last reader going away retires the page; the default delete never takes
     // a card with it.
-    const last = await releaseRecord(
-      knowledge,
-      { channel: 'chat', groupKey: second },
+    const last = await new RecordReleaser(() => knowledge).release(
       { channel: 'chat', groupKey: second },
       '记录已删除'
     )
-    expect(last.detached).toEqual([])
+    expect(last.detached).toBe(0)
     expect((await knowledge.getSource(page.id)).state).toBe('invalid')
     await expect(knowledge.getCard(card.id)).resolves.toMatchObject({ id: card.id })
   }, 60_000)
@@ -314,23 +307,20 @@ describe('deleting a record without touching cards', () => {
       source => source.kind === 'web'
     )!
     const [left, right] = await Promise.all([
-      releaseRecord(
-        knowledge,
-        { channel: 'chat', groupKey: first },
+      new RecordReleaser(() => knowledge).release(
         { channel: 'chat', groupKey: first },
         '记录已删除'
       ),
-      releaseRecord(
-        knowledge,
-        { channel: 'chat', groupKey: second },
+      new RecordReleaser(() => knowledge).release(
         { channel: 'chat', groupKey: second },
         '记录已删除'
       )
     ])
     expect(left.failures).toEqual([])
     expect(right.failures).toEqual([])
-    // Exactly one of the two finds another owner and lets go; the other retires it.
-    expect([left, right].filter(outcome => outcome.detached.includes(page.id))).toHaveLength(1)
+    // Both turns and the page are retired exactly once between them: the row is
+    // never retired while another reader still claims it.
+    expect(left.retired + right.retired).toBe(3)
     expect((await knowledge.getSource(page.id)).state).toBe('invalid')
     for (const threadId of [first, second]) {
       const live = (await knowledge.findSources({ channel: 'chat', groupKey: threadId })).sources.filter(

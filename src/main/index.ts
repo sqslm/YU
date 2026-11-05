@@ -45,7 +45,8 @@ import type { KnowledgeTools } from './tools/knowledge'
 import type { FindSourceInput, SourceRef } from '@shared/knowledge'
 import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
-import { releaseRecord } from './knowledge/release'
+import { RecordReleaser } from './knowledge/release'
+import { SettleRegistry, settleRecordKnowledge, type SettleRecordDeps } from './knowledge/settle'
 import { ExtractEngine } from './knowledge/engine'
 import { HistoryDriver } from './knowledge/history'
 import { createHistoryPages } from './knowledge/pages'
@@ -68,7 +69,8 @@ import {
   type KnowledgeModelInfo,
   type KnowledgeSource,
   type MergeCardsInput,
-  type SourceTarget
+  type SourceTarget,
+  sourceIdentityOf
 } from '@shared/knowledge'
 import { Updater } from './updater'
 import { Pipeline } from './pipeline'
@@ -222,7 +224,7 @@ const profileText = async (): Promise<string> => {
 const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
 }, () => assistant.localQueries(), turn => collectChatTurn(turn), (threadId, reason) => {
-  if (!settlingRecords.has(threadId)) knowledgeCollector.threadRemoved(threadId, reason)
+  if (!settling.holds('chat', threadId)) knowledgeCollector.threadRemoved(threadId, reason)
   void profileCollector.retractThread(threadId, reason)
 }, profileText)
 let explanationController: AbortController | null = null
@@ -249,7 +251,11 @@ const knowledge = new KnowledgeHost({
   root: app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(),
   completer: createKnowledgeCompleter({ settings: () => store.get() }),
   log: line => log(line),
-  onChanged: scope => broadcastKnowledge(scope)
+  onChanged: scope => {
+    broadcastKnowledge(scope)
+    // A cleanup whose record is gone finishes as soon as the helper is reachable.
+    void settling.retry()
+  }
 })
 /**
  * Turns finished notes, questions and readings into sources and pending tasks.
@@ -374,8 +380,13 @@ const knowledgeTools: KnowledgeTools = {
  * itself is deleted. It throws: nothing has been deleted when it does, so the
  * caller keeps both sides intact and can retry with the real reason.
  */
-/** Records whose deletion this process is settling, so the store callbacks stay out. */
-const settlingRecords = new Set<string>()
+/**
+ * One owner per record deletion, so the store's own change callbacks stay out.
+ * The registry also holds the cleanups that failed and must run again once the
+ * helper answers: the record is already gone, so the same idempotent call is the
+ * only honest finish.
+ */
+const settling = new SettleRegistry(new RecordReleaser(() => knowledge, line => log(line)))
 
 async function verifyKnowledgeDelete(identity: import('@shared/knowledge').SourceIdentity, ticket?: string, cards = true): Promise<void> {
   if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
@@ -388,55 +399,36 @@ async function verifyKnowledgeDelete(identity: import('@shared/knowledge').Sourc
   if (!ticket || preview.ticket !== ticket) throw new Error('预览已失效，请重新确认')
 }
 
-function recordKey(input: FindSourceInput): string {
-  return 'originRef' in input ? input.originRef : input.groupKey
-}
-
 /** One settle owner per record: the store callbacks stay out until the whole flow ends. */
-async function settleOnDelete<T>(key: string, body: () => Promise<T>): Promise<T> {
-  settlingRecords.add(key)
-  try {
-    return await body()
-  } finally {
-    settlingRecords.delete(key)
-  }
+function settleOnDelete<T>(channel: 'chat' | 'note', id: string, body: () => Promise<T>): Promise<T> {
+  return settling.run(channel, id, body)
 }
 
-async function purgeRecordKnowledge(input: FindSourceInput, identity: import('@shared/knowledge').SourceIdentity, options: { cards?: boolean; ticket?: string } = {}): Promise<void> {
-  // One path owns the ordering: while this runs, the store's own removal callback
-  // must not invalidate the sources first and let the confirmed op fall through.
-  const key = recordKey(input)
-  settlingRecords.add(key)
-  try {
-    await settleRecord(input, identity, options)
-  } finally {
-    settlingRecords.delete(key)
-  }
+async function purgeRecordKnowledge(
+  input: FindSourceInput,
+  identity: import('@shared/knowledge').SourceIdentity,
+  options: { cards?: boolean; ticket?: string } = {}
+): Promise<void> {
+  // The caller already holds this record's registration for the whole flow, so a
+  // nested claim cannot release it early and let a store callback settle first.
+  await settleRecord(input, identity, options)
 }
 
-async function settleRecord(input: FindSourceInput, identity: import('@shared/knowledge').SourceIdentity, options: { cards?: boolean; ticket?: string }): Promise<void> {
-  // A switched-off loop must not block the invalidation of knowledge that already
-  // exists; with no database there is nothing to settle and no helper to wake.
-  if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
-  const found = await knowledge.findSources(input)
-  const sources = found.sources.filter(source => source.state !== 'invalid').map(source => ({ id: source.id, version: source.version }))
-  // Nothing was published for this record: there is no knowledge to settle.
-  if (!sources.length) return
-  // The helper re-checks these versions and this ticket inside its write
-  // transaction, so a preview that no longer holds refuses instead of widening.
-  if (!options.cards) {
-    // The default keeps every card and the link that says where it came from, and
-    // it only takes back what this record really owned: a material another record
-    // also read keeps its row and its reader's queued work.
-    // A failed invalidation is reported, never swallowed into a false success: the
-    // record is already gone, so the caller sees a retryable partial failure.
-    const released = await releaseRecord(knowledge, input, identity, '记录已删除')
-    if (released.failures.length) throw new Error(released.failures[0])
-    log(`[knowledge] 记录删除后：失效 ${released.sources.length} 个来源，保留 ${released.detached.length} 条共享出处，卡片与来源关联保留`)
-    return
-  }
-  const result = await knowledge.purgeCards({ record: identity, confirm: { sources, ticket: options.ticket ?? '' }, cards: true })
-  log(`[knowledge] 记录删除后：移除 ${result.removed.length} 张卡片，保留 ${result.kept.length} 张，跳过 ${result.skipped.length} 个已变更来源`)
+/** The library calls one record's settlement needs, wired to the live host. */
+const settleDeps: SettleRecordDeps = {
+  release: (input, reason) => settling.release(input, reason),
+  active: () => knowledgeCollector.enabled || knowledge.running || knowledge.hasData(),
+  find: input => knowledge.findSources(input),
+  purgeCards: input => knowledge.purgeCards(input),
+  log: line => log(line)
+}
+
+async function settleRecord(
+  input: FindSourceInput,
+  identity: import('@shared/knowledge').SourceIdentity,
+  options: { cards?: boolean; ticket?: string }
+): Promise<void> {
+  await settleRecordKnowledge(settleDeps, input, identity, options)
 }
 /** Characters of a card body handed to a continued discussion. */
 const MAX_CARD_CONTEXT = 2000
@@ -859,7 +851,9 @@ const notes = new NotesStore({
     // old body is not a new note and must not raise the usage count.
     if (event === 'created') void profileCollector.completedNote(note.id)
   },
-  onRemoved: id => { if (!settlingRecords.has(id)) knowledgeCollector.noteRemoved(id) },
+  onRemoved: id => {
+    if (!settling.holds('note', id)) knowledgeCollector.noteRemoved(id)
+  },
   getSettings: () => store.get(),
   notify: () => broadcastNotes(),
   localAsr: {
@@ -1929,16 +1923,12 @@ function registerIpc(): void {
     return knowledge.cardsBySource({ ...ref, offset, limit })
   })
   /** What deleting the record would do; a failure here is reported, not swallowed. */
-  handle('knowledge:impact', async (event, target: SourceRef | string) => {
+  handle('knowledge:impact', async (event, target: SourceRef) => {
     knowledgeOwner(event)
     // One call decides for the whole record: a note holds a source per version and
     // a thread one per turn, so merging per-source answers under-counted.
-    const identity: import('@shared/knowledge').SourceIdentity | null = typeof target === 'string'
-      ? { sourceId: target }
-      : target?.sourceId ? { sourceId: target.sourceId }
-        : target?.noteId ? { channel: 'note', originRef: target.noteId }
-          : target?.threadId ? { channel: 'chat', groupKey: target.threadId } : null
-    if (!identity) return { sourceId: '', version: '', cards: 0, single: 0, multi: 0, items: [], more: false, sources: [], ticket: '', incomplete: false }
+    const identity = sourceIdentityOf(target)
+    if (!identity) throw new Error(mt('请指定要预览的记录'))
     return knowledge.cardImpact(identity)
   })
   /**
@@ -2135,7 +2125,7 @@ function registerIpc(): void {
     // The registration covers the record write and its settlement, ticked or not.
     // One owner for both halves: a failed record write keeps its own error, while a
     // settle failure after a real removal says exactly what still has to be cleaned.
-    return await settleOnDelete(input.id, async () => {
+    return await settleOnDelete('chat', input.id, async () => {
       const written = await Promise.resolve(chats.edit(input))
       try {
         await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },
@@ -3325,7 +3315,7 @@ async function bootstrap(): Promise<void> {
     // The user ticked 「同时删除关联知识」 in the confirmation: remove the cards
     // this note alone supported, before the note row itself goes away.
     verifyKnowledge: (noteId, ticket) => verifyKnowledgeDelete({ channel: 'note', originRef: noteId }, ticket),
-    settle: settleOnDelete,
+    settle: (noteId, body) => settleOnDelete('note', noteId, body),
     purgeKnowledge: (noteId, options) => purgeRecordKnowledge({ channel: 'note', originRef: noteId },
       { channel: 'note', originRef: noteId }, options),
     persistDir: async (dir) => {

@@ -13,8 +13,9 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{ApiError, ApiResult, Code};
+use crate::queue::settle_after;
 use crate::sources::{
-    FindParams, RECORD_SOURCES, RecordRef, detach, detach_all, other_owners, owner_ref,
+    FindParams, RECORD_SOURCES, RecordRef, detach, exclusive, other_owners, owner_ref,
     resolve_record,
 };
 use crate::util::{check_chars, ensure_not_cancelled, now_ms, sha256_hex};
@@ -173,6 +174,8 @@ pub struct PurgeResult {
     pub detached: Vec<String>,
     pub kept: Vec<String>,
     pub skipped: Vec<String>,
+    /// Queued work that lost its last valid source and stopped with this purge.
+    pub cancelled: Vec<String>,
     pub ticket: String,
 }
 
@@ -180,11 +183,11 @@ fn sqlite(error: rusqlite::Error) -> ApiError {
     ApiError::storage(format!("purge statement failed: {error}"))
 }
 
-/// One row per card linked to the matched records, with how many valid sources it
-/// keeps overall (`valid`) and how many of those are inside the matched set
-/// (`owned`). A source is valid unless it was retracted, so a card whose only other
-/// source is invalid still counts as single: deleting these records would delete
-/// it. Both parameters carry the same id array.
+/// One row per card linked to the rows this record alone supports, with how many
+/// valid sources the card keeps overall (`valid`) and how many of those are inside
+/// that set (`owned`). A source is valid unless it was retracted, so a card whose
+/// only other source is invalid still counts as single: deleting these rows would
+/// delete it.
 const LINKED: &str = "SELECT c.id AS id, c.title AS title, c.kind AS kind,
        c.updated_at AS updated_at,
        (SELECT count(*) FROM card_sources inner_cs
@@ -193,123 +196,18 @@ const LINKED: &str = "SELECT c.id AS id, c.title AS title, c.kind AS kind,
        (SELECT count(*) FROM card_sources inner_cs
           JOIN sources inner_s ON inner_s.id = inner_cs.source_id
          WHERE inner_cs.card_id = c.id AND inner_s.state <> 'invalid'
-           AND inner_s.id IN (SELECT value FROM json_each(?2))) AS owned
+           AND inner_s.id IN (SELECT value FROM json_each(?1))) AS owned
   FROM cards c
  WHERE c.id IN (SELECT card_id FROM card_sources
                  WHERE source_id IN (SELECT value FROM json_each(?1)))";
 
-/// A digest over the matched rows and the cards they touch: same state → same
-/// ticket; any version, membership, affected card or surviving-source count change →
-/// different ticket.
-fn ticket(sources: &[ImpactSource], cards: &[(String, i64)]) -> String {
-    let mut text = String::new();
-    for source in sources {
-        text.push_str(&source.id);
-        text.push('\u{1f}');
-        text.push_str(&source.version);
-        text.push('\n');
-    }
-    text.push('\u{1e}');
-    for (card, valid) in cards {
-        text.push_str(card);
-        text.push('\t');
-        text.push_str(&valid.to_string());
-        text.push('\n');
-    }
-    sha256_hex(&text)
-}
-
-fn impact_source(source: &crate::sources::FoundSource) -> ImpactSource {
-    ImpactSource {
-        id: source.id.clone(),
-        version: source.version.clone(),
-    }
-}
-
-/// The cards one matched set touches, with how many valid sources each keeps, in
-/// id order so the ticket is stable.
-fn affected(connection: &Connection, ids: &[String]) -> ApiResult<Vec<(String, i64)>> {
+/// The cards one set of rows touches, newest first, with the counts the preview
+/// shows and the digest needs.
+fn card_rows(connection: &Connection, ids: &[String]) -> ApiResult<Vec<ImpactItem>> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let key = serde_json::to_string(ids)
-        .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
-    let mut statement = connection
-        .prepare(
-            "SELECT cs.card_id,
-                    (SELECT count(*) FROM card_sources inner_cs
-                       JOIN sources inner_s ON inner_s.id = inner_cs.source_id
-                      WHERE inner_cs.card_id = cs.card_id AND inner_s.state <> 'invalid') AS valid
-               FROM card_sources cs JOIN sources s ON s.id = cs.source_id
-              WHERE cs.source_id IN (SELECT value FROM json_each(?1))
-                AND s.state <> 'invalid'
-              GROUP BY cs.card_id
-              ORDER BY cs.card_id",
-        )
-        .map_err(sqlite)?;
-    let cards = statement
-        .query_map([&key], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        })
-        .map_err(sqlite)?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(sqlite)?;
-    Ok(cards)
-}
-
-/// Reports what deleting this record would do to the cards that cite it, read from
-/// the current rows. Newest cards first, matching the card list ranking.
-pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardImpact> {
-    let set = resolve_record(connection, &params.find())?;
-    let sources: Vec<ImpactSource> = set.sources.iter().map(impact_source).collect();
-    let (source_id, version) = match set.sources.as_slice() {
-        [only] => (only.id.clone(), only.version.clone()),
-        _ => (String::new(), String::new()),
-    };
-    // What this record really takes away: the live rows no other record also
-    // owns. A material read by two conversations is kept for the other one, so
-    // counting it as lost would promise a deletion that never happens.
-    let owner = owner_ref(&set.record);
-    let mut shared: Vec<String> = Vec::new();
-    let mut lost: Vec<String> = Vec::new();
-    for source in set
-        .sources
-        .iter()
-        .filter(|source| source.state != "invalid")
-    {
-        let also = match owner.as_deref() {
-            Some(record) => other_owners(connection, &source.id, record)?,
-            None => false,
-        };
-        if also {
-            shared.push(source.id.clone());
-        } else {
-            lost.push(source.id.clone());
-        }
-    }
-    // The digest covers the whole record, shared rows included, so a preview and
-    // the purge that confirms it hash exactly the same inputs.
-    let touched = affected(connection, &set.ids())?;
-    let digest = ticket(&sources, &touched);
-    if lost.is_empty() {
-        return Ok(CardImpact {
-            source_id,
-            version,
-            record: set.record,
-            sources,
-            cards: 0,
-            single: 0,
-            multi: 0,
-            items: Vec::new(),
-            more: false,
-            incomplete: set.incomplete,
-            shared,
-            ticket: digest,
-        });
-    }
-    let key = serde_json::to_string(&set.ids())
-        .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
-    let lost_encoded = serde_json::to_string(&lost)
+    let encoded = serde_json::to_string(ids)
         .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
     let mut statement = connection
         .prepare(&format!(
@@ -320,7 +218,7 @@ pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardIm
         ))
         .map_err(sqlite)?;
     let rows = statement
-        .query_map(params![&key, &lost_encoded], |row| {
+        .query_map([&encoded], |row| {
             let valid: i64 = row.get(3)?;
             let owned: i64 = row.get(4)?;
             Ok(ImpactItem {
@@ -334,34 +232,252 @@ pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardIm
         .map_err(sqlite)?
         .collect::<rusqlite::Result<Vec<ImpactItem>>>()
         .map_err(sqlite)?;
-    let cards = rows.len() as i64;
-    let single = rows.iter().filter(|item| item.single).count() as i64;
+    Ok(rows)
+}
+
+/// The digest a preview hands back and a purge re-checks: which record it is about,
+/// every row the record holds with the version the user saw, which of those rows
+/// only this record still supports, and the cards the purge would delete or merely
+/// unlink. Two previews of the same record that would do different things can never
+/// share a ticket, so a confirmation can only carry out the preview the user read.
+fn ticket(
+    record: &RecordRef,
+    sources: &[ImpactSource],
+    shared: &[String],
+    lost: &[String],
+    remove: &[String],
+    keep: &[String],
+) -> String {
+    let mut text = String::new();
+    text.push_str(&record.channel);
+    text.push('\u{1f}');
+    text.push_str(record.origin_ref.as_deref().unwrap_or(""));
+    text.push('\u{1f}');
+    text.push_str(record.group_key.as_deref().unwrap_or(""));
+    text.push('\n');
+    for source in sources {
+        text.push_str(&source.id);
+        text.push('\u{1f}');
+        text.push_str(&source.version);
+        text.push('\n');
+    }
+    text.push('\u{1e}');
+    for group in [shared, lost] {
+        for id in group {
+            text.push_str(id);
+            text.push('\n');
+        }
+        text.push('\u{1d}');
+    }
+    // Card lists are hashed in id order: the preview sorts them for reading, and a
+    // re-ranking alone must not invalidate a ticket the user is looking at.
+    for group in [remove, keep] {
+        let mut ids: Vec<&String> = group.iter().collect();
+        ids.sort();
+        for id in ids {
+            text.push_str(id);
+            text.push('\n');
+        }
+        text.push('\u{1d}');
+    }
+    sha256_hex(&text)
+}
+
+fn impact_source(source: &crate::sources::FoundSource) -> ImpactSource {
+    ImpactSource {
+        id: source.id.clone(),
+        version: source.version.clone(),
+    }
+}
+
+/// Everything deleting one record would do, read from the rows in one place so the
+/// preview, the confirmation check and the purge itself describe the same work.
+struct Effect {
+    record: RecordRef,
+    /// The whole matched set, oldest first, with the versions the preview showed.
+    sources: Vec<ImpactSource>,
+    /// Live rows another record also owns: this delete only gives up its claim.
+    shared: Vec<String>,
+    /// Live rows this record alone supports: they are retired.
+    lost: Vec<String>,
+    /// Rows of this record that were already gone: the purge reports them as skipped.
+    gone: Vec<String>,
+    /// Cards left without any valid source: the purge deletes them.
+    remove: Vec<String>,
+    /// Cards that keep another valid source and only lose these links.
+    keep: Vec<String>,
+    items: Vec<ImpactItem>,
+    more: bool,
+    incomplete: bool,
+    ticket: String,
+}
+
+impl Effect {
+    fn single(&self) -> i64 {
+        self.remove.len() as i64
+    }
+
+    fn cards(&self) -> i64 {
+        self.remove.len() as i64 + self.keep.len() as i64
+    }
+
+    /// The two halves of the card work, sorted, so the purge acts in a stable order.
+    fn split(&self) -> (Vec<String>, Vec<String>) {
+        let mut remove = self.remove.clone();
+        let mut keep = self.keep.clone();
+        remove.sort();
+        keep.sort();
+        (remove, keep)
+    }
+
+    fn into_impact(self, source_id: String, version: String) -> CardImpact {
+        let cards = self.cards();
+        let single = self.single();
+        CardImpact {
+            source_id,
+            version,
+            record: self.record,
+            sources: self.sources,
+            cards,
+            single,
+            multi: cards - single,
+            items: self.items,
+            more: self.more,
+            shared: self.shared,
+            incomplete: self.incomplete,
+            ticket: self.ticket,
+        }
+    }
+}
+
+/// Reads what deleting this record would do, from the rows as they are now.
+fn describe(connection: &Connection, find: &FindParams) -> ApiResult<Effect> {
+    let set = resolve_record(connection, find)?;
+    let sources: Vec<ImpactSource> = set.sources.iter().map(impact_source).collect();
+    // A material another record also owns is not this record's to retire: counting
+    // it as lost would promise a deletion that never happens, and would let a stale
+    // ticket delete a card the other record still needs.
+    let owner = owner_ref(&set.record);
+    let mut shared: Vec<String> = Vec::new();
+    let mut lost: Vec<String> = Vec::new();
+    let gone: Vec<String> = set
+        .sources
+        .iter()
+        .filter(|source| source.state == "invalid")
+        .map(|source| source.id.clone())
+        .collect();
+    for source in set
+        .sources
+        .iter()
+        .filter(|source| source.state != "invalid")
+    {
+        // Shared unless this record alone proves the row: another claim protects it,
+        // and a claim older databases could only guess is never proof enough to
+        // retire a source or delete a card that cites it.
+        let also = match owner.as_deref() {
+            Some(record) => {
+                !exclusive(connection, &source.id, record)?
+                    || other_owners(connection, &source.id, record)?
+            }
+            None => false,
+        };
+        if also {
+            shared.push(source.id.clone());
+        } else {
+            lost.push(source.id.clone());
+        }
+    }
+    let rows = card_rows(connection, &lost)?;
+    let remove: Vec<String> = rows
+        .iter()
+        .filter(|item| item.single)
+        .map(|item| item.id.clone())
+        .collect();
+    let keep: Vec<String> = rows
+        .iter()
+        .filter(|item| !item.single)
+        .map(|item| item.id.clone())
+        .collect();
     let more = rows.len() > IMPACT_ITEMS;
     let items: Vec<ImpactItem> = rows.into_iter().take(IMPACT_ITEMS).collect();
-    Ok(CardImpact {
-        source_id,
-        version,
+    let digest = ticket(&set.record, &sources, &shared, &lost, &remove, &keep);
+    Ok(Effect {
         record: set.record,
-        cards,
-        single,
-        multi: cards - single,
+        sources,
+        shared,
+        lost,
+        gone,
+        remove,
+        keep,
         items,
         more,
         incomplete: set.incomplete,
-        shared,
-        sources,
         ticket: digest,
     })
 }
 
-/// Retracts the confirmed records and, when asked, deletes the cards left without a
+/// The older, row-level form: a bare list of rows, with no record to ask about
+/// ownership. It still works for callers that hold ids and nothing else.
+fn listed_effect(connection: &Connection, listed: &[PurgeSource]) -> ApiResult<Effect> {
+    let lost: Vec<String> = listed.iter().map(|entry| entry.id.clone()).collect();
+    let sources: Vec<ImpactSource> = listed
+        .iter()
+        .map(|entry| ImpactSource {
+            id: entry.id.clone(),
+            version: entry.version.clone(),
+        })
+        .collect();
+    let rows = card_rows(connection, &lost)?;
+    let remove: Vec<String> = rows
+        .iter()
+        .filter(|item| item.single)
+        .map(|item| item.id.clone())
+        .collect();
+    let keep: Vec<String> = rows
+        .iter()
+        .filter(|item| !item.single)
+        .map(|item| item.id.clone())
+        .collect();
+    let more = rows.len() > IMPACT_ITEMS;
+    let items: Vec<ImpactItem> = rows.into_iter().take(IMPACT_ITEMS).collect();
+    let record = RecordRef::default();
+    let digest = ticket(&record, &sources, &[], &lost, &remove, &keep);
+    Ok(Effect {
+        record,
+        sources,
+        shared: Vec::new(),
+        lost,
+        gone: Vec::new(),
+        remove,
+        keep,
+        items,
+        more,
+        incomplete: false,
+        ticket: digest,
+    })
+}
+
+/// Reports what deleting this record would do to the cards that cite it, read from
+/// the current rows. Newest cards first, matching the card list ranking.
+pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardImpact> {
+    let effect = describe(connection, &params.find())?;
+    let (source_id, version) = match effect.sources.as_slice() {
+        [only] => (only.id.clone(), only.version.clone()),
+        _ => (String::new(), String::new()),
+    };
+    Ok(effect.into_impact(source_id, version))
+}
+
+/// Retracts the confirmed record and, when asked, deletes the cards left without a
 /// valid source.
 ///
-/// The whole call is one transaction, so a failure leaves every row as it was. With
-/// a `confirm` block the record is resolved again inside the transaction and the
-/// ticket recomputed: anything that moved in between aborts the call untouched. A
-/// record is skipped — with no side effect at all — when its row is missing, was
-/// already retracted, or no longer carries the version the caller saw.
+/// The whole call is one transaction, so a failure leaves every row as it was. A
+/// confirmed call describes the record again inside the transaction and compares
+/// the ticket: anything that moved in between — a version, another reader's claim,
+/// a card that appeared or lost its last other source — aborts the call untouched.
+/// The queues are settled inside the same transaction from the rows as they stand,
+/// so work that lost its last live row stops here and work another record still
+/// needs keeps running.
 pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<PurgeResult> {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -369,49 +485,87 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
             ApiError::storage(format!("cannot start the purge transaction: {error}"))
         })?;
     let now = now_ms();
-    let (targets, digest, owner) = snapshot(&transaction, &params)?;
-    let mut purged: BTreeSet<String> = BTreeSet::new();
-    let mut detached: BTreeSet<String> = BTreeSet::new();
-    let mut skipped: Vec<String> = Vec::new();
-    for entry in &targets {
-        // Another record still owns this row: this delete gives up its own claim
-        // and leaves the row, its cards and the other record's evidence alone.
-        if let Some(record) = owner.as_deref()
-            && other_owners(&transaction, &entry.id, record)?
-        {
-            detach(&transaction, &entry.id, record)?;
-            detached.insert(entry.id.clone());
-            continue;
+    let effect = match params.confirm.as_ref() {
+        Some(_) => describe(&transaction, &params.find())?,
+        None => listed_effect(&transaction, &params.sources)?,
+    };
+    if let Some(confirm) = params.confirm.as_ref() {
+        if effect.incomplete {
+            return Err(ApiError::new(
+                Code::TooLarge,
+                format!("这条记录超过 {RECORD_SOURCES} 条来源，无法一次确认清除"),
+            ));
         }
-        match retract(&transaction, entry, now)? {
-            Some(id) => {
-                detach_all(&transaction, &id)?;
-                purged.insert(id);
-            }
-            None => skipped.push(entry.id.clone()),
+        let listed: Vec<(String, String)> = confirm
+            .sources
+            .iter()
+            .map(|entry| (entry.id.clone(), entry.version.clone()))
+            .collect();
+        let counted: Vec<(String, String)> = effect
+            .sources
+            .iter()
+            .map(|entry| (entry.id.clone(), entry.version.clone()))
+            .collect();
+        if confirm.ticket != effect.ticket || listed != counted {
+            return Err(ApiError::new(Code::SourceChanged, STALE));
         }
     }
-    let mut touched: BTreeSet<String> = BTreeSet::new();
-    for source in &purged {
-        for card in linked_cards(&transaction, source)? {
-            touched.insert(card);
+    let owner = owner_ref(&effect.record);
+    let mut detached: BTreeSet<String> = BTreeSet::new();
+    let mut purged: BTreeSet<String> = BTreeSet::new();
+    // Rows of this record that were already gone are reported, not re-retracted:
+    // a second confirmed purge says exactly what it skipped.
+    let mut skipped: Vec<String> = effect.gone.clone();
+    for id in &effect.shared {
+        // Another record still owns this row: only this record's claim goes.
+        if let Some(record) = owner.as_deref() {
+            detach(&transaction, id, record)?;
+            detached.insert(id.clone());
+        }
+    }
+    for id in &effect.lost {
+        let version = effect
+            .sources
+            .iter()
+            .find(|entry| &entry.id == id)
+            .map(|entry| entry.version.clone())
+            .unwrap_or_default();
+        let listed = PurgeSource {
+            id: id.clone(),
+            version,
+        };
+        match retract(&transaction, &listed, now)? {
+            Some(retired) => {
+                purged.insert(retired);
+            }
+            None => skipped.push(id.clone()),
         }
     }
     let list: Vec<String> = purged.iter().cloned().collect();
     let encoded = serde_json::to_string(&list)
         .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
+    let (remove, keep) = effect.split();
     let mut removed: BTreeSet<String> = BTreeSet::new();
-    let mut kept: BTreeSet<String> = BTreeSet::new();
-    for card in &touched {
-        // Every confirmed record is already invalid here, so this counts exactly
-        // the sources that survive the purge.
-        let remaining = valid_sources(&transaction, card)?;
-        if params.cards && remaining == 0 {
+    if params.cards {
+        for card in &remove {
             // The shared delete path keeps the exclusions, the history and the
             // relation cascade exactly as a manual delete does.
             crate::cards::delete_in(&transaction, card)?;
             removed.insert(card.clone());
-        } else {
+        }
+    }
+    // A card that keeps another valid source only loses the links to the rows that
+    // just went. When the user did not tick the delete, the doomed cards stay too
+    // and keep their now invalid links, exactly as the default path does.
+    let mut unlinked: Vec<String> = keep;
+    if !params.cards {
+        unlinked.extend(remove.iter().cloned());
+    }
+    // Nothing was retired, so there is no link to drop: the rows the caller listed
+    // turned out to have moved and were skipped instead.
+    let mut kept: BTreeSet<String> = BTreeSet::new();
+    if !list.is_empty() {
+        for card in &unlinked {
             transaction
                 .execute(
                     "DELETE FROM card_sources
@@ -424,6 +578,7 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
         }
     }
     ensure_not_cancelled()?;
+    let cancelled = settle_after(&transaction, PURGE_REASON, owner.as_deref(), &list)?;
     transaction
         .commit()
         .map_err(|error| ApiError::storage(format!("cannot commit the purge: {error}")))?;
@@ -432,61 +587,9 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
         detached: detached.into_iter().collect(),
         kept: kept.into_iter().collect(),
         skipped,
-        ticket: digest,
+        cancelled,
+        ticket: effect.ticket,
     })
-}
-
-/// The rows this purge may act on, plus the ticket it is acting under.
-///
-/// A confirmed call re-resolves the record and compares the ticket; an older caller
-/// that handed a bare list keeps working, without the guard.
-fn snapshot(
-    transaction: &Connection,
-    params: &PurgeParams,
-) -> ApiResult<(Vec<PurgeSource>, String, Option<String>)> {
-    let Some(confirm) = params.confirm.as_ref() else {
-        let targets = params.sources.clone();
-        let ids: Vec<String> = targets.iter().map(|entry| entry.id.clone()).collect();
-        let cards = affected(transaction, &ids)?;
-        let sources: Vec<ImpactSource> = targets
-            .iter()
-            .map(|entry| ImpactSource {
-                id: entry.id.clone(),
-                version: entry.version.clone(),
-            })
-            .collect();
-        return Ok((targets, ticket(&sources, &cards), None));
-    };
-    let set = resolve_record(transaction, &params.find())?;
-    if set.incomplete {
-        return Err(ApiError::new(
-            Code::TooLarge,
-            format!("这条记录超过 {RECORD_SOURCES} 条来源，无法一次确认清除"),
-        ));
-    }
-    let sources: Vec<ImpactSource> = set.sources.iter().map(impact_source).collect();
-    let expected = ticket(&sources, &affected(transaction, &set.ids())?);
-    let listed: Vec<(String, String)> = confirm
-        .sources
-        .iter()
-        .map(|entry| (entry.id.clone(), entry.version.clone()))
-        .collect();
-    let counted: Vec<(String, String)> = sources
-        .iter()
-        .map(|entry| (entry.id.clone(), entry.version.clone()))
-        .collect();
-    if confirm.ticket != expected || listed != counted {
-        return Err(ApiError::new(Code::SourceChanged, STALE));
-    }
-    let owner = owner_ref(&set.record);
-    let targets = sources
-        .into_iter()
-        .map(|entry| PurgeSource {
-            id: entry.id,
-            version: entry.version,
-        })
-        .collect();
-    Ok((targets, expected, owner))
 }
 
 /// Retracts one listed record when it still carries the version the caller saw.
@@ -517,29 +620,4 @@ fn retract(transaction: &Connection, entry: &PurgeSource, now: i64) -> ApiResult
         )
         .map_err(sqlite)?;
     Ok(Some(entry.id.clone()))
-}
-
-/// The cards linked to one record, in id order so the result lists are stable.
-fn linked_cards(transaction: &Connection, source: &str) -> ApiResult<Vec<String>> {
-    let mut statement = transaction
-        .prepare("SELECT DISTINCT card_id FROM card_sources WHERE source_id = ?1 ORDER BY card_id")
-        .map_err(sqlite)?;
-    let cards = statement
-        .query_map([source], |row| row.get::<_, String>(0))
-        .map_err(sqlite)?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(sqlite)?;
-    Ok(cards)
-}
-
-/// How many sources still count as valid for one card.
-fn valid_sources(transaction: &Connection, card: &str) -> ApiResult<i64> {
-    transaction
-        .query_row(
-            "SELECT count(*) FROM card_sources cs JOIN sources s ON s.id = cs.source_id
-              WHERE cs.card_id = ?1 AND s.state <> 'invalid'",
-            [card],
-            |row| row.get(0),
-        )
-        .map_err(sqlite)
 }

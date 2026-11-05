@@ -872,6 +872,22 @@ export class KnowledgeHost {
     )
   }
 
+  /**
+   * Hands one deleted record's rows back to the library in the helper's own
+   * transaction: every version the record was published as, not just the page a
+   * preview showed. The answer is bounded — counts and the tasks that stopped —
+   * so a long-lived note is still one statement.
+   */
+  releaseRecord(
+    input: { channel: 'note' | 'chat'; originRef?: string; groupKey?: string },
+    reason: string
+  ): Promise<{ retired: number; detached: number; cancelled: string[] }> {
+    return this.call<{ retired: number; detached: number; cancelled: string[] }>(
+      'source.release_record',
+      { ...input, reason }
+    )
+  }
+
   /** One page of a task's items; a long thread never arrives in one frame. */
   queueItems(query: { groupId: string; offset?: number; limit?: number }): Promise<QueueItemPage> {
     return this.call<QueueItemPage>('queue.items', query)

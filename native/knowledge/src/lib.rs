@@ -15,6 +15,7 @@ pub mod protocol;
 pub mod purge;
 pub mod queue;
 pub mod relations;
+pub mod release;
 pub mod service;
 pub mod sources;
 pub mod store;

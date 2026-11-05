@@ -262,13 +262,21 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
       if (options?.deleteKnowledge) await verifyKnowledge?.(id, options.ticket)
       await store.remove(id)
       broadcast()
-      if (!options?.deleteKnowledge) { await purgeKnowledge?.(id, { cards: false }); return }
-      try {
-        await purgeKnowledge?.(id, { cards: true, ticket: options.ticket })
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error)
-        throw new Error(mt('记录已删除，但关联知识清理失败：{{reason}}', { reason }))
+      // Whatever the ticked option, the record is already gone: a failed settlement
+      // is a partial failure that names itself, never a quiet success.
+      const settleKnowledge = async (run: () => Promise<void>): Promise<void> => {
+        try {
+          await run()
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error)
+          throw new Error(mt('记录已删除，但关联知识清理失败：{{reason}}', { reason }))
+        }
       }
+      if (!options?.deleteKnowledge) {
+        await settleKnowledge(async () => purgeKnowledge?.(id, { cards: false }))
+        return
+      }
+      await settleKnowledge(async () => purgeKnowledge?.(id, { cards: true, ticket: options.ticket }))
     })
   })
 

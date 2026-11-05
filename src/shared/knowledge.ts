@@ -263,6 +263,20 @@ export type SourceIdentity =
   | { channel: 'chat'; groupKey: string }
   | { channel: 'reading'; originRef: string }
 
+/**
+ * The record a preview or a delete is about.
+ *
+ * A bare id cannot say which kind of record it names, so the caller always says:
+ * reading one id as a single source answers for less than the user is about to
+ * delete, and the confirm dialog would under-count what it promises.
+ */
+export function sourceIdentityOf(target: SourceRef): SourceIdentity | null {
+  if (target?.sourceId) return { sourceId: target.sourceId }
+  if (target?.noteId) return { channel: 'note', originRef: target.noteId }
+  if (target?.threadId) return { channel: 'chat', groupKey: target.threadId }
+  return null
+}
+
 /** One source the preview saw, at the version it saw. */
 export interface CardImpactSource {
   id: string
@@ -507,6 +521,7 @@ export type KnowledgeMethod =
   | 'card.impact'
   | 'card.purge'
   | 'source.find'
+  | 'source.release_record'
   | 'profile.save'
   | 'profile.get'
   | 'profile.list'

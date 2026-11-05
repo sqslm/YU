@@ -17,7 +17,7 @@ use serde::Deserialize;
 use crate::protocol::{ApiError, ApiResult, Code};
 use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA, Store};
 use crate::util::ensure_not_cancelled;
-use crate::{cards, history, profile, purge, queue, relations, sources};
+use crate::{cards, history, profile, purge, queue, relations, release, sources};
 
 #[derive(Deserialize)]
 struct IdParams {
@@ -468,6 +468,12 @@ impl Service {
                     scope: None,
                     shutdown: false,
                 })
+            }
+            "source.release_record" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = release::release_record(&mut connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
             }
             "queue.invalidate_thread" => {
                 let store = self.store()?;

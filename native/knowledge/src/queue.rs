@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use crate::protocol::{
     ApiError, ApiResult, Code, DEFAULT_PAGE, MAX_GROUP_CHARS, MAX_PAGE, fit_page,
 };
-use crate::sources::{detach, detach_all, other_owners};
+use crate::sources::{detach, detach_all, exclusive, other_owners};
 use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms, require_text, sha256_hex};
 
 pub const CHANNELS: [&str; 3] = ["note", "chat", "reading"];
@@ -668,8 +668,8 @@ fn record_owner(
         _ => return Ok(()),
     };
     conn.execute(
-        "INSERT OR IGNORE INTO source_records (source_id, channel, record_ref, created_at)
-         VALUES (?1, 'chat', ?2, ?3)",
+        "INSERT OR IGNORE INTO source_records (source_id, channel, record_ref, created_at, exclusive)
+         VALUES (?1, 'chat', ?2, ?3, 1)",
         params![source_id, owner, now_ms()],
     )
     .map_err(|error| ApiError::storage(format!("cannot record the source owner: {error}")))?;
@@ -981,9 +981,95 @@ fn owners_of(conn: &Connection, source_id: &str) -> ApiResult<Vec<String>> {
     crate::sources::owners(conn, source_id)
 }
 
+/// Settles the queued work that named these rows: a group left without a single
+/// valid source stops at once, and a group that still holds a live row keeps its
+/// work and loses only a stale thread pointer. It reads the rows as they are now,
+/// not what this call retired: a version retired in an earlier round still counts,
+/// so the last delete of a shared material settles what the first one left behind.
+pub(crate) fn settle_after(
+    conn: &Connection,
+    reason: &str,
+    thread_key: Option<&str>,
+    touched: &[String],
+) -> ApiResult<Vec<String>> {
+    if touched.is_empty() && thread_key.is_none() {
+        return Ok(Vec::new());
+    }
+    let encoded = serde_json::to_string(touched)
+        .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
+    let candidates: Vec<String> = {
+        let mut statement = conn
+            .prepare(
+                "SELECT g.id FROM queue_groups g
+                  WHERE g.id IN (SELECT i.group_id FROM queue_items i
+                                  WHERE i.source_id IN (SELECT value FROM json_each(?2)))
+                     OR (g.thread_key IS NOT NULL AND g.thread_key = ?1)
+                  ORDER BY g.created_at, g.id",
+            )
+            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
+        let rows = statement
+            .query_map(params![thread_key, encoded], |row| row.get::<_, String>(0))
+            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
+        rows.filter_map(Result::ok).collect()
+    };
+    let mut cancelled: Vec<String> = Vec::new();
+    for id in &candidates {
+        let (state, items, valid): (String, i64, i64) = conn
+            .query_row(
+                "SELECT g.state,
+                        (SELECT count(*) FROM queue_items i WHERE i.group_id = g.id),
+                        (SELECT count(*) FROM queue_items i JOIN sources s ON s.id = i.source_id
+                          WHERE i.group_id = g.id AND s.state <> 'invalid')
+                   FROM queue_groups g WHERE g.id = ?1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .map_err(|error| ApiError::storage(format!("cannot read the queue group: {error}")))?;
+        if state != "cancelled" && items > 0 && valid == 0 {
+            conn.execute(
+                "UPDATE queue_groups
+                    SET state = 'cancelled', reason = ?2, updated_at = ?3 WHERE id = ?1",
+                params![id, reason, now_ms()],
+            )
+            .map_err(|error| {
+                ApiError::storage(format!("cannot settle the queue group: {error}"))
+            })?;
+            cancelled.push(id.clone());
+            continue;
+        }
+        // Still holding live work, so it keeps running: only the pointer to the
+        // record that just went away is repaired.
+        if let Some(thread) = thread_key
+            && state != "cancelled"
+        {
+            let remaining = remaining_owner(conn, id, thread)?;
+            conn.execute(
+                "UPDATE queue_groups SET thread_key = ?2, updated_at = ?3 WHERE id = ?1",
+                params![id, remaining, now_ms()],
+            )
+            .map_err(|error| ApiError::storage(format!("cannot repair the thread key: {error}")))?;
+        }
+    }
+    Ok(cancelled)
+}
+
+/// A conversation other than `thread` that still claims one of the group's rows.
+fn remaining_owner(conn: &Connection, group_id: &str, thread: &str) -> ApiResult<Option<String>> {
+    for source in group_sources(conn, group_id)? {
+        if let Some(owner) = owners_of(conn, &source)?
+            .into_iter()
+            .find(|owner| owner != thread)
+        {
+            return Ok(Some(owner));
+        }
+    }
+    Ok(None)
+}
+
 /// Cancels every task that quoted a conversation: its chat turns and the reading
 /// tasks it produced. A deleted or made-temporary thread must not leave work
-/// behind just because reading tasks live under their material identity.
+/// behind just because reading tasks live under their material identity, and a
+/// group whose last live row just went away stops in the same transaction.
 pub fn invalidate_thread(conn: &mut Connection, params: ThreadParams) -> ApiResult<Value> {
     let thread_key = require_text("threadKey", &params.thread_key)?;
     check_chars("threadKey", &thread_key, MAX_GROUP_CHARS)?;
@@ -1017,7 +1103,11 @@ pub fn invalidate_thread(conn: &mut Connection, params: ThreadParams) -> ApiResu
     let mut retired: Vec<String> = Vec::new();
     let mut detached: Vec<String> = Vec::new();
     for id in &owned {
-        if other_owners(&transaction, id, &thread_key)? {
+        // A hint from an older database, or a reader that is still there, keeps the
+        // row: this conversation only gives up its own claim.
+        if !exclusive(&transaction, id, &thread_key)?
+            || other_owners(&transaction, id, &thread_key)?
+        {
             // Another conversation still cites this row: only the claim goes, so
             // its cards keep their evidence and its reading task stays alive.
             detach(&transaction, id, &thread_key)?;
@@ -1026,47 +1116,9 @@ pub fn invalidate_thread(conn: &mut Connection, params: ThreadParams) -> ApiResu
             retired.push(id.clone());
         }
     }
-    let encoded = serde_json::to_string(&retired)
-        .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
-    // A group is cancelled only when every row it quotes is being retired. A group
-    // that still holds a live row belongs to another conversation: it keeps its
-    // work and loses only the stale thread pointer.
-    let candidates: Vec<String> = {
-        let mut statement = transaction
-            .prepare(
-                "SELECT g.id FROM queue_groups g
-                  WHERE g.state <> 'cancelled'
-                    AND (g.thread_key = ?1
-                      OR g.id IN (SELECT i.group_id FROM queue_items i
-                                   WHERE i.source_id IN (SELECT value FROM json_each(?2))))
-                  ORDER BY g.created_at, g.id",
-            )
-            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
-        let rows = statement
-            .query_map(params![thread_key, encoded], |row| row.get::<_, String>(0))
-            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
-        rows.filter_map(Result::ok).collect()
-    };
-    let mut groups: Vec<String> = Vec::new();
-    for id in &candidates {
-        let sources = group_sources(&transaction, id)?;
-        if sources.iter().all(|source| retired.contains(source)) {
-            set_state(&transaction, id, "cancelled", Some(&reason), None)?;
-            groups.push(id.clone());
-            continue;
-        }
-        let remaining = sources
-            .iter()
-            .flat_map(|source| owners_of(&transaction, source).unwrap_or_default())
-            .find(|owner| owner != &thread_key);
-        transaction
-            .execute(
-                "UPDATE queue_groups SET thread_key = ?2, updated_at = ?3 WHERE id = ?1",
-                params![id, remaining, now_ms()],
-            )
-            .map_err(|error| ApiError::storage(format!("cannot repair the thread key: {error}")))?;
-    }
     if !retired.is_empty() {
+        let encoded = serde_json::to_string(&retired)
+            .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
         transaction
             .execute(
                 "UPDATE sources SET state = 'invalid', invalid_reason = ?2, updated_at = ?3
@@ -1080,13 +1132,14 @@ pub fn invalidate_thread(conn: &mut Connection, params: ThreadParams) -> ApiResu
             detach_all(&transaction, id)?;
         }
     }
+    let cancelled = settle_after(&transaction, &reason, Some(&thread_key), &owned)?;
     ensure_not_cancelled()?;
     transaction
         .commit()
         .map_err(|error| ApiError::storage(format!("cannot commit the invalidate: {error}")))?;
     Ok(json!({
         "threadKey": thread_key,
-        "cancelled": groups,
+        "cancelled": cancelled,
         "detached": detached,
         "reason": reason
     }))

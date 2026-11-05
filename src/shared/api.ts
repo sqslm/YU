@@ -152,7 +152,7 @@ export interface TypelessApi {
     /** Cards extracted from one record, paged in the helper. */
     bySource(query: import('./knowledge').SourceRef & { offset?: number; limit?: number }): Promise<import('./knowledge').KnowledgeCardPage>
     /** What deleting a record would do to the knowledge it produced. */
-    impact(target: import('./knowledge').SourceRef | string): Promise<import('./knowledge').CardImpact>
+    impact(target: import('./knowledge').SourceRef): Promise<import('./knowledge').CardImpact>
     /** Opens a new chat that carries only this card's id and bounded context. */
     continueDiscussion(cardId: string): Promise<{ threadId: string }>
     /** Saves a real todo from a card the user picked; never runs card instructions. */

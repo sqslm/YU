@@ -1258,7 +1258,8 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
     let live = true
     setImpactLoading(true)
     void window.api.knowledge
-      .impact(note.id)
+      // A note owns one source per version, so the record is what is previewed.
+      .impact({ noteId: note.id })
       .then((next) => {
         if (live) setImpact(next)
       })

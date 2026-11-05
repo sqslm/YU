@@ -472,3 +472,387 @@ fn a_database_written_before_ownership_is_backfilled_when_it_opens() {
     };
     assert_eq!(source_state(&root, &page_id), "active");
 }
+
+impl Helper {
+    /// Sends a request that must fail, and returns the error the helper reported.
+    fn err(&mut self, id: &str, method: &str, params: Value) -> Value {
+        let frame =
+            json!({ "v": 1, "type": "request", "id": id, "method": method, "params": params });
+        let mut line = serde_json::to_vec(&frame).unwrap();
+        line.push(b'\n');
+        let stdin = self.stdin.as_mut().unwrap();
+        stdin.write_all(&line).unwrap();
+        stdin.flush().unwrap();
+        loop {
+            let frame = self.recv();
+            if frame["type"] == "result" && frame["id"] == id {
+                assert_eq!(frame["ok"], false, "{method} was accepted: {frame}");
+                return frame["error"].clone();
+            }
+        }
+    }
+}
+
+/// The ticket is the record's current effect, so a preview taken before another
+/// reader let go cannot delete a card that reader's delete made single-source.
+#[test]
+fn an_old_ticket_cannot_delete_the_card_the_other_reader_gave_up() {
+    let root = Root::new("stale-ticket");
+    let mut helper = Helper::start(&root);
+    let at = now_ms();
+    let page = "https://example.test/stale";
+    helper.ok("a1", "source.publish", turn("t-a", "问题甲", "回答甲", at));
+    helper.ok("a2", "source.publish", turn("t-b", "问题乙", "回答乙", at));
+    helper.ok(
+        "a3",
+        "source.publish",
+        material(page, "reading:stale", "t-a", "两边都读过的正文。", at),
+    );
+    helper.ok(
+        "a4",
+        "source.publish",
+        material(page, "reading:stale", "t-b", "两边都读过的正文。", at),
+    );
+    let page_id = source_of(&mut helper, "f1")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let turn_id: String = helper.ok("f2", "source.find", json!({ "threadId": "t-a" }))["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["kind"] == "chat")
+        .expect("the turn is part of the thread")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let own = helper.ok(
+        "c1",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "独占结论",
+            "body": "只有 t-a 的回合支持。",
+            "sourceIds": [turn_id]
+        }),
+    );
+    let shared = helper.ok(
+        "c2",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "共享结论",
+            "body": "这条结论引用了共享材料。",
+            "sourceIds": [page_id]
+        }),
+    );
+    let own_id = own["id"].as_str().unwrap().to_string();
+    let shared_id = shared["id"].as_str().unwrap().to_string();
+
+    let preview = helper.ok("i1", "card.impact", json!({ "threadId": "t-a" }));
+    assert_eq!(preview["cards"], 1, "{preview}");
+    assert_eq!(preview["shared"].as_array().unwrap().len(), 1, "{preview}");
+
+    // The other reader goes away and only gives up its claim: the page stays live
+    // and now belongs to t-a alone.
+    let released = helper.ok(
+        "r1",
+        "source.release_record",
+        json!({ "channel": "chat", "groupKey": "t-b", "reason": "记录已删除" }),
+    );
+    assert_eq!(released["detached"], 1, "{released}");
+    assert_eq!(source_state(&root, &page_id), "active");
+
+    // The preview t-a saw no longer describes the record: a card that was shared is
+    // single-source now, so submitting the old ticket must change nothing at all.
+    let stale = helper.err(
+        "p1",
+        "card.purge",
+        json!({
+            "threadId": "t-a",
+            "cards": true,
+            "confirm": { "sources": preview["sources"].clone(), "ticket": preview["ticket"].clone() }
+        }),
+    );
+    assert_eq!(stale["code"], "source_changed", "{stale}");
+    assert_eq!(source_state(&root, &page_id), "active");
+    assert_eq!(
+        helper.ok("g1", "card.get", json!({ "id": own_id.clone() }))["id"],
+        own_id.as_str()
+    );
+    assert_eq!(
+        helper.ok("g2", "card.get", json!({ "id": shared_id.clone() }))["id"],
+        shared_id.as_str(),
+        "the stale ticket left the shared card alone"
+    );
+
+    // A fresh preview describes the same delete, and confirms it.
+    let fresh = helper.ok("i2", "card.impact", json!({ "threadId": "t-a" }));
+    assert_eq!(fresh["cards"], 2, "{fresh}");
+    let purged = helper.ok(
+        "p2",
+        "card.purge",
+        json!({
+            "threadId": "t-a",
+            "cards": true,
+            "confirm": { "sources": fresh["sources"].clone(), "ticket": fresh["ticket"].clone() }
+        }),
+    );
+    assert_eq!(purged["removed"].as_array().unwrap().len(), 2, "{purged}");
+}
+
+/// The queue is settled inside the purge transaction: a reading task that just lost
+/// its last live row stops with it, in the same statement batch that retired the row.
+#[test]
+fn a_confirmed_purge_settles_the_reading_task_it_emptied() {
+    let root = Root::new("settle");
+    let mut helper = Helper::start(&root);
+    let at = now_ms();
+    let page = "https://example.test/settled";
+    helper.ok("a1", "source.publish", turn("t-a", "问题甲", "回答甲", at));
+    helper.ok(
+        "a2",
+        "source.publish",
+        material(page, "reading:settled", "t-a", "只有这一轮读过的正文。", at),
+    );
+    let page_id = source_of(&mut helper, "f1")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    helper.ok(
+        "c1",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "独占知识",
+            "body": "引用只被这一轮读过的材料。",
+            "sourceIds": [page_id]
+        }),
+    );
+    let preview = helper.ok("i1", "card.impact", json!({ "threadId": "t-a" }));
+    let purged = helper.ok("p1", "card.purge", json!({
+        "threadId": "t-a",
+        "cards": true,
+        "confirm": { "sources": preview["sources"].clone(), "ticket": preview["ticket"].clone() }
+    }));
+    assert_eq!(purged["removed"].as_array().unwrap().len(), 1, "{purged}");
+    assert_eq!(source_state(&root, &page_id), "invalid");
+    let cancelled: Vec<String> = purged["cancelled"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|id| id.as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        !cancelled.is_empty(),
+        "the emptied reading task stopped: {purged}"
+    );
+    let listed = helper.ok("l1", "queue.list", json!({ "offset": 0, "limit": 50 }));
+    for row in listed["items"].as_array().unwrap() {
+        if cancelled.contains(&row["id"].as_str().unwrap().to_string()) {
+            assert_eq!(row["state"], "cancelled", "{row}");
+        }
+    }
+}
+
+/// Two conversations read two versions of one page. The first delete leaves the
+/// group running because the other version is still live; the last one stops it —
+/// a version retired in an earlier call still counts.
+#[test]
+fn versions_retired_in_earlier_calls_still_settle_the_group() {
+    let root = Root::new("versions");
+    let mut helper = Helper::start(&root);
+    let at = now_ms();
+    let page = "https://example.test/versions";
+    let group = "reading:versions";
+    helper.ok("a1", "source.publish", turn("t-a", "问题甲", "回答甲", at));
+    helper.ok("a2", "source.publish", turn("t-b", "问题乙", "回答乙", at));
+    helper.ok(
+        "a3",
+        "source.publish",
+        material(page, group, "t-a", "第一版正文内容。", at),
+    );
+    helper.ok(
+        "a4",
+        "source.publish",
+        material(page, group, "t-b", "第二版正文内容更完整一些。", at),
+    );
+    let reading_group: String = helper.ok("l0", "queue.list", json!({ "offset": 0, "limit": 50 }))
+        ["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["channel"] == "reading")
+        .expect("the reading task is queued")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let first = helper.ok(
+        "r1",
+        "source.release_record",
+        json!({ "channel": "chat", "groupKey": "t-a", "reason": "记录已删除" }),
+    );
+    let first_cancelled: Vec<&str> = first["cancelled"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|id| id.as_str().unwrap())
+        .collect();
+    assert!(
+        !first_cancelled.contains(&reading_group.as_str()),
+        "the other version keeps the task alive: {first}"
+    );
+    assert_eq!(
+        thread_key(&root, group).as_deref(),
+        Some("t-b"),
+        "the pointer follows the reader that is still there"
+    );
+    let last = helper.ok(
+        "r2",
+        "source.release_record",
+        json!({ "channel": "chat", "groupKey": "t-b", "reason": "记录已删除" }),
+    );
+    let last_cancelled: Vec<&str> = last["cancelled"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|id| id.as_str().unwrap())
+        .collect();
+    assert!(
+        last_cancelled.contains(&reading_group.as_str()),
+        "both versions are now invalid, so the task stops: {last}"
+    );
+    let listed = helper.ok("l1", "queue.list", json!({ "offset": 0, "limit": 50 }));
+    for row in listed["items"].as_array().unwrap() {
+        if row["channel"] == "reading" {
+            assert_eq!(row["state"], "cancelled", "{row}");
+        }
+    }
+}
+
+/// A note keeps one row per published version: far more than one preview page. The
+/// release works over the record, so the answer stays a count and every version goes.
+#[test]
+fn a_note_with_more_versions_than_one_page_is_released_whole() {
+    let root = Root::new("many-versions");
+    let mut helper = Helper::start(&root);
+    let at = now_ms();
+    let origin = "note_many_versions";
+    for index in 0..201 {
+        helper.ok(
+            &format!("n{index}"),
+            "source.publish",
+            json!({
+                "channel": "note",
+                "kind": "note",
+                "originRef": origin,
+                "groupKey": origin,
+                "threadKey": origin,
+                "title": "长随记",
+                "scope": "随记",
+                "text": format!("第 {index} 版正文，每次保存都是同一条来源的新版本。"),
+                "at": at + index
+            }),
+        );
+    }
+    let released = helper.ok(
+        "r1",
+        "source.release_record",
+        json!({ "channel": "note", "originRef": origin, "reason": "记录已删除" }),
+    );
+    assert_eq!(released["retired"], 201, "{released}");
+    let found = helper.ok(
+        "f1",
+        "source.find",
+        json!({ "channel": "note", "originRef": origin }),
+    );
+    assert_eq!(found["incomplete"], true, "a preview page is capped");
+    for row in found["sources"].as_array().unwrap() {
+        assert_eq!(row["state"], "invalid", "{row}");
+    }
+    let invalid: i64 = {
+        let path = root.join("data").join("knowledge").join("knowledge.db");
+        let connection = rusqlite::Connection::open(path).unwrap();
+        connection
+            .query_row(
+                "SELECT count(*) FROM sources WHERE origin_ref = ?1 AND state = 'invalid'",
+                [origin],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!(invalid, 201, "every version went, not one page of them");
+}
+
+/// A database from before schema 10 only kept one thread per group. That pointer is
+/// a hint, not proof: deleting that thread must not retire the page or delete a card
+/// that cites it.
+#[test]
+fn an_upgraded_hint_never_authorizes_a_retire() {
+    let root = Root::new("hint");
+    let mut helper = Helper::start(&root);
+    let at = now_ms();
+    let page = "https://example.test/hinted";
+    helper.ok("a1", "source.publish", turn("t-a", "问题甲", "回答甲", at));
+    helper.ok(
+        "a2",
+        "source.publish",
+        material(
+            page,
+            "reading:hinted",
+            "t-a",
+            "旧库里只记了一个读者的正文。",
+            at,
+        ),
+    );
+    let page_id = source_of(&mut helper, "f1")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    helper.ok(
+        "c1",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "旧库知识",
+            "body": "引用旧库里只记了一个读者的材料。",
+            "sourceIds": [page_id]
+        }),
+    );
+    helper.stop();
+    let path = root.join("data").join("knowledge").join("knowledge.db");
+    {
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .execute_batch("DROP TABLE source_records; PRAGMA user_version = 8;")
+            .unwrap();
+    }
+    let mut helper = Helper::start(&root);
+    let hint: i64 = {
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .query_row(
+                "SELECT count(*) FROM source_records WHERE exclusive = 0",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+    assert!(hint >= 1, "the upgraded library kept the pointer as a hint");
+
+    let released = helper.ok(
+        "r1",
+        "source.release_record",
+        json!({ "channel": "chat", "groupKey": "t-a", "reason": "记录已删除" }),
+    );
+    assert_eq!(
+        released["retired"], 1,
+        "only the turn is provably t-a's: {released}"
+    );
+    assert_eq!(source_state(&root, &page_id), "active");
+    let preview = helper.ok("i1", "card.impact", json!({ "threadId": "t-a" }));
+    assert_eq!(
+        preview["cards"], 0,
+        "the hint protects the card too: {preview}"
+    );
+}

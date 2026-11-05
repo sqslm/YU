@@ -79,7 +79,9 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
     let live = true
     setImpactLoading(true)
     void window.api.knowledge
-      .impact(threadId)
+      // The whole record is previewed, so the answer can count every source the
+      // thread really holds: a bare id would be read as one source and miss.
+      .impact({ threadId })
       .then(next => {
         if (live) setImpact(next)
       })

@@ -479,7 +479,7 @@ fn by_origin(
         .prepare(
             "SELECT id, kind, state, version, title, origin_ref, size FROM sources
               WHERE origin_ref = ?1 AND kind IN (SELECT value FROM json_each(?2))
-              ORDER BY read_at ASC, created_at ASC, id ASC LIMIT ?3",
+              ORDER BY read_at ASC, created_at ASC, rowid ASC LIMIT ?3",
         )
         .map_err(sqlite_error)?;
     let rows = statement
@@ -520,7 +520,7 @@ fn thread_sources(
                 SELECT r.source_id FROM source_records r
                  WHERE r.channel = 'chat' AND r.record_ref = ?2)
               GROUP BY s.id
-              ORDER BY s.read_at ASC, s.created_at ASC, s.id ASC
+              ORDER BY s.read_at ASC, s.created_at ASC, rowid ASC
               LIMIT ?3",
         )
         .map_err(sqlite_error)?;
@@ -561,6 +561,29 @@ pub(crate) fn other_owners(
         )
         .map_err(sqlite_error)?;
     Ok(count > 0)
+}
+
+/// Whether one record's claim on a source proves it can retire it.
+///
+/// A claim is proof when it was written for this record by the code that published
+/// the row. A claim carried over from a database that only kept a group pointer is a
+/// hint: it may protect the row from another record's delete, but it must never let
+/// a delete take the row — or its cards — away. A record with no claim at all is the
+/// older row-level form, and nothing contradicts retiring it.
+pub(crate) fn exclusive(
+    connection: &Connection,
+    source_id: &str,
+    record_ref: &str,
+) -> ApiResult<bool> {
+    let (claims, exclusive): (i64, i64) = connection
+        .query_row(
+            "SELECT count(*), coalesce(sum(exclusive), 0) FROM source_records
+              WHERE source_id = ?1 AND channel = 'chat' AND record_ref = ?2",
+            params![source_id, record_ref],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(sqlite_error)?;
+    Ok(claims == 0 || exclusive > 0)
 }
 
 /// Gives up one record's claim on a source. The source itself stays exactly as it

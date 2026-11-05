@@ -1,67 +1,104 @@
-import type { FindSourceInput, SourceIdentity } from '@shared/knowledge'
+import type { FindSourceInput } from '@shared/knowledge'
 
-/** The helper calls one record's deletion needs; the host object satisfies this. */
+/** The identity one record has for the helper, as a release command carries it. */
+export interface ReleaseTarget {
+  channel: 'note' | 'chat'
+  originRef?: string
+  groupKey?: string
+}
+
+/** The helper call one record's deletion needs; the host object satisfies this. */
 export interface ReleaseHost {
-  findSources(input: FindSourceInput): Promise<{ sources: { id: string; state: string }[] }>
-  invalidateSource(id: string, reason: string): Promise<unknown>
-  invalidateTask(group: { channel: 'note'; groupKey: string }, reason: string): Promise<unknown>
-  invalidateThread(threadKey: string, reason: string): Promise<{ cancelled: string[]; detached: string[] }>
+  releaseRecord(
+    target: ReleaseTarget,
+    reason: string
+  ): Promise<{ retired: number; detached: number; cancelled: string[] }>
 }
 
 export interface ReleaseOutcome {
-  /** Sources whose claim this record gave up, retired or left to their other owners. */
-  sources: string[]
-  /** Sources another record also supports: the row, its cards and its readers stay. */
-  detached: string[]
-  /** Queued work that belonged to this record alone. */
+  /** Rows only this record supported: the helper retired them. */
+  retired: number
+  /** Rows another record — or an older claim that cannot be proved — still supports. */
+  detached: number
+  /** Queued work that lost its last live row and stopped. */
   cancelled: string[]
-  /** Invalidation failures; the record is already gone, so the caller reports them. */
   failures: string[]
 }
 
+/** The record a deletion is about, or nothing when the input carries no identity. */
+export function releaseTarget(input: FindSourceInput): ReleaseTarget | null {
+  if ('groupKey' in input && input.groupKey && (!('channel' in input) || input.channel === 'chat')) {
+    return { channel: 'chat', groupKey: input.groupKey }
+  }
+  if ('originRef' in input && input.originRef) return { channel: 'note', originRef: input.originRef }
+  return null
+}
+
+function key(target: ReleaseTarget): string {
+  return target.channel === 'chat' ? `chat:${target.groupKey}` : `note:${target.originRef}`
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /**
- * Hands one deleted record's claims back to the library, keeping cards and other
- * readers. A material two conversations read stays for the other one; a source
- * nothing else supports is retired.
+ * Hands deleted records' claims back to the library, keeping cards and other
+ * readers, and finishes the job later when the helper cannot be reached now.
+ *
+ * The helper does the work in one transaction over every row the record holds, so
+ * this never depends on how many rows a preview showed. A cleanup that fails stays
+ * queued: the record is already gone, so the only honest thing left is to run the
+ * same idempotent call again — the next helper answer does exactly that.
  */
-export async function releaseRecord(
-  host: ReleaseHost,
-  input: FindSourceInput,
-  identity: SourceIdentity,
-  reason: string
-): Promise<ReleaseOutcome> {
-  const found = await host.findSources(input)
-  const sources = found.sources.filter(source => source.state !== 'invalid')
-  const outcome: ReleaseOutcome = { sources: [], detached: [], cancelled: [], failures: [] }
-  // Nothing was published for this record: there is no knowledge to settle.
-  if (!sources.length) return outcome
+export class RecordReleaser {
+  private readonly pending = new Map<string, { target: ReleaseTarget; reason: string }>()
 
-  // A conversation is the record, so the helper settles it by owner: a page read
-  // elsewhere survives, and only this conversation's queued work stops.
-  if ('groupKey' in identity && identity.channel === 'chat') {
-    const released = await host.invalidateThread(identity.groupKey, reason)
-    return {
-      sources: sources.map(source => source.id),
-      detached: released.detached,
-      cancelled: released.cancelled,
-      failures: []
-    }
+  constructor(
+    private readonly host: () => ReleaseHost,
+    private readonly log: (line: string) => void = () => {}
+  ) {}
+
+  /** Cleanups waiting for the helper to answer again. */
+  get waiting(): number {
+    return this.pending.size
   }
 
-  // A note is only ever its own record: no other record claims what it published.
-  for (const source of sources) {
+  async release(input: FindSourceInput, reason: string): Promise<ReleaseOutcome> {
+    const target = releaseTarget(input)
+    const outcome: ReleaseOutcome = { retired: 0, detached: 0, cancelled: [], failures: [] }
+    if (!target) return outcome
     try {
-      await host.invalidateSource(source.id, reason)
-      outcome.sources.push(source.id)
+      const released = await this.host().releaseRecord(target, reason)
+      this.pending.delete(key(target))
+      return {
+        retired: released.retired,
+        detached: released.detached,
+        cancelled: released.cancelled,
+        failures: []
+      }
     } catch (error) {
-      outcome.failures.push(error instanceof Error ? error.message : String(error))
+      this.pending.set(key(target), { target, reason })
+      outcome.failures.push(message(error))
+      return outcome
     }
   }
-  if ('channel' in input) {
-    const group = 'groupKey' in input ? input.groupKey : input.originRef
-    await host
-      .invalidateTask({ channel: 'note', groupKey: group }, reason)
-      .catch(() => undefined)
+
+  /** Re-runs every cleanup still waiting, and reports how many finished. */
+  async retry(): Promise<number> {
+    let finished = 0
+    for (const [id, entry] of [...this.pending]) {
+      try {
+        const released = await this.host().releaseRecord(entry.target, entry.reason)
+        this.pending.delete(id)
+        finished += 1
+        this.log(
+          `[knowledge] 补做知识清理：失效 ${released.retired} 个来源，保留 ${released.detached} 条共享出处`
+        )
+      } catch {
+        // Still unreachable: it stays queued for the next answer.
+      }
+    }
+    return finished
   }
-  return outcome
 }

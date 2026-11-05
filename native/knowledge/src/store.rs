@@ -13,7 +13,7 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 9;
+pub const KNOWLEDGE_SCHEMA: i64 = 10;
 pub const PROFILE_SCHEMA: i64 = 3;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
@@ -423,6 +423,24 @@ INSERT OR IGNORE INTO source_records (source_id, channel, record_ref, created_at
    WHERE g.channel = 'reading' AND g.thread_key IS NOT NULL AND g.thread_key <> '';
 "#;
 
+/// Schema 9 recorded who asked for a source. For a reading task it wrote the group's
+/// `thread_key`, which is a single pointer to the last thread that touched the group
+/// — not proof that this thread read the row. A database that old cannot say which
+/// reader a material belonged to, so schema 10 marks such a claim as a hint: it can
+/// protect a source from another record's delete, and it never authorizes retiring
+/// the source or deleting its cards. Claims a conversation can verify — its own
+/// turns — stay exclusive. New claims are written with the real owner and stay
+/// exclusive, so nothing written from now on is caught by this rule.
+const SOURCE_HINT_SQL: &str = r#"
+ALTER TABLE source_records ADD COLUMN exclusive INTEGER NOT NULL DEFAULT 1;
+UPDATE source_records SET exclusive = 0
+ WHERE channel = 'chat'
+   AND NOT EXISTS (
+     SELECT 1 FROM queue_items i JOIN queue_groups g ON g.id = i.group_id
+      WHERE i.source_id = source_records.source_id
+        AND g.channel = 'chat' AND g.group_key = source_records.record_ref);
+"#;
+
 /// Both databases, opened lazily on the first data request.
 pub struct Store {
     pub knowledge: Mutex<Connection>,
@@ -448,6 +466,7 @@ impl Store {
                 RELATION_SOURCE_SQL,
                 CITED_SQL,
                 SOURCE_OWNER_SQL,
+                SOURCE_HINT_SQL,
             ],
         )?;
         let profile = open_db(
