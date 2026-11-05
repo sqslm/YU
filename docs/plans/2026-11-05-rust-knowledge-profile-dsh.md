@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1 已通过外部复核；阶段 2 外部复核仍未通过，T1～T3 修复已提交（见「阶段 2 第四次复核修复」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1、阶段 2 已通过外部复核（阶段 3 实施中）。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -627,3 +627,50 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 测试专用二进制未变：`target/debug/yu-knowledge.exe` 3,927,040 字节 `2f47e92a…`；`target/debug/yu-knowledge-fixture.exe` 2,412,544 字节 `393df85a…`，不随安装包分发。
 - 临时产物：`%TEMP%/yu-knowledge*` 复跑后为 0；`native/knowledge/target` 1.2 GB（`.gitignore` 已忽略）。
 - 仍未覆盖：真实 Electron 启动与安装包联动、60 秒稳定期真实时长（仍用 `YU_KNOWLEDGE_STABLE_MS` 缩短）、阶段 3 卡片生成（本轮 0 次模型调用）。
+
+## 阶段 2 外部验收（2026-11-05，reportId `bf09ce12-6830-4bf5-a033-6b1d4398e505`）
+
+外部在 HEAD `4c05194` 定点复核通过阶段 2：目标 15 文件 170 项 Vitest 全部通过，完整阶段 `git diff --check` 通过，release 哈希 `085f3ec8…` 一致；独立合成探针确认 61 轮 122 条消息的首/中/末问答可定向恢复、两线程长问答字节分页为 `[A0,A1] → [B0]` 且 cursor 前进无重无漏、游戏自动挂起保留 `running` 而手动 `paused` 保持、`syncKnowledge` 四处真实接线成立。此前通过的取消/checkpoint、201 项分页、默认关闭与来源限长仍然有效。以上为外部复核结论；本文件中的 DSH 自测数字不代表外部全量复跑。
+
+## 阶段 3 实施记录（2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+### 目标与边界
+
+- 启用知识库后，真实待提炼队列在稳定期结束且未暂停时自动取得合法正文，经既有模型桥接由 Rust 提炼知识卡片；相同知识补来源或更新，冲突与人工编辑内容形成建议。
+- 本阶段只新增必要的 Rust 业务、共享类型、设置项与受信管理 API；页面仍在阶段 5，软件联动在阶段 6，画像/图谱/检索工具不在此阶段。
+- 生产模型路径必须接通（`createKnowledgeCompleter`），测试用注入完成器；真实模型质量与付费效果留到阶段 7。
+
+### 管道操作（协议版本仍为 1）
+
+| 操作 | 参数 | 结果 |
+| --- | --- | --- |
+| `extract.next` | `{}` | `{group, nextDueAt, paused, enabled}`；`group` 为占用凭证与来源描述，Rust 决定顺序与占用 |
+| `extract.run` | `{groupId, claim, sources:[{sourceId, version, text}], profileId?, effort?}` | `{groupId, state, cards, proposals, noKnowledge, reason, remaining}`；内部写卡/建议/进度在一个事务 |
+| `extract.fail` | `{groupId, claim, code, reason}` | `{groupId, state}`；`cancelled`/`changed`/`needs_reread`/`failed` 由 code 决定 |
+
+- 三个操作都不接受 renderer 提供的任意正文或 prompt：`extract.run` 的正文由主进程按被占用来源读取，Rust 逐条核对 `sourceId + version + sha256(text)`。
+- 主进程只做来源 I/O、既有模型请求与唤醒（`nextDueAt` 定时器或既有 `changed` 通知），同一批次由 Rust 的 `working` + `claim` 保证单并发。
+- `extract.run` 的 120 秒是包含 ready、正文读取与模型往返的总预算；普通 CRUD 仍为 15 秒；模型子请求绑定真实在途父请求并沿用既有代际/迟到/取消规则。
+
+### 数据模型（knowledge.db `user_version = 5`）
+
+- `queue_groups`：新增 `priority INTEGER NOT NULL DEFAULT 0`（历史积压为 1、显式重试为 -1）与 `claim TEXT`；`state` 允许新增 `working`、`completed`。
+- `cards`：新增 `fingerprint TEXT`（规范化正文的 SHA-256，用于精确去重）与 `revision INTEGER NOT NULL DEFAULT 1`；人工编辑递增 `revision`。
+- `card_history(id, card_id, revision, title, summary, body, reason, created_at)`：自动更新前的实质内容与理由，供阶段 5 查看。
+- `extract_progress(source_id, version, segment, state, group_id, created_at, updated_at, PRIMARY KEY(source_id, version, segment))`：以来源版本与分段为键的幂等进度。
+- `suggestions(id, kind, target_card_id, target_revision, action, draft, reason, source_ids, state, created_at, updated_at)`：`action ∈ reference|merge|propose`，`state ∈ open|accepted|rejected`。
+
+### 提炼与去重规则
+
+- 单来源分段上限 12 000 Unicode 字符、段间重叠最多 500 字符；单批模型输入合计最多 12 000 字符；不把首段成功当作整源完成。
+- 每批最多 3 张卡片，卡片正文建议 300～800 字，`maxTokens` 8192；单批最多一次提炼调用加一次候选比较调用，精确重复或无候选时跳过比较，总期限不重置。
+- 精确去重：规范化（仅折叠空白，不改代码/路径/参数/版本号）后比较指纹，相同结论只补来源、保留正文与 `edited`。
+- 语义去重：用现有 FTS/LIKE 找最多 8 条候选（候选文本合计最多 6000 字符），一次比较决定 `new|reference|merge|propose`；不引入 embedding 或全库两两比较。
+- 自动合并仅限"同一结论 + 增加细节 + 目标未人工编辑 + 依据充分"，合并前把旧版本写入 `card_history` 并保留全部来源；其余情况只写建议、保留原卡片。
+- 提交前重新核对目标卡片 `revision`/`edited` 与来源版本；变化则放弃本次过期写入。
+- 尊重 `card.delete` 写入的 `source_version`/来源组排除：已删除卡片同版本重跑不复活，改为建议。
+- 合法空数组可 `completed` 并记录原因；非法 JSON、陌生 source/target、超限、超时、缺模型都明确失败，不写半成品。
+
+### 设置
+
+- `KnowledgeSettings` 新增 `profileId: string | null`（默认 `null` → 首个启用 LLM）与 `effort: string`（默认 `high`）；不继承听写 `thinking off`，不读写密钥。缺可用模型返回 `model_unavailable`。
