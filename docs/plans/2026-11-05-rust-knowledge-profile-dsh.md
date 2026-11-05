@@ -1909,3 +1909,69 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 ### 提交
 
 - `7e627ce` `fix(knowledge): bind the delete ticket to the current effect and settle the queue it empties` —— 22 个文件（6 个 Rust 源文件 + 新增 `native/knowledge/src/release.rs`、`ownership.rs` 8 项；新增 `src/main/knowledge/settle.ts`、`settle.integration.test.ts`、`src/shared/knowledge.test.ts`，以及 `index.ts`/`notes-ipc.ts`/`host.ts`/`api.ts`/`knowledge.ts`/两个渲染页与两处 schema 断言）。本节由随后的 docs 提交记录。
+
+## 阶段 6 B 定点收尾（2026-11-06 第十六轮）
+
+上一轮的 B 已由外部核对通过：真实 ChatService + 生产 `chat:edit` + release helper 的「只含阅读来源的会话默认删除」（预览 1、原会话已删、来源 invalid、组 cancelled、卡片保留失效链接）；共享关系变化后旧票据被拒且原会话与受保护卡片都在；普通有效勾选与旧确认保护继续通过；Rust 归属 8 项全过。本轮只处理外部新给的三条真实反例，A/C/D 与阶段 7 未动。
+
+### 反例与修复
+
+| 反例（外部实测） | 根因 | 修复 |
+| --- | --- | --- |
+| 旧逐行接口 `host.purgeSources([{id, version: 'wrong-version'}], true)` 返回 `skipped` 含该行、`removed` 同时含只靠它支撑的卡：来源仍 active，卡片已消失 | `listed_effect` 用全部入参算 `lost`/`remove`，`retract` 跳过也不改删除集合 | `listed_effect` 逐行读 `state_of()`，只有 `state != 'invalid' && version == entry.version` 的行进 `lost`，其余进 `gone`（`skipped`）；`purge()` 先算 `retirable`（对 `lost` 逐行按状态与版本复验），用 `card_rows(&transaction, &retirable)` 在退休前算真实 `remove`/`keep`，被跳过的行不再带走卡、关系与排除状态；不再使用的 `Effect::split()` 删除 |
+| 随记「早前失效版本 + active 当前版本 + 当前版本独占卡」时，真实 preview 报 `cards=1、sources=2`，同一票据交给生产 `settleRecordKnowledge` 却报「预览已失效」（无并发改动），原记录已落盘 | TS 在 `find` 后滤掉 invalid 行，Rust `effect.sources` 含全部行；更根本的是票据把「存活」写进摘要，记录自己的旧版本一失效摘要就变 | 票据改为与行状态无关：`describe()` 对**每一条**记录行判归属（`shared` / `claimed`），摘要用 `claimed` 全量行与其支撑的卡（`stable_remove`/`stable_keep`）算，`state` 不再进摘要；可退休集合 `lost` 仍只取存活行，`impact` 报数不变。TS 侧不再拼第二份快照：默认路径不 `find`，勾选路径只回传票据（`confirm.sources` 空 = 只比票据） |
+| 默认撤回：①随记 201 版、首 200 版已 invalid、第 201 版 active，TS 先 `find`（200 上限）并在「无 active」时提前 return，Rust 无界撤回从未被调用；②真故障（helper 文件无法启动）时 `find` 先抛，`RecordReleaser` 尚未登记，`waiting=0`，恢复后 `retry()` 返回 0 | 默认路径复用有界预览；登记发生在 find 之后 | `SettleRecordDeps` 去掉 `find`；默认路径直接 `deps.release(input, '记录已删除')`（`source.release_record` 无界、按记录身份），失败即进 `RecordReleaser` 待办；新增 `KnowledgeHostOptions.onReady`（每次 helper `ready` 都触发——起不来的进程不会留下 change 通知），`src/main/index.ts` 用它 `void settling.retry()`，与既有 `onChanged` 一起构成可执行的生产恢复路径 |
+
+勾选路径的「后置失败」仍按 B 既定语义：失败如实抛给用户（`记录已删除，但关联知识清理失败：<原因>`），不自动扩大范围；票据未变时同一确认可以在原记录消失后继续完成（本轮回归覆盖），票据过期则给「预览已失效，请重新确认」。
+
+### 回归（真实件）
+
+| 用例 | 覆盖 |
+| --- | --- |
+| `native/knowledge/tests/relations.rs` 新增 `a_stale_row_in_the_listed_purge_touches_nothing`、`listing_only_stale_rows_removes_no_card` | 逐行接口：混入错版本只处理有效子集，全陈旧时不删任何卡；被跳过行的来源、版本、卡片链接与关系全部不变 |
+| `native/knowledge/tests/relations.rs` 新增 `a_preview_survives_the_record_retiring_its_own_old_version`、`a_widened_record_still_refuses_the_older_ticket` | 同一记录旧版本失效后票据不变（两次 `impact` 同票）且凭旧票删卡成功；记录真的多出一版时旧票 `source_changed`，卡片与可读版本仍在 |
+| `src/main/knowledge/settle.integration.test.ts` 扩为 8 项（真 helper + 真 `NotesStore` + 真 `notes:remove` handler + 生产 collector） | 新增：201 版且前 200 版已失效、只剩第 201 版可读时，经 handler 一次撤完（预览页看不到那 201 行，行级状态靠直读 SQLite 断言）；「历史失效行 + 当前版本独占卡」的票据在记录删除后照常删卡；范围真的变大时旧票被拒且卡片保留。原「helper 起不来 → 记录已删、清理排队」用例改为由 helper 的 `ready` 触发补做（不再直接调 `retry()`），`rig.restart()` 先改指向再启动，与生产接线同序 |
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cd native/knowledge && cargo fmt -- --check` | 0 |
+| `cd native/knowledge && cargo test --locked` | 0，142 项全过（lib 18、cards_view 11、extract 15、ownership 8、process 11、profile 27、queue 22、relations 30） |
+| `cd native/knowledge && cargo clippy --locked --all-targets -- -D warnings` | 0 |
+| `node scripts/build-native.mjs` | 0（先重建 release，再跑根目录用例） |
+| release 助手 | 3,247,104 字节 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`（本轮有 Rust 改动，已重建） |
+| `pnpm exec vitest run src/main/knowledge src/main/notes-ipc.test.ts src/main/chat.test.ts src/main/ask-knowledge.integration.test.ts src/shared/knowledge.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 0，30 文件 / 264 项全过（含 `settle.integration` 8 项） |
+| `pnpm typecheck` | 0（node + web） |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0，280 文件通过 / 3 跳过，3989 项通过 / 8 跳过（100.25 s） |
+| `pnpm build` | 0（14.22 s） |
+| `git diff --check` / `git diff --check 526d550..HEAD` | 0 / 0 |
+
+`ask-knowledge.integration.test.ts` 的偶发（外部曾见一处用例收到 0 次模型请求）本轮尝试定位：桩每次响应后不再复用连接（`response.shouldKeepAlive = false` + `connection: close`），避免客户端把上一个桩留下的 keep-alive socket 用到复用端口的下一台桩上；改动后连跑 28 次全过，未复现，断言未放宽。
+
+### 实窗证据（第十六轮：隔离实例、合成库、本地模型桩、真实 release 助手）
+
+`E:/code/deepseek-harness/rea/typeless/.tmp/stage6b3-evidence/`（`report.md`、`logs/{app,stub,cdp}.log`、`shots/A-01…05`、`B-01…05`、`C-01…05`、`C4-01…05`、`requests/`、`scripts/`）。启动方式：包装 app 目录（`app/boot.js` 只 `require` 仓库 `out/main/index.js`，渲染页仍是仓库 `out/renderer/settings.html`，避免 `app.getAppPath()` 把 `data/` 写进仓库）＋`--user-data-dir=E:\CpanQianYi\Temp\yu-w6b3\userdata`＋`--remote-debugging-port=18893`＋只监听 `127.0.0.1:19093` 的 OpenAI 兼容桩＋`Input.dispatchMouseEvent` 真实点击；视口 1080×750。
+
+| 场景 | 观察 |
+| --- | --- |
+| A 记录含历史失效版本、勾选删卡 | 确认框原文「删除这条随记？…同时删除仅依赖这条记录的知识（1 条）…这些知识只有这一条来源，删除后无法再从记录追溯。」；`[data-notes-delete-impact]` 存在、`[data-notes-delete-impact-error]` 为空；勾选项点击后由 false 变 true；确认后无 alert、无 `[data-notes-notice]`（**没有「预览已失效」**）；卡片 `unknown card`、两条来源均 invalid（第一版 `旧版本`、第二版 `记录已清除`） |
+| B 默认删除 | 提示与勾选路径同文案；记录从列表消失、卡片保留且 `sourceIds` 仍指向失效来源、`invalid_reason=记录已删除` |
+| C 勾选后清理阶段失败 | 注入 purge 阶段写库失败 → 5.6 秒后出现「记录已删除，但关联知识清理失败：cannot start the purge transaction: database is locked」，记录已删、卡片与来源未清，与文案一致 |
+| C4 helper 完全不可启动 | 删除在票据校验阶段被整体拒绝，界面提示 `spawn UNKNOWN` 原始文本，记录**未删除**、卡片与来源未动（既有「先验证后落盘」顺序的真实表现，见未测与边界） |
+
+### 未测与边界
+
+- 实窗未覆盖：抽取流水线自动产卡（卡片经 `window.api.knowledge.saveCard` 手造）、`reading` 通道的共享来源、界面上的「预览已失效」路径（本轮只验到它不再误报）。
+- 实窗观察到的两条既有缺口（本轮未修改）：①IPC 拒绝文案仍带 Electron 前缀 `Error invoking remote method 'notes:remove': Error: `，中文正文正确但整串不是干净本地化文案；②helper 完全起不下来时 `notes:remove` 在 `verifyKnowledge` 阶段就抛 `spawn UNKNOWN`，记录**未被删除**，是既有「先验证后落盘」顺序的真实表现，不是本轮新行为。
+- 勾选路径的后置失败不自动重排（票据一旦过期就无法安全重放）；「原记录已消失仍可收尾」只对票据未变的确认成立。
+- `--features fixture` 本轮未跑（无夹具变更）；`settleOnDelete` 的并发用例仍经 helper `Mutex` 串行，证明的是登记与清尾，不是真并行写入。
+
+### 提交
+
+- 代码与回归：`0405186` `fix(knowledge): keep the delete ticket stable and release the record without a preview`
+  - `native/knowledge/src/purge.rs`（票据与状态解耦、逐行有效性、`card_rows` 先于退休）、`native/knowledge/tests/relations.rs`（4 项新回归）
+  - `src/main/knowledge/settle.ts`（默认路径不再 `find`、勾选只回传票据）、`src/main/knowledge/host.ts`（`onReady`）、`src/main/index.ts`（`onReady` → `settling.retry()`）
+  - `src/main/knowledge/settle.integration.test.ts`（8 项）、`src/main/ask-knowledge.integration.test.ts`（桩不再复用连接）
+- 本节由随后的 docs 提交记录。
