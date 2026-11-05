@@ -85,7 +85,7 @@ describe('compiled helper over the production host', () => {
       opened: true,
       fts5: true,
       trigram: true,
-      schema: { knowledge: 4, profile: 1 }
+      schema: { knowledge: 5, profile: 1 }
     })
     const card = await instance.saveCard({
       kind: 'concept',

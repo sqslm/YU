@@ -52,6 +52,8 @@ pub enum Code {
     ModelUnavailable,
     ChannelDisabled,
     Excluded,
+    SourceChanged,
+    InvalidOutput,
     Internal,
 }
 
@@ -72,6 +74,8 @@ impl Code {
             Code::ModelUnavailable => "model_unavailable",
             Code::ChannelDisabled => "channel_disabled",
             Code::Excluded => "excluded",
+            Code::SourceChanged => "source_changed",
+            Code::InvalidOutput => "invalid_output",
             Code::Internal => "internal",
         }
     }

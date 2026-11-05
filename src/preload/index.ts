@@ -76,7 +76,11 @@ const api: TypelessApi = {
     resumeHistory: id => ipcRenderer.invoke('knowledge:history-resume', id),
     cancelHistory: id => ipcRenderer.invoke('knowledge:history-cancel', id),
     historyStatus: id => ipcRenderer.invoke('knowledge:history-status', id),
-    latestHistory: () => ipcRenderer.invoke('knowledge:history-latest')
+    latestHistory: () => ipcRenderer.invoke('knowledge:history-latest'),
+    listSuggestions: query => ipcRenderer.invoke('knowledge:suggestion-list', query),
+    getSuggestion: id => ipcRenderer.invoke('knowledge:suggestion-get', id),
+    acceptSuggestion: id => ipcRenderer.invoke('knowledge:suggestion-accept', id),
+    rejectSuggestion: id => ipcRenderer.invoke('knowledge:suggestion-reject', id)
   },
   profile: {
     save: input => ipcRenderer.invoke('profile:save', input),

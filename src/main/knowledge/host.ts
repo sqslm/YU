@@ -32,6 +32,14 @@ import {
   type KnowledgeStatus,
   type CollectChannels,
   type ExclusionEntry,
+  type ExtractFailInput,
+  type AcceptedSuggestion,
+  type KnowledgeSuggestion,
+  type RejectedSuggestion,
+  type SuggestionPage,
+  type ExtractNext,
+  type ExtractOutcome,
+  type ExtractRunInput,
   type HistoryJob,
   type PublishInput,
   type PublishResult,
@@ -727,6 +735,43 @@ export class KnowledgeHost {
     text?: string
   ): Promise<{ source: unknown; matched: boolean; fingerprint: string | null; size: number | null }> {
     return this.call('source.read', { id, expectFingerprint, text })
+  }
+
+  /** Claims one runnable task, or reports when nothing is due yet. */
+  extractNext(): Promise<ExtractNext> {
+    return this.call<ExtractNext>('extract.next', {})
+  }
+
+  /**
+   * Runs one claimed batch. The helper asks this process for a model call while
+   * it is waiting, so the completion budget covers reading, prompting and the
+   * provider round trip alike.
+   */
+  extractRun(input: ExtractRunInput): Promise<ExtractOutcome> {
+    return this.call<ExtractOutcome>('extract.run', input, KNOWLEDGE_LIMITS.modelRequestMs)
+  }
+
+  extractFail(input: ExtractFailInput): Promise<{ groupId: string; state: string }> {
+    return this.call<{ groupId: string; state: string }>('extract.fail', input)
+  }
+
+  /** Proposals waiting for a person to accept or reject them. */
+  listSuggestions(
+    query: { state?: string; offset?: number; limit?: number } = {}
+  ): Promise<SuggestionPage> {
+    return this.call<SuggestionPage>('suggestion.list', query)
+  }
+
+  getSuggestion(id: string): Promise<KnowledgeSuggestion> {
+    return this.call<KnowledgeSuggestion>('suggestion.get', { id })
+  }
+
+  acceptSuggestion(id: string): Promise<AcceptedSuggestion> {
+    return this.call<AcceptedSuggestion>('suggestion.accept', { id })
+  }
+
+  rejectSuggestion(id: string): Promise<RejectedSuggestion> {
+    return this.call<RejectedSuggestion>('suggestion.reject', { id })
   }
 
   invalidateTask(target: TaskTarget, reason: string): Promise<TaskRefusal> {

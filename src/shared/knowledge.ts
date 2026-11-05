@@ -77,6 +77,7 @@ export interface KnowledgeCard {
   aliases: string[]
   sourceIds: string[]
   edited: boolean
+  revision: number
   createdAt: number
   updatedAt: number
 }
@@ -96,6 +97,7 @@ export interface KnowledgeCardSummary {
   sourceIds: string[]
   bodyChars: number
   edited: boolean
+  revision: number
   createdAt: number
   updatedAt: number
 }
@@ -259,6 +261,13 @@ export type KnowledgeMethod =
   | 'history.cancel'
   | 'history.status'
   | 'history.latest'
+  | 'extract.next'
+  | 'extract.run'
+  | 'extract.fail'
+  | 'suggestion.list'
+  | 'suggestion.get'
+  | 'suggestion.accept'
+  | 'suggestion.reject'
 
 export type KnowledgeErrorCode =
   | 'invalid_request'
@@ -275,6 +284,8 @@ export type KnowledgeErrorCode =
   | 'model_unavailable'
   | 'channel_disabled'
   | 'excluded'
+  | 'source_changed'
+  | 'invalid_output'
   | 'internal'
 
 /** Ids are opaque, but they are always short, ASCII and minted by the helper. */
@@ -306,7 +317,18 @@ export type CollectChannel = 'note' | 'chat' | 'reading'
  * `ready`. Phase 2 never marks a task extracted, so `ready` is the end state
  * this stage can reach.
  */
-export type QueueState = 'stabilizing' | 'ready' | 'needs_reread' | 'failed' | 'cancelled'
+/**
+ * `working` is a task an extraction batch holds right now; `completed` means the
+ * material was turned into cards (or the model saw nothing worth keeping).
+ */
+export type QueueState =
+  | 'stabilizing'
+  | 'ready'
+  | 'working'
+  | 'completed'
+  | 'needs_reread'
+  | 'failed'
+  | 'cancelled'
 
 export interface QueueItem {
   sourceId: string
@@ -393,6 +415,122 @@ export interface ExclusionEntry {
 export type HistoryState = 'running' | 'paused' | 'completed' | 'cancelled'
 
 /** Progress of one one-off history collection. */
+/** One source the main process must read back before a batch can run. */
+export interface ExtractSourceRef {
+  sourceId: string
+  version: string
+  fingerprint: string
+  kind: string
+  originRef: string
+  scope: string
+  title: string
+  size: number
+}
+
+/** The task `extract.next` claimed, or null when nothing is runnable. */
+export interface ExtractGroup {
+  groupId: string
+  channel: CollectChannel
+  title: string
+  scope: string
+  claim: string
+  sources: ExtractSourceRef[]
+}
+
+export interface ExtractNext {
+  enabled: boolean
+  paused: boolean
+  group: ExtractGroup | null
+  nextDueAt: number | null
+}
+
+/** Material the main process read out of its own stores, never the renderer. */
+export interface ExtractSourceInput {
+  sourceId: string
+  version: string
+  text: string
+}
+
+export interface ExtractRunInput {
+  groupId: string
+  claim: string
+  sources: ExtractSourceInput[]
+  profileId?: string | null
+  effort?: string
+}
+
+export interface ExtractFailInput {
+  groupId: string
+  claim: string
+  code: string
+  reason?: string | null
+}
+
+export interface ExtractOutcome {
+  groupId: string
+  state: 'completed' | 'ready' | 'failed' | 'needs_reread'
+  cards: { cardId: string; action: 'new' | 'merge' | 'reference' }[]
+  proposals: { targetCardId: string; action: string }[]
+  noKnowledge: boolean
+  reason: string
+  remaining: boolean
+  segments?: number
+}
+
+export type SuggestionState = 'open' | 'accepted' | 'rejected'
+export type SuggestionAction = 'reference' | 'merge' | 'propose'
+
+/** What a proposal would write, kept next to the card it targets. */
+export interface SuggestionDraft {
+  kind: CardKind
+  title: string
+  summary: string
+  body: string
+  topics: string[]
+  aliases: string[]
+  sources?: unknown
+  reason?: string
+}
+
+/**
+ * A change extraction did not dare to write on its own: the target card was
+ * edited by hand, two sources disagree, or a merge is merely plausible.
+ */
+export interface KnowledgeSuggestion {
+  id: string
+  kind: CardKind
+  targetCardId: string
+  targetRevision: number
+  action: SuggestionAction
+  draft: SuggestionDraft
+  reason: string
+  sourceIds: string[]
+  state: SuggestionState
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SuggestionPage {
+  items: KnowledgeSuggestion[]
+  total: number
+  offset: number
+  limit: number
+  hasMore: boolean
+  nextOffset: number | null
+}
+
+export interface AcceptedSuggestion {
+  id: string
+  targetCardId: string
+  revision: number
+  state: 'accepted'
+}
+
+export interface RejectedSuggestion {
+  id: string
+  state: 'rejected'
+}
+
 export interface HistoryJob {
   id: string
   scopes: { notes: boolean; chat: boolean }

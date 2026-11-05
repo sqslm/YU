@@ -6,6 +6,7 @@
 //! shared writer so frames never interleave.
 
 pub mod cards;
+pub mod extract;
 pub mod history;
 pub mod link;
 pub mod profile;
@@ -14,6 +15,7 @@ pub mod queue;
 pub mod service;
 pub mod sources;
 pub mod store;
+pub mod suggestions;
 pub mod util;
 
 use std::collections::HashMap;
@@ -129,7 +131,12 @@ pub fn run() -> i32 {
                         let worker_pending = pending.clone();
                         std::thread::spawn(move || {
                             util::enter_cancel(token.clone());
-                            let outcome = worker_service.dispatch(&request.method, request.params);
+                            let outcome = worker_service.dispatch(
+                                &request.method,
+                                request.params,
+                                &worker_link,
+                                &request.id,
+                            );
                             let answer = match &outcome {
                                 Ok(outcome) => protocol::result_frame(&request.id, &outcome.result),
                                 Err(error) => protocol::error_frame(&request.id, error),

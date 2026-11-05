@@ -15,6 +15,8 @@ import type { HistoryDriver } from './history'
 export interface KnowledgeWiring {
   collector: Pick<KnowledgeCollector, 'sync' | 'enabled'>
   history: Pick<HistoryDriver, 'resume'>
+  /** Woken only after the switch and the game state have been confirmed. */
+  engine?: { wake: () => void }
 }
 
 /**
@@ -27,4 +29,6 @@ export async function syncKnowledge(wiring: KnowledgeWiring, game: boolean): Pro
   await wiring.collector.sync({ game })
   if (!wiring.collector.enabled || game) return
   await wiring.history.resume().catch(() => undefined)
+  // Extraction looks for one runnable batch; Rust decides whether anything is due.
+  wiring.engine?.wake()
 }

@@ -13,7 +13,7 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 4;
+pub const KNOWLEDGE_SCHEMA: i64 = 5;
 pub const PROFILE_SCHEMA: i64 = 1;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
@@ -82,6 +82,94 @@ CREATE TABLE history_jobs (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+"#;
+
+/// Phase 3 adds extraction: a task can be claimed and worked, cards remember the
+/// fingerprint of their content and their revision, processed segments are
+/// recorded per source version, and a conflict becomes a suggestion instead of a
+/// silent overwrite. `queue_groups.state` needs two more values, so the table is
+/// rebuilt — children first, so the drop never cascades.
+const EXTRACT_SQL: &str = r#"
+CREATE TABLE queue_groups_v5 (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL CHECK (channel IN ('note','chat','reading')),
+  group_key TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  scope TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL CHECK (state IN ('stabilizing','ready','working','completed','needs_reread','failed','cancelled')),
+  stable_at INTEGER NOT NULL,
+  reason TEXT,
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  priority INTEGER NOT NULL DEFAULT 0,
+  claim TEXT,
+  thread_key TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (channel, group_key)
+);
+INSERT INTO queue_groups_v5 (id, channel, group_key, title, scope, state, stable_at, reason, error, attempts, thread_key, created_at, updated_at)
+  SELECT id, channel, group_key, title, scope, state, stable_at, reason, error, attempts, thread_key, created_at, updated_at FROM queue_groups;
+
+CREATE TABLE queue_items_v5 (
+  group_id TEXT NOT NULL REFERENCES queue_groups_v5(id) ON DELETE CASCADE,
+  ordinal INTEGER NOT NULL,
+  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (group_id, ordinal)
+);
+INSERT INTO queue_items_v5 (group_id, ordinal, source_id, created_at) SELECT group_id, ordinal, source_id, created_at FROM queue_items;
+DROP TABLE queue_items;
+DROP TABLE queue_groups;
+ALTER TABLE queue_groups_v5 RENAME TO queue_groups;
+ALTER TABLE queue_items_v5 RENAME TO queue_items;
+CREATE INDEX queue_groups_state ON queue_groups (state, stable_at);
+CREATE INDEX queue_groups_thread ON queue_groups (thread_key);
+CREATE INDEX queue_items_source ON queue_items (source_id);
+
+ALTER TABLE cards ADD COLUMN fingerprint TEXT;
+ALTER TABLE cards ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+UPDATE cards SET fingerprint = '' WHERE fingerprint IS NULL;
+
+CREATE TABLE card_history (
+  id TEXT PRIMARY KEY,
+  card_id TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  body TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX card_history_card ON card_history (card_id, revision);
+
+CREATE TABLE extract_progress (
+  source_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  segment INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('done')),
+  group_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (source_id, version, segment)
+);
+
+CREATE TABLE suggestions (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  target_card_id TEXT,
+  target_revision INTEGER,
+  action TEXT NOT NULL CHECK (action IN ('reference','merge','propose')),
+  draft TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  source_ids TEXT NOT NULL DEFAULT '[]',
+  fingerprint TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL CHECK (state IN ('open','accepted','rejected')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX suggestions_state ON suggestions (state, created_at DESC);
+CREATE INDEX suggestions_target ON suggestions (target_card_id, fingerprint, state);
 "#;
 
 pub const CARD_KINDS: [&str; 7] = [
@@ -207,7 +295,13 @@ impl Store {
         let knowledge = open_db(
             &knowledge_path,
             KNOWLEDGE_SCHEMA,
-            &[KNOWLEDGE_SQL, QUEUE_SQL, THREAD_SQL, HISTORY_BOUND_SQL],
+            &[
+                KNOWLEDGE_SQL,
+                QUEUE_SQL,
+                THREAD_SQL,
+                HISTORY_BOUND_SQL,
+                EXTRACT_SQL,
+            ],
         )?;
         let profile = open_db(&profile_path, PROFILE_SCHEMA, &[PROFILE_SQL])?;
         Ok(Store {

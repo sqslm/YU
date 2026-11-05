@@ -36,7 +36,14 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
   memory: { enabled: false, autoLearn: true, profileId: null, effort: 'high' },
   // Collection starts off: no helper, no database and no queue until the user
   // turns it on. The channels are pre-allowed but inert while the switch is off.
-  knowledge: { enabled: false, notes: true, chat: true, reading: true },
+  knowledge: {
+    enabled: false,
+    notes: true,
+    chat: true,
+    reading: true,
+    profileId: null,
+    effort: 'high',
+  },
   hotkeys: {
     enabled: true,
     // Mirrors the vendor defaults discovered on disk so muscle memory carries

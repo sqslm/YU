@@ -38,6 +38,7 @@ import { UiaHost } from './uia/host'
 import { KnowledgeHost } from './knowledge/host'
 import { createKnowledgeCompleter } from './knowledge/model'
 import { KnowledgeCollector } from './knowledge/collector'
+import { ExtractEngine } from './knowledge/engine'
 import { HistoryDriver } from './knowledge/history'
 import { createHistoryPages } from './knowledge/pages'
 import { syncKnowledge } from './knowledge/session'
@@ -228,10 +229,21 @@ const knowledge = new KnowledgeHost({
  * only asks; every decision about whether the text still counts stays in Rust.
  */
 const knowledgeRecovery = createSourceRecovery({ notes: () => notes, chats: () => chats.store })
+// The extraction driver is created before the collector so a freshly queued
+// source can wake it; neither one spawns the helper by itself.
+const extractEngine = new ExtractEngine({
+  host: () => knowledge,
+  readBody: (channel, originRef) => knowledgeRecovery(channel, originRef),
+  settings: () => store.get(),
+  allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+  log: line => log(line)
+})
+
 const knowledgeCollector = new KnowledgeCollector({
   readBody: (channel, originRef) => knowledgeRecovery(channel, originRef),
   settings: () => store.get(),
   host: () => knowledge,
+  onQueued: () => extractEngine.wake(),
   log: line => log(line)
 })
 /**
@@ -254,7 +266,7 @@ const historyDriver = new HistoryDriver({
 })
 
 /** The switch/game facts and the scan they authorize, in one call. */
-const knowledgeWiring = { collector: knowledgeCollector, history: historyDriver }
+const knowledgeWiring = { collector: knowledgeCollector, history: historyDriver, engine: extractEngine }
 
 /** A finished chat turn: a reading summary never also becomes a plain task. */
 function collectChatTurn(turn: import('./knowledge/collector').ChatTurnDone): void {
@@ -1558,6 +1570,13 @@ function registerIpc(): void {
   handle('knowledge:history-cancel', (event, id: string) => { knowledgeOwner(event); return historyDriver.control(knowledgeId(id, '任务 ID'), 'cancel') })
   handle('knowledge:history-status', (event, id: string) => { knowledgeOwner(event); return knowledge.historyStatus(knowledgeId(id, '任务 ID')) })
   handle('knowledge:history-latest', event => { knowledgeOwner(event); return knowledge.latestHistory() })
+  handle('knowledge:suggestion-list', (event, query: { state?: string; offset?: number; limit?: number } = {}) => {
+    knowledgeOwner(event)
+    return knowledge.listSuggestions(query)
+  })
+  handle('knowledge:suggestion-get', (event, id: unknown) => { knowledgeOwner(event); return knowledge.getSuggestion(knowledgeId(id, '建议 ID')) })
+  handle('knowledge:suggestion-accept', (event, id: unknown) => { knowledgeOwner(event); return knowledge.acceptSuggestion(knowledgeId(id, '建议 ID')) })
+  handle('knowledge:suggestion-reject', (event, id: unknown) => { knowledgeOwner(event); return knowledge.rejectSuggestion(knowledgeId(id, '建议 ID')) })
   let selectedBackup: string | null = null, backupWorking = false
   const roots = (): BackupRoots => ({ user: app.getPath('userData'), notes: store.get().notesDir || app.getPath('userData'), chat: chatRoot })
   const assertBackupIdle = (): void => {
@@ -3176,6 +3195,7 @@ if (!gotLock) {
     wakeWord.stop()
     wakeWord.cancelLearning()
     memory.shutdown()
+    extractEngine.stop()
     void knowledge.shutdown()
     entityStore.close()
     if (hubRetireTimer) clearTimeout(hubRetireTimer)

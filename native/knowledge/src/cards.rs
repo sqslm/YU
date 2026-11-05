@@ -13,7 +13,7 @@ use crate::protocol::{
 use crate::store::CARD_KINDS;
 use crate::util::{check_chars, new_id, now_ms, page, require_text};
 
-const CARD_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.body, c.topics, c.aliases, c.edited, c.created_at, c.updated_at,
+const CARD_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.body, c.topics, c.aliases, c.edited, c.created_at, c.updated_at, c.revision,
        (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids
   FROM cards c";
 
@@ -22,7 +22,8 @@ const CARD_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.body, c.to
 /// tells a caller whether there is a body worth fetching.
 const CARD_LIST_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.topics, c.aliases, c.edited, c.created_at, c.updated_at,
        length(c.body) AS body_chars,
-       (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids
+       (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids,
+       c.revision
   FROM cards c";
 
 #[derive(Serialize, Debug, Clone)]
@@ -37,6 +38,8 @@ pub struct Card {
     pub aliases: Vec<String>,
     pub source_ids: Vec<String>,
     pub edited: bool,
+    /// Bumped by every write, so a proposal can say which version it applies to.
+    pub revision: i64,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -54,6 +57,8 @@ pub struct CardSummary {
     pub source_ids: Vec<String>,
     pub body_chars: i64,
     pub edited: bool,
+    /// Bumped by every write, so a proposal can say which version it applies to.
+    pub revision: i64,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -143,7 +148,7 @@ fn decode_list(text: &str) -> Vec<String> {
 fn map(row: &Row<'_>) -> rusqlite::Result<Card> {
     let topics: String = row.get(5)?;
     let aliases: String = row.get(6)?;
-    let source_ids: Option<String> = row.get(10)?;
+    let source_ids: Option<String> = row.get(11)?;
     let mut source_ids: Vec<String> = source_ids
         .unwrap_or_default()
         .split(',')
@@ -163,6 +168,7 @@ fn map(row: &Row<'_>) -> rusqlite::Result<Card> {
         edited: row.get::<_, i64>(7)? != 0,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+        revision: row.get(10)?,
     })
 }
 
@@ -189,6 +195,7 @@ fn map_summary(row: &Row<'_>) -> rusqlite::Result<CardSummary> {
         updated_at: row.get(8)?,
         body_chars: row.get(9)?,
         source_ids,
+        revision: row.get(11)?,
     })
 }
 
@@ -242,6 +249,31 @@ fn index(transaction: &Transaction<'_>, card: &Card) -> ApiResult<()> {
         )
         .map_err(sqlite_error)?;
     Ok(())
+}
+
+/// Rewrites the search row of one card from its stored columns. Extraction
+/// merges a card without holding a `Card` value, so the row is rebuilt by
+/// re-reading it instead of duplicating the insert statement.
+pub(crate) fn reindex(connection: &Connection, card_id: &str) -> ApiResult<()> {
+    connection
+        .execute("DELETE FROM cards_fts WHERE card_id = ?1", [card_id])
+        .map_err(sqlite_error)?;
+    connection
+        .execute(
+            "INSERT INTO cards_fts (card_id, title, summary, body, topics, aliases)
+             SELECT id, title, summary, body, topics, aliases FROM cards WHERE id = ?1",
+            [card_id],
+        )
+        .map_err(sqlite_error)?;
+    Ok(())
+}
+
+/// Content identity of a card body. Whitespace is normalised so the same
+/// conclusion written with other line breaks is still one card; code, paths and
+/// version numbers are left untouched.
+pub(crate) fn fingerprint_of(body: &str) -> String {
+    let normalized = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    crate::util::sha256_hex(&normalized)
 }
 
 /// Replaces the card's source links, refusing the whole write when one of the
@@ -304,8 +336,8 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Card> 
         })?;
     transaction
         .execute(
-            "INSERT INTO cards (id, kind, title, summary, body, topics, aliases, edited, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+            "INSERT INTO cards (id, kind, title, summary, body, topics, aliases, edited, fingerprint, revision, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, ?10, ?10)",
             params![
                 id,
                 params.kind,
@@ -315,6 +347,7 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Card> 
                 topics,
                 aliases,
                 i64::from(params.edited),
+                fingerprint_of(&params.body),
                 now
             ],
         )
@@ -378,8 +411,19 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Ca
         })?;
     transaction
         .execute(
-            "UPDATE cards SET title = ?2, summary = ?3, body = ?4, topics = ?5, aliases = ?6, edited = ?7, updated_at = ?8 WHERE id = ?1",
-            params![params.id, title, summary, body, topics, aliases, i64::from(edited), now],
+            "UPDATE cards SET title = ?2, summary = ?3, body = ?4, topics = ?5, aliases = ?6, edited = ?7,
+             fingerprint = ?9, revision = revision + 1, updated_at = ?8 WHERE id = ?1",
+            params![
+                params.id,
+                title,
+                summary,
+                body,
+                topics,
+                aliases,
+                i64::from(edited),
+                now,
+                fingerprint_of(&body)
+            ],
         )
         .map_err(sqlite_error)?;
     if let Some(source_ids) = params.source_ids {

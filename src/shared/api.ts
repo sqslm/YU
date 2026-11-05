@@ -126,6 +126,10 @@ export interface TypelessApi {
     cancelHistory(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
     historyStatus(id: string): Promise<{ job: import('./knowledge').HistoryJob }>
     latestHistory(): Promise<{ job: import('./knowledge').HistoryJob | null }>
+    listSuggestions(query?: { state?: string; offset?: number; limit?: number }): Promise<import('./knowledge').SuggestionPage>
+    getSuggestion(id: string): Promise<import('./knowledge').KnowledgeSuggestion>
+    acceptSuggestion(id: string): Promise<import('./knowledge').AcceptedSuggestion>
+    rejectSuggestion(id: string): Promise<import('./knowledge').RejectedSuggestion>
   }
   profile: {
     save(input: import('./knowledge').SaveProfileInput): Promise<import('./knowledge').ProfileItem>

@@ -12,4 +12,8 @@ export interface KnowledgeSettings {
   notes: boolean
   chat: boolean
   reading: boolean
+  /** Profile used for extraction; `null` means the first enabled provider. */
+  profileId?: string | null
+  /** Reasoning effort for extraction. Knowledge synthesis thinks by default. */
+  effort?: string
 }

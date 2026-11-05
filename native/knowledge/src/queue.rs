@@ -14,9 +14,11 @@ use crate::protocol::{
 use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms, require_text, sha256_hex};
 
 pub const CHANNELS: [&str; 3] = ["note", "chat", "reading"];
-pub const STATES: [&str; 5] = [
+pub const STATES: [&str; 7] = [
     "stabilizing",
     "ready",
+    "working",
+    "completed",
     "needs_reread",
     "failed",
     "cancelled",

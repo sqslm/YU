@@ -126,6 +126,12 @@ export interface CollectorDeps {
    * body is still in memory, so recovery never claims text it cannot produce.
    */
   readBody?: (channel: 'note' | 'chat' | 'reading', originRef: string) => RecoveredBody
+  /**
+   * Called after a source is queued so the extraction driver can look for work.
+   * Collection and extraction stay separate: this file decides what to publish,
+   * Rust decides what may be extracted and when.
+   */
+  onQueued?: () => void
   log?: (line: string) => void
   now?: () => number
 }
@@ -460,6 +466,7 @@ export class KnowledgeCollector {
       const result = await host.publishSource(input)
       const key = this.keys.has(input.groupKey) ? this.keys.get(input.groupKey) : undefined
       if (key) this.keys.set(result.groupId, key)
+      if (!result.duplicate) this.deps.onQueued?.()
       return result
     } catch (error) {
       // A refused source is not a crash: the channel may be off, the group

@@ -103,7 +103,13 @@ impl Service {
             .unwrap_or(false)
     }
 
-    pub fn dispatch(&self, method: &str, params: Value) -> ApiResult<Outcome> {
+    pub fn dispatch(
+        &self,
+        method: &str,
+        params: Value,
+        link: &Arc<crate::link::Link>,
+        parent: &str,
+    ) -> ApiResult<Outcome> {
         ensure_not_cancelled()?;
         match method {
             "status" => Ok(Outcome {
@@ -414,6 +420,65 @@ impl Service {
                     scope: None,
                     shutdown: false,
                 })
+            }
+            "extract.next" => {
+                let store = self.store()?;
+                Ok(Outcome {
+                    result: crate::extract::next(&store)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "extract.run" => {
+                let store = self.store()?;
+                let params = decode::<crate::extract::RunParams>(params)?;
+                Ok(changed(
+                    crate::extract::run(&store, link, parent, params)?,
+                    "cards",
+                ))
+            }
+            "extract.fail" => {
+                let store = self.store()?;
+                let params = decode::<crate::extract::FailParams>(params)?;
+                Ok(changed(crate::extract::fail(&store, params)?, "queue"))
+            }
+            "suggestion.list" => {
+                let store = self.store()?;
+                let params = decode::<crate::suggestions::ListParams>(params)?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                Ok(Outcome {
+                    result: crate::suggestions::list(&connection, params)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "suggestion.get" => {
+                let store = self.store()?;
+                let params = decode::<crate::suggestions::IdParams>(params)?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                Ok(Outcome {
+                    result: crate::suggestions::get(&connection, &params.id)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "suggestion.accept" => {
+                let store = self.store()?;
+                let params = decode::<crate::suggestions::IdParams>(params)?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                Ok(changed(
+                    crate::suggestions::accept(&mut connection, &params.id)?,
+                    "cards",
+                ))
+            }
+            "suggestion.reject" => {
+                let store = self.store()?;
+                let params = decode::<crate::suggestions::IdParams>(params)?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                Ok(changed(
+                    crate::suggestions::reject(&mut connection, &params.id)?,
+                    "cards",
+                ))
             }
             "history.latest" => {
                 let store = self.store()?;
