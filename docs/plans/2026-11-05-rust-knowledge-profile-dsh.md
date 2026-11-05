@@ -2215,5 +2215,76 @@ Rust 本轮未改，`native/bin/yu-knowledge.exe` 复用 `66731bd317674ff537c954
 ### 提交
 
 - 代码：`2ca63d7` `fix(knowledge): keep pending cleanups in step with the main process`（11 文件，同上）
-- 计划：`__DOCS_SHA__` `docs(plan): record the cleanup snapshot sync and the round-19 window evidence`
+- 计划：`62f0e18` `docs(plan): record the cleanup snapshot sync and the round-19 window evidence`
 - 未 push / merge / rebase / reset。
+
+## 阶段 6 C1 交付（2026-11-06 第二十轮）：知识库浏览面
+
+### 6 B 的外部验收与本轮验证分开记
+
+- 6 B 已由外部复核通过（`2ca63d7` / `62f0e18`，`git diff --check 41713b7..HEAD` 0，独立 7 文件 67 项通过，release 助手 3,247,104 字节 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`）。本节以下数字全部是本轮 C1 实测，不沿用 6 B 任何结果。
+- 基线：master HEAD `62f0e18`，工作区干净。
+
+### 缺口（改版前的默认知识库）
+
+- `KnowledgePage.tsx` 是「固定列表 + 常驻详情分栏」：宽屏 320px 列表永远占左侧、详情常驻右侧，窄屏主从切换；卡片用 `ListItemButton` 单行，标题与摘要被压成一行，主题不可见。
+- 默认选中：`focusCardId` 只把 `selectedId` 指向某张卡；列表一打开就有一张被选中，页面没有「浏览」这一档。
+- 图谱只能整页切换（`view: 'cards' | 'graph'`），且没有预览；页面首屏看不到知识网络。
+- 卡片详情只能在分栏里看，不能全宽读；没有对话框形态，关闭后也没有焦点归还的语义。
+
+### 实现（8 个文件，1 个新建）
+
+| 文件 | 变更 |
+| --- | --- |
+| `src/renderer/src/settings/pages/KnowledgePage.tsx` | 重写为单列浏览面：`maxWidth: 1180` 容器内页标题 + 总数 + 搜索/主题/类型/收藏/清除；「知识网络」预览区块（标题 + `data-knowledge-graph-expand`）与「知识卡片」网格（`data-knowledge-grid`、`data-knowledge-columns`）；筛选或搜索时卡片区在前，否则预览在前；卡片整卡可点开详情对话框（`data-knowledge-detail-dialog`），窄于 600px 时 `fullScreen`；`focusCardId` 直接开对话框（网格里没有也开）；打开时记住 scrollTop 与触发元素，关闭后恢复滚动并把焦点还给该卡 |
+| `src/renderer/src/settings/pages/KnowledgeGraphPreview.tsx`（新） | 预览用真实 `knowledge.graph`（`limit: GRAPH_PREVIEW_NODES = 40`），固定高度 260px，禁用缩放/平移手势让滚轮交给页面，`onNodeClick` 开卡，`onEngineStop` 首次自适应；有键盘可达的节点列表入口（最多 8 个按钮）与计数/预算文案 |
+| `src/renderer/src/settings/pages/KnowledgeGraphPage.tsx` | 调色板 `kindColor` 移到 `knowledgeView.ts` 共用；新增 `initialTopic` / `initialQuery`，完整图谱沿用浏览页的主题与搜索范围 |
+| `src/renderer/src/settings/pages/knowledgeView.ts` | 新增 `kindColor`、`GRID_THREE_WIDTH = 900` / `GRID_TWO_WIDTH = 600` / `gridColumns()`、`GRAPH_PREVIEW_NODES` / `GRAPH_PREVIEW_HEIGHT` / `CARD_TOPIC_LIMIT` / `cardTopics()` |
+| `src/renderer/src/settings/sections/KnowledgeCardDetail.tsx` | 新增 `closeLabel`（对话框里箭头常显并标为「关闭」，`data-knowledge-detail-close`）；一个组件同时服务分栏与对话框 |
+| `src/renderer/src/locales/{zh-CN,en-US}.json` | `knowledge.openGraph` / `knowledge.cardsTitle` / `knowledge.cardsTotal`、`common.close` |
+| `src/renderer/src/settings/pages/knowledgeView.test.ts` | 新增网格列分档（3/2/1 与 940 窗口 690px 仍 2 列）与卡面主题截断用例，文件 54 项 |
+
+- 图谱预览按需加载：`IntersectionObserver`（`rootMargin` 600px）命中后才挂 `lazy` 的预览 chunk，首屏不需要图谱时不下载 `react-force-graph`；构建产物中 `KnowledgeGraphPreview-*.js` 独立成 chunk 可证。
+- 只挂一份画布：浏览页与完整图谱互斥渲染，完整图谱仍是原来的 `ForceGraph2D`，预览卸载后其 canvas 一并释放。
+- 未新增数据库、后台模型、自动重跑；卡片管理动作（编辑/收藏/来源定位/关系/修订/建议/合并/导出）全部走原组件与原 IPC。
+
+### 实窗取证（隔离 Electron，合成库，零付费模型调用）
+
+三轮取证都在隔离环境：临时根 + junction 借用仓库 `node_modules`/`native`/`resources`，`--user-data-dir` 指向临时根，本地桩 `127.0.0.1:19206`/`19226`（`logs/*/requests` 为空可证没有外连），交互全部是 CDP `Input.dispatchMouseEvent` / `dispatchKeyEvent` 真实输入。
+
+| 轮次 | 构建 | 结论 |
+| --- | --- | --- |
+| 主流程 9 项（`.tmp/c1-evidence/report.md`） | 03:54 | 8 项通过：1080×750 真实窗口 `page.clientWidth 844`、`data-knowledge-columns="2"` 与 `gridTemplateColumns="400px 400px"` 一致、溢出 0、首卡标题 y=587 可见、预览计数「匹配 27 / 总数 27」；940×690（Emulation）page 704、2 列 330px、网格 672 铺满、卡片宽 330/标题 16px/摘要 14px、搜索命中 20、无匹配可清除；列数阶梯 1300→3、1080→2、820→1 且无溢出；深/浅主题、详情对话框 900×645、窄窗 760×700 全屏；Esc 与关闭按钮均回焦原卡；筛选「合成」+加载更多后 `{scrollTop 1934, 值「合成」, cards 26}` 不变；图谱 canvas 节点点击与节点列表两条路径都开对卡；完整图谱计数「匹配 25 / 总数 25」与 `graph({limit:200})` 的 26 节点 8 边一致；已删卡给出 `KnowledgeError: unknown card: …` + 重试；空库显示「知识库还是空的」、无匹配显示「没有符合条件的卡片」并可清除。第 9 项「图谱往返」失败：返回后 scrollTop 1422→0 |
+| r7（`.tmp/c1-evidence/report-r7.md`） | 03:54 + 04:14 修复 | 定位两个原因：返回浏览页时取数 effect 带 `view` 依赖重取第 0 页（26→20 张、maxScroll 2124→1660，scrollTop 被夹到 1660）；恢复只写一次且早于布局补齐（1644→1601，−43） |
+| r8（`.tmp/c1-evidence/report-r8.md`） | 04:22 | 取数依赖已修（卡片 26 保持、无重复、返回后「加载更多」仍可追加），但恢复仍早于图谱区预览 chunk 挂载（`scrollHeight` 差 59px），2107→2065、1644→1601 |
+| r9（`.tmp/c1-evidence/report-r9.md`） | 04:28 | 恢复改为按帧重试（最多 20 帧，写住即停）：R1 `2107→2107`、R1b `1644→1644`、R2 `2107→2107`，20 条断言全过（`FAILED_ASSERTIONS []`），0–1600ms 采样无二次漂移 |
+
+- 构建产物：`out/renderer/assets/KnowledgePage-*.js`、`KnowledgeGraphPage-*.js`、`KnowledgeGraphPreview-*.js`、`react-force-graph-2d-*.js`。
+- 证据路径（均 gitignored）：`.tmp/c1-evidence/{report.md,report-r7.md,report-r8.md,report-r9.md,results/,shots/,logs/,scripts/}`。
+
+### 验证命令与退出码
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run src/renderer/src/settings/pages/knowledgeView.test.ts src/main/knowledge/graph-budget.test.ts src/main/ask-knowledge.integration.test.ts src/renderer/src/settings` | 40 文件 / 530 项通过，exit 0 |
+| `pnpm exec vitest run src/main/knowledge src/preload/index.test.ts src/main/ipc-trust.test.ts` | 29 文件 / 297 项通过，exit 0 |
+| `pnpm exec vitest run src/renderer/src/settings src/main/chat.test.ts src/main/notes-ipc.test.ts src/main/chat-delete.test.ts` | 41 文件 / 561 项通过，exit 0 |
+| `pnpm typecheck` | exit 0（node + web） |
+| `pnpm build` | exit 0（末次 14.58s，04:28:41 产物） |
+| `git diff --check` | exit 0 |
+| `git diff --check 62f0e18..HEAD` | exit 0（见提交后复核） |
+
+### 未测与边界
+
+- 实窗只覆盖 1080×750 与 Emulation 的 940×690/1300/1200/1000/900/860/820 宽度；dpr≠1、>100 张多页、拖拽滚动条、键盘翻页、图谱内缩放后返回、第 3 次及以后往返、en-US 文案定位均未命中。
+- 图谱预览的节点点击用像素聚类定位，一次命中；节点重叠时的命中率未做统计。
+- 删除卡片在取证里用 `window.api.knowledge.deleteCard` 触发（未点详情里的删除按钮，那条路径 6 B 已覆盖）。
+- C2（卡片联动）与 6 B 见过的既有缺口（IPC 拒绝文案带 Electron 前缀、helper 完全起不来时 `notes:remove` 在预检阶段抛 `spawn UNKNOWN`）本轮未动，按外部安排另行处理。
+- 阶段 6 全量测试门槛仍按总计划在收尾时统一跑，本轮只跑与改动直接相关的集合。
+
+### 提交
+
+- 代码：`d7cdded` `feat(knowledge): browse cards in one column with a graph preview and a detail dialog`
+- 计划：本文件所在的 `docs(plan)` 提交。
+- 未 push / merge / rebase / reset。
+
