@@ -42,12 +42,36 @@ function host(dir: string): KnowledgeHost {
   return instance
 }
 
+const stores: ChatStore[] = []
+
+/** A chat store the suite closes before the temporary roots are removed. */
+function chatsAt(path: string): ChatStore {
+  const store = new ChatStore(path)
+  stores.push(store)
+  return store
+}
+
 afterEach(async () => {
   for (const instance of instances.splice(0)) await instance.stop()
+  // Windows keeps a database file locked by a live connection, so the store has to
+  // go before the root can be removed.
+  for (const store of stores.splice(0)) {
+    try {
+      store.close()
+    } catch {
+      // already closed
+    }
+  }
 })
 
 afterAll(() => {
-  for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true })
+  for (const dir of roots.splice(0)) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+    } catch {
+      // a leftover root is reported by the caller, never hidden
+    }
+  }
 })
 
 describe('history scan through the real stores', () => {
@@ -62,7 +86,7 @@ describe('history scan through the real stores', () => {
     const second = await notes.createText({ text: '第二条历史笔记' })
     await notes.createText({ text: '   ' })
 
-    const chats = new ChatStore(join(dir, 'chats.db'))
+    const chats = chatsAt(join(dir, 'chats.db'))
     const kept = chats.create(null), temporary = chats.create(null), unfinished = chats.create(null)
     const answered = chats.begin(kept.id, '历史问题')
     chats.finish(answered.answerId, '历史回答', 'done')
@@ -96,12 +120,11 @@ describe('history scan through the real stores', () => {
     // The temporary thread and the unfinished answer never became sources.
     expect(origins.some(origin => origin.startsWith(temporary.id))).toBe(false)
     expect(origins.some(origin => origin.startsWith(unfinished.id))).toBe(false)
-    chats.close()
   })
 
   it('walks a long conversation in pages without skipping or repeating a turn', async () => {
     const dir = root()
-    const chats = new ChatStore(join(dir, 'chats.db'))
+    const chats = chatsAt(join(dir, 'chats.db'))
     const thread = chats.create(null)
     const ids: string[] = []
     for (let index = 0; index < 25; index += 1) {
@@ -121,7 +144,6 @@ describe('history scan through the real stores', () => {
     }
     expect(seen).toEqual(ids)
     expect(new Set(seen).size).toBe(25)
-    chats.close()
   })
 
   it('pages notes inside a bound that an insertion during the scan cannot move', async () => {
@@ -168,7 +190,7 @@ describe('history scan through the real stores', () => {
   it('keeps the first turn of a thread longer than the old message window', () => {
     const dir = mkdtempSync(join(tmpdir(), 'yu-knowledge-scan-'))
     roots.push(dir)
-    const chats = new ChatStore(join(dir, 'chats.db'))
+    const chats = chatsAt(join(dir, 'chats.db'))
     const thread = chats.create(null)
     // 5 001 turns is 10 002 messages: more than the 10 000-message window the
     // reader used to take, which silently dropped the oldest questions.
@@ -198,6 +220,5 @@ describe('history scan through the real stores', () => {
     expect(seen[0]).toBe('问题0')
     expect(seen[5000]).toBe('问题5000')
     expect(new Set(seen).size).toBe(5001)
-    chats.close()
   }, 60_000)
 })
