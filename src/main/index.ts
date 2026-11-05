@@ -329,6 +329,30 @@ const knowledgeTools: KnowledgeTools = {
   get(id) {
     return knowledge.getCard(id)
   },
+  async reading(material) {
+    // The page this run already read becomes a reading source through the same
+    // projection a normal summary uses; the text is the one in hand, never re-read.
+    knowledgeCollector.readingFinished({
+      threadId: 'workflow',
+      scope: '工作流',
+      request: material.title,
+      materials: [material as import('./knowledge/collector').ReadingMaterial],
+      answer: (material.text ?? '').slice(0, 2000),
+      sources: [{ title: material.title, url: material.url }],
+      at: Date.now()
+    })
+    const found = await knowledge.findSources({ channel: 'reading', originRef: material.origin })
+    const source = found.sources[0]
+    if (!source) return { queued: 0, reason: '这条读取还没有进入知识库' }
+    return extractSourceNow(source.id, {
+      host: () => knowledge,
+      enabled: () => knowledgeCollector.enabled,
+      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+      resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
+      wake: () => extractEngine.wake(),
+      log: line => log(line)
+    })
+  },
   async extractFromNote(noteId) {
     // Reading the note back through its own store is the only way in: the tool
     // never accepts a body handed to it from outside.
@@ -352,17 +376,27 @@ const knowledgeTools: KnowledgeTools = {
  * itself is deleted. It throws: nothing has been deleted when it does, so the
  * caller keeps both sides intact and can retry with the real reason.
  */
-async function purgeRecordKnowledge(input: FindSourceInput): Promise<void> {
-  if (!knowledgeCollector.enabled) return
+async function purgeRecordKnowledge(input: FindSourceInput, identity: import('@shared/knowledge').SourceIdentity, options: { cards?: boolean; ticket?: string } = {}): Promise<void> {
+  // A switched-off loop must not block the invalidation of knowledge that already
+  // exists; with no database there is nothing to settle and no helper to wake.
+  if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
   const found = await knowledge.findSources(input)
   const sources = found.sources.filter(source => source.state !== 'invalid').map(source => ({ id: source.id, version: source.version }))
-  // Nothing was published for this record: there is no knowledge to remove.
+  // Nothing was published for this record: there is no knowledge to settle.
   if (!sources.length) return
-  const result = await knowledge.purgeCards({ sources, cards: true })
-  log(`[knowledge] 删除记录时移除 ${result.removed.length} 张卡片，保留 ${result.kept.length} 张，跳过 ${result.skipped.length} 个已变更来源`)
+  // The helper re-checks these versions and this ticket inside its write
+  // transaction, so a preview that no longer holds refuses instead of widening.
+  const result = await knowledge.purgeCards({
+    record: identity,
+    confirm: { sources, ticket: options.ticket ?? '' },
+    cards: Boolean(options.cards)
+  })
+  log(`[knowledge] 记录删除后：移除 ${result.removed.length} 张卡片，保留 ${result.kept.length} 张，跳过 ${result.skipped.length} 个已变更来源`)
 }
 /** Characters of a card body handed to a continued discussion. */
 const MAX_CARD_CONTEXT = 2000
+/** Cards carried into a conversation that was opened from them, before it is sent. */
+const pendingSeeds = new Map<string, import('@shared/workspace').LocalRecord[]>()
 
 /** The switch/game facts and the scan they authorize, in one call. */
 const knowledgeWiring = { collector: knowledgeCollector, history: historyDriver, engine: extractEngine }
@@ -1819,15 +1853,6 @@ function registerIpc(): void {
     const found = await knowledge.findSources({ channel: 'note', originRef: noteId })
     return found.sources[0]?.id ?? null
   }
-  /** Every source one record produced, for the delete preview. */
-  const sourcesFor = async (target: SourceRef): Promise<KnowledgeSource[]> => {
-    if (typeof target?.sourceId === 'string' && target.sourceId) return [await knowledge.getSource(knowledgeId(target.sourceId, '来源 ID'))]
-    const noteId = typeof target?.noteId === 'string' ? target.noteId.trim() : ''
-    if (noteId) return (await knowledge.findSources({ channel: 'note', originRef: noteId })).sources
-    const threadId = typeof target?.threadId === 'string' ? target.threadId.trim() : ''
-    if (threadId) return (await knowledge.findSources({ channel: 'chat', groupKey: threadId })).sources
-    return []
-  }
   handle('knowledge:by-source', async (event, query: SourceRef & { offset?: number; limit?: number }) => {
     knowledgeOwner(event)
     const offset = Math.max(0, Math.trunc(Number(query?.offset) || 0))
@@ -1839,47 +1864,29 @@ function registerIpc(): void {
   /** What deleting the record would do; a failure here is reported, not swallowed. */
   handle('knowledge:impact', async (event, target: SourceRef | string) => {
     knowledgeOwner(event)
-    // The dialog knows a record id; the page may already hold a source id.
-    const sources: KnowledgeSource[] = await sourcesFor(typeof target === 'string' ? { sourceId: target } : target)
-    if (!sources.length) return { sourceId: '', version: '', cards: 0, single: 0, multi: 0, items: [], more: false }
-    // One record can have several sources (a thread holds one per turn), so the
-    // preview is the union of their cards, counted once each.
-    let more = false
-    const seen = new Map<string, import('@shared/knowledge').CardImpactItem>()
-    for (const source of sources.slice(0, 50)) {
-      const impact = await knowledge.cardImpact(source.id)
-      for (const item of impact.items) {
-        const previous = seen.get(item.id)
-        // A card that has another valid source anywhere is not single-source.
-        seen.set(item.id, previous ? { ...previous, single: previous.single && item.single, sources: Math.max(previous.sources, item.sources) } : item)
-      }
-      if (impact.more) more = true
-    }
-    const items = [...seen.values()]
-    const single = items.filter(item => item.single)
-    return {
-      sourceId: sources[0]!.id,
-      version: sources[0]!.version,
-      cards: items.length,
-      single: single.length,
-      multi: items.length - single.length,
-      items: items.slice(0, 20),
-      more: more || items.length > 20
-    }
+    // One call decides for the whole record: a note holds a source per version and
+    // a thread one per turn, so merging per-source answers under-counted.
+    const identity: import('@shared/knowledge').SourceIdentity | null = typeof target === 'string'
+      ? { sourceId: target }
+      : target?.sourceId ? { sourceId: target.sourceId }
+        : target?.noteId ? { channel: 'note', originRef: target.noteId }
+          : target?.threadId ? { channel: 'chat', groupKey: target.threadId } : null
+    if (!identity) return { sourceId: '', version: '', cards: 0, single: 0, multi: 0, items: [], more: false, sources: [], ticket: '', incomplete: false }
+    return knowledge.cardImpact(identity)
   })
   /**
    * Continue a card in a new conversation. Only the card's own id and a bounded
    * body travel; the thread itself is the ordinary chat thread.
+   *
+   * Nothing is sent here: the card becomes the draft's first reference, and the
+   * first real question the user types is the one that reaches the model.
    */
   handle('knowledge:continue', async (event, id: string) => {
     knowledgeOwner(event)
     const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
     const thread = chats.create(null)
-    const seed = [{ kind: 'knowledge' as const, id: card.id, title: card.title, text: card.summary, at: card.updatedAt }]
-    // Bounded context: the card body is the material, the question is a pointer to it.
-    const question = `继续讨论这张知识卡片。\n\n【卡片】${card.title}\n${card.body.slice(0, MAX_CARD_CONTEXT)}`
-    void chats.send(thread.id, question, [], seed).catch(error => log(`continue chat: ${String(error)}`))
-    return { threadId: thread.id }
+    pendingSeeds.set(thread.id, [{ kind: 'knowledge', id: card.id, title: card.title, text: card.body.slice(0, MAX_CARD_CONTEXT), at: card.updatedAt }])
+    return { threadId: thread.id, card: { id: card.id, title: card.title } }
   })
   /** A real todo from a card the user picked; the card's text is data, not orders. */
   handle('knowledge:card-todo', async (event, id: string) => {
@@ -1889,11 +1896,20 @@ function registerIpc(): void {
     const todo = reminders.save({ title: card.title.slice(0, 200), description: card.summary.slice(0, 2000), dueAt: null, level: 'normal', recurrence: null, source: 'manual' })
     return { id: todo.id, title: todo.title }
   })
-  /** A card becomes a note through the note store's own save path. */
+  /**
+   * A card becomes a note through the note store's own save path. The note is then
+   * published as a source that cites the card, so extracting the very same text
+   * again restates knowledge instead of minting a second card.
+   */
   handle('knowledge:card-note', async (event, id: string) => {
     knowledgeOwner(event)
     const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
     const note = await notes.createText({ text: `# ${card.title}\n\n${card.body}\n` })
+    try {
+      await knowledgeCollector.publishNote({ id: note.id, title: card.title, transcript: `# ${card.title}\n\n${card.body}\n`, polished: '', updatedAt: note.updatedAt ?? Date.now() }, [card.id])
+    } catch (error) {
+      log(`[knowledge] 卡片另存随记后登记来源失败：${String(error)}`)
+    }
     return { noteId: note.id }
   })
   handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })
@@ -2044,15 +2060,28 @@ function registerIpc(): void {
   handle('chat:create', (event, group: string | null) => { chatOwner(event); return chats.create(group) })
   handle('chat:edit', async (event, input: import('@shared/chat').ChatEdit) => {
     chatOwner(event)
-    // An explicit opt-in removes the cards this thread alone supported, before the
-    // thread row goes away; a failure here leaves the thread untouched.
-    if (input?.action === 'delete' && input.deleteKnowledge) await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id })
-    return chats.edit(input)
+    if (input?.action !== 'delete') return chats.edit(input)
+    // The thread really goes first; its knowledge is settled afterwards, with the
+    // ticket the user confirmed. A mismatch is a partial failure, never a silent
+    // cleanup of knowledge created after the preview.
+    const removed = chats.edit(input)
+    try {
+      await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },
+        { cards: Boolean(input.deleteKnowledge), ticket: input.ticket })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new Error(mt('对话已删除，但关联知识清理失败：{{reason}}', { reason }))
+    }
+    return removed
   })
   handle('chat:send', async (event, id: string, text: string, attachments?: import('@shared/chat').ChatUpload[]) => {
     chatOwner(event)
     if (gameMode.snapshot().active) throw Error('游戏模式下已暂停聊天生成')
-    return chats.send(id, text, attachments)
+    // A conversation opened from a card carries that card as its first reference,
+    // as data the user did not write; it is consumed by the first real send.
+    const seed = pendingSeeds.get(id)
+    if (seed) pendingSeeds.delete(id)
+    return chats.send(id, text, attachments, seed ?? [])
   })
   handle('chat:cancel', event => { chatOwner(event); chats.cancel() })
   handle('card:explain', async (event, term: string) => {
@@ -3222,7 +3251,8 @@ async function bootstrap(): Promise<void> {
     store: notes,
     // The user ticked 「同时删除关联知识」 in the confirmation: remove the cards
     // this note alone supported, before the note row itself goes away.
-    purgeKnowledge: noteId => purgeRecordKnowledge({ channel: 'note', originRef: noteId }),
+    purgeKnowledge: (noteId, options) => purgeRecordKnowledge({ channel: 'note', originRef: noteId },
+      { channel: 'note', originRef: noteId }, options),
     persistDir: async (dir) => {
       await store.update({ notesDir: dir })
     },

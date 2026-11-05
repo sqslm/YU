@@ -4,7 +4,9 @@
 //! to the new databases, so no duplicate copy of a note, chat or web page is
 //! kept here.
 
-use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
+use std::collections::BTreeSet;
+
+use rusqlite::{Connection, Row, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use serde_json::{Value, json};
@@ -290,23 +292,44 @@ pub(crate) fn channel_kinds(channel: &str) -> ApiResult<Vec<String>> {
         .ok_or_else(|| ApiError::invalid(format!("unknown channel: {channel}")))
 }
 
-/// How many records one thread lookup may answer. A chat thread is one row per
-/// message, so the cap keeps a long conversation's answer bounded; the host
-/// purges what it got and asks again.
-const THREAD_SOURCES: i64 = 200;
+/// How many records one lookup answers. A note keeps one row per published
+/// version and a chat thread one row per message, so a long record would otherwise
+/// answer without bound. `incomplete` says the cap cut something: a preview built
+/// on a truncated set must never be confirmed.
+pub(crate) const RECORD_SOURCES: usize = 200;
 
-#[derive(Deserialize)]
+/// The identity a host holds for one original record: the note it is rendering, the
+/// thread it is deleting, or — the older, row-level form — one source id.
+#[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FindParams {
-    pub channel: String,
+    #[serde(default)]
+    pub source_id: Option<String>,
+    #[serde(default)]
+    pub note_id: Option<String>,
+    #[serde(default)]
+    pub thread_id: Option<String>,
+    #[serde(default)]
+    pub channel: Option<String>,
     #[serde(default)]
     pub origin_ref: Option<String>,
     #[serde(default)]
     pub group_key: Option<String>,
 }
 
-/// The fields a detail view needs to reach a record by the identity it holds: the
-/// note id or thread id it is rendering, never the row id or the fingerprint.
+/// Echoed back so a caller can tell which record an answer belongs to.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordRef {
+    pub channel: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_key: Option<String>,
+}
+
+/// The fields a card view needs to reach a record by the identity it holds, plus
+/// the row id and version a preview hands back.
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FoundSource {
@@ -323,30 +346,125 @@ pub struct FoundSource {
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FindResult {
-    /// Always an array: a note matches at most one record, a chat thread matches
-    /// one per message. Empty is a normal answer, not an error — the note was
-    /// never collected, or the thread produced nothing yet.
+    /// Always an array: a note answers every version it was published as, a chat
+    /// thread one row per message. Empty is a normal answer, not an error.
     pub sources: Vec<FoundSource>,
+    pub record: RecordRef,
+    /// True when [`RECORD_SOURCES`] cut the set.
+    pub incomplete: bool,
 }
 
-/// Resolves the identity a host holds to the records it produced.
+/// Every still-traceable record of one identity, oldest first.
+#[derive(Debug, Clone)]
+pub(crate) struct SourceSet {
+    pub record: RecordRef,
+    pub sources: Vec<FoundSource>,
+    pub incomplete: bool,
+}
+
+impl SourceSet {
+    /// The ids of the records, in the order they were published.
+    pub(crate) fn ids(&self) -> Vec<String> {
+        self.sources
+            .iter()
+            .map(|source| source.id.clone())
+            .collect()
+    }
+}
+
+/// Resolves the identity a host holds to every record it produced.
 ///
-/// `originRef` names one row (the note id); `groupKey` names a whole chat thread
-/// and answers every record under it, oldest first. Read-only, no transaction.
+/// One note keeps a row per published version, so `originRef` answers all of them,
+/// oldest first; `groupKey` answers a whole chat thread the same way. A `sourceId`
+/// answers that one row, which is what the older callers pass.
 pub fn find(connection: &Connection, params: FindParams) -> ApiResult<FindResult> {
-    let channel = params.channel.trim().to_string();
-    let kinds = channel_kinds(&channel)?;
-    let sources = match (params.origin_ref.as_deref(), params.group_key.as_deref()) {
-        (Some(origin_ref), _) => by_origin(connection, &channel, &kinds, origin_ref)?,
-        (None, Some(group_key)) => thread_sources(connection, &channel, group_key)?,
-        (None, None) => {
-            return Err(ApiError::invalid("originRef or groupKey is required"));
+    let set = resolve_record(connection, &params)?;
+    Ok(FindResult {
+        sources: set.sources,
+        record: set.record,
+        incomplete: set.incomplete,
+    })
+}
+
+/// The record-scoped resolver every card view shares: identity in, every
+/// still-traceable source of that record out.
+pub(crate) fn resolve_record(connection: &Connection, params: &FindParams) -> ApiResult<SourceSet> {
+    let given = |value: &Option<String>| -> Option<String> {
+        value
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    };
+    if let Some(id) = given(&params.source_id) {
+        let source = get(connection, &id)?;
+        let channel = params
+            .channel
+            .clone()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| channel_of(&source.kind).to_string());
+        let found = FoundSource {
+            id: source.id,
+            kind: source.kind,
+            channel: channel.clone(),
+            state: source.state,
+            version: source.version,
+            title: source.title,
+            origin_ref: source.origin_ref.clone(),
+            size: source.size,
+        };
+        return Ok(SourceSet {
+            record: RecordRef {
+                channel,
+                origin_ref: Some(source.origin_ref),
+                group_key: None,
+            },
+            sources: vec![found],
+            incomplete: false,
+        });
+    }
+    // A note id or a thread id is enough: the host renders one of them and never
+    // both, so the identity needs no channel.
+    let (channel, origin_ref, group_key) = match (given(&params.note_id), given(&params.thread_id))
+    {
+        (Some(note_id), _) => ("note".to_string(), Some(note_id), None),
+        (_, Some(thread_id)) => ("chat".to_string(), None, Some(thread_id)),
+        _ => {
+            let channel = given(&params.channel)
+                .ok_or_else(|| {
+                    ApiError::invalid(
+                        "sourceId, noteId, threadId, or channel with originRef or groupKey, is required",
+                    )
+                })?
+                .trim()
+                .to_string();
+            (channel, given(&params.origin_ref), given(&params.group_key))
         }
     };
-    Ok(FindResult { sources })
+    let kinds = channel_kinds(&channel)?;
+    let record = RecordRef {
+        channel: channel.clone(),
+        origin_ref: origin_ref.clone(),
+        group_key: group_key.clone(),
+    };
+    let mut sources = match (origin_ref.as_deref(), group_key.as_deref()) {
+        (Some(origin_ref), _) => by_origin(connection, &channel, &kinds, origin_ref)?,
+        (None, Some(group_key)) => thread_sources(connection, &channel, group_key)?,
+        (None, None) => return Err(ApiError::invalid("originRef or groupKey is required")),
+    };
+    let incomplete = sources.len() > RECORD_SOURCES;
+    sources.truncate(RECORD_SOURCES);
+    Ok(SourceSet {
+        record,
+        sources: dedupe(sources),
+        incomplete,
+    })
 }
 
-/// The record one note produced.
+/// Every version one note was published as, oldest first.
+///
+/// Re-publishing a note mints a new row with a new fingerprint, so the identity —
+/// not the row — is what a preview must count.
 fn by_origin(
     connection: &Connection,
     channel: &str,
@@ -357,19 +475,22 @@ fn by_origin(
     check_chars("originRef", &origin_ref, 400)?;
     let kinds = serde_json::to_string(kinds)
         .map_err(|error| ApiError::storage(format!("cannot encode the kinds: {error}")))?;
-    // A live row wins over an invalidated one: the caller shows what the note
-    // produced right now, and re-collecting a note reactivates its row anyway.
-    let found = connection
-        .query_row(
+    let mut statement = connection
+        .prepare(
             "SELECT id, kind, state, version, title, origin_ref, size FROM sources
               WHERE origin_ref = ?1 AND kind IN (SELECT value FROM json_each(?2))
-              ORDER BY (state = 'active') DESC, updated_at DESC, id DESC LIMIT 1",
-            params![origin_ref, kinds],
+              ORDER BY read_at ASC, created_at ASC, id ASC LIMIT ?3",
+        )
+        .map_err(sqlite_error)?;
+    let rows = statement
+        .query_map(
+            params![origin_ref, kinds, RECORD_SOURCES as i64 + 1],
             |row| map_found(row, channel),
         )
-        .optional()
+        .map_err(sqlite_error)?
+        .collect::<rusqlite::Result<Vec<FoundSource>>>()
         .map_err(sqlite_error)?;
-    Ok(found.into_iter().collect())
+    Ok(rows)
 }
 
 /// Every record a chat thread produced, oldest first.
@@ -397,13 +518,32 @@ fn thread_sources(
         )
         .map_err(sqlite_error)?;
     let rows = statement
-        .query_map(params![channel, group_key, THREAD_SOURCES], |row| {
-            map_found(row, channel)
-        })
+        .query_map(
+            params![channel, group_key, RECORD_SOURCES as i64 + 1],
+            |row| map_found(row, channel),
+        )
         .map_err(sqlite_error)?
         .collect::<rusqlite::Result<Vec<FoundSource>>>()
         .map_err(sqlite_error)?;
     Ok(rows)
+}
+
+/// One row per source id, first occurrence wins.
+fn dedupe(rows: Vec<FoundSource>) -> Vec<FoundSource> {
+    let mut seen = BTreeSet::new();
+    rows.into_iter()
+        .filter(|row| seen.insert(row.id.clone()))
+        .collect()
+}
+
+/// The collect channel a source kind belongs to, for callers that name one row and
+/// never a channel.
+pub(crate) fn channel_of(kind: &str) -> &str {
+    match kind {
+        "note" => "note",
+        "chat" => "chat",
+        _ => "reading",
+    }
 }
 
 fn map_found(row: &Row<'_>, channel: &str) -> rusqlite::Result<FoundSource> {
@@ -417,44 +557,4 @@ fn map_found(row: &Row<'_>, channel: &str) -> rusqlite::Result<FoundSource> {
         size: row.get(6)?,
         channel: channel.to_string(),
     })
-}
-
-/// Finds the records a caller named, by bound id or by the identity a note or a
-/// thread still carries. An empty answer means "no such record", which the card
-/// views render as an empty page; an unknown id stays an error, because the caller
-/// named something it believes exists.
-pub(crate) fn resolve_many(
-    connection: &Connection,
-    id: Option<&str>,
-    channel: Option<&str>,
-    origin_ref: Option<&str>,
-    group_key: Option<&str>,
-) -> ApiResult<Vec<FoundSource>> {
-    if let Some(id) = id.filter(|value| !value.is_empty()) {
-        let source = get(connection, id)?;
-        return Ok(vec![FoundSource {
-            id: source.id,
-            kind: source.kind,
-            channel: channel.unwrap_or_default().to_string(),
-            state: source.state,
-            version: source.version,
-            title: source.title,
-            origin_ref: source.origin_ref,
-            size: source.size,
-        }]);
-    }
-    let Some(channel) = channel else {
-        return Err(ApiError::invalid(
-            "sourceId, or channel with originRef or groupKey, is required",
-        ));
-    };
-    let found = find(
-        connection,
-        FindParams {
-            channel: channel.to_string(),
-            origin_ref: origin_ref.map(str::to_string),
-            group_key: group_key.map(str::to_string),
-        },
-    )?;
-    Ok(found.sources)
 }

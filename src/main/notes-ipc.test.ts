@@ -94,25 +94,30 @@ describe('deleting a note with the knowledge option', () => {
     const remove = vi.fn(async (id: string) => { order.push('note:' + id) })
     const broadcast = vi.fn()
     registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast, purgeKnowledge })
-    await mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true })
-    expect(order).toEqual(['knowledge:n1', 'note:n1'])
+    await mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true, ticket: 't1' })
+    // The record really goes first; the knowledge settles afterwards, quoting the
+    // snapshot the user confirmed.
+    expect(order).toEqual(['note:n1', 'knowledge:n1'])
+    expect(purgeKnowledge).toHaveBeenCalledWith('n1', { cards: true, ticket: 't1' })
     expect(broadcast).toHaveBeenCalledOnce()
   })
 
-  it('keeps the note when the knowledge cleanup refuses', async () => {
-    const remove = vi.fn(), broadcast = vi.fn()
-    const purgeKnowledge = vi.fn(async () => { throw new Error('knowledge helper is not ready') })
+  it('reports a cleanup failure as a partial failure, never as a kept note', async () => {
+    const remove = vi.fn(async () => undefined), broadcast = vi.fn()
+    const purgeKnowledge = vi.fn(async () => { throw new Error('预览已失效，请重新确认') })
     registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast, purgeKnowledge })
-    await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true })).rejects.toThrow('not ready')
-    expect(remove).not.toHaveBeenCalled()
-    expect(broadcast).not.toHaveBeenCalled()
+    await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true, ticket: 'old' }))
+      .rejects.toThrow('预览已失效，请重新确认')
+    expect(remove).toHaveBeenCalledWith('n1')
+    expect(broadcast).toHaveBeenCalledOnce()
   })
 
-  it('never asks for a purge when the option was not ticked', async () => {
+  it('still settles the source when the option was not ticked', async () => {
     const remove = vi.fn(async () => undefined), purgeKnowledge = vi.fn()
     registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast: vi.fn(), purgeKnowledge })
     await mock.handlers.get('notes:remove')!(null, 'n1')
-    expect(purgeKnowledge).not.toHaveBeenCalled()
+    // The default keeps every card and only marks the source deleted.
+    expect(purgeKnowledge).toHaveBeenCalledWith('n1', { cards: false })
     expect(remove).toHaveBeenCalledWith('n1')
   })
 })

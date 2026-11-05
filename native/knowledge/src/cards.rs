@@ -902,16 +902,21 @@ pub fn list(connection: &Connection, params: ListParams) -> ApiResult<CardPage> 
 
 /// The cards generated from the original records a caller names.
 ///
-/// `sourceId` names one bound record; `channel` + `originRef` name it by the
-/// identity the host still holds while rendering a note; `channel` + `groupKey`
-/// name a whole chat thread and answer the union of its records' cards. A note
-/// that never produced a record is a normal state for that detail view, so an
-/// unresolved identity answers an empty page instead of `not_found`.
+/// `sourceId` names one bound record; `noteId` or `channel` + `originRef` name the
+/// note itself and answer every version it was published as; `threadId` or
+/// `channel` + `groupKey` name a whole chat thread and answer the union of its
+/// records' cards. A note that never produced a record is a normal state for that
+/// detail view, so an unresolved identity answers an empty page instead of
+/// `not_found`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceCardsParams {
     #[serde(default)]
     pub source_id: Option<String>,
+    #[serde(default)]
+    pub note_id: Option<String>,
+    #[serde(default)]
+    pub thread_id: Option<String>,
     #[serde(default)]
     pub channel: Option<String>,
     #[serde(default)]
@@ -937,14 +942,18 @@ pub fn by_source(connection: &Connection, params: SourceCardsParams) -> ApiResul
         params.topic.as_deref(),
         params.favorite,
     )?;
-    let found = crate::sources::resolve_many(
+    let found = crate::sources::resolve_record(
         connection,
-        params.source_id.as_deref(),
-        params.channel.as_deref(),
-        params.origin_ref.as_deref(),
-        params.group_key.as_deref(),
+        &crate::sources::FindParams {
+            source_id: params.source_id,
+            note_id: params.note_id,
+            thread_id: params.thread_id,
+            channel: params.channel,
+            origin_ref: params.origin_ref,
+            group_key: params.group_key,
+        },
     )?;
-    if found.is_empty() {
+    if found.sources.is_empty() {
         return Ok(CardPage {
             items: Vec::new(),
             total: 0,
@@ -954,7 +963,7 @@ pub fn by_source(connection: &Connection, params: SourceCardsParams) -> ApiResul
             next_offset: None,
         });
     }
-    let ids: Vec<String> = found.into_iter().map(|source| source.id).collect();
+    let ids = found.ids();
     query_page(connection, &filter, &Plan::All, &ids, offset, limit)
 }
 

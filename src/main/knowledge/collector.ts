@@ -258,7 +258,7 @@ export class KnowledgeCollector {
    * note" action goes through the same call the save path uses: the same source
    * chain, the same dedupe, no second copy of the same knowledge.
    */
-  async publishNote(note: NoteProjection): Promise<PublishResult | null> {
+  async publishNote(note: NoteProjection, citedCardIds: string[] = []): Promise<PublishResult | null> {
     if (!this.allows('note')) return null
     if (note.polishStatus === 'pending') return null
     const text = noteBody(note)
@@ -276,7 +276,8 @@ export class KnowledgeCollector {
       title: note.title ?? text.slice(0, 40),
       scope: '笔记',
       text,
-      at: note.updatedAt
+      at: note.updatedAt,
+      ...(citedCardIds.length ? { citedCardIds } : {})
     })
   }
 

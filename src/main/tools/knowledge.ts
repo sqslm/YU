@@ -24,6 +24,11 @@ export interface KnowledgeCardHit {
 }
 
 export interface KnowledgeTools {
+  /**
+   * Extraction of a page this run really read. The material comes from a previous
+   * step's own result, never from a string the model or the renderer supplied.
+   */
+  reading?: (material: { origin: string; title: string; text?: string; url?: string }) => Promise<{ queued: number; reason?: string; groupId?: string | null }>
   /** Full-text search; the helper ranks and pages, we only bound the answer. */
   search(query: string, limit: number): Promise<{ items: KnowledgeCardHit[]; total: number }>
   get(id: string): Promise<KnowledgeCard>

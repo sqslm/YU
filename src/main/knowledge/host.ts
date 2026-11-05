@@ -83,7 +83,7 @@ import {
 } from '@shared/knowledge'
 
 import type { KnowledgeCompleter } from './model'
-import type { TaskRefusal, TaskTarget } from '@shared/knowledge'
+import type { SourceIdentity, TaskRefusal, TaskTarget } from '@shared/knowledge'
 
 export type { TaskTarget, TaskRefusal } from '@shared/knowledge'
 
@@ -200,6 +200,9 @@ export class KnowledgeHost {
    * Whether a profile database already exists on disk. A withdrawal still has to be
    * applied while the switch is closed, but it must not create the database itself.
    */
+  /** True when a knowledge database exists, even with the loop switched off. */
+  hasData(): boolean { return existsSync(join(this.options.root, 'data', 'knowledge', 'knowledge.db')) }
+
   hasProfileData(): boolean {
     return existsSync(join(this.options.root, 'data', 'profile', 'profile.db'))
   }
@@ -740,13 +743,16 @@ export class KnowledgeHost {
   }
 
   /** What deleting this record would do to the cards derived from it. */
-  cardImpact(sourceId: string): Promise<CardImpact> {
-    return this.call<CardImpact>('card.impact', { sourceId })
+  cardImpact(identity: string | SourceIdentity): Promise<CardImpact> {
+    // One call for the whole record: the helper resolves every source of it, so
+    // the preview and the purge that follows agree on the same numbers.
+    return this.call<CardImpact>('card.impact', typeof identity === 'string' ? { sourceId: identity } : identity)
   }
 
   /** Removes or unlinks the cards of records that were just deleted, atomically. */
+  /** The helper takes the record identity, the confirmed snapshot and the ticket. */
   purgeCards(input: PurgeCardsInput): Promise<PurgeCardsResult> {
-    return this.call<PurgeCardsResult>('card.purge', input)
+    return this.call<PurgeCardsResult>('card.purge', { ...input.record, confirm: input.confirm, cards: input.cards })
   }
 
   listTopics(limit?: number): Promise<TopicList> {

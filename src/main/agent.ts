@@ -1682,6 +1682,7 @@ async function askTask(
     submittedAt: options.submittedAt,
     selectionGuard: options.selectionGuard,
     personal: options.personal,
+    knowledge: options.knowledge,
     life: options.life,
     workflow: options.workflow,
     windows: options.windows,

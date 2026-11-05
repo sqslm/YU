@@ -354,6 +354,6 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
         <FormControlLabel data-chat-delete-knowledge sx={{ alignItems: 'flex-start', mr: 0 }} control={<Checkbox size="small" checked={deleteKnowledge} onChange={event => setDeleteKnowledge(event.target.checked)} sx={{ py: 0.25 }} />} label={<Typography sx={{ fontSize: 12.5, lineHeight: 1.5 }}>{t(deleteNotice.labelKey, { count: deleteNotice.count })}</Typography>} />
         <Typography sx={{ fontSize: 11.5, lineHeight: 1.6, color: 'text.secondary', pl: 3.25 }}>{t(deleteNotice.detailKey, { multi: deleteNotice.multi, single: deleteNotice.single })}</Typography>
       </Box>}
-    </DialogContent><DialogActions><Button onClick={() => setRemove(null)}>{t('取消')}</Button><Button color="error" onClick={() => { if (remove) { const input = remove.action === 'delete' ? { action: 'delete' as const, id: remove.id, deleteKnowledge } : remove; void window.api.chat.edit(input).then(() => { setRemove(null); return refresh() }).catch(error => setError(messageOf(error))) } }}>{t('删除')}</Button></DialogActions></Dialog>
+    </DialogContent><DialogActions><Button onClick={() => setRemove(null)}>{t('取消')}</Button><Button color="error" onClick={() => { if (remove) { const input = remove.action === 'delete' ? { action: 'delete' as const, id: remove.id, deleteKnowledge, ticket: impact?.ticket } : remove; void window.api.chat.edit(input).then(() => { setRemove(null); return refresh() }).catch(error => setError(messageOf(error))) } }}>{t('删除')}</Button></DialogActions></Dialog>
   </Box>
 }

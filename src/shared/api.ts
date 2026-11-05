@@ -425,7 +425,7 @@ export interface TypelessApi {
      * confirmation: the default keeps extracted knowledge and only marks the
      * source deleted.
      */
-    remove(id: string, options?: { deleteKnowledge?: boolean }): Promise<void>
+    remove(id: string, options?: { deleteKnowledge?: boolean; ticket?: string }): Promise<void>
     /**
      * One change over a selection of notes: delete, set/clear category, add or
      * remove tags. Main applies it in a single write.

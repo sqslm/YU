@@ -8,6 +8,7 @@ import { isReadingTool, readingMaterial } from './knowledge/collector'
 import { askAgent, resetThread, type AgentConversation, type AgentOptions, type AgentResult } from './agent'
 import { chainFor } from './providers/chain'
 import { WINDOWS_TOOLS, type WindowsTools } from './tools/windows'
+import { KNOWLEDGE_TOOLS } from './tools/knowledge'
 import { runTool, availableToolNames, type ToolContext, type ToolOutcome } from './tools/registry'
 import { redactSecrets } from './diagnostics'
 import { attachTask, createTask } from './task-context'
@@ -435,8 +436,8 @@ export class AssistantSession {
 
   get busy(): boolean { return this.controller !== null || this.trialSession !== null }
   /** Chat shares the stores, while its own allowlist restricts them to queries. */
-  localQueries(): Pick<AgentOptions, 'personal' | 'life' | 'toolAccess'> {
-    return { personal: this.deps.personal, life: this.deps.life, toolAccess: () => this.deps.settings().assistantAccess }
+  localQueries(): Pick<AgentOptions, 'personal' | 'life' | 'toolAccess' | 'knowledge'> {
+    return { personal: this.deps.personal, life: this.deps.life, knowledge: this.deps.knowledge, toolAccess: () => this.deps.settings().assistantAccess }
   }
   /** An isolated onboarding exchange shares real tools but never the user's thread. */
   async trial(input: string, signal: AbortSignal): Promise<AssistantTurn> {
@@ -452,7 +453,7 @@ export class AssistantSession {
   }
   private allowedTools(input: string): string[] {
     return [...ASSISTANT_TOOLS, ...(this.deps.windows ? WINDOWS_TOOLS : []), ...(this.deps.personal ? PERSONAL_TOOLS : []),
-      ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []),
+      ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.knowledge ? KNOWLEDGE_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []),
       ...(this.deps.analyzeScreenshot && (screenshotNeedsEditor(input) || /截.{0,8}(?:图|窗口|屏)|屏幕|图片|图表|这个界面|这张图|\b(?:screenshot|screen|capture|OCR|image|chart|interface)\b/iu.test(input)) ? ['analyze_screenshot'] : [])]
   }
 

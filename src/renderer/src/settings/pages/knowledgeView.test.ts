@@ -354,6 +354,9 @@ describe('delete impact', () => {
     single: 0,
     multi: 0,
     items: [],
+    sources: [],
+    ticket: '',
+    incomplete: false,
     more: false,
     ...patch
   })

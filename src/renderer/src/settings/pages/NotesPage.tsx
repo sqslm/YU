@@ -1278,7 +1278,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
     setDeleteOpen(false)
     if (!note) return
     try {
-      await window.api.notes.remove(note.id, { deleteKnowledge })
+      await window.api.notes.remove(note.id, { deleteKnowledge, ticket: impact?.ticket })
       pendingRef.current = null
       setNotes((prev) => prev.filter((item) => item.id !== note.id))
       setSelectedId(null)

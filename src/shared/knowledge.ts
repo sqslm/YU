@@ -256,6 +256,19 @@ export interface CardImpactItem {
   single: boolean
 }
 
+/** Which original record (or single source) a preview or a purge speaks about. */
+export type SourceIdentity =
+  | { sourceId: string }
+  | { channel: 'note'; originRef: string }
+  | { channel: 'chat'; groupKey: string }
+  | { channel: 'reading'; originRef: string }
+
+/** One source the preview saw, at the version it saw. */
+export interface CardImpactSource {
+  id: string
+  version: string
+}
+
 /**
  * What deleting one original record would do to the knowledge derived from it.
  *
@@ -274,6 +287,15 @@ export interface CardImpact {
   items: CardImpactItem[]
   /** True when `items` is a bounded preview rather than every card. */
   more: boolean
+  /** Every source of the record the preview saw: the snapshot the user confirms. */
+  sources: CardImpactSource[]
+  /**
+   * A digest of that snapshot. The purge quotes it back, so a record that gained a
+   * source after the confirmation is refused instead of swept away.
+   */
+  ticket: string
+  /** True when the record's source set was too large to preview exactly. */
+  incomplete: boolean
 }
 
 /** The original record a purge was asked for, at the version the preview saw. */
@@ -283,7 +305,10 @@ export interface PurgeSource {
 }
 
 export interface PurgeCardsInput {
-  sources: PurgeSource[]
+  /** The record being acted on, resolved exactly like the preview was. */
+  record: SourceIdentity
+  /** The preview the user actually confirmed: its sources and its ticket. */
+  confirm: { sources: CardImpactSource[]; ticket: string }
   /** Remove the cards that this record alone supports; otherwise only unlink. */
   cards: boolean
 }
@@ -293,6 +318,8 @@ export interface PurgeCardsResult {
   kept: string[]
   /** Ids the purge refused because the record moved since the preview. */
   skipped: string[]
+  /** The snapshot the helper actually committed against. */
+  ticket?: string
 }
 
 /** Relation kinds, in the order the UI offers them. */

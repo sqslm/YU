@@ -12,6 +12,7 @@ import { ChatStore } from './chat-store'
 import { LOCAL_QUERY_TOOLS, recordsFromTool, type LocalRecord } from '@shared/workspace'
 import type { AgentOptions } from './agent'
 import { attachmentMaterial, isReadingTool, readingMaterial } from './knowledge/collector'
+import { KNOWLEDGE_TOOLS } from './tools/knowledge'
 
 /**
  * Only the wire fields a thread's chosen profile owns.
@@ -135,7 +136,7 @@ export class ChatService {
       const queryTools: string[] = [...LOCAL_QUERY_TOOLS.filter(name => name === 'list_events' ? local.life : local.personal)]
       // The knowledge base is offered only while the user has it switched on, and
       // only as a read: it never writes during an ordinary answer.
-      if (local.knowledge) queryTools.push('search_knowledge')
+      if (local.knowledge) queryTools.push(...KNOWLEDGE_TOOLS.filter(name => name !== 'extract_knowledge'))
       const allowedTools = [...(summarizing ? ['get_weather', 'get_datetime', 'calculate'] : ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate']), ...queryTools]
       // Read once per turn: the profile is context, not a tool, and a failure to
       // read it must never keep the user waiting for an answer.
@@ -182,6 +183,7 @@ export class ChatService {
             question,
             answer: stripAppendedSources(result.text),
             at: Date.now(),
+            citedCardIds: records.filter(record => record.kind === 'knowledge').map(record => record.id),
             materials
           })
         } catch (error) {

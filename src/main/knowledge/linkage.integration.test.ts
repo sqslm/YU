@@ -65,12 +65,12 @@ describe('records and the knowledge they produced', () => {
       text: '问：幂等键有什么用？答：避免重复写入。'
     })
 
-    await expect(instance.findSources({ channel: 'note', originRef: 'n1' })).resolves.toEqual({
+    await expect(instance.findSources({ channel: 'note', originRef: 'n1' })).resolves.toMatchObject({
       sources: [expect.objectContaining({ id: note.id, version: '1', state: 'active' })]
     })
     const thread = await instance.findSources({ channel: 'chat', originRef: 't1:u1:a1' })
     expect(thread.sources.map(source => source.id)).toEqual([turn.id])
-    await expect(instance.findSources({ channel: 'note', originRef: 'missing' })).resolves.toEqual({ sources: [] })
+    await expect(instance.findSources({ channel: 'note', originRef: 'missing' })).resolves.toMatchObject({ sources: [] })
   }, 60_000)
 
   it('lists only the cards a record produced, filtered before paging', async () => {
@@ -139,7 +139,11 @@ describe('records and the knowledge they produced', () => {
     expect(impact).toMatchObject({ cards: 2, single: 1, multi: 1 })
     expect(impact.items.map(item => item.id).sort()).toEqual([lonely.id, both.id].sort())
 
-    const purged = await instance.purgeCards({ sources: [{ id: only.id, version: only.version }], cards: true })
+    const purged = await instance.purgeCards({
+      record: { sourceId: only.id },
+      confirm: { sources: [{ id: only.id, version: only.version }], ticket: impact.ticket },
+      cards: true
+    })
     expect(purged.removed).toEqual([lonely.id])
     expect(purged.kept).toEqual([both.id])
 
@@ -148,7 +152,12 @@ describe('records and the knowledge they produced', () => {
     expect(survivor.sourceIds).toEqual([shared.id])
 
     // Idempotent: purging an already invalid source skips it and touches nothing.
-    const again = await instance.purgeCards({ sources: [{ id: only.id, version: only.version }], cards: true })
+    const after = await instance.cardImpact(only.id)
+    const again = await instance.purgeCards({
+      record: { sourceId: only.id },
+      confirm: { sources: [{ id: only.id, version: only.version }], ticket: after.ticket },
+      cards: true
+    })
     expect(again.removed).toEqual([])
     expect(again.skipped).toEqual([only.id])
   }, 60_000)
@@ -168,10 +177,61 @@ describe('records and the knowledge they produced', () => {
     })
     const card = await instance.saveCard({ kind: 'concept', title: '留下的知识', body: '这条知识应当保留下来。', sourceIds: [source.id] })
 
-    const result = await instance.purgeCards({ sources: [{ id: source.id, version: source.version }], cards: false })
+    const preview = await instance.cardImpact(source.id)
+    const result = await instance.purgeCards({
+      record: { sourceId: source.id },
+      confirm: { sources: [{ id: source.id, version: source.version }], ticket: preview.ticket },
+      cards: false
+    })
     expect(result.removed).toEqual([])
     expect((await instance.getCard(card.id)).sourceIds).toEqual([])
     expect((await instance.cardsBySource({ sourceId: source.id, offset: 0, limit: 5 })).items).toEqual([])
+  }, 60_000)
+
+  it('counts two versions of one note as a single dependency', async () => {
+    requireHelper()
+    const instance = host()
+    const first = await instance.saveSource({
+      kind: 'note',
+      originRef: 'n-two',
+      locator: '',
+      title: '第一版',
+      version: '1',
+      scope: '随记',
+      readAt: 1,
+      text: '第一版讲的是重复写入。'
+    })
+    const second = await instance.saveSource({
+      kind: 'note',
+      originRef: 'n-two',
+      locator: '',
+      title: '第二版',
+      version: '2',
+      scope: '随记',
+      readAt: 3,
+      text: '第二版也讲重复写入。'
+    })
+    const card = await instance.saveCard({
+      kind: 'concept',
+      title: '重复写入',
+      body: '同一段内容重复写入需要幂等键。',
+      sourceIds: [first.id, second.id]
+    })
+
+    // Both links belong to the same record: the card depends on that record alone,
+    // so the preview must call it single, not multi.
+    const impact = await instance.cardImpact({ channel: 'note', originRef: 'n-two' })
+    expect(impact).toMatchObject({ cards: 1, single: 1, multi: 0, incomplete: false })
+    expect(impact.sources.map(source => source.id).sort()).toEqual([first.id, second.id].sort())
+
+    const preview = await instance.cardImpact({ channel: 'note', originRef: 'n-two' })
+    const purged = await instance.purgeCards({
+      record: { channel: 'note', originRef: 'n-two' },
+      confirm: { sources: preview.sources, ticket: preview.ticket },
+      cards: true
+    })
+    expect(purged.removed).toEqual([card.id])
+    expect((await instance.cardsBySource({ noteId: 'n-two', offset: 0, limit: 5 })).items).toEqual([])
   }, 60_000)
 
   it('refuses a stale preview instead of deleting a newer source', async () => {
@@ -199,10 +259,16 @@ describe('records and the knowledge they produced', () => {
       text: '第二版正文，已经改过。'
     })
 
-    // A preview taken before the note changed carries the old version number.
-    const result = await instance.purgeCards({ sources: [{ id: source.id, version: '9' }], cards: true })
-    expect(result.removed).toEqual([])
-    expect(result.skipped).toEqual([source.id])
+    // A preview taken before the note changed carries the old version number: the
+    // helper must refuse instead of widening to whatever is current now.
+    const preview = await instance.cardImpact(source.id)
+    await expect(instance.purgeCards({
+      record: { sourceId: source.id },
+      confirm: { sources: [{ id: source.id, version: '9' }], ticket: preview.ticket },
+      cards: true
+    })).rejects.toThrow('预览已失效，请重新确认')
+    // Nothing was destroyed by the refusal.
     await expect(instance.getCard(card.id)).resolves.toMatchObject({ id: card.id })
+    expect((await instance.getSource(source.id)).state).toBe('active')
   }, 60_000)
 })

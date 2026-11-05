@@ -1199,3 +1199,146 @@ fn a_note_lists_only_the_cards_it_produced_and_filters_before_paging() {
     );
     assert_eq!(empty["sources"], json!([]), "{empty}");
 }
+
+/// Publishes one more version of the same note: the identity stays, the queue group
+/// does not, so a republished note mints a second row under one `originRef`.
+fn publish_version(helper: &mut Helper, note: &str, group: &str, text: &str) -> Value {
+    let id = helper.next_id();
+    let result = helper.ok(
+        &id,
+        "source.publish",
+        json!({
+            "channel": "note",
+            "kind": "note",
+            "originRef": note,
+            "groupKey": group,
+            "title": note,
+            "scope": "notes",
+            "text": text,
+            "at": 1_700_000_000_000i64 + helper.counter as i64,
+        }),
+    );
+    helper.source_id = result["sourceId"].as_str().expect("sourceId").to_string();
+    helper.fingerprint = result["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    result
+}
+
+#[test]
+fn a_republished_note_answers_every_version_before_paging() {
+    let root = Root::new("record");
+    let mut helper = Helper::start(&root, vec![]);
+    let first = publish_version(
+        &mut helper,
+        "note-a",
+        "note-a",
+        "第一版正文，说明了适用条件。",
+    );
+    let version_one = first["sourceId"].as_str().expect("sourceId").to_string();
+    let second = publish_version(
+        &mut helper,
+        "note-a",
+        "note-a-v2",
+        "第二版正文，补充了关键机制。",
+    );
+    let version_two = second["sourceId"].as_str().expect("sourceId").to_string();
+    assert_ne!(version_one, version_two, "a republished note is a new row");
+
+    let old = helper.save(
+        "c1",
+        card_params(
+            "concept",
+            "旧",
+            "旧的摘要",
+            BODY,
+            &["方法"],
+            &[],
+            std::slice::from_ref(&version_one),
+        ),
+    );
+    let both = helper.save(
+        "c2",
+        card_params(
+            "method",
+            "双",
+            "双的摘要",
+            BODY,
+            &["方法"],
+            &[],
+            &[version_one.clone(), version_two.clone()],
+        ),
+    );
+    let fresh = helper.save(
+        "c3",
+        card_params(
+            "concept",
+            "新",
+            "新的摘要",
+            BODY,
+            &["知识"],
+            &[],
+            std::slice::from_ref(&version_two),
+        ),
+    );
+
+    let found = helper.ok("f1", "source.find", json!({ "noteId": "note-a" }));
+    let sources = found["sources"].as_array().expect("sources");
+    assert_eq!(sources.len(), 2, "both versions stay traceable: {found}");
+    assert_eq!(sources[0]["id"], version_one, "oldest first: {found}");
+    assert_eq!(sources[1]["id"], version_two, "{found}");
+
+    let all = helper.ok("b1", "card.by_source", json!({ "noteId": "note-a" }));
+    assert_eq!(
+        all["total"], 3,
+        "a card citing both versions is still one card: {all}"
+    );
+    let mut listed = ids(&all);
+    listed.sort();
+    let mut expected = vec![old.clone(), both.clone(), fresh.clone()];
+    expected.sort();
+    assert_eq!(listed, expected, "{all}");
+
+    let only_kind = helper.ok(
+        "b2",
+        "card.by_source",
+        json!({ "noteId": "note-a", "kind": "method" }),
+    );
+    assert_eq!(ids(&only_kind), vec![both.clone()], "{only_kind}");
+    assert_eq!(only_kind["total"], 1, "{only_kind}");
+
+    let only_topic = helper.ok(
+        "b3",
+        "card.by_source",
+        json!({ "noteId": "note-a", "topic": "知识" }),
+    );
+    assert_eq!(ids(&only_topic), vec![fresh.clone()], "{only_topic}");
+
+    let page = helper.ok(
+        "b4",
+        "card.by_source",
+        json!({ "noteId": "note-a", "offset": 1, "limit": 1 }),
+    );
+    assert_eq!(
+        page["total"], 3,
+        "the total counts the whole record, not the page: {page}"
+    );
+    assert_eq!(page["hasMore"], true, "{page}");
+    assert_eq!(page["nextOffset"], 2, "{page}");
+
+    let by_identity = helper.ok(
+        "b5",
+        "card.by_source",
+        json!({ "channel": "note", "originRef": "note-a" }),
+    );
+    assert_eq!(by_identity["total"], 3, "{by_identity}");
+
+    let unknown = helper.call("b6", "card.by_source", json!({ "sourceId": "src_missing" }));
+    assert_eq!(unknown["ok"], false, "{unknown}");
+    assert_eq!(unknown["error"]["code"], "not_found", "{unknown}");
+
+    let missing = helper.ok("b7", "card.by_source", json!({ "noteId": "note-missing" }));
+    assert_eq!(missing["total"], 0, "{missing}");
+    assert_eq!(missing["items"], json!([]), "{missing}");
+}

@@ -226,11 +226,13 @@ fn main() {
                             }
                             "card.impact" => {
                                 let id = param(&request.params, "sourceId", "fixture-source");
+                                let origin = param(&request.params, "originRef", "fixture-note");
                                 protocol::result_frame(
                                     &request.id,
                                     &json!({
                                         "sourceId": id,
                                         "version": "v1",
+                                        "record": { "channel": "note", "originRef": origin },
                                         "sources": [{ "id": id, "version": "v1" }],
                                         "cards": 2,
                                         "single": 1,
@@ -242,14 +244,21 @@ fn main() {
                                             "sources": 1,
                                             "single": true
                                         }],
-                                        "more": true
+                                        "more": true,
+                                        "incomplete": false,
+                                        "ticket": "fixture-ticket"
                                     }),
                                 )
                             }
                             "card.purge" => {
-                                let removed: Vec<Value> = request
+                                // The confirmed form nests the rows under `confirm`; the
+                                // older form hands them over directly.
+                                let list = request
                                     .params
-                                    .get("sources")
+                                    .get("confirm")
+                                    .and_then(|confirm| confirm.get("sources"))
+                                    .or_else(|| request.params.get("sources"));
+                                let removed: Vec<Value> = list
                                     .and_then(Value::as_array)
                                     .map(|entries| {
                                         entries
@@ -263,7 +272,8 @@ fn main() {
                                     &json!({
                                         "removed": removed,
                                         "kept": Vec::<String>::new(),
-                                        "skipped": Vec::<String>::new()
+                                        "skipped": Vec::<String>::new(),
+                                        "ticket": "fixture-ticket"
                                     }),
                                 )
                             }
@@ -281,7 +291,9 @@ fn main() {
                                             "title": "夹具随记",
                                             "originRef": origin,
                                             "size": 12
-                                        }]
+                                        }],
+                                        "record": { "channel": "note", "originRef": origin },
+                                        "incomplete": false
                                     }),
                                 )
                             }

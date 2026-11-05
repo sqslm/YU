@@ -31,7 +31,7 @@ export interface NotesIpcOptions {
    * option. Runs before the note is deleted: a failure leaves both sides intact
    * and the caller sees the real reason.
    */
-  purgeKnowledge?: (noteId: string) => Promise<void>
+  purgeKnowledge?: (noteId: string, options?: { cards?: boolean; ticket?: string }) => Promise<void>
 }
 
 /** IPC hands us a real `Int16Array`, but a stray array must not throw. */
@@ -246,13 +246,19 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     return note
   })
 
-  ipcHandle('notes:remove', async (_event, id: string, options?: { deleteKnowledge?: boolean }) => {
-    // Order matters: knowledge first, so a refused purge leaves the note readable
-    // and the user can retry. The default keeps the knowledge and only marks the
-    // source deleted, which the collector already does when the note disappears.
-    if (options?.deleteKnowledge) await purgeKnowledge?.(id)
+  ipcHandle('notes:remove', async (_event, id: string, options?: { deleteKnowledge?: boolean; ticket?: string }) => {
+    // The record really goes first, then its knowledge is settled: the ticket the
+    // user confirmed is re-validated by the helper, and a mismatch is reported as
+    // a partial failure instead of sweeping away knowledge created meanwhile.
     await store.remove(id)
     broadcast()
+    if (!options?.deleteKnowledge) { await purgeKnowledge?.(id, { cards: false }); return }
+    try {
+      await purgeKnowledge?.(id, { cards: true, ticket: options.ticket })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new Error(mt('记录已删除，但关联知识清理失败：{{reason}}', { reason }))
+    }
   })
 
   /** Batch operations from the notes sidebar: delete, set category, add tag. */

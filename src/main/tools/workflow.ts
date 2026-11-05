@@ -26,6 +26,7 @@ import {
   type WorkflowStep
 } from '@shared/workflow'
 import type { ToolContext, ToolDefinition, ToolOutcome } from './registry'
+import { isReadingTool, readingMaterial } from '../knowledge/collector'
 
 export const WORKFLOW_TOOLS = ['save_workflow', 'list_workflows', 'run_workflow', 'manage_workflow'] as const
 
@@ -132,6 +133,7 @@ async function runWorkflow(
     api.recordRun(workflow.id)
     return {ok:false,summary,data:{ok:false,workflowId:workflow.id,steps:[{label:step?.label,tool:step?.tool,ok:false,summary}],stoppedAt:step?.label}}
   }
+  let lastReading: { origin: string; title: string; text?: string; url?: string } | undefined
   for (const [index, saved] of steps.entries()) {
     let step: Pick<WorkflowStep,'tool'|'args'|'label'> = saved
     if(saved.when && !workflowCondition(saved.when, actual)){
@@ -162,10 +164,24 @@ async function runWorkflow(
       if (reference && ['search_files', 'search_file_contents', 'search_files_everything'].includes(steps[Number(reference[1]) - 1]?.tool) && typeof args.id === 'string') {
         ctx.windows?.permitWorkflowFile(args.id)
       }
-      outcome = await runTool(step.tool, args, stepCtx)
+      // A knowledge step with no note of its own takes the page this run already
+      // read: the same material the normal summary path projects, so a workflow and
+      // a plain question share one source chain instead of two copies.
+      if (step.tool === 'extract_knowledge' && !args.noteId && lastReading && ctx.knowledge?.reading) {
+        const handed = await ctx.knowledge.reading(lastReading)
+        outcome = handed.queued
+          ? { ok: true, summary: mt('已把这次读取送入知识提炼'), data: { ...handed } }
+          : { ok: false, summary: mt('没有可提炼的新内容：{{reason}}', { reason: handed.reason ?? '未说明' }), data: { ...handed } }
+      } else {
+        outcome = await runTool(step.tool, args, stepCtx)
+      }
     }
     catch(error){outcome={ok:false,summary:String(error instanceof Error?error.message:error),data:{ok:false}}}
     actual.push(outcome.data)
+    if (outcome.ok && isReadingTool(step.tool)) {
+      const material = readingMaterial(step.tool, outcome.data)
+      if (material?.text?.trim()) lastReading = material
+    }
     results.push({ label: step.label, tool: step.tool, ok: outcome.ok, summary: outcome.summary })
     if (!outcome.ok) break
   }
