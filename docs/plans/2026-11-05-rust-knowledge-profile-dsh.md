@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6 与补充复核 T1～T3 的修复均已提交，等待外部复核（见文末「阶段 5 外部复核与修复」「阶段 5 补充复核修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
+**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6、补充复核 T1～T3 与二次复核 A～C 的修复均已提交，等待外部复核（见文末「阶段 5 外部复核与修复」「阶段 5 补充复核修复」「阶段 5 二次复核修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -1232,3 +1232,72 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - `3f4645b` `fix(knowledge): consume manual extractions and bound what can be opened` —— `src/main/knowledge/{manual,open}.ts` 与三份新回归、`targets.ts` / `targets.test.ts`、`src/main/index.ts` 的两处 handler、`knowledgeView.ts` 与图谱页面、两份语言包。
 - `a115aca` `docs(knowledge): record the stage 5 supplementary review and its T1-T3 repair` —— 本节与状态行；交付哈希与提交编号由本次小型 docs 提交补齐。
 - 工作区干净；`git diff --check`、`git diff --check 9e60512..HEAD`、`git diff --check 4e077a3..HEAD` 均为 0；`%TEMP%/yu-knowledge*` 残留 0；`native/knowledge/target` 2.0 GB（gitignore，按仓库惯例保留）；仓库内 `data/` 只有既有的 `data/chat`，本轮测试全部使用隔离根目录。
+
+## 阶段 5 二次复核修复（A～C，2026-11-05 第八轮，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+外部 Codex（thread `01a1a846-2e68-7062-89a9-bc2ed962ce86`，reportId `7dadc1bf-1cc1-4a16-8f03-41ef638c42db`）在 HEAD `84b3da4` 上复核第七轮结果：手动提炼的唤醒、附件/会话定位、节点预算、异步问答票据、侧边栏与宽窄窗口布局均已通过，阶段 5 仍不验收，因为上一轮的修复只做了一层。本轮只修 A～C 三项，阶段 6～7 未开始。
+
+### 三项复核发现（外部实测，本轮复现并修复）
+
+- **A 队列原子性**：两个已完成来源的进度为 `[1,1]`；对正文已消失的活跃阅读来源做手动提炼返回 `needs_reread`，但进度变成 0；正文已变的笔记仍返回 `queued:1`/`stabilizing` 并把进度清零、白唤醒一次。
+- **B 文档打开凭据**：把笔记根指向临时目录后，通过生产 host 的 `knowledge.source-save` 写入两个伪造来源（`unread.txt`、惰性 `inert.cmd`），`resolveSourceTarget` 与 `openSource` 都返回 `file` 并调用了注入的 opener。
+- **C 图谱计数**：1 个匹配节点 + 1 个筛选外邻居时，生产 `graphView` 给出 `visible:2, total:1, expanded:1`，`KnowledgeGraphPage` 印出「当前显示 2 / 总数 1」，把画布节点数与匹配总数混成一个数。
+
+### 根因与落点
+
+| 项 | 根因 | 落点 |
+| --- | --- | --- |
+| A | `manual.ts` 先调 `queue.extract`（其中 `DELETE FROM extract_progress`），再发第二个 IPC 请求 `needs_reread`，失败还被 `.catch(() => undefined)` 吞掉；正文缺失时也可能先被认领 | `native/knowledge/src/queue.rs` 的 `extract()` 改为在同一个 Immediate 事务里先判定 `missing` / 版本 / 指纹，再决定是否重置进度；`src/main/knowledge/manual.ts` 先取正文与指纹，缺失就地 park，只有 `queued === 1` 才 `wake()` |
+| B | `ownedFile` 把「文件在笔记目录内」当成读取凭据，而来源行本身是可写的 | 新增 `src/main/knowledge/documents.ts`：拒绝空 locator 与显式协议、只放行文档扩展名、要求主进程自己读到过正文且 `sha256(正文) === source.fingerprint`，再 realpath + `isFile`；`targets.ts`、`open.ts` 共用同一判定 |
+| C | `graphCounts` 直接把 `graph.shown`（画布节点数）当匹配数 | `knowledgeView.ts` 新增 `graphMatched = max(0, shown - expanded)`，`GraphNotice`/`GraphCounts` 改用 `matched`；语言包只改占位符 |
+
+### 反例修复前后（真实入口，非 mock）
+
+- A：修复前「缺失正文手动提炼」→ `needs_reread` 且进度 0；修复后 `extract_progress` 计数前后都是 1，0 次唤醒，分组停在 `needs_reread`。正文变更：修复前 `queued:1` + 进度清零 + 1 次唤醒；修复后 `source_changed`（界面文案「原文已变更，需要重新读取该来源」），进度仍为 1，0 次唤醒。来源版本被后来的发布替换：同样返回 `source_changed`。
+- B：修复前伪造 `unread.txt`（笔记根内外）与 `inert.cmd` 都判为 `file`，opener 被调用；修复后两者都返回 `{kind:'none'}`，原因分别为「该来源没有可核验的读取记录」与「这类文件不提供打开」，注入的 opener 调用 0 次。真实读过并由 Rust 铸出指纹的文档仍可定位、可打开，opener 的失败原因原样回传。
+- C：修复前 `shown=2,total=1,expanded=1` → 「当前显示 2 / 总数 1」；修复后「匹配 1 / 总数 1 · 展开 1」，画布仍是 2 个节点；纯 200 匹配场景为 200/200、展开 0、画布 200；焦点扩展场景为 199/200 + 展开 1。
+
+### 负向控制（临时复原缺陷，确认对应用例确实失败）
+
+| 复原的缺陷 | 失败的用例 |
+| --- | --- |
+| `queue.rs` 的过期判定短路（`if false && (stale_version || stale_body)`） | `manual.test.ts` 的「refuses a body that changed after it was read and keeps the progress」与「refuses when the source moved to a newer version than the one read」（2 失败 / 6 通过） |
+| `documentPath` 去掉读取记录与哈希校验 | `documents.test.ts` / `open.test.ts` 的「never hands a fabricated locator to the file opener」「refuses a script or an unread body even when the path exists」「refuses a file inside the notes root that was never read」「refuses a body that no longer matches the stored hash」「lets the real helper mint the fingerprint that authorises a real file」（5 失败） |
+| `graphMatched` 退回 `graph.shown` | `knowledgeView.test.ts` 四项（展开答案自身体量、匹配/总数/展开拆分、邻居不计作第二匹配、预算提示用筛选分母、重复展开不累积）+ `graph-budget.test.ts` 一项（6 失败） |
+
+三处缺陷均已复原为最终实现；A 的复原需要重新构建 helper，恢复后再次 `node scripts/build-native.mjs` 并核对哈希。
+
+### 新增回归
+
+- `src/main/knowledge/manual.test.ts` 增至 8 项：缺失正文 park 且保留上次进度（真实引擎跑到 `completed`）；正文变更拒绝且保留进度；来源被新版本替换时拒绝；总开关关闭不启动 helper；helper 无法启动时如实失败；真实引擎把点击的任务跑到 `completed`（无人为唤醒）。
+- `src/main/knowledge/documents.test.ts`（7 项，真实临时文件）：笔记根内/根外伪造 locator、脚本与可执行、URL 与空 locator、文件已消失、哈希不符，以及真实 helper `source.save` 铸出指纹后可授权真实文件。
+- `src/main/knowledge/open.test.ts` 增至 8 项：新增「打开真实读过的文档并原样回传 opener 失败原因」「脚本或未读正文即使路径存在也拒绝」。
+- `src/main/knowledge/targets.test.ts`：默认依赖改为 `documentPath`（无读取记录即拒绝），正向用例改为真实读取记录 + 真实哈希。
+- `src/main/knowledge/graph-budget.test.ts`：断言改为 `{matched: shown - expanded, total, expanded}`。
+- `src/renderer/src/settings/pages/knowledgeView.test.ts` 增至 40 项：1 匹配 + 1 邻居的探针用例、预算提示分母、200 满预算用例。
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 |
+| `cargo test --locked` | 0；113 项（lib 17 / cards_view 9 / extract 12 / process 11 / profile 27 / queue 22 / relations 15） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture` 变体 0） |
+| `node scripts/build-native.mjs` | 0；release `native/bin/yu-knowledge.exe` 3,082,752 字节，SHA-256 `87a5c6532f87aea2dd37a72dab118d47c0c027b7ab545b458ca1c5f2b46d0c15` |
+| `pnpm typecheck` | 0（node + web） |
+| 定向 vitest（`src/main/knowledge`、`knowledgeView.test.ts`、`preload`、`ipc-trust`） | 24 文件 / 229 项通过 |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0；274 文件通过 / 3 跳过，3906 项通过 / 8 跳过，96.93s |
+| `pnpm build` | 0；12.30s；`KnowledgePage-CbpWfKjM.js` 200,477 字节、`KnowledgeGraphPage-CvlaDKY-.js` 18,533 字节为独立 chunk，`settings-yYYCVi9k.js` 4,689.68 kB |
+
+### 未测与边界
+
+- 未调用付费模型；A 的闭环用注入 completer 与 `{"cards": []}`，只验证「点击 → 取正文 → 入队 → 引擎消费 → 结算」。
+- B 的凭据来自主进程自己读到过的正文（进程内读取记录 + Rust 铸出的指纹），重启后没有旧凭据的历史 `document` 来源会显示「该来源没有可核验的读取记录」，不提供重建入口；未引入磁盘级索引或新的授权存储。
+- 未在打包安装包上点测（阶段 7）；C 只改渲染计数与文案占位，未改 Rust 协议、力导向参数与节点/字节预算。
+- 手动提炼仍受现有稳定窗口与认领互斥约束：窗口内重复点击归并到同一任务，已有认领中的任务返回 `working` 而不重复排队。
+
+### 提交
+
+- `16ce29c` `fix(knowledge): verify manual extraction and document opening against real reads` —— `native/knowledge/src/queue.rs`、`src/main/knowledge/{manual,documents,open,targets,host,engine}.ts`、`src/main/index.ts`、`src/shared/knowledge.ts`、`src/renderer/**`（图谱计数）与对应回归。
+- 本节由随后的 docs 提交记录，提交编号与产物哈希在本节内回填。
