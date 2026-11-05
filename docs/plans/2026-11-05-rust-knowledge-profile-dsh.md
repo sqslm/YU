@@ -1544,3 +1544,11 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - 生产入口回归：`src/main/notes-ipc.test.ts` 新增 `registers one settle owner around the whole removal`（`settle` 收到 `n1`、`store.remove` 抛错后仍返回真实错误），加上此前的顺序/失败/未勾选用例，该文件 16 项全过。
 
 仍未交付（同前）：真实 `chat:edit` 两来源误报复现、`incomplete` 拒绝与登记竞态的自动化用例、A/C/D 的生产端到端与隔离实窗证据。
+
+### A～D 续做（第十一轮补 2）
+
+- **C**：`knowledge:by-source` 不再经 `findSources()[0]`，改为把 `{sourceId}` / `{noteId}` / `{threadId}` 翻成 `SourceRef` 交给 Rust 的记录级查询（`card.by_source`），两版本、跨版本共享卡、`total` 与 `nextOffset` 由 Rust 一次给出；真 helper 回归 `answers every version of one note through the record identity`（3 张卡、跨版本共享卡去重、`limit:2` 时 `hasMore/nextOffset/total` 正确）。`sourceIdFor` 已删除。
+- **B**：`verifyKnowledgeDelete` 先判 `preview.incomplete` 再走零卡短路，杜绝「被截断但所见为零卡」的预览通过；`chat:edit` 改为单一 `settleOnDelete` 包裹落盘与结清，落盘失败原样抛出（原会话与 active 来源保留），只有结清失败才用「对话已删除，但关联知识清理失败」。回归：`keeps the record write error when the write itself fails`（笔记入口）。
+- 验证：`tsc` node/web 0/0；定向 72 文件 / 986 项全过；`pnpm test` 全过（新增 2 项）；`pnpm build` 0（12.14 s）；`git diff --check` 0；release 助手未变（无 Rust 改动）。
+
+未交付：A 的 Ask/聊天引用点击端到端与隔离 Electron、C 的草稿关联卡片界面与实窗导航、D 的生产执行器回归；B 的 `incomplete` 与竞态仍无自动化用例。

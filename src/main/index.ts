@@ -379,10 +379,11 @@ const settlingRecords = new Set<string>()
 async function verifyKnowledgeDelete(identity: import('@shared/knowledge').SourceIdentity, ticket?: string, cards = true): Promise<void> {
   if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
   const preview = await knowledge.cardImpact(identity)
-  if (!preview.cards) return
-  // A preview built on a capped source list must never be confirmed: the real
-  // dependency count is larger than what the user saw.
+  // A preview cut by the source cap is never a confirmation, even when the part the
+  // user saw happened to hold no cards.
   if (cards && preview.incomplete) throw new Error(mt('这条记录的来源太多，请先在知识库确认后再删除关联知识'))
+  if (!preview.cards) return
+
   if (!ticket || preview.ticket !== ticket) throw new Error('预览已失效，请重新确认')
 }
 
@@ -1899,21 +1900,22 @@ function registerIpc(): void {
    * The cards one record produced. A note page only knows the note id, so the
    * source is looked up read-only; an unpublished note simply has none yet.
    */
-  /** A detail page knows the record, not the source; this is the read-only bridge. */
-  const sourceIdFor = async (query: SourceRef): Promise<string | null> => {
-    if (typeof query?.sourceId === 'string' && query.sourceId) return knowledgeId(query.sourceId, '来源 ID')
-    const noteId = typeof query?.noteId === 'string' ? query.noteId.trim() : ''
-    if (!noteId) return null
-    const found = await knowledge.findSources({ channel: 'note', originRef: noteId })
-    return found.sources[0]?.id ?? null
-  }
   handle('knowledge:by-source', async (event, query: SourceRef & { offset?: number; limit?: number }) => {
     knowledgeOwner(event)
     const offset = Math.max(0, Math.trunc(Number(query?.offset) || 0))
     const limit = Math.min(50, Math.max(1, Math.trunc(Number(query?.limit) || 20)))
-    const sourceId = await sourceIdFor(query)
-    if (!sourceId) return { items: [], total: 0, offset, limit, hasMore: false, nextOffset: null }
-    return knowledge.cardsBySource({ sourceId, offset, limit })
+    // A note keeps one source row per published version, so asking by source would
+    // answer the newest version only: the record identity covers all of them.
+    const identity: import('@shared/knowledge').SourceIdentity = query?.sourceId
+      ? { sourceId: query.sourceId }
+      : query?.noteId
+        ? { channel: 'note', originRef: query.noteId }
+        : query?.threadId
+          ? { channel: 'chat', groupKey: query.threadId }
+          : { channel: 'note', originRef: '' }
+    if ('originRef' in identity && !identity.originRef) return { items: [], total: 0, offset, limit, hasMore: false, nextOffset: null }
+    const ref: SourceRef = 'sourceId' in identity ? { sourceId: identity.sourceId } : 'groupKey' in identity ? { threadId: identity.groupKey } : { noteId: identity.originRef }
+    return knowledge.cardsBySource({ ...ref, offset, limit })
   })
   /** What deleting the record would do; a failure here is reported, not swallowed. */
   handle('knowledge:impact', async (event, target: SourceRef | string) => {
@@ -2120,16 +2122,19 @@ function registerIpc(): void {
     // cleanup of knowledge created after the preview.
     if (input.deleteKnowledge) await verifyKnowledgeDelete({ channel: 'chat', groupKey: input.id }, input.ticket)
     // The registration covers the record write and its settlement, ticked or not.
-    const removed = await settleOnDelete(input.id, async () => {
-      const edited = await chats.edit(input)
-      await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },
-        { cards: Boolean(input.deleteKnowledge), ticket: input.ticket })
-      return edited
-    }).catch((error: unknown) => {
-      const reason = error instanceof Error ? error.message : String(error)
-      throw new Error(mt('对话已删除，但关联知识清理失败：{{reason}}', { reason }))
+    // One owner for both halves: a failed record write keeps its own error, while a
+    // settle failure after a real removal says exactly what still has to be cleaned.
+    return await settleOnDelete(input.id, async () => {
+      const written = await Promise.resolve(chats.edit(input))
+      try {
+        await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },
+          { cards: Boolean(input.deleteKnowledge), ticket: input.ticket })
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        throw new Error(mt('对话已删除，但关联知识清理失败：{{reason}}', { reason }))
+      }
+      return written
     })
-    return removed
   })
   handle('chat:send', async (event, id: string, text: string, attachments?: import('@shared/chat').ChatUpload[]) => {
     chatOwner(event)

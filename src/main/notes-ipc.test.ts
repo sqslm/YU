@@ -132,4 +132,14 @@ describe('deleting a note with the knowledge option', () => {
     expect(settle.mock.calls[0][0]).toBe('n1')
     expect(remove).toHaveBeenCalledWith('n1')
   })
+
+  it('keeps the record write error when the write itself fails', async () => {
+    const settle = vi.fn(async (_id: string, body: () => Promise<void>) => body())
+    const remove = vi.fn(async () => { throw new Error('disk is full') })
+    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast: vi.fn(), settle: settle as never, purgeKnowledge: vi.fn() })
+    // The partial-failure wording belongs to a settle that failed after a real
+    // removal; a failed write must reach the caller unchanged.
+    await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true, ticket: 't1' })).rejects.toThrow('disk is full')
+    await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true, ticket: 't1' })).rejects.not.toThrow('关联知识清理失败')
+  })
 })
