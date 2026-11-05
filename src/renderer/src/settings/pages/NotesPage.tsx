@@ -102,13 +102,12 @@ import {
   type NotesViewState
 } from './pageState'
 import {
-  CARDS_SECTION_LIMIT,
-  cardRefreshLimit,
+  CardPager,
+  emptySection,
   cardsSection,
   impactNotice,
   kindKey,
-  mergeCards,
-  type CardPageMode
+  type CardSectionState
 } from './knowledgeView'
 
 /** Typing pause before a text edit is written; blur and navigation flush earlier. */
@@ -303,21 +302,28 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
    * The cards the open note generated. The section is a footnote of the note,
    * so it keeps its own bounded page state instead of borrowing the 知识库 list.
    */
-  const [cardRows, setCardRows] = useState<KnowledgeCardSummary[]>([])
-  const [cardTotal, setCardTotal] = useState(0)
-  const [cardMore, setCardMore] = useState(false)
-  const [cardOffset, setCardOffset] = useState<number | null>(null)
-  const [cardPages, setCardPages] = useState(0)
-  /**
-   * The section as the last accepted answer left it. Requests read it instead of
-   * the state, so two answers landing close together cannot both merge into a
-   * stale copy.
-   */
-  const cardRowsRef = useRef<KnowledgeCardSummary[]>([])
-  const cardPagesRef = useRef(0)
-  const cardSeqRef = useRef(0)
+  const [cards, setCards] = useState<CardSectionState<KnowledgeCardSummary>>(() => emptySection<KnowledgeCardSummary>())
   const [cardsLoading, setCardsLoading] = useState(false)
   const [cardsError, setCardsError] = useState('')
+  /**
+   * The note's pages and the change notices are coordinated by one owner: a notice
+   * that lands mid-page must not cancel the page the reader asked for, and a page
+   * started during a refresh must win. The pager keeps that order and reports back
+   * through these setters.
+   */
+  const pagerRef = useRef<CardPager<KnowledgeCardSummary> | null>(null)
+  if (!pagerRef.current) {
+    pagerRef.current = new CardPager<KnowledgeCardSummary>(() => ({
+      // The note's identity, not a source id: one note keeps a source row per
+      // published version, so a source id would answer the newest version only.
+      page: (noteId, offset, limit) => window.api.knowledge.bySource({ noteId, offset, limit }),
+      render: (next) => setCards(next),
+      loading: (on) => setCardsLoading(on),
+      error: (message) => setCardsError(message),
+      message: (error) => messageOf(error)
+    }))
+  }
+  const pager = pagerRef.current
   /** What deleting this note would do to the cards that quote it. */
   const [impact, setImpact] = useState<CardImpact | null>(null)
   const [impactError, setImpactError] = useState('')
@@ -440,56 +446,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
   selectedRef.current = selected
 
   /**
-   * One page of the open note's cards. Offset 0 replaces (a new note, a retry),
-   * anything else appends — and a slow answer for a note the user already left is
-   * dropped instead of landing in the new note's section.
+   * Opening a note reloads its first cards; the section never grows on its own.
+   * Switching away resets it, and the pager drops any answer that belongs to the
+   * note the reader already left.
    */
-  const loadCards = useCallback(async (noteId: string, offset: number, mode: CardPageMode): Promise<void> => {
-    const seq = ++cardSeqRef.current
-    if (mode !== 'refresh') {
-      setCardsLoading(true)
-      setCardsError('')
-    }
-    try {
-      // The note's identity, not a source id: one note keeps a source row per
-      // published version, so a source id would answer the newest version only.
-      // A refresh asks for what is already shown, so the range it updates is the
-      // one the reader is looking at.
-      const limit = mode === 'refresh' ? cardRefreshLimit(cardRowsRef.current.length) : CARDS_SECTION_LIMIT
-      const page = await window.api.knowledge.bySource({ noteId, offset, limit })
-      if (selectedRef.current?.id !== noteId || seq !== cardSeqRef.current) return
-      const merged = mergeCards({ rows: cardRowsRef.current, pages: cardPagesRef.current }, page, mode)
-      cardRowsRef.current = merged.rows
-      cardPagesRef.current = merged.pages
-      setCardRows(merged.rows)
-      setCardTotal(merged.total)
-      setCardMore(merged.more)
-      setCardOffset(merged.offset)
-      setCardPages(merged.pages)
-    } catch (err) {
-      if (selectedRef.current?.id !== noteId || seq !== cardSeqRef.current) return
-      // A refresh that fails leaves what is already shown alone; it only speaks up
-      // when there is nothing to leave, so an empty section is never a lie.
-      if (mode !== 'refresh' || cardRowsRef.current.length === 0) setCardsError(messageOf(err))
-    } finally {
-      if (mode !== 'refresh') setCardsLoading(false)
-    }
-  }, [])
-
-  /** Opening a note reloads its first cards; the section never grows on its own. */
   useEffect(() => {
-    cardRowsRef.current = []
-    cardPagesRef.current = 0
-    cardSeqRef.current += 1
-    setCardRows([])
-    setCardTotal(0)
-    setCardMore(false)
-    setCardOffset(null)
-    setCardPages(0)
-    setCardsError('')
-    if (!selectedNoteId) return
-    void loadCards(selectedNoteId, 0, 'replace')
-  }, [selectedNoteId, loadCards])
+    pager.open(selectedNoteId)
+  }, [selectedNoteId, pager])
 
   /**
    * Extraction of a fresh note takes a stable window, so its cards arrive after the
@@ -502,11 +465,11 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
       // The extraction that finishes while the note is open lands in place: the rows
       // already shown are refreshed, not replaced by a first page that would both
       // spend a request and drop the pages the reader loaded.
-      if (scope === 'cards') void loadCards(selectedNoteId, 0, 'refresh')
+      if (scope === 'cards') pager.refresh()
     })
-  }, [selectedNoteId, loadCards])
+  }, [selectedNoteId, pager])
 
-  const cardsView = cardsSection({ shown: cardRows.length, total: cardTotal, hasMore: cardMore, requests: cardPages })
+  const cardsView = cardsSection({ shown: cards.rows.length, total: cards.total, hasMore: cards.more, requests: cards.pages })
   const deleteNotice = impact ? impactNotice(impact) : null
 
   const audioKey = selected?.audioPath ?? ''
@@ -2306,9 +2269,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
                   <Typography sx={{ flex: 1, fontSize: 11.5, fontWeight: 600, color: 'text.secondary' }}>
                     {t(cardsView.titleKey)}
                   </Typography>
-                  {cardTotal > 0 && (
+                  {cards.total > 0 && (
                     <Typography data-notes-knowledge-total sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
-                      {t('knowledge.noteCards.total', { total: cardTotal })}
+                      {t('knowledge.noteCards.total', { total: cards.total })}
                     </Typography>
                   )}
                 </Stack>
@@ -2318,7 +2281,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
                     data-notes-knowledge-error
                     sx={{ mt: 1, fontSize: 11.5 }}
                     action={
-                      <Button size="small" color="inherit" onClick={() => void loadCards(selected.id, 0, 'replace')}>
+                      <Button size="small" color="inherit" onClick={() => pager.open(selected.id)}>
                         {t('common.retry')}
                       </Button>
                     }
@@ -2326,13 +2289,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
                     {cardsError}
                   </Alert>
                 )}
-                {!cardsError && cardsLoading && cardRows.length === 0 && <CircularProgress size={12} sx={{ mt: 1 }} />}
+                {!cardsError && cardsLoading && cards.rows.length === 0 && <CircularProgress size={12} sx={{ mt: 1 }} />}
                 {!cardsError && !cardsLoading && cardsView.empty && (
                   <Typography data-notes-knowledge-empty sx={{ mt: 1, fontSize: 11.5, color: 'text.disabled' }}>
                     {t('knowledge.noteCards.empty')}
                   </Typography>
                 )}
-                {cardRows.map((row) => (
+                {cards.rows.map((row) => (
                   <Button
                     key={row.id}
                     data-notes-knowledge-card={row.id}
@@ -2358,16 +2321,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
                     </Box>
                   </Button>
                 ))}
-                {(cardsView.moreRows || cardsView.capped || (cardsLoading && cardRows.length > 0)) && (
+                {(cardsView.moreRows || cardsView.capped || (cardsLoading && cards.rows.length > 0)) && (
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
                     {cardsView.moreRows && (
                       <Button
                         size="small"
                         data-notes-knowledge-more
                         disabled={cardsLoading}
-                        onClick={() => {
-                          if (cardOffset !== null) void loadCards(selected.id, cardOffset, 'append')
-                        }}
+                        onClick={() => pager.append()}
                         sx={{ fontSize: 11.5, px: 0.75 }}
                       >
                         {t('knowledge.noteCards.more')}
@@ -2378,7 +2339,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
                         {t('knowledge.noteCards.capped', { shown: cardsView.shown })}
                       </Typography>
                     )}
-                    {cardsLoading && cardRows.length > 0 && <CircularProgress size={12} />}
+                    {cardsLoading && cards.rows.length > 0 && <CircularProgress size={12} />}
                   </Stack>
                 )}
               </Box>

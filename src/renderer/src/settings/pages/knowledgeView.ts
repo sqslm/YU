@@ -566,6 +566,145 @@ export function mergeCards<T extends { id: string }>(
   }
 }
 
+/**
+ * One note's card section, driven by the reader's paging and by background change
+ * notices. The two must not cancel each other: a notice that arrives while a manual
+ * page is loading is remembered as "refresh when that page lands", and a manual page
+ * started while a refresh is in flight makes that refresh's answer stale instead of
+ * letting it replace what the reader just asked for.
+ */
+export interface CardPagerDeps<T extends { id: string }> {
+  page(noteId: string, offset: number, limit: number): Promise<CardPage<T>>
+  render(state: CardSectionState<T>): void
+  loading(on: boolean): void
+  error(message: string): void
+  message(error: unknown): string
+}
+
+export function emptySection<T extends { id: string }>(): CardSectionState<T> {
+  return { rows: [], total: 0, more: false, offset: null, pages: 0 }
+}
+
+export class CardPager<T extends { id: string } = { id: string }> {
+  private noteId: string | null = null
+  private current: CardSectionState<T> = { rows: [], total: 0, more: false, offset: null, pages: 0 }
+  /** Ticket of the newest manual request; an older answer cannot touch the section. */
+  private manual = 0
+  /** How many manual requests are in flight, so a refresh waits for all of them. */
+  private running = 0
+  private refreshTicket = 0
+  private refreshing = false
+  /** A notice arrived while something else was in flight: refresh once afterwards. */
+  private queued = false
+
+  constructor(private readonly deps: () => CardPagerDeps<T>) {}
+
+  get state(): CardSectionState<T> {
+    return this.current
+  }
+
+  get openNote(): string | null {
+    return this.noteId
+  }
+
+  /** Opening a note (or a retry of its first page) replaces the section. */
+  open(noteId: string | null): void {
+    this.noteId = noteId
+    this.manual += 1
+    this.refreshTicket += 1
+    this.refreshing = false
+    this.queued = false
+    this.current = { rows: [], total: 0, more: false, offset: null, pages: 0 }
+    this.deps().render(this.current)
+    if (!noteId) {
+      this.deps().loading(false)
+      this.deps().error('')
+      return
+    }
+    void this.load(noteId, 0, 'replace')
+  }
+
+  /** The reader's next page: offset comes from the page the backend last handed out. */
+  append(): void {
+    const noteId = this.noteId
+    if (!noteId || this.current.offset === null) return
+    void this.load(noteId, this.current.offset, 'append')
+  }
+
+  /** A change notice: update what is shown, and never spend the reader's budget. */
+  refresh(): void {
+    void this.follow()
+  }
+
+  private async follow(): Promise<void> {
+    const noteId = this.noteId
+    if (!noteId) return
+    if (this.running > 0) {
+      // The reader is already waiting on a page; follow it with one refresh instead
+      // of racing it (a second request would answer a range that is about to change).
+      this.queued = true
+      return
+    }
+    if (this.refreshing) {
+      this.queued = true
+      return
+    }
+    const ticket = ++this.refreshTicket
+    const manualAt = this.manual
+    this.refreshing = true
+    try {
+      const page = await this.deps().page(noteId, 0, cardRefreshLimit(this.current.rows.length))
+      if (!this.mine(noteId) || ticket !== this.refreshTicket || manualAt !== this.manual) return
+      this.apply(mergeCards(this.current, page, 'refresh'))
+    } catch (error) {
+      if (!this.mine(noteId) || ticket !== this.refreshTicket) return
+      // A failed refresh keeps the rows on screen; it only speaks when there is
+      // nothing to keep, so the section never claims to be empty on its own.
+      if (this.current.rows.length === 0) this.deps().error(this.deps().message(error))
+    } finally {
+      if (ticket === this.refreshTicket) this.refreshing = false
+      if (this.queued && this.running === 0 && this.mine(noteId)) {
+        this.queued = false
+        void this.follow()
+      }
+    }
+  }
+
+  private async load(noteId: string, offset: number, mode: 'replace' | 'append'): Promise<void> {
+    const ticket = ++this.manual
+    this.running += 1
+    const deps = this.deps()
+    deps.loading(true)
+    deps.error('')
+    if (this.refreshing) this.queued = true
+    try {
+      const page = await deps.page(noteId, offset, CARDS_SECTION_LIMIT)
+      if (!this.mine(noteId) || ticket !== this.manual) return
+      this.apply(mergeCards(this.current, page, mode))
+    } catch (error) {
+      if (this.mine(noteId) && ticket === this.manual) deps.error(deps.message(error))
+    } finally {
+      this.running -= 1
+      // Only the newest manual request closes the spinner: an older answer landing
+      // later must not say the reader's current page finished loading.
+      if (ticket === this.manual) deps.loading(false)
+      if (this.queued && this.running === 0 && this.mine(noteId)) {
+        this.queued = false
+        void this.follow()
+      }
+    }
+  }
+
+  private mine(noteId: string): boolean {
+    return this.noteId === noteId
+  }
+
+  private apply(next: CardSectionState<T>): void {
+    this.current = next
+    this.deps().render(next)
+  }
+}
+
 export interface ModelOption {
   id: string
   label: string
