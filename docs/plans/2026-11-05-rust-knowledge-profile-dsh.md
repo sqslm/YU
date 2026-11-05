@@ -1226,3 +1226,9 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - 未在打包安装包上点测（阶段 7）；未重复做真实窗口截图，本轮 T1～T3 的证据是真实 helper + 生产桥接 + 生产渲染函数，UI 布局回归沿用上轮 1080×750 / 940×690 的窗口证据。
 - `ownedFile` 只承认笔记根目录下的文件；保存在其他位置的历史 `document` 来源将显示「该来源没有可核验的读取记录」，不提供重建入口（不新增授权框架）。
 - 手动提炼受现有稳定窗口约束：窗口内重复点击只归并到同一任务，不额外排批。
+
+### 提交
+
+- `3f4645b` `fix(knowledge): consume manual extractions and bound what can be opened` —— `src/main/knowledge/{manual,open}.ts` 与三份新回归、`targets.ts` / `targets.test.ts`、`src/main/index.ts` 的两处 handler、`knowledgeView.ts` 与图谱页面、两份语言包。
+- `a115aca` `docs(knowledge): record the stage 5 supplementary review and its T1-T3 repair` —— 本节与状态行；交付哈希与提交编号由本次小型 docs 提交补齐。
+- 工作区干净；`git diff --check`、`git diff --check 9e60512..HEAD`、`git diff --check 4e077a3..HEAD` 均为 0；`%TEMP%/yu-knowledge*` 残留 0；`native/knowledge/target` 2.0 GB（gitignore，按仓库惯例保留）；仓库内 `data/` 只有既有的 `data/chat`，本轮测试全部使用隔离根目录。
