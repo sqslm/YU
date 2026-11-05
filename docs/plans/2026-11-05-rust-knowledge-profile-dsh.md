@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2、阶段 3 已通过外部复核；阶段 4 外部复核未通过，P1～P6 与随后 T1～T4 的修复均已提交，等待外部复核。阶段 5～7 未开始；用户可见的知识库页面与画像页面尚未开放（后台画像与上下文接口已就绪，接入回答属阶段 6）。**
+**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5（知识库页面与独立图谱）已提交，等待外部复核。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -990,3 +990,102 @@ Rust `native/knowledge/tests/profile.rs` 现 27 项（20 + 7）：`a_control_cha
 交付产物：`native/bin/yu-knowledge.exe` 2,897,408 字节，SHA-256 `10ed0e8743a94a102685db4fb7061f24bc6fa5a48eb5a526fe95be117edca01c`（MSVC 重建哈希会变）；debug `native/knowledge/target/debug/yu-knowledge.exe`、fixture `yu-knowledge-fixture.exe` 与 `native/knowledge/target`（1.6 GB，已 gitignore）不计入交付。`%TEMP%/yu-knowledge*` 已清空（提交前实测 0 个）。
 
 未测与边界：未调用真实付费模型（全部注入 completer，模型调用次数由测试断言为 0 或 1）；未在打包 Electron 实例内运行；30 天窗口仍用注入时间；「快速关→开」三条路径覆盖总开关、chat 通道与手动暂停，游戏暂停走同一条 `configure` 释放路径但未单独做快速开关回归；`profile.retry` 仍只人工触发。阶段 5～7 未开始，用户可见的画像页面尚未开放。
+
+## 阶段 4 外部验收（2026-11-05，reportId `be0f31a5-f917-47ef-9f07-cbe81ca501f1`）
+
+外部在 `efc0b9b` 上复核并**通过**阶段 4：`cargo test --locked` 83 项通过；定向 Vitest（knowledge/chat/notes/assistant/preload/ipc-trust）21 文件 / 271 项通过；`git diff --check 1944446..HEAD` 与 `git diff --check 4e077a3..HEAD` 均通过；交付 release 2,897,408 字节，SHA-256 `10ed0e8743a94a102685db4fb7061f24bc6fa5a48eb5a526fe95be117edca01c`，与报告一致；T1～T4 的实现与对应回归（快速关→开、关闭期撤回、失败容量、旧库回收、维度与同槽身份）均已核对。上文记录的 DSH 全量与 `pnpm build` 仍标注为 DSH 侧验证。
+
+阶段 5（知识库页面与独立图谱）随之授权。
+
+## 阶段 5 实施记录（2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+**起始 HEAD `efc0b9bd9d47bbb7aedefaa94c276b8518169373`（master，工作区干净）。** 本轮交付：主界面侧栏的“知识库”入口、知识库内容页（主题/列表/详情）、卡片管理与采集操作、独立知识图谱、由知识库打开的画像面板。语在回答中检索与引用、原记录删除时的关联知识联动属阶段 6；备份、卸载与安装包真实模型验证属阶段 7。阶段 1～4 的输入、提炼、保护与画像行为是本轮必须保持的回归基线。
+
+### 边界
+
+- 新增业务仍在 Rust：收藏标记、主题聚合、修订读取、手工合并、导出序列化、关系与图谱查询、筛选与分页全部由 `native/knowledge` 完成，Schema 由 `store.rs` 迁移持有。
+- 主进程只做固定接口与权限：`host.ts` 增加同名 RPC，`index.ts` 增加 `handle()` 通道并沿用 `knowledgeOwner`，Renderer 只传卡片/关系 ID；导出文件的写入路径由主进程保存对话框决定，Renderer 不接触文件系统与 SQL。
+- 不新增框架、ORM、向量库或网络服务；沿用 SQLite、JSONL 管道、现有 React/MUI/主题/i18n 与已安装的 `react-force-graph-2d`。
+
+### 数据模型变更（知识库 schema 5 → 6）
+
+迁移在 `KNOWLEDGE_SQL` 序列末尾追加，升级保留全部卡片、来源、修订、建议与排除记录，更高版本仍返回 `storage_schema_newer`：
+
+```sql
+ALTER TABLE cards ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX cards_favorite ON cards (favorite, updated_at DESC);
+CREATE TABLE card_relations (
+  id TEXT PRIMARY KEY,
+  from_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  to_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('contains','prerequisite','applies','contrast','derives')),
+  origin TEXT NOT NULL CHECK (origin IN ('manual','model')),
+  evidence TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (from_id, to_id, kind)
+);
+```
+
+`contrast` 是对称关系：落库前按两个 ID 排序规范化，`(a,b)` 与 `(b,a)` 是同一条边。收藏是持久标记而非内容编辑：只更新 `updated_at`，不提升 `revision`、不置 `edited`。
+
+### 新增与变更接口
+
+| 方法 | 参数 | 结果 | 关键约束 |
+| --- | --- | --- | --- |
+| `card.list` / `card.search`（变更） | 增加 `topic?`、`favorite?`、`kind?` | `CardPage`（条目含 `favorite`） | 筛选在 SQL 内先于 `LIMIT/OFFSET`，`total` 为筛选后的真实总数；沿用字节预算与 `nextOffset` |
+| `card.update`（变更） | 增加 `favorite?` | `Card` | 收藏翻转只改 `updated_at` |
+| `topic.list` | `limit?`（默认 50，上限 200） | `{topics:[{topic,count}], total}` | 按 `cards.topics` 的 JSON 数组聚合，计数降序、主题升序 |
+| `card.revisions` | `id`、`limit?`（默认 10，上限 20） | `{id, revisions:[{revision,title,summary,body,topics,edited,createdAt}]}` | 新的在前；受 2 MiB 帧预算约束 |
+| `card.merge` | `keepId`、`mergeId`、`keepRevision`、`mergeRevision`、`title?`、`summary?`、`body?` | `{card, removedId, sources, relations}` | 单个 `IMMEDIATE` 事务：重验两卡与版本、合并主题/别名、重指来源与关系、去重去自环、把被并卡的历史修订移交给保留卡、`favorite` 取或、置 `edited` 并提版；版本过期→`source_changed`，同 ID 或超长→`invalid_params`，失败时两卡与关系不变 |
+| `card.export` | `id` | `{id, filename, markdown}` | Rust 序列化 Markdown；文件名清洗 `\/:*?"<>|` 与控制字符 |
+| `relation.add` | `fromId`、`toId`、`kind`、`evidence?` | `KnowledgeRelation` | 拒未知端点、自环、未知类型、依据超 500 字；`contrast` 规范化去重；重复返回既有行 |
+| `relation.remove` | `id` | `{removed:true}` | 未知 ID → `not_found` |
+| `relation.list` | `cardId`、`limit?`（默认 30，上限 100） | `{items:[{…relation, card:{id,title,kind}, direction}], total}` | 对方卡片元数据随行返回，避免逐条查询 |
+| `graph.query` | `topic?`、`query?`、`focusId?`、`depth?`、`limit?` | `{nodes,edges,total,shown,truncated,limitedBy}` | Rust 先筛后截断：节点默认/上限 200，`total` 为裁剪前命中数，边只保留两端都在节点集内的，512 KiB 预算触发 `limitedBy:'bytes'`；节点只带元数据 |
+| `profile.*`（沿用） | 不变 | 不变 | 面板复用阶段 4 的 list/get/update/delete/pause/clear/retry/status/context |
+
+模型关系不新增方法：`extract.run` 的批次答案可带 `relations:[{from,to,kind,evidence}]`，端点必须是本批实际提供过的卡片或建议标识，`evidence` 必须是本批文本子串，单批上限 12 条，落库标记 `origin:'model'`；越界即 `invalid_output`。空白关系是合法答案。
+
+主进程通道（`handle()` + `knowledgeOwner`）：`knowledge:topic-list`、`knowledge:card-revisions`、`knowledge:card-merge`、`knowledge:card-export`、`knowledge:card-export-save`（保存对话框 + UTF-8 写入，取消不写）、`knowledge:relation-add|remove|list`、`knowledge:graph`；新增 `knowledge:changed` 广播（携带 helper 的 scope），页面挂载时订阅、卸载时退订，用于刷新可见页面而不是轮询。
+
+### 验收（本轮实际执行结果见下一节）
+
+- 真实 helper 合成验证：筛选分页与 `total`、中文/特殊字符搜索、收藏持久化、合法关系与非法端点、重复边与删除/合并后的关系一致性、200+ 节点裁剪与字节预算、schema 5→6 升级与更高版本拒绝、合并的过期版本/超长正文/来源保留/原子失败、模型关系的可引用集合与错误输出。
+- 生产渲染入口：从侧栏到真实卡片的搜索/选择/编辑/收藏/删除/合并/导出、图谱节点与邻居展开、源记录跳转与失效说明、历史整理、关闭状态、画像更正/固定/清空；至少一组窄窗口、键盘路径、中英文与深浅主题；图谱与 Mem0 各自查实际数据。
+- 组件级 mock 只作 UI 检查，Rust/host/IPC 真实链路单独验证；阶段 1～4 的既有回归继续通过。
+
+### 新增回归
+
+Rust：`native/knowledge/tests/cards_view.rs` 7 项（过滤后的 `total`、收藏不动 revision/edited、`nextOffset` 续页、字节预算页、`topic.list` 计数排序、`card.revisions` 顺序与上限、merge 成功路径与四类拒绝、导出 Markdown 与文件名清洗）；`native/knowledge/tests/relations.rs` 10 项（增删列与幂等、自环/未知端点/未知类型/超长依据拒绝、`contrast` 对称去重、删卡级联、图谱 topic/短查询 LIKE/长查询 FTS、focus 1～2 跳、节点上限与边端点闭合、字节预算、模型关系可引用集合与三类 `invalid_output`）；`native/knowledge/src/store.rs` 库内 1 项（schema 5 → 6 保住来源/卡片/来源关联/修订/建议/排除，`favorite` 默认 0，新列默认值正确）。合计 `cargo test --locked` 101 项。
+
+TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验证 `topic.list`/`card.revisions`/`card.export` 与 `card.merge`/`relation.add|list|remove`/`graph.query` 的方法名、参数形状与返回类型；`src/renderer/src/settings/pages/knowledgeView.test.ts` 24 项（请求构造与上限钳制、`nextOffset` 合并与重叠去重、过期响应闸门、选择保持、宽窄切换、空状态、关系分组、合并预览、图谱截断文案、画像分组）。渲染侧共 52 文件 / 562 项通过。
+
+顺手修掉的两处真实问题（不是测试问题）：ready 帧的 `schema.knowledge` 由 5 变 6 后，`host.integration.test.ts` 与 `loop.test.ts` 里钉住的对象断言仍是 5，实测失败后改为 6；`suggestions.rs` 接受建议时写 `card_history` 未带 `topics`/`edited`（依赖默认值），会让该版修订在列表里显示空主题，改为随快照写入真实值。
+
+### 验证（最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（native/knowledge） | 0 |
+| `cargo test --locked`（native/knowledge） | 0，101 项通过（lib 17 + cards_view 7 + extract 11 + process 11 + profile 27 + queue 18 + relations 10） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 |
+| `cargo clippy --locked --all-targets --features fixture -- -D warnings` | 0 |
+| `node scripts/build-native.mjs` | 0（knowledge crate release 重建 23.83 s；`suggestions.rs` 修正后再次重建） |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` / `-p tsconfig.web.json` | 0 / 0 |
+| `pnpm exec vitest run src/main/knowledge src/main/chat.test.ts src/main/notes.test.ts src/main/assistant.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts src/renderer` | 0（73 文件 / 835 项） |
+| `pnpm test:native` | 0（7 个 crate 全部构建并通过） |
+| `pnpm test` | 0（269 文件通过 / 3 跳过；3851 项通过 / 8 跳过；98.40 s） |
+| `pnpm build` | 0（`settings-*.js` 5,255.65 kB，含图谱与知识库页面） |
+| `git diff --check` | 0（本轮提交前工作区） |
+
+交付产物：`native/bin/yu-knowledge.exe` 3,044,864 字节，SHA-256 `5dc8d3ba733f8e86d1d6058fde5e4ae81df3ecfb55e128130c5942fdb3900b66`（MSVC 重建哈希会变）；debug `native/knowledge/target/debug/yu-knowledge.exe`、fixture `yu-knowledge-fixture.exe` 与 `native/knowledge/target` 不计入交付。
+
+### 未测与边界
+
+- 未调用真实付费模型：图谱与合并路径都不触发模型；模型关系只在既有提炼批次里接收，测试全部用注入 completer，并断言调用次数。
+- 未在打包的 Electron 实例里手工点选：页面、对话框与图谱的验证是类型检查加纯逻辑单测（`knowledgeView.test.ts`）加构建通过，没有真实窗口截图或窄窗口目视证据。这一项与阶段 1～4 的记录口径一致，仍是本阶段最主要的未测部分。
+- 文档来源（`kind: 'document'`）没有可打开的原记录类型，详情里只显示类型/标题/ID/定位与失效原因，不伪造跳转。
+- 图谱是知识库页内的视图（`view: 'cards' | 'graph'`）而不是独立一级导航；知识库设置是知识库页顶栏打开的对话框，没有并入全局设置树。
+- 图谱的 Byte 预算与节点上限有 Rust 侧实测，但 200+ 节点在真实窗口里的渲染表现未目视确认。
+- 阶段 6 的聊天检索引用、系列、工作流联动与删除联动，阶段 7 的备份/卸载/安装包验证仍未开始。
