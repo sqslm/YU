@@ -1231,13 +1231,20 @@ fn apply(
                     .iter()
                     .find(|candidate| candidate.id == id)
                     .map(|candidate| candidate.revision);
-                let moved = matches!(seen_revision, Some(seen) if seen != revision);
-                if edited != 0 || moved {
-                    let why = if edited != 0 {
-                        "目标卡片已被人工编辑"
-                    } else {
-                        "目标卡片在提炼期间已更新"
-                    };
+                // A suggestion is only honest for the revision the model was shown. If
+                // the card moved on after the comparison, this draft is stale: anchoring
+                // it to the newer revision would let a human edit be overwritten by an
+                // answer that never saw it, so the whole judgement is refused.
+                if matches!(seen_revision, Some(seen) if seen != revision) {
+                    return Err(ApiError::new(
+                        Code::SourceChanged,
+                        "目标卡片在提炼期间已更新",
+                    ));
+                }
+                if edited != 0 {
+                    // Edited before the comparison: the model judged exactly this
+                    // revision, so the proposal stays usable for it.
+                    let why = "目标卡片已被人工编辑";
                     if suggest(
                         &transaction,
                         draft,

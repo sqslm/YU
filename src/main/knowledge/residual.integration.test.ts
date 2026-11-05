@@ -280,7 +280,8 @@ describe('T3: a target lost during the comparison', () => {
 
   async function compareCase(
     action: Action,
-    duringCompare: (card: string, host: KnowledgeHost) => Promise<void>
+    duringCompare: (card: string, host: KnowledgeHost) => Promise<void>,
+    beforeSecond?: (card: string, host: KnowledgeHost) => Promise<void>
   ) {
     let target: string | null = null
     let compared = 0
@@ -311,6 +312,7 @@ describe('T3: a target lost during the comparison', () => {
     const first = await host.listCards()
     expect(first.total, 'the target card exists').toBe(1)
     target = first.items[0]!.id
+    if (beforeSecond) await beforeSecond(target, built.host)
 
     settle(collector, await notes.createText({ text: '第二条随记：同样先谈约束。' }))
     await until(async () => ((await host.queueStatus()).total === 2 ? true : null), 'the second note to be queued')
@@ -333,19 +335,72 @@ describe('T3: a target lost during the comparison', () => {
     }
   )
 
-  it('only suggests when the target was edited while the model answered', { timeout: 120_000 }, async () => {
+  it('refuses a merge whose target changed while the model answered', { timeout: 120_000 }, async () => {
     const edited = `${BODY}（人工补充：这段是我改过的。）`
     const { host } = await compareCase('merge', async (card, live) => {
       await live.updateCard({ id: card, body: edited })
     })
     const cards = await host.listCards()
-    expect(cards.total, 'the target is kept').toBe(1)
+    expect(cards.total, 'the target is kept, no substitute').toBe(1)
     const card = await host.getCard(cards.items[0]!.id)
     expect(card.body, 'the human body was not overwritten').toBe(edited)
     expect(card.edited, 'the edit is recorded').toBe(true)
+    expect(card.revision, 'the human revision stands').toBe(2)
+    const open = await host.listSuggestions()
+    expect(open.total, 'a stale draft cannot come back as a suggestion').toBe(0)
+    const status = await host.queueStatus()
+    expect(status.counts.working, 'the claim was released').toBe(0)
+    expect(status.counts.needs_reread, 'the judge was refused as stale').toBe(1)
+    expect(status.counts.completed, 'the refused batch committed no progress').toBe(1)
+  })
+
+  it('suggests against the revision the model actually saw', { timeout: 120_000 }, async () => {
+    const edited = `${BODY}（人工补充：比较之前我就改过。）`
+    const { host } = await compareCase(
+      'merge',
+      async () => undefined,
+      async (card, live) => {
+        await live.updateCard({ id: card, body: edited })
+      }
+    )
     const open = await host.listSuggestions({ state: 'open' })
-    expect(open.total, 'the merge became a suggestion').toBe(1)
-    expect((await host.queueStatus()).counts.working).toBe(0)
+    expect(open.total, 'the edited card yields one usable suggestion').toBe(1)
+    const suggestion = open.items[0]!
+    expect(suggestion.targetRevision, 'the suggestion is bound to the seen revision').toBe(2)
+
+    const cards = await host.listCards()
+    const target = cards.items[0]!.id
+    const accepted = await host.acceptSuggestion(suggestion.id)
+    expect(accepted.state).toBe('accepted')
+    const card = await host.getCard(target)
+    expect(card.revision, 'accepting bumps the card revision').toBe(3)
+    expect(card.body, 'the accepted draft replaced the body').toContain('补充：这条随记多一句。')
+    expect(card.edited, 'the human edit flag survives').toBe(true)
+    expect(card.sourceIds.length, 'both sources stay attached').toBe(2)
+  })
+
+  it('refuses a suggestion once the card moved past its revision', { timeout: 120_000 }, async () => {
+    const edited = `${BODY}（人工补充：比较之前我就改过。）`
+    const later = `${edited}（后来又改了一次。）`
+    const { host } = await compareCase(
+      'merge',
+      async () => undefined,
+      async (card, live) => {
+        await live.updateCard({ id: card, body: edited })
+      }
+    )
+    const open = await host.listSuggestions({ state: 'open' })
+    expect(open.total).toBe(1)
+    const suggestion = open.items[0]!
+    const target = (await host.listCards()).items[0]!.id
+    await host.updateCard({ id: target, body: later })
+
+    await expect(host.acceptSuggestion(suggestion.id)).rejects.toMatchObject({ code: 'source_changed' })
+    const card = await host.getCard(target)
+    expect(card.body, 'the newer human body is intact').toBe(later)
+    expect(card.revision, 'no revision was applied on top').toBe(3)
+    const after = await host.getSuggestion(suggestion.id)
+    expect(after.state, 'the stale suggestion is closed').toBe('rejected')
   })
 })
 
