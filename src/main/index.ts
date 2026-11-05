@@ -40,6 +40,7 @@ import { createKnowledgeCompleter } from './knowledge/model'
 import { KnowledgeCollector } from './knowledge/collector'
 import { HistoryDriver } from './knowledge/history'
 import { createHistoryPages } from './knowledge/pages'
+import { createSourceRecovery } from './knowledge/recover'
 import type { TaskTarget } from '@shared/knowledge'
 
 import {
@@ -221,7 +222,13 @@ const knowledge = new KnowledgeHost({
  * It holds no state of its own except the reading bodies: the queue, its window
  * and every dedupe rule live in the Rust helper.
  */
+/**
+ * Reads a pending task's text back out of the store it came from. The collector
+ * only asks; every decision about whether the text still counts stays in Rust.
+ */
+const knowledgeRecovery = createSourceRecovery({ notes: () => notes, chats: () => chats.store })
 const knowledgeCollector = new KnowledgeCollector({
+  readBody: (channel, originRef) => knowledgeRecovery(channel, originRef),
   settings: () => store.get(),
   host: () => knowledge,
   log: line => log(line)
@@ -231,11 +238,17 @@ const knowledgeCollector = new KnowledgeCollector({
  * already exist. The renderer cannot hand in rows of its own — that channel is
  * not exposed to it at all, so a page can never be forged.
  */
-const historyPages = createHistoryPages({ notes: () => notes, chats: () => chats })
+const historyPages = createHistoryPages({ notes: () => notes, chats: () => chats.store })
 const historyDriver = new HistoryDriver({
   host: () => knowledge,
   pages: historyPages,
-  allowed: () => knowledgeCollector.enabled,
+  allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+  // Fixed once per job: content newer than these bounds arrives through the live
+  // hooks instead, so a scan over a library the user keeps editing terminates.
+  bounds: () => {
+    const ids = notes.list().notes.map(note => note.id).sort()
+    return { noteBound: ids.length ? ids[ids.length - 1]! : null, chatBound: chats.store.historyBound() }
+  },
   log: line => log(line)
 })
 
@@ -800,7 +813,10 @@ function applyGameMode(status: GameModeStatus): void {
     // Only a running helper is told about the game: with the feature switched off
     // there is nothing to pause, and spawning one just to write a flag would create
     // the databases the feature is supposed to leave alone.
-    if (knowledge.running) void knowledge.pauseCollect('game', true).catch(() => undefined).finally(() => knowledge.stop())
+    // The pause flag has to reach the database before the helper dies, so the
+    // hand-over is awaited and only then is the process stopped. With the feature
+    // off nothing spawns and nothing is paused: there is no scan to hold back.
+    if (knowledgeCollector.enabled) void knowledgeCollector.sync({ game: true }).finally(() => knowledge.stop())
     hotkeys?.stop()
     refreshWakeWord()
     cancelAssistant()
@@ -824,8 +840,9 @@ function applyGameMode(status: GameModeStatus): void {
     }
   } else {
     gamePreparation?.finish(false)
-    // Leaving the game lifts only the game reason; a manual pause stays put.
-    if (knowledgeCollector.enabled && knowledge.running) void knowledge.pauseCollect('game', false).catch(() => undefined)
+    // Leaving the game lifts only the game reason; a manual pause stays put, and a
+    // disabled feature still does not spawn anything just to clear a flag.
+    if (knowledgeCollector.enabled) void knowledgeCollector.sync({ game: false })
     if (gameResourceTimer) clearInterval(gameResourceTimer)
     gameResourceTimer = null
     if (!quitting) {
@@ -2507,11 +2524,6 @@ async function bootstrap(): Promise<void> {
     if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('recording:changed')
   })
   const settings = await store.load()
-  // Mirrors the switches only while the feature is on: with the default off
-  // nothing spawns, no database is created and no scan is resumed. The game flag
-  // is corrected here too, so a stale pause cannot outlive a crash.
-  void knowledgeCollector.sync({ game: gameMode.snapshot().active })
-  if (knowledgeCollector.enabled) void historyDriver.resume()
   // Chromium's network stack is the only transport that reads the OS proxy/PAC,
   // so the mode is pushed in before any window exists and before any request.
   setEgressLog(log)
@@ -2527,6 +2539,13 @@ async function bootstrap(): Promise<void> {
   // hand; nothing may touch the store before this completes.
   await notes.load()
   await history.load(settings.historyLimit)
+  // Knowledge starts only now, once both stores a scan reads are loaded and the
+  // settings are in hand: a resume that ran earlier would scan an empty library
+  // and mark its scopes finished. With the default off nothing spawns, no
+  // database is created and no scan is resumed; the game flag is corrected here
+  // too, so a pause left behind by a crash cannot outlive the restart.
+  void knowledgeCollector.sync({ game: gameMode.snapshot().active })
+  if (knowledgeCollector.enabled && !gameMode.snapshot().active) void historyDriver.resume()
   // Lifetime usage rollup. Seeded from the history that is still on disk when
   // the file does not exist yet, so upgrading does not reset the 概览 charts.
   await stats.load(() => history.list(''))

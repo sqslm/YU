@@ -5,8 +5,10 @@ import { join } from 'node:path'
 
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
+import { DEFAULT_SETTINGS } from '@shared/defaults'
 import { KNOWLEDGE_LIMITS } from '@shared/knowledge'
 
+import { KnowledgeCollector } from './collector'
 import { KnowledgeHost } from './host'
 
 /**
@@ -83,7 +85,7 @@ describe('compiled helper over the production host', () => {
       opened: true,
       fts5: true,
       trigram: true,
-      schema: { knowledge: 3, profile: 1 }
+      schema: { knowledge: 4, profile: 1 }
     })
     const card = await instance.saveCard({
       kind: 'concept',
@@ -289,5 +291,99 @@ describe('compiled helper over the production host', () => {
     // appears in tasklist's own error text, so the name is the reliable check.
     expect(listing.trim().length).toBeGreaterThan(0)
     expect(listing).not.toContain('yu-knowledge.exe')
+  })
+})
+
+
+/** The collector publishes without blocking its caller, so tests wait for the row. */
+async function until<T>(read: () => Promise<T>, done: (value: T) => boolean, timeoutMs = 10_000): Promise<T> {
+  const started = Date.now()
+  for (;;) {
+    const value = await read()
+    if (done(value)) return value
+    if (Date.now() - started > timeoutMs) return value
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+}
+
+describe('collection recovery, clearing and the game pause on the real helper', () => {
+  const NOTE = 'n-recovery-1'
+
+  function collectorFor(instance: KnowledgeHost, readBody: (channel: string, originRef: string) => unknown) {
+    return new KnowledgeCollector({
+      settings: () => ({ ...DEFAULT_SETTINGS, knowledge: { enabled: true, notes: true, chat: true, reading: true } }),
+      host: () => instance,
+      readBody: readBody as never,
+      log: (line: string) => console.log('DBG', line)
+    })
+  }
+
+  it('retracts a source whose body changed instead of retrying the old text', async () => {
+    requireHelper()
+    const instance = host()
+    const collector = collectorFor(instance, (channel, originRef) =>
+      channel === 'note' && originRef === NOTE ? { text: '现在的正文' } : { missing: 'deleted' }
+    )
+    await collector.sync()
+    await collector.noteSettled({ id: NOTE, title: '标题', transcript: '原始正文', polished: '原始正文', updatedAt: 1 })
+    const queued = await until(() => instance.listQueue({}), page => page.items.length === 1)
+    expect(queued.items).toHaveLength(1)
+    await expect(collector.retry(queued.items[0].id)).resolves.toBe(false)
+    const cancelled = await instance.listQueue({ state: 'cancelled' })
+    expect(cancelled.total).toBe(1)
+    expect(cancelled.items[0].state).toBe('cancelled')
+    expect((await instance.queueStatus()).counts.ready).toBe(0)
+  })
+
+  it('never collects the old transcript of a note whose polished body was cleared', async () => {
+    requireHelper()
+    const instance = host()
+    const collector = collectorFor(instance, (_channel, originRef) => ({ text: '旧转写' }))
+    await collector.sync()
+    await collector.noteSettled({ id: NOTE, transcript: '旧转写', polished: '旧润色', polishStatus: 'ok', updatedAt: 1 })
+    const published = await until(() => instance.listQueue({}), page => page.items.length === 1)
+    expect(published.items).toHaveLength(1)
+    await collector.noteSettled({ id: NOTE, transcript: '旧转写', polished: '', polishStatus: 'ok', updatedAt: 2 })
+    const cleared = await until(
+      () => instance.listQueue({}),
+      page => page.items.length === 1 && page.items[0].state === 'cancelled'
+    )
+    expect(cleared.items).toHaveLength(1)
+    expect(cleared.items[0].state).toBe('cancelled')
+    expect((await instance.queueStatus()).counts.ready + (await instance.queueStatus()).counts.stabilizing).toBe(0)
+  })
+
+  it('keeps the game pause after the helper dies and lifts it on exit', async () => {
+    requireHelper()
+    const instance = host()
+    const collector = collectorFor(instance, () => ({ text: '正文' }))
+    await collector.sync()
+    await collector.noteSettled({ id: NOTE, transcript: '正文', polished: '正文', updatedAt: 1 })
+    await collector.sync({ game: true })
+    await instance.stop()
+    expect(instance.running).toBe(false)
+    // The flag lives in the database, so a fresh process still reports the pause.
+    expect((await instance.queueStatus()).pausedReasons.game).toBe(true)
+    await collector.sync({ game: false })
+    const resumed = await instance.queueStatus()
+    expect(resumed.pausedReasons.game).toBe(false)
+    expect(resumed.paused).toBe(false)
+  })
+
+  it('starts nothing when the feature is switched off', async () => {
+    requireHelper()
+    const dir = root()
+    cleanup.push(dir)
+    const off = new KnowledgeHost({ entry: join(dir, 'missing.exe'), root: dir, requestMs: 1_000 })
+    const collector = new KnowledgeCollector({
+      settings: () => ({ ...DEFAULT_SETTINGS, knowledge: { enabled: false, notes: true, chat: true, reading: true } }),
+      host: () => off,
+      readBody: () => ({ missing: 'deleted' })
+    })
+    await collector.sync({ game: true })
+    await collector.sync({ game: false })
+    expect(off.running).toBe(false)
+    await collector.noteSettled({ id: 'n-off', transcript: '正文', polished: '正文', updatedAt: 1 })
+    expect(off.running).toBe(false)
   })
 })

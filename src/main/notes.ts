@@ -37,6 +37,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path'
 import { app } from 'electron'
 import { resolvePromptCard } from '@shared/promptLibrary'
 import { renderContext } from '@shared/prompts'
+import { noteBodyField } from '@shared/noteBody'
 import { applyReplacements } from '@shared/text'
 import type { NoteBulk, NoteCategory, NoteEntry, NotePatch, NoteStore, NoteTombstone, Settings } from '@shared/types'
 import { toOggOpus } from './audio/transcode'
@@ -67,6 +68,12 @@ const MAX_CATEGORIES = 40
 const MAX_PUSH_NOTES = 200
 
 const POLISH_STATUSES: readonly NoteEntry['polishStatus'][] = ['pending', 'ok', 'failed', 'skipped']
+
+/** The body of a note, using the same rule the notes page displays. */
+function noteBodyOf(note: Pick<NoteEntry, 'polished' | 'transcript' | 'polishStatus'>): string {
+  const field = noteBodyField({ polished: note.polished, polishStatus: note.polishStatus })
+  return field === 'polished' ? note.polished : note.transcript
+}
 
 export interface NotesStoreOptions {
   localAsr?: { enabled: () => boolean; prepare: () => Promise<void>; transcribeWav: (wav: Uint8Array) => Promise<string> }
@@ -528,8 +535,9 @@ export class NotesStore {
     if (!note) return undefined
     const before = cloneNote(note)
     // Only a body change is worth collecting: renaming or retagging a note must
-    // not look like new material.
-    const bodyBefore = note.polished || note.transcript
+    // not look like new material. The comparison uses the same body rule the
+    // notes page uses, so clearing a polished body really does look like a change.
+    const bodyBefore = noteBodyOf(note)
 
     if (patch.title !== undefined) {
       const title = patch.title.trim().slice(0, 200)
@@ -561,7 +569,7 @@ export class NotesStore {
     note.pending = true
     try { this.save(true) }
     catch (error) { this.data.notes[this.data.notes.indexOf(note)] = before; throw error }
-    if ((note.polished || note.transcript) !== bodyBefore) this.settled(note)
+    if (noteBodyOf(note) !== bodyBefore) this.settled(note)
     return cloneNote(note)
   }
 

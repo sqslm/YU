@@ -17,6 +17,8 @@ import type {
   SourceKind
 } from '@shared/knowledge'
 import type { KnowledgeHost } from './host'
+import { noteBodyField } from '@shared/noteBody'
+import { createHash } from 'node:crypto'
 
 /** A note as the notes store holds it, reduced to what a source needs. */
 export interface NoteProjection {
@@ -89,6 +91,17 @@ export interface ReadingProjection {
   at: number
 }
 
+/**
+ * A bounded, stable group key for one reading material.
+ *
+ * The origin can be a long URL or a document path, so the key is a digest of it:
+ * fixed length, no prefix collisions from cutting the string, and identical every
+ * time the same material is read.
+ */
+export function readingKey(origin: string): string {
+  return `reading:${createHash('sha256').update(origin).digest('hex')}`
+}
+
 /** Which stored kind a material's identity implies. */
 export function materialKind(material: ReadingMaterial): SourceKind {
   if (material.attachmentId) return 'document'
@@ -101,9 +114,18 @@ const MAX_MATERIALS = 5
 const MAX_MATERIAL_CHARS = 48_000
 const STASH_BYTES = 16 * 1024 * 1024
 
+/** What a store says about the text a pending task quoted. */
+export type RecoveredBody = { text: string } | { missing: 'deleted' | 'temporary' | 'empty' | 'unknown' }
+
 export interface CollectorDeps {
   settings: () => Settings
   host: () => KnowledgeHost | null
+  /**
+   * The production recovery entry: reads a source's current body back out of the
+   * store it came from. Without it a note/chat task can only be retried while its
+   * body is still in memory, so recovery never claims text it cannot produce.
+   */
+  readBody?: (channel: 'note' | 'chat' | 'reading', originRef: string) => RecoveredBody
   log?: (line: string) => void
   now?: () => number
 }
@@ -187,6 +209,8 @@ export class KnowledgeCollector {
 
   /** Drops every in-memory body; called when the feature is switched off. */
   clear(): void {
+    // Bodies are dropped, but the tasks stay: the helper is the authority on them
+    // and a later retry reports `needs_reread` because the text is gone.
     this.stash.clear()
     this.keys.clear()
     this.stashed = 0
@@ -285,9 +309,12 @@ export class KnowledgeCollector {
       ].filter(part => part !== '')
       const links = reading.sources.filter(item => item.url).map(item => item.url as string)
       if (links.length) parts.push(`【来源】\n${links.join('\n')}`)
-      const text = parts.join('\n\n')
-      const groupKey = `reading:${material.origin}`.slice(0, 200)
-      this.remember(material.origin, groupKey, text)
+      // The composed text is what the user would re-open, so the stash keeps it;
+      // the source version itself is the material's own text, because a new
+      // question about the same page must not look like a new version of it.
+      const context = parts.join('\n\n')
+      const groupKey = readingKey(material.origin)
+      this.remember(material.origin, groupKey, context)
       void this.publish({
         channel: 'reading',
         kind: materialKind(material),
@@ -297,8 +324,8 @@ export class KnowledgeCollector {
         title: material.title.slice(0, 200),
         locator: material.locator ?? material.url ?? material.path ?? material.attachmentId ?? '',
         readAt: reading.at,
-        scope: `${reading.scope}（材料 ${range}）`.slice(0, 1000),
-        text,
+        scope: `${reading.scope}（材料 ${range}${material.coverage ? `，${material.coverage}` : ''}）`.slice(0, 1000),
+        text: material.text,
         at: reading.at
       })
     })
@@ -309,23 +336,74 @@ export class KnowledgeCollector {
    * whose text was evicted is reported as `needs_reread` instead of leaving a
    * task that can never finish.
    */
+  /**
+   * Retries a parked task, but only after proving the text is still the text.
+   *
+   * The queue holds a reference and a fingerprint, not a copy. Recovery reads the
+   * current body out of the original store (or the in-memory stash for a reading
+   * summary), lets the helper re-hash it against the stored fingerprint, and only
+   * then re-arms the task. A deleted note, a temporary thread, an evicted body or
+   * an edited note ends the task instead of retrying stale content.
+   */
   async retry(groupId: string): Promise<boolean> {
     const host = this.host()
     if (!host) return false
-    const key = this.keys.get(groupId)
-    if (key && !this.stash.has(key)) {
-      await host.needsReread({ groupId }, 'reading body no longer in memory').catch(() => undefined)
-      return false
-    }
     try {
+      const page = await host.queueItems({ groupId, limit: 1 })
+      // `queue.items` returns the items of one group, not a list of groups.
+      const item = page.items[0]
+      if (!item) return false
+      const channel = page.channel ?? 'reading'
+      const body = this.bodyOf(channel, item.originRef, groupId)
+      if ('missing' in body) {
+        await this.retract(groupId, body.missing, channel)
+        return false
+      }
+      if (channel !== 'reading') {
+        // Rust re-hashes the body we just read; a changed source is a new version,
+        // so the old task is retracted rather than retried with stale text.
+        const check = await host.readSource(item.sourceId, undefined, body.text)
+        if (!check.matched) {
+          await this.retract(groupId, 'changed', channel)
+          return false
+        }
+      }
       await host.retryTask({ groupId })
       return true
     } catch (error) {
       const message = this.error(error)
       this.deps.log?.(`[knowledge] 无法重试：${message}`)
-      if (key) await host.needsReread({ groupId }, 'reading body no longer in memory').catch(() => undefined)
       return false
     }
+  }
+
+  private bodyOf(channel: 'note' | 'chat' | 'reading', originRef: string, groupId: string): RecoveredBody {
+    if (channel === 'reading') {
+      const key = this.keys.get(groupId) ?? originRef
+      const entry = this.stash.get(key)
+      return entry ? { text: entry.text } : { missing: 'unknown' }
+    }
+    const read = this.deps.readBody?.(channel, originRef)
+    return read ?? { missing: 'unknown' }
+  }
+
+  /** Ends a task whose source no longer says what it said. */
+  private async retract(groupId: string, reason: string, channel: 'note' | 'chat' | 'reading'): Promise<void> {
+    const host = this.host()
+    if (!host) return
+    if (channel === 'reading' && reason === 'unknown') {
+      await host.needsReread({ groupId }, 'reading body no longer in memory').catch(() => undefined)
+      return
+    }
+    const text =
+      reason === 'deleted'
+        ? 'source deleted'
+        : reason === 'temporary'
+          ? 'thread became temporary'
+          : reason === 'empty'
+            ? 'source body is empty'
+            : 'source changed'
+    await host.invalidateTask({ groupId }, text).catch(() => undefined)
   }
 
   locate(origin: string): string | null {
@@ -335,15 +413,41 @@ export class KnowledgeCollector {
   private remember(origin: string, groupKey: string, text: string): void {
     const size = Buffer.byteLength(text, 'utf8')
     if (size > STASH_BYTES) return
-    while (this.stashed + size > STASH_BYTES && this.stash.size) {
+    // The same origin can be published twice (a re-read of the same page). Its old
+    // entry is replaced rather than counted twice, or the budget would drift.
+    const previous = this.stash.get(origin)
+    if (previous) {
+      this.stash.delete(origin)
+      this.stashed -= previous.size
+    }
+    while (this.stashed + size > STASH_BYTES) {
       const oldest = this.stash.keys().next()
       if (oldest.done) break
-      this.stashed -= this.stash.get(oldest.value)?.size ?? 0
-      this.stash.delete(oldest.value)
+      this.forget(oldest.value)
     }
     this.stash.set(origin, { text, size })
     this.stashed += size
     this.keys.set(groupKey, origin)
+  }
+
+  /**
+   * Drops one stashed body and parks every task that quoted it.
+   *
+   * A task whose text is gone cannot be retried into `ready`: it is reported as
+   * needing a re-read, which is the only honest state for a body that was never
+   * stored anywhere but this process.
+   */
+  private forget(origin: string): void {
+    const entry = this.stash.get(origin)
+    if (!entry) return
+    this.stash.delete(origin)
+    this.stashed -= entry.size
+    const host = this.host()
+    for (const [groupId, key] of [...this.keys]) {
+      if (key !== origin) continue
+      this.keys.delete(groupId)
+      void host?.needsReread({ groupId }, 'reading body evicted').catch(() => undefined)
+    }
   }
 
   private async publish(input: PublishInput): Promise<PublishResult | null> {
@@ -403,8 +507,24 @@ export class KnowledgeCollector {
 }
 
 /** A note's stored body, or null when it has nothing worth keeping. */
-export function noteBody(note: { polished?: string; transcript?: string }): string {
-  return (note.polished || note.transcript || '').trim()
+/**
+ * The note body the way the notes page defines it.
+ *
+ * `polished || transcript` is wrong for an intentionally cleared body: with
+ * `polishStatus: 'ok'` and an empty polished text the user meant "empty", not
+ * "show the old transcript". The shared field rule already encodes that, so the
+ * collector follows it instead of inventing a second interpretation.
+ */
+export function noteBody(note: {
+  polished?: string
+  transcript?: string
+  polishStatus?: 'pending' | 'ok' | 'failed' | 'skipped'
+}): string {
+  const field = noteBodyField({
+    polished: note.polished ?? '',
+    polishStatus: note.polishStatus ?? 'skipped'
+  })
+  return (field === 'polished' ? (note.polished ?? '') : (note.transcript ?? '')).trim()
 }
 
 /** The note projection the collector expects. */

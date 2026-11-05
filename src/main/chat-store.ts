@@ -12,6 +12,17 @@ function name(value: unknown): string {
   return value.trim()
 }
 /** Local conversations, opened on demand. SQLite owns transactions and persistence. */
+/** One completed question/answer pair, as a history scan reads it. */
+export interface HistoryTurn {
+  userId: string
+  answerId: string
+  question: string
+  answer: string
+  at: number
+  /** Sequence of the answer message: the cursor the next page continues from. */
+  seq: number
+}
+
 export class ChatStore {
   private database: DatabaseSync | null = null
   constructor(private path: string) {}
@@ -42,6 +53,72 @@ export class ChatStore {
   list(): { threads: ChatThread[]; groups: ChatGroup[] } {
     return { threads: this.db.prepare('SELECT * FROM chat_threads ORDER BY updatedAt DESC,id').all().map(row => ({ ...row, manualTitle: Boolean(row.manualTitle), memoryTemporary: Boolean(row.memoryTemporary), profileId: row.profileId ?? null, effort: row.effort ?? null })) as unknown as ChatThread[], groups: this.db.prepare('SELECT * FROM chat_groups ORDER BY name,id').all() as unknown as ChatGroup[] }
   }
+  /**
+   * The highest message sequence in the store.
+   *
+   * A history scan fixes this once when it starts: everything appended later is
+   * newer than the bound and takes the live path instead of joining the scan.
+   */
+  historyBound(): number {
+    return Number(this.db.prepare('SELECT COALESCE(MAX(seq), 0) AS n FROM chat_messages').get()!.n)
+  }
+
+  /** Thread ids in a stable order, so a scan can walk them without drifting. */
+  historyThreads(): string[] {
+    return this.db
+      .prepare('SELECT id FROM chat_threads WHERE memoryTemporary = 0 ORDER BY id')
+      .all()
+      .map(row => String(row.id))
+  }
+
+  /**
+   * Completed question/answer pairs of one thread after `afterSeq`.
+   *
+   * The cursor is the message sequence the store already keeps, not an index into
+   * a sliding window: appending a turn or reading a short window can neither hide
+   * an earlier turn nor shift a later one.
+   */
+  historyTurns(
+    threadId: string,
+    afterSeq: number,
+    bound: number,
+    limit: number
+  ): { turns: HistoryTurn[]; nextSeq: number; done: boolean } {
+    const rows = this.db
+      .prepare(
+        'SELECT seq, id, role, text, state, createdAt FROM chat_messages WHERE threadId = ? AND seq > ? AND seq <= ? ORDER BY seq LIMIT ?'
+      )
+      .all(threadId, afterSeq, bound, Math.max(limit * 2, 2)) as {
+      seq: number
+      id: string
+      role: string
+      text: string
+      state: string
+      createdAt: number
+    }[]
+    const turns: HistoryTurn[] = []
+    let nextSeq = afterSeq
+    for (let index = 0; index + 1 < rows.length; index += 1) {
+      const question = rows[index]!, answer = rows[index + 1]!
+      if (question.role !== 'user' || answer.role !== 'assistant') continue
+      if (answer.state !== 'done' || !question.text.trim() || !answer.text.trim()) {
+        nextSeq = question.seq
+        continue
+      }
+      turns.push({
+        userId: question.id,
+        answerId: answer.id,
+        question: question.text.trim(),
+        answer: answer.text.trim(),
+        at: answer.createdAt,
+        seq: answer.seq
+      })
+      nextSeq = answer.seq
+      if (turns.length >= limit) return { turns, nextSeq, done: false }
+    }
+    return { turns, nextSeq, done: rows.length < Math.max(limit * 2, 2) }
+  }
+
   get(id: string, limit = 100, messageId?: string): ChatDetail {
     if (typeof id !== 'string' || !Number.isInteger(limit) || limit < 1 || limit > 10000) throw Error('无效的对话请求')
     const row = this.db.prepare('SELECT * FROM chat_threads WHERE id=?').get(id)

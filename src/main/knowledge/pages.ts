@@ -2,16 +2,23 @@
  * The bounded, read-only projections the history scan walks.
  *
  * The renderer never supplies bodies — these readers are the only source of
- * "old content", and each page is bounded by `limit` so a large library is never
- * moved in one step. Both readers are cursor-based on values that survive
- * concurrent edits: a note is keyed by `updatedAt:id`, a chat turn by
- * `threadId:messageIndex`, so an insert or a delete during a scan can neither
- * skip a row nor repeat one.
+ * "old content". Two rules keep a scan honest while the user keeps working:
+ *
+ * 1. The set is fixed when the job starts. The note reader is bounded by the
+ *    highest note id and the chat reader by the highest message sequence that
+ *    existed at `history.begin`; anything newer takes the live path instead.
+ * 2. The order is stable and independent of mutable fields. Notes are ordered by
+ *    their id (never by `updatedAt`, which every edit moves), and turns by the
+ *    message sequence the chat store already keeps (never by an index into a
+ *    sliding window of the newest 10 000 messages).
+ *
+ * Each page is also capped by bytes, not only by row count: twenty legal notes of
+ * 200 000 characters would otherwise build a batch the helper has to refuse.
  */
 
 import type { PublishInput } from '@shared/knowledge'
 import type { HistoryPage, HistoryPages } from './history'
-import type { ChatDetail, ChatIndex } from '@shared/chat'
+import type { HistoryTurn } from '../chat-store'
 import { noteBody, noteProjection } from './collector'
 import type { NoteProjection } from './collector'
 
@@ -22,23 +29,58 @@ export interface NoteSource {
 
 /** The chat fields the scan reads; a real `ChatStore` satisfies this. */
 export interface ChatSource {
-  list(): { threads: ChatIndex['threads'] }
-  get(id: string, limit?: number): ChatDetail
+  historyThreads(): string[]
+  historyTurns(
+    threadId: string,
+    afterSeq: number,
+    bound: number,
+    limit: number
+  ): { turns: HistoryTurn[]; nextSeq: number; done: boolean }
+  get(id: string): { title?: string }
 }
 
-const noteKey = (note: NoteProjection): string => `${note.updatedAt}:${note.id}`
+/**
+ * Bytes a single batch may carry. The helper's frame limit is 2 MiB and the batch
+ * is wrapped in one request, so half of it is a comfortable ceiling; a row that
+ * alone exceeds the budget still goes out on its own, because the body limit
+ * (200 000 characters) keeps a single row well below the frame.
+ */
+export const HISTORY_BATCH_BYTES = 512 * 1024
 
-export function createHistoryPages(deps: { notes: () => NoteSource; chats: () => ChatSource }): HistoryPages {
+const bytes = (text: string): number => Buffer.byteLength(text, 'utf8')
+
+/** Where a scan starts and where it may not look past. */
+export interface HistoryBounds {
+  noteBound: string | null
+  chatBound: number | null
+}
+
+export function createHistoryPages(deps: {
+  notes: () => NoteSource
+  chats: () => ChatSource
+  limit?: number
+}): HistoryPages {
+  const limit = deps.limit ?? 20
   return {
-    notes(after, limit) {
+    notes(after, bound) {
       const rows = deps
         .notes()
         .list()
         .notes.map(noteProjection)
-        .filter(note => note.polishStatus !== 'pending' && noteBody(note) !== '')
-        .sort((left, right) => left.updatedAt - right.updatedAt || (left.id < right.id ? -1 : 1))
-      const rest = after ? rows.filter(note => noteKey(note) > after) : rows
-      const page = rest.slice(0, limit)
+        .filter(note => note.polishStatus !== 'pending')
+        .filter(note => noteBody(note) !== '')
+        .filter(note => !bound || note.id <= bound)
+        .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+      const rest = after ? rows.filter(note => note.id > after) : rows
+      const page: NoteProjection[] = []
+      let budget = 0
+      for (const note of rest) {
+        if (page.length >= limit) break
+        const text = noteBody(note)
+        if (page.length > 0 && budget + bytes(text) > HISTORY_BATCH_BYTES) break
+        page.push(note)
+        budget += bytes(text)
+      }
       return {
         rows: page.map(note => ({
           channel: 'note' as const,
@@ -50,58 +92,62 @@ export function createHistoryPages(deps: { notes: () => NoteSource; chats: () =>
           text: noteBody(note),
           at: note.updatedAt
         })),
-        cursor: page.length ? noteKey(page[page.length - 1]!) : after,
-        done: rest.length <= limit
+        cursor: page.length ? page[page.length - 1]!.id : after,
+        done: rest.length <= page.length
       }
     },
 
-    chat(after, limit) {
-      const [afterThread, afterIndex] = splitCursor(after)
-      const threads = deps
-        .chats()
-        .list()
-        .threads.filter(thread => !thread.memoryTemporary)
-        .sort((left, right) => (left.id < right.id ? -1 : 1))
+    chat(after, bound) {
+      const boundSeq = bound ?? null
+      if (boundSeq === null) return { rows: [], cursor: after, done: true }
+      const [afterThread, afterSeq] = splitCursor(after)
+      const threads = deps.chats().historyThreads()
       const rows: PublishInput[] = []
+      let budget = 0
       let cursor = after
-      for (const thread of threads) {
-        if (afterThread && thread.id < afterThread) continue
-        if (afterThread && thread.id === afterThread && afterIndex === null) continue
-        const start = afterThread === thread.id && afterIndex !== null ? afterIndex : 0
-        const detail = deps.chats().get(thread.id, 10_000)
-        for (let index = start; index + 1 < detail.messages.length; index += 1) {
-          const question = detail.messages[index]!, answer = detail.messages[index + 1]!
-          if (question.role !== 'user' || answer.role !== 'assistant') continue
-          if (answer.state !== 'done' || !question.text.trim() || !answer.text.trim()) continue
-          rows.push({
-            channel: 'chat',
-            kind: 'chat',
-            originRef: `${thread.id}:${question.id}:${answer.id}`,
-            groupKey: thread.id,
-            threadKey: thread.id,
-            title: thread.title || question.text.slice(0, 40),
-            scope: '主界面问答',
-            text: `${question.text.trim()}\n\n${answer.text.trim()}`,
-            at: answer.createdAt
-          })
-          // A full page always names the exact message it stopped on, so the next
-          // call resumes inside this thread instead of skipping its later turns.
-          if (rows.length >= limit) return { rows, cursor: `${thread.id}:${index + 1}`, done: false }
+      for (const threadId of threads) {
+        if (afterThread && threadId < afterThread) continue
+        const start = afterThread === threadId ? afterSeq : 0
+        let position = start
+        for (;;) {
+          const page = deps.chats().historyTurns(threadId, position, boundSeq, limit)
+          for (const turn of page.turns) {
+            const text = `${turn.question}\n\n${turn.answer}`
+            if (rows.length > 0 && budget + bytes(text) > HISTORY_BATCH_BYTES) {
+              return { rows, cursor, done: false }
+            }
+            rows.push({
+              channel: 'chat',
+              kind: 'chat',
+              originRef: `${threadId}:${turn.userId}:${turn.answerId}`,
+              groupKey: threadId,
+              threadKey: threadId,
+              title: deps.chats().get(threadId).title || turn.question.slice(0, 40),
+              scope: '主界面问答',
+              text,
+              at: turn.at
+            })
+            budget += bytes(text)
+            position = turn.seq
+            cursor = `${threadId}:${position}`
+            if (rows.length >= limit) return { rows, cursor, done: false }
+          }
+          if (page.done) break
+          position = page.nextSeq
         }
-        cursor = thread.id
+        cursor = threadId
       }
-      // The last page keeps what it collected: an unterminated page is not empty.
       return { rows, cursor, done: true }
     }
   }
 }
 
-function splitCursor(cursor: string | null): [string | null, number | null] {
-  if (!cursor) return [null, null]
+function splitCursor(cursor: string | null): [string | null, number] {
+  if (!cursor) return [null, 0]
   const at = cursor.lastIndexOf(':')
-  if (at < 0) return [cursor, null]
-  const index = Number(cursor.slice(at + 1))
-  return [cursor.slice(0, at), Number.isInteger(index) && index >= 0 ? index : 0]
+  if (at < 0) return [cursor, 0]
+  const seq = Number(cursor.slice(at + 1))
+  return [cursor.slice(0, at), Number.isInteger(seq) && seq >= 0 ? seq : 0]
 }
 
 export type { HistoryPage, HistoryPages }

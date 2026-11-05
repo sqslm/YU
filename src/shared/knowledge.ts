@@ -362,6 +362,18 @@ export interface QueuePage {
   channels: CollectChannels
 }
 
+/** One page of a group's items, plus the channel the group belongs to. */
+/** One group's items: what `queue.items` answers, and what recovery reads back. */
+export interface QueueItemPage {
+  channel: CollectChannel | null
+  items: QueueItem[]
+  total: number
+  offset: number
+  limit: number
+  hasMore: boolean
+  nextOffset: number | null
+}
+
 export interface QueueStatus {
   counts: Record<QueueState, number>
   total: number
@@ -387,6 +399,9 @@ export interface HistoryJob {
   state: HistoryState
   noteCursor: string | null
   chatCursor: string | null
+  /** Scan bounds fixed when the job started; newer content takes the live path. */
+  noteBound: string | null
+  chatBound: number | null
   noteDone: boolean
   chatDone: boolean
   scanned: number

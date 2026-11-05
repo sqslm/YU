@@ -37,6 +37,7 @@ import {
   type PublishResult,
   type ProfileItem,
   type ProfilePage,
+  type QueueItemPage,
   type QueuePage,
   type QueueStatus,
   type SaveCardInput,
@@ -710,13 +711,22 @@ export class KnowledgeHost {
   }
 
   /** One page of a task's items; a long thread never arrives in one frame. */
-  queueItems(query: { groupId: string; offset?: number; limit?: number }): Promise<QueuePage> {
-    return this.call<QueuePage>('queue.items', query)
+  queueItems(query: { groupId: string; offset?: number; limit?: number }): Promise<QueueItemPage> {
+    return this.call<QueueItemPage>('queue.items', query)
   }
 
   /** Reads a stored source by id and says whether the expected text still matches. */
-  readSource(id: string, expectFingerprint?: string): Promise<{ source: unknown; matched: boolean }> {
-    return this.call<{ source: unknown; matched: boolean }>('source.read', { id, expectFingerprint })
+  /**
+   * Asks the helper whether a source still matches. Passing `text` makes the
+   * helper re-hash the body the host just read, so "unchanged" is decided by the
+   * store, not by the caller's own claim.
+   */
+  readSource(
+    id: string,
+    expectFingerprint?: string,
+    text?: string
+  ): Promise<{ source: unknown; matched: boolean; fingerprint: string | null; size: number | null }> {
+    return this.call('source.read', { id, expectFingerprint, text })
   }
 
   invalidateTask(target: TaskTarget, reason: string): Promise<TaskRefusal> {
@@ -739,8 +749,11 @@ export class KnowledgeHost {
     return this.call<ExclusionEntry[]>('exclude.list', {})
   }
 
-  beginHistory(scopes: { notes: boolean; chat: boolean }): Promise<{ job: HistoryJob; resumed: boolean }> {
-    return this.call<{ job: HistoryJob; resumed: boolean }>('history.begin', scopes)
+  beginHistory(
+    scopes: { notes: boolean; chat: boolean },
+    bounds: { noteBound: string | null; chatBound: number | null } = { noteBound: null, chatBound: null }
+  ): Promise<{ job: HistoryJob; resumed: boolean }> {
+    return this.call<{ job: HistoryJob; resumed: boolean }>('history.begin', { ...scopes, ...bounds })
   }
 
   stepHistory(input: {

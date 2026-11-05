@@ -549,10 +549,14 @@ pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<Publish
                     };
                     source_link(transaction, &id, ordinal, &source_id)?;
                 }
+                // A late or historical event must never pull the window backwards:
+                // the group keeps the latest deadline it already had, so a newly
+                // arrived discussion still waits its full settling window.
                 transaction
                     .execute(
-                        "UPDATE queue_groups SET state = 'stabilizing', stable_at = ?2, title = ?3,
-                         scope = ?4, reason = NULL, error = NULL, updated_at = ?5,
+                        "UPDATE queue_groups SET state = 'stabilizing',
+                         stable_at = MAX(stable_at, ?2), title = ?3,
+                         scope = ?4, reason = NULL, error = NULL, updated_at = MAX(updated_at, ?5),
                          thread_key = COALESCE(?6, thread_key) WHERE id = ?1",
                         params![id, stable_at, title, scope, at, params.thread_key],
                     )
@@ -611,7 +615,7 @@ fn items_of(
             "SELECT s.id, i.ordinal, s.kind, s.origin_ref, s.title, s.locator, s.scope, s.size,
                     s.read_at, s.state
              FROM queue_items i JOIN sources s ON s.id = i.source_id
-             WHERE i.group_id = ?1 ORDER BY i.ordinal LIMIT ?2 OFFSET ?3",
+             WHERE i.group_id = ?1 ORDER BY s.read_at, i.ordinal LIMIT ?2 OFFSET ?3",
         )
         .map_err(|error| ApiError::storage(format!("cannot read the queue items: {error}")))?;
     let rows = statement
@@ -645,7 +649,18 @@ pub fn items(conn: &Connection, params: ItemsParams) -> ApiResult<Value> {
     };
     let rows = items_of(conn, &params.group_id, params.offset, limit)?;
     let (kept, has_more, next_offset) = fit_page(rows, total, params.offset);
+    // The channel travels with the page: recovery needs to know which store the
+    // origin reference points at before it can read a body back out of it.
+    let channel: Option<String> = conn
+        .query_row(
+            "SELECT channel FROM queue_groups WHERE id = ?1",
+            params![params.group_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| ApiError::storage(error.to_string()))?;
     Ok(json!({
+        "channel": channel,
         "items": kept,
         "total": total,
         "offset": params.offset,

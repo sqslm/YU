@@ -108,16 +108,45 @@ pub fn validate(fields: Fields<'_>) -> ApiResult<()> {
     Ok(())
 }
 
-/// Reads one source by its bound id and says whether it still matches the
-/// fingerprint a caller expected. Recovery uses this instead of trusting a
-/// queue row: the store is the authority on what still exists.
-pub fn read(connection: &Connection, id: &str, expect: Option<&str>) -> ApiResult<Value> {
+/// Reads one source by its bound id and says whether it still matches.
+///
+/// When the host supplies the body it just read out of the original store, the
+/// fingerprint is recomputed here and compared with the stored one — a caller
+/// cannot declare "unchanged" by echoing a string back. Without a body only the
+/// caller's expectation is compared, which is what the queue's own retry needs.
+pub fn read(
+    connection: &Connection,
+    id: &str,
+    expect: Option<&str>,
+    text: Option<&str>,
+) -> ApiResult<Value> {
     let source = get(connection, id)?;
     if let Some(expect) = expect {
         check_chars("expectFingerprint", expect, 200)?;
     }
-    let matched = expect.is_none_or(|value| value == source.fingerprint || value == source.version);
-    Ok(json!({ "source": source, "matched": matched }))
+    let recomputed = match text {
+        Some(text) => {
+            check_chars("text", text, MAX_BODY_CHARS)?;
+            Some(crate::util::sha256_hex(text))
+        }
+        None => None,
+    };
+    let matches_expect = expect.is_none_or(|value| {
+        value == source.fingerprint
+            || value == source.version
+            || recomputed.as_deref() == Some(value)
+    });
+    let matched = match recomputed.as_deref() {
+        // The store is the authority: a changed body is a different version.
+        Some(print) => print == source.fingerprint && matches_expect,
+        None => matches_expect,
+    };
+    Ok(json!({
+        "source": source,
+        "matched": matched,
+        "fingerprint": recomputed,
+        "size": text.map(|text| text.chars().count() as i64),
+    }))
 }
 
 /// Inserts or refreshes the source identified by (kind, originRef, version).

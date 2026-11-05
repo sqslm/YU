@@ -24,6 +24,9 @@ pub struct HistoryJob {
     pub chat_cursor: Option<String>,
     pub note_done: bool,
     pub chat_done: bool,
+    /// Scan bounds fixed when the job started; new content never enters this scan.
+    pub note_bound: Option<String>,
+    pub chat_bound: Option<i64>,
     pub scanned: i64,
     pub skipped: i64,
     pub deduped: i64,
@@ -37,7 +40,7 @@ pub struct HistoryJob {
 fn read(conn: &Connection, id: &str) -> ApiResult<HistoryJob> {
     conn.query_row(
         "SELECT id, scopes, state, note_cursor, chat_cursor, note_done, chat_done, scanned, skipped,
-           deduped, ready, needs_reread, failed, created_at, updated_at
+           deduped, ready, needs_reread, failed, created_at, updated_at, note_bound, chat_bound
          FROM history_jobs WHERE id = ?1",
         [id],
         |row| {
@@ -57,6 +60,8 @@ fn read(conn: &Connection, id: &str) -> ApiResult<HistoryJob> {
                 failed: row.get(12)?,
                 created_at: row.get(13)?,
                 updated_at: row.get(14)?,
+                note_bound: row.get(15)?,
+                chat_bound: row.get(16)?,
             })
         },
     )
@@ -73,6 +78,12 @@ pub struct BeginParams {
     pub notes: bool,
     #[serde(default)]
     pub chat: bool,
+    /// Highest note key and chat sequence that existed when the scan started. The
+    /// host reads them from its own stores; a job never re-enumerates them.
+    #[serde(default)]
+    pub note_bound: Option<String>,
+    #[serde(default)]
+    pub chat_bound: Option<i64>,
 }
 
 pub fn begin(conn: &mut Connection, params: BeginParams) -> ApiResult<Value> {
@@ -96,9 +107,15 @@ pub fn begin(conn: &mut Connection, params: BeginParams) -> ApiResult<Value> {
     let now = now_ms();
     let scopes = json!({ "notes": params.notes, "chat": params.chat });
     conn.execute(
-        "INSERT INTO history_jobs (id, scopes, state, created_at, updated_at)
-         VALUES (?1, ?2, 'running', ?3, ?3)",
-        params![id, serde_json::to_string(&scopes).unwrap_or_default(), now],
+        "INSERT INTO history_jobs (id, scopes, state, created_at, updated_at, note_bound, chat_bound)
+         VALUES (?1, ?2, 'running', ?3, ?3, ?4, ?5)",
+        params![
+            id,
+            serde_json::to_string(&scopes).unwrap_or_default(),
+            now,
+            params.note_bound,
+            params.chat_bound
+        ],
     )
     .map_err(|error| ApiError::storage(format!("cannot start the history job: {error}")))?;
     Ok(json!({ "job": read(conn, &id)?, "resumed": false }))
@@ -145,7 +162,9 @@ pub fn step(conn: &mut Connection, params: StepParams) -> ApiResult<Value> {
         job.chat_cursor.clone()
     };
     // A replayed batch is not a second scan: the checkpoint already covers it.
-    if params.cursor.is_some() && params.cursor == stored_cursor {
+    // An empty batch at the same cursor is different — it is the completion
+    // marker for that position, and it must still finish the scope.
+    if !params.rows.is_empty() && params.cursor.is_some() && params.cursor == stored_cursor {
         return Ok(json!({
             "job": job,
             "done": job.state == "completed",

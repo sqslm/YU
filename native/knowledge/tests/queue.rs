@@ -307,7 +307,11 @@ fn every_question_in_one_thread_stays_its_own_item() {
     let items = task["items"].as_array().unwrap();
     assert_eq!(items.len(), 2, "one item per question: {task}");
     assert_eq!(items[0]["ordinal"], 0);
-    assert_eq!(items[1]["ordinal"], 1);
+    // Ordinals stay distinct so a page can order two turns of the same instant.
+    assert_ne!(
+        items[0]["ordinal"], items[1]["ordinal"],
+        "ordinals collided: {task}"
+    );
     assert_eq!(items[0]["originRef"], "thread-1:m1:m2");
 }
 
@@ -614,9 +618,22 @@ fn an_independent_turn_is_kept_even_when_it_arrives_late() {
     let items = task["items"].as_array().unwrap();
     assert_eq!(items.len(), 2, "both turns must survive: {task}");
     assert_eq!(task["itemsTotal"], 2);
-    assert_eq!(items[0]["originRef"], "thread-1:m2:m3");
-    assert_eq!(items[1]["originRef"], "thread-1:m0:m1");
-    assert_eq!(items[1]["ordinal"], 1);
+    // Conversation order, not arrival order: the historical turn is older, so it
+    // is listed first even though it was published second.
+    assert_eq!(items[0]["originRef"], "thread-1:m0:m1");
+    assert_eq!(items[1]["originRef"], "thread-1:m2:m3");
+    // Ordinals stay distinct so a page can order two turns of the same instant.
+    assert_ne!(
+        items[0]["ordinal"], items[1]["ordinal"],
+        "ordinals collided: {task}"
+    );
+    // A late historical turn must not pull the settling window backwards: the
+    // group still waits the full window after the newest turn.
+    let stable_at = task["stableAt"].as_i64().unwrap();
+    assert!(
+        stable_at >= base + 2_000 + 60,
+        "the window regressed to {stable_at}: {task}"
+    );
 }
 
 #[test]

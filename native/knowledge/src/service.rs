@@ -30,6 +30,9 @@ struct ReadParams {
     id: String,
     #[serde(default)]
     expect_fingerprint: Option<String>,
+    /// Body the host read out of its own store; Rust re-hashes it and decides.
+    #[serde(default)]
+    text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -147,6 +150,7 @@ impl Service {
                     &connection,
                     &params.id,
                     params.expect_fingerprint.as_deref(),
+                    params.text.as_deref(),
                 )?;
                 Ok(Outcome {
                     result,

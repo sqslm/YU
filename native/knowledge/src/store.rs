@@ -13,11 +13,18 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 3;
+pub const KNOWLEDGE_SCHEMA: i64 = 4;
 pub const PROFILE_SCHEMA: i64 = 1;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
 /// deleting or hiding a conversation also cancels its reading tasks.
+/// The scan bound each history job fixed when it started. A job never re-reads
+/// content newer than its own bound; that content takes the live path instead.
+const HISTORY_BOUND_SQL: &str = "
+ALTER TABLE history_jobs ADD COLUMN note_bound TEXT;
+ALTER TABLE history_jobs ADD COLUMN chat_bound INTEGER;
+";
+
 const THREAD_SQL: &str = r#"
 ALTER TABLE queue_groups ADD COLUMN thread_key TEXT;
 CREATE INDEX queue_groups_thread ON queue_groups (thread_key);
@@ -200,7 +207,7 @@ impl Store {
         let knowledge = open_db(
             &knowledge_path,
             KNOWLEDGE_SCHEMA,
-            &[KNOWLEDGE_SQL, QUEUE_SQL, THREAD_SQL],
+            &[KNOWLEDGE_SQL, QUEUE_SQL, THREAD_SQL, HISTORY_BOUND_SQL],
         )?;
         let profile = open_db(&profile_path, PROFILE_SCHEMA, &[PROFILE_SQL])?;
         Ok(Store {

@@ -5,6 +5,7 @@
  */
 
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -73,7 +74,13 @@ describe('history scan through the real stores', () => {
 
     const knowledge = host(dir)
     await knowledge.configureCollect({ enabled: true, notes: true, chat: true })
-    const driver = new HistoryDriver({ host: () => knowledge, pages: createHistoryPages({ notes: () => notes, chats: () => chats }) })
+    const driver = new HistoryDriver({
+      host: () => knowledge,
+      pages: createHistoryPages({ notes: () => notes, chats: () => chats }),
+      // The same bounds the app fixes when a scan starts; without them the chat
+      // reader has no upper limit and emits nothing.
+      bounds: () => ({ noteBound: null, chatBound: chats.historyBound() })
+    })
     const job = await driver.start({ notes: true, chat: true })
     await vi.waitFor(async () => {
       const status = await knowledge.historyStatus(job!.id)
@@ -102,11 +109,11 @@ describe('history scan through the real stores', () => {
       chats.finish(turn.answerId, `回答 ${index}`, 'done')
       ids.push(`${thread.id}:${turn.userId}:${turn.answerId}`)
     }
-    const pages = createHistoryPages({ notes: () => ({ list: () => ({ notes: [] }) }), chats: () => chats })
+    const pages = createHistoryPages({ notes: () => ({ list: () => ({ notes: [] }) }), chats: () => chats, limit: 4 })
     const seen: string[] = []
     let cursor: string | null = null
     for (let guard = 0; guard < 20; guard += 1) {
-      const page = pages.chat(cursor, 4)
+      const page = pages.chat(cursor, chats.historyBound())
       seen.push(...page.rows.map(row => row.originRef))
       if (page.done) break
       expect(page.cursor).not.toBe(cursor)
@@ -117,28 +124,80 @@ describe('history scan through the real stores', () => {
     chats.close()
   })
 
-  it('pages notes by a cursor that survives an insertion during the scan', async () => {
+  it('pages notes inside a bound that an insertion during the scan cannot move', async () => {
     const dir = root()
     const current = settings(dir)
     const notes = new NotesStore({ log: () => undefined, getSettings: () => current, notify: () => undefined })
     await notes.load()
-    const older = [await notes.createText({ text: '最早的一页' }), await notes.createText({ text: '第二页' }), await notes.createText({ text: '第三页' })]
-    const pages = createHistoryPages({ notes: () => notes, chats: () => ({ list: () => ({ threads: [] }), get: () => { throw Error('unused') } }) })
-    const firstPage = pages.notes(null, 1)
-    expect(firstPage.rows.map(row => row.originRef)).toEqual([older[0]!.id])
+    const older = [
+      await notes.createText({ text: '最早的一页' }),
+      await notes.createText({ text: '第二页' }),
+      await notes.createText({ text: '第三页' })
+    ]
+    const unusedChats = {
+      historyThreads: () => [],
+      historyTurns: () => ({ turns: [], nextSeq: 0, done: true }),
+      get: () => ({})
+    }
+    const pages = createHistoryPages({ notes: () => notes, chats: () => unusedChats, limit: 1 })
+    // The bound is the store's highest note id at the moment the scan starts.
+    const bound = older.map(note => note.id).sort()[older.length - 1]!
+    const firstPage = pages.notes(null, bound)
     expect(firstPage.done).toBe(false)
     const inserted = await notes.createText({ text: '扫描期间新增' })
-    const secondPage = pages.notes(firstPage.cursor, 10)
-    const second = secondPage.rows.map(row => row.originRef)
-    const remaining = older.filter(note => note.id !== older[0]!.id).map(note => note.id)
-    // Every older note is reached exactly once, and the page already delivered is
-    // never repeated. Whether the note written during the scan lands in this page or
-    // the next depends on its timestamp, but it can never be lost or duplicated.
-    expect(second).not.toContain(older[0]!.id)
-    for (const id of remaining) expect(second).toContain(id)
-    const third = secondPage.done ? [] : pages.notes(secondPage.cursor, 10).rows.map(row => row.originRef)
-    const seen = [...second, ...third]
+
+    const seen = [...firstPage.rows.map(row => row.originRef)]
+    let cursor = firstPage.cursor
+    for (let guard = 0; guard < 20; guard += 1) {
+      const page = pages.notes(cursor, bound)
+      seen.push(...page.rows.map(row => row.originRef))
+      if (page.done) break
+      expect(page.cursor).not.toBe(cursor)
+      cursor = page.cursor
+    }
+    // Nothing repeats and every note that existed when the scan started is reached.
     expect(new Set(seen).size).toBe(seen.length)
-    expect(seen).toEqual(expect.arrayContaining([...remaining, inserted.id]))
+    for (const note of older) expect(seen).toContain(note.id)
+    // The bound is fixed at start, so a note written afterwards belongs to the live
+    // path: the scan may see it once when its id still falls inside the bound, and it
+    // must never be reached twice either way.
+    expect(seen.every(id => older.some(note => note.id === id) || id === inserted.id)).toBe(true)
+    expect(seen.filter(id => id === inserted.id).length).toBeLessThanOrEqual(1)
   })
+
+  it('keeps the first turn of a thread longer than the old message window', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'yu-knowledge-scan-'))
+    roots.push(dir)
+    const chats = new ChatStore(join(dir, 'chats.db'))
+    const thread = chats.create(null)
+    // 5 001 turns is 10 002 messages: more than the 10 000-message window the
+    // reader used to take, which silently dropped the oldest questions.
+    const db = new DatabaseSync(join(dir, 'chats.db'))
+    const insert = db.prepare(
+      'INSERT INTO chat_messages (id, threadId, role, text, state, createdAt) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+    db.exec('BEGIN')
+    for (let index = 0; index < 5001; index += 1) {
+      insert.run(`u${index}`, thread.id, 'user', `问题${index}`, 'done', 1_000 + index)
+      insert.run(`a${index}`, thread.id, 'assistant', `回答${index}`, 'done', 1_001 + index)
+    }
+    db.exec('COMMIT')
+    db.close()
+
+    const pages = createHistoryPages({ notes: () => ({ list: () => ({ notes: [] }) }), chats: () => chats, limit: 200 })
+    const bound = chats.historyBound()
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (let guard = 0; guard < 40; guard += 1) {
+      const page = pages.chat(cursor, bound)
+      for (const row of page.rows) seen.push((row as { text: string }).text.split(String.fromCharCode(10))[0])
+      if (page.done) break
+      cursor = page.cursor
+    }
+    expect(seen).toHaveLength(5001)
+    expect(seen[0]).toBe('问题0')
+    expect(seen[5000]).toBe('问题5000')
+    expect(new Set(seen).size).toBe(5001)
+    chats.close()
+  }, 60_000)
 })

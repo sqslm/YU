@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+
+import { DEFAULT_SETTINGS } from '@shared/defaults'
 import {
   KnowledgeCollector,
   attachmentMaterial,
   isReadingTool,
   materialKind,
   noteBody,
+  readingKey,
   noteProjection,
   readingMaterial
 } from './collector'
@@ -30,6 +33,22 @@ function fakeHost(options: { running?: boolean } = {}) {
       input
     })),
     invalidateTask: vi.fn(async () => ({ groupId: 'g1', state: 'cancelled' })),
+    /**
+     * One group with one item, which is all recovery needs: the channel decides
+     * which store is read, the item carries the id and the origin reference.
+     */
+    queueItems: vi.fn(async ({ groupId }: { groupId: string }) => ({
+      channel: 'reading' as const,
+      // `queue.items` answers with the items of one group, so recovery reads the
+      // origin reference straight off the first entry.
+      items:
+        groupId === 'g-never-seen'
+          ? []
+          : [{ sourceId: 's1', originRef: 'https://example.test/y', ordinal: 0, kind: 'web', title: '', locator: '', scope: '', size: 1, readAt: 1, state: 'active' }],
+      total: 1, offset: 0, limit: 1, hasMore: false, nextOffset: null, paused: false,
+      channels: { enabled: true, note: true, chat: true, reading: true, pausedManual: false, pausedGame: false }
+    })),
+    readSource: vi.fn(async () => ({ source: {}, matched: true, fingerprint: 'f', size: 1 })),
     invalidateThread: vi.fn(async () => ({ threadKey: 't1', cancelled: ['g1'], reason: 'thread deleted' })),
     retryTask: vi.fn(async () => ({ groupId: 'g1', state: 'stabilizing' })),
     needsReread: vi.fn(async () => ({ groupId: 'g1', state: 'needs_reread' })),
@@ -125,15 +144,21 @@ describe('knowledge collector reading', () => {
       channel: 'reading',
       kind: 'web',
       originRef: 'https://example.test/a?p=2',
-      groupKey: 'reading:https://example.test/a?p=2',
+      // The key is a digest of the origin: bounded, and never a truncated prefix
+      // that two long URLs could share.
+      groupKey: readingKey('https://example.test/a?p=2'),
       threadKey: 'ask:1',
       locator: 'https://example.test/a?p=2',
       readAt: 7
     })
     expect(String(first.scope)).toContain('材料 1/2')
-    expect(String(first.text)).toContain('【覆盖】公开网页正文')
+    expect(String(first.scope)).toContain('公开网页正文')
+    // The version is the material's own text; the question and answer belong to
+    // the conversation, not to the identity of the page.
+    expect(first.text).toBe('甲正文')
     expect(second).toMatchObject({ kind: 'document', originRef: 'E:/docs/乙.md', locator: '第 3 章' })
-    expect(String(second.text)).toContain('乙正文')
+    expect(second.text).toBe('乙正文')
+    expect(String(second.groupKey).length).toBeLessThan(200)
   })
 
   it('caps the material count and the character budget, marking the cut', () => {
@@ -173,10 +198,9 @@ describe('knowledge collector reading', () => {
     // The helper minted g1; the collector must be able to map it back to the body.
     expect(await subject.retry('g1')).toBe(true)
     expect(host.retryTask).toHaveBeenCalledWith({ groupId: 'g1' })
-    // An id it never saw has no body either, so the task is not retried blindly.
-    host.retryTask.mockRejectedValueOnce(new Error('only a failed task can be retried'))
+    // A group it never saw has no body either: the task is not retried blindly.
     expect(await subject.retry('g-never-seen')).toBe(false)
-    expect(host.needsReread).not.toHaveBeenCalled()
+    expect(host.retryTask).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -248,5 +272,31 @@ describe('knowledge collector switches', () => {
     subject.noteSettled({ id: 'n1', transcript: '正文', polished: '', updatedAt: 1 })
     await new Promise(resolve => setTimeout(resolve, 10))
     expect(log).toHaveBeenCalledWith(expect.stringContaining('channel_disabled'))
+  })
+})
+
+describe('knowledge collector stash', () => {
+  it('marks a task needs_reread when its reading body was evicted', async () => {
+    const host = fakeHost()
+    const current = { ...DEFAULT_SETTINGS, knowledge: { enabled: true, notes: true, chat: true, reading: true } }
+    const service = new KnowledgeCollector({ settings: () => current, host: () => host as unknown as KnowledgeHost })
+    const body = 'x'.repeat(48_000)
+    // The per-material cap is 48 000 characters and the stash holds 16 MiB, so the
+    // first task falls out of memory long before the last one is published.
+    for (let index = 0; index < 360; index += 1) {
+      service.readingFinished({
+        threadId: `ask-stash-${index}`,
+        scope: '浮动提问',
+        request: '问题',
+        materials: [{ origin: `https://example.test/${index}`, title: `材料${index}`, text: body }],
+        answer: '回答',
+        sources: [],
+        at: index
+      })
+    }
+    await Promise.resolve()
+    await expect(service.retry('g1')).resolves.toBe(false)
+    expect(host.needsReread).toHaveBeenCalledWith({ groupId: 'g1' }, expect.any(String))
+    expect(host.retryTask).not.toHaveBeenCalledWith({ groupId: 'g1' })
   })
 })
