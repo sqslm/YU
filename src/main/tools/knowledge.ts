@@ -36,7 +36,7 @@ export interface KnowledgeTools {
   search(query: string, limit: number): Promise<{ items: KnowledgeCardHit[]; total: number }>
   get(id: string): Promise<KnowledgeCard>
   /** Re-queues one note for extraction through the real source chain. */
-  extractFromNote(noteId: string): Promise<ExtractSourceResult>
+  extractFromNote(noteId: string, options?: { signal?: AbortSignal }): Promise<ExtractSourceResult>
   /** True only while the user has the knowledge base switched on and idle. */
   enabled(): boolean
 }
@@ -125,7 +125,7 @@ export const KNOWLEDGE_DEFINITIONS: ToolDefinition[] = [
       // The user's own words, not the platform's: a stopped turn says so.
       if (ctx.signal?.aborted) throw new Error(mt('本轮已取消'))
       ctx.onStatus?.(mt('正在加入提炼队列…'))
-      const result = await ctx.knowledge.extractFromNote(noteId)
+      const result = await ctx.knowledge.extractFromNote(noteId, ctx.signal ? { signal: ctx.signal } : {})
       // Only a really accepted task counts as success: a refusal, a pause or a
       // stale source must stop the step it belongs to instead of reporting a queue
       // entry that does not exist.

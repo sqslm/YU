@@ -93,7 +93,8 @@ describe('knowledge tools inside an answer', () => {
     // Extraction is a write: it needs this run's write grant, not just the switch.
     await expect(runTool('extract_knowledge', { noteId: 'n1' }, ctx)).resolves.toMatchObject({ ok: false })
     const result = await runTool('extract_knowledge', { noteId: 'n1' }, { ...ctx, knowledgeWrite: true })
-    expect(api.extractFromNote).toHaveBeenCalledWith('n1')
+    // The turn's own signal travels with the request, so a cancel stops the write.
+    expect(api.extractFromNote).toHaveBeenCalledWith('n1', { signal: expect.anything() })
     expect(result.ok).toBe(true)
     expect(JSON.stringify(result.data)).toContain('grp_1')
   })

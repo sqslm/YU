@@ -7,8 +7,13 @@
  * material it already holds, the other reads the note back through its own store.
  *
  * Every refusal here is a real state of the app (switch off, channel off, paused,
- * game mode, switched off turn), so the caller reports it instead of queueing
- * something the helper will never take.
+ * game mode, switched off turn, tool disabled in the permission settings), so the
+ * caller reports it instead of queueing something the helper will never take.
+ *
+ * The turn's own signal travels with the hand-over: a source written after the
+ * user cancelled would be a write nobody asked for. Rust keeps whatever it
+ * committed, so a cancel that lands during the write is reported as cancelled and
+ * nothing further is queued — the source that already exists stays as it is.
  */
 import type { ExtractSourceResult } from '@shared/knowledge'
 import { mt } from '@shared/mainI18n'
@@ -22,6 +27,12 @@ export interface HandoffMaterial {
   locator?: string
 }
 
+export interface HandoffPublishOptions {
+  signal?: AbortSignal
+  /** The helper's own words when it refused the source. */
+  reject?: (reason: string) => void
+}
+
 export interface HandoffDeps {
   /** Master switch for the knowledge base. */
   enabled(): boolean
@@ -29,37 +40,62 @@ export interface HandoffDeps {
   channelOn(channel: 'reading' | 'notes'): boolean
   /** Game mode holds back every collection channel. */
   gameActive(): boolean
+  /** Tools the user switched off in the permission settings; a saved workflow
+   * grant never overrides them. */
+  disabled(): readonly string[]
   /** The pause flags live in the helper, so they are asked for, never guessed. */
   paused(): Promise<{ manual: boolean; game: boolean }>
   /** Publishes through the collector and answers the source id it minted or found. */
-  publishReading(material: HandoffMaterial): Promise<string | null>
+  publishReading(material: HandoffMaterial, options: HandoffPublishOptions): Promise<string | null>
   /** Reads the note through its own store, publishes it, and answers the source id. */
-  publishNote(noteId: string): Promise<string | null>
+  publishNote(noteId: string, options: HandoffPublishOptions): Promise<string | null>
   /** Queues one published source and wakes the engine only when it was accepted. */
-  extract(sourceId: string): Promise<ExtractSourceResult>
+  extract(sourceId: string, options: { signal?: AbortSignal }): Promise<ExtractSourceResult>
   log?(line: string): void
 }
 
-/** Why this run cannot hand anything over right now, or '' when it can. */
+/** The tool this hand-over writes with, i.e. the one the permission settings own. */
+const TOOL = 'extract_knowledge'
+
+function channelReason(channel: 'reading' | 'notes'): string {
+  return channel === 'reading' ? mt('知识库没有开启阅读采集') : mt('知识库没有开启随记采集')
+}
+
+/**
+ * Why this run cannot hand anything over right now, or '' when it can.
+ *
+ * The switches, the pause and the permission list all live outside this call, so
+ * they are read twice: once before waiting for the helper's pause state and once
+ * after. The second read is what makes a switch thrown or a turn cancelled during
+ * that wait stop the write instead of showing up one source too late.
+ */
 export async function handoffBlocker(
   deps: HandoffDeps,
   channel: 'reading' | 'notes',
   signal?: AbortSignal
 ): Promise<string> {
-  if (signal?.aborted) return mt('本轮已取消')
-  if (!deps.enabled()) return mt('知识采集未开启')
-  if (!deps.channelOn(channel)) {
-    return channel === 'reading' ? mt('知识库没有开启阅读采集') : mt('知识库没有开启随记采集')
+  const check = (): string => {
+    if (signal?.aborted) return mt('本轮已取消')
+    if (deps.disabled().includes(TOOL)) return mt('此工具已在权限设置中关闭：{{name}}', { name: TOOL })
+    if (!deps.enabled()) return mt('知识采集未开启')
+    if (!deps.channelOn(channel)) return channelReason(channel)
+    if (deps.gameActive()) return mt('游戏模式已开启')
+    return ''
   }
-  if (deps.gameActive()) return mt('游戏模式已开启')
+  const before = check()
+  if (before) return before
+  let paused: { manual: boolean; game: boolean } | null = null
   try {
-    const status = await deps.paused()
-    if (status.manual) return mt('采集已暂停')
-    if (status.game) return mt('游戏模式已开启')
+    paused = await deps.paused()
   } catch (error) {
     // The helper may be down; publishing reports that with its own reason.
     deps.log?.(`[knowledge] 读取暂停状态失败：${error instanceof Error ? error.message : String(error)}`)
   }
+  const after = check()
+  if (after) return after
+  if (!paused) return ''
+  if (paused.game) return mt('游戏模式已开启')
+  if (paused.manual) return mt('采集已暂停')
   return ''
 }
 
@@ -71,16 +107,36 @@ export async function handoffReading(
 ): Promise<ExtractSourceResult> {
   const blocked = await handoffBlocker(deps, 'reading', options.signal)
   if (blocked) return { queued: 0, reason: blocked }
-  const sourceId = await deps.publishReading(material)
-  if (!sourceId) return { queued: 0, reason: '这条读取还没有进入知识库' }
-  return deps.extract(sourceId)
+  let refused = ''
+  const publish: HandoffPublishOptions = { reject: reason => (refused = reason) }
+  if (options.signal) publish.signal = options.signal
+  const sourceId = await deps.publishReading(material, publish)
+  if (refused) return { queued: 0, reason: mt('知识库拒绝了这次读取：{{reason}}', { reason: refused }) }
+  if (!sourceId) {
+    return { queued: 0, reason: options.signal?.aborted ? mt('本轮已取消') : mt('这条读取还没有进入知识库') }
+  }
+  // The source may already be committed when the cancel lands here. That is the
+  // truth, so it is not rolled back — but nothing more is written or queued.
+  if (options.signal?.aborted) return { queued: 0, reason: mt('本轮已取消') }
+  return deps.extract(sourceId, options.signal ? { signal: options.signal } : {})
 }
 
 /** One real note, re-read through its own store and handed over. */
-export async function handoffNote(deps: HandoffDeps, noteId: string): Promise<ExtractSourceResult> {
-  const blocked = await handoffBlocker(deps, 'notes')
+export async function handoffNote(
+  deps: HandoffDeps,
+  noteId: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<ExtractSourceResult> {
+  const blocked = await handoffBlocker(deps, 'notes', options.signal)
   if (blocked) return { queued: 0, reason: blocked }
-  const sourceId = await deps.publishNote(noteId)
-  if (!sourceId) return { queued: 0, reason: '这条随记还不能提炼' }
-  return deps.extract(sourceId)
+  let refused = ''
+  const publish: HandoffPublishOptions = { reject: reason => (refused = reason) }
+  if (options.signal) publish.signal = options.signal
+  const sourceId = await deps.publishNote(noteId, publish)
+  if (refused) return { queued: 0, reason: mt('知识库拒绝了这条随记：{{reason}}', { reason: refused }) }
+  if (!sourceId) {
+    return { queued: 0, reason: options.signal?.aborted ? mt('本轮已取消') : mt('这条随记还不能提炼') }
+  }
+  if (options.signal?.aborted) return { queued: 0, reason: mt('本轮已取消') }
+  return deps.extract(sourceId, options.signal ? { signal: options.signal } : {})
 }

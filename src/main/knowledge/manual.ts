@@ -16,6 +16,8 @@ import { fingerprintOf } from './engine'
 
 export interface ManualExtractDeps {
   host: () => KnowledgeHost
+  /** This turn's signal: a cancel stops the queueing before it happens. */
+  signal?: AbortSignal
   /** The master switch, i.e. the same gate every other channel uses. */
   enabled: () => boolean
   /** False while paused, in game mode, or when the channel is off. */
@@ -53,10 +55,15 @@ const STALE_REASON = '原文已变更，需要重新读取该来源'
  * come back from one write transaction, and a storage failure is returned as it is.
  */
 export async function extractSourceNow(id: string, deps: ManualExtractDeps): Promise<ExtractSourceResult> {
+  const cancelled = (): ExtractSourceResult => ({ queued: 0, reason: '本轮已取消' })
+  if (deps.signal?.aborted) return cancelled()
   if (!deps.enabled()) return { queued: 0, reason: '知识采集未开启' }
   if (!deps.allowed()) return { queued: 0, reason: '采集已暂停' }
   const host = deps.host()
   const source = await host.getSource(id)
+  // Reading the source and its body is an await: the turn may be gone by now, and
+  // a task queued for a cancelled turn is work nobody asked for.
+  if (deps.signal?.aborted) return cancelled()
   if (source.state !== 'active') return { queued: 0, reason: source.invalidReason || '来源已失效' }
   const channel = sourceChannel(source)
   const body = deps.resolveBody(channel, source.originRef)
@@ -82,6 +89,7 @@ export async function extractSourceNow(id: string, deps: ManualExtractDeps): Pro
     return { queued: 0, reason, groupId: parked.groupId ?? null, state: 'needs_reread' }
   }
 
+  if (deps.signal?.aborted) return cancelled()
   const queued = await host.extractSource({
     sourceId: id,
     expectVersion: source.version,

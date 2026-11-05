@@ -345,28 +345,33 @@ const handoff: HandoffDeps = {
   enabled: () => knowledgeCollector.enabled,
   channelOn: channel => store.get().knowledge[channel] !== false,
   gameActive: () => gameMode.snapshot().active,
+  // A saved workflow's explicit extraction step is a grant from the workflow, not
+  // from the user's permission settings: a tool switched off there stays off.
+  disabled: () => store.get().assistantAccess?.disabledTools ?? [],
   paused: async () => (await knowledge.queueStatus()).pausedReasons,
-  async publishReading(material) {
+  async publishReading(material, options) {
     // The page this run already read becomes a reading source through the same
     // projection a normal summary uses; the text is the one in hand, never re-read.
     // Waiting for this publish's own answer is what makes the status honest.
     const published = await knowledgeCollector.publishReading(
       { ...(material as import('./knowledge/collector').ReadingMaterial), locator: material.url ?? '' },
-      { threadId: 'workflow', at: Date.now(), scope: '工作流' }
+      { threadId: 'workflow', at: Date.now(), scope: '工作流' },
+      options
     )
     return published?.sourceId ?? null
   },
-  async publishNote(noteId) {
+  async publishNote(noteId, options) {
     // Reading the note back through its own store is the only way in: the tool
     // never accepts a body handed to it from outside.
     const note = notes.list().notes.find(entry => entry.id === noteId)
     if (!note) throw new Error('这条随记已不存在')
-    const published = await knowledgeCollector.publishNote(note)
+    const published = await knowledgeCollector.publishNote(note, [], options)
     return published?.sourceId ?? null
   },
-  extract: sourceId =>
+  extract: (sourceId, options) =>
     extractSourceNow(sourceId, {
       host: () => knowledge,
+      signal: options.signal,
       enabled: () => knowledgeCollector.enabled,
       allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
       resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
@@ -389,7 +394,7 @@ const knowledgeTools: KnowledgeTools = {
     return knowledge.getCard(id)
   },
   reading: (material, options) => handoffReading(handoff, material, options),
-  extractFromNote: noteId => handoffNote(handoff, noteId)
+  extractFromNote: (noteId, options) => handoffNote(handoff, noteId, options)
 }
 
 /**

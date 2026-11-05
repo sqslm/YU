@@ -126,6 +126,13 @@ const MAX_CITED = 12
 const STASH_BYTES = 16 * 1024 * 1024
 
 /** What a store says about the text a pending task quoted. */
+/** What a caller may say about one publish: this turn's signal and its refusal hook. */
+export interface PublishOptions {
+  signal?: AbortSignal
+  /** Called with the helper's own words when the source was refused. */
+  reject?: (reason: string) => void
+}
+
 export type RecoveredBody = { text: string } | { missing: 'deleted' | 'temporary' | 'empty' | 'unknown' }
 
 export interface CollectorDeps {
@@ -260,7 +267,12 @@ export class KnowledgeCollector {
    * note" action goes through the same call the save path uses: the same source
    * chain, the same dedupe, no second copy of the same knowledge.
    */
-  async publishNote(note: NoteProjection, citedCardIds: string[] = []): Promise<PublishResult | null> {
+  async publishNote(
+    note: NoteProjection,
+    citedCardIds: string[] = [],
+    options: PublishOptions = {}
+  ): Promise<PublishResult | null> {
+    if (options.signal?.aborted) return null
     if (!this.allows('note')) return null
     if (note.polishStatus === 'pending') return null
     const text = noteBody(note)
@@ -280,7 +292,7 @@ export class KnowledgeCollector {
       text,
       at: note.updatedAt,
       ...(citedCardIds.length ? { citedCardIds } : {})
-    })
+    }, options)
   }
 
   /** A deleted note must not leave pending extraction behind. */
@@ -332,12 +344,20 @@ export class KnowledgeCollector {
    * Publishes one already-read material and answers with this publish's own
    * result, so a caller never has to look the source up by origin afterwards.
    */
-  async publishReading(material: ReadingMaterial, projection: { threadId: string; at: number; scope: string }): Promise<PublishResult | null> {
+  async publishReading(
+    material: ReadingMaterial,
+    projection: { threadId: string; at: number; scope: string },
+    options: PublishOptions = {}
+  ): Promise<PublishResult | null> {
+    if (options.signal?.aborted) return null
     if (!this.allows('reading')) return null
     const text = material.text ?? ''
     if (!text.trim()) return null
     const capped = text.length > MAX_MATERIAL_CHARS ? { ...material, text: text.slice(0, MAX_MATERIAL_CHARS), truncated: true } : material
     const groupKey = readingKey(capped.origin)
+    // The body is stashed only when the write is really going ahead: a cancelled
+    // hand-over must not replace the text another legal task is quoting.
+    if (options.signal?.aborted) return null
     this.remember(capped.origin, groupKey, capped.text, capped.path)
     return this.publish({
       channel: 'reading',
@@ -351,7 +371,7 @@ export class KnowledgeCollector {
       scope: projection.scope.slice(0, 1000),
       text: capped.text,
       at: projection.at
-    })
+    }, options)
   }
 
   readingFinished(reading: ReadingProjection): void {
@@ -542,13 +562,17 @@ export class KnowledgeCollector {
     }
   }
 
-  private async publish(input: PublishInput): Promise<PublishResult | null> {
+  private async publish(input: PublishInput, options: PublishOptions = {}): Promise<PublishResult | null> {
+    if (options.signal?.aborted) return null
     const host = this.host()
     if (!host) return null
     try {
       // Wait for a switch hand-over still in flight: the helper must already know
       // that this channel is off before the source is offered to it.
       if (this.confirming) await this.confirmed
+      // The wait can outlast the turn: a cancel that landed while the switch was
+      // being confirmed stops the write here, before the helper ever sees it.
+      if (options.signal?.aborted) return null
       const result = await host.publishSource(input)
       const key = this.keys.has(input.groupKey) ? this.keys.get(input.groupKey) : undefined
       if (key) this.keys.set(result.groupId, key)
@@ -556,8 +580,11 @@ export class KnowledgeCollector {
       return result
     } catch (error) {
       // A refused source is not a crash: the channel may be off, the group
-      // excluded, or the body too large. The reason stays in the log only.
-      this.deps.log?.(`[knowledge] 采集 ${input.channel} 失败：${this.error(error)}`)
+      // excluded, or the body too large. Background producers keep that reason in
+      // the log; a caller that shows it to the user asks for it explicitly.
+      const reason = this.error(error)
+      options.reject?.(reason)
+      this.deps.log?.(`[knowledge] 采集 ${input.channel} 失败：${reason}`)
       return null
     }
   }
