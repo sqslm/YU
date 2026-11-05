@@ -205,12 +205,25 @@ let sync: SyncEngine | null = null
 const stats = new StatsStore()
 
 let settingsWindow: BrowserWindow | null = null
+/**
+ * What an answer may know about the user: the helper's bounded profile text,
+ * empty when the switch is off. Called per turn so flipping the switch takes
+ * effect at once, and it degrades to no profile rather than delaying an answer.
+ */
+const profileText = async (): Promise<string> => {
+  if (!store.get().userProfile.enabled) return ''
+  try {
+    return (await profileCollector.context())?.text?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
 const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
 }, () => assistant.localQueries(), turn => collectChatTurn(turn), (threadId, reason) => {
   knowledgeCollector.threadRemoved(threadId, reason)
   void profileCollector.retractThread(threadId, reason)
-})
+}, profileText)
 let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
 /** Which pill renderer has finished loading and subscribed to its channels. */
@@ -434,6 +447,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   // The knowledge tools come and go with the user's switch; availability is
   // re-checked per call, so turning the feature off retires them immediately.
   knowledge: knowledgeTools,
+  profile: profileText,
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
     const target = await captureSelectionTarget(store.get(), context, signal)

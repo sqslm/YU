@@ -424,6 +424,11 @@ export class AssistantSession {
     workflow?: WorkflowTools
     /** The user's own knowledge base, present only while it is switched on. */
     knowledge?: KnowledgeTools
+    /**
+     * Bounded profile text (≤2000 characters) for the asks that use it, or ''
+     * when the profile switch is off. Reference material, never an instruction.
+     */
+    profile?: () => Promise<string>
     readSelection?: (context: PromptContext, signal: AbortSignal) => Promise<string>
     analyzeScreenshot?: (context: PromptContext, question: string, ocr: boolean, signal: AbortSignal) => Promise<string>
   }) {}
@@ -658,7 +663,14 @@ export class AssistantSession {
           turn.state = 'done'
           return
         }
-        result = await (this.deps.ask ?? askAgent)(resolveSettings(reference), turn.question, context, taskSignal,
+        // The profile is read per ask so a switch flipped mid-session takes effect
+        // immediately; a helper failure degrades to no profile instead of failing.
+        const profile = await (this.deps.profile?.().catch(() => '') ?? '')
+        const promptContext = profile.trim() ? { ...context, profile: profile.trim() } : context
+        // Reading the profile is an await point: a cancel that lands during it must
+        // stop here instead of starting a request nobody is waiting for.
+        taskSignal.throwIfAborted()
+        result = await (this.deps.ask ?? askAgent)(resolveSettings(reference), turn.question, promptContext, taskSignal,
           logTool, options)
       }
       taskSignal.throwIfAborted()

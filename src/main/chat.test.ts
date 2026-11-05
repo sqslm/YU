@@ -30,6 +30,24 @@ it('isolates conversation context and excludes failed or uncompleted turns', asy
   await vi.waitFor(() => expect(service.get(a.id).title).toBe('项目讨论'))
   expect(complete).toHaveBeenCalled()
 })
+it('hands the turn the profile text it was given, and answers anyway when it cannot be read', async () => {
+  const withProfile = new ChatService(join(root, 'profile-on.db'), () => settings, () => {}, () => ({}), undefined, undefined,
+    async () => '偏好：先给结论')
+  try {
+    const thread = withProfile.create(null)
+    await withProfile.send(thread.id, '怎么写')
+    expect(vi.mocked(askAgent).mock.calls.at(-1)?.[2]).toEqual({ profile: '偏好：先给结论' })
+  } finally { withProfile.close() }
+  const broken = new ChatService(join(root, 'profile-error.db'), () => settings, () => {}, () => ({}), undefined, undefined,
+    async () => { throw Error('helper down') })
+  try {
+    const thread = broken.create(null)
+    await broken.send(thread.id, '怎么写')
+    // No profile reaching the model is the honest degradation; the answer still happens.
+    expect(vi.mocked(askAgent).mock.calls.at(-1)?.[2]).toEqual({})
+    expect(broken.get(thread.id).messages.at(-1)).toMatchObject({ state: 'done', text: '回答' })
+  } finally { broken.close() }
+})
 it('persists model errors and partial cancellation rather than leaving a permanent working state', async () => {
   const a = service.create(null)
   vi.mocked(askAgent).mockRejectedValueOnce(Error('LLM offline'))

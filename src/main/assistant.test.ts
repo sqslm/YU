@@ -130,6 +130,15 @@ describe('assistant session', () => {
     expect(analyzeScreenshot).toHaveBeenCalledWith(expect.objectContaining({task: expect.objectContaining({source: 'text'})}), input, input.includes('提取'), expect.any(AbortSignal))
     expect(ask).not.toHaveBeenCalled()
   })
+  it('answers with the profile text when there is one, and without it when the profile cannot be read', async () => {
+    const withProfile = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), profile: async () => '偏好：先给结论' })
+    await withProfile.send('今天该怎么安排')
+    expect(ask.mock.calls.at(-1)?.[2]).toMatchObject({ profile: '偏好：先给结论' })
+    ask.mockClear()
+    const broken = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), profile: async () => { throw Error('helper down') } })
+    await broken.send('今天该怎么安排')
+    expect(ask.mock.calls.at(-1)?.[2]?.profile).toBeUndefined()
+  })
   it('re-reads stored reminders for persistence questions instead of trusting a previous answer', async () => {
     const reminders = vi.fn().mockReturnValue([])
     const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), personal: { reminders } as unknown as PersonalTools })

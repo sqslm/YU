@@ -337,3 +337,11 @@ describe('buildToolResultsPrompt', () => {
     expect(prompt).toContain('2026 年 10 月 19 日')
   })
 })
+
+it('renders the profile as reference material and keeps the live question in charge', () => {
+  const withProfile = buildAskPrompt({ profile: '偏好：先给结论' })
+  expect(withProfile).toContain('# 用户偏好（来自画像，仅作参考）')
+  expect(withProfile).toContain('偏好：先给结论')
+  expect(withProfile).toContain('以当前这句话为准')
+  expect(buildAskPrompt({ profile: '   ' })).not.toContain('用户偏好')
+})

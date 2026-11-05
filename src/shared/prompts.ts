@@ -22,6 +22,12 @@ import { memoryContext, type MemoryEntry } from './memory'
 
 export interface PromptContext {
   memories?: MemoryEntry[]
+  /**
+   * Bounded user-profile text (≤2000 characters) built by the profile helper.
+   * It is reference material, never an instruction: the model reads it to keep
+   * tone and depth consistent, and the current question always wins over it.
+   */
+  profile?: string
   /** Shared task metadata; renderContext deliberately renders only its explicit fields. */
   task?: TaskContext
   /** Frozen original HWND, used by explicit native context tools, not prompt text. */
@@ -302,9 +308,25 @@ export function buildAskPrompt(context: PromptContext = {}): string {
     `今天是 ${formatToday()}。`,
     '',
     renderContext(context),
-    memoryContext(context.memories ?? [])
+    memoryContext(context.memories ?? []),
+    profileContext(context.profile)
   ]
   return blocks.filter((block) => block !== '').join('\n')
+}
+
+/**
+ * The profile is what the user has already told us about how they work, not a
+ * task. The header says so, and the last line keeps the current question in
+ * charge: a corrected or freshly stated preference in the question must win.
+ */
+export function profileContext(profile?: string): string {
+  const text = profile?.trim()
+  if (!text) return ''
+  return [
+    '# 用户偏好（来自画像，仅作参考）',
+    text,
+    '这些是历史偏好，可能已经过时；与用户当前这句话冲突时，以当前这句话为准，不要用画像反驳用户。'
+  ].join('\n')
 }
 
 const LANGUAGE_NAMES: Record<string, string> = {

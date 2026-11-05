@@ -57,7 +57,12 @@ export class ChatService {
      * Told when a conversation stops being storable — deleted, or turned into a
      * temporary one mid-flight — so the tasks that quoted it can be retracted.
      */
-    private onRemoved?: (threadId: string, reason: string) => void) { this.store = new ChatStore(path) }
+    private onRemoved?: (threadId: string, reason: string) => void,
+    /**
+     * The bounded profile text for this turn, or '' when the profile switch is
+     * off. A missing helper must not block an answer, so failures are silent.
+     */
+    private profileText: () => Promise<string> = async () => '') { this.store = new ChatStore(path) }
   get busy(): boolean { return Boolean(this.active) }
   list(): ChatIndex { return { ...this.store.list(), busyThreadId: this.active?.threadId ?? null } }
   get(id: string, limit?: number, messageId?: string): ChatDetail {
@@ -132,7 +137,12 @@ export class ChatService {
       // only as a read: it never writes during an ordinary answer.
       if (local.knowledge) queryTools.push('search_knowledge')
       const allowedTools = [...(summarizing ? ['get_weather', 'get_datetime', 'calculate'] : ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate']), ...queryTools]
-      const pending = askAgent(effective, question.trim(), {}, active.controller.signal, () => {}, {
+      // Read once per turn: the profile is context, not a tool, and a failure to
+      // read it must never keep the user waiting for an answer.
+      const profile = await this.profileText().catch(() => '')
+      // The profile read is an await point: a stop during it must end the turn here.
+      active.controller.signal.throwIfAborted()
+      const pending = askAgent(effective, question.trim(), profile.trim() ? { profile: profile.trim() } : {}, active.controller.signal, () => {}, {
         ...local,
         onToolResult: (name, result) => {
           if (result.ok && isReadingTool(name)) {

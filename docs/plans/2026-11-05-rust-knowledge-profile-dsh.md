@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6、补充复核 T1～T3、二次复核 A～C 与二次复核残余 A～C 的修复均已提交，等待外部复核（见文末「阶段 5 外部复核与修复」「阶段 5 补充复核修复」「阶段 5 二次复核修复」「阶段 5 二次复核残余修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
+**状态：阶段 1～5 已通过外部 Codex 复核；阶段 6（软件联动）已提交，等待外部复核（见文末「阶段 5 外部复核与修复」…「阶段 5 二次复核残余修复」与「阶段 5 外部验收与阶段 6 实施记录」）。阶段 7 未开始；备份与卸载尚未接入。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -1368,6 +1368,77 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 
 ### 提交
 
-- `fix(knowledge): recheck the source snapshot and the real read before acting` —— `native/knowledge/src/{queue,relations}.rs`、`src/main/knowledge/{manual,collector,documents,open,targets}.ts` 与对应回归、`graph-budget.test.ts`。
 - `d4318de` `fix(knowledge): recheck the source snapshot and the real read before acting` —— `native/knowledge/src/{queue,relations}.rs`、`native/knowledge/tests/relations.rs`、`src/main/knowledge/{manual,collector,documents}.ts`、`src/main/index.ts` 与六个回归文件（12 个文件，+314/−91）。
 - 本节由随后的 docs 提交记录，交付哈希已在「验证」表中给出。
+
+## 阶段 5 外部验收与阶段 6 实施记录（2026-11-05 第十轮）
+
+外部 Codex 在 `0178d20` 上核对阶段 5：`cargo test --locked` 114 项、targeted vitest 24 文件 / 232 项、`git diff --check 15c134a..HEAD` 通过、release 3,085,824 字节 `f73ace70b183b43edf156a6c4bd896d4e5bdcbe601c058cacd958353258a00c9`，阶段 5 通过并授权阶段 6（软件联动）。阶段 7 未开始。
+
+### 交付条目
+
+| 条目 | 落点 | 真实行为 |
+| --- | --- | --- |
+| 对话/提问检索 | `src/main/tools/knowledge.ts`、`src/main/tools/registry.ts`、`src/main/chat.ts`、`src/main/assistant.ts`、`src/main/index.ts` | 只读 `search_knowledge`/`get_knowledge` 走真实 Rust 卡片检索与详情；仅在知识开关打开且本轮 allowlist 含该工具时可用（`availableToolNames` 与 `runRegisteredTool` 两处同时校验）；本轮未授权时拒绝并说明，不静默降级 |
+| 画像上下文 | `src/shared/prompts.ts`、`src/main/chat.ts`、`src/main/assistant.ts`、`src/main/index.ts` | 每轮按画像开关读取 helper 的有界画像（≤2000 字符）并作为参考材料放进提示词：开关关着返回空，helper 读不到时静默降级，回答照常完成；提示词末尾写明与用户当前这句话冲突时以当前这句话为准；读取点位于取消可感知处，读到一半被停止就结束本轮 |
+| 引用 | `src/shared/workspace.ts`、`src/main/knowledge/collector.ts`、`src/renderer/src/settings/WorkspaceSearch.tsx`、`App.tsx` | 检索结果进入既有本地引用通道（`LocalRecord.kind` 新增 `knowledge`），只登记本轮真正取回的卡片；点击走知识页并定位卡片；被删卡片显示页面自身的缺失状态 |
+| 复用去重 | `src/main/knowledge/collector.ts`、`native/knowledge/src/{queue,extract}.rs` | 本轮引用 id 去重保序、上限 12 条随 `source.publish` 落库（`sources.cited_card_ids`）；提炼时按 6 张 × 400 字符并入比较候选，纯复述落到 `reference` 不新增卡片，新结论仍 `new` |
+| 卡片联动 | `src/main/index.ts`、`src/renderer/src/settings/sections/KnowledgeCardDetail.tsx` | 「继续讨论」用既有新对话链路并只携带该卡片 id 与 2000 字正文；「生成待办」写既有提醒存储；「另存为随记」写既有随记存储；主进程按 id 重读，卡片被删时报真实原因 |
+| 随记联动 | `src/main/index.ts`、`src/renderer/src/settings/pages/NotesPage.tsx` | 随记详情列出由该随记生成的卡片（Rust 按来源 id 过滤后再分页，真实 `total`），点击进入知识页；最多 3 次分页请求 |
+| 删除联动 | `src/main/index.ts`、`src/main/notes-ipc.ts`、`native/knowledge/src/purge.rs`、`src/renderer/src/settings/pages/{NotesPage,ChatPage}.tsx` | 删除前预览受影响卡片（单来源/多来源分别统计）；默认只作废来源并保留知识；勾选「同时删除仅依赖这条记录的知识」时只删唯一有效来源就是该记录的卡片，其余仅解链；Rust 在一个 `Immediate` 事务内重校验版本，版本不符的记录 `skipped` |
+| 工作流 | `src/shared/workflow.ts`、`src/shared/workflow-tool-groups.ts`、`src/main/tools/workflow.ts`、`src/renderer/src/settings/sections/WorkflowEditor.tsx` | 新增步骤工具 `extract_knowledge`，复用随记来源发布与既有队列，返回真实 `queued`/`reason`；已保存流程重放时按当前知识开关准入，不需要聊天 allowlist 点名 |
+
+### 新增协议与入口
+
+| RPC | params | result | scope |
+| --- | --- | --- | --- |
+| `source.find` | `{channel?, originRef?, groupKey?}` | `{sources: [...]}`（≤200，按 `at` 升序） | 只读 |
+| `card.by_source` | `{sourceId?} \| {channel, originRef} \| {channel:'chat', groupKey}` + 分页/过滤 | 与 `card.list` 同形（先过滤后分页） | 只读 |
+| `card.impact` | 同上（来源身份） | `{sourceId, version, sources, cards, single, multi, items≤20, more}` | 只读 |
+| `card.purge` | `{sources:[{id,version}], cards}` | `{removed, kept, skipped}` | `cards` |
+| `source.publish` | 原字段 + `citedCardIds?: string[]`（≤12×128 字符） | 原样 | `queue` |
+
+- IPC：`knowledge:by-source`、`knowledge:impact`、`knowledge:continue`、`knowledge:card-todo`、`knowledge:card-note`；`notes:remove(id, {deleteKnowledge})`；`chat:edit({action:'delete', id, deleteKnowledge})`，全部经 `handle()` + 信任校验。
+- 工具：`search_knowledge`（空查询与超 200 字查询拒绝，`limit` ≤8，默认 5）、`get_knowledge`、`extract_knowledge`。
+- 迁移：`KNOWLEDGE_SCHEMA` 7 → 8，`CITED_SQL` 只有 `ALTER TABLE sources ADD COLUMN cited_card_ids TEXT NOT NULL DEFAULT '[]'`，旧库原地升级、旧行保留。
+
+### 证据（真实 helper、真实入口）
+
+- `src/main/knowledge/linkage.integration.test.ts`（5 项，真实 release helper）：按 `originRef` 找到随记与对话来源；`cardsBySource` 只列该记录的卡片且带真实 `total`；预览 `{cards:2, single:1, multi:1}` 后 purge `removed:[唯一来源卡]`、`kept:[双来源卡]`，保留卡 `sourceIds` 指向另一条随记；`cards:false` 只解链；未落库的版本字符串 `skipped` 且不删任何卡。
+- `src/main/tools/knowledge.test.ts`（7 项）：无知识依赖时不广告；本轮未授权时拒绝；`limit` 收敛到 8、查询去空白；超长查询拒绝且 `searchCards` 未被调用；无命中如实返回；`get` 透出 helper 错误；`extract_knowledge` 转发 noteId 并回报真实分组。
+- `src/main/knowledge/collector.test.ts`（22 项）：引用 id 去重、空值丢弃、上限 12；空列表不下发 `citedCardIds`。
+- `src/main/notes-ipc.test.ts`（15 项）：purge 先于 `store.remove` 执行；purge 被拒时记录仍在且不广播删除；未勾选时不请求 purge。
+- `src/main/tools/workflow.test.ts`（22 项）：已保存的 `extract_knowledge` 步骤只授权 `run_workflow` 也能重放；知识依赖缺失时该步失败且不产生第二次提炼。
+- `src/main/workspace.test.ts`（4 项）：`recordsFromTool('search_knowledge')` 产 `kind:'knowledge'`；`readWorkspaceRecord` 不含知识卡（渲染侧先路由到知识页）。
+- `src/shared/prompts.test.ts`（43 项）与 `src/main/chat.test.ts`（16 项）：画像块只在有内容时出现、写明「以当前这句话为准」；`ChatService` 把拿到的画像传给本轮上下文，读不到时上下文为空但回答仍落 `done`。`src/main/assistant.test.ts`（58 项）：提问侧同样带画像，画像读取抛错时该轮没有画像字段（并在 await 之后重新检查取消）。
+- Rust 新增：`tests/cards_view.rs` 的来源分页用例、`tests/relations.rs` 的 impact/purge/thread 用例 5 项、`tests/extract.rs` 的引用复述 3 项、`src/store.rs` 的 v7→v8 升级用例。
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | 0 |
+| `cargo test --locked` | 0（124 项：lib 18 / cards_view 10 / extract 15 / process 11 / profile 27 / queue 22 / relations 21） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture` 变体） |
+| `node scripts/build-native.mjs` | 0；release `native/bin/yu-knowledge.exe` 3,162,112 字节 `d14e7e397396e2045ee1221f3f473dc6046f231f2c1c16857e5d32a08fe447c7` |
+| `pnpm typecheck` | 0（node + web） |
+| 定向 vitest（`src/main/knowledge`、chat/notes/notes-ipc/assistant/workspace、`src/main/tools`、preload、ipc-trust、`src/renderer/src/settings`） | 78 文件 / 1119 项 |
+| `pnpm test:native` | 0（7 个 crate） |
+| `pnpm test` | 0（276 文件通过 / 3 跳过，3937 项通过 / 8 跳过，96.03 s） |
+| `pnpm build` | 0（`KnowledgePage-B1B150_h.js` 200.28 kB，`settings-BQOcJqrR.js` 4,708.92 kB） |
+| `git diff --check`、`git diff --check 0178d20..HEAD` | 0 / 0 |
+
+### 未测与边界
+
+- 未调用任何付费模型：检索、引用、提炼与删除预览都跑真实 release helper，模型调用一律用注入 completer。
+- 未在打包安装包上点测（阶段 7 范围）。
+- 删除联动跨两个数据库，不是单一事务：顺序是知识库 purge 事务成功后删记录；purge 失败则不删记录并保留可重试状态（`notes-ipc.test.ts` 记录了这个顺序），不做跨库回滚的承诺。
+- 引用正文按 6 张 × 400 字符进入比较候选，超出部分不参与复用判断；这 6 张按来源聚合取最早引用。
+- 批量删除随记不携带 `deleteKnowledge`（逐条删除才有该选项）。
+- 随记详情的知识区不订阅 `onChanged`，进入或翻页时取最新数据。
+- 重建打包产物与节点/字节预算沿用阶段 5 结论，未重新做性能基准。
+
+### 提交
+
+- `c9d3fb5` `feat(knowledge): link retrieval, citations and record deletion to the helper` —— 44 个文件（+2482/−62），含 `native/knowledge/src/purge.rs`、`src/main/tools/knowledge.ts` 两个新文件与全部回归。
+- 本节由随后的 docs 提交记录。
