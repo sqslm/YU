@@ -1958,6 +1958,18 @@ function registerIpc(): void {
    * lets the helper refuse a range that moved; `release` is the user's explicit
    * downgrade to withdrawing sources only, keeping every card.
    */
+  /**
+   * The cleanups this channel still owes the user.
+   *
+   * A page that was unmounted, or a window closed and reopened while the app kept
+   * running, asks here instead of keeping its own copy: the register is the only
+   * place a pending retry lives, and it answers with the opaque id, the last
+   * failure and whether the ticket was refused — never the record or the ticket.
+   */
+  handle('knowledge:cleanup-list', async (event, input: { channel: string }) => {
+    knowledgeOwner(event)
+    return cleanups.list(String(input?.channel ?? ''))
+  })
   handle('knowledge:cleanup-retry', async (event, input: { id: string; action: CleanupAction }) => {
     knowledgeOwner(event)
     if (input?.action !== 'purge' && input?.action !== 'release') throw new Error(mt('请选择知识清理的方式'))

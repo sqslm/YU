@@ -24,13 +24,26 @@ export interface CleanupDeps {
   log: (line: string) => void
 }
 
+/**
+ * The page the entry belongs to, so a query can hand each one only its own rows.
+ */
+type Channel = 'note' | 'chat'
+
+/** A deletion always names a record: the cleanup never starts from a bare source. */
+type RecordIdentity = Extract<SourceIdentity, { channel: Channel }>
+
 /** One record whose ticked cleanup failed after the record itself was deleted. */
 interface Entry {
   input: FindSourceInput
-  identity: SourceIdentity
+  identity: RecordIdentity
+  channel: Channel
   /** The confirmation the user actually gave; empty when there was no ticket. */
   ticket?: string
+  /** Why the last attempt failed, in the words the user is shown. */
   reason: string
+  /** Once the helper refused the ticket, the range moved for good. */
+  stale: boolean
+  at: number
 }
 
 function message(error: unknown): string {
@@ -71,12 +84,44 @@ export class CleanupRetries {
   /** Registers one failed cleanup and returns the handle the page may show. */
   add(
     input: FindSourceInput,
-    identity: SourceIdentity,
+    identity: RecordIdentity,
     detail: { reason: string; ticket?: string }
   ): CleanupPending {
     const id = randomUUID()
-    this.entries.set(id, { input, identity, ticket: detail.ticket, reason: detail.reason })
-    return { id, reason: detail.reason, cards: true }
+    const at = Date.now()
+    const channel: Channel = identity.channel
+    this.entries.set(id, {
+      input,
+      identity,
+      channel,
+      ticket: detail.ticket,
+      reason: detail.reason,
+      stale: false,
+      at
+    })
+    return { id, reason: detail.reason, cards: true, stale: false, at }
+  }
+
+  /**
+   * What this channel still owes the user.
+   *
+   * This is a read of the same in-memory register, not a second source of truth:
+   * a page that was unmounted, or a window that was closed and reopened, asks here
+   * to get its rows back. Nothing about the record leaves the main process except
+   * the opaque id, the reason it failed, and whether the ticket has been refused.
+   */
+  list(channel: string): CleanupPending[] {
+    if (channel !== 'note' && channel !== 'chat') return []
+    return [...this.entries.entries()]
+      .filter(([, entry]) => entry.channel === channel)
+      .sort((left, right) => right[1].at - left[1].at)
+      .map(([id, entry]) => ({
+        id,
+        reason: entry.reason,
+        cards: true,
+        stale: entry.stale,
+        at: entry.at
+      }))
   }
 
   /**
@@ -103,8 +148,17 @@ export class CleanupRetries {
     if (!entry) throw new Error(mt('这次知识清理已经结束，不需要再重试'))
     const deps = this.deps()
     if (action === 'release') {
-      const released = await deps.release(entry.input, '记录已删除')
+      let released: ReleaseOutcome
+      try {
+        released = await deps.release(entry.input, '记录已删除')
+      } catch (error) {
+        const reason = message(error)
+        entry.reason = reason
+        deps.log(`[knowledge] 重试知识清理失败：${reason}`)
+        return { status: 'failed', reason, removed: 0, kept: 0, released: 0 }
+      }
       if (released.failures.length) {
+        entry.reason = released.failures[0]
         deps.log(`[knowledge] 重试知识清理失败：${released.failures[0]}`)
         return { status: 'failed', reason: released.failures[0], removed: 0, kept: 0, released: 0 }
       }
@@ -129,7 +183,11 @@ export class CleanupRetries {
       return { status: 'done', removed: result.removed.length, kept: result.kept.length, released: 0 }
     } catch (error) {
       const reason = message(error)
+      entry.reason = reason
       if (moved(error)) {
+        // The refusal is about the range, so it stays true no matter what the
+        // next attempt fails on; the downgrade stays on offer.
+        entry.stale = true
         deps.log(`[knowledge] 关联知识已变化，未删除卡片：${reason}`)
         return { status: 'stale', reason, removed: 0, kept: 0, released: 0 }
       }

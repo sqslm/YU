@@ -97,6 +97,7 @@ const api: TypelessApi = {
     bySource: (query) => ipcRenderer.invoke('knowledge:by-source', query),
     impact: (target) => ipcRenderer.invoke('knowledge:impact', target),
     retryCleanup: (id, action) => ipcRenderer.invoke('knowledge:cleanup-retry', { id, action }),
+    cleanups: (channel) => ipcRenderer.invoke('knowledge:cleanup-list', { channel }),
     continueDiscussion: (cardId) => ipcRenderer.invoke('knowledge:continue', cardId),
     cardTodo: (cardId) => ipcRenderer.invoke('knowledge:card-todo', cardId),
     saveCardAsNote: (cardId) => ipcRenderer.invoke('knowledge:card-note', cardId),

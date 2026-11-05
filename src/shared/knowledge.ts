@@ -367,6 +367,15 @@ export interface CleanupPending {
   reason: string
   /** True when the failed attempt was the version that also deletes cards. */
   cards: boolean
+  /**
+   * Set once the helper refused the confirmed ticket: the range moved, so the
+   * retry cannot delete anything until the user picks the downgrade. The flag is
+   * a remembered fact about that record, not the outcome of the last attempt —
+   * a lock failing again does not take the offer away.
+   */
+  stale?: boolean
+  /** When the cleanup was registered, so two pendings can be told apart. */
+  at?: number
 }
 
 /** What one retry of a failed cleanup did. */

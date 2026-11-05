@@ -104,6 +104,68 @@ describe('finishing a cleanup that failed after its record was deleted', () => {
     expect(purgeCards).toHaveBeenCalledTimes(1)
   })
 
+  it('hands a page only the rows of its own channel, without the record or ticket', async () => {
+    const cleanups = new CleanupRetries(() => deps())
+    const note = cleanups.add(input, identity, { reason: 'database is locked', ticket: 't1' })
+    const thread = cleanups.add(
+      { channel: 'chat', groupKey: 'th1' },
+      { channel: 'chat', groupKey: 'th1' },
+      { reason: 'cannot start the knowledge helper', ticket: 't2' }
+    )
+
+    const notes = cleanups.list('note')
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatchObject({ id: note.id, reason: 'database is locked', stale: false })
+    // Nothing that could widen the range travels back to the page.
+    expect(Object.keys(notes[0]).sort()).toEqual(['at', 'cards', 'id', 'reason', 'stale'])
+    expect(cleanups.list('chat').map(row => row.id)).toEqual([thread.id])
+    expect(cleanups.list('reminder')).toEqual([])
+  })
+
+  it('remembers a refused ticket even when the downgrade fails too', async () => {
+    const moved = Object.assign(new Error('预览已失效，请重新确认'), { code: 'source_changed' })
+    let lock = true
+    const d = deps({
+      purgeCards: vi.fn(async () => {
+        throw moved
+      }),
+      release: vi.fn(async () =>
+        lock
+          ? { retired: 0, detached: 0, cancelled: [], failures: ['database is locked'] }
+          : { retired: 1, detached: 0, cancelled: ['q1'], failures: [] }
+      )
+    })
+    const cleanups = new CleanupRetries(() => d)
+    const handle = cleanups.add(input, identity, { reason: 'database is locked', ticket: 't1' })
+
+    await expect(cleanups.retry(handle.id, 'purge')).resolves.toMatchObject({ status: 'stale' })
+    expect(cleanups.list('note')[0]).toMatchObject({ stale: true })
+
+    // The library is locked again during the downgrade: the offer has to survive.
+    await expect(cleanups.retry(handle.id, 'release')).resolves.toMatchObject({ status: 'failed' })
+    const after = cleanups.list('note')
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({ stale: true, reason: 'database is locked' })
+
+    lock = false
+    await expect(cleanups.retry(handle.id, 'release')).resolves.toMatchObject({ status: 'done' })
+    expect(cleanups.list('note')).toEqual([])
+  })
+
+  it('leaves the other rows alone when one of them finishes', async () => {
+    const cleanups = new CleanupRetries(() => deps())
+    const first = cleanups.add(input, identity, { reason: 'database is locked', ticket: 't1' })
+    const second = cleanups.add(
+      { channel: 'note', originRef: 'n2' },
+      { channel: 'note', originRef: 'n2' },
+      { reason: 'database is locked', ticket: 't2' }
+    )
+
+    await cleanups.retry(first.id, 'purge')
+
+    expect(cleanups.list('note').map(row => row.id)).toEqual([second.id])
+  })
+
   it('refuses a handle that is already finished', async () => {
     const cleanups = new CleanupRetries(() => deps())
     await expect(cleanups.retry('gone', 'purge')).rejects.toThrow('这次知识清理已经结束，不需要再重试')

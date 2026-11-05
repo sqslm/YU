@@ -585,4 +585,94 @@ describe('finishing a ticked cleanup after the record was already deleted', () =
     expect(kept.id).toBe(card.id)
     expect(kept.sourceIds).toContain(source.id)
   }, 90_000)
+
+  it('keeps the downgrade open while the library is locked again, and leaves the other row alone', async () => {
+    const app = await rig()
+    const first = await app.notes.createText({ text: '第一条随记：卡片只依赖这一条来源。' })
+    await until(async () => (await app.rows('note', first.id)).length > 0, 'the first source')
+    const [firstSource] = await app.rows('note', first.id)
+    const firstCard = await app.knowledge().saveCard({
+      kind: 'concept',
+      title: '第一条',
+      body: '只依赖第一条随记。',
+      topics: ['清理'],
+      sourceIds: [firstSource.id]
+    })
+    const firstPreview = await app.knowledge().cardImpact({ channel: 'note', originRef: first.id })
+
+    const second = await app.notes.createText({ text: '第二条随记：同样有自己的卡片。' })
+    await until(async () => (await app.rows('note', second.id)).length > 0, 'the second source')
+    const [secondSource] = await app.rows('note', second.id)
+    const secondCard = await app.knowledge().saveCard({
+      kind: 'concept',
+      title: '第二条',
+      body: '只依赖第二条随记。',
+      topics: ['清理'],
+      sourceIds: [secondSource.id]
+    })
+    const secondPreview = await app.knowledge().cardImpact({ channel: 'note', originRef: second.id })
+
+    // Both deletions land while the library is locked, so both cleanups wait.
+    let firstPending: { id: string } | undefined
+    const lockOne = hold(app.dir)
+    try {
+      firstPending = (await app.removeNote(first.id, {
+        deleteKnowledge: true,
+        ticket: firstPreview.ticket
+      })) as { id: string } | undefined
+    } finally {
+      lockOne.release()
+    }
+    let secondPending: { id: string } | undefined
+    const lockTwo = hold(app.dir)
+    try {
+      secondPending = (await app.removeNote(second.id, {
+        deleteKnowledge: true,
+        ticket: secondPreview.ticket
+      })) as { id: string } | undefined
+    } finally {
+      lockTwo.release()
+    }
+    expect(app.cleanups.waiting).toBe(2)
+
+    // The first record moves on, so its ticket is refused and the downgrade opens.
+    await app.collector.publishNote({
+      id: first.id,
+      title: '第一条',
+      transcript: '第一条随记：卡片只依赖这一条来源。',
+      polished: '第二版：第一条随记又多了一版。',
+      updatedAt: Date.now(),
+      polishStatus: 'ok'
+    })
+    await until(async () => (await app.rows('note', first.id)).length > 1, 'the second version')
+    await expect(app.cleanups.retry(firstPending!.id, 'purge')).resolves.toMatchObject({ status: 'stale' })
+
+    // The downgrade itself hits the lock: the offer has to survive that too.
+    const lockThree = hold(app.dir)
+    let blocked: { status: string; reason?: string }
+    try {
+      blocked = await app.cleanups.retry(firstPending!.id, 'release')
+    } finally {
+      lockThree.release()
+    }
+    expect(blocked.status).toBe('failed')
+    expect(blocked.reason).toMatch(/lock/i)
+    const listed = app.cleanups.list('note')
+    expect(listed.map(row => row.id).sort()).toEqual([firstPending!.id, secondPending!.id].sort())
+    expect(listed.find(row => row.id === firstPending!.id)?.stale).toBe(true)
+    expect(listed.find(row => row.id === secondPending!.id)?.stale).toBe(false)
+
+    const released = await app.cleanups.retry(firstPending!.id, 'release')
+
+    expect(released.status).toBe('done')
+    expect(app.cleanups.waiting).toBe(1)
+    expect(app.cleanups.list('note').map(row => row.id)).toEqual([secondPending!.id])
+    // The record that only asked to keep cards keeps them, with the dead link.
+    const kept = await app.knowledge().getCard(firstCard.id)
+    expect(kept.sourceIds).toContain(firstSource.id)
+    expect(app.sourceStates(first.id).every(row => row.state === 'invalid')).toBe(true)
+    // The other row never moved.
+    expect(app.sourceStates(second.id).every(row => row.state !== 'invalid')).toBe(true)
+    expect((await app.knowledge().getCard(secondCard.id)).id).toBe(secondCard.id)
+  }, 120_000)
 })

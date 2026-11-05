@@ -70,7 +70,12 @@ export interface TypelessApi {
     get(id: string, limit?: number, messageId?: string): Promise<import('./chat').ChatDetail>
     attachment(id: string, attachmentId: string): Promise<{ name: string; url?: string; text?: string }>
     create(groupId?: string | null): Promise<import('./chat').ChatDetail>
-    edit(input: import('./chat').ChatEdit): Promise<void>
+    /**
+     * Edits a thread. Deleting one that had its knowledge ticked may come back with
+     * a cleanup to finish when the record went but the knowledge could not — every
+     * other edit ignores the result.
+     */
+    edit(input: import('./chat').ChatEdit): Promise<import('./knowledge').CleanupPending | void>
     send(id: string, text: string, attachments?: import('./chat').ChatUpload[]): Promise<void>
     cancel(): Promise<void>
     onEvent(callback: (event: import('./chat').ChatEvent) => void): () => void
@@ -159,6 +164,8 @@ export interface TypelessApi {
      * and the confirmation stay in the main process.
      */
     retryCleanup(id: string, action: import('./knowledge').CleanupAction): Promise<import('./knowledge').CleanupRetryResult>
+    /** The cleanups this app session still owes the user for one channel. */
+    cleanups(channel: 'note' | 'chat'): Promise<import('./knowledge').CleanupPending[]>
     /** Opens a new chat that carries only this card's id and bounded context. */
     continueDiscussion(cardId: string): Promise<{ threadId: string }>
     /** Saves a real todo from a card the user picked; never runs card instructions. */
