@@ -1561,10 +1561,10 @@ function registerIpc(): void {
    * whose hash has to match the source. A restart or an evicted body keeps the row
    * readable and says why it cannot be opened.
    */
-  const documentRead = (source: KnowledgeSource): string | null => {
-    const body = knowledgeCollector.resolveBody('reading', source.originRef)
-    return 'text' in body ? body.text : null
-  }
+  // The read this process really did, including the path the document came from.
+  // The source row's own locator is writable, so it never supplies the target.
+  const documentRead = (source: KnowledgeSource): { text: string; path?: string } | null =>
+    knowledgeCollector.readRecord('reading', source.originRef)
   const documentFile = (value: string): string | null => {
     try {
       const real = realpathSync(value)

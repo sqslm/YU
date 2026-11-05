@@ -52,14 +52,22 @@ describe('the graph budget the helper applies', () => {
     const drawn = graphView(acceptGraph(gate, gate.next(), topicAnswer, null))
     expect(drawn.nodes).toHaveLength(LIMIT)
 
-    const focusAnswer = await host.queryGraph({ focusId: focus, depth: 1 })
-    expect(focusAnswer.nodes.length).toBeLessThanOrEqual(LIMIT)
-    expect(focusAnswer.expanded).toBeGreaterThanOrEqual(1)
+    // The same filter as the first page: without it every card matches and the
+    // neighbour is not extra context at all.
+    const focusAnswer = await host.queryGraph({ topic: 'Rust', focusId: focus, depth: 1 })
+    expect(focusAnswer.nodes).toHaveLength(LIMIT)
+    // 200 cards match the topic, the page holds 200, and the neighbour the focus
+    // pulled in took the last slot — so 199 matched, 1 extra, 200 drawn.
+    expect(focusAnswer.total).toBe(LIMIT)
+    expect(focusAnswer.shown).toBe(LIMIT)
+    expect(focusAnswer.expanded).toBe(1)
+    expect(focusAnswer.focused).toBe(true)
+    expect(focusAnswer.truncated).toBe(true)
     expect(focusAnswer.nodes.some(row => row.id === focus)).toBe(true)
     expect(focusAnswer.nodes.some(row => row.id === neighbour.id)).toBe(true)
 
     const expanded = graphView(acceptGraph(gate, gate.next(), focusAnswer, topicAnswer))
-    expect(expanded.nodes.length).toBeLessThanOrEqual(LIMIT)
+    expect(expanded.nodes).toHaveLength(LIMIT)
     expect(expanded.nodes.some(row => row.id === focus)).toBe(true)
     expect(expanded.nodes.some(row => row.id === neighbour.id)).toBe(true)
     const visible = new Set(expanded.nodes.map(row => row.id))
@@ -68,10 +76,6 @@ describe('the graph budget the helper applies', () => {
       expect(visible.has(link.target)).toBe(true)
     }
     // The canvas stays at the budget while matching and expanded are counted apart.
-    expect(expanded.counts).toEqual({
-      matched: focusAnswer.shown - focusAnswer.expanded,
-      total: focusAnswer.total,
-      expanded: focusAnswer.expanded
-    })
+    expect(expanded.counts).toEqual({ matched: LIMIT - 1, total: LIMIT, expanded: 1 })
   }, 180_000)
 })

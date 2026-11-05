@@ -844,7 +844,7 @@ fn status_groups(conn: &Connection, now: i64) -> ApiResult<Vec<QueueGroup>> {
                     (SELECT count(*) FROM queue_items i WHERE i.group_id = g.id),
                     g.updated_at
                FROM queue_groups g
-              ORDER BY g.updated_at DESC, g.id
+              ORDER BY g.updated_at DESC, g.rowid DESC
               LIMIT ?2"
         ))
         .map_err(|error| ApiError::storage(format!("cannot read the queue status: {error}")))?;
@@ -1043,10 +1043,36 @@ pub fn extract(conn: &mut Connection, params: ExtractParams) -> ApiResult<Value>
             "this source is excluded from collection",
         ));
     }
+    // The text itself is never stored, only its fingerprint, so a source that was
+    // never read through, or was invalidated since, has nothing to extract. Saying
+    // so is better than queueing work that can only fail.
+    if source.state != "active" || source.size <= 0 {
+        return Ok(json!({ "queued": 0, "reason": "needs_reread" }));
+    }
+    // A cancelled task stays cancelled: a caller that read the source before the
+    // deletion must not resurrect it by reporting the body missing afterwards.
+    if state == "cancelled" {
+        return Ok(json!({ "queued": 0, "reason": "cancelled" }));
+    }
+    // Stale text is refused before anything is reset or parked: the body the caller
+    // read has to be the version and the fingerprint this source really holds, no
+    // matter whether the caller came back with the text or with the news that it
+    // is gone.
+    let stale_version = params
+        .expect_version
+        .as_deref()
+        .is_some_and(|version| version != source.version);
+    let stale_body = params
+        .expect_fingerprint
+        .as_deref()
+        .is_some_and(|print| print != source.fingerprint);
+    if stale_version || stale_body {
+        return Ok(json!({ "queued": 0, "reason": "source_changed" }));
+    }
     // A body the caller already found missing is parked right here, in the same
-    // transaction that checked the channel and the exclusions. Park before reset:
-    // the progress an earlier run committed stays, so recovering the text resumes
-    // where it stopped instead of re-extracting the whole source.
+    // transaction that checked the channel, the exclusions and the snapshot. Park
+    // before reset: the progress an earlier run committed stays, so recovering the
+    // text resumes where it stopped instead of re-extracting the whole source.
     if let Some(reason) = params.missing.as_deref() {
         check_chars("reason", reason, 200)?;
         set_state(&transaction, &group_id, "needs_reread", Some(reason), None)?;
@@ -1060,25 +1086,6 @@ pub fn extract(conn: &mut Connection, params: ExtractParams) -> ApiResult<Value>
             "groupId": group_id,
             "state": "needs_reread"
         }));
-    }
-    // The text itself is never stored, only its fingerprint, so a source that was
-    // never read through, or was invalidated since, has nothing to extract. Saying
-    // so is better than queueing work that can only fail.
-    if source.state != "active" || source.size <= 0 {
-        return Ok(json!({ "queued": 0, "reason": "needs_reread" }));
-    }
-    // Stale text is refused before anything is reset: the body the caller read has
-    // to be the version and the fingerprint this source really holds.
-    let stale_version = params
-        .expect_version
-        .as_deref()
-        .is_some_and(|version| version != source.version);
-    let stale_body = params
-        .expect_fingerprint
-        .as_deref()
-        .is_some_and(|print| print != source.fingerprint);
-    if stale_version || stale_body {
-        return Ok(json!({ "queued": 0, "reason": "source_changed" }));
     }
     // This version starts over: an earlier run's progress would otherwise count
     // every segment as done and close the task as empty.

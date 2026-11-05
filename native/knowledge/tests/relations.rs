@@ -870,9 +870,11 @@ fn a_full_page_still_admits_the_focus_and_one_neighbour() {
     assert_eq!(graph["truncated"], true);
     assert_eq!(graph["limitedBy"], "nodes", "{graph}");
     assert_eq!(graph["focused"], true, "{graph}");
+    // Nothing was filtered out, so both nodes are matches even though they had to
+    // take the page's lowest-ranked slots to be drawn.
     assert_eq!(
-        graph["expanded"], 2,
-        "the focus and the neighbour replaced two ranked cards: {graph}"
+        graph["expanded"], 0,
+        "an unfiltered graph has no extra nodes: {graph}"
     );
     assert!(
         shown.iter().any(|id| id == &focus),
@@ -1027,4 +1029,63 @@ fn a_relation_may_not_name_a_card_the_round_hid() {
     assert_eq!(listed["total"], 1, "only the first round's card: {listed}");
     let relations = helper.ok("l2", "relation.list", json!({"cardId": known}));
     assert_eq!(relations["total"], 0, "no edge was written: {relations}");
+}
+
+/// A card the page could not hold is still a match when the filter selects it.
+///
+/// The page bounds what is drawn, not what matches: focusing a page-out card must
+/// report it as a match (`shown - expanded`) instead of pretending it is extra
+/// context the filter never selected.
+#[test]
+fn a_page_out_focus_that_matches_the_filter_is_counted_as_a_match() {
+    let root = Root::new("graph-focus-page-out");
+    let mut helper = Helper::start(&root, vec![]);
+    let one = helper.save(
+        "a0",
+        card_params("concept", "甲匹配", "甲的正文。", &["Match"]),
+    );
+    let two = helper.save(
+        "b0",
+        card_params("concept", "乙匹配", "乙的正文。", &["Match"]),
+    );
+
+    // Topic filter: whichever card the page keeps, the other one is page-out.
+    let page = helper.ok("p1", "graph.query", json!({"topic": "Match", "limit": 1}));
+    let kept = node_ids(&page);
+    assert_eq!(kept.len(), 1, "the page is bounded: {page}");
+    let focus = if kept[0] == one {
+        two.clone()
+    } else {
+        one.clone()
+    };
+    let graph = helper.ok(
+        "g1",
+        "graph.query",
+        json!({"topic": "Match", "focusId": focus, "depth": 1, "limit": 1}),
+    );
+    assert_eq!(node_ids(&graph), vec![focus.clone()], "{graph}");
+    assert_eq!(graph["total"], 2, "{graph}");
+    assert_eq!(graph["shown"], 1, "{graph}");
+    assert_eq!(graph["focused"], true, "{graph}");
+    assert_eq!(graph["truncated"], true, "{graph}");
+    assert_eq!(
+        graph["expanded"], 0,
+        "a matching focus is a match even when the page could not hold it: {graph}"
+    );
+
+    // Search filter: the same rule, with the plan's own condition instead of a topic.
+    let search = helper.ok("s1", "graph.query", json!({"query": "乙", "limit": 1}));
+    let found = node_ids(&search);
+    assert_eq!(found, vec![two.clone()], "{search}");
+    let expanded = helper.ok(
+        "g2",
+        "graph.query",
+        json!({"query": "甲", "focusId": one, "depth": 1, "limit": 1}),
+    );
+    assert_eq!(node_ids(&expanded), vec![one.clone()], "{expanded}");
+    assert_eq!(expanded["total"], 1, "{expanded}");
+    assert_eq!(
+        expanded["expanded"], 0,
+        "the search filter matches the focus too: {expanded}"
+    );
 }

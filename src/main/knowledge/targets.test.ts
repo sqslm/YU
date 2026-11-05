@@ -128,12 +128,16 @@ describe('resolveSourceTarget', () => {
     expect(target).toMatchObject({ kind: 'record', record: { id: 'm9', threadId: 't9' } })
   })
 
-  it('opens an app-owned document and refuses a locator with no read credential', () => {
-    // A real read record plus a real path is the only combination that opens.
-    const read = { read: () => 'PDF 正文', file: (value: string) => value }
+  it('opens the document the read record names and refuses a rewritten locator', () => {
+    // A real read record plus the file it came from is the only combination that
+    // opens; the row's own locator only has to agree with it.
+    const read = { read: () => ({ text: 'PDF 正文', path: 'C:/notes/a.pdf' }), file: (value: string) => value }
     const readDeps = deps({ document: value => documentPath(value, read) })
     expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/notes/a.pdf', fingerprint: fingerprintOf('PDF 正文') }), readDeps))
       .toEqual({ kind: 'file', path: 'C:/notes/a.pdf' })
+    // Same id, version and fingerprint — only the locator was rewritten.
+    expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/notes/unread.pdf', fingerprint: fingerprintOf('PDF 正文') }), readDeps))
+      .toEqual({ kind: 'none', reason: '该来源的文件与读取记录不符' })
     // A locator written through `source.save` proves nothing: without a read
     // record it stays a metadata row.
     expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/anywhere/gone.pdf' }), deps()))

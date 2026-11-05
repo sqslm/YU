@@ -63,10 +63,21 @@ export async function extractSourceNow(id: string, deps: ManualExtractDeps): Pro
 
   if ('missing' in body) {
     const reason = missingReason(body.missing, channel === 'reading')
-    const parked = await host.extractSource({ sourceId: id, missing: reason })
+    // The snapshot travels with the news as well: a source that was invalidated,
+    // replaced or cancelled while this read was in flight must not be parked by a
+    // request that described an older state.
+    const parked = await host.extractSource({
+      sourceId: id,
+      expectVersion: source.version,
+      expectFingerprint: source.fingerprint,
+      missing: reason
+    })
     // A batch already holds the task: its claim is not pulled out from under the
     // running call, and nothing is claimed to be parked when it was not.
-    if (parked.state !== 'needs_reread') return parked
+    if (parked.state !== 'needs_reread') {
+      if (parked.reason === STALE) return { ...parked, reason: STALE_REASON }
+      return parked
+    }
     deps.log?.(`[knowledge] 手动提炼缺原文，已挂起：${source.kind} ${parked.groupId ?? ''}`.trim())
     return { queued: 0, reason, groupId: parked.groupId ?? null, state: 'needs_reread' }
   }

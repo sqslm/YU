@@ -460,12 +460,10 @@ pub fn graph(connection: &Connection, params: GraphParams) -> ApiResult<Graph> {
     loop {
         let ids: Vec<String> = nodes.iter().map(|node| node.id.clone()).collect();
         let edges = load_edges(connection, &ids)?;
-        // Only matching cards answer to `total`: the focus and its neighbours are
-        // context the filter did not select, so they are reported apart.
-        let matched_shown = nodes
-            .iter()
-            .filter(|node| matched.contains(&node.id))
-            .count();
+        // Whatever the page size, a card the filter matches counts as a match: the
+        // page bounds how much is drawn, not what is matching. The filter is asked
+        // again about exactly the drawn ids, so nothing is loaded twice.
+        let matched_shown = matches_among(connection, &plan, &filter, &ids)?;
         let truncated = (matched_shown as i64) < total || byte_cut;
         let graph = Graph {
             nodes: nodes.clone(),
@@ -494,6 +492,41 @@ pub fn graph(connection: &Connection, params: GraphParams) -> ApiResult<Graph> {
         nodes.pop();
         byte_cut = true;
     }
+}
+
+/// How many of these cards the current filter really matches.
+///
+/// The page is capped, so the count cannot come from the page: the same filter and
+/// the same search plan are applied to just the drawn ids, which keeps the work
+/// bounded by the size of the view instead of the size of the library.
+fn matches_among(
+    connection: &Connection,
+    plan: &Plan,
+    filter: &Filter,
+    ids: &[String],
+) -> ApiResult<usize> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let encoded = serde_json::to_string(ids).map_err(|error| {
+        ApiError::new(
+            crate::protocol::Code::Internal,
+            format!("cannot encode the ids: {error}"),
+        )
+    })?;
+    let mut counting = Where::new();
+    let join = cards::plan_condition(plan, &mut counting);
+    filter.apply(&mut counting);
+    let at = counting.bind(Value::Text(encoded));
+    counting.and(format!("c.id IN (SELECT value FROM json_each({at}))"));
+    let matched: i64 = connection
+        .query_row(
+            &format!("SELECT count(*) FROM cards c{join}{}", counting.sql()),
+            params_from_iter(counting.values().iter()),
+            |row| row.get(0),
+        )
+        .map_err(sqlite)?;
+    Ok(matched as usize)
 }
 
 /// Collects `depth` hops from `focus` into `priority`, the list of nodes the

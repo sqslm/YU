@@ -1,13 +1,11 @@
 /**
- * A document is openable only through a read record the main process kept.
+ * A document is openable only through the read record the main process kept.
  *
- * Two things are being pinned here. First, directory ownership is not evidence:
- * a file inside the notes root without a read record is refused, and a file
- * outside it with a matching record is allowed. Second, a readable script stays a
- * script — the record is necessary but not sufficient.
- *
- * The last case drives the real release helper, so the fingerprint the decision
- * compares against is the one Rust itself computed for the text YU read.
+ * The record names two things: the body that was hashed, and the file the read
+ * came from. The source row names a locator, and that row is writable, so it can
+ * be rewritten to another file while the id, version and fingerprint stay the
+ * same. The decision therefore resolves the recorded path, judges the type on the
+ * canonical target, and refuses a row that disagrees with what was read.
  */
 
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -82,49 +80,66 @@ describe('extensionOf', () => {
 })
 
 describe('documentPath', () => {
-  it('opens a document it read, wherever the file lives', () => {
+  it('opens the file the read record names, wherever it lives', () => {
     const { notes, outside } = scratch()
     const inside = write(join(notes, 'a.pdf'), 'PDF 正文')
     const away = write(join(outside, 'b.docx'), 'DOCX 正文')
-    expect(documentPath(source({ locator: inside, fingerprint: fingerprintOf('PDF 正文') }), { read: () => 'PDF 正文', file }))
+    const deps = (text: string, path: string) => ({ read: () => ({ text, path }), file })
+    expect(documentPath(source({ locator: inside, fingerprint: fingerprintOf('PDF 正文') }), deps('PDF 正文', inside)))
       .toEqual({ path: inside })
     // Ownership is irrelevant: the record is what authorises the path.
-    expect(documentPath(source({ locator: away, fingerprint: fingerprintOf('DOCX 正文') }), { read: () => 'DOCX 正文', file }))
+    expect(documentPath(source({ locator: away, fingerprint: fingerprintOf('DOCX 正文') }), deps('DOCX 正文', away)))
       .toEqual({ path: away })
   })
 
-  it('refuses a file inside the notes root that was never read', () => {
+  it('refuses a row whose locator was rewritten to another file', () => {
+    const { notes } = scratch()
+    const read = write(join(notes, 'read.txt'), '真正读过的正文')
+    const unread = write(join(notes, 'unread.txt'), '别人写的正文')
+    // The review's probe: same id, origin, version and fingerprint, only the
+    // locator changed — the record still points at the file that was read.
+    const row = source({ locator: unread, fingerprint: fingerprintOf('真正读过的正文') })
+    expect(documentPath(row, { read: () => ({ text: '真正读过的正文', path: read }), file }))
+      .toEqual({ reason: '该来源的文件与读取记录不符' })
+  })
+
+  it('judges the type on the canonical target, not on the alias', () => {
+    const { notes } = scratch()
+    const script = write(join(notes, 'inert.cmd'), 'echo hi')
+    // A row that claims `.pdf` while the file it was read from is a script.
+    expect(documentPath(source({ locator: join(notes, 'renamed.pdf'), fingerprint: fingerprintOf('echo hi') }), { read: () => ({ text: 'echo hi', path: script }), file }))
+      .toEqual({ reason: '这类文件不提供打开' })
+    const exe = write(join(notes, 'setup.exe'), 'MZ')
+    expect(documentPath(source({ locator: exe, fingerprint: fingerprintOf('MZ') }), { read: () => ({ text: 'MZ', path: exe }), file }))
+      .toEqual({ reason: '这类文件不提供打开' })
+  })
+
+  it('refuses a file nobody read', () => {
     const { notes } = scratch()
     const path = write(join(notes, 'unread.txt'), '没人读过我')
     expect(documentPath(source({ locator: path }), { read: () => null, file }))
+      .toEqual({ reason: '该来源没有可核验的读取记录' })
+    // A page read through the web has a record but no file behind it.
+    expect(documentPath(source({ locator: path, fingerprint: fingerprintOf('网页') }), { read: () => ({ text: '网页' }), file }))
       .toEqual({ reason: '该来源没有可核验的读取记录' })
   })
 
   it('refuses a body that no longer matches the stored hash', () => {
     const { notes } = scratch()
     const path = write(join(notes, 'edited.md'), '改过的正文')
-    expect(documentPath(source({ locator: path, fingerprint: fingerprintOf('原来的正文') }), { read: () => '改过的正文', file }))
+    expect(documentPath(source({ locator: path, fingerprint: fingerprintOf('原来的正文') }), { read: () => ({ text: '改过的正文', path }), file }))
       .toEqual({ reason: '该来源的正文与读取记录不符' })
-  })
-
-  it('refuses a script even when the read record exists', () => {
-    const { notes } = scratch()
-    const cmd = write(join(notes, 'inert.cmd'), 'echo hi')
-    expect(documentPath(source({ locator: cmd, fingerprint: fingerprintOf('echo hi') }), { read: () => 'echo hi', file }))
-      .toEqual({ reason: '这类文件不提供打开' })
-    const exe = write(join(notes, 'setup.exe'), 'MZ')
-    expect(documentPath(source({ locator: exe, fingerprint: fingerprintOf('MZ') }), { read: () => 'MZ', file }))
-      .toEqual({ reason: '这类文件不提供打开' })
   })
 
   it('refuses a URL, a missing file and an empty locator', () => {
     const { notes } = scratch()
-    expect(documentPath(source({ locator: 'https://example.com/a.pdf' }), { read: () => 'x', file }))
+    expect(documentPath(source({ locator: 'https://example.com/a.pdf' }), { read: () => ({ text: 'x' }), file }))
       .toEqual({ reason: '该来源没有可打开的文件' })
-    expect(documentPath(source({ locator: '' }), { read: () => 'x', file }))
+    expect(documentPath(source({ locator: '' }), { read: () => ({ text: 'x' }), file }))
       .toEqual({ reason: '该来源没有可打开的文件' })
     const gone = join(notes, 'gone.pdf')
-    expect(documentPath(source({ locator: gone, fingerprint: fingerprintOf('x') }), { read: () => 'x', file }))
+    const goneRead = { text: 'x', path: gone }
+    expect(documentPath(source({ locator: gone, fingerprint: fingerprintOf('x') }), { read: () => goneRead, file }))
       .toEqual({ reason: '原文件已不存在' })
   })
 
@@ -148,8 +163,12 @@ describe('documentPath', () => {
       })
       // The hash comes from Rust, not from this test.
       expect(saved.fingerprint).toBe(fingerprintOf(text))
-      expect(documentPath({ ...source({ locator: path }), fingerprint: saved.fingerprint }, { read: () => text, file }))
+      expect(documentPath({ ...source({ locator: path }), fingerprint: saved.fingerprint }, { read: () => ({ text, path }), file }))
         .toEqual({ path })
+      // The same row, rewritten to a file that was never read.
+      const unread = write(join(notes, 'unread.txt'), '没人读过我')
+      expect(documentPath({ ...source({ locator: unread }), fingerprint: saved.fingerprint }, { read: () => ({ text, path }), file }))
+        .toEqual({ reason: '该来源的文件与读取记录不符' })
       // Forgetting the read (a restart, an evicted body) keeps the row readable
       // and refuses the open with the real reason.
       expect(documentPath({ ...source({ locator: path }), fingerprint: saved.fingerprint }, { read: () => null, file }))

@@ -77,20 +77,27 @@ describe('openSource', () => {
 
   it('opens a document it really read and reports the opener failure verbatim', async () => {
     const calls: Calls = { external: [], file: [] }
-    // The production decision, fed by a real read record for this exact text.
-    const read = { read: () => 'PDF 正文', file: (value: string) => value }
+    // The production decision, fed by a real read record for this exact text and
+    // the file that read came from.
+    let readPath = 'C:/notes/a.pdf'
+    const read = { read: () => ({ text: 'PDF 正文', path: readPath }), file: (value: string) => value }
     const readDeps = (failure = ''): Partial<TargetDeps> => ({ document: value => documentPath(value, read) })
     const body = { fingerprint: fingerprintOf('PDF 正文') }
     const ok = await openSource(source({ locator: 'C:/notes/a.pdf', ...body }), deps(calls, readDeps()))
     expect(ok).toEqual({ opened: true, reason: '' })
+    readPath = 'C:/notes/b.pdf'
     const bad = await openSource(source({ locator: 'C:/notes/b.pdf', ...body }), deps(calls, readDeps(), '文件已被删除'))
     expect(bad).toEqual({ opened: false, reason: '文件已被删除' })
     expect(calls.file).toEqual(['C:/notes/a.pdf', 'C:/notes/b.pdf'])
+    // The row points at another file than the one that was read.
+    const moved = await openSource(source({ locator: 'C:/notes/c.pdf', ...body }), deps(calls, readDeps()))
+    expect(moved).toEqual({ opened: false, reason: '该来源的文件与读取记录不符' })
+    expect(calls.file).toHaveLength(2)
   })
 
   it('refuses a script or an unread body even when the path exists', async () => {
     const calls: Calls = { external: [], file: [] }
-    const read = { read: () => 'echo hi', file: (value: string) => value }
+    const read = { read: () => ({ text: 'echo hi', path: 'C:/notes/inert.cmd' }), file: (value: string) => value }
     const readDeps: Partial<TargetDeps> = { document: value => documentPath(value, read) }
     const digest = { fingerprint: fingerprintOf('echo hi') }
     // A readable script is still not a document.

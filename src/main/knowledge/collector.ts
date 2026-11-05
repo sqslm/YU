@@ -140,8 +140,10 @@ export class KnowledgeCollector {
   /**
    * Reading bodies are held in this process only. The helper never stores them
    * anywhere else, so an evicted entry can only be reported as `needs_reread`.
+   * A document also keeps the path the read came from: that is the only file
+   * target this process can vouch for, and it outlives the writable source row.
    */
-  private readonly stash = new Map<string, { text: string; size: number }>()
+  private readonly stash = new Map<string, { text: string; size: number; path?: string }>()
   private stashed = 0
   /** Group id → stash key, so retry can find the body it is meant to reuse. */
   private readonly keys = new Map<string, string>()
@@ -323,7 +325,7 @@ export class KnowledgeCollector {
       // stored a fingerprint for, so extraction can prove it read the same body.
       // The question and answer stay in the source scope, not in the version.
       const groupKey = readingKey(material.origin)
-      this.remember(material.origin, groupKey, material.text)
+      this.remember(material.origin, groupKey, material.text, material.path)
       void this.publish({
         channel: 'reading',
         kind: materialKind(material),
@@ -432,7 +434,22 @@ export class KnowledgeCollector {
     return this.stash.get(origin)?.text ?? null
   }
 
-  private remember(origin: string, groupKey: string, text: string): void {
+  /**
+   * The read this process actually did for a source: the body it hashed and, for
+   * a document, the path that read came from.
+   *
+   * This — not the writable source row — is what authorises handing a file to the
+   * operating system. A row can be rewritten to point at any locator while the
+   * recorded read still names the file that was really opened.
+   */
+  readRecord(channel: CollectChannel, originRef: string): { text: string; path?: string } | null {
+    if (channel !== 'reading') return null
+    const entry = this.stash.get(originRef)
+    if (!entry) return null
+    return entry.path ? { text: entry.text, path: entry.path } : { text: entry.text }
+  }
+
+  private remember(origin: string, groupKey: string, text: string, path?: string): void {
     const size = Buffer.byteLength(text, 'utf8')
     if (size > STASH_BYTES) return
     // The same origin can be published twice (a re-read of the same page). Its old
@@ -447,7 +464,7 @@ export class KnowledgeCollector {
       if (oldest.done) break
       this.forget(oldest.value)
     }
-    this.stash.set(origin, { text, size })
+    this.stash.set(origin, path ? { text, size, path } : { text, size })
     this.stashed += size
     this.keys.set(groupKey, origin)
   }

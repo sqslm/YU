@@ -38,8 +38,8 @@ const DOCUMENTS = new Set([
 ])
 
 export interface DocumentDeps {
-  /** The text the main process really read for this source, or null. */
-  read(source: KnowledgeSource): string | null
+  /** The read this process really did for this source, or null. */
+  read(source: KnowledgeSource): { text: string; path?: string } | null
   /** The canonical path of an existing regular file, or null. */
   file(value: string): string | null
 }
@@ -59,17 +59,25 @@ export function extensionOf(value: string): string {
 /**
  * The path this document source may open, or why it may not.
  *
- * The order matters: a URL is not a file, an unknown type is refused before any
- * read happens, and the read record is checked before the file is touched.
+ * The target is the file the main process itself read, never the locator: a source
+ * row can be rewritten to another locator while its id, version and fingerprint
+ * stay the same, so a row that disagrees with the read is refused instead of being
+ * resolved. The type is judged on the canonical target, not on the alias.
  */
 export function documentPath(source: KnowledgeSource, deps: DocumentDeps): DocumentDecision {
   const locator = source.locator
   // `C:/x.pdf` is a path, not a scheme: only an explicit `scheme://` is a URL.
   if (!locator || /^[a-z][a-z0-9+.-]*:\/\//i.test(locator)) return { reason: '该来源没有可打开的文件' }
-  if (!DOCUMENTS.has(extensionOf(locator))) return { reason: '这类文件不提供打开' }
-  const text = deps.read(source)
-  if (!text) return { reason: NO_RECORD }
-  if (fingerprintOf(text) !== source.fingerprint) return { reason: '该来源的正文与读取记录不符' }
-  const path = deps.file(locator)
-  return path ? { path } : { reason: '原文件已不存在' }
+  const record = deps.read(source)
+  if (!record) return { reason: NO_RECORD }
+  if (fingerprintOf(record.text) !== source.fingerprint) return { reason: '该来源的正文与读取记录不符' }
+  // A page read through the web has no file behind it.
+  if (!record.path) return { reason: NO_RECORD }
+  const target = deps.file(record.path)
+  if (!target) return { reason: '原文件已不存在' }
+  if (!DOCUMENTS.has(extensionOf(target))) return { reason: '这类文件不提供打开' }
+  const claimed = deps.file(locator)
+  if (!claimed) return { reason: '原文件已不存在' }
+  if (claimed !== target) return { reason: '该来源的文件与读取记录不符' }
+  return { path: target }
 }

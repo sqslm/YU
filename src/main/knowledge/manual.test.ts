@@ -266,4 +266,56 @@ describe('manual extraction', () => {
       rmSync(engineRoot, { recursive: true, force: true })
     }
   }, 60_000)
+  it('does not park a source that was invalidated while the read was in flight', async () => {
+    // The review's probe: read an active source, delete the record so the task is
+    // cancelled and the source invalid, then let the late "body is gone" request
+    // arrive. It must not resurrect the task as parked.
+    const source = await published(BODY, 'n-del')
+    const groups = await host.queueStatus()
+    const group = groups.groups.find(entry => entry.items > 0)
+    expect(group).toBeTruthy()
+    await host.invalidateTask({ groupId: group!.id }, 'deleted')
+
+    let wakes = 0
+    const late = await extractSourceNow(
+      source.id,
+      deps({ resolveBody: () => ({ missing: 'deleted' }), wake: () => { wakes++ } })
+    )
+    expect(late.queued).toBe(0)
+    expect(late.state).toBeUndefined()
+    // The refusal names the reason it really is: the task was cancelled, so the
+    // late report is not "park this for later" but "there is nothing to park".
+    expect(late.reason).not.toBe('needs_reread')
+    expect(wakes).toBe(0)
+    const after = await host.queueStatus()
+    expect(after.groups.find(entry => entry.id === group!.id)?.state).toBe('cancelled')
+    const row = await host.getSource(source.id)
+    expect(row.state).toBe('invalid')
+  })
+
+  it('refuses a late missing report whose snapshot no longer matches the source', async () => {
+    // The caller read this row, then the row moved on (a new version and body were
+    // written by a later publish). The missing report describes the older snapshot,
+    // so the helper refuses it instead of parking the newer task.
+    const fresh = await published(BODY, 'n-rep')
+    const stale = { ...fresh, version: 'v0', fingerprint: '0'.repeat(64) }
+
+    const seenOldRow = {
+      getSource: async () => stale,
+      extractSource: (query: Parameters<KnowledgeHost['extractSource']>[0]) => host.extractSource(query)
+    } as unknown as KnowledgeHost
+    let wakes = 0
+    const late = await extractSourceNow(
+      stale.id,
+      deps({ host: () => seenOldRow, resolveBody: () => ({ missing: 'unknown' }), wake: () => { wakes++ } })
+    )
+    expect(late.queued).toBe(0)
+    expect(late.reason).toBe('原文已变更，需要重新读取该来源')
+    expect(wakes).toBe(0)
+    const groups = await host.queueStatus()
+    expect(groups.groups.every(entry => entry.state !== 'needs_reread')).toBe(true)
+    // The real row is untouched by the refused report.
+    expect((await host.getSource(fresh.id)).state).toBe('active')
+  })
+
 })
