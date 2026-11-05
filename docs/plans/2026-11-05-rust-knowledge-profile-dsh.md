@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5、阶段 6 A 与阶段 6 B 已通过外部 Codex 复核。阶段 6 C1（知识库浏览排版）已交付，并按外部复核提出的三条反例完成定点补修，待外部验收。其后按 6 C2 卡片联动、6 D 工作流的顺序交付。阶段 7 未开始。
+**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B 与阶段 6 C1（知识库浏览排版）已通过外部 Codex 复核。阶段 6 C2（卡片联动）已交付，并按外部复核提出的两条反例完成定点补修，待外部验收。其后按 6 D 工作流的顺序交付。阶段 7 未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2395,3 +2395,66 @@ A 的不自动跳页沿用 C1 的既有交互（详情动作只给成功提示�
 - 实窗里的「删除卡片」「新建卡片」经应用 IPC 播种，不是逐个点界面表单；A–F 的**验证**交互都是真实点击。
 - 06:13 之前的 46/592 与之后的 49/623 是同一套代码的两次运行，后者含 `NotesPage` 变更。
 - 未跑 `cargo`：本轮没有改 Rust（helper 仍是 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`）。
+
+## 阶段 6 C2 定点补修（第二十三轮，2026-11-06）
+
+外部复核通过 6 C1（含 `git diff --check c214d4b..HEAD`、指定 Vitest 三文件 67/67，并用最终 04:55:36 构建复测预览同步、往返位置与已删卡关闭入口），同时用隔离 Electron + 真 helper 复现 6 C2 的两条缺陷。本轮只修这两条，C1 排版与图谱、6 A 引用、6 B 删除与清理重试保持不动。
+
+### 1. 外部反例与本轮修复
+
+| 反例 | 根因 | 修复 |
+| --- | --- | --- |
+| 卡片建未发消息的草稿、关联存在；用真实预检与失效票据调 `chat:edit` 返回「预览已失效，请重新确认」，原对话与关联卡都在，但 `chat.draftCard` 从有值变 null | `chat:edit` 在 `chatOwner` 与预检/写入之前就 `draftCards.delete`，既违反 owner 边界，也让「没删成的删除」吃掉关联 | `chat:edit` 先 `chatOwner(event)` 再分支；关联上收到 `DraftCards`，`deleteThread` 在 `chats.edit` **写入成功之后**才 `dropCard`（新增可选 deps，不用「整段清理成功的 then」），预检拒绝、写入失败都不动关联；成功删除（即使随后进入 6 B 待办清理）都会清掉 |
+| 8 张卡的随记初始 5/8 且可「查看全部」；两次无关卡变更后仍 5/8，但「查看全部」消失、进入 capped；`bySource({noteId,offset:5,limit:5})` 仍能返回后 3 张 | `NotesPage` 每个请求都 `cardPages+1`、所有 `cards` 通知都请求第 0 页：既花掉手动分页预算，又把已加载页替换成第一页 | 新增 `CardPageMode = replace \| append \| refresh` 与 `mergeCards`（`replace`/`append` 各花一页，`refresh` 不花预算、不缩范围）；后台通知改 `refresh`，按**已加载行数**取同一范围（`cardRefreshLimit`），`replace`/`append` 才花预算；请求/答复用 ref + 序号票据，切随记或过期答复直接丢弃；`refresh` 失败不拆掉已显示内容，只有内容为空时才报错 |
+
+顺带核对：另存保存失败时已登记的临时 citation 会释放（`card-notes.ts` 的 `forget`），不额外发布；卡片正文、人工编辑与原记录行为不变。
+
+### 2. 实现清单
+
+- `src/main/knowledge/card-draft.ts`：新增 `DraftCards`（`hold`/`get`/`drop`/`consume`）。`consume` 在读卡期间再次确认关联仍是发送开始时的那一个，种子只用那次关联；`started` 只在真正 `store.begin` 之后、且关联未被替换/移除时消耗。
+- `src/main/chat-delete.ts`：`ChatDeleteDeps` 增可选 `dropCard`，调用点在 `edit` 成功之后、清理分支之前。
+- `src/main/index.ts`：`draftCards` 换成 `DraftCards`；`knowledge:continue` → `hold`、`chat:draft-card` → `get`、`chat:drop-draft-card` → `drop`；`chat:send` → `consume(...)` 后把种子与 `started` 交给 `ChatService.send`；`knowledge:card-note` 增加 `forget`。
+- `src/renderer/src/settings/pages/knowledgeView.ts`：`CardPage`/`CardPageMode`/`CardSectionState`/`cardRefreshLimit`/`mergeCards`。
+- `src/renderer/src/settings/pages/NotesPage.tsx`：`loadCards(noteId, offset, mode)` 走同一 reducer，切换/过期答复丢弃，`onChanged` 走 `refresh`。
+
+### 3. 测试与命令（实际退出码）
+
+```
+pnpm exec vitest run src/main/knowledge/linkage.integration.test.ts \
+  src/main/knowledge/card-note.integration.test.ts src/main/knowledge/draft-boundary.integration.test.ts \
+  src/main/chat-draft.integration.test.ts src/main/ask-knowledge.integration.test.ts src/main/chat.test.ts \
+  src/main/chat-delete.test.ts src/main/notes-ipc.test.ts src/main/knowledge/card-draft.test.ts \
+  src/main/knowledge/card-notes.test.ts src/renderer/src/settings/pages/knowledgeView.test.ts \
+  src/preload/index.test.ts src/main/ipc-trust.test.ts        → 13 文件 / 160 项通过，exit 0
+pnpm typecheck                                                → exit 0（tsc node + web）
+pnpm build                                                    → exit 0（13.71 s）
+git diff --check                                              → exit 0
+```
+
+- 新增 `card-draft.test.ts` 8 项：无草稿不发种子也不读库；发送时重读且有界（`MAX_CARD_CONTEXT`）；读卡期间读者被移除 → 空种子且保持移除；读卡期间换成另一张 → 空种子、关联是新的那张；`started` 只在真正开始后消耗；旧发送的 `started` 不删新关联；读失败抛出 helper 原因且关联保留。
+- 新增 `card-notes.test.ts` 4 项（先 `cite` 后 `save`、保存失败 `forget`、读不出不 cite、`cardNoteText` 格式）。
+- 新增 `draft-boundary.integration.test.ts` 4 项（真 `ChatService` + 真 `DraftCards` + 生产 `deleteThread`）：预检拒绝时线程与关联都在；成功删除后关联清空；后置清理失败仍清空；其它线程互不影响。
+- `chat-delete.test.ts` 增 4 项（成功调用 `dropCard` 一次、预检拒绝不调用、写入失败不调用、后置清理失败仍调用）；`knowledgeView.test.ts` 增 5 项（`cardRefreshLimit`、`replace`、`append`、`refresh` 不花预算、`refresh` 让消失的行离开）。
+
+### 4. 实窗证据（隔离 Electron + 真 helper + 本地模型桩）
+
+证据目录 `.tmp/c3-evidence/`（gitignored）：`report.md`、`results/{summary,draft,draft-boundary,notes-paging,saved-note}.json`、`shots/A1..D1`。构建为 06:4x 的 `out/`（`settings-BiI-ibpd.js`），helper `66731bd3…93ab7f`，隔离根 `E:\CpanQianYi\Temp\yu-c3`（Junction + `boot.js`），CDP 19595，桩 127.0.0.1:19596，视口 1080×750，真实鼠标点击。
+
+- A 5/8 与「查看全部」：两次无关卡片变更后仍 5 行、仍可点、未 capped，点开后 8 行。
+- B 已加载 8 行时新增第 9 张：通知后仍 8 行、总数 9、仍可取第 3 页 → 取齐 9 行并 capped。
+- C 真实「继续讨论」建草稿（0 消息、0 请求）→ 聊天页出现关联卡片 → 真实 `chat.edit` 删除后线程与关联一起消失。
+- D 真实「另存为随记」新建 `d080d1a3…`，打开该随记后提炼完成，卡片在同一页自动出现。
+- 合计 19/19 断言通过（`failed: []`）。
+
+### 5. 未测与边界
+
+- 外部反例里的「预检拒绝后关联仍在」在实窗不可复现：无来源草稿的 `cardImpact` 为 `cards: 0`，`verifyKnowledgeDelete` 依既有语义直接放行（没有卡片可删就不需要票据）。该顺序保证改由 `draft-boundary.integration.test.ts`（生产 `deleteThread` + 真 `ChatService`）与 `chat-delete.test.ts` 覆盖，实窗只证明成功删除会清掉关联。
+- 非 owner 调用需要第二个非受信窗口，未在实窗构造；`chatOwner` 仍在写入之前，`ipc-trust` 套件覆盖信任边界。
+- 未构造真实写入失败（关闭 store 后 `chats.edit` 静默返回），该分支由单测覆盖。
+- 未测 >100 张卡的多页滚动、dpr≠1、en-US 文案定位。
+- C1 的 NUL 收尾已在上轮提交：`KnowledgeGraphPreview.tsx` 现为 UTF-8 文本、`\u0000` 为源码转义，`git diff --text` 仅一行改动。
+
+### 6. 提交
+
+- 代码：`e033914` `fix(knowledge): keep a card draft only while its thread is really deleted`
+- 本文件：`docs(plan)` 随本次交付一并提交。
