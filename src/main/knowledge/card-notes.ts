@@ -17,6 +17,8 @@ export interface CardNoteDeps {
    * the citation: there is one publication, not a plain one racing an explicit one.
    */
   cite(noteId: string, cardIds: string[]): void
+  /** Forgets a citation registered for a note that never got written. */
+  forget(noteId: string): void
 }
 
 /**
@@ -28,6 +30,13 @@ export async function saveCardAsNote(deps: CardNoteDeps, cardId: string): Promis
   const card = await deps.read(cardId)
   const noteId = deps.nextId()
   deps.cite(noteId, [card.id])
-  const note = await deps.save({ id: noteId, text: cardNoteText(card) })
-  return { noteId: note.id }
+  try {
+    const note = await deps.save({ id: noteId, text: cardNoteText(card) })
+    return { noteId: note.id }
+  } catch (error) {
+    // The store threw the note away, so the citation registered for its id would
+    // outlive it and could be handed to whatever note takes that id next.
+    deps.forget(noteId)
+    throw error
+  }
 }

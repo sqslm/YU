@@ -47,7 +47,7 @@ import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
 import { RecordReleaser } from './knowledge/release'
 import { SettleRegistry, settleRecordKnowledge, type SettleRecordDeps } from './knowledge/settle'
-import { draftSeed, type DraftCard } from './knowledge/card-draft'
+import { DraftCards } from './knowledge/card-draft'
 import { saveCardAsNote } from './knowledge/card-notes'
 import { CleanupRetries } from './knowledge/cleanup'
 import { deleteThread } from './chat-delete'
@@ -459,7 +459,7 @@ async function settleRecord(
  * Cards a conversation was opened from and has not sent yet. Only the identity
  * and the title are remembered: the body is read again on the send that quotes it.
  */
-const draftCards = new Map<string, DraftCard>()
+const draftCards = new DraftCards()
 /**
  * Cards a note that is being saved must cite, by note id. Registered before the
  * store writes, because the store publishes a finished note on its own and that
@@ -2014,7 +2014,7 @@ function registerIpc(): void {
     knowledgeOwner(event)
     const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
     const thread = chats.create(null)
-    draftCards.set(thread.id, { id: card.id, title: card.title })
+    draftCards.hold(thread.id, { id: card.id, title: card.title })
     return { threadId: thread.id, card: { id: card.id, title: card.title } }
   })
   /** A real todo from a card the user picked; the card's text is data, not orders. */
@@ -2038,7 +2038,8 @@ function registerIpc(): void {
       read: cardId => knowledge.getCard(knowledgeId(cardId, '卡片 ID')),
       nextId: () => randomUUID(),
       save: input => notes.createText(input),
-      cite: (noteId, cardIds) => { noteCitations.set(noteId, cardIds) }
+      cite: (noteId, cardIds) => { noteCitations.set(noteId, cardIds) },
+      forget: noteId => { noteCitations.delete(noteId) }
     }, id)
   })
   handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })
@@ -2188,9 +2189,8 @@ function registerIpc(): void {
   handle('chat:attachment', (event, id: string, attachmentId: string) => { chatOwner(event); return chats.store.attachment(id, attachmentId) })
   handle('chat:create', (event, group: string | null) => { chatOwner(event); return chats.create(group) })
   handle('chat:draft-card', (event, id: string) => { chatOwner(event); return draftCards.get(id) ?? null })
-  handle('chat:drop-draft-card', (event, id: string) => { chatOwner(event); draftCards.delete(id) })
+  handle('chat:drop-draft-card', (event, id: string) => { chatOwner(event); draftCards.drop(id) })
   handle('chat:edit', async (event, input: import('@shared/chat').ChatEdit) => {
-    if (input?.action === 'delete') draftCards.delete(input.id)
     chatOwner(event)
     if (input?.action !== 'delete') return chats.edit(input)
     // The thread really goes first; its knowledge is settled afterwards, with the
@@ -2199,6 +2199,10 @@ function registerIpc(): void {
     // error it cannot act on; the default path keeps its own wording.
     return await deleteThread({
       edit: next => chats.edit(next),
+      // The card belongs to a draft of this thread, so only a deletion that was
+      // really written drops it: a refused preview or a failed write leaves the
+      // conversation, its draft and its card in place.
+      dropCard: () => draftCards.drop(input.id),
       verify: (identity, ticket) => verifyKnowledgeDelete(identity, ticket),
       settle: (id, body) => settleOnDelete('chat', id, body),
       purge: (target, identity, options) => purgeRecordKnowledge(target, identity, options),
@@ -2210,8 +2214,8 @@ function registerIpc(): void {
     if (gameMode.snapshot().active) throw Error('游戏模式下已暂停聊天生成')
     // A conversation opened from a card carries that card as its first reference,
     // as data the user did not write; it is consumed by the first real send.
-    const seed = await draftSeed(cardId => knowledge.getCard(cardId), draftCards.get(id))
-    return chats.send(id, text, attachments, seed, () => { draftCards.delete(id) })
+    const { seed, started } = await draftCards.consume(id, cardId => knowledge.getCard(cardId))
+    return chats.send(id, text, attachments, seed, started)
   })
   handle('chat:cancel', event => { chatOwner(event); chats.cancel() })
   handle('card:explain', async (event, term: string) => {

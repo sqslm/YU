@@ -11,6 +11,7 @@ import {
   IMPACT_LABEL_KEY,
   SPLIT_MIN_WIDTH,
   acceptGraph,
+  cardRefreshLimit,
   cardTopics,
   cardRequest,
   cardsSection,
@@ -26,6 +27,7 @@ import {
   groupRelations,
   impactNotice,
   kindKey,
+  mergeCards,
   mergePage,
   mergePreview,
   mergeQuery,
@@ -534,5 +536,59 @@ describe('the card face topics', () => {
 
   it('has no topics to show when a card has none', () => {
     expect(cardTopics([])).toEqual({ shown: [], rest: 0 })
+  })
+})
+
+describe('the note card section and its change notices', () => {
+  const row = (id: string) => summary(id)
+
+  it('asks a refresh for the rows already shown, never for less than one page', () => {
+    expect(cardRefreshLimit(0)).toBe(5)
+    expect(cardRefreshLimit(2)).toBe(5)
+    expect(cardRefreshLimit(8)).toBe(8)
+  })
+
+  it('spends one request on a page and replaces the rows on the first one', () => {
+    const first = mergeCards(
+      { rows: [], pages: 0 },
+      { items: [row('a'), row('b')], total: 8, hasMore: true, nextOffset: 2 },
+      'replace'
+    )
+
+    expect(first.rows.map((item) => item.id)).toEqual(['a', 'b'])
+    expect(first).toMatchObject({ total: 8, more: true, offset: 2, pages: 1 })
+  })
+
+  it('appends a later page without repeating a row that arrived twice', () => {
+    const current = { rows: [row('a'), row('b')], pages: 1 }
+    const next = mergeCards(current, { items: [row('b'), row('c')], total: 8, hasMore: true, nextOffset: 3 }, 'append')
+
+    expect(next.rows.map((item) => item.id)).toEqual(['a', 'b', 'c'])
+    expect(next).toMatchObject({ total: 8, more: true, offset: 3, pages: 2 })
+  })
+
+  it('refreshes the loaded range in place without spending a request or shrinking it', () => {
+    const current = { rows: [row('a'), row('b'), row('c'), row('d'), row('e'), row('f'), row('g')], pages: 2 }
+
+    const next = mergeCards(
+      current,
+      { items: [row('a'), row('b'), row('c'), row('d'), row('e'), row('f'), row('g'), row('h')], total: 9, hasMore: true, nextOffset: 8 },
+      'refresh'
+    )
+
+    // Seven rows were on screen and seven came back: the reader keeps the range
+    // they loaded, and the third page is still available to them.
+    expect(next.rows).toHaveLength(8)
+    expect(next).toMatchObject({ total: 9, more: true, offset: 8, pages: 2 })
+    expect(next.rows.map((item) => item.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
+  })
+
+  it('lets a refreshed answer drop a row whose source went away', () => {
+    const current = { rows: [row('a'), row('b'), row('c')], pages: 1 }
+
+    const next = mergeCards(current, { items: [row('a'), row('c')], total: 2, hasMore: false, nextOffset: null }, 'refresh')
+
+    expect(next.rows.map((item) => item.id)).toEqual(['a', 'c'])
+    expect(next).toMatchObject({ total: 2, more: false, offset: null, pages: 1 })
   })
 })

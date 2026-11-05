@@ -512,6 +512,60 @@ export function cardsSection(input: CardsSectionInput): CardsSection {
   }
 }
 
+/** A page of cards, as the backend answers one request for a record. */
+export interface CardPage<T extends { id: string } = { id: string }> {
+  items: T[]
+  total: number
+  hasMore: boolean
+  nextOffset?: number | null
+}
+
+/** Which part of the section one answer is allowed to touch. */
+export type CardPageMode = 'replace' | 'append' | 'refresh'
+
+export interface CardSectionState<T extends { id: string } = { id: string }> {
+  rows: T[]
+  total: number
+  more: boolean
+  offset: number | null
+  pages: number
+}
+
+/**
+ * How many rows a refresh asks for: everything already on screen. A change
+ * notice updates the range the reader is looking at; it must not pull the
+ * section back to its first page.
+ */
+export function cardRefreshLimit(shown: number): number {
+  return Math.max(CARDS_SECTION_LIMIT, Math.max(0, Math.trunc(shown)))
+}
+
+/**
+ * The section after one answer. `replace` and `append` are the reader's own
+ * pages and spend the request budget; `refresh` follows a change notice, so it
+ * updates the loaded rows in place and spends nothing. Rows are deduplicated by
+ * id and keep the backend's order, so an overlap cannot show a card twice.
+ */
+export function mergeCards<T extends { id: string }>(
+  current: Pick<CardSectionState<T>, 'rows' | 'pages'>,
+  page: CardPage<T>,
+  mode: CardPageMode
+): CardSectionState<T> {
+  const known = new Set<string>()
+  const rows = (mode === 'append' ? [...current.rows, ...page.items] : page.items).filter((row) => {
+    if (known.has(row.id)) return false
+    known.add(row.id)
+    return true
+  })
+  return {
+    rows,
+    total: Math.max(0, Math.trunc(page.total)),
+    more: page.hasMore,
+    offset: page.nextOffset ?? null,
+    pages: mode === 'refresh' ? current.pages : current.pages + 1
+  }
+}
+
 export interface ModelOption {
   id: string
   label: string

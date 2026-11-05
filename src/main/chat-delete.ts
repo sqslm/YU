@@ -10,6 +10,12 @@ export type ChatDelete = Extract<ChatEdit, { action: 'delete' }>
 export interface ChatDeleteDeps {
   /** Writes the deletion itself. */
   edit: (input: ChatEdit) => void | Promise<void>
+  /**
+   * Drops what only a draft of this thread held — its card. Called once the
+   * deletion is written, never before: a refused preview or a failed write leaves
+   * the conversation alive, and a card that outlives its thread must not be sent.
+   */
+  dropCard?: () => void
   /** Proves the ticked preview still holds, while the thread still exists. */
   verify: (identity: SourceIdentity, ticket?: string) => Promise<void>
   /** One owner for the record write and its settlement. */
@@ -34,6 +40,7 @@ export async function deleteThread(deps: ChatDeleteDeps, input: ChatDelete): Pro
   if (input.deleteKnowledge) await deps.verify(identity, input.ticket)
   return await deps.settle(input.id, async () => {
     const written = await deps.edit(input)
+    deps.dropCard?.()
     try {
       await deps.purge(identity, identity, { cards: Boolean(input.deleteKnowledge), ticket: input.ticket })
     } catch (error) {

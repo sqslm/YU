@@ -189,7 +189,8 @@ async function rig(options: { enabled?: boolean } = {}): Promise<Rig> {
         read: id => host.getCard(id),
         nextId: () => `note-${Math.random().toString(16).slice(2)}`,
         save: input => notes.createText(input),
-        cite: (noteId, cardIds) => { citations.set(noteId, cardIds) }
+        cite: (noteId, cardIds) => { citations.set(noteId, cardIds) },
+        forget: noteId => { citations.delete(noteId) }
       }, cardId)
     }
   }

@@ -101,7 +101,15 @@ import {
   validateNotesView,
   type NotesViewState
 } from './pageState'
-import { CARDS_SECTION_LIMIT, cardsSection, impactNotice, kindKey } from './knowledgeView'
+import {
+  CARDS_SECTION_LIMIT,
+  cardRefreshLimit,
+  cardsSection,
+  impactNotice,
+  kindKey,
+  mergeCards,
+  type CardPageMode
+} from './knowledgeView'
 
 /** Typing pause before a text edit is written; blur and navigation flush earlier. */
 const SAVE_DEBOUNCE_MS = 600
@@ -300,6 +308,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
   const [cardMore, setCardMore] = useState(false)
   const [cardOffset, setCardOffset] = useState<number | null>(null)
   const [cardPages, setCardPages] = useState(0)
+  /**
+   * The section as the last accepted answer left it. Requests read it instead of
+   * the state, so two answers landing close together cannot both merge into a
+   * stale copy.
+   */
+  const cardRowsRef = useRef<KnowledgeCardSummary[]>([])
+  const cardPagesRef = useRef(0)
+  const cardSeqRef = useRef(0)
   const [cardsLoading, setCardsLoading] = useState(false)
   const [cardsError, setCardsError] = useState('')
   /** What deleting this note would do to the cards that quote it. */
@@ -428,32 +444,43 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
    * anything else appends — and a slow answer for a note the user already left is
    * dropped instead of landing in the new note's section.
    */
-  const loadCards = useCallback(async (noteId: string, offset: number): Promise<void> => {
-    setCardsLoading(true)
-    setCardsError('')
+  const loadCards = useCallback(async (noteId: string, offset: number, mode: CardPageMode): Promise<void> => {
+    const seq = ++cardSeqRef.current
+    if (mode !== 'refresh') {
+      setCardsLoading(true)
+      setCardsError('')
+    }
     try {
       // The note's identity, not a source id: one note keeps a source row per
       // published version, so a source id would answer the newest version only.
-      const page = await window.api.knowledge.bySource({ noteId, offset, limit: CARDS_SECTION_LIMIT })
-      if (selectedRef.current?.id !== noteId) return
-      setCardRows((current) => {
-        if (offset === 0) return page.items
-        const known = new Set(current.map((row) => row.id))
-        return [...current, ...page.items.filter((row) => !known.has(row.id))]
-      })
-      setCardTotal(page.total)
-      setCardMore(page.hasMore)
-      setCardOffset(page.nextOffset ?? null)
-      setCardPages((count) => count + 1)
+      // A refresh asks for what is already shown, so the range it updates is the
+      // one the reader is looking at.
+      const limit = mode === 'refresh' ? cardRefreshLimit(cardRowsRef.current.length) : CARDS_SECTION_LIMIT
+      const page = await window.api.knowledge.bySource({ noteId, offset, limit })
+      if (selectedRef.current?.id !== noteId || seq !== cardSeqRef.current) return
+      const merged = mergeCards({ rows: cardRowsRef.current, pages: cardPagesRef.current }, page, mode)
+      cardRowsRef.current = merged.rows
+      cardPagesRef.current = merged.pages
+      setCardRows(merged.rows)
+      setCardTotal(merged.total)
+      setCardMore(merged.more)
+      setCardOffset(merged.offset)
+      setCardPages(merged.pages)
     } catch (err) {
-      if (selectedRef.current?.id === noteId) setCardsError(messageOf(err))
+      if (selectedRef.current?.id !== noteId || seq !== cardSeqRef.current) return
+      // A refresh that fails leaves what is already shown alone; it only speaks up
+      // when there is nothing to leave, so an empty section is never a lie.
+      if (mode !== 'refresh' || cardRowsRef.current.length === 0) setCardsError(messageOf(err))
     } finally {
-      setCardsLoading(false)
+      if (mode !== 'refresh') setCardsLoading(false)
     }
   }, [])
 
   /** Opening a note reloads its first cards; the section never grows on its own. */
   useEffect(() => {
+    cardRowsRef.current = []
+    cardPagesRef.current = 0
+    cardSeqRef.current += 1
     setCardRows([])
     setCardTotal(0)
     setCardMore(false)
@@ -461,7 +488,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
     setCardPages(0)
     setCardsError('')
     if (!selectedNoteId) return
-    void loadCards(selectedNoteId, 0)
+    void loadCards(selectedNoteId, 0, 'replace')
   }, [selectedNoteId, loadCards])
 
   /**
@@ -472,7 +499,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
   useEffect(() => {
     if (!selectedNoteId) return
     return window.api.knowledge.onChanged((scope) => {
-      if (scope === 'cards') void loadCards(selectedNoteId, 0)
+      // The extraction that finishes while the note is open lands in place: the rows
+      // already shown are refreshed, not replaced by a first page that would both
+      // spend a request and drop the pages the reader loaded.
+      if (scope === 'cards') void loadCards(selectedNoteId, 0, 'refresh')
     })
   }, [selectedNoteId, loadCards])
 
@@ -2288,7 +2318,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
                     data-notes-knowledge-error
                     sx={{ mt: 1, fontSize: 11.5 }}
                     action={
-                      <Button size="small" color="inherit" onClick={() => void loadCards(selected.id, 0)}>
+                      <Button size="small" color="inherit" onClick={() => void loadCards(selected.id, 0, 'replace')}>
                         {t('common.retry')}
                       </Button>
                     }
@@ -2336,7 +2366,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
                         data-notes-knowledge-more
                         disabled={cardsLoading}
                         onClick={() => {
-                          if (cardOffset !== null) void loadCards(selected.id, cardOffset)
+                          if (cardOffset !== null) void loadCards(selected.id, cardOffset, 'append')
                         }}
                         sx={{ fontSize: 11.5, px: 0.75 }}
                       >

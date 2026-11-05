@@ -80,6 +80,45 @@ describe('deleting a conversation and the knowledge only it supported', () => {
     expect(d.pending).not.toHaveBeenCalled()
   })
 
+  it('drops the draft card only once the thread is really gone', async () => {
+    const dropCard = vi.fn()
+    const d = deps({ dropCard })
+
+    await deleteThread(d, input)
+
+    expect(dropCard).toHaveBeenCalledOnce()
+    expect(d.edit).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the draft card when the preview refuses the delete', async () => {
+    const dropCard = vi.fn()
+    const d = deps({ dropCard, verify: vi.fn(async () => { throw new Error('预览已失效，请重新确认') }) })
+
+    await expect(deleteThread(d, input)).rejects.toThrow('预览已失效，请重新确认')
+
+    expect(dropCard).not.toHaveBeenCalled()
+    expect(d.edit).not.toHaveBeenCalled()
+  })
+
+  it('keeps the draft card when the thread could not be written away', async () => {
+    const dropCard = vi.fn()
+    const d = deps({ dropCard, edit: vi.fn(async () => { throw new Error('EACCES: permission denied') }) })
+
+    await expect(deleteThread(d, input)).rejects.toThrow('EACCES')
+
+    expect(dropCard).not.toHaveBeenCalled()
+  })
+
+  it('drops the draft card even when the cleanup after the delete fails', async () => {
+    const dropCard = vi.fn()
+    const d = deps({ dropCard, purge: vi.fn(async () => { throw new Error('database is locked') }) })
+
+    await expect(deleteThread(d, input)).resolves.toEqual({ id: 'retry-1', reason: 'database is locked', cards: true })
+
+    // The thread is deleted, so a card that only its draft held is gone with it.
+    expect(dropCard).toHaveBeenCalledOnce()
+  })
+
   it('deletes nothing when the preview no longer holds', async () => {
     const d = deps({ verify: vi.fn(async () => { throw new Error('预览已失效，请重新确认') }) })
 
