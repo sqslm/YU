@@ -1411,6 +1411,10 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 | `pnpm build` | exit 0，11.87 s |
 | `git diff --check` | exit 0 |
 
+
+### 阶段 5 验收记录的测试归属更正
+阶段 5 验收由外部实跑的是**定向 Vitest 232 项 + queue/relations 38 项**；此前记录里写的「114 项全 Rust 通过」是 DSH 自己的结果，不是外部验收口径，特此更正（数字与结论本身均为真实，问题只在归属）。
+
 ### 未测与边界
 - R1 的「真实 `ChatService`/`AssistantSession` + 仅替网络的传输替身」端到端断言尚未补齐（目前覆盖到工具注册、授权门、采集投影与单元级透传）。
 - 未做隔离 Electron 真窗口点击验证（继续讨论、随记↔卡片跳转）。
