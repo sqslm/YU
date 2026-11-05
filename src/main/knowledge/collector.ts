@@ -131,6 +131,18 @@ export interface PublishOptions {
   signal?: AbortSignal
   /** Called with the helper's own words when the source was refused. */
   reject?: (reason: string) => void
+  /**
+   * Asked again once the switch hand-over has been waited out, right before the
+   * source is offered to the helper. The wait can last long enough for the user
+   * to cancel, pause or switch the tool off, and a source written after that is a
+   * write nobody asked for. Answers a reason to refuse with, or '' to go ahead.
+   */
+  allow?: () => Promise<string>
+  /**
+   * Runs once the helper accepted the source and before the engine is woken: the
+   * body a task will need has to be readable before anything starts using it.
+   */
+  accepted?: () => void
 }
 
 export type RecoveredBody = { text: string } | { missing: 'deleted' | 'temporary' | 'empty' | 'unknown' }
@@ -355,10 +367,9 @@ export class KnowledgeCollector {
     if (!text.trim()) return null
     const capped = text.length > MAX_MATERIAL_CHARS ? { ...material, text: text.slice(0, MAX_MATERIAL_CHARS), truncated: true } : material
     const groupKey = readingKey(capped.origin)
-    // The body is stashed only when the write is really going ahead: a cancelled
-    // hand-over must not replace the text another legal task is quoting.
-    if (options.signal?.aborted) return null
-    this.remember(capped.origin, groupKey, capped.text, capped.path)
+    // The body is stashed only once the helper took this source: a hand-over that
+    // is cancelled or refused must not replace the text another legal task is
+    // quoting, which is the version the stored fingerprint belongs to.
     return this.publish({
       channel: 'reading',
       kind: materialKind(capped),
@@ -371,7 +382,7 @@ export class KnowledgeCollector {
       scope: projection.scope.slice(0, 1000),
       text: capped.text,
       at: projection.at
-    }, options)
+    }, { ...options, accepted: () => this.remember(capped.origin, groupKey, capped.text, capped.path) })
   }
 
   readingFinished(reading: ReadingProjection): void {
@@ -397,7 +408,6 @@ export class KnowledgeCollector {
       // stored a fingerprint for, so extraction can prove it read the same body.
       // The question and answer stay in the source scope, not in the version.
       const groupKey = readingKey(material.origin)
-      this.remember(material.origin, groupKey, material.text, material.path)
       void this.publish({
         channel: 'reading',
         kind: materialKind(material),
@@ -411,7 +421,7 @@ export class KnowledgeCollector {
         text: material.text,
         ...(cited.length ? { citedCardIds: cited } : {}),
         at: reading.at
-      })
+      }, { accepted: () => this.remember(material.origin, groupKey, material.text, material.path) })
     })
   }
 
@@ -570,10 +580,19 @@ export class KnowledgeCollector {
       // Wait for a switch hand-over still in flight: the helper must already know
       // that this channel is off before the source is offered to it.
       if (this.confirming) await this.confirmed
-      // The wait can outlast the turn: a cancel that landed while the switch was
-      // being confirmed stops the write here, before the helper ever sees it.
+      // The wait can outlast the turn: a cancel, a pause or a tool switched off
+      // while the switch was being confirmed stops the write here, before the
+      // helper ever sees it. The caller's own admission check is the one that
+      // knows those rules, so it is asked rather than guessed.
       if (options.signal?.aborted) return null
+      const denied = options.allow ? await options.allow() : ''
+      if (denied) {
+        options.reject?.(denied)
+        this.deps.log?.(`[knowledge] 采集 ${input.channel} 中止：${denied}`)
+        return null
+      }
       const result = await host.publishSource(input)
+      options.accepted?.()
       const key = this.keys.has(input.groupKey) ? this.keys.get(input.groupKey) : undefined
       if (key) this.keys.set(result.groupId, key)
       if (!result.duplicate) this.deps.onQueued?.()

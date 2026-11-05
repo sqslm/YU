@@ -31,6 +31,8 @@ export interface HandoffPublishOptions {
   signal?: AbortSignal
   /** The helper's own words when it refused the source. */
   reject?: (reason: string) => void
+  /** Asked once the switch hand-over is done, before the source is written. */
+  allow?: () => Promise<string>
 }
 
 export interface HandoffDeps {
@@ -62,18 +64,20 @@ function channelReason(channel: 'reading' | 'notes'): string {
 }
 
 /**
- * Why this run cannot hand anything over right now, or '' when it can.
+ * The admission check, as a function that can be asked more than once.
  *
  * The switches, the pause and the permission list all live outside this call, so
- * they are read twice: once before waiting for the helper's pause state and once
- * after. The second read is what makes a switch thrown or a turn cancelled during
- * that wait stop the write instead of showing up one source too late.
+ * they are read before and after the helper answers with its pause state. The
+ * same function is handed to the publish call as well: waiting for a switch
+ * hand-over can last long enough for the user to cancel, pause or switch the tool
+ * off, and the write that follows has to honour that rather than the state this
+ * run started with.
  */
-export async function handoffBlocker(
+function admission(
   deps: HandoffDeps,
   channel: 'reading' | 'notes',
   signal?: AbortSignal
-): Promise<string> {
+): () => Promise<string> {
   const check = (): string => {
     if (signal?.aborted) return mt('本轮已取消')
     if (deps.disabled().includes(TOOL)) return mt('此工具已在权限设置中关闭：{{name}}', { name: TOOL })
@@ -82,21 +86,32 @@ export async function handoffBlocker(
     if (deps.gameActive()) return mt('游戏模式已开启')
     return ''
   }
-  const before = check()
-  if (before) return before
-  let paused: { manual: boolean; game: boolean } | null = null
-  try {
-    paused = await deps.paused()
-  } catch (error) {
-    // The helper may be down; publishing reports that with its own reason.
-    deps.log?.(`[knowledge] 读取暂停状态失败：${error instanceof Error ? error.message : String(error)}`)
+  return async () => {
+    const before = check()
+    if (before) return before
+    let paused: { manual: boolean; game: boolean } | null = null
+    try {
+      paused = await deps.paused()
+    } catch (error) {
+      // The helper may be down; publishing reports that with its own reason.
+      deps.log?.(`[knowledge] 读取暂停状态失败：${error instanceof Error ? error.message : String(error)}`)
+    }
+    const after = check()
+    if (after) return after
+    if (!paused) return ''
+    if (paused.game) return mt('游戏模式已开启')
+    if (paused.manual) return mt('采集已暂停')
+    return ''
   }
-  const after = check()
-  if (after) return after
-  if (!paused) return ''
-  if (paused.game) return mt('游戏模式已开启')
-  if (paused.manual) return mt('采集已暂停')
-  return ''
+}
+
+/** Why this run cannot hand anything over right now, or '' when it can. */
+export async function handoffBlocker(
+  deps: HandoffDeps,
+  channel: 'reading' | 'notes',
+  signal?: AbortSignal
+): Promise<string> {
+  return admission(deps, channel, signal)()
 }
 
 /** A page this run already read, handed to the queue through the real source chain. */
@@ -105,12 +120,24 @@ export async function handoffReading(
   material: HandoffMaterial,
   options: { signal?: AbortSignal } = {}
 ): Promise<ExtractSourceResult> {
-  const blocked = await handoffBlocker(deps, 'reading', options.signal)
+  const admit = admission(deps, 'reading', options.signal)
+  const blocked = await admit()
   if (blocked) return { queued: 0, reason: blocked }
   let refused = ''
-  const publish: HandoffPublishOptions = { reject: reason => (refused = reason) }
+  let denied = ''
+  const publish: HandoffPublishOptions = {
+    reject: reason => (refused = reason),
+    // The publish waits for a switch hand-over; whatever changed during that wait
+    // is decided here, in the same words the first check used.
+    allow: async () => {
+      const reason = await admit()
+      if (reason) denied = reason
+      return reason
+    }
+  }
   if (options.signal) publish.signal = options.signal
   const sourceId = await deps.publishReading(material, publish)
+  if (denied) return { queued: 0, reason: denied }
   if (refused) return { queued: 0, reason: mt('知识库拒绝了这次读取：{{reason}}', { reason: refused }) }
   if (!sourceId) {
     return { queued: 0, reason: options.signal?.aborted ? mt('本轮已取消') : mt('这条读取还没有进入知识库') }
@@ -127,12 +154,22 @@ export async function handoffNote(
   noteId: string,
   options: { signal?: AbortSignal } = {}
 ): Promise<ExtractSourceResult> {
-  const blocked = await handoffBlocker(deps, 'notes', options.signal)
+  const admit = admission(deps, 'notes', options.signal)
+  const blocked = await admit()
   if (blocked) return { queued: 0, reason: blocked }
   let refused = ''
-  const publish: HandoffPublishOptions = { reject: reason => (refused = reason) }
+  let denied = ''
+  const publish: HandoffPublishOptions = {
+    reject: reason => (refused = reason),
+    allow: async () => {
+      const reason = await admit()
+      if (reason) denied = reason
+      return reason
+    }
+  }
   if (options.signal) publish.signal = options.signal
   const sourceId = await deps.publishNote(noteId, publish)
+  if (denied) return { queued: 0, reason: denied }
   if (refused) return { queued: 0, reason: mt('知识库拒绝了这条随记：{{reason}}', { reason: refused }) }
   if (!sourceId) {
     return { queued: 0, reason: options.signal?.aborted ? mt('本轮已取消') : mt('这条随记还不能提炼') }
