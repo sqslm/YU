@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B、阶段 6 C1（知识库浏览排版）与阶段 6 C2（卡片联动）已通过外部 Codex 复核。阶段 6 D（工作流送入知识提炼）已交付，并按外部复核提出的四条边界（暂停读取中取消、配置确认中取消、权限设置禁用、helper 真实拒绝）完成定点补修，待外部复验。阶段 7 未开始。
+**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B、阶段 6 C1（知识库浏览排版）与阶段 6 C2（卡片联动）已通过外部 Codex 复核。阶段 6 D（工作流送入知识提炼）已交付，并按外部复核提出的七个边界（暂停读取中取消、配置确认中取消、权限设置禁用、helper 真实拒绝、配置交接中的取消、等待中关闭工具、等待中暂停采集）完成两轮定点补修，最后三条待外部复验。阶段 7 未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2668,4 +2668,69 @@ C2（卡片联动）本身与其后三轮定点补修（草稿关联的删除边
 ### 7. 提交
 
 - 代码：`e069667 fix(workflow): stop a cancelled or disabled extraction before it writes`（`src/main/knowledge/{handoff,collector,manual}.ts`、`src/main/tools/knowledge.ts`、`src/main/index.ts`、`src/main/tools/knowledge.test.ts`、`src/main/workflow-extract.integration.test.ts`）。
+- 本文件：随本次交付一并提交。
+
+## 阶段 6 D 定点收尾（第二十七轮）：配置交接期间的取消与权限变化
+
+外部在同一套真 helper 与可控配置闸门上复现三条反例：配置交接（`collector.publish` 等 `confirmed`）期间发生取消、权限关闭或暂停，写入仍然发生。本轮只修这三条与对应回归；阶段 7 未开始。
+
+### 1. 反例与修复
+
+| 反例（外部复现） | 根因 | 修复 |
+| --- | --- | --- |
+| 普通总结先经 `readingFinished` 发布正文 A，得到 1 条 active 来源与 1 个任务；工作流读同 URL 的正文 B，在等待配置确认时取消。工作流返回 cancelled、来源仍 1，但内存正文被换成 B，随后 tick 让原任务 `needs_reread`，提炼请求 0 | `publishReading` 在 `publish` 等待 `confirmed` **之前**调用 `remember` | 正文改在 helper **接受**这条来源之后、唤醒引擎之前登记：`PublishOptions.accepted` 回调，`publishReading`/`readingFinished` 都用它登记 stash |
+| 同一闸门等待期间把 `extract_knowledge` 加入实时 `disabledTools`，放行后仍 completed、来源 +1、任务 +1，还执行了 `get_datetime` | `publish` 在等待后只复查 signal，不看权限/开关/暂停 | `PublishOptions.allow`：等待结束后、发出写请求之前，由交接方用**同一个** admission 检查复核取消、工具权限、知识总开关、对应频道、手动暂停与游戏状态；被拒时按真实原因中止并让执行器停在提炼步 |
+| 同一闸门等待期间真实 helper `pauseCollect('manual', true)`，放行后仍 completed、来源 +1、任务 +1 | 同上；暂停状态只有 helper 知道，交接前读过一次就不再读 | 同上：`allow` 里重新 `queueStatus().pausedReasons`，`manual` → 「采集已暂停」，`game` → 「游戏模式已开启」 |
+
+`handoff.ts` 把原来的 `handoffBlocker` 拆成可复用的 `admission(deps, channel, signal)`：同步项（取消/工具权限/总开关/频道/游戏模式）先查一次，等 `paused()` 回来再查一次，然后才读 pause 标志。`handoffReading`/`handoffNote` 用它做首检，并作为 `allow` 交给发布调用；`denied` 与 helper 自己的 `refused` 分开记录，所以界面看到的是「此工具已在权限设置中关闭：extract_knowledge」这类原文，而不是被包装成「知识库拒绝了…」。
+
+普通后台采集（`threadFinished`、`readingFinished`、随记保存）不传 `allow`/`signal`，行为与之前一致：工作流专用的暂停规则没有扩大成禁止后台入库。取消落在**已提交之后**时，来源与它的正文都保留，只不再排队、不再唤醒。
+
+### 2. 实现位置
+
+- `src/main/knowledge/collector.ts`：`PublishOptions` 增 `allow?: () => Promise<string>` 与 `accepted?: () => void`；`publish()` 在 `await this.confirmed` 之后、`host.publishSource` 之前调用 `allow`（拒绝时 `reject(denied)` + 日志 + 返回 null），在 `publishSource` 成功之后立刻调用 `accepted`，再唤醒；`publishReading` 不再提前 `remember`，`readingFinished` 同样改为接受后登记。
+- `src/main/knowledge/handoff.ts`：新增 `admission()` 工厂（供首检与 `allow` 共用），`HandoffPublishOptions` 增 `allow`，`handoffReading`/`handoffNote` 把 `denied` 与 `refused` 分开并直接返回拒绝原文。
+- `src/main/index.ts`：无需改动——`publishReading`/`publishNote` 适配器已把 options 透传给 collector。
+
+### 3. 回归
+
+| 用例 | 断言 |
+| --- | --- |
+| `keeps the body the summary published when the workflow is cancelled mid hand-over` | 关闸期间取消 → 返回 cancelled；`resolveBody('reading', PAGE)` 仍是 A（不是 B）；`counts.needs_reread === 0`；随后 tick 提炼出的卡片 `sourceIds` 等于总结那次的 `src_…`；提炼提示词含 A、不含 B；来源仍 1 条 |
+| `stops when the tool is switched off while the switches are handed over` | 等待期间加入 `disabledTools` → `ok:false`、`summary` 含「此工具已在权限设置中关闭」；来源 0、任务 0、唤醒 0、未执行 `get_datetime` |
+| `stops when collection is paused while the switches are handed over` | 等待期间 `pauseCollect('manual', true)` → 同上，原因「采集已暂停」；结束前恢复暂停状态 |
+| `applies the same boundary to the note branch` | 显式随记在同一边界下同样停在提炼步，来源 0、任务 0 |
+| `keeps the source it already committed when the cancel lands after the write` | 写入已提交后取消：来源保留且 active、内存正文就是写入的那版、任务只有 publish 自己那条、无唤醒（这条在旧实现上同样通过，属边界characterisation） |
+| `shares one source with the normal summary path instead of publishing twice`（改写） | 先由**普通总结入口** `readingFinished` 发布，等来源出现后再跑工作流：来源仍 1 条且 id 相同、任务 1、卡片 1 张且 `sourceIds` 指向同一条来源 |
+
+新用例对旧实现的验证：把 `collector.ts` 与 `handoff.ts` 回退到 `HEAD` 后重跑本组，前四条失败（正文被换成 B；两条 gate 反例仍 completed 并执行后续步骤；随记分支同样继续），提交后依新实现全部通过。这条也说明「提交后才取消」那条不是抓这个 bug 的用例，保留作边界。
+
+### 4. 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run`（11 个定向文件：`workflow-extract.integration`、`tools/workflow`、`tools/knowledge`、`knowledge/collector`、`knowledge/manual`、`knowledge/engine`、`knowledge/linkage.integration`、`ask-knowledge.integration`、`shared/workflow-edit`、`shared/workflow-tool-groups`、`workflows`） | 11 文件 / 139 项通过 |
+| `pnpm exec vitest run src/main/workflow-extract.integration.test.ts` | 15 项通过（2.9 s；其中本轮新增 4 项 + 改写 1 项） |
+| `pnpm typecheck` | 0 |
+| `pnpm build` | 0（13.71 s） |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 290 文件通过 / 3 跳过；4081 项通过 / 8 跳过（`/tmp/full27.log`，99.64 s） |
+| `git diff --check` | 0 |
+
+本轮未改 Rust，`native/bin/yu-knowledge.exe` 仍为 3,247,104 B、SHA-256 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`。
+
+### 5. 实窗复测（隔离 Electron，`.tmp/d-evidence/report.md`）
+
+07:54 构建后按既有脚本重跑成功路径（隔离根 `E:\CpanQianYi\Temp\yu-d1`、`app/` 下 `out|node_modules|resources` 为 Junction、`app/native` 为副本、CDP 19995、桩 `127.0.0.1:19996`、真 release helper、1080×750）：浮层真实鼠标输入「运行早间提炼」→ 回答「早间提炼：✓ 送入提炼」；桩只有 1 次请求（提炼用），指令本身 0 次；`queue.counts.completed = 1`、`needs_reread = 0`；卡片 `card_b8ca26e19badde6c`，`sourceIds: ['src_4850b766b25dfea0']`；`bySource({noteId})` 1 条；知识库页出现「匹配 1 / 总数 1」「知识卡片 共 1 条」。`app.out` 有 `tool=run_workflow status=completed ms=12`。进程与隔离根已回收。
+
+### 6. 未测与边界
+
+- 三条 gate 反例只用真 helper 集成证据，没有在窗口里逐帧重放（外部也说明以集成证据为准）。
+- 「提交后才取消」只有集成层面断言（保留来源与正文、不再排队），没有实窗观察。
+- 后台采集路径（普通总结、随记保存）没有新增 regression：它们不传 `allow`，本轮改动只把 `remember` 挪到接受之后，行为等价。
+- 实窗桩的提炼回答仍是测试替身；真实模型质量属阶段 7。
+
+### 7. 提交
+
+- 代码：`fix(knowledge): re-check the turn and the settings after the switch hand-over`（`src/main/knowledge/{collector,handoff}.ts`、`src/main/workflow-extract.integration.test.ts`）。
 - 本文件：随本次交付一并提交。
