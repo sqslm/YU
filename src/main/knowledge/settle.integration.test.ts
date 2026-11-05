@@ -34,6 +34,7 @@ vi.mock('electron', () => ({
   nativeImage: { createFromPath: () => ({ isEmpty: () => true }) }
 }))
 
+import { CleanupRetries } from './cleanup'
 import { KnowledgeCollector } from './collector'
 import { KnowledgeHost } from './host'
 import { RecordReleaser } from './release'
@@ -72,6 +73,8 @@ interface Rig {
   knowledge: () => KnowledgeHost
   restart: () => Promise<void>
   settling: SettleRegistry
+  /** The retries a failed ticked cleanup leaves behind, wired as the app wires them. */
+  cleanups: CleanupRetries
   collector: KnowledgeCollector
   notes: NotesStore
   settings: Settings
@@ -79,7 +82,7 @@ interface Rig {
   rows: (channel: 'note' | 'chat', ref: string) => Promise<{ id: string; state: string; version: string }[]>
 }
 
-async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig> {
+async function rig(options: { unreachableRelease?: boolean; stalePreview?: boolean } = {}): Promise<Rig> {
   if (!existsSync(ENTRY)) throw new Error(`the knowledge helper is missing: ${ENTRY}`)
   const dir = mkdtempSync(join(tmpdir(), 'yu-knowledge-settle-'))
   roots.push(dir)
@@ -134,6 +137,11 @@ async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig>
     purgeCards: input => knowledge().purgeCards(input),
     log: () => undefined
   }
+  const cleanups = new CleanupRetries(() => ({
+    purgeCards: input => knowledge().purgeCards(input),
+    release: (input, reason) => settling.release(input, reason),
+    log: () => undefined
+  }))
   registerNotesIpc({
     store: notes,
     persistDir: async () => undefined,
@@ -143,7 +151,11 @@ async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig>
       settleRecordKnowledge(deps, { channel: 'note', originRef: noteId }, { channel: 'note', originRef: noteId }, options),
     // The prod check runs while the record still exists; here the note has one
     // version, so the ticket the preview issued is the one to confirm with.
-    verifyKnowledge: async () => undefined
+    verifyKnowledge: async () => {
+      if (options.stalePreview) throw new Error('预览已失效，请重新确认')
+    },
+    pendingCleanup: (noteId, detail) =>
+      cleanups.add({ channel: 'note', originRef: noteId }, { channel: 'note', originRef: noteId }, detail)
   })
   const removeNote = async (
     id: string,
@@ -183,6 +195,7 @@ async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig>
       await current.configureCollect(channels)
     },
     settling,
+    cleanups,
     collector,
     notes,
     settings,
@@ -243,6 +256,21 @@ describe('deleting a record settles exactly what it owned', () => {
     await app.knowledge().findSources({ channel: 'note', originRef: note.id })
     await until(async () => app.settling.waiting === 0, 'the queued cleanup')
     await until(async () => (await app.rows('note', note.id)).every(row => row.state === 'invalid'), 'retired rows')
+  }, 60_000)
+
+  it('refuses before deleting anything when the preview no longer holds', async () => {
+    const app = await rig({ stalePreview: true })
+    const note = await app.notes.createText({ text: '只此一版：先认领版本再删卡片。' })
+    await until(async () => (await app.rows('note', note.id)).length > 0, 'the note source')
+
+    // This is the path the dialog promises: the proof runs while the record still
+    // exists, so a stale ticket deletes nothing and creates no retry.
+    await expect(app.removeNote(note.id, { deleteKnowledge: true, ticket: 'old' })).rejects.toThrow(
+      '预览已失效，请重新确认'
+    )
+    // Nothing was deleted, so there is nothing to retry either.
+    expect(app.notes.list().notes.some(entry => entry.id === note.id)).toBe(true)
+    expect(app.cleanups.waiting).toBe(0)
   }, 60_000)
 
   it('tells a record that owns nothing apart from a failure', async () => {
@@ -409,7 +437,7 @@ describe('deleting a record settles exactly what it owned', () => {
     expect((await app.rows('note', note.id)).every(row => row.state === 'invalid')).toBe(true)
   }, 60_000)
 
-  it('refuses an opt-in whose preview no longer matches and keeps the card', async () => {
+  it('hands the moved range back as a retry and keeps the card', async () => {
     const app = await rig()
     const note = await app.notes.createText({ text: '只此一版：先认领版本再删卡片。' })
     await until(async () => (await app.rows('note', note.id)).length > 0, 'the note source')
@@ -427,12 +455,134 @@ describe('deleting a record settles exactly what it owned', () => {
     await app.notes.update(note.id, { transcript: '第二版：先认领版本，再删卡片，最后收尾关系。', polished: '' })
     await until(async () => (await app.rows('note', note.id)).length > 1, 'the new version')
 
-    await expect(app.removeNote(note.id, { deleteKnowledge: true, ticket: impact.ticket })).rejects.toThrow(
-      '预览已失效，请重新确认'
-    )
-    // Nothing widened: the card is still there and the new version is still readable.
+    const pending = (await app.removeNote(note.id, { deleteKnowledge: true, ticket: impact.ticket })) as
+      | { id: string; reason: string }
+      | undefined
+    // The note is gone either way, so the refusal arrives as something the user can
+    // act on: nothing was deleted, and the same handle still offers the downgrade.
+    expect(pending?.reason).toBe('预览已失效，请重新确认')
+    expect(app.notes.list().notes.some(entry => entry.id === note.id)).toBe(false)
+    expect(app.cleanups.waiting).toBe(1)
     const kept = await app.knowledge().getCard(card.id)
     expect(kept.id).toBe(card.id)
     expect((await app.rows('note', note.id)).some(row => row.state !== 'invalid')).toBe(true)
+
+    // Finishing it the same way refuses again: the range only moved once.
+    await expect(app.cleanups.retry(pending!.id, 'purge')).resolves.toMatchObject({ status: 'stale' })
   }, 60_000)
+})
+
+describe('finishing a ticked cleanup after the record was already deleted', () => {
+  /** Holds the helper's write lock, exactly like a second connection would. */
+  function hold(dir: string): { release: () => void } {
+    const db = new DatabaseSync(join(dir, 'data', 'knowledge', 'knowledge.db'))
+    db.exec('BEGIN IMMEDIATE')
+    return {
+      release: () => {
+        db.exec('ROLLBACK')
+        db.close()
+      }
+    }
+  }
+
+  it('hands back a retry, then deletes exactly the confirmed cards once it can write', async () => {
+    const app = await rig()
+    const note = await app.notes.createText({ text: '指纹去重靠问题与回答一起算。' })
+    await until(async () => (await app.rows('note', note.id)).length > 0, 'the note source')
+    const [source] = await app.rows('note', note.id)
+    const card = await app.knowledge().saveCard({
+      kind: 'concept',
+      title: '指纹去重',
+      body: '指纹由问题与回答一起算出。',
+      topics: ['去重'],
+      sourceIds: [source.id]
+    })
+    const preview = await app.knowledge().cardImpact({ channel: 'note', originRef: note.id })
+    expect(preview.cards).toBe(1)
+
+    // The note is deleted while the write lock is held, so only the cleanup fails.
+    const lock = hold(app.dir)
+    let pending: { id: string; reason: string; cards: boolean } | undefined
+    try {
+      pending = (await app.removeNote(note.id, { deleteKnowledge: true, ticket: preview.ticket })) as
+        | { id: string; reason: string; cards: boolean }
+        | undefined
+    } finally {
+      lock.release()
+    }
+    expect(pending?.cards).toBe(true)
+    expect(pending?.reason).toMatch(/lock/i)
+    // The record really went; the knowledge did not move on its own.
+    expect(app.notes.list().notes.some(entry => entry.id === note.id)).toBe(false)
+    expect(app.cleanups.waiting).toBe(1)
+    expect(app.sourceStates(note.id).every(row => row.state !== 'invalid')).toBe(true)
+    expect((await app.knowledge().getCard(card.id)).id).toBe(card.id)
+
+    const result = await app.cleanups.retry(pending!.id, 'purge')
+
+    expect(result.status).toBe('done')
+    expect(result.removed).toBe(1)
+    expect(app.cleanups.waiting).toBe(0)
+    expect(app.sourceStates(note.id).every(row => row.state === 'invalid')).toBe(true)
+    await expect(app.knowledge().getCard(card.id)).rejects.toThrow()
+  }, 90_000)
+
+  it('refuses the moved range and keeps the cards when the user chooses the downgrade', async () => {
+    const app = await rig()
+    const note = await app.notes.createText({ text: '写入顺序先认领版本，再删卡片。' })
+    await until(async () => (await app.rows('note', note.id)).length > 0, 'the note source')
+    const [source] = await app.rows('note', note.id)
+    const card = await app.knowledge().saveCard({
+      kind: 'concept',
+      title: '写入顺序',
+      body: '先认领版本，再删卡片，最后收尾关系。',
+      topics: ['写入'],
+      sourceIds: [source.id]
+    })
+    const preview = await app.knowledge().cardImpact({ channel: 'note', originRef: note.id })
+
+    const lock = hold(app.dir)
+    let pending: { id: string } | undefined
+    try {
+      pending = (await app.removeNote(note.id, { deleteKnowledge: true, ticket: preview.ticket })) as
+        | { id: string }
+        | undefined
+    } finally {
+      lock.release()
+    }
+    expect(pending?.id).toBeTruthy()
+
+    // The record moved: another version of the same origin is published, so the
+    // ticket the user confirmed no longer describes the record.
+    await app.collector.publishNote({
+      id: note.id,
+      title: '写入顺序',
+      transcript: '写入顺序先认领版本，再删卡片。',
+      polished: '第二版：先认领版本，再删卡片，最后收尾关系。',
+      updatedAt: Date.now(),
+      polishStatus: 'ok'
+    })
+    await until(async () => (await app.rows('note', note.id)).length > 1, 'the second version')
+
+    const stale = await app.cleanups.retry(pending!.id, 'purge')
+
+    expect(stale.status).toBe('stale')
+    expect(stale.removed).toBe(0)
+    // Nothing was deleted, and the offer to keep the cards is still open.
+    expect((await app.knowledge().getCard(card.id)).id).toBe(card.id)
+    expect(app.sourceStates(note.id).some(row => row.state !== 'invalid')).toBe(true)
+    expect(app.cleanups.waiting).toBe(1)
+
+    const released = await app.cleanups.retry(pending!.id, 'release')
+
+    expect(released.status).toBe('done')
+    expect(released.released).toBeGreaterThan(0)
+    expect(app.cleanups.waiting).toBe(0)
+    // The explicit downgrade withdraws every source and keeps the card with its
+    // now-dead link, which is what the confirmation dialog promised.
+    expect(app.sourceStates(note.id).every(row => row.state === 'invalid')).toBe(true)
+    const kept = await app.knowledge().getCard(card.id)
+    expect(kept.id).toBe(card.id)
+    expect(kept.sourceIds).toContain(source.id)
+  }, 90_000)
 })

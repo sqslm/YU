@@ -42,11 +42,13 @@ import { documentPath } from './knowledge/documents'
 import { openSource } from './knowledge/open'
 import { extractSourceNow } from './knowledge/manual'
 import type { KnowledgeTools } from './tools/knowledge'
-import type { FindSourceInput, SourceRef } from '@shared/knowledge'
+import type { CleanupAction, FindSourceInput, SourceRef } from '@shared/knowledge'
 import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
 import { RecordReleaser } from './knowledge/release'
 import { SettleRegistry, settleRecordKnowledge, type SettleRecordDeps } from './knowledge/settle'
+import { CleanupRetries } from './knowledge/cleanup'
+import { deleteThread } from './chat-delete'
 import { ExtractEngine } from './knowledge/engine'
 import { HistoryDriver } from './knowledge/history'
 import { createHistoryPages } from './knowledge/pages'
@@ -393,6 +395,17 @@ const knowledgeTools: KnowledgeTools = {
  * only honest finish.
  */
 const settling = new SettleRegistry(new RecordReleaser(() => knowledge, line => log(line)))
+
+/**
+ * The cleanups that failed after their record was already deleted. The user
+ * finishes those from the deletion they confirmed, so the record identity and that
+ * confirmation stay here and the page only ever gets an opaque retry id.
+ */
+const cleanups = new CleanupRetries(() => ({
+  purgeCards: input => knowledge.purgeCards(input),
+  release: (input, reason) => settling.release(input, reason),
+  log: line => log(line)
+}))
 
 async function verifyKnowledgeDelete(identity: import('@shared/knowledge').SourceIdentity, ticket?: string, cards = true): Promise<void> {
   if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
@@ -1937,6 +1950,20 @@ function registerIpc(): void {
     return knowledge.cardImpact(identity)
   })
   /**
+   * Finishes a cleanup that failed after its record was already deleted.
+   *
+   * The page sends only the opaque handle it was given and the action it chose;
+   * the record identity and the confirmation live in `cleanups`, so nothing here
+   * can be widened by what a renderer sends. `purge` re-sends that confirmation and
+   * lets the helper refuse a range that moved; `release` is the user's explicit
+   * downgrade to withdrawing sources only, keeping every card.
+   */
+  handle('knowledge:cleanup-retry', async (event, input: { id: string; action: CleanupAction }) => {
+    knowledgeOwner(event)
+    if (input?.action !== 'purge' && input?.action !== 'release') throw new Error(mt('请选择知识清理的方式'))
+    return cleanups.retry(String(input.id ?? ''), input.action)
+  })
+  /**
    * Continue a card in a new conversation. Only the card's own id and a bounded
    * body travel; the thread itself is the ordinary chat thread.
    *
@@ -2124,23 +2151,16 @@ function registerIpc(): void {
     chatOwner(event)
     if (input?.action !== 'delete') return chats.edit(input)
     // The thread really goes first; its knowledge is settled afterwards, with the
-    // ticket the user confirmed. A mismatch is a partial failure, never a silent
-    // cleanup of knowledge created after the preview.
-    if (input.deleteKnowledge) await verifyKnowledgeDelete({ channel: 'chat', groupKey: input.id }, input.ticket)
-    // The registration covers the record write and its settlement, ticked or not.
-    // One owner for both halves: a failed record write keeps its own error, while a
-    // settle failure after a real removal says exactly what still has to be cleaned.
-    return await settleOnDelete('chat', input.id, async () => {
-      const written = await Promise.resolve(chats.edit(input))
-      try {
-        await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },
-          { cards: Boolean(input.deleteKnowledge), ticket: input.ticket })
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error)
-        throw new Error(mt('对话已删除，但关联知识清理失败：{{reason}}', { reason }))
-      }
-      return written
-    })
+    // ticket the user confirmed. A ticked cleanup that fails after the removal
+    // leaves the thread deleted, so the page gets a retry handle instead of an
+    // error it cannot act on; the default path keeps its own wording.
+    return await deleteThread({
+      edit: next => chats.edit(next),
+      verify: (identity, ticket) => verifyKnowledgeDelete(identity, ticket),
+      settle: (id, body) => settleOnDelete('chat', id, body),
+      purge: (target, identity, options) => purgeRecordKnowledge(target, identity, options),
+      pending: (target, detail) => cleanups.add(target, { channel: 'chat', groupKey: input.id }, detail)
+    }, input)
   })
   handle('chat:send', async (event, id: string, text: string, attachments?: import('@shared/chat').ChatUpload[]) => {
     chatOwner(event)
@@ -3323,6 +3343,10 @@ async function bootstrap(): Promise<void> {
     settle: (noteId, body) => settleOnDelete('note', noteId, body),
     purgeKnowledge: (noteId, options) => purgeRecordKnowledge({ channel: 'note', originRef: noteId },
       { channel: 'note', originRef: noteId }, options),
+    // A ticked cleanup that fails after the note is gone becomes a retry the user
+    // finishes from the deletion they confirmed; the default keeps its auto-recovery.
+    pendingCleanup: (noteId, detail) => cleanups.add({ channel: 'note', originRef: noteId },
+      { channel: 'note', originRef: noteId }, detail),
     persistDir: async (dir) => {
       await store.update({ notesDir: dir })
     },

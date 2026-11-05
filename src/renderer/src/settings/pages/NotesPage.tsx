@@ -53,7 +53,7 @@ import { matchHeadingIndex, noteHeadings } from './noteOutline'
 import { noteBodyField } from '@shared/noteBody'
 import { attachmentMarkdown } from '@shared/noteAttachments'
 import type { NoteAttachment } from '@shared/noteAttachments'
-import type { CardImpact, KnowledgeCardSummary } from '@shared/knowledge'
+import type { CardImpact, CleanupPending, KnowledgeCardSummary } from '@shared/knowledge'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
 import { MicCapture } from '../../bar/capture'
 import { IconMic, IconPlus, IconSearch, IconSparkles, IconTrash } from '../icons'
@@ -211,6 +211,10 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [notice, setNotice] = useState('')
+  /** A ticked cleanup that failed after the note was already deleted. */
+  const [cleanup, setCleanup] = useState<CleanupPending | null>(null)
+  const [cleanupStale, setCleanupStale] = useState(false)
+  const [cleanupBusy, setCleanupBusy] = useState(false)
   const [extractingReminders, setExtractingReminders] = useState(false)
 
   /**
@@ -1279,12 +1283,41 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
     setDeleteOpen(false)
     if (!note) return
     try {
-      await window.api.notes.remove(note.id, { deleteKnowledge, ticket: impact?.ticket })
+      const failed = await window.api.notes.remove(note.id, { deleteKnowledge, ticket: impact?.ticket })
       pendingRef.current = null
       setNotes((prev) => prev.filter((item) => item.id !== note.id))
       setSelectedId(null)
+      // The note is gone either way; a ticked cleanup that failed comes back as a
+      // handle, so the retry stays available after the row has left the list.
+      setCleanupStale(false)
+      setCleanup(failed ?? null)
     } catch (err) {
       setNotice(messageOf(err))
+    }
+  }
+
+  /**
+   * Finishes the cleanup the failed deletion left behind. `purge` re-sends the
+   * confirmation the user already gave; `release` is what they may pick once the
+   * range moved — it withdraws the note's sources and keeps every card.
+   */
+  const retryCleanup = async (action: 'purge' | 'release'): Promise<void> => {
+    if (!cleanup || cleanupBusy) return
+    setCleanupBusy(true)
+    setNotice('')
+    try {
+      const result = await window.api.knowledge.retryCleanup(cleanup.id, action)
+      if (result.status === 'done') {
+        setCleanup(null)
+        setCleanupStale(false)
+        return
+      }
+      setCleanup({ ...cleanup, reason: result.reason ?? cleanup.reason })
+      setCleanupStale(result.status === 'stale')
+    } catch (err) {
+      setNotice(messageOf(err))
+    } finally {
+      setCleanupBusy(false)
     }
   }
 
@@ -1560,6 +1593,34 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
           <Typography data-notes-notice sx={{ fontSize: 11.5, color: 'warning.main' }}>
             {notice}
           </Typography>
+        )}
+        {cleanup && (
+          <Stack data-notes-cleanup data-notes-cleanup-stale={cleanupStale ? 'on' : 'off'} direction="row" spacing={1} alignItems="center">
+            <Typography sx={{ fontSize: 11.5, color: 'warning.main' }}>
+              {t('knowledge.cleanup.pending', { reason: cleanup.reason })}
+            </Typography>
+            <Button
+              data-notes-cleanup-retry
+              size="small"
+              disabled={cleanupBusy}
+              onClick={() => void retryCleanup('purge')}
+              sx={{ fontSize: 11.5 }}
+            >
+              {t('knowledge.cleanup.retry')}
+            </Button>
+            {cleanupStale && (
+              <Button
+                data-notes-cleanup-release
+                size="small"
+                color="warning"
+                disabled={cleanupBusy}
+                onClick={() => void retryCleanup('release')}
+                sx={{ fontSize: 11.5 }}
+              >
+                {t('knowledge.cleanup.keepCards')}
+              </Button>
+            )}
+          </Stack>
         )}
         {loadError && (
           <Alert data-notes-load-error severity="error" action={<Button color="inherit" size="small" onClick={() => void reload()}>{t('重试')}</Button>}>{loadError}</Alert>

@@ -153,6 +153,12 @@ export interface TypelessApi {
     bySource(query: import('./knowledge').SourceRef & { offset?: number; limit?: number }): Promise<import('./knowledge').KnowledgeCardPage>
     /** What deleting a record would do to the knowledge it produced. */
     impact(target: import('./knowledge').SourceRef): Promise<import('./knowledge').CardImpact>
+    /**
+     * Finishes a cleanup that failed after its record was already deleted. The
+     * handle is the opaque one the failed deletion handed back: the record identity
+     * and the confirmation stay in the main process.
+     */
+    retryCleanup(id: string, action: import('./knowledge').CleanupAction): Promise<import('./knowledge').CleanupRetryResult>
     /** Opens a new chat that carries only this card's id and bounded context. */
     continueDiscussion(cardId: string): Promise<{ threadId: string }>
     /** Saves a real todo from a card the user picked; never runs card instructions. */
@@ -425,7 +431,7 @@ export interface TypelessApi {
      * confirmation: the default keeps extracted knowledge and only marks the
      * source deleted.
      */
-    remove(id: string, options?: { deleteKnowledge?: boolean; ticket?: string }): Promise<void>
+    remove(id: string, options?: { deleteKnowledge?: boolean; ticket?: string }): Promise<import('./knowledge').CleanupPending | void>
     /**
      * One change over a selection of notes: delete, set/clear category, add or
      * remove tags. Main applies it in a single write.

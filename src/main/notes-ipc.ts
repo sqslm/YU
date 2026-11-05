@@ -2,6 +2,7 @@ import { clipboard, dialog, nativeImage, protocol, shell } from 'electron'
 import { copyFile, readFile, open } from 'node:fs/promises'
 import { basename, extname, resolve } from 'node:path'
 import { Readable } from 'node:stream'
+import type { CleanupPending } from '@shared/knowledge'
 import type { NoteBulk, NoteCategory, NoteExportFormat, NotePatch } from '@shared/types'
 import type { NotesStore } from './notes'
 import { mt } from '@shared/mainI18n'
@@ -36,6 +37,12 @@ export interface NotesIpcOptions {
   purgeKnowledge?: (noteId: string, options?: { cards?: boolean; ticket?: string }) => Promise<void>
   /** Proves the confirmed preview still holds, before the note is removed. */
   verifyKnowledge?: (noteId: string, ticket?: string) => Promise<void>
+  /**
+   * Remembers a ticked cleanup that failed after the note was already gone, and
+   * hands back the handle the page retries. Without it the failure is thrown, which
+   * is exactly what the default (cards kept) callers had before.
+   */
+  pendingCleanup?: (noteId: string, detail: { reason: string; ticket?: string }) => CleanupPending
 }
 
 /** IPC hands us a real `Int16Array`, but a stray array must not throw. */
@@ -96,7 +103,7 @@ async function serveAudio(file: string, range: string | null, attachment = false
 }
 
 export function registerNotesIpc(options: NotesIpcOptions): void {
-  const { store, persistDir, broadcast, settle, purgeKnowledge, verifyKnowledge } = options
+  const { store, persistDir, broadcast, settle, purgeKnowledge, verifyKnowledge, pendingCleanup } = options
   let audioJob: AbortController | null = null
 
   ipcHandle('notes:cancelAudioJob', () => audioJob?.abort())
@@ -257,8 +264,8 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     // A destructive confirmation is proved while the record still exists. The
     // settle registration wraps the whole flow, so a store callback cannot claim
     // the record first — and a failed write still releases it.
-    const run = (body: () => Promise<void>): Promise<void> => (settle ? settle(id, body) : body())
-    return await run(async () => {
+    const run = <T>(body: () => Promise<T>): Promise<T> => (settle ? settle(id, body) : body())
+    return await run(async (): Promise<CleanupPending | void> => {
       if (options?.deleteKnowledge) await verifyKnowledge?.(id, options.ticket)
       await store.remove(id)
       broadcast()
@@ -276,7 +283,18 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
         await settleKnowledge(async () => purgeKnowledge?.(id, { cards: false }))
         return
       }
-      await settleKnowledge(async () => purgeKnowledge?.(id, { cards: true, ticket: options.ticket }))
+      if (!pendingCleanup) {
+        await settleKnowledge(async () => purgeKnowledge?.(id, { cards: true, ticket: options.ticket }))
+        return
+      }
+      // Ticked and already deleted: the user gets a retry they can act on instead
+      // of an error about a record that no longer exists.
+      try {
+        await purgeKnowledge?.(id, { cards: true, ticket: options.ticket })
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        return pendingCleanup(id, { reason, ticket: options.ticket })
+      }
     })
   })
 

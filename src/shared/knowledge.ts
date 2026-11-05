@@ -344,6 +344,49 @@ export interface PurgeCardsResult {
   ticket?: string
 }
 
+/**
+ * The two ways a failed post-delete cleanup can be finished.
+ *
+ * `purge` finishes the ticked version: the cards the confirmed preview named go.
+ * `release` is the user's explicit downgrade after the range moved: the record's
+ * sources and queued work are withdrawn, every card stays with its now-dead link.
+ */
+export type CleanupAction = 'purge' | 'release'
+
+/**
+ * One cleanup that failed after the record it belonged to was already deleted.
+ *
+ * The page gets this instead of an error it cannot act on, and it only ever holds
+ * the opaque `id`: the record identity and the confirmed ticket stay in the main
+ * process, so a renderer cannot widen a range by echoing something back.
+ */
+export interface CleanupPending {
+  /** Opaque handle for one retry; valid only while this app session lives. */
+  id: string
+  /** Why the cleanup failed, in the words the user is shown. */
+  reason: string
+  /** True when the failed attempt was the version that also deletes cards. */
+  cards: boolean
+}
+
+/** What one retry of a failed cleanup did. */
+export interface CleanupRetryResult {
+  /**
+   * `done` finished it; `stale` means the confirmed range moved, so nothing was
+   * deleted and the user may keep the cards instead; `failed` means the library
+   * still cannot be reached and the same retry is offered again.
+   */
+  status: 'done' | 'stale' | 'failed'
+  /** Why it is not done, when it is not. */
+  reason?: string
+  /** Cards removed by this retry. */
+  removed: number
+  /** Cards kept because another source still backs them. */
+  kept: number
+  /** Sources the record gave back (the release downgrade). */
+  released: number
+}
+
 /** Relation kinds, in the order the UI offers them. */
 export type RelationKind = 'contains' | 'prerequisite' | 'applies' | 'contrast' | 'derives'
 

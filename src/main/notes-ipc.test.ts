@@ -112,6 +112,31 @@ describe('deleting a note with the knowledge option', () => {
     expect(broadcast).toHaveBeenCalledOnce()
   })
 
+  it('hands the page a retry when a ticked cleanup fails after the note is gone', async () => {
+    const remove = vi.fn(async () => undefined), broadcast = vi.fn()
+    const purgeKnowledge = vi.fn(async () => { throw new Error('database is locked') })
+    const pendingCleanup = vi.fn(() => ({ id: 'retry-1', reason: 'database is locked', cards: true }))
+    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast, purgeKnowledge, pendingCleanup })
+    // The note is deleted either way, so the failure becomes a handle the user can
+    // act on instead of an error about a record that no longer exists.
+    await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true, ticket: 't1' }))
+      .resolves.toEqual({ id: 'retry-1', reason: 'database is locked', cards: true })
+    expect(remove).toHaveBeenCalledWith('n1')
+    expect(purgeKnowledge).toHaveBeenCalledWith('n1', { cards: true, ticket: 't1' })
+    expect(pendingCleanup).toHaveBeenCalledWith('n1', { reason: 'database is locked', ticket: 't1' })
+    expect(broadcast).toHaveBeenCalledOnce()
+  })
+
+  it('never turns the default cleanup into a retry', async () => {
+    const purgeKnowledge = vi.fn(async () => { throw new Error('database is locked') })
+    const pendingCleanup = vi.fn()
+    registerNotesIpc({ store: { remove: vi.fn(async () => undefined) } as never, persistDir: vi.fn(), broadcast: vi.fn(), purgeKnowledge, pendingCleanup })
+    // Keeping the cards is the helper-driven path: it keeps its own wording and its
+    // onReady recovery, so nothing about it becomes a manual retry.
+    await expect(mock.handlers.get('notes:remove')!(null, 'n1')).rejects.toThrow('记录已删除，但关联知识清理失败')
+    expect(pendingCleanup).not.toHaveBeenCalled()
+  })
+
   it('still settles the source when the option was not ticked', async () => {
     const remove = vi.fn(async () => undefined), purgeKnowledge = vi.fn()
     registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast: vi.fn(), purgeKnowledge })
