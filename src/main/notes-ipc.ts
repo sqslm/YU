@@ -31,6 +31,8 @@ export interface NotesIpcOptions {
    * option. Runs before the note is deleted: a failure leaves both sides intact
    * and the caller sees the real reason.
    */
+  /** Wraps the whole removal, so one owner settles the record's knowledge. */
+  settle?: <T>(noteId: string, body: () => Promise<T>) => Promise<T>
   purgeKnowledge?: (noteId: string, options?: { cards?: boolean; ticket?: string }) => Promise<void>
   /** Proves the confirmed preview still holds, before the note is removed. */
   verifyKnowledge?: (noteId: string, ticket?: string) => Promise<void>
@@ -94,7 +96,7 @@ async function serveAudio(file: string, range: string | null, attachment = false
 }
 
 export function registerNotesIpc(options: NotesIpcOptions): void {
-  const { store, persistDir, broadcast, purgeKnowledge, verifyKnowledge } = options
+  const { store, persistDir, broadcast, settle, purgeKnowledge, verifyKnowledge } = options
   let audioJob: AbortController | null = null
 
   ipcHandle('notes:cancelAudioJob', () => audioJob?.abort())
@@ -252,17 +254,22 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     // The record really goes first, then its knowledge is settled: the ticket the
     // user confirmed is re-validated by the helper, and a mismatch is reported as
     // a partial failure instead of sweeping away knowledge created meanwhile.
-    // A destructive confirmation is proved while the record still exists.
-    if (options?.deleteKnowledge) await verifyKnowledge?.(id, options.ticket)
-    await store.remove(id)
-    broadcast()
-    if (!options?.deleteKnowledge) { await purgeKnowledge?.(id, { cards: false }); return }
-    try {
-      await purgeKnowledge?.(id, { cards: true, ticket: options.ticket })
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
-      throw new Error(mt('记录已删除，但关联知识清理失败：{{reason}}', { reason }))
-    }
+    // A destructive confirmation is proved while the record still exists. The
+    // settle registration wraps the whole flow, so a store callback cannot claim
+    // the record first — and a failed write still releases it.
+    const run = (body: () => Promise<void>): Promise<void> => (settle ? settle(id, body) : body())
+    return await run(async () => {
+      if (options?.deleteKnowledge) await verifyKnowledge?.(id, options.ticket)
+      await store.remove(id)
+      broadcast()
+      if (!options?.deleteKnowledge) { await purgeKnowledge?.(id, { cards: false }); return }
+      try {
+        await purgeKnowledge?.(id, { cards: true, ticket: options.ticket })
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        throw new Error(mt('记录已删除，但关联知识清理失败：{{reason}}', { reason }))
+      }
+    })
   })
 
   /** Batch operations from the notes sidebar: delete, set category, add tag. */

@@ -121,4 +121,15 @@ describe('deleting a note with the knowledge option', () => {
     expect(remove).toHaveBeenCalledWith('n1')
   })
 })
+
+  it('registers one settle owner around the whole removal', async () => {
+    // The store's own onRemoved callback must not claim the record first, and a
+    // failed write must still run inside that registration.
+    const settle = vi.fn(async (_id: string, body: () => Promise<void>) => body())
+    const remove = vi.fn(async () => { throw new Error('disk is full') })
+    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast: vi.fn(), settle })
+    await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true, ticket: 't1' })).rejects.toThrow('disk is full')
+    expect(settle.mock.calls[0][0]).toBe('n1')
+    expect(remove).toHaveBeenCalledWith('n1')
+  })
 })

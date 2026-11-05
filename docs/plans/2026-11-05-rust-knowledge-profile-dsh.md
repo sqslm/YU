@@ -1533,3 +1533,14 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - **D**：工作流真实执行器 + 注入读 + 真 helper 的回归（配置交接等待、取消不新建任务、与普通总结共用来源）未交付。
 - B 的两处新语义（`settlingRecords` 竞态、`incomplete` 拒绝）没有自动化用例，只有代码路径与人工推演；真实 `chat:edit`/`notes:remove` 的两来源误报复现未以生产入口写成测试。
 - `cargo fmt/test/clippy` 未复跑（本轮无 Rust 改动）。
+
+### 勾选删除的登记范围（第十一轮补）
+
+外部复跑指出：有效勾选路径在 `chats.edit` 落盘时没有登记，`notes:remove` 的预检回调也不登记，旧 `onRemoved → invalidateThread` 仍可先作废来源。本轮改为**由单一清理所有者登记，且生命周期覆盖原记录落盘与后续结清**：
+
+- `src/main/index.ts` 新增 `settleOnDelete(key, body)`：进入即 `settlingRecords.add(key)`，`finally` 释放；`chat:edit` 删除分支把「`chats.edit` + `purgeRecordKnowledge`」整段包在它里面（勾选与未勾选都一样），因此原记录写入失败、helper 后置失败和正常返回都会释放，不会留下永久占位。
+- `src/main/notes-ipc.ts` 新增可选 `settle?: <T>(noteId, body) => Promise<T>`，`notes:remove` 把「预检 → `store.remove` → broadcast → 结清」整段交给它；`src/main/index.ts` 注入 `settle: settleOnDelete`。
+- 默认撤回的失效失败不再吞掉：逐个来源 `try/catch` 后若有失败，抛第一条真实原因（记录已删 → 调用方看到可重试的部分失败），不再出现「失效失败但返回成功」。
+- 生产入口回归：`src/main/notes-ipc.test.ts` 新增 `registers one settle owner around the whole removal`（`settle` 收到 `n1`、`store.remove` 抛错后仍返回真实错误），加上此前的顺序/失败/未勾选用例，该文件 16 项全过。
+
+仍未交付（同前）：真实 `chat:edit` 两来源误报复现、`incomplete` 拒绝与登记竞态的自动化用例、A/C/D 的生产端到端与隔离实窗证据。

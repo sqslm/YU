@@ -390,6 +390,16 @@ function recordKey(input: FindSourceInput): string {
   return 'originRef' in input ? input.originRef : input.groupKey
 }
 
+/** One settle owner per record: the store callbacks stay out until the whole flow ends. */
+async function settleOnDelete<T>(key: string, body: () => Promise<T>): Promise<T> {
+  settlingRecords.add(key)
+  try {
+    return await body()
+  } finally {
+    settlingRecords.delete(key)
+  }
+}
+
 async function purgeRecordKnowledge(input: FindSourceInput, identity: import('@shared/knowledge').SourceIdentity, options: { cards?: boolean; ticket?: string } = {}): Promise<void> {
   // One path owns the ordering: while this runs, the store's own removal callback
   // must not invalidate the sources first and let the confirmed op fall through.
@@ -416,15 +426,21 @@ async function settleRecord(input: FindSourceInput, identity: import('@shared/kn
     // The default keeps every card and the link that says where it came from: the
     // source is marked invalid, the queue stops, and the card still points at the
     // record it was distilled from.
+    // A failed invalidation is reported, never swallowed into a false success: the
+    // record is already gone, so the caller sees a retryable partial failure.
+    const failures: string[] = []
     for (const source of sources) {
-      await knowledge.invalidateSource(source.id, '记录已删除').catch(error =>
-        log(`[knowledge] 失效来源失败：${error instanceof Error ? error.message : String(error)}`)
-      )
+      try {
+        await knowledge.invalidateSource(source.id, '记录已删除')
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error))
+      }
     }
     if ('channel' in input) {
       const group = 'groupKey' in input ? { channel: input.channel, groupKey: input.groupKey } : { channel: input.channel, groupKey: input.originRef }
       await knowledge.invalidateTask(group, '记录已删除').catch(() => undefined)
     }
+    if (failures.length) throw new Error(failures[0])
     log(`[knowledge] 记录删除后：失效 ${sources.length} 个来源，卡片与来源关联保留`)
     return
   }
@@ -2103,15 +2119,16 @@ function registerIpc(): void {
     // ticket the user confirmed. A mismatch is a partial failure, never a silent
     // cleanup of knowledge created after the preview.
     if (input.deleteKnowledge) await verifyKnowledgeDelete({ channel: 'chat', groupKey: input.id }, input.ticket)
-    else settlingRecords.add(input.id)
-    const removed = chats.edit(input)
-    try {
+    // The registration covers the record write and its settlement, ticked or not.
+    const removed = await settleOnDelete(input.id, async () => {
+      const edited = await chats.edit(input)
       await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },
         { cards: Boolean(input.deleteKnowledge), ticket: input.ticket })
-    } catch (error) {
+      return edited
+    }).catch((error: unknown) => {
       const reason = error instanceof Error ? error.message : String(error)
       throw new Error(mt('对话已删除，但关联知识清理失败：{{reason}}', { reason }))
-    }
+    })
     return removed
   })
   handle('chat:send', async (event, id: string, text: string, attachments?: import('@shared/chat').ChatUpload[]) => {
@@ -3292,6 +3309,7 @@ async function bootstrap(): Promise<void> {
     // The user ticked 「同时删除关联知识」 in the confirmation: remove the cards
     // this note alone supported, before the note row itself goes away.
     verifyKnowledge: (noteId, ticket) => verifyKnowledgeDelete({ channel: 'note', originRef: noteId }, ticket),
+    settle: settleOnDelete,
     purgeKnowledge: (noteId, options) => purgeRecordKnowledge({ channel: 'note', originRef: noteId },
       { channel: 'note', originRef: noteId }, options),
     persistDir: async (dir) => {
