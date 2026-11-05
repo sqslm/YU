@@ -165,7 +165,12 @@ export interface TypelessApi {
      */
     retryCleanup(id: string, action: import('./knowledge').CleanupAction): Promise<import('./knowledge').CleanupRetryResult>
     /** The cleanups this app session still owes the user for one channel. */
-    cleanups(channel: 'note' | 'chat'): Promise<import('./knowledge').CleanupPending[]>
+    cleanups(channel: 'note' | 'chat'): Promise<import('./knowledge').CleanupSnapshot>
+    /**
+     * Fires when this channel's rows may have changed. The payload says which
+     * channel only; the page reads the projection through `cleanups`.
+     */
+    onCleanupsChanged: (listener: (channel: 'note' | 'chat') => void) => () => void
     /** Opens a new chat that carries only this card's id and bounded context. */
     continueDiscussion(cardId: string): Promise<{ threadId: string }>
     /** Saves a real todo from a card the user picked; never runs card instructions. */

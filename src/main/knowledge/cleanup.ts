@@ -6,6 +6,7 @@ import type {
   CleanupAction,
   CleanupPending,
   CleanupRetryResult,
+  CleanupSnapshot,
   FindSourceInput,
   SourceIdentity
 } from '@shared/knowledge'
@@ -67,14 +68,24 @@ function moved(error: unknown): boolean {
  * only ever gets an opaque id back. The entry is in-memory only — a restart
  * forgets it, and no schema, file or retry queue is added for it.
  *
+ * Every change a page can see — a new entry, an attempt starting, an attempt
+ * settling — bumps `revision` and calls `changed` with the channel alone. That is
+ * what lets a page that was unmounted mid-delete, or rebuilt mid-retry, read the
+ * current projection instead of the one it left behind; and it is why a late
+ * reply can be recognised as older than what the page already has.
+ *
  * Duplicate clicks must not run twice: the first attempt's promise is handed to
  * every later caller until it settles, so one retry means one helper transaction.
  */
 export class CleanupRetries {
   private readonly entries = new Map<string, Entry>()
   private readonly running = new Map<string, Promise<CleanupRetryResult>>()
+  private revision = 0
 
-  constructor(private readonly deps: () => CleanupDeps) {}
+  constructor(
+    private readonly deps: () => CleanupDeps,
+    private readonly changed: (channel: Channel) => void = () => {}
+  ) {}
 
   /** Cleanups still waiting for the user to finish them. */
   get waiting(): number {
@@ -99,29 +110,27 @@ export class CleanupRetries {
       stale: false,
       at
     })
-    return { id, reason: detail.reason, cards: true, stale: false, at }
+    this.touch(channel)
+    return { id, reason: detail.reason, cards: true, stale: false, at, busy: false }
   }
 
   /**
-   * What this channel still owes the user.
+   * What this channel still owes the user, with the revision it was read at.
    *
    * This is a read of the same in-memory register, not a second source of truth:
    * a page that was unmounted, or a window that was closed and reopened, asks here
    * to get its rows back. Nothing about the record leaves the main process except
-   * the opaque id, the reason it failed, and whether the ticket has been refused.
+   * the opaque id, the reason it failed, whether the ticket has been refused, and
+   * whether an attempt is in flight right now.
    */
+  snapshot(channel: string): CleanupSnapshot {
+    if (channel !== 'note' && channel !== 'chat') return { revision: this.revision, rows: [] }
+    return { revision: this.revision, rows: this.rows(channel) }
+  }
+
+  /** The rows alone, for callers that do not care how fresh they are. */
   list(channel: string): CleanupPending[] {
-    if (channel !== 'note' && channel !== 'chat') return []
-    return [...this.entries.entries()]
-      .filter(([, entry]) => entry.channel === channel)
-      .sort((left, right) => right[1].at - left[1].at)
-      .map(([id, entry]) => ({
-        id,
-        reason: entry.reason,
-        cards: true,
-        stale: entry.stale,
-        at: entry.at
-      }))
+    return this.snapshot(channel).rows
   }
 
   /**
@@ -136,11 +145,35 @@ export class CleanupRetries {
   retry(id: string, action: CleanupAction): Promise<CleanupRetryResult> {
     const held = this.running.get(id)
     if (held) return held
+    const channel = this.entries.get(id)?.channel
     const run = this.run(id, action).finally(() => {
       this.running.delete(id)
+      // The row either changed (reason, stale) or went away; either way the pages
+      // that were waiting on this attempt must not keep showing it as busy.
+      if (channel) this.touch(channel)
     })
     this.running.set(id, run)
+    if (channel) this.touch(channel)
     return run
+  }
+
+  private rows(channel: Channel): CleanupPending[] {
+    return [...this.entries.entries()]
+      .filter(([, entry]) => entry.channel === channel)
+      .sort((left, right) => right[1].at - left[1].at)
+      .map(([id, entry]) => ({
+        id,
+        reason: entry.reason,
+        cards: true,
+        stale: entry.stale,
+        at: entry.at,
+        busy: this.running.has(id)
+      }))
+  }
+
+  private touch(channel: Channel): void {
+    this.revision += 1
+    this.changed(channel)
   }
 
   private async run(id: string, action: CleanupAction): Promise<CleanupRetryResult> {

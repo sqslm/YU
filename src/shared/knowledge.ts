@@ -376,6 +376,18 @@ export interface CleanupPending {
   stale?: boolean
   /** When the cleanup was registered, so two pendings can be told apart. */
   at?: number
+  /**
+   * An attempt is running right now. The row is still waiting — this only tells a
+   * page that comes back mid-retry that it must not offer the same click again.
+   */
+  busy?: boolean
+}
+
+/** One channel's rows as the main process holds them, at one revision. */
+export interface CleanupSnapshot {
+  /** Bumped on every change a page can see, so an older answer can be dropped. */
+  revision: number
+  rows: CleanupPending[]
 }
 
 /** What one retry of a failed cleanup did. */

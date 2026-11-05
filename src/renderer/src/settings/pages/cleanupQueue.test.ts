@@ -1,88 +1,59 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  EMPTY_QUEUE,
-  addPending,
-  abandonRetry,
-  isBusy,
-  mergeList,
-  settleRetry,
-  startRetry
-} from './cleanupQueue'
+import { EMPTY_QUEUE, applySnapshot, clearRetry, isBusy, markRetry } from './cleanupQueue'
 
-const pending = (id: string, reason = 'database is locked', at = 1) => ({ id, reason, cards: true, at })
-const done = { status: 'done' as const, removed: 1, kept: 0, released: 0 }
-const stale = { status: 'stale' as const, reason: '预览已失效，请重新确认', removed: 0, kept: 0, released: 0 }
-const failed = { status: 'failed' as const, reason: 'database is locked', removed: 0, kept: 0, released: 0 }
+const first = { id: 'a', reason: 'database is locked', cards: true, stale: false, at: 10, busy: false }
+const second = { id: 'b', reason: 'database is locked', cards: true, stale: false, at: 20, busy: false }
 
-describe('the cleanup rows a page keeps', () => {
-  it('keeps a second failure instead of replacing the first', () => {
-    const one = addPending(EMPTY_QUEUE, pending('a'))
-    const two = addPending(one, pending('b', 'cannot start the knowledge helper', 2))
+describe('the cleanup rows a page shows', () => {
+  it('takes the channel rows from the main process as they are', () => {
+    const queue = applySnapshot(EMPTY_QUEUE, { revision: 3, rows: [first, second] })
 
-    expect(two.rows.map(row => row.id)).toEqual(['b', 'a'])
-    expect(two.rows[1].reason).toBe('database is locked')
-  })
-
-  it('puts the rows a channel query returns back, newest first', () => {
-    const queue = mergeList(EMPTY_QUEUE, [pending('a', '锁住了', 5), pending('b', '锁住了', 9)])
-
+    expect(queue.revision).toBe(3)
+    // Newest first, and nothing the page knew before can survive the replacement.
     expect(queue.rows.map(row => row.id)).toEqual(['b', 'a'])
-    expect(queue.rows[0].at).toBe(9)
+    expect(queue.rows[0]).toEqual({ id: 'b', reason: 'database is locked', stale: false, at: 20, busy: false })
   })
 
-  it('never lets a late query resurrect a finished row or undo a stale one', () => {
-    const staleRow = settleRetry(addPending(EMPTY_QUEUE, pending('a')), 'a', stale)
-    const after = mergeList(staleRow, [pending('a', '数据库忙', 3)])
-    expect(after.rows[0].stale).toBe(true)
-    expect(after.rows[0].reason).toBe('数据库忙')
+  it('drops an answer older than what the page already applied', () => {
+    const fresh = applySnapshot(EMPTY_QUEUE, { revision: 5, rows: [second] })
+    // A mount-time query sent before the change landed resolves after it.
+    const late = applySnapshot(fresh, { revision: 4, rows: [first, second] })
 
-    const finished = settleRetry(staleRow, 'a', done)
-    expect(finished.rows).toEqual([])
-    expect(mergeList(finished, [pending('a')]).rows).toEqual([])
-    expect(addPending(finished, pending('a')).rows).toEqual([])
+    expect(late).toBe(fresh)
+    expect(late.rows.map(row => row.id)).toEqual(['b'])
   })
 
-  it('keeps the rows the page already knew when the query predates them', () => {
-    // The delete reply landed while the mount query was still in flight.
-    const queue = addPending(EMPTY_QUEUE, pending('new', '锁住了', 7))
-    const merged = mergeList(queue, [])
+  it('cannot bring back a row that a newer snapshot already settled', () => {
+    const waiting = applySnapshot(EMPTY_QUEUE, { revision: 7, rows: [first] })
+    const settled = applySnapshot(waiting, { revision: 8, rows: [] })
 
-    expect(merged.rows.map(row => row.id)).toEqual(['new'])
+    expect(settled.rows).toEqual([])
+    // The retry reply carries the row it was about; it cannot resurrect it.
+    expect(applySnapshot(settled, { revision: 7, rows: [first] }).rows).toEqual([])
   })
 
-  it('applies one retry answer to its own id only', () => {
-    let queue = addPending(addPending(EMPTY_QUEUE, pending('a')), pending('b', '锁住了', 2))
-    queue = startRetry(queue, 'a')
-    // A second cleanup registered while the first retry was in flight.
-    queue = addPending(queue, pending('c', '锁住了', 3))
-    queue = settleRetry(queue, 'a', done)
+  it('keeps an attempt that is still running visible as busy after a remount', () => {
+    const queue = applySnapshot(EMPTY_QUEUE, { revision: 9, rows: [{ ...first, busy: true }] })
 
-    expect(isBusy(queue, 'a')).toBe(false)
-    expect(queue.rows.map(row => row.id)).toEqual(['c', 'b'])
-    expect(queue.finished).toEqual(['a'])
-    expect(queue.rows.every(row => row.stale === false)).toBe(true)
+    expect(isBusy(queue, 'a')).toBe(true)
+    expect(queue.rows[0].busy).toBe(true)
   })
 
-  it('keeps the downgrade on offer when the retry fails again', () => {
-    let queue = addPending(EMPTY_QUEUE, pending('a'))
-    queue = settleRetry(queue, 'a', stale)
-    expect(queue.rows[0].stale).toBe(true)
+  it('blocks only the row that was clicked, and only until the next answer', () => {
+    const queue = applySnapshot(EMPTY_QUEUE, { revision: 2, rows: [first, second] })
+    const clicked = markRetry(queue, 'a')
 
-    // The library is locked again during the downgrade: the offer must survive.
-    queue = settleRetry(queue, 'a', failed)
-    expect(queue.rows[0].stale).toBe(true)
-    expect(queue.rows).toHaveLength(1)
-
-    queue = settleRetry(queue, 'a', done)
-    expect(queue.rows).toEqual([])
+    expect(isBusy(clicked, 'a')).toBe(true)
+    expect(isBusy(clicked, 'b')).toBe(false)
+    expect(clearRetry(clicked, 'a').rows.every(row => !row.busy)).toBe(true)
   })
 
-  it('clears only the in-flight lock when the request itself fails', () => {
-    let queue = startRetry(addPending(EMPTY_QUEUE, pending('a')), 'a')
-    queue = abandonRetry(queue, 'a')
+  it('leaves the other rows untouched when one of them settles', () => {
+    const queue = applySnapshot(EMPTY_QUEUE, { revision: 4, rows: [first, second] })
+    const after = applySnapshot(queue, { revision: 5, rows: [second] })
 
-    expect(isBusy(queue, 'a')).toBe(false)
-    expect(queue.rows.map(row => row.id)).toEqual(['a'])
+    expect(after.rows.map(row => row.id)).toEqual(['b'])
+    expect(after.revision).toBe(5)
   })
 })

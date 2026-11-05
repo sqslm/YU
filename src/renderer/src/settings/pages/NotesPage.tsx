@@ -3,12 +3,10 @@ import { playCue } from '../../bar/cues'
 import { PagedList } from '../Pagination'
 import {
   EMPTY_QUEUE,
-  abandonRetry,
-  addPending,
+  applySnapshot,
+  clearRetry,
   isBusy,
-  mergeList,
-  settleRetry,
-  startRetry,
+  markRetry,
   type CleanupQueue
 } from './cleanupQueue'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -229,18 +227,26 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
    */
   const [cleanups, setCleanups] = useState<CleanupQueue>(EMPTY_QUEUE)
 
-  // The register lives in the main process, so a page that was unmounted and comes
-  // back (or a window closed and reopened) asks for its rows again.
+  // The register lives in the main process, so this page subscribes first and then
+  // reads the projection: a row that appeared while the page was away, or a retry
+  // still running when it left, comes back in the state it is really in.
   useEffect(() => {
     let live = true
-    void window.api.knowledge
-      .cleanups('note')
-      .then((rows) => {
-        if (live) setCleanups((previous) => mergeList(previous, rows))
-      })
-      .catch(() => {})
+    const read = (): void => {
+      void window.api.knowledge
+        .cleanups('note')
+        .then((snapshot) => {
+          if (live) setCleanups((previous) => applySnapshot(previous, snapshot))
+        })
+        .catch(() => {})
+    }
+    const off = window.api.knowledge.onCleanupsChanged((channel) => {
+      if (channel === 'note') read()
+    })
+    read()
     return () => {
       live = false
+      off()
     }
   }, [])
   const [extractingReminders, setExtractingReminders] = useState(false)
@@ -1311,14 +1317,13 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
     setDeleteOpen(false)
     if (!note) return
     try {
-      const failed = await window.api.notes.remove(note.id, { deleteKnowledge, ticket: impact?.ticket })
+      await window.api.notes.remove(note.id, { deleteKnowledge, ticket: impact?.ticket })
       pendingRef.current = null
       setNotes((prev) => prev.filter((item) => item.id !== note.id))
       setSelectedId(null)
-      // The note is gone either way; a ticked cleanup that failed comes back as a
-      // handle, so the retry stays available after the row has left the list. Every
-      // other row keeps waiting untouched.
-      if (failed) setCleanups((previous) => addPending(previous, failed))
+      // The note is gone either way. A ticked cleanup that failed is registered in
+      // the main process, whose notification brings the row in; this reply is only
+      // about the note, so it never writes the cleanup list.
     } catch (err) {
       setNotice(messageOf(err))
     }
@@ -1331,13 +1336,14 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
    */
   const retryCleanup = async (id: string, action: 'purge' | 'release'): Promise<void> => {
     if (isBusy(cleanups, id)) return
-    setCleanups((previous) => startRetry(previous, id))
+    // The row blocks as soon as it is clicked; the next snapshot carries the real
+    // in-flight state, so leaving the page mid-retry comes back still blocked.
+    setCleanups((previous) => markRetry(previous, id))
     setNotice('')
     try {
-      const result = await window.api.knowledge.retryCleanup(id, action)
-      setCleanups((previous) => settleRetry(previous, id, result))
+      await window.api.knowledge.retryCleanup(id, action)
     } catch (err) {
-      setCleanups((previous) => abandonRetry(previous, id))
+      setCleanups((previous) => clearRetry(previous, id))
       setNotice(messageOf(err))
     }
   }

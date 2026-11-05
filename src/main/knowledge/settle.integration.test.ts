@@ -675,4 +675,53 @@ describe('finishing a ticked cleanup after the record was already deleted', () =
     expect(app.sourceStates(second.id).every(row => row.state !== 'invalid')).toBe(true)
     expect((await app.knowledge().getCard(secondCard.id)).id).toBe(secondCard.id)
   }, 120_000)
+
+  it('shows an attempt as in flight while it runs, and drops the row once it settles', async () => {
+    const app = await rig()
+    const note = await app.notes.createText({ text: '在途状态要能从主进程读回来。' })
+    await until(async () => (await app.rows('note', note.id)).length > 0, 'the note source')
+    const [source] = await app.rows('note', note.id)
+    const card = await app.knowledge().saveCard({
+      kind: 'concept',
+      title: '在途状态',
+      body: '重试期间页面要看到忙碌。',
+      topics: ['清理'],
+      sourceIds: [source.id]
+    })
+    const preview = await app.knowledge().cardImpact({ channel: 'note', originRef: note.id })
+
+    const first = hold(app.dir)
+    let pending: { id: string } | undefined
+    try {
+      pending = (await app.removeNote(note.id, { deleteKnowledge: true, ticket: preview.ticket })) as
+        | { id: string }
+        | undefined
+    } finally {
+      first.release()
+    }
+    const idle = app.cleanups.snapshot('note')
+    expect(idle.rows).toHaveLength(1)
+    expect(idle.rows[0].busy).toBe(false)
+
+    // A second lock keeps the retry running while the page reads the register.
+    const second = hold(app.dir)
+    const running = app.cleanups.retry(pending!.id, 'purge')
+    try {
+      const during = app.cleanups.snapshot('note')
+      expect(during.revision).toBeGreaterThan(idle.revision)
+      expect(during.rows[0]).toMatchObject({ id: pending!.id, busy: true })
+      // The chat channel is a different page and never sees this row.
+      expect(app.cleanups.snapshot('chat').rows).toEqual([])
+    } finally {
+      second.release()
+    }
+
+    const result = await running
+
+    expect(result.status).toBe('done')
+    const after = app.cleanups.snapshot('note')
+    expect(after.revision).toBeGreaterThan(idle.revision)
+    expect(after.rows).toEqual([])
+    await expect(app.knowledge().getCard(card.id)).rejects.toThrow()
+  }, 120_000)
 })

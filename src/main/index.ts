@@ -401,11 +401,16 @@ const settling = new SettleRegistry(new RecordReleaser(() => knowledge, line => 
  * finishes those from the deletion they confirmed, so the record identity and that
  * confirmation stay here and the page only ever gets an opaque retry id.
  */
-const cleanups = new CleanupRetries(() => ({
-  purgeCards: input => knowledge.purgeCards(input),
-  release: (input, reason) => settling.release(input, reason),
-  log: line => log(line)
-}))
+const cleanups = new CleanupRetries(
+  () => ({
+    purgeCards: input => knowledge.purgeCards(input),
+    release: (input, reason) => settling.release(input, reason),
+    log: line => log(line)
+  }),
+  // A page that was off screen when a row appeared, or rebuilt while a retry was
+  // running, learns about it here and reads the projection back itself.
+  channel => notifyCleanups(channel)
+)
 
 async function verifyKnowledgeDelete(identity: import('@shared/knowledge').SourceIdentity, ticket?: string, cards = true): Promise<void> {
   if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
@@ -915,6 +920,16 @@ function broadcastNotes(): void {
  * The scope is the helper's own word (`cards`, `queue`, `profile`…), so a page
  * refreshes only what it shows instead of re-reading the whole store.
  */
+/**
+ * Tells the main window that one channel's cleanup rows changed. Only the channel
+ * travels: the rows, their reasons and their in-flight state are read back through
+ * `knowledge:cleanup-list`, which never touches the helper.
+ */
+function notifyCleanups(channel: 'note' | 'chat'): void {
+  const win = settingsWindow
+  if (win && !win.isDestroyed()) win.webContents.send('knowledge:cleanups-changed', { channel })
+}
+
 function broadcastKnowledge(scope: string): void {
   for (const win of [settingsWindow]) {
     if (win && !win.isDestroyed()) win.webContents.send('knowledge:changed', scope)
@@ -1968,7 +1983,7 @@ function registerIpc(): void {
    */
   handle('knowledge:cleanup-list', async (event, input: { channel: string }) => {
     knowledgeOwner(event)
-    return cleanups.list(String(input?.channel ?? ''))
+    return cleanups.snapshot(String(input?.channel ?? ''))
   })
   handle('knowledge:cleanup-retry', async (event, input: { id: string; action: CleanupAction }) => {
     knowledgeOwner(event)

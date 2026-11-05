@@ -16,7 +16,7 @@ import GraphicEqRounded from '@mui/icons-material/GraphicEqRounded'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import type { ChatDetail, ChatGroup, ChatIndex, ChatThread } from '@shared/chat'
 import type { CardImpact } from '@shared/knowledge'
-import { EMPTY_QUEUE, abandonRetry, addPending, isBusy, mergeList, settleRetry, startRetry, type CleanupQueue } from './cleanupQueue'
+import { EMPTY_QUEUE, applySnapshot, clearRetry, isBusy, markRetry, type CleanupQueue } from './cleanupQueue'
 import { CHAT_ATTACHMENT_BYTES, CHAT_ATTACHMENT_LIMIT, CHAT_ATTACHMENT_TOTAL, CHAT_FILE_ACCEPT } from '@shared/chat'
 import type { Settings } from '@shared/types'
 import type { LocalRecord } from '@shared/workspace'
@@ -62,22 +62,41 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
   const [remove, setRemove] = useState<{ action: 'delete' | 'group-delete'; id: string; name: string } | null>(null)
   /**
    * Ticked cleanups that failed after their thread was already deleted, keyed by
-   * the opaque id. The register is the main process's, so this page asks for its
-   * rows on mount and whenever the window is rebuilt around it.
+   * the opaque id. The register is the main process's; this page subscribes first
+   * and then reads it, so a rebuilt window comes back with the same rows and the
+   * same in-flight state.
    */
   const [cleanups, setCleanups] = useState<CleanupQueue>(EMPTY_QUEUE)
   useEffect(() => {
     let live = true
-    void window.api.knowledge
-      .cleanups('chat')
-      .then((rows) => {
-        if (live) setCleanups((previous) => mergeList(previous, rows))
-      })
-      .catch(() => {})
+    const read = (): void => {
+      void window.api.knowledge
+        .cleanups('chat')
+        .then((snapshot) => {
+          if (live) setCleanups((previous) => applySnapshot(previous, snapshot))
+        })
+        .catch(() => {})
+    }
+    const off = window.api.knowledge.onCleanupsChanged((channel) => {
+      if (channel === 'chat') read()
+    })
+    read()
     return () => {
       live = false
+      off()
     }
   }, [])
+  const retryCleanup = async (id: string, action: 'purge' | 'release'): Promise<void> => {
+    if (isBusy(cleanups, id)) return
+    setCleanups(previous => markRetry(previous, id))
+    setError('')
+    try {
+      await window.api.knowledge.retryCleanup(id, action)
+    } catch (failure) {
+      setCleanups(previous => clearRetry(previous, id))
+      setError(messageOf(failure))
+    }
+  }
   /** What deleting the thread would do to the cards that quote it. */
   const [impact, setImpact] = useState<CardImpact | null>(null)
   const [impactError, setImpactError] = useState('')
@@ -311,7 +330,7 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
         <Tooltip title={t('模型设置')}><IconButton size="small" aria-label={t('模型设置')} onClick={onModels}><SettingsOutlined fontSize="small" /></IconButton></Tooltip>
       </Stack>
       {error && <Alert severity="error" onClose={() => setError('')} action={<Button color="inherit" size="small" onClick={() => { setError(''); void refresh() }}>{t('刷新')}</Button>}>{error.replace(/^Error: /, '')}</Alert>}
-      {cleanups.rows.map(row => <Alert key={row.id} severity="warning" data-chat-cleanup data-chat-cleanup-id={row.id} data-chat-cleanup-stale={row.stale ? 'on' : 'off'} action={<Stack direction="row" spacing={.5}><Button color="inherit" size="small" data-chat-cleanup-retry disabled={isBusy(cleanups, row.id)} onClick={() => { if (isBusy(cleanups, row.id)) return; setCleanups(previous => startRetry(previous, row.id)); setError(''); void window.api.knowledge.retryCleanup(row.id, 'purge').then(result => setCleanups(previous => settleRetry(previous, row.id, result))).catch(error => { setCleanups(previous => abandonRetry(previous, row.id)); setError(messageOf(error)) }) }}>{t('knowledge.cleanup.retry')}</Button>{row.stale && <Button color="inherit" size="small" data-chat-cleanup-release disabled={isBusy(cleanups, row.id)} onClick={() => { if (isBusy(cleanups, row.id)) return; setCleanups(previous => startRetry(previous, row.id)); setError(''); void window.api.knowledge.retryCleanup(row.id, 'release').then(result => setCleanups(previous => settleRetry(previous, row.id, result))).catch(error => { setCleanups(previous => abandonRetry(previous, row.id)); setError(messageOf(error)) }) }}>{t('knowledge.cleanup.keepCards')}</Button>}</Stack>}>{t('knowledge.cleanup.pending', { reason: row.reason })}</Alert>)}
+      {cleanups.rows.map(row => <Alert key={row.id} severity="warning" data-chat-cleanup data-chat-cleanup-id={row.id} data-chat-cleanup-stale={row.stale ? 'on' : 'off'} action={<Stack direction="row" spacing={.5}><Button color="inherit" size="small" data-chat-cleanup-retry disabled={isBusy(cleanups, row.id)} onClick={() => void retryCleanup(row.id, 'purge')}>{t('knowledge.cleanup.retry')}</Button>{row.stale && <Button color="inherit" size="small" data-chat-cleanup-release disabled={isBusy(cleanups, row.id)} onClick={() => void retryCleanup(row.id, 'release')}>{t('knowledge.cleanup.keepCards')}</Button>}</Stack>}>{t('knowledge.cleanup.pending', { reason: row.reason })}</Alert>)}
       <Box ref={scroll} onScroll={event => { const el = event.currentTarget; nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 2, lg: 4 }, py: 2.5 }}>
         {focused && <Button onClick={() => { focusedRef.current = undefined; setFocused(undefined); nearBottom.current = true; void refresh() }}>{t('回到最新消息')}</Button>}
         {!focused && detail && detail.total > detail.messages.length && <Button fullWidth size="small" onClick={() => { nearBottom.current = false; limitRef.current += 100; setLimit(limitRef.current) }}>{t('加载更早消息')}</Button>}
@@ -376,6 +395,6 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
         <FormControlLabel data-chat-delete-knowledge sx={{ alignItems: 'flex-start', mr: 0 }} control={<Checkbox size="small" checked={deleteKnowledge} onChange={event => setDeleteKnowledge(event.target.checked)} sx={{ py: 0.25 }} />} label={<Typography sx={{ fontSize: 12.5, lineHeight: 1.5 }}>{t(deleteNotice.labelKey, { count: deleteNotice.count })}</Typography>} />
         <Typography sx={{ fontSize: 11.5, lineHeight: 1.6, color: 'text.secondary', pl: 3.25 }}>{t(deleteNotice.detailKey, { multi: deleteNotice.multi, single: deleteNotice.single })}</Typography>
       </Box>}
-    </DialogContent><DialogActions><Button onClick={() => setRemove(null)}>{t('取消')}</Button><Button color="error" onClick={() => { if (remove) { const input = remove.action === 'delete' ? { action: 'delete' as const, id: remove.id, deleteKnowledge, ticket: impact?.ticket } : remove; void window.api.chat.edit(input).then(failed => { setRemove(null); if (failed) setCleanups(previous => addPending(previous, failed)); return refresh() }).catch(error => setError(messageOf(error))) } }}>{t('删除')}</Button></DialogActions></Dialog>
+    </DialogContent><DialogActions><Button onClick={() => setRemove(null)}>{t('取消')}</Button><Button color="error" onClick={() => { if (remove) { const input = remove.action === 'delete' ? { action: 'delete' as const, id: remove.id, deleteKnowledge, ticket: impact?.ticket } : remove; void window.api.chat.edit(input).then(() => { setRemove(null); return refresh() }).catch(error => setError(messageOf(error))) } }}>{t('删除')}</Button></DialogActions></Dialog>
   </Box>
 }

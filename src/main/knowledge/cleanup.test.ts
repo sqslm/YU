@@ -117,7 +117,7 @@ describe('finishing a cleanup that failed after its record was deleted', () => {
     expect(notes).toHaveLength(1)
     expect(notes[0]).toMatchObject({ id: note.id, reason: 'database is locked', stale: false })
     // Nothing that could widen the range travels back to the page.
-    expect(Object.keys(notes[0]).sort()).toEqual(['at', 'cards', 'id', 'reason', 'stale'])
+    expect(Object.keys(notes[0]).sort()).toEqual(['at', 'busy', 'cards', 'id', 'reason', 'stale'])
     expect(cleanups.list('chat').map(row => row.id)).toEqual([thread.id])
     expect(cleanups.list('reminder')).toEqual([])
   })
@@ -164,6 +164,47 @@ describe('finishing a cleanup that failed after its record was deleted', () => {
     await cleanups.retry(first.id, 'purge')
 
     expect(cleanups.list('note').map(row => row.id)).toEqual([second.id])
+  })
+
+  it('names the channel on every change a page can see, and never the record', async () => {
+    const seen: string[] = []
+    const cleanups = new CleanupRetries(() => deps(), channel => seen.push(channel))
+    const handle = cleanups.add(input, identity, { reason: 'database is locked', ticket: 't1' })
+    expect(seen).toEqual(['note'])
+
+    await cleanups.retry(handle.id, 'purge')
+
+    // A start and a settle: both are changes the page has to pick up.
+    expect(seen).toEqual(['note', 'note', 'note'])
+    expect(seen.every(channel => channel === 'note')).toBe(true)
+    cleanups.add({ channel: 'chat', groupKey: 'th1' }, { channel: 'chat', groupKey: 'th1' }, { reason: 'x' })
+    expect(seen.at(-1)).toBe('chat')
+  })
+
+  it('reports the attempt as in flight while it runs, and settles the revision', async () => {
+    let finish: (value: { removed: string[]; kept: string[]; skipped: string[] }) => void = () => {}
+    const purgeCards = vi.fn(
+      () =>
+        new Promise<{ removed: string[]; kept: string[]; skipped: string[] }>(resolve => {
+          finish = resolve
+        })
+    )
+    const cleanups = new CleanupRetries(() => deps({ purgeCards: purgeCards as never }))
+    const handle = cleanups.add(input, identity, { reason: 'database is locked', ticket: 't1' })
+    const before = cleanups.snapshot('note')
+
+    const running = cleanups.retry(handle.id, 'purge')
+    const during = cleanups.snapshot('note')
+
+    expect(before.revision).toBeLessThan(during.revision)
+    expect(during.rows[0]).toMatchObject({ id: handle.id, busy: true })
+
+    finish({ removed: ['c1'], kept: [], skipped: [] })
+    await running
+    const after = cleanups.snapshot('note')
+
+    expect(after.revision).toBeGreaterThan(during.revision)
+    expect(after.rows).toEqual([])
   })
 
   it('refuses a handle that is already finished', async () => {

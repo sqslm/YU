@@ -98,6 +98,13 @@ const api: TypelessApi = {
     impact: (target) => ipcRenderer.invoke('knowledge:impact', target),
     retryCleanup: (id, action) => ipcRenderer.invoke('knowledge:cleanup-retry', { id, action }),
     cleanups: (channel) => ipcRenderer.invoke('knowledge:cleanup-list', { channel }),
+    onCleanupsChanged: listener => {
+      const handler = (_event: Electron.IpcRendererEvent, input: { channel: 'note' | 'chat' }): void => {
+        listener(input.channel)
+      }
+      ipcRenderer.on('knowledge:cleanups-changed', handler)
+      return () => ipcRenderer.removeListener('knowledge:cleanups-changed', handler)
+    },
     continueDiscussion: (cardId) => ipcRenderer.invoke('knowledge:continue', cardId),
     cardTodo: (cardId) => ipcRenderer.invoke('knowledge:card-todo', cardId),
     saveCardAsNote: (cardId) => ipcRenderer.invoke('knowledge:card-note', cardId),
