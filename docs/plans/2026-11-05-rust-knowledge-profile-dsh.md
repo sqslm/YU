@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2 已通过外部复核（阶段 3 实施中）。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 已实现，待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -674,3 +674,53 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 ### 设置
 
 - `KnowledgeSettings` 新增 `profileId: string | null`（默认 `null` → 首个启用 LLM）与 `effort: string`（默认 `high`）；不继承听写 `thinking off`，不读写密钥。缺可用模型返回 `model_unavailable`。
+
+### 阶段 3 实现与验证（2026-11-05）
+
+实现提交：`786dc14` `feat(knowledge): extract cards from the pending queue`（本轮全部代码与测试）。
+
+**落地位置**
+
+- Rust：`native/knowledge/src/extract.rs`（`next`/`run`/`fail`）、`suggestions.rs`（`list`/`get`/`accept`/`reject`）、`store.rs`（`EXTRACT_SQL`，`user_version = 5`）、`cards.rs`（`reindex`、`fingerprint_of`、`revision` 与列表 `revision` 列）、`service.rs`（7 个新方法）、`lib.rs`（模块与派发绑定 `parent`）。
+- TS：`src/main/knowledge/engine.ts`（`ExtractEngine`，单并发、按 `nextDueAt` 唤醒）、`collector.ts`（`onQueued` 入队后唤醒）、`session.ts`（开关/游戏确认后唤醒）、`host.ts`（`extractNext/extractRun/extractFail` 与四个建议方法）、`src/main/index.ts`（引擎实例、`readBody` 走生产恢复、退出时 `stop()`、4 个受信 IPC）、`src/shared/knowledge.ts`（`Card.revision`、`QueueState` 增 `working|completed`、建议类型与方法名）、`src/shared/knowledgeSettings.ts`（`profileId`/`effort`）。
+
+**实现要点**
+
+- 占用与单并发：`extract.next` 用 `claim = clm_…` 把 `ready`（或稳定期已过的 `stabilizing`）任务改成 `working` 再返回；同一批次不可能被两个事件同时启动，重复 `claim` 在 `extract.run` 开头即被 `source_changed` 拒绝。
+- 正文核对：`extract.run` 对每条输入重新 `sha256(text)` 与 `sources.fingerprint` 比对，版本不符返回 `source_changed`；主进程只提供自己按 source id 读到的正文。
+- 分段与进度：单段 12 000 字符、段间重叠 500 字符，`extract_progress(source_id, version, segment)` 记录已完成段；未完成段则任务回到 `ready` 并保留 `remaining: true`，首段成功不等于整源完成。
+- 模型预算：每批一次提炼调用（`maxTokens = 8192`，≤3 张卡），仅当存在候选时再调用一次比较；候选最多 8 条、合计 6 000 字符；`extract.run` 总期限 120 秒（`KNOWLEDGE_LIMITS.modelRequestMs`），普通 CRUD 仍 15 秒。
+- 提交事务：卡片写入、来源关联、`card_history` 快照、`extract_progress`、组状态与 `changed` 通知在同一事务内完成；取消在提交前检查，失败或取消不留半张卡、不前进进度。
+- 去重与修订：正文指纹相同则只补来源（`reference`），保留原正文与 `edited`；`merge` 仅当目标未人工编辑时执行，且先把旧版本写入 `card_history` 并使 `revision + 1`；目标已被人工编辑、结论冲突或依据不足时只写建议。
+- 建议生命周期：`suggestion.list/get/accept/reject`；`accept` 在目标卡片 `revision` 与该建议记录的目标版本一致时才应用，否则把建议置为 `rejected`（原因"目标卡片已更新，建议已过期"）并返回 `source_changed`；同目标同草稿指纹的建议不重复写入，被拒绝的也不会因下一批而复活。`suggestions` 因此比原契约多一列 `fingerprint TEXT NOT NULL DEFAULT ''` 与索引 `suggestions_target`。
+- 失败语义：`cancelled`/`source_changed` → `needs_reread`，其余（非法 JSON、陌生 source/target、超时、缺模型）→ `failed` 并清空 `claim`；合法空数组 → `completed` 且 `noKnowledge: true`，写入 0 张卡也算有结论。
+- 关闭即静默：总开关关闭时 `extract.next` 返回 `enabled: false`、不占用任务；`ExtractEngine` 在未运行、未启用或游戏态下不发请求，空闲等待上限 60 秒，不轮询全库。
+
+**本轮验证（实际命令与退出码，依赖顺序执行）**
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 |
+| `cargo test --locked` | 0；15 lib + 8 extract + 11 process + 18 queue |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture`） |
+| `pnpm exec vitest run src/main/knowledge src/preload/index.test.ts src/main/ipc-trust.test.ts` | 15 文件 / 116 项通过 |
+| `pnpm typecheck` | 0 |
+| `pnpm test:native` | 0（6 个原生 crate 的恢复构建与测试） |
+| `pnpm test` | 0；265 文件通过 / 3 跳过（268），3792 项通过 / 8 跳过（3800），98.96 s |
+| `pnpm build` | 0（渲染层 `settings-*.js` 4,687.76 kB） |
+
+交付产物：`native/bin/yu-knowledge.exe` 2,688,000 字节，SHA-256 `dc19de6b50f6f92289bcc20555326ca3aea9ced9d68b1070c0bc4e14af231fdd`（release）；调试用 `native/knowledge/target/debug/yu-knowledge.exe` `b80a88b9…` 与 `yu-knowledge-fixture.exe` `850a0ccc…` 不属于交付物。
+
+**新增回归**
+
+- Rust `native/knowledge/tests/extract.rs`（8 项）：稳定来源写成卡、同正文只补来源、空数组 `completed` 无卡、正文变更被拒并转 `needs_reread`、非法 JSON → `failed`、30 000 字符来源分三批且提示词 ≤12 500 字符、总开关关闭时 `source.publish` 与 `extract.next` 都按关闭处理、建议全生命周期（人工编辑后只出建议 → 过期建议被 `source_changed` 关闭 → 当前版本建议可接受并 `revision + 1` → 拒绝的同草稿不再复活）。
+- TS `src/main/knowledge/engine.test.ts`（9 项）：未运行/未启用不请求、按 `nextDueAt` 等待、读正文后单批执行、正文缺失时不调用模型并释放占用、存储故障保持可重试、单并发、按设置传 `profileId`/`effort`、批次抛错不冒泡。
+- TS `src/main/knowledge/extract.integration.test.ts`（2 项，真实 helper + 生产 host + 真实 `NotesStore` + 生产恢复）：队列里的随记经真实链路提炼成卡片并绑定来源；已人工编辑的卡片只得到建议，接受后才写入且 `revision` 增加。
+
+**未测与边界**
+
+- 仍以注入完成器代替真实模型：本阶段只证明程序规则，提示词质量与付费模型表现留待阶段 7。
+- 未在打包后的 Electron 实例里跑真实启动/退出；`extract.run` 的 120 秒预算只以较短期限验证了超时与取消路径。
+- 60 秒稳定期在测试中通过 `YU_KNOWLEDGE_STABLE_MS` 缩短；未做长时间多批并行压测。
+- 页面、图谱、画像、聊天检索仍未开始（阶段 5、6）。
+- 全量套件在本轮共跑四次，前三次各自出现不同失败：`src/main/windows-native-browser-url.test.ts` 的 30-pid 用例（单独运行 13 项全通过，48.9 秒）、`src/main/cloud.live.test.ts` 与 `src/main/providers/search-pool.test.ts` 的 `fetch failed`（`cloud.live.test.ts` 单独运行 3 项通过，462 毫秒，同期 `curl https://api.deepseek.com` 返回 401，说明网络正常）、以及 `src/main/providers/tts.test.ts` 的 `listen EACCES 127.0.0.1:49667`（临时端口占用）。这些用例与本阶段改动无关，属并发负载下的既有抖动；本轮没有放宽任何断言或跳过用例，第四次在最终代码上得到 265 文件 / 3792 项全绿。本轮自己新增的集成用例曾因采集在后台发布而抢跑，已改为等待队列与建议页出现（20 秒上限、25 毫秒步进），随后连续三次通过。
