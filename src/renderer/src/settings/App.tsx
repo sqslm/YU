@@ -140,6 +140,9 @@ export function App(): JSX.Element {
       if (view.page === 'settings') setSettingsSection('general')
       setSettingsOpen(view.page === 'settings')
       if (view.page === 'notes') setNoteToOpen(view.noteId ? { id: view.noteId } : undefined)
+      // A knowledge card the answer card asked for: the page only moves its selection,
+      // so a card that no longer exists reports its own missing state.
+      if (view.page === 'knowledge') { setKnowledgeToOpen(view.cardId); setPage('knowledge'); return }
       // 简报 is a pane of 日程 now: the assistant's "打开简报" lands on it.
       if (view.page === 'briefing') setCalendarTab('briefing')
       if (view.page !== 'settings') setPage(view.page === 'overview' ? 'home' : view.page === 'corrections' ? 'dictionary' : view.page === 'briefing' ? 'calendar' : view.page)

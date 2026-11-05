@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ChatStore } from './chat-store'
 import { readWorkspaceRecord, searchWorkspace, type WorkspaceSources } from './workspace'
 import type { NoteEntry } from '@shared/types'
-import { recordsFromTool } from '@shared/workspace'
+import { recordsFromTool, citedKnowledgeIds, MAX_CITED_CARDS } from '@shared/workspace'
 
 const roots: string[] = [], stores: ChatStore[] = []
 afterEach(() => { vi.restoreAllMocks(); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -22,6 +22,33 @@ it('turns a knowledge hit into a knowledge record and survives a deleted card', 
   // the workspace for it; this store deliberately has no knowledge card to read.
   expect(() => readWorkspaceRecord(sources, rows[0])).toThrow('原记录已不存在')
 })
+
+it('turns a single card read into a knowledge record', () => {
+  const rows = recordsFromTool('get_knowledge', { ok: true, card: { id: 'card_2', title: '幂等键', kind: 'concept', topics: [], body: '重复提交要用幂等键。', sourceIds: [], updatedAt: 3 } })
+  expect(rows).toEqual([expect.objectContaining({ kind: 'knowledge', id: 'card_2', title: '幂等键' })])
+  expect(rows[0].text).toBe('重复提交要用幂等键。')
+  // A payload with neither a card nor rows is not a reference.
+  expect(recordsFromTool('get_knowledge', { ok: false })).toEqual([])
+})
+
+it('cites only the cards the answer really used', () => {
+  const hits = recordsFromTool('search_knowledge', { items: [
+    { id: 'card_1', title: '锁粒度', summary: '锁的粒度决定竞争范围' },
+    { id: 'card_2', title: '幂等键', summary: '重复提交' },
+    { id: 'card_3', title: '缓存穿透', summary: '空值缓存' }
+  ] })
+  // A candidate the answer never named is not a citation.
+  expect(citedKnowledgeIds(hits, '锁粒度决定竞争范围。')).toEqual(['card_1'])
+  // A card the turn opened by id is a use even when the answer never repeats the title.
+  expect(citedKnowledgeIds(hits, '两件事都要注意。', ['card_2'])).toEqual(['card_2'])
+  // Nothing was fetched this turn, so an id the model wrote itself has no row to match.
+  expect(citedKnowledgeIds(hits, 'card_9 与 卡片', ['card_9'])).toEqual([])
+  // A one-character title is too weak to prove anything.
+  expect(citedKnowledgeIds([{ id: 'card_4', title: '锁' }], '锁')).toEqual([])
+  const many = Array.from({ length: 20 }, (_, index) => ({ id: `c${index}`, title: `卡片${index}` }))
+  expect(citedKnowledgeIds(many, many.map(card => card.title).join('，'))).toHaveLength(MAX_CITED_CARDS)
+})
+
 
 it('finds Chinese text in message bodies and document attachments and opens the exact old message', () => {
   const sources = fixture(), thread = sources.chat.create(), first = sources.chat.begin(thread.id, '采购预算 50%_预算')

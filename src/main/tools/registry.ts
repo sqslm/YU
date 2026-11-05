@@ -889,7 +889,7 @@ async function runTaskTool(name: string, args: Record<string, unknown>, ctx: Too
   }
   if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, ...KNOWLEDGE_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary, status, taskId: task?.id,
     ...(needsFileSearchFallback(name, outcome) ? { fallback: true } : {}),
-    items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : knowledgeItems(name, outcome), 
+    items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : knowledgeItems(name, outcome),
     detail: [outcome.data.coverage, name === 'read_current_content' && outcome.data.truncated ? mt('当前内容仅读取了部分，摘要可能不完整。') : '', outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[task ${task?.id ?? 'unscoped'}] tool=${tool?.name ?? 'unknown'} status=${status} ms=${durationMs}${outcome.reused ? ' reused=true' : ''}`)
   return outcome

@@ -475,6 +475,7 @@ function collectChatTurn(turn: import('./knowledge/collector').ChatTurnDone): vo
       materials: turn.materials,
       answer: turn.answer,
       sources: turn.materials.map(material => ({ title: material.title, url: material.url })),
+      citedCardIds: turn.citedCardIds,
       at: turn.at
     })
     return
@@ -501,7 +502,12 @@ let hubRetireTimer: NodeJS.Timeout | null = null
 let quitting = false
 let assistantCardActive = false
 let tray: ReturnType<typeof createTray> | null = null
-let hubView: { page: import('./tools/personal').HubPage; noteId?: string } | null = null
+/**
+ * A hub destination the renderer has not collected yet. `knowledge` is not a
+ * model-facing hub page: it is only ever set from a card the app itself handed
+ * to the user, with the card id that has to be opened.
+ */
+let hubView: { page: import('./tools/personal').HubPage | 'knowledge'; noteId?: string; cardId?: string } | null = null
 let assistantTarget: ForegroundInfo | undefined
 const screenshotTool = new ScreenshotTool(() => store.get(), active => { hotkeys?.setSuspended(active || Boolean(wakeSetupMode) || gameMode.snapshot().active); refreshWakeWord(active) }, line => log(line))
 const noteAudio=new NoteAudioPlayer({peek:barPeek,ensure:barEnsure,ready:barReady},id=>notes.audioPathOf(id)?`typeless-audio://note/${encodeURIComponent(id)}`:null,noteAudioBusy.track)
@@ -536,6 +542,7 @@ const assistant = new AssistantSession({ settings: () => store.get(), windows: w
   // The knowledge tools come and go with the user's switch; availability is
   // re-checked per call, so turning the feature off retires them immediately.
   knowledge: knowledgeTools,
+  openCard: focusKnowledgeCard,
   profile: profileText,
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
@@ -1335,6 +1342,18 @@ function navigateHub(page: import('./tools/personal').HubPage, noteId?: string):
   win.webContents.send('assistant:navigate')
 }
 
+/**
+ * Opens one knowledge card in the hub. The id is the one the answer card was
+ * built from, so a deleted card lands on the knowledge page and reports the
+ * helper's real error instead of opening something else. A closed window keeps
+ * the view pending; the renderer collects it on its first mount.
+ */
+function focusKnowledgeCard(cardId: string): void {
+  hubView = { page: 'knowledge', cardId }
+  const win = ensureSettingsWindow()
+  win.webContents.send('assistant:navigate')
+}
+
 function cancelAssistant(): void { assistant.cancel(); assistantCardActive = false }
 
 function openAsk(): boolean {
@@ -1598,7 +1617,9 @@ async function handleCardAction(action: CardAction): Promise<void> {
   if (action.id === 'open-item') {
     if (!action.payload || pipeline?.isBusy || assistant.busy || notesRecording || selectionEditor?.isBusy) return
     hideCard()
-    await assistant.openItem(action.payload)
+    // A knowledge card is a place in the library, not a new question: opening it
+    // must not re-report the answer the card was built from.
+    if (await assistant.openItem(action.payload) === 'knowledge') return
     const turn = assistant.snapshot().turns.at(-1)
     if (turn && turn.state !== 'cancelled') pipeline?.reportTaskResult(turn.answer, turn.state === 'error')
     return

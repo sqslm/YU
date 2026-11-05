@@ -491,3 +491,69 @@ describe('assistant session references', () => {
     expect(session.snapshot().turns.at(-1)?.answer).toContain('项目讨论')
   })
 })
+
+describe('knowledge card references in the floating answer', () => {
+  const card = (id: string, title: string): import('@shared/assistant').AssistantItem => ({ id, name: title, path: '', kind: 'knowledge' })
+
+  it('shows a card this turn really received without spending a model round', async () => {
+    const openCard = vi.fn()
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), openCard })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: true, summary: '知识库命中 1 条：锁粒度', items: [card('card_1', '锁粒度')] })
+      return { text: '你记过：锁的粒度决定竞争范围。', sources: [], searched: false }
+    })
+    await current.send('我以前记过锁粒度吗')
+    await expect(current.openItem('card_1')).resolves.toBe('knowledge')
+    expect(openCard).toHaveBeenCalledWith('card_1')
+    // Navigation is not a question: the thread keeps the one answer it had.
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(current.busy).toBe(false)
+    expect(current.snapshot().turns).toHaveLength(1)
+  })
+
+  it('rejects an id no tool returned', async () => {
+    const openCard = vi.fn()
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), openCard })
+    await expect(current.openItem('card_forged')).rejects.toThrow('请先查找并选择真实结果')
+    expect(openCard).not.toHaveBeenCalled()
+    expect(ask).not.toHaveBeenCalled()
+  })
+
+  it('still sends the request for a file row the windows tool produced', async () => {
+    const windows = new WindowsTools({ folders: { downloads: '.', desktop: '.', documents: '.' }, native: vi.fn(), openPath: vi.fn(), openUrl: vi.fn() })
+    vi.spyOn(windows, 'operation').mockReturnValue({ name: 'open_file', args: { id: 'file_1' }, title: '打开 会议纪要.txt' })
+    const run = vi.spyOn(windows, 'run').mockResolvedValue({ ok: true, summary: '已打开 会议纪要.txt', data: { ok: true } })
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), windows })
+    await expect(current.openItem('file_1')).resolves.toBe('item')
+    // A real file row still runs the registered Windows tool, exactly as before.
+    expect(run).toHaveBeenCalledWith('open_file', { id: 'file_1' }, expect.anything(), expect.anything())
+    expect(current.snapshot().turns.at(-1)?.state).toBe('done')
+  })
+
+  it('hands the collector only the cards the answer used', async () => {
+    const readings: import('./knowledge/collector').ReadingProjection[] = []
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), onReading: reading => readings.push(reading) })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onToolResult?.('read_webpage', { ok: true, summary: '已读取', data: { url: 'https://example.com/a', title: 'A', text: '页面正文' } })
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: true, summary: '命中 3 条', items: [card('card_1', '锁粒度'), card('card_2', '幂等键'), card('card_3', '缓存穿透')] })
+      options?.onLocalResult?.({ tool: 'get_knowledge', ok: true, summary: '已读取卡片：幂等键', items: [card('card_2', '幂等键')] })
+      return { text: '锁粒度决定竞争范围，幂等键防止重复写入。', sources: [], searched: false, taskState: 'completed' }
+    })
+    await current.send('这两个概念的关系')
+    expect(readings).toHaveLength(1)
+    // card_3 was a candidate: fetched, never named, never opened.
+    expect(readings[0].citedCardIds).toEqual(['card_1', 'card_2'])
+  })
+
+  it('cites nothing when the knowledge tools never ran', async () => {
+    const readings: import('./knowledge/collector').ReadingProjection[] = []
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), onReading: reading => readings.push(reading) })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onToolResult?.('read_webpage', { ok: true, summary: '已读取', data: { url: 'https://example.com/b', title: 'B', text: '正文' } })
+      return { text: '回答里提到 锁粒度，但没有对应的检索结果。', sources: [], searched: false, taskState: 'completed' }
+    })
+    await current.send('随便问问')
+    expect(readings).toHaveLength(1)
+    expect(readings[0].citedCardIds).toEqual([])
+  })
+})

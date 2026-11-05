@@ -209,7 +209,7 @@ export interface TypelessApi {
   }
   assistant: {
     navigate(page: 'notes' | 'reminders' | 'settings'): Promise<void>
-    hubView(): Promise<{ page: 'overview' | 'history' | 'notes' | 'reminders' | 'calendar' | 'briefing' | 'corrections' | 'settings'; noteId?: string } | null>
+    hubView(): Promise<{ page: 'overview' | 'history' | 'notes' | 'reminders' | 'calendar' | 'briefing' | 'corrections' | 'settings' | 'knowledge'; noteId?: string; cardId?: string } | null>
     onNavigate(callback: () => void): () => void
   }
   reminders: {

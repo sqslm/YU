@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import type { Settings } from '@shared/types'
 import { askAgent } from './agent'
@@ -220,4 +220,68 @@ it('retracts the thread tasks when a conversation is deleted or turns temporary'
     expect(removed.at(-1)).toEqual([flipped.id, 'thread became temporary'])
     expect(collecting.get(flipped.id).memoryTemporary).toBe(true)
   } finally { collecting.close() }
+})
+
+describe('knowledge citations in the chat page', () => {
+  const hit = (id: string, title: string, summary = '') => ({ id, title, summary, kind: 'concept', topics: [], updatedAt: 1 })
+  const knowledge = (): import('./tools/knowledge').KnowledgeTools => ({
+    enabled: () => true,
+    search: vi.fn(),
+    get: vi.fn(),
+    extractFromNote: vi.fn()
+  } as unknown as import('./tools/knowledge').KnowledgeTools)
+
+  it('cites only the cards the answer really used and keeps every fetched card clickable', async () => {
+    const turns: import('./knowledge/collector').ChatTurnDone[] = []
+    const chat = new ChatService(join(root, 'citations.db'), () => settings, () => {}, () => ({ knowledge: knowledge() }), turn => turns.push(turn))
+    try {
+      const thread = chat.create(null)
+      vi.mocked(askAgent).mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+        options?.onToolResult?.('search_knowledge', { ok: true, summary: '知识库命中 2 条：锁粒度', data: { ok: true, query: '锁', total: 2, items: [hit('card_1', '锁粒度', '锁的粒度决定竞争范围'), hit('card_3', '缓存穿透', '空值缓存')] } })
+        return { text: '锁粒度决定竞争范围。', sources: [], searched: false, taskState: 'completed' }
+      })
+      await chat.send(thread.id, '锁粒度是什么意思')
+      // card_3 was fetched but never named: it is a candidate, not a citation.
+      expect(turns[0].citedCardIds).toEqual(['card_1'])
+      // Both stay clickable in the stored message, which is what reopening the thread shows.
+      const records = chat.get(thread.id).messages.at(-1)?.records ?? []
+      expect(records.filter(record => record.kind === 'knowledge').map(record => record.id)).toEqual(['card_1', 'card_3'])
+    } finally { chat.close() }
+  })
+
+  it('cites a card the turn opened by id, and never an id the model invented', async () => {
+    const turns: import('./knowledge/collector').ChatTurnDone[] = []
+    const chat = new ChatService(join(root, 'citations-open.db'), () => settings, () => {}, () => ({ knowledge: knowledge() }), turn => turns.push(turn))
+    try {
+      const thread = chat.create(null)
+      vi.mocked(askAgent).mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+        options?.onToolResult?.('search_knowledge', { ok: true, summary: '知识库命中 1 条：幂等键', data: { ok: true, query: '幂等', total: 1, items: [hit('card_2', '幂等键', '重复提交要用幂等键')] } })
+        options?.onToolResult?.('get_knowledge', { ok: true, summary: '已读取卡片：幂等键', data: { ok: true, card: { id: 'card_2', title: '幂等键', kind: 'concept', topics: [], body: '重复提交要用幂等键。', sourceIds: [], updatedAt: 5 } } })
+        return { text: '两件事都要注意。', sources: [], searched: false, taskState: 'completed' }
+      })
+      await chat.send(thread.id, '这两件事')
+      expect(turns[0].citedCardIds).toEqual(['card_2'])
+      // A read of that card is also a real reference row, not only a citation id.
+      expect(chat.get(thread.id).messages.at(-1)?.records?.find(record => record.id === 'card_2')?.title).toBe('幂等键')
+
+      vi.mocked(askAgent).mockResolvedValueOnce({ text: '我记得 card_9 这张卡片，标题是 幂等键。', sources: [], searched: false, taskState: 'completed' })
+      await chat.send(thread.id, '再说一次')
+      expect(turns[1].citedCardIds).toEqual([])
+    } finally { chat.close() }
+  })
+
+  it('tells the collector nothing for a temporary thread', async () => {
+    const turns: import('./knowledge/collector').ChatTurnDone[] = []
+    const chat = new ChatService(join(root, 'citations-temp.db'), () => settings, () => {}, () => ({ knowledge: knowledge() }), turn => turns.push(turn))
+    try {
+      const thread = chat.create(null)
+      chat.store.markTemporary(thread.id)
+      vi.mocked(askAgent).mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+        options?.onToolResult?.('search_knowledge', { ok: true, summary: '知识库命中 1 条：锁粒度', data: { ok: true, query: '锁', total: 1, items: [hit('card_1', '锁粒度', '锁的粒度决定竞争范围')] } })
+        return { text: '锁粒度决定竞争范围。', sources: [], searched: false, taskState: 'completed' }
+      })
+      await chat.send(thread.id, '锁粒度')
+      expect(turns).toEqual([])
+    } finally { chat.close() }
+  })
 })

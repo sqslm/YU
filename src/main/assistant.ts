@@ -13,6 +13,7 @@ import { runTool, availableToolNames, type ToolContext, type ToolOutcome } from 
 import { redactSecrets } from './diagnostics'
 import { attachTask, createTask } from './task-context'
 import type { TaskContext } from '@shared/task'
+import { citedKnowledgeIds, type KnowledgeCardRef } from '@shared/workspace'
 import { localDayKey } from '@shared/calendar'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { readAloudCommand } from './read-aloud-command'
@@ -393,6 +394,8 @@ export class AssistantSession {
   private conversation: AgentConversation = { messages: [], toolNotes: '' }
   /** The rows the last turn showed: what "第二个"/"刚才那条" resolve against. */
   private reference: ReferenceContext | null = null
+  /** Knowledge cards this session really received, by id: the only openable ones. */
+  private readonly cards = new Set<string>()
   private turns: AssistantTurn[] = []
   private controller: AbortController | null = null
   private status = ''
@@ -425,6 +428,11 @@ export class AssistantSession {
     workflow?: WorkflowTools
     /** The user's own knowledge base, present only while it is switched on. */
     knowledge?: KnowledgeTools
+    /**
+     * Shows one knowledge card in the main window. Called only for ids this
+     * session really received from a tool, never for a string the card sent.
+     */
+    openCard?: (cardId: string) => void
     /**
      * Bounded profile text (≤2000 characters) for the asks that use it, or ''
      * when the profile switch is off. Reference material, never an instruction.
@@ -505,6 +513,7 @@ export class AssistantSession {
     this.cancel()
     resetThread(this.conversation)
     this.deps.windows?.clear()
+    this.cards.clear()
     this.reference = null
     this.turns = []
     this.status = ''
@@ -536,10 +545,25 @@ export class AssistantSession {
     return parts.join('\n\n')
   }
 
-  async openItem(id: string): Promise<void> {
+  /**
+   * A row the user clicked in the answer card.
+   *
+   * A knowledge card is a place in the user's library, not a request: showing it
+   * must not spend a model round or overwrite the answer the card came from. A
+   * file or application row still runs the Windows tool that produced it, and an
+   * id that came from neither is rejected instead of guessed.
+   */
+  async openItem(id: string): Promise<'knowledge' | 'item'> {
+    if (this.cards.has(id)) {
+      const open = this.deps.openCard
+      if (!open) throw new Error(mt('知识卡片需要在主界面查看'))
+      open(id)
+      return 'knowledge'
+    }
     const operation = this.deps.windows?.operation(id)
     if (!operation) throw new Error(mt('请先查找并选择真实结果'))
     await this.send(operation.title, undefined, operation)
+    return 'item'
   }
 
   async send(input: string, signal?: AbortSignal, operation?: { name: string; args: Record<string, unknown> }, submittedAt = this.now(), context: PromptContext = {}, useContext?: boolean): Promise<void> {
@@ -587,6 +611,10 @@ export class AssistantSession {
     const turn: AssistantTurn = { id: ++this.nextId, taskId: task.id, taskState: 'running', question: input.trim(), answer: '', sources: [], state: 'working', localResults: [] }
     // Only what this turn really read: the collector never re-fetches a page.
     const materials: import('./knowledge/collector').ReadingMaterial[] = []
+    // The cards this turn really received, and the ones it opened by id; both come
+    // from the tool receipts, so a card id the model wrote itself has no entry.
+    const cards: KnowledgeCardRef[] = []
+    const openedCards = new Set<string>()
     this.turns = [...this.turns, turn].slice(-12)
     this.lastUsed = this.now()
     this.status = mt('正在思考…')
@@ -610,7 +638,17 @@ export class AssistantSession {
         readSelection: this.deps.readSelection ? () => this.deps.readSelection!(context, taskSignal) : undefined,
         conversation: this.conversation, allowedTools,
         windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, knowledge: this.deps.knowledge, submittedAt,
-        onLocalResult: receipt => { if (this.controller === controller && !taskSignal.aborted) { turn.localResults!.push(receipt); this.notify() } },
+        onLocalResult: receipt => {
+          if (this.controller !== controller || taskSignal.aborted) return
+          for (const item of receipt.items ?? []) {
+            if (item.kind !== 'knowledge') continue
+            this.cards.add(item.id)
+            if (!cards.some(card => card.id === item.id)) cards.push({ id: item.id, title: item.name })
+          }
+          const read = receipt.tool === 'get_knowledge' && receipt.ok ? receipt.items?.[0]?.id : undefined
+          if (read) openedCards.add(read)
+          turn.localResults!.push(receipt); this.notify()
+        },
         onToolResult: (name, result) => {
           if (!result.ok || !isReadingTool(name)) return
           const material = readingMaterial(name, result.data)
@@ -723,6 +761,7 @@ export class AssistantSession {
             materials,
             answer: turn.answer,
             sources: turn.sources.map(item => ({ title: item.title, url: item.url })),
+            citedCardIds: citedKnowledgeIds(cards, turn.answer, openedCards),
             at: this.now()
           })
         } catch {

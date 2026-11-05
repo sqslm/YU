@@ -95,6 +95,8 @@ export interface ReadingProjection {
   materials: ReadingMaterial[]
   answer: string
   sources: Array<{ title: string; url?: string }>
+  /** Cards the answer really cited this turn, from the tools' own results. */
+  citedCardIds?: string[]
   at: number
 }
 
@@ -356,6 +358,7 @@ export class KnowledgeCollector {
     if (!this.allows('reading')) return
     const answer = reading.answer.trim()
     if (!answer) return
+    const cited = [...new Set((reading.citedCardIds ?? []).filter(Boolean))].slice(0, MAX_CITED)
     const kept: ReadingMaterial[] = []
     let used = 0
     for (const material of reading.materials) {
@@ -386,6 +389,7 @@ export class KnowledgeCollector {
         readAt: reading.at,
         scope: `${reading.scope}（材料 ${range}${material.coverage ? `，${material.coverage}` : ''}）`.slice(0, 1000),
         text: material.text,
+        ...(cited.length ? { citedCardIds: cited } : {}),
         at: reading.at
       })
     })
