@@ -27,15 +27,17 @@ interface Harness {
   profile: ProfileCollector
   settings: Settings
   prompts: string[]
+  logs: string[]
 }
 
 function harness(options: {
   enabled?: boolean
-  answer?: (prompt: string) => string
+  answer?: (prompt: string) => string | Promise<string>
   root?: string
 } = {}): Harness {
   const root = options.root ?? makeRoot()
   const prompts: string[] = []
+  const logs: string[] = []
   const host = new KnowledgeHost({
     entry,
     root,
@@ -43,7 +45,7 @@ function harness(options: {
     completer: async call => {
       const prompt = call.messages.map(message => message.content).join('\n')
       prompts.push(prompt)
-      return (options.answer ?? (() => '{"items":[]}'))(prompt)
+      return await (options.answer ?? (() => '{"items":[]}'))(prompt)
     }
   })
   hosts.push(host)
@@ -57,9 +59,10 @@ function harness(options: {
   const profile: ProfileCollector = new ProfileCollector({
     settings: () => settings,
     host: () => host,
-    allowed: (): boolean => profile.enabled
+    allowed: (): boolean => profile.enabled,
+    log: line => logs.push(line)
   })
-  return { host, profile, settings, prompts }
+  return { host, profile, settings, prompts, logs }
 }
 
 async function until<T>(check: () => Promise<T | undefined>, what: string, timeoutMs = 20_000): Promise<T> {
@@ -107,11 +110,14 @@ describe('the profile loop over the compiled helper', () => {
     await profile.sync()
     const turn = { threadId: 't1', userId: 'm1', answerId: 'm2', question: '帮我把这段话改得更简洁', at: Date.now() }
     await profile.completedChat(turn)
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the evidence batch')
     await profile.completedChat(turn)
-    await until(async () => ((await host.profileStatus()).usageTotal === 1 ? true : undefined), 'the first count')
+    await new Promise(resolve => setTimeout(resolve, 300))
     const status = await host.profileStatus()
     expect(status.usageTotal).toBe(1)
-    expect(prompts).toHaveLength(0)
+    // A replayed turn is neither counted again nor queued again, so the loop keeps
+    // the one call it already made.
+    expect(prompts).toHaveLength(1)
   })
 
   it('turns the user sentence into a quoted item and a readable context', { timeout: 90_000 }, async () => {
@@ -131,8 +137,8 @@ describe('the profile loop over the compiled helper', () => {
     })
     await profile.sync()
     await profile.completedChat({ threadId: 't1', userId: 'm1', answerId: 'm2', question, at: Date.now() })
-    await until(async () => ((await host.profileStatus()).pending === 1 ? true : undefined), 'the queued evidence')
-    profile.wake()
+    // No explicit wake: real evidence is what starts the loop, exactly like a
+    // finished conversation does in the running app.
     await until(async () => ((await host.profileStatus()).items === 1 ? true : undefined), 'the written item')
     expect(prompts.length).toBeGreaterThan(0)
     const context = await profile.context()
@@ -147,14 +153,26 @@ describe('the profile loop over the compiled helper', () => {
   })
 
   it('keeps the manual correction when the model answers after a clear', { timeout: 90_000 }, async () => {
-    // A callback assigned inside an executor is widened to `never` by TS, so the
-    // handle lives on an object the compiler cannot narrow away.
+    // The completer really waits, so the batch is provably in flight when the user
+    // clears: a gate that nothing awaits would prove nothing.
     const gate: { release?: () => void } = {}
     const waiting = new Promise<void>(resolve => {
       gate.release = resolve
     })
-    const { host, profile } = harness({
-      answer: () => '{"items":[]}'
+    const { host, profile, prompts } = harness({
+      answer: async () => {
+        await waiting
+        return JSON.stringify({
+          items: [
+            {
+              dimension: 'expression',
+              category: 'explicit',
+              value: '回答要先给结论',
+              evidence: [{ quote: '回答先给结论' }]
+            }
+          ]
+        })
+      }
     })
     await profile.sync()
     await profile.completedChat({
@@ -164,26 +182,98 @@ describe('the profile loop over the compiled helper', () => {
       question: '我更希望回答先给结论',
       at: Date.now()
     })
-    await until(async () => ((await host.profileStatus()).pending === 1 ? true : undefined), 'the queued evidence')
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
     await host.saveProfile({ dimension: 'expression', value: '先给结论', category: 'explicit', origin: 'manual', pinned: true, slot: 'expression:conclusion-first' })
     const cleared = await profile.clear()
     expect(cleared).toBe(true)
-    const context = await profile.context()
-    expect(context?.text ?? '').toBe('')
     gate.release?.()
     await waiting
+    // The late answer is refused by the epoch barrier: nothing was written back.
+    await until(async () => ((await host.profileStatus()).pending === 0 ? true : undefined), 'the released batch')
+    const context = await profile.context()
+    expect(context?.text ?? '').toBe('')
     expect((await host.profileStatus()).items).toBe(0)
   })
 
-  it('parks a running batch on game mode and resumes the same evidence afterwards', { timeout: 60_000 }, async () => {
-    const { host, profile } = harness({ answer: () => '{"items":[]}' })
+  it('does not cancel the profile batch when only the knowledge switch closes', { timeout: 90_000 }, async () => {
+    const gate: { release?: () => void } = {}
+    const waiting = new Promise<void>(resolve => {
+      gate.release = resolve
+    })
+    const { host, profile, prompts } = harness({
+      answer: async () => {
+        await waiting
+        return JSON.stringify({
+          items: [
+            {
+              dimension: 'goal',
+              category: 'inferred',
+              value: '把知识库做成可检索的卡片',
+              evidence: [{ quote: '做成可检索的卡片' }]
+            }
+          ]
+        })
+      }
+    })
+    await profile.sync()
+    await profile.completedChat({ threadId: 't5', userId: 'm1', answerId: 'm2', question: '我想把知识库做成可检索的卡片', at: Date.now() })
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
+    // The extraction module's only cancel entry must not reach this batch.
+    host.cancelInFlight('采集已暂停', 'extract.run')
+    gate.release?.()
+    await waiting
+    await until(async () => ((await host.profileStatus()).items === 1 ? true : undefined), 'the finished profile batch')
+    expect((await host.profileStatus()).pending).toBe(0)
+  })
+
+  it('retries a real failure only through the explicit entry', { timeout: 90_000 }, async () => {
+    let attempt = 0
+    const { host, profile, logs } = harness({
+      answer: () => {
+        attempt += 1
+        if (attempt === 1) throw new Error('合成的模型失败')
+        return JSON.stringify({
+          items: [
+            {
+              dimension: 'background',
+              category: 'inferred',
+              value: '主要用 Windows 开发',
+              evidence: [{ quote: 'Windows 开发' }]
+            }
+          ]
+        })
+      }
+    })
+    await profile.sync()
+    await profile.completedChat({ threadId: 't6', userId: 'm1', answerId: 'm2', question: '我主要用 Windows 开发', at: Date.now() })
+    await until(async () => (logs.some(line => line.includes('画像归纳失败')) ? true : undefined), 'the failed batch')
+    expect((await host.profileStatus()).items).toBe(0)
+    const retried = await profile.retry()
+    expect(retried).toBe(1)
+    await until(async () => ((await host.profileStatus()).items === 1 ? true : undefined), 'the retried item')
+  })
+
+  it('parks a running batch on game mode and resumes the same evidence afterwards', { timeout: 90_000 }, async () => {
+    const gate: { release?: () => void } = {}
+    const waiting = new Promise<void>(resolve => {
+      gate.release = resolve
+    })
+    const { host, profile, prompts } = harness({
+      answer: async () => {
+        await waiting
+        return '{"items":[]}'
+      }
+    })
     await profile.sync()
     await profile.completedChat({ threadId: 't3', userId: 'm1', answerId: 'm2', question: '最近在看 SQLite 的 FTS5', at: Date.now() })
-    await until(async () => ((await host.profileStatus()).pending === 1 ? true : undefined), 'the queued evidence')
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
     await profile.sync({ game: true })
-    const parked = await host.profileStatus()
-    expect(parked.pausedGame).toBe(true)
-    expect((await host.profileStatus()).pending).toBe(1)
+    expect((await host.profileStatus()).pausedGame).toBe(true)
+    // The cancelled answer is refused and its row comes back to the queue instead
+    // of staying `working` until the helper restarts.
+    await until(async () => ((await host.profileStatus()).pending === 1 ? true : undefined), 'the released batch')
+    gate.release?.()
+    await waiting
     await profile.sync({ game: false })
     expect((await host.profileStatus()).pausedGame).toBe(false)
     // Leaving the game resumes the loop, so the queued sentence is consumed
@@ -191,20 +281,34 @@ describe('the profile loop over the compiled helper', () => {
     await until(async () => ((await host.profileStatus()).pending === 0 ? true : undefined), 'the resumed batch')
   })
 
-  it('does not run a paused module and keeps the evidence for later', { timeout: 60_000 }, async () => {
-    const { host, profile } = harness({ answer: () => '{"items":[]}' })
+  it('does not run a paused module and keeps the evidence for later', { timeout: 90_000 }, async () => {
+    const gate: { release?: () => void } = {}
+    const waiting = new Promise<void>(resolve => {
+      gate.release = resolve
+    })
+    const { host, profile, prompts } = harness({
+      answer: async () => {
+        await waiting
+        return '{"items":[]}'
+      }
+    })
     await profile.sync()
     await profile.completedChat({ threadId: 't4', userId: 'm1', answerId: 'm2', question: '我想把项目拆成多个阶段', at: Date.now() })
-    await until(async () => ((await host.profileStatus()).pending === 1 ? true : undefined), 'the queued evidence')
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
     await profile.pause(true)
     expect((await host.profileStatus()).pausedManual).toBe(true)
     // A paused module neither learns nor loses the queued sentence.
-    expect((await host.profileStatus()).pending).toBe(1)
+    await until(async () => ((await host.profileStatus()).pending === 1 ? true : undefined), 'the released batch')
+    gate.release?.()
+    await waiting
+    const pausedCalls = prompts.length
+    await new Promise(resolve => setTimeout(resolve, 300))
+    expect(prompts.length).toBe(pausedCalls)
     await profile.pause(false)
-    const status = await host.profileStatus()
-    expect(status.pausedManual).toBe(false)
+    expect((await host.profileStatus()).pausedManual).toBe(false)
     // Resuming drains it: the batch ran instead of the evidence piling up forever.
     await until(async () => ((await host.profileStatus()).pending === 0 ? true : undefined), 'the resumed batch')
     expect((await host.profileStatus()).items).toBe(0)
   })
+
 })

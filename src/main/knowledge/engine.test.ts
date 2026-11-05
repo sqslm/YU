@@ -234,7 +234,7 @@ describe('ExtractEngine', () => {
     const host = fakeHost()
     const { engine } = engineWith(host)
     engine.abort('采集已暂停')
-    expect(host.cancelInFlight).toHaveBeenCalledWith('采集已暂停')
+    expect(host.cancelInFlight).toHaveBeenCalledWith('采集已暂停', 'extract.run')
   })
 
   it('passes the configured extraction profile and effort', async () => {

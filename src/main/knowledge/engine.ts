@@ -108,7 +108,9 @@ export class ExtractEngine {
    * always released by `extract.run` or `extract.fail`.
    */
   abort(reason = '采集已暂停'): void {
-    this.deps.host()?.cancelInFlight(reason)
+    // Only extraction belongs to this module: a concurrent profile batch is a
+    // separate switch and must survive closing the knowledge switch.
+    this.deps.host()?.cancelInFlight(reason, 'extract.run')
   }
 
   /**

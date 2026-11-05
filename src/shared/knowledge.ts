@@ -285,6 +285,7 @@ export type KnowledgeMethod =
   | 'profile.context'
   | 'profile.retract'
   | 'profile.clear'
+  | 'profile.retry'
 
 export type KnowledgeErrorCode =
   | 'invalid_request'

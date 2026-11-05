@@ -533,10 +533,26 @@ impl Service {
             "profile.learn.run" => {
                 let store = self.store()?;
                 let params = decode::<crate::profile_learning::RunParams>(params)?;
-                Ok(changed(
-                    crate::profile_learning::learn(&store, link, parent, params)?,
-                    "profile",
-                ))
+                let claim = params.claim.clone();
+                // A cancellation that escapes the run must not leave its rows
+                // `working`: give them back to the queue before the error travels.
+                let result = crate::profile_learning::learn(&store, link, parent, params);
+                match result {
+                    Ok(value) => Ok(changed(value, "profile")),
+                    Err(error) => {
+                        if error.code == Code::Cancelled {
+                            let mut connection = store.profile.lock().map_err(lock_error)?;
+                            crate::profile_learning::release(&mut connection, &claim)?;
+                        }
+                        Err(error)
+                    }
+                }
+            }
+            "profile.retry" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::retry(&mut connection)?;
+                Ok(changed(result, "profile"))
             }
             "profile.learn.fail" => {
                 let store = self.store()?;

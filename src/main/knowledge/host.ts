@@ -877,6 +877,11 @@ export class KnowledgeHost {
     return this.call('profile.clear', {})
   }
 
+  /** The explicit retry path for batches that failed for a real reason. */
+  retryProfile(): Promise<{ retried: number }> {
+    return this.call('profile.retry', {})
+  }
+
   needsReread(target: TaskTarget, reason: string): Promise<TaskRefusal> {
     return this.call<TaskRefusal>('queue.needs_reread', { ...target, reason })
   }

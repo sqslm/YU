@@ -83,7 +83,7 @@ export interface NotesStoreOptions {
    * user edited the text, a polish or retranscription replaced it, or a text note
    * was created. The knowledge collector decides whether it wants it.
    */
-  onSettled?: (note: NoteEntry) => void
+  onSettled?: (note: NoteEntry, event: 'created' | 'updated') => void
   /** Called when a note is gone, so pending extraction can be dropped. */
   onRemoved?: (id: string) => void
   getSettings: () => Settings
@@ -496,7 +496,7 @@ export class NotesStore {
       `[notes] 新随记 ${id} 已保存（${stored.format}, ${Math.round(stored.data.byteLength / 1024)} KB, ${durationMs} ms）`
     )
 
-    if (transcript && transcript.trim()) this.settled(entry)
+    if (transcript && transcript.trim()) this.settled(entry, 'created')
     // Detached on purpose: `create` returns as soon as the note is safe on disk.
     if (!input.recovery) void this.run(id, wav, signal, transcript)
     return cloneNote(entry)
@@ -521,7 +521,7 @@ export class NotesStore {
       this.data.notes.splice(this.data.notes.indexOf(entry), 1)
       throw error
     }
-    this.settled(entry)
+    this.settled(entry, 'created')
     return cloneNote(entry)
   }
 
@@ -1448,10 +1448,10 @@ export class NotesStore {
    * Tells the collector that this note's body changed. Collection is optional and
    * must never break a save, so a throwing listener is only logged.
    */
-  private settled(note: NoteEntry): void {
+  private settled(note: NoteEntry, event: 'created' | 'updated' = 'updated'): void {
     if (!this.options.onSettled) return
     try {
-      this.options.onSettled(note)
+      this.options.onSettled(note, event)
     } catch (error) {
       this.options.log(`[notes] 采集通知失败：${describeError(error)}`)
     }

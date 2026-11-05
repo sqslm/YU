@@ -837,13 +837,14 @@ describe('collection hooks', () => {
       log: () => undefined,
       getSettings: () => settings,
       notify: () => undefined,
-      onSettled: note => settled.push(`${note.id}:${note.polished || note.transcript}`)
+      onSettled: (note, event) => settled.push(`${event}:${note.id}:${note.polished || note.transcript}`)
     })
     await store.load()
     const note = await store.createText({ text: '第一段' })
-    expect(settled).toEqual([`${note.id}:第一段`])
+    expect(settled).toEqual([`created:${note.id}:第一段`])
     await store.update(note.id, { transcript: '第二段' })
-    expect(settled).toEqual([`${note.id}:第一段`, `${note.id}:第二段`])
+    // An edit is reported as an edit: the profile counts created notes only.
+    expect(settled).toEqual([`created:${note.id}:第一段`, `updated:${note.id}:第二段`])
     // A metadata-only change is not a new body.
     await store.update(note.id, { title: '标题' })
     expect(settled).toHaveLength(2)

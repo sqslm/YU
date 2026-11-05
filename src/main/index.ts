@@ -685,7 +685,12 @@ function saveFeeds(feeds: ExternalCalendar[]): ExternalCalendar[] {
  */
 const notes = new NotesStore({
   log: (line) => log(line),
-  onSettled: note => { knowledgeCollector.noteSettled(note); void profileCollector.completedNote(note.id) },
+  onSettled: (note, event) => {
+    knowledgeCollector.noteSettled(note)
+    // Only a note that was really created is a completed `note` action; editing an
+    // old body is not a new note and must not raise the usage count.
+    if (event === 'created') void profileCollector.completedNote(note.id)
+  },
   onRemoved: id => knowledgeCollector.noteRemoved(id),
   getSettings: () => store.get(),
   notify: () => broadcastNotes(),
@@ -1545,12 +1550,20 @@ function registerIpc(): void {
     knowledgeOwner(event)
     return profileCollector.context()
   })
+  handle('profile:retry', (event) => {
+    knowledgeOwner(event)
+    return profileCollector.retry()
+  })
+  handle('profile:status', (event) => {
+    knowledgeOwner(event)
+    return profileCollector.status()
+  })
   handle('knowledge:card-update', async (event, input: UpdateCardInput) => {
     knowledgeOwner(event)
     const card = await knowledge.updateCard({ ...input, id: knowledgeId(input?.id, '卡片 ID') })
     // A manual edit is a completed in-app action the profile may count; the card
     // body itself never becomes a statement about the user.
-    void profileCollector.editedCard(card.id)
+    void profileCollector.editedCard(card.id, card.revision)
     return card
   })
   handle('knowledge:card-get', (event, id: string) => { knowledgeOwner(event); return knowledge.getCard(knowledgeId(id, '卡片 ID')) })

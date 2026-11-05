@@ -140,6 +140,9 @@ export interface TypelessApi {
     pause(paused: boolean): Promise<boolean>
     clear(): Promise<boolean>
     context(): Promise<import('./knowledge').ProfileContext | null>
+    /** Re-queues every batch that failed for a real reason; counts nothing by itself. */
+    retry(): Promise<number | null>
+    status(): Promise<import('./knowledge').ProfileStatus>
   }
   entities: {
     list(): Promise<import('./entities').EntityTerm[]>

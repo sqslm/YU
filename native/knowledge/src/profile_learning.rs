@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use crate::protocol::{ApiError, ApiResult, Code, MAX_BODY_CHARS};
 use crate::store::Store;
-use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms, require_text};
+use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms, require_text, sha256_hex};
 
 /// Features the app can report. Only these four exist in stage 4.
 pub const FEATURES: [&str; 4] = ["chat", "ask", "note", "card-edit"];
@@ -39,6 +39,10 @@ pub const SEGMENT_CHARS: usize = 12_000;
 pub const SEGMENT_OVERLAP: usize = 500;
 pub const MAX_CANDIDATES: usize = 8;
 pub const MAX_CANDIDATE_CHARS: usize = 4_000;
+/// Removed preferences are short and few: they exist only to block a re-wording.
+const MAX_FAILED: usize = 20;
+const MAX_REMOVED: usize = 20;
+const MAX_REMOVED_CHARS: usize = 400;
 pub const MAX_UPDATES: usize = 6;
 pub const MAX_TOKENS: u32 = 4_096;
 pub const MAX_QUOTE_CHARS: usize = 500;
@@ -268,11 +272,41 @@ pub fn status(connection: &Connection) -> ApiResult<Value> {
             |row| row.get(0),
         )
         .map_err(sqlite)?;
+    // A small, bounded window onto what is stuck, so a caller can offer a retry
+    // without reading the queue itself.
+    let mut statement = connection
+        .prepare(
+            "SELECT id, reason, length(text), at FROM profile_pending
+             WHERE state = 'failed' ORDER BY updated_at DESC LIMIT ?1",
+        )
+        .map_err(sqlite)?;
+    let failed_items = statement
+        .query_map(params![MAX_FAILED as i64], |row| {
+            Ok(json!({
+                "id": row.get::<_, String>(0)?,
+                "reason": row.get::<_, String>(1)?,
+                "chars": row.get::<_, i64>(2)?,
+                "at": row.get::<_, i64>(3)?,
+            }))
+        })
+        .map_err(sqlite)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(sqlite)?;
+    drop(statement);
+    let failed: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM profile_pending WHERE state = 'failed'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(sqlite)?;
     let mut control = control(connection)?;
     let next_due = next_due_at(connection)?;
     control["pending"] = json!(pending);
     control["items"] = json!(items);
     control["usageTotal"] = json!(usage);
+    control["failed"] = json!(failed);
+    control["failedItems"] = json!(failed_items);
     control["nextDueAt"] = json!(next_due);
     Ok(control)
 }
@@ -320,6 +354,11 @@ pub fn record_event(connection: &mut Connection, params: EventParams) -> ApiResu
     if !flag(connection, "enabled")? || !flag(connection, "usage")? {
         return Ok(json!({"counted": false, "reason": "usage is off"}));
     }
+    // A manual or in-game pause stops the loop; counting while it is paused would
+    // keep a number moving that the user asked to freeze.
+    if flag(connection, "paused_manual")? || flag(connection, "paused_game")? {
+        return Ok(json!({"counted": false, "reason": "profile learning is paused"}));
+    }
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sqlite)?;
@@ -358,12 +397,17 @@ pub fn enqueue(connection: &mut Connection, params: EvidenceParams) -> ApiResult
     if !flag(connection, "enabled")? || !flag(connection, "chat")? {
         return Ok(json!({"queued": 0, "reason": "profile learning is off"}));
     }
+    if flag(connection, "paused_manual")? || flag(connection, "paused_game")? {
+        return Ok(json!({"queued": 0, "reason": "profile learning is paused"}));
+    }
     let at = now_ms();
-    let mut queued = 0;
-    let mut skipped = 0;
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(sqlite)?;
+    let barrier = cleared_at(connection)?;
+    let (active_rows, active_chars) = active_usage(connection)?;
+    // Plan the call before writing anything. A later "capacity" check that only
+    // deletes what it just inserted is exactly the silent loss this replaces.
+    let mut planned: Vec<Planned> = Vec::new();
+    let mut skipped = 0i64;
+    let mut chars = 0i64;
     for item in params.items {
         check_chars("sourceKind", &item.source_kind, 40)?;
         check_chars("sourceId", &item.source_id, 200)?;
@@ -376,33 +420,139 @@ pub fn enqueue(connection: &mut Connection, params: EvidenceParams) -> ApiResult
             continue;
         }
         check_chars("text", text, MAX_BODY_CHARS)?;
+        let observed = item.at.unwrap_or(at);
+        // A segment the user already cleared, or one whose source was retracted,
+        // must not come back just because the callback is delivered again.
+        if observed <= barrier {
+            skipped += 1;
+            continue;
+        }
+        if source_invalid(connection, &item.source_kind, &item.source_id)? {
+            skipped += 1;
+            continue;
+        }
         let segments = segments_of(text);
         for (index, segment) in segments.iter().enumerate() {
-            let inserted = transaction
-                .execute(
-                    "INSERT OR IGNORE INTO profile_pending
-                     (id, source_kind, source_id, version, segment, origin_ref, locator, text, state, at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, ?9)",
-                    params![
-                        new_id("ppd"),
-                        item.source_kind,
-                        item.source_id,
-                        item.version,
-                        index as i64,
-                        item.origin_ref,
-                        item.locator,
-                        segment,
-                        item.at.unwrap_or(at)
-                    ],
-                )
-                .map_err(sqlite)?;
-            queued += inserted;
+            let slot = index as i64;
+            if marked(
+                connection,
+                &item.source_kind,
+                &item.source_id,
+                &item.version,
+                slot,
+            )? {
+                skipped += 1;
+                continue;
+            }
+            chars += segment.chars().count() as i64;
+            planned.push(Planned {
+                source_kind: item.source_kind.clone(),
+                source_id: item.source_id.clone(),
+                version: item.version.clone(),
+                origin_ref: item.origin_ref.clone(),
+                locator: item.locator.clone(),
+                segment: slot,
+                text: segment.clone(),
+                at: observed,
+            });
         }
+    }
+    if planned.is_empty() {
+        return Ok(json!({"queued": 0, "skipped": skipped}));
+    }
+    if active_rows + planned.len() as i64 > MAX_PENDING_ROWS
+        || active_chars + chars > MAX_PENDING_CHARS as i64
+    {
+        return Ok(json!({
+            "queued": 0,
+            "skipped": skipped + planned.len() as i64,
+            "reason": "capacity",
+            "capacity": {"rows": MAX_PENDING_ROWS, "chars": MAX_PENDING_CHARS},
+            "pending": {"rows": active_rows, "chars": active_chars},
+        }));
+    }
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sqlite)?;
+    let mut queued = 0i64;
+    for row in planned {
+        queued += transaction
+            .execute(
+                "INSERT OR IGNORE INTO profile_pending
+                 (id, source_kind, source_id, version, segment, origin_ref, locator, text, state, at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, ?9)",
+                params![
+                    new_id("ppd"),
+                    row.source_kind,
+                    row.source_id,
+                    row.version,
+                    row.segment,
+                    row.origin_ref,
+                    row.locator,
+                    row.text,
+                    row.at
+                ],
+            )
+            .map_err(sqlite)? as i64;
     }
     prune(&transaction)?;
     ensure_not_cancelled()?;
     transaction.commit().map_err(sqlite)?;
     Ok(json!({"queued": queued, "skipped": skipped}))
+}
+
+fn cleared_at(connection: &Connection) -> ApiResult<i64> {
+    let value: Option<String> = connection
+        .query_row(
+            "SELECT value FROM profile_control WHERE key = 'cleared_at'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(sqlite)?;
+    Ok(value.and_then(|text| text.parse().ok()).unwrap_or(0))
+}
+
+/// Rows and characters still waiting, which is what capacity is measured against.
+fn active_usage(connection: &Connection) -> ApiResult<(i64, i64)> {
+    connection
+        .query_row(
+            "SELECT count(*), coalesce(sum(length(text)), 0) FROM profile_pending
+             WHERE state IN ('pending', 'working')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(sqlite)
+}
+
+fn marked(
+    connection: &Connection,
+    source_kind: &str,
+    source_id: &str,
+    version: &str,
+    segment: i64,
+) -> ApiResult<bool> {
+    let count: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM profile_markers
+             WHERE source_kind = ?1 AND source_id = ?2 AND version = ?3 AND segment = ?4",
+            params![source_kind, source_id, version, segment],
+            |row| row.get(0),
+        )
+        .map_err(sqlite)?;
+    Ok(count > 0)
+}
+
+fn source_invalid(connection: &Connection, source_kind: &str, source_id: &str) -> ApiResult<bool> {
+    let state: Option<String> = connection
+        .query_row(
+            "SELECT state FROM profile_source_state WHERE source_kind = ?1 AND source_id = ?2",
+            params![source_kind, source_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(sqlite)?;
+    Ok(state.as_deref() == Some("invalid"))
 }
 
 /// Splits by characters with a small overlap so a sentence cut at the boundary is
@@ -426,28 +576,16 @@ fn segments_of(text: &str) -> Vec<String> {
     out
 }
 
-/// Keeps the queue bounded in both rows and characters by dropping the oldest
-/// work, which is the only work a later batch would already have covered.
+/// Retires the lightweight markers of old work. The queue itself is never trimmed
+/// to make room: work that has not been learned yet is either refused up front or
+/// kept, never silently dropped.
 fn prune(transaction: &rusqlite::Transaction<'_>) -> ApiResult<()> {
     transaction
         .execute(
-            "DELETE FROM profile_pending WHERE state = 'done' AND updated_at < ?1",
+            "DELETE FROM profile_markers WHERE created_at < ?1",
             params![now_ms() - RECENT_DAYS * 86_400_000],
         )
         .map_err(sqlite)?;
-    let rows: i64 = transaction
-        .query_row("SELECT count(*) FROM profile_pending", [], |row| row.get(0))
-        .map_err(sqlite)?;
-    if rows > MAX_PENDING_ROWS {
-        transaction
-            .execute(
-                "DELETE FROM profile_pending WHERE id IN (
-                   SELECT id FROM profile_pending WHERE state = 'pending'
-                   ORDER BY at LIMIT ?1)",
-                params![rows - MAX_PENDING_ROWS],
-            )
-            .map_err(sqlite)?;
-    }
     Ok(())
 }
 
@@ -550,6 +688,31 @@ pub fn next(connection: &mut Connection) -> ApiResult<Value> {
     Ok(control)
 }
 
+/// What the user removed, so a re-wording cannot smuggle it back in.
+fn removed(connection: &Connection) -> ApiResult<Vec<String>> {
+    let mut statement = connection
+        .prepare(
+            "SELECT key FROM exclusions WHERE kind = 'profile'
+             ORDER BY created_at DESC LIMIT ?1",
+        )
+        .map_err(sqlite)?;
+    let keys = statement
+        .query_map(params![MAX_REMOVED as i64], |row| row.get::<_, String>(0))
+        .map_err(sqlite)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(sqlite)?;
+    let mut out = Vec::new();
+    let mut chars = 0;
+    for key in keys {
+        chars += key.chars().count();
+        if chars > MAX_REMOVED_CHARS {
+            break;
+        }
+        out.push(key);
+    }
+    Ok(out)
+}
+
 fn candidates(connection: &Connection) -> ApiResult<Vec<Value>> {
     let mut statement = connection
         .prepare(
@@ -632,9 +795,11 @@ pub fn learn(
         .collect::<Vec<_>>()
         .join("\n\n");
     let known = candidates(&connection)?;
+    let removed = removed(&connection)?;
     let prompt = json!({
         "evidence": rows.iter().map(|row| json!({"id": row.id, "text": row.text})).collect::<Vec<_>>(),
         "existing": known,
+        "removed": removed,
     });
     let messages = json!([
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -658,7 +823,26 @@ pub fn learn(
         .profile
         .lock()
         .map_err(|_| ApiError::new(Code::Internal, "the profile lock was poisoned"))?;
-    apply(&mut connection, &params.claim, &rows, &batch, parsed)
+    apply(
+        &mut connection,
+        &params.claim,
+        &rows,
+        &known,
+        &batch,
+        parsed,
+    )
+}
+
+/// One accepted piece of evidence, planned before anything is written.
+struct Planned {
+    source_kind: String,
+    source_id: String,
+    version: String,
+    origin_ref: String,
+    locator: String,
+    segment: i64,
+    text: String,
+    at: i64,
 }
 
 struct Row {
@@ -666,15 +850,56 @@ struct Row {
     source_kind: String,
     source_id: String,
     version: String,
+    segment: i64,
     origin_ref: String,
     locator: String,
     text: String,
+    at: i64,
+}
+
+/// One profile item as the model saw it, kept only for this judgement.
+struct Candidate {
+    id: String,
+    slot: String,
+    dimension: String,
+    updated_at: i64,
+}
+
+fn snapshot_of(known: &[Value]) -> Vec<Candidate> {
+    known
+        .iter()
+        .filter_map(|entry| {
+            Some(Candidate {
+                id: entry.get("id")?.as_str()?.to_string(),
+                slot: entry.get("slot")?.as_str()?.to_string(),
+                dimension: entry.get("dimension")?.as_str()?.to_string(),
+                updated_at: entry.get("updatedAt")?.as_i64()?,
+            })
+        })
+        .collect()
+}
+
+/// Dimensions that hold several separate things at once. Everything else is a
+/// single value the user has one of.
+fn is_multi(dimension: &str) -> bool {
+    matches!(dimension, "project" | "focus")
+}
+
+fn excluded(transaction: &rusqlite::Transaction<'_>, key: &str) -> ApiResult<bool> {
+    let count: i64 = transaction
+        .query_row(
+            "SELECT count(*) FROM exclusions WHERE kind = 'profile' AND key = ?1",
+            [key],
+            |row| row.get(0),
+        )
+        .map_err(sqlite)?;
+    Ok(count > 0)
 }
 
 fn claimed_rows(connection: &Connection, claim: &str) -> ApiResult<Vec<Row>> {
     let mut statement = connection
         .prepare(
-            "SELECT id, source_kind, source_id, version, origin_ref, locator, text
+            "SELECT id, source_kind, source_id, version, segment, origin_ref, locator, text, at
              FROM profile_pending WHERE state = 'working' AND claim = ?1 ORDER BY at, id",
         )
         .map_err(sqlite)?;
@@ -685,9 +910,11 @@ fn claimed_rows(connection: &Connection, claim: &str) -> ApiResult<Vec<Row>> {
                 source_kind: row.get(1)?,
                 source_id: row.get(2)?,
                 version: row.get(3)?,
-                origin_ref: row.get(4)?,
-                locator: row.get(5)?,
-                text: row.get(6)?,
+                segment: row.get(4)?,
+                origin_ref: row.get(5)?,
+                locator: row.get(6)?,
+                text: row.get(7)?,
+                at: row.get(8)?,
             })
         })
         .map_err(sqlite)?
@@ -807,6 +1034,7 @@ fn apply(
     connection: &mut Connection,
     claim: &str,
     rows: &[Row],
+    known: &[Value],
     batch: &str,
     updates: Vec<Update>,
 ) -> ApiResult<Value> {
@@ -837,6 +1065,7 @@ fn apply(
         return Err(ApiError::new(Code::Cancelled, "the evidence was withdrawn"));
     }
     let now = now_ms();
+    let snapshot = snapshot_of(known);
     let mut written = Vec::new();
     let mut skipped = 0;
     for update in updates {
@@ -857,18 +1086,47 @@ fn apply(
                 "an evidence quote is not part of the input",
             ));
         }
-        let slot = update
-            .slot
-            .clone()
-            .unwrap_or_else(|| update.dimension.clone());
-        let excluded: i64 = transaction
-            .query_row(
-                "SELECT count(*) FROM exclusions WHERE kind = 'profile' AND key = ?1",
-                [&slot],
-                |row| row.get(0),
-            )
-            .map_err(sqlite)?;
-        if excluded > 0 {
+        let dimension = update.dimension.clone();
+        if !DIMENSIONS.contains(&dimension.as_str()) {
+            return Err(ApiError::new(
+                Code::InvalidOutput,
+                format!("unknown profile dimension: {dimension}"),
+            ));
+        }
+        // The answer may only name a slot this batch actually offered. An invented
+        // slot would be a new identity, which is how a restatement used to slip past
+        // a pinned or corrected item.
+        let offered = match &update.slot {
+            Some(slot) => Some(
+                snapshot
+                    .iter()
+                    .find(|entry| &entry.slot == slot)
+                    .ok_or_else(|| {
+                        ApiError::new(
+                            Code::InvalidOutput,
+                            format!("the answer referenced an unknown slot: {slot}"),
+                        )
+                    })?,
+            ),
+            None => None,
+        };
+        let slot = match (offered, &update.slot) {
+            (Some(entry), _) => entry.slot.clone(),
+            (None, Some(slot)) => slot.clone(),
+            // Interests and projects coexist, so they get one entity per value with
+            // an identity minted here rather than one shared slot per dimension.
+            (None, None) if is_multi(&dimension) => {
+                format!("{dimension}:{}", &sha256_hex(&update.value)[..12])
+            }
+            (None, None) => snapshot
+                .iter()
+                .find(|entry| entry.dimension == dimension)
+                .map(|entry| entry.slot.clone())
+                .unwrap_or_else(|| dimension.clone()),
+        };
+        if excluded(&transaction, &slot)?
+            || excluded(&transaction, &format!("{dimension}={}", update.value))?
+        {
             skipped += 1;
             continue;
         }
@@ -887,13 +1145,31 @@ fn apply(
                 skipped += 1;
             }
             Some((id, _, _)) => {
+                // Compare against what the model actually saw. A manual edit that
+                // landed while the answer was on its way wins.
+                let current: Option<i64> = transaction
+                    .query_row(
+                        "SELECT updated_at FROM profile_items WHERE id = ?1",
+                        [&id],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(sqlite)?;
+                let judged = snapshot
+                    .iter()
+                    .find(|entry| entry.id == id)
+                    .map(|entry| entry.updated_at);
+                if current.is_none() || current != judged {
+                    skipped += 1;
+                    continue;
+                }
                 transaction
                     .execute(
-                        "UPDATE profile_items SET value = ?2, category = ?3, origin = 'auto', updated_at = ?4 WHERE id = ?1",
-                        params![id, update.value, update.category, now],
+                        "UPDATE profile_items SET value = ?2, category = ?3, origin = 'auto', slot = ?4, updated_at = ?5 WHERE id = ?1",
+                        params![id, update.value, update.category, slot, now],
                     )
                     .map_err(sqlite)?;
-                attach(&transaction, &id, rows, &quotes, now)?;
+                attach(&transaction, &id, rows, &quotes)?;
                 written.push(json!({"id": id, "action": "updated"}));
             }
             None => {
@@ -906,17 +1182,30 @@ fn apply(
                         params![id, update.dimension, update.value, update.category, slot, now],
                     )
                     .map_err(sqlite)?;
-                attach(&transaction, &id, rows, &quotes, now)?;
+                attach(&transaction, &id, rows, &quotes)?;
                 written.push(json!({"id": id, "action": "created"}));
             }
         }
     }
+    // A learned segment becomes a light marker, so the queue stops holding its full
+    // text and a replayed callback cannot learn it twice.
     for row in rows {
         transaction
             .execute(
-                "UPDATE profile_pending SET state = 'done', claim = NULL, reason = '', updated_at = ?2 WHERE id = ?1",
-                params![row.id, now],
+                "INSERT OR IGNORE INTO profile_markers
+                 (source_kind, source_id, version, segment, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    row.source_kind,
+                    row.source_id,
+                    row.version,
+                    row.segment,
+                    now
+                ],
             )
+            .map_err(sqlite)?;
+        transaction
+            .execute("DELETE FROM profile_pending WHERE id = ?1", [&row.id])
             .map_err(sqlite)?;
     }
     prune(&transaction)?;
@@ -930,7 +1219,6 @@ fn attach(
     item_id: &str,
     rows: &[Row],
     quotes: &[String],
-    now: i64,
 ) -> ApiResult<()> {
     for row in rows {
         if !row
@@ -940,6 +1228,8 @@ fn attach(
             continue;
         }
         let locator: String = quotes.join(" / ");
+        // The evidence keeps the time it was observed, not the time it was learned:
+        // a whole month late is still "a month ago", not "today".
         transaction
             .execute(
                 "INSERT OR IGNORE INTO profile_evidence
@@ -955,7 +1245,7 @@ fn attach(
                     } else {
                         locator
                     },
-                    now
+                    row.at
                 ],
             )
             .map_err(sqlite)?;
@@ -969,24 +1259,84 @@ pub fn fail(connection: &mut Connection, params: FailParams) -> ApiResult<Value>
     let code = params.code.unwrap_or_else(|| "internal".into());
     let reason = params.reason.unwrap_or_default();
     check_chars("reason", &reason, 300)?;
-    let (state, next) = match code.as_str() {
-        "cancelled" | "paused" => ("pending", "pending"),
-        "source_changed" | "retracted" => ("done", "done"),
-        _ => ("failed", "failed"),
-    };
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sqlite)?;
-    let changed = transaction
-        .execute(
-            "UPDATE profile_pending SET state = ?2, claim = NULL, reason = ?3, updated_at = ?4
-             WHERE state = 'working' AND claim = ?1",
-            params![params.claim, next, reason, now_ms()],
-        )
-        .map_err(sqlite)?;
+    let now = now_ms();
+    let (state, changed) = match code.as_str() {
+        // A pause parks the batch: the same evidence is learned after a resume.
+        "cancelled" | "paused" => (
+            "pending",
+            transaction
+                .execute(
+                    "UPDATE profile_pending SET state = 'pending', claim = NULL, reason = ?2,
+                     updated_at = ?3 WHERE state = 'working' AND claim = ?1",
+                    params![params.claim, reason, now],
+                )
+                .map_err(sqlite)?,
+        ),
+        // The source is gone, so its text goes with it; a marker keeps a replayed
+        // callback from queueing the same segment again.
+        "source_changed" | "retracted" => ("done", drop_claim(&transaction, &params.claim)?),
+        // Anything else is a real failure the user can retry explicitly.
+        _ => (
+            "failed",
+            transaction
+                .execute(
+                    "UPDATE profile_pending SET state = 'failed', claim = NULL, reason = ?2,
+                     updated_at = ?3 WHERE state = 'working' AND claim = ?1",
+                    params![params.claim, reason, now],
+                )
+                .map_err(sqlite)?,
+        ),
+    };
     ensure_not_cancelled()?;
     transaction.commit().map_err(sqlite)?;
     Ok(json!({"released": changed, "state": state}))
+}
+
+/// Drops a claim's text and leaves a marker per segment behind.
+fn drop_claim(transaction: &rusqlite::Transaction<'_>, claim: &str) -> ApiResult<usize> {
+    transaction
+        .execute(
+            "INSERT OR IGNORE INTO profile_markers
+             (source_kind, source_id, version, segment, created_at)
+             SELECT source_kind, source_id, version, segment, ?2
+             FROM profile_pending WHERE state = 'working' AND claim = ?1",
+            params![claim, now_ms()],
+        )
+        .map_err(sqlite)?;
+    transaction
+        .execute(
+            "DELETE FROM profile_pending WHERE state = 'working' AND claim = ?1",
+            [claim],
+        )
+        .map_err(sqlite)
+}
+
+/// Returns a cancelled claim to the queue. The host calls this when a run is
+/// aborted mid-flight so no row stays `working` without an owner.
+pub fn release(connection: &mut Connection, claim: &str) -> ApiResult<usize> {
+    connection
+        .execute(
+            "UPDATE profile_pending SET state = 'pending', claim = NULL, reason = '',
+             updated_at = ?2 WHERE state = 'working' AND claim = ?1",
+            params![claim, now_ms()],
+        )
+        .map_err(sqlite)
+}
+
+/// Puts failed batches back in the queue. The only way a real failure is retried,
+/// and never an automatic paid call.
+pub fn retry(connection: &mut Connection) -> ApiResult<Value> {
+    let retried = connection
+        .execute(
+            "UPDATE profile_pending SET state = 'pending', claim = NULL, reason = '',
+             updated_at = ?1 WHERE state = 'failed'",
+            params![now_ms()],
+        )
+        .map_err(sqlite)?;
+    Ok(json!({"retried": retried}))
 }
 
 /// Marks a source as gone. Evidence already written stays, but it stops being
@@ -1018,6 +1368,22 @@ pub fn retract(connection: &mut Connection, params: RetractParams) -> ApiResult<
     ensure_not_cancelled()?;
     transaction.commit().map_err(sqlite)?;
     Ok(json!({"retracted": true, "dropped": dropped}))
+}
+
+/// Usage inside the window, by feature. Counts only: never the user's text.
+fn usage_days(connection: &Connection, after: i64) -> ApiResult<Vec<(String, i64)>> {
+    let mut statement = connection
+        .prepare(
+            "SELECT feature, sum(count) FROM profile_usage WHERE day * 86400000 >= ?1
+             GROUP BY feature ORDER BY sum(count) DESC, feature",
+        )
+        .map_err(sqlite)?;
+    let rows = statement
+        .query_map([after], |row| Ok((row.get(0)?, row.get(1)?)))
+        .map_err(sqlite)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(sqlite)?;
+    Ok(rows)
 }
 
 /// The bounded, traceable profile context. No model, no Mem0, no writes.
@@ -1064,7 +1430,9 @@ pub fn context(connection: &Connection) -> ApiResult<Value> {
     for (id, dimension, value, category, pinned, corrected, _, recent_at) in rows {
         let protected = pinned != 0 || corrected != 0;
         let fresh = recent_at.map(|at| at >= recent_after).unwrap_or(false);
-        if !protected && !fresh {
+        // The 30-day window is about *now*: which interests and projects are alive.
+        // A stable preference the user stated is not retracted by the calendar.
+        if !protected && is_multi(&dimension) && !fresh {
             continue;
         }
         let line = format!("- {value}（{dimension}/{category}，id={id}）");
@@ -1084,11 +1452,23 @@ pub fn context(connection: &Connection) -> ApiResult<Value> {
             "recent": fresh,
         }));
     }
+    let mut shown = items.len();
+    for (feature, count) in usage_days(connection, recent_after)? {
+        let line = format!("- 近期常用：{feature} {count} 次");
+        let cost = line.chars().count();
+        if bytes + cost > CONTEXT_CHARS {
+            break;
+        }
+        bytes += cost;
+        shown += 1;
+        lines.push(line);
+    }
     let text = lines.join("\n");
     Ok(json!({
         "enabled": true,
         "text": text,
         "items": items,
+        "recent": shown,
         "bytes": text.len(),
     }))
 }
@@ -1104,6 +1484,16 @@ pub fn clear(connection: &mut Connection) -> ApiResult<Value> {
         .map_err(sqlite)?;
     transaction
         .execute("DELETE FROM profile_evidence", [])
+        .map_err(sqlite)?;
+    // Whatever was still waiting is remembered as a marker before the text goes: a
+    // callback for the same turn must not be able to queue it again.
+    transaction
+        .execute(
+            "INSERT OR IGNORE INTO profile_markers
+             (source_kind, source_id, version, segment, created_at)
+             SELECT source_kind, source_id, version, segment, ?1 FROM profile_pending",
+            params![now_ms()],
+        )
         .map_err(sqlite)?;
     let pending = transaction
         .execute("DELETE FROM profile_pending", [])
@@ -1121,14 +1511,26 @@ pub fn clear(connection: &mut Connection) -> ApiResult<Value> {
         )
         .map_err(sqlite)?;
     let next = epoch(&transaction)? + 1;
+    let cleared = now_ms();
     transaction
         .execute(
             "INSERT INTO profile_control (key, value, updated_at) VALUES ('epoch', ?1, ?2)
              ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-            params![next.to_string(), now_ms()],
+            params![next.to_string(), cleared],
+        )
+        .map_err(sqlite)?;
+    // The barrier outlives the deleted rows: a callback already on its way carries an
+    // older observation time and is refused at the queue instead of reviving the item.
+    transaction
+        .execute(
+            "INSERT INTO profile_control (key, value, updated_at) VALUES ('cleared_at', ?1, ?1)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            params![cleared.to_string()],
         )
         .map_err(sqlite)?;
     ensure_not_cancelled()?;
     transaction.commit().map_err(sqlite)?;
-    Ok(json!({"cleared": true, "items": items, "pending": pending, "epoch": next}))
+    Ok(
+        json!({"cleared": true, "items": items, "pending": pending, "epoch": next, "clearedAt": cleared}),
+    )
 }

@@ -12,7 +12,7 @@
  */
 
 import type { Settings } from '@shared/types'
-import type { ProfileContext, ProfileFeature } from '@shared/knowledge'
+import type { ProfileContext, ProfileFeature, ProfileStatus } from '@shared/knowledge'
 import { KnowledgeError } from '@shared/knowledge'
 import type { KnowledgeHost } from './host'
 
@@ -77,9 +77,9 @@ export class ProfileCollector {
     if (!settings || !host) return
     if (!settings.enabled) {
       // A closed switch parks the loop and frees the timer; the stored profile
-      // stays in the database for explicit management.
-      this.stop()
-      this.parked = true
+      // stays in the database for explicit management. A batch already waiting on
+      // a provider is released instead of staying `working` until a restart.
+      await this.park('画像学习已关闭')
       if (!host.running) return
     }
     try {
@@ -94,6 +94,11 @@ export class ProfileCollector {
       return
     }
     if (!settings.enabled) return
+    if (!settings.chat) {
+      // Only chat and Ask questions are evidence; with the channel closed nothing
+      // new can arrive, so an in-flight batch is released as a pause.
+      await this.park('画像学习已停止收集对话')
+    }
     if (options.game) {
       // Game mode parks before the helper is stopped, so the release is recorded
       // as a pause instead of looking like a crashed batch.
@@ -138,9 +143,53 @@ export class ProfileCollector {
     await this.report('note', `note:${noteId}`, at)
   }
 
-  /** The user edited a card by hand: a real, completed, in-app action. */
-  async editedCard(cardId: string, at = this.deps.now?.() ?? Date.now()): Promise<void> {
-    await this.report('card-edit', `card:${cardId}:${at}`, at)
+  /**
+   * The user edited a card by hand: a real, completed, in-app action. The card's own
+   * revision is the operation identity, so editing the same revision twice counts
+   * once and an edit never mints a fresh id out of the clock.
+   */
+  async editedCard(cardId: string, revision: number, at = this.deps.now?.() ?? Date.now()): Promise<void> {
+    await this.report('card-edit', `card:${cardId}:${revision}`, at)
+  }
+
+  /** The numbers the page may show; an off switch answers locally. */
+  async status(): Promise<ProfileStatus | null> {
+    const host = this.deps.host()
+    if (!host) return null
+    if (!this.enabled) {
+      return {
+        enabled: false,
+        usage: this.settings?.usage === true,
+        chat: this.settings?.chat === true,
+        pausedManual: false,
+        pausedGame: false,
+        epoch: 0,
+        pending: 0,
+        items: 0,
+        usageTotal: 0,
+        nextDueAt: null
+      }
+    }
+    try {
+      return await host.profileStatus()
+    } catch (error) {
+      this.deps.log?.(`画像状态读取失败：${describe(error)}`)
+      return null
+    }
+  }
+
+  /** The explicit retry path for a batch that failed for a real reason. */
+  async retry(): Promise<number | null> {
+    const host = this.deps.host()
+    if (!host) return null
+    try {
+      const result = await host.retryProfile()
+      if (result.retried > 0) this.wake()
+      return result.retried
+    } catch (error) {
+      this.deps.log?.(`画像重试失败：${describe(error)}`)
+      return null
+    }
   }
 
   /** A deleted or temporary thread can no longer be evidence. */
@@ -305,7 +354,10 @@ export class ProfileCollector {
     const host = this.deps.host()
     if (!host || !this.enabled || !this.deps.allowed()) return
     try {
-      await host.queueProfileEvidence([input])
+      const result = await host.queueProfileEvidence([input])
+      // New evidence the helper really accepted is what wakes the loop. A duplicate
+      // settles as `queued: 0` and must not spend a model call.
+      if (result.queued > 0) this.wake()
     } catch (error) {
       // Collection never breaks the answer it was observing, but the failure is
       // reported instead of swallowed.

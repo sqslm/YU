@@ -78,6 +78,13 @@ impl Helper {
         helper
     }
 
+    /// Ends the process without a shutdown frame, like a real crash.
+    fn crash(&mut self) {
+        self.stdin.take();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+
     fn recv(&mut self) -> Value {
         let mut line = String::new();
         let read = self.out.read_line(&mut line).unwrap();
@@ -563,4 +570,465 @@ fn a_model_failure_releases_the_batch_as_a_retryable_failure() {
     assert_eq!(released["released"], 1);
     let status = helper.ok("s1", "profile.status", json!({}));
     assert_eq!(status["items"], 0);
+}
+
+/// One full learning round: claim, wait for the model, answer, read the result.
+fn run_learn(helper: &mut Helper, next_id: &str, run_id: &str, answer: Value) -> Value {
+    let next = helper.ok(next_id, "profile.learn.next", json!({}));
+    let claim = next["batch"]["claim"].as_str().unwrap().to_string();
+    helper.send(
+        run_id,
+        "profile.learn.run",
+        json!({ "claim": claim, "profileId": "fixture-profile", "effort": "high" }),
+    );
+    let request = helper.recv_model();
+    let model_id = request["id"].as_str().unwrap().to_string();
+    helper.answer_model(&model_id, &answer.to_string());
+    helper.answer(run_id)
+}
+
+fn one_item(value: &str, category: &str, quote: &str) -> Value {
+    json!({
+        "items": [{
+            "dimension": if category == "inferred" { "focus" } else { "depth" },
+            "category": category,
+            "value": value,
+            "evidence": [{ "quote": quote }]
+        }]
+    })
+}
+
+#[test]
+fn a_hand_written_value_is_a_correction_and_beats_a_late_answer() {
+    let root = Root::new("corrected");
+    let mut helper = Helper::start(&root);
+    let text = "我希望回答先给结论。";
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", text)] }),
+    );
+    let result = run_learn(
+        &mut helper,
+        "n1",
+        "r1",
+        one_item("先给结论", "explicit", "先给结论"),
+    );
+    assert_eq!(result["ok"], true, "{result}");
+    let id = result["result"]["written"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // The user edits the text by hand and does not flag it: it is still a correction.
+    let edited = helper.ok(
+        "u1",
+        "profile.update",
+        json!({ "id": id, "value": "先给结论，再给一行动步骤" }),
+    );
+    assert_eq!(edited["corrected"], true, "{edited}");
+    assert_eq!(edited["value"], "先给结论，再给一行动步骤");
+
+    // A later turn offers the old wording again and the model repeats it.
+    helper.ok(
+        "q2",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t2", "v1", "还是先给结论吧。")] }),
+    );
+    let result = run_learn(
+        &mut helper,
+        "n2",
+        "r2",
+        one_item("先给结论", "explicit", "先给结论"),
+    );
+    assert_eq!(result["ok"], true, "{result}");
+    assert_eq!(result["result"]["written"].as_array().unwrap().len(), 0);
+    assert_eq!(result["result"]["skipped"], json!(1));
+
+    let page = helper.ok("p1", "profile.list", json!({}));
+    let items = page["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["value"], "先给结论，再给一行动步骤");
+}
+
+#[test]
+fn two_interests_coexist_and_an_invented_slot_is_refused() {
+    let root = Root::new("slots");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "我最近在看 Rust 还有摄影。")] }),
+    );
+    let answer = json!({
+        "items": [
+            { "dimension": "focus", "category": "inferred", "value": "Rust",
+              "evidence": [{ "quote": "Rust" }] },
+            { "dimension": "focus", "category": "inferred", "value": "摄影",
+              "evidence": [{ "quote": "摄影" }] }
+        ]
+    });
+    let result = run_learn(&mut helper, "n1", "r1", answer);
+    assert_eq!(result["ok"], true, "{result}");
+    let written = result["result"]["written"].as_array().unwrap();
+    assert_eq!(written.len(), 2, "{result}");
+    assert_ne!(written[0]["id"], written[1]["id"]);
+
+    let page = helper.ok("p1", "profile.list", json!({}));
+    let items = page["items"].as_array().unwrap();
+    let slots: Vec<&str> = items
+        .iter()
+        .map(|item| item["slot"].as_str().unwrap())
+        .collect();
+    assert_eq!(slots.len(), 2);
+    assert_ne!(slots[0], slots[1], "two interests must not share one slot");
+
+    // An identity the batch never offered is not a slot the answer may use.
+    helper.ok(
+        "q2",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t2", "v1", "我的兴趣又多了一个。")] }),
+    );
+    let next = helper.ok("n2", "profile.learn.next", json!({}));
+    let claim = next["batch"]["claim"].as_str().unwrap().to_string();
+    helper.send(
+        "r2",
+        "profile.learn.run",
+        json!({ "claim": claim, "profileId": "fixture-profile", "effort": "high" }),
+    );
+    let request = helper.recv_model();
+    let model_id = request["id"].as_str().unwrap().to_string();
+    helper.answer_model(
+        &model_id,
+        &json!({
+            "items": [{
+                "slot": "focus:made-up",
+                "dimension": "focus",
+                "category": "inferred",
+                "value": "另一个兴趣",
+                "evidence": [{ "quote": "兴趣" }]
+            }]
+        })
+        .to_string(),
+    );
+    let refused = helper.answer("r2");
+    assert_eq!(refused["ok"], false, "{refused}");
+    assert_eq!(refused["error"]["code"], "invalid_output");
+    let after = helper.ok("p2", "profile.list", json!({}));
+    assert_eq!(after["items"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn a_batch_that_does_not_fit_is_refused_and_nothing_is_dropped() {
+    let root = Root::new("capacity");
+    let mut helper = Helper::start(&root);
+    let mut items = Vec::new();
+    for index in 0..200 {
+        items.push(evidence(
+            "chat",
+            &format!("t{index}"),
+            "v1",
+            "一行很短的证据文本。",
+        ));
+    }
+    helper.ok("q1", "profile.evidence", json!({ "items": items }));
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(200), "{status}");
+
+    let overflow = helper.ok(
+        "q2",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t200", "v1", "第 201 条证据")] }),
+    );
+    assert_eq!(overflow["queued"], json!(0), "{overflow}");
+    assert_eq!(overflow["reason"], json!("capacity"));
+    let status = helper.ok("s2", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(200), "nothing waiting was dropped");
+
+    // Everything waiting is learned in one round; only light markers stay behind.
+    let result = run_learn(&mut helper, "n1", "r1", json!({ "items": [] }));
+    assert_eq!(result["ok"], true, "{result}");
+    let status = helper.ok("s3", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(0));
+
+    // Room is measured against the work, so the next piece is accepted.
+    let again = helper.ok(
+        "q3",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t201", "v1", "第 201 条证据")] }),
+    );
+    assert_eq!(again["queued"], json!(1), "{again}");
+}
+
+#[test]
+fn a_cleared_or_retracted_turn_cannot_be_replayed() {
+    let root = Root::new("replay");
+    let mut helper = Helper::start(&root);
+    let text = "我希望回答先给结论。";
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", text)] }),
+    );
+    helper.ok("c1", "profile.clear", json!({}));
+    let replay = helper.ok(
+        "q2",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", text)] }),
+    );
+    assert_eq!(replay["queued"], json!(0), "{replay}");
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(0));
+
+    helper.ok(
+        "q3",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t2", "v1", "另一段要撤回的话。")] }),
+    );
+    helper.ok(
+        "r1",
+        "profile.retract",
+        json!({ "sourceKind": "chat", "sourceId": "t2", "reason": "用户删除了这段对话" }),
+    );
+    let replay = helper.ok(
+        "q4",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t2", "v1", "另一段要撤回的话。")] }),
+    );
+    assert_eq!(replay["queued"], json!(0), "{replay}");
+    let result = run_learn_or_empty(&mut helper);
+    assert_eq!(result["pending"], json!(0));
+}
+
+/// A round that may have nothing to learn, returning the status instead.
+fn run_learn_or_empty(helper: &mut Helper) -> Value {
+    let next = helper.ok("n9", "profile.learn.next", json!({}));
+    assert!(next["batch"].is_null(), "{next}");
+    helper.ok("s9", "profile.status", json!({}))
+}
+
+#[test]
+fn an_old_observation_is_not_recent_but_a_stable_preference_stays() {
+    let root = Root::new("window");
+    let mut helper = Helper::start(&root);
+    let old = now_ms() - 31 * 86_400_000;
+    let mut focus = evidence("chat", "t1", "v1", "我最近在关注性能优化。");
+    focus["at"] = json!(old);
+    let mut depth = evidence("chat", "t2", "v1", "回答请尽量简短。");
+    depth["at"] = json!(old);
+    helper.ok("q1", "profile.evidence", json!({ "items": [focus, depth] }));
+    let answer = json!({
+        "items": [
+            { "dimension": "focus", "category": "inferred", "value": "性能优化",
+              "evidence": [{ "quote": "性能优化" }] },
+            { "dimension": "depth", "category": "explicit", "value": "回答请尽量简短",
+              "evidence": [{ "quote": "回答请尽量简短" }] }
+        ]
+    });
+    let result = run_learn(&mut helper, "n1", "r1", answer);
+    assert_eq!(result["ok"], true, "{result}");
+
+    let context = helper.ok("c1", "profile.context", json!({}));
+    let text = context["text"].as_str().unwrap().to_string();
+    assert!(text.contains("回答请尽量简短"), "{text}");
+    assert!(!text.contains("性能优化"), "{text}");
+
+    // Usage is readable by category, without any of the user's own text.
+    helper.ok(
+        "e1",
+        "profile.event",
+        json!({ "opId": "chat:t1:a1", "feature": "chat" }),
+    );
+    let context = helper.ok("c2", "profile.context", json!({}));
+    let text = context["text"].as_str().unwrap().to_string();
+    assert!(text.contains("近期常用：chat"), "{text}");
+}
+
+#[test]
+fn a_pause_freezes_counting_and_queueing_until_it_resumes() {
+    let root = Root::new("pause");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "p1",
+        "profile.pause",
+        json!({ "paused": true, "reason": "manual" }),
+    );
+    let event = helper.ok(
+        "e1",
+        "profile.event",
+        json!({ "opId": "note:n1", "feature": "note" }),
+    );
+    assert_eq!(event["counted"], false, "{event}");
+    let queued = helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "暂停期间的证据。")] }),
+    );
+    assert_eq!(queued["queued"], json!(0), "{queued}");
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["usageTotal"], json!(0));
+
+    helper.ok(
+        "p2",
+        "profile.pause",
+        json!({ "paused": false, "reason": "manual" }),
+    );
+    let queued = helper.ok(
+        "q2",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "暂停期间的证据。")] }),
+    );
+    assert_eq!(queued["queued"], json!(1), "{queued}");
+    let event = helper.ok(
+        "e2",
+        "profile.event",
+        json!({ "opId": "note:n2", "feature": "note" }),
+    );
+    assert_eq!(event["counted"], true, "{event}");
+}
+
+#[test]
+fn a_real_failure_is_retried_only_through_the_production_entry() {
+    let root = Root::new("retry");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "我更习惯晚上写代码。")] }),
+    );
+    let next = helper.ok("n1", "profile.learn.next", json!({}));
+    let claim = next["batch"]["claim"].as_str().unwrap().to_string();
+    helper.send(
+        "r1",
+        "profile.learn.run",
+        json!({ "claim": claim.clone(), "profileId": "fixture-profile", "effort": "high" }),
+    );
+    let request = helper.recv_model();
+    let model_id = request["id"].as_str().unwrap().to_string();
+    helper.fail_model(&model_id, "internal");
+    let failed = helper.answer("r1");
+    assert_eq!(failed["ok"], false, "{failed}");
+    helper.ok(
+        "f1",
+        "profile.learn.fail",
+        json!({ "claim": claim, "code": "internal", "reason": "合成的模型失败" }),
+    );
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(0));
+    // The stuck work is visible, with its reason, without reading the queue.
+    assert_eq!(status["failed"], json!(1), "{status}");
+    assert_eq!(
+        status["failedItems"][0]["reason"],
+        json!("合成的模型失败"),
+        "{status}"
+    );
+    assert_eq!(status["failedItems"][0]["chars"], json!(10), "{status}");
+
+    let retried = helper.ok("t1", "profile.retry", json!({}));
+    assert_eq!(retried["retried"], json!(1), "{retried}");
+    let status = helper.ok("s2", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(1));
+    assert_eq!(status["failed"], json!(0));
+    assert_eq!(status["failedItems"], json!([]));
+    let result = run_learn(
+        &mut helper,
+        "n2",
+        "r2",
+        one_item("晚上写代码", "inferred", "晚上写代码"),
+    );
+    assert_eq!(result["ok"], true, "{result}");
+}
+
+#[test]
+fn a_removed_preference_is_named_to_the_model_and_refused_when_it_returns() {
+    let root = Root::new("removed");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "回答尽量简短。")] }),
+    );
+    let learned = run_learn(
+        &mut helper,
+        "n1",
+        "r1",
+        one_item("回答尽量简短", "explicit", "回答尽量简短"),
+    );
+    let id = learned["result"]["written"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    helper.ok("d1", "profile.delete", json!({ "id": id }));
+
+    helper.ok(
+        "q2",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t2", "v1", "还是简短点更好。")] }),
+    );
+    let next = helper.ok("n2", "profile.learn.next", json!({}));
+    let claim = next["batch"]["claim"].as_str().unwrap().to_string();
+    helper.send(
+        "r2",
+        "profile.learn.run",
+        json!({ "claim": claim, "profileId": "fixture-profile", "effort": "high" }),
+    );
+    let request = helper.recv_model();
+    let prompt = request["messages"].to_string();
+    // The model is told what the user removed, so it can stay away from it.
+    assert!(prompt.contains("回答尽量简短"), "{prompt}");
+    let model_id = request["id"].as_str().unwrap().to_string();
+    helper.answer_model(
+        &model_id,
+        &one_item("回答尽量简短", "explicit", "简短").to_string(),
+    );
+    let run = helper.answer("r2");
+    assert_eq!(
+        run["result"]["written"].as_array().map(|rows| rows.len()),
+        Some(0),
+        "{run}"
+    );
+    let context = helper.ok("c1", "profile.context", json!({}));
+    assert!(
+        !context["text"]
+            .as_str()
+            .unwrap_or("")
+            .contains("回答尽量简短")
+    );
+}
+
+#[test]
+fn an_interrupted_batch_becomes_retryable_after_a_real_crash() {
+    let root = Root::new("crash");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "我更习惯晚上写代码。")] }),
+    );
+    let next = helper.ok("n1", "profile.learn.next", json!({}));
+    assert!(next["batch"]["claim"].is_string(), "{next}");
+    // The process dies with the batch still claimed as working.
+    helper.crash();
+
+    let mut again = Helper::start(&root);
+    let status = again.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(0), "{status}");
+    assert_eq!(status["failed"], json!(1), "{status}");
+    assert_eq!(
+        status["failedItems"][0]["reason"],
+        json!("助手中断，需重试"),
+        "{status}"
+    );
+    let retried = again.ok("t1", "profile.retry", json!({}));
+    assert_eq!(retried["retried"], json!(1), "{retried}");
+    let status = again.ok("s2", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(1), "{status}");
+    assert_eq!(status["failed"], json!(0), "{status}");
+    let result = run_learn(
+        &mut again,
+        "n2",
+        "r2",
+        one_item("晚上写代码", "inferred", "晚上写代码"),
+    );
+    assert_eq!(result["ok"], true, "{result}");
 }

@@ -14,7 +14,7 @@ use rusqlite::Connection;
 use crate::protocol::{ApiError, ApiResult, Code};
 
 pub const KNOWLEDGE_SCHEMA: i64 = 5;
-pub const PROFILE_SCHEMA: i64 = 2;
+pub const PROFILE_SCHEMA: i64 = 3;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
 /// deleting or hiding a conversation also cancels its reading tasks.
@@ -336,6 +336,22 @@ CREATE TABLE profile_source_state (
 );
 "#;
 
+/// Stage 4 leaves a processed segment behind as a lightweight marker instead of a
+/// row full of text, so finished work cannot crowd out the segments still waiting.
+/// The marker also keeps a replayed callback (same source, version and segment)
+/// from being learned twice, including after `clear`.
+const PROFILE_MARKER_SQL: &str = r#"
+CREATE TABLE profile_markers (
+  source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  segment INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (source_kind, source_id, version, segment)
+);
+CREATE INDEX profile_markers_created ON profile_markers (created_at);
+"#;
+
 /// Both databases, opened lazily on the first data request.
 pub struct Store {
     pub knowledge: Mutex<Connection>,
@@ -362,7 +378,7 @@ impl Store {
         let profile = open_db(
             &profile_path,
             PROFILE_SCHEMA,
-            &[PROFILE_SQL, PROFILE_LEARN_SQL],
+            &[PROFILE_SQL, PROFILE_LEARN_SQL, PROFILE_MARKER_SQL],
         )?;
         // A helper that died mid-batch leaves a claim nobody can release. Turning
         // such tasks into a retryable failure keeps them from sitting in `working`
@@ -376,6 +392,17 @@ impl Store {
             )
             .map_err(|error| {
                 ApiError::storage(format!("cannot recover interrupted tasks: {error}"))
+            })?;
+        // The profile loop needs the same recovery, and it is a *retryable* failure
+        // so `profile.retry` can put the batch back in the queue.
+        profile
+            .execute(
+                "UPDATE profile_pending SET state = 'failed', claim = NULL,
+                 reason = '助手中断，需重试', updated_at = ?1 WHERE state = 'working'",
+                rusqlite::params![crate::util::now_ms()],
+            )
+            .map_err(|error| {
+                ApiError::storage(format!("cannot recover interrupted profile work: {error}"))
             })?;
         Ok(Store {
             knowledge: Mutex::new(knowledge),

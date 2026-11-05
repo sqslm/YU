@@ -361,7 +361,12 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Pr
     };
     let category = params.category.unwrap_or(existing.category.clone());
     let pinned = params.pinned.unwrap_or(existing.pinned);
-    let corrected = params.corrected.unwrap_or(existing.corrected);
+    // A hand-written value is a correction, even when the caller only sends the new
+    // text: otherwise a late automatic answer would simply restate it away.
+    let value_changed = value != existing.value;
+    let corrected = params
+        .corrected
+        .unwrap_or(existing.corrected || value_changed);
     let key = existing.slot.clone();
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -415,6 +420,14 @@ pub fn delete(connection: &mut Connection, id: &str) -> ApiResult<bool> {
         .execute(
             "INSERT OR REPLACE INTO exclusions (kind, key, reason, created_at) VALUES ('profile', ?1, 'deleted by the user', ?2)",
             params![key, now_ms()],
+        )
+        .map_err(sqlite_error)?;
+    // Also refuse the value itself, so the same preference cannot come back under a
+    // freshly minted slot.
+    transaction
+        .execute(
+            "INSERT OR REPLACE INTO exclusions (kind, key, reason, created_at) VALUES ('profile', ?1, 'deleted by the user', ?2)",
+            params![format!("{}={}", existing.dimension, existing.value), now_ms()],
         )
         .map_err(sqlite_error)?;
     transaction
