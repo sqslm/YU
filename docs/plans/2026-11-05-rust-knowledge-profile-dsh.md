@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B 与阶段 6 C1（知识库浏览排版）已通过外部 Codex 复核。阶段 6 C2（卡片联动）已交付，并按外部复核提出的反例完成三轮定点补修（草稿关联的删除边界、随记卡片段的顺序分页、后台通知与手动翻页的协调），最后一条待外部验收。其后按 6 D 工作流的顺序交付。阶段 7 未开始。
+**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B 与阶段 6 C1（知识库浏览排版）已通过外部 Codex 复核。阶段 6 C2（卡片联动）已交付，并按外部复核提出的反例完成三轮定点补修（草稿关联的删除边界、随记卡片段的顺序分页、后台通知与手动翻页的协调）。阶段 6 D（工作流送入知识提炼）已交付，待外部复核。阶段 7 未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2528,4 +2528,75 @@ git diff --check                                              → exit 0
 ### 6. 提交
 
 - 代码：本节的 `CardPager`、`NotesPage` 接线与 `cardPager.test.ts`。
+- 本文件：随本次交付一并提交。
+
+## 阶段 6 C2 外部验收与 6 D 交付（第二十五轮 2026-11-06）
+
+### 1. 6 C2 的结果
+
+C2（卡片联动）本身与其后三轮定点补修（草稿关联的删除边界、随记卡片段的顺序分页、后台通知与手动翻页的协调）已在上一节逐条记录；本轮外部以 6 D 派单接手，没有再提 C2 的反例，`git diff --check b519974..HEAD` 为 0。C2 行为本轮不做改动。
+
+### 2. 6 D 派单要求与实际缺口
+
+外部要求：保存工作流里明确选择「送入知识提炼」后，生产执行器把**该次真正读取的材料**（或明确指定的真实随记）经现有来源链交给 Rust；只有实际受理才报告排队；失败、拒绝、取消都不算成功且停下后续步骤；普通总结与工作流对同一材料共用来源指纹、队列与去重，不二次抓取、不读无关记录、不用外部伪造正文。
+
+审阅现有接线后确认的实际缺口（全部在本轮修掉）：
+
+| 缺口 | 现场 | 后果 |
+| --- | --- | --- |
+| 提炼工具把「没受理」当成功 | `extract_knowledge` 只在 `queued === 1` 时 `ok:true`，`queued === 0` 仍 `ok:true`（只把原因写进摘要） | 显式随记提炼被 Rust 拒绝时，工作流继续执行后续有副作用的步骤 |
+| 交接不看本轮取消 | `knowledgeTools.reading` 与 `extractFromNote` 都不接收 `ctx.signal` | 用户取消后仍可能把材料写进库、登记队列任务并唤醒引擎 |
+| 交接不知道手动暂停 | `allowed()` 只判「采集开关 + 非游戏模式」，`pauseCollect('manual', true)` 的状态只存在于 helper | 手动暂停期间仍报「已送入提炼」，且唤醒引擎 |
+| 通道关闭时靠发布失败兜底 | `publishReading` 在通道关时返回 null，原因文案是「这条读取还没有进入知识库」 | 用户看到的原因与真实原因（通道关）不一致 |
+
+### 3. 实现
+
+| 文件 | 改动 |
+| --- | --- |
+| `src/main/knowledge/handoff.ts`（新） | `handoffBlocker`（取消 →「本轮已取消」、总开关 →「知识采集未开启」、通道 →「知识库没有开启阅读采集」/「知识库没有开启随记采集」、游戏模式 →「游戏模式已开启」、`pausedReasons.manual` →「采集已暂停」）；`handoffReading` 用 `publishReading` **本次回包**的 sourceId 再 `extract`，没有 sourceId 返回「这条读取还没有进入知识库」；`handoffNote` 同规则，随记不存在抛「这条随记已不存在」 |
+| `src/main/index.ts` | `knowledgeTools.reading` / `extractFromNote` 改为薄适配 `handoffReading` / `handoffNote`；`HandoffDeps` 用**生产件**：`knowledgeCollector.publishReading`（scope「工作流」、threadId `workflow`）、`collector.publishNote`、`knowledge.queueStatus().pausedReasons`、`extractSourceNow`（沿用 `enabled`/`allowed`/`resolveBody`/`wake`）；删除旧的内联阻塞判断 |
+| `src/main/tools/knowledge.ts` | `KnowledgeTools.reading` 增加 `options?: { signal?: AbortSignal }`；`extract_knowledge` 改为 `queued === 1` 才 `ok:true`，否则 `ok:false` 并带真实 `reason`；取消改判 `ctx.signal.aborted` |
+| `src/main/tools/workflow.ts` | 提炼步骤在交接前检查 `ctx.signal.aborted`（取消不得越过写入）；`ctx.knowledge.reading(lastReading, { signal: ctx.signal })` |
+
+### 4. 回归
+
+| 用例 | 覆盖 |
+| --- | --- |
+| `src/main/tools/workflow.test.ts` 新增 `run_workflow stops at the extraction it could not hand over` 4 项 | 交接只发生一次且带本轮读到的 url/正文；拒绝时停在该步、`stoppedAt === 'extract_knowledge'`、后续步骤不跑；显式随记被拒同样停步；读完后取消 → `status === 'cancelled'` 且没有发生交接 |
+| `src/main/workflow-extract.integration.test.ts`（新，5 项） | 真 `WorkflowStore` + `runTool('run_workflow')` + 生产 `handoff` + `KnowledgeCollector` + 真 release helper + `ExtractEngine`：①工作流读页面 → 来源一行 `kind:'web'`、任务 1 条、提炼后一张卡片（正文与材料一致、`sourceIds` 指向该来源）；②同一页面再由普通总结读一次 → `duplicate === true`、来源仍一行、任务仍 1 条、卡片仍 1 张；③阅读通道关 → 停在提炼步、摘要含「知识库没有开启阅读采集」、无来源、后续 `get_datetime` 未跑；④`pauseCollect('manual', true)` → 停在提炼步、摘要含「采集已暂停」、无来源；⑤随记通道关 → `handoffNote` 返回 `{queued:0, reason:'知识库没有开启随记采集'}` |
+
+### 5. 命令与结果（本机实测）
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run src/main/tools/workflow.test.ts src/main/tools/knowledge.test.ts src/main/workflows.test.ts src/main/knowledge/linkage.integration.test.ts src/main/ask-knowledge.integration.test.ts src/shared/workflow-edit.test.ts src/shared/workflow-tool-groups.test.ts src/main/workflow-extract.integration.test.ts` | 8 文件 / 83 项通过，exit 0 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm build` | exit 0（13.82 s，`out/renderer/assets/settings-D6U6P5gZ.js`） |
+| `pnpm test:native` | exit 0 |
+| `pnpm test` | 290 文件通过 / 3 跳过，4071 项通过 / 8 跳过（100.23 s） |
+| `git diff --check`、`git diff --check 459dc12..HEAD` | exit 0 |
+
+本轮未改 Rust，`native/bin/yu-knowledge.exe` 仍为 3,247,104 B、SHA-256 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`。
+
+### 6. 实窗证据（隔离 Electron，`.tmp/d-evidence/`）
+
+隔离根 `E:\CpanQianYi\Temp\yu-d1`：`app/out`、`app/node_modules`、`app/resources` 为指向仓库的 Junction，`app/native` 为副本（只替换热键助手），`app/boot.js` 只 require 仓库 `out/main/index.js` 并覆写 `setLoginItemSettings`；CDP 19995，模型桩 `127.0.0.1:19996`，视口 1080×750，输入走 `Input.dispatchMouseEvent` / `Input.insertText` / `dispatchKeyEvent`。浮层由隔离副本 `yu-hotkey.exe`（5,120 B，`scripts/HotkeyStub.cs`）按仓库同一条消息分支触发 `openAsk()`，真实物理热键未用。
+
+| 观察 | 结果 |
+| --- | --- |
+| 浮层输入「运行早间提炼」后回车 | 回答原文「早间提炼：✓ 送入提炼」；`app.out` 有 `tool=run_workflow status=completed ms=14`，模型请求 0 次（`results/answer.json`、`shots/03-answer.png`） |
+| 队列 | `counts.completed = 1`，`groups[0]` 为 `{channel:'note', state:'completed'}`，来源 `src_3c61ae3ad77307b7`（`kind:'note'`、`active`、38 字节）（`results/result.json`） |
+| 卡片 | `listCards.total = 1`，`card_9d47725e38cddc45`（`kind:'method'`、`topics:['工作流']`），`bySource({noteId})` 1 条 |
+| 知识库页 | 真实鼠标点侧栏「知识库」后页面出现：「匹配 1 / 总数 1」「知识卡片 共 1 条」（`shots/04-knowledge-page.png`） |
+
+### 7. 未测与边界
+
+- 真实物理热键与 Win11 托盘溢出浮层的合成右键（XAML island 限制）未覆盖；浮层入口用隔离副本热键助手模拟同一消息分支。
+- 知识总开关关闭、通道关闭、手动暂停、游戏模式四条阻塞分支只在 `workflow-extract.integration.test.ts` 用真 helper 覆盖，没有在窗口里逐个点击。
+- 桩不是真实模型：卡片正文是材料复述，真实模型质量仍属阶段 7。
+- `listQueue` 的组 `state` 已是 `completed` 时，组内 item 的 `state` 仍报 `stabilizing`（既有读数，本轮未改 Rust）。
+
+### 8. 提交
+
+- 代码：`16cecf1 feat(workflow): hand a real reading to the knowledge queue and stop when it cannot`（`src/main/knowledge/handoff.ts`、`src/main/index.ts`、`src/main/tools/knowledge.ts`、`src/main/tools/workflow.ts`、`src/main/tools/workflow.test.ts`、`src/main/workflow-extract.integration.test.ts`）。
 - 本文件：随本次交付一并提交。
