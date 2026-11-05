@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B 与阶段 6 C1（知识库浏览排版）已通过外部 Codex 复核。阶段 6 C2（卡片联动）已交付，并按外部复核提出的两条反例完成定点补修，待外部验收。其后按 6 D 工作流的顺序交付。阶段 7 未开始。
+**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B 与阶段 6 C1（知识库浏览排版）已通过外部 Codex 复核。阶段 6 C2（卡片联动）已交付，并按外部复核提出的反例完成三轮定点补修（草稿关联的删除边界、随记卡片段的顺序分页、后台通知与手动翻页的协调），最后一条待外部验收。其后按 6 D 工作流的顺序交付。阶段 7 未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2448,7 +2448,7 @@ git diff --check                                              → exit 0
 
 ### 5. 未测与边界
 
-- 外部反例里的「预检拒绝后关联仍在」在实窗不可复现：无来源草稿的 `cardImpact` 为 `cards: 0`，`verifyKnowledgeDelete` 依既有语义直接放行（没有卡片可删就不需要票据）。该顺序保证改由 `draft-boundary.integration.test.ts`（生产 `deleteThread` + 真 `ChatService`）与 `chat-delete.test.ts` 覆盖，实窗只证明成功删除会清掉关联。
+- 「预检拒绝后关联仍在」有两种情形，须分开看：①无来源的草稿 `cardImpact` 为 `cards: 0`，`verifyKnowledgeDelete` 依既有语义直接放行（没有卡片可删就不需要票据），这类草稿在实窗里根本走不到拒绝分支；②带真实预检影响的草稿（用合成 `source_records` 归属夹具让预览 `cards: 1`）在实窗里会用错误票据被拒绝并保留关联——第二十四轮外部独立复验即此情形，DSH 未能构造同类夹具，故当时的「实窗不可复现」只对①成立。顺序保证另由 `draft-boundary.integration.test.ts`（生产 `deleteThread` + 真 `ChatService`）与 `chat-delete.test.ts` 覆盖。
 - 非 owner 调用需要第二个非受信窗口，未在实窗构造；`chatOwner` 仍在写入之前，`ipc-trust` 套件覆盖信任边界。
 - 未构造真实写入失败（关闭 store 后 `chats.edit` 静默返回），该分支由单测覆盖。
 - 未测 >100 张卡的多页滚动、dpr≠1、en-US 文案定位。
@@ -2458,3 +2458,74 @@ git diff --check                                              → exit 0
 
 - 代码：`e033914` `fix(knowledge): keep a card draft only while its thread is really deleted`
 - 本文件：`docs(plan)` 随本次交付一并提交。
+
+## 阶段 6 C2 最后定点补修：后台通知与手动翻页的协调（第二十四轮，2026-11-06）
+
+外部用同一最终构建独立复现一条交错反例：随记有 8 张关联卡、已显示 5 张并可「查看全部」；在同一个 renderer turn 里启动真实 `knowledge.saveCard`（无关卡）并立即调真实「查看全部」按钮的 `.click()`，900 ms 后仍是 5/8、按钮仍在。无变更时用真实鼠标点一次立即到 8/8。
+
+### 1. 反例与根因
+
+| 现象 | 根因（`git show b519974:src/renderer/src/settings/pages/NotesPage.tsx`） |
+| --- | --- |
+| 手动翻页被通知吞掉 | `cardSeqRef` 给 `refresh` 与 `append` 一起发新序号，通知稍晚发起的 `refresh` 使正在取的手动页答复过期，手动页被丢弃 |
+| 通知把已加载页重置成第一页 | 通知路径固定 `loadCards(noteId, 0, 'refresh')`，`refresh` 的 `limit` 取的是手动页提交前的行数，手动翻页等于没发生 |
+| 旧请求会清当前加载状态 | `finally` 里无条件 `setCardsLoading(false)`，没有票据或归属判断 |
+
+### 2. 修复
+
+新增 `CardPager`（`src/renderer/src/settings/pages/knowledgeView.ts`），用 `page(noteId, offset, limit)`、`render`、`loading`、`error`、`message` 五个依赖把「取哪一页」与「页面怎么显示」分开，`NotesPage` 只负责把依赖接到真实 IPC：
+
+- 手动 `replace`/`append` 各自持票（`manual`），通知走 `refresh`（`refreshTicket`）。手动页在途时到来的通知只置 `queued`，等这一页合并后按**最新已加载行数**跟一次刷新，不并发、不轮询、不加全局状态。
+- `refresh` 在途时点手动翻页：手动页持新票，迟到的刷新答复因票不符被丢弃，并补一次跟随刷新。
+- 过期答复、切随记后的旧答复、旧错误都因 `mine(noteId)` 与票不符被丢弃；`finally` 只在票仍有效时关 loading，旧请求不会关掉新请求的加载态。
+- 每次成功手动分页只花一次额度（`pages + 1`），通知不花额度；按 `nextOffset` 与 id 去重，已有页不回退；`refresh` 失败且已有内容时不报错，无内容时才给真实错误。
+
+`NotesPage` 的五组 `useState` 与三个 `ref` 收敛为一个 `CardSectionState`，切换随记与通知订阅都只调 `pager.open` / `pager.refresh`。
+
+### 3. 回归
+
+| 用例 | 覆盖 |
+| --- | --- |
+| `cardPager.test.ts` ① | 通知先到、`append` 未完成 → 手动页仍合并成 8 行，随后只跟一次 `offset 0 / limit 8` 的刷新 |
+| ② | `refresh` 在途时点 `append` → 手动页胜出，迟到刷新不缩回第一页，并补一次跟随刷新 |
+| ③ | 两次手动分页花 2 次额度、通知 0 次，`nextOffset` 去重后 10 行 |
+| ④ | 切随记后旧答复与旧错误都被丢弃 |
+| ⑤ | 两个手动请求在途时，旧答复不关 loading，最新落地才关 |
+| ⑥ | 通知失败保留已显示行且不报错，无内容时才报错 |
+| 旧设计复现 | 按 `b519974` 的协调逻辑重写一份临时用例（`.tmp/c4-evidence/scripts/oldPager.repro.test.ts`），同一交错下断言仍是 5 行、且旧答复会关掉新页面的 spinner —— 即最小可控请求测试确实让旧实现失败；该文件只用于取证，未提交 |
+
+命令与退出码：
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run`（13 个指定文件 + `cardPager.test.ts`） | 0，14 文件 / 166 项通过 |
+| `pnpm typecheck` | 0 |
+| `pnpm build` | 0（13.89 s，`out/renderer/assets/settings-D6U6P5gZ.js`） |
+| `git diff --check` | 0 |
+| `git diff --check b519974..HEAD` | 0（见提交后复跑） |
+
+### 4. 实窗证据
+
+隔离根 `E:\CpanQianYi\Temp\yu-c4`（`app/` 下 `out|native|resources|node_modules` 为指向仓库的 Junction，`app/boot.js` 只 require 仓库 `out/main/index.js` 并屏蔽登录项），CDP 19695，桩 `127.0.0.1:19696`，视口 1080×750，真实鼠标点击（`Input.dispatchMouseEvent`），真实 release helper `66731bd3…93ab7f`。证据目录 `.tmp/c4-evidence/`：`report.md`、`results/{summary,interleaving,seed,stub-stats}.json`、`shots/{00-home,A1-five-of-eight,A2-eight-of-eight,B1-still-eight,C2-mouse-click,D1-two-notices}.png`、`logs/{cdp,app.out,stub.out}.log`。
+
+| 场景 | 做法 | 读数 |
+| --- | --- | --- |
+| A 反例重放 | 打开 8 卡随记（5 行 + 「查看全部」），同一 renderer turn 内 `void knowledge.saveCard(无关卡 A)` 后立即 `button.click()` | 5/8 → **8/8**，按钮消失，`共 8 条`，无错误 |
+| B 满页后再通知 | 8 行已加载，真实 `saveCard`（无关卡 B） | 仍 8 行，未回退 |
+| C 真实鼠标对照 | 切到另一条随记再切回（回到第一页 5 行），真实鼠标点「查看全部」 | 5 → 8 |
+| D 两次通知 + 手动点击 | 同一 turn 内两次真实 `saveCard` 后 `.click()` | 8/8，未回退 |
+| 模型调用 | 桩 `__stats` | `count: 0`（全程无模型请求） |
+
+合计 7/7 断言通过（`failed: []`）。脚本化 `.click()` 只用来锁定「通知与手动页同一 turn」的时序；C 场景用真实鼠标证明按钮本身可用。
+
+### 5. 未测与边界
+
+- 非 owner 与真实写入失败分支不在本次实窗范围（沿用上一轮的 `draft-boundary.integration.test.ts` 与 `ipc-trust` 套件）。
+- 未构造「helper 在 refresh 中途不可用」的实窗场景，只在 `cardPager.test.ts` ⑥ 用可控请求覆盖。
+- 未测 >100 张卡的多页滚动、dpr≠1、en-US 文案定位。
+- 外部独立复跑（156 项，未含 `draft-boundary.integration.test.ts`）与 DSH 的 166 项分开记录，不互相替代。
+
+### 6. 提交
+
+- 代码：本节的 `CardPager`、`NotesPage` 接线与 `cardPager.test.ts`。
+- 本文件：随本次交付一并提交。
