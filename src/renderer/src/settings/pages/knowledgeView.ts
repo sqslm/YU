@@ -257,27 +257,14 @@ export function toForceData(graph: KnowledgeGraph): ForceData {
 }
 
 /**
- * Union of two graph answers, by id. Expanding one hop must not delete what the
- * canvas already shows, and must not duplicate it either. The counts always come
- * from the newer answer, which is the one that knows the current budget.
+ * The page's whole graph state after one answer: the newest accepted response,
+ * never a union with the previous one. The backend already applied its node and
+ * byte budgets, so adding an older answer back would exceed them and make the
+ * reported counts lie. A ticket that is no longer current is ignored, so a slow
+ * answer for a query the user already left cannot replace the newer canvas.
  */
-export function mergeGraph(current: KnowledgeGraph | null, next: KnowledgeGraph): KnowledgeGraph {
-  if (!current) return next
-  const nodes = new Map(current.nodes.map((node) => [node.id, node]))
-  for (const node of next.nodes) nodes.set(node.id, node)
-  const edges = new Map(current.edges.map((edge) => [edge.id, edge]))
-  for (const edge of next.edges) edges.set(edge.id, edge)
-  const ids = new Set(nodes.keys())
-  return {
-    nodes: [...nodes.values()],
-    edges: [...edges.values()].filter((edge) => ids.has(edge.fromId) && ids.has(edge.toId)),
-    total: next.total,
-    shown: next.shown,
-    truncated: next.truncated,
-    limitedBy: next.limitedBy,
-    focused: next.focused,
-    expanded: next.expanded
-  }
+export function acceptGraph(gate: RequestGate, ticket: number, next: KnowledgeGraph, current: KnowledgeGraph | null): KnowledgeGraph | null {
+  return gate.isCurrent(ticket) ? next : current
 }
 
 export interface GraphNotice {
@@ -291,6 +278,40 @@ export interface GraphNotice {
 export function graphNotice(graph: KnowledgeGraph): GraphNotice | null {
   if (!graph.truncated || !graph.limitedBy) return null
   return { limitedBy: graph.limitedBy, total: graph.total, shown: graph.shown }
+}
+
+export interface GraphCounts {
+  /** Nodes of this answer the canvas draws. */
+  visible: number
+  /** Cards matching the filter before any budget cut them. */
+  total: number
+  /** Of `visible`, the nodes the focus brought in that the filter did not match. */
+  expanded: number
+}
+
+/** The three numbers the info bar owes, all from the one accepted answer. */
+export function graphCounts(graph: KnowledgeGraph | null): GraphCounts {
+  if (!graph) return { visible: 0, total: 0, expanded: 0 }
+  return { visible: graph.shown, total: graph.total, expanded: graph.expanded }
+}
+
+export interface GraphView extends ForceData {
+  counts: GraphCounts
+  notice: GraphNotice | null
+}
+
+const EMPTY_GRAPH: KnowledgeGraph = { nodes: [], edges: [], total: 0, shown: 0, truncated: false, limitedBy: null, focused: false, expanded: 0 }
+
+/**
+ * Everything the canvas, the node list and the info bar draw, taken from one
+ * answer. The rendered nodes and links are that answer's own `nodes` and `edges`
+ * (with edges whose endpoint was trimmed dropped), so the picture and the counts
+ * can never disagree.
+ */
+export function graphView(graph: KnowledgeGraph | null): GraphView {
+  const source = graph ?? EMPTY_GRAPH
+  const data = toForceData(source)
+  return { nodes: data.nodes, links: data.links, counts: graphCounts(graph), notice: graphNotice(source) }
 }
 
 export interface ProfileGroup {

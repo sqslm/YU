@@ -1,20 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import type { KnowledgeCard, KnowledgeCardPage, KnowledgeGraph, KnowledgeModelInfo, ProfileItem, RelationList } from '@shared/knowledge'
+import type { GraphEdge, GraphNode, KnowledgeCard, KnowledgeCardPage, KnowledgeGraph, KnowledgeModelInfo, ProfileItem, RelationList } from '@shared/knowledge'
 import {
   CARD_PAGE_SIZE,
   EMPTY_FILTERS,
   EMPTY_LIST,
   SPLIT_MIN_WIDTH,
+  acceptGraph,
   cardRequest,
   createGate,
   emptyState,
   extractStatus,
   filtersActive,
+  graphCounts,
   graphNotice,
+  graphView,
   groupProfile,
   groupRelations,
   kindKey,
-  mergeGraph,
   mergePage,
   mergePreview,
   mergeQuery,
@@ -211,27 +213,91 @@ describe('graph adaptation', () => {
   it('says which budget limited the graph', () => {
     expect(graphNotice(graph)).toEqual({ limitedBy: 'nodes', total: 8, shown: 2 })
     expect(graphNotice({ ...graph, limitedBy: 'bytes' })?.limitedBy).toBe('bytes')
-    expect(graphNotice({ ...graph, truncated: false, limitedBy: null,   focused: false,   expanded: 0 })).toBeNull()
+    expect(graphNotice({ ...graph, truncated: false, limitedBy: null })).toBeNull()
+  })
+})
+
+describe('graph budget', () => {
+  /** The helper's node budget, and the size of the answer it returns. */
+  const LIMIT = 200
+  const node = (id: string): GraphNode => ({ id, title: id, kind: 'concept', topics: ['Rust'], favorite: false })
+
+  /** One chain so every node after the first has an edge into the answer. */
+  function chain(rows: readonly GraphNode[]): GraphEdge[] {
+    return rows.slice(1).map((row, index) => ({ id: `edge-${index}`, fromId: rows[index].id, toId: row.id, kind: 'contains' as const, origin: 'manual' as const }))
+  }
+
+  function answer(nodes: GraphNode[], patch: Partial<KnowledgeGraph> = {}): KnowledgeGraph {
+    return { nodes, edges: chain(nodes), total: nodes.length, shown: nodes.length, truncated: false, limitedBy: null, focused: false, expanded: 0, ...patch }
+  }
+
+  const topicNodes = (count: number): GraphNode[] => Array.from({ length: count }, (_, index) => node(`topic-${index}`))
+
+  /**
+   * The repro: a topic query fills the budget with 200 matching nodes, then a
+   * focus query keeps the focus plus its one out-of-topic neighbour. Rust evicts
+   * one matching node to stay inside the budget, so the answer is still 200.
+   */
+  function expanded(rows: GraphNode[]): KnowledgeGraph {
+    const kept = [...rows.slice(0, LIMIT - 2), node('focus'), node('neighbour')]
+    return answer(kept, { total: LIMIT, shown: LIMIT, focused: true, expanded: 1 })
+  }
+
+  it('draws the expanded answer at its own size, not on top of the previous one', () => {
+    // The page's own path: `setData(current => acceptGraph(...))`. The second
+    // answer is drawn alone, so what the helper evicted stays evicted.
+    const gate = createGate()
+    const topic = answer(topicNodes(LIMIT))
+    const first = graphView(acceptGraph(gate, gate.next(), topic, null))
+    expect(first.nodes).toHaveLength(LIMIT)
+    const next = graphView(acceptGraph(gate, gate.next(), expanded(topicNodes(LIMIT)), topic))
+    expect(next.nodes).toHaveLength(LIMIT)
+    expect(next.counts).toEqual({ visible: LIMIT, total: LIMIT, expanded: 1 })
+    expect(next.nodes.some((row) => row.id === 'focus')).toBe(true)
+    expect(next.nodes.some((row) => row.id === 'neighbour')).toBe(true)
+    // The helper evicted this one; the page must not put it back.
+    expect(next.nodes.some((row) => row.id === `topic-${LIMIT - 1}`)).toBe(false)
   })
 
-  it('unions an expanded hop without duplicating what is already drawn', () => {
-    const first = mergeGraph(null, graph)
-    const next: KnowledgeGraph = {
-      nodes: [...graph.nodes, { id: 'c', title: 'C', kind: 'review', topics: [], favorite: false }],
-      edges: [...graph.edges, { id: 'e3', fromId: 'b', toId: 'c', kind: 'applies', origin: 'manual' }, { id: 'e4', fromId: 'c', toId: 'a', kind: 'derives', origin: 'model' }],
-      total: 9,
-      shown: 3,
-      truncated: false,
-      limitedBy: null,
-      focused: true,
-      expanded: 1
+  it('keeps no duplicate node and no edge with a hidden endpoint', () => {
+    const view = graphView(expanded(topicNodes(LIMIT)))
+    const ids = view.nodes.map((row) => row.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    const visible = new Set(ids)
+    expect(view.links).toHaveLength(LIMIT - 1)
+    for (const link of view.links) {
+      expect(visible.has(link.source)).toBe(true)
+      expect(visible.has(link.target)).toBe(true)
     }
-    const merged = mergeGraph(first, next)
-    expect(merged.nodes.map((node) => node.id)).toEqual(['a', 'b', 'c'])
-    // e2 still points at a node neither answer contains, so it stays dropped.
-    expect(merged.edges.map((edge) => edge.id)).toEqual(['e1', 'e3', 'e4'])
-    expect(merged.shown).toBe(3)
-    expect(graphNotice(merged)).toBeNull()
+  })
+
+  it('reports visible, filter total and expanded from the one answer', () => {
+    const view = graphView(expanded(topicNodes(LIMIT)))
+    expect(view.counts).toEqual({ visible: LIMIT, total: LIMIT, expanded: 1 })
+    expect(view.counts.visible).toBe(view.nodes.length)
+    expect(graphCounts(answer(topicNodes(2), { total: 8, shown: 2 }))).toEqual({ visible: 2, total: 8, expanded: 0 })
+    expect(graphCounts(null)).toEqual({ visible: 0, total: 0, expanded: 0 })
+    expect(graphView(null).nodes).toHaveLength(0)
+  })
+
+  it('ignores a late answer for a query the user already left', () => {
+    const gate = createGate()
+    const older = gate.next()
+    const newer = gate.next()
+    const current = answer(topicNodes(LIMIT))
+    const accepted = acceptGraph(gate, newer, current, null)
+    expect(accepted).toBe(current)
+    expect(acceptGraph(gate, older, expanded(topicNodes(LIMIT)), accepted)).toBe(current)
+  })
+
+  it('does not grow the set when the same expansion arrives twice', () => {
+    const gate = createGate()
+    const once = acceptGraph(gate, gate.next(), expanded(topicNodes(LIMIT)), null)
+    const twice = acceptGraph(gate, gate.next(), expanded(topicNodes(LIMIT)), once)
+    const view = graphView(twice)
+    expect(view.nodes).toHaveLength(LIMIT)
+    expect(view.links).toHaveLength(LIMIT - 1)
+    expect(view.counts).toEqual({ visible: LIMIT, total: LIMIT, expanded: 1 })
   })
 })
 

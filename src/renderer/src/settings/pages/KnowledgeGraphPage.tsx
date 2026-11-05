@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next'
 import { KNOWLEDGE_LIMITS } from '@shared/knowledge'
 import type { CardKind, KnowledgeGraph, RelationKind } from '@shared/knowledge'
 import { dampenNodeDrag } from '../sections/memoryGraphDrag'
-import { graphNotice, kindKey, mergeGraph, relationKey, splitFit, toForceData, type ForceNode } from './knowledgeView'
+import { acceptGraph, createGate, graphView, kindKey, relationKey, splitFit, type ForceNode } from './knowledgeView'
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -59,7 +59,8 @@ interface Props {
 
 /**
  * The knowledge graph. Its own data and selection — nothing here reads Mem0.
- * Every expansion is a backend question; the canvas never invents nodes.
+ * Every expansion is a backend question; the canvas never invents nodes, and it
+ * draws exactly the newest answer rather than unioning the previous hop in.
  */
 export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
   const { t } = useTranslation()
@@ -81,6 +82,8 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
   const [topics, setTopics] = useState<string[]>([])
   const container = useRef<HTMLDivElement>(null)
   const measure = useRef<ResizeObserver | null>(null)
+  /** Only the newest graph answer may write; a superseded request takes a stale ticket. */
+  const gate = useRef(createGate())
   const graph = useRef<ForceGraphMethods<ForceNode>>()
   const fitted = useRef(false)
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
@@ -115,14 +118,15 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
   }, [refresh])
 
   useEffect(() => {
-    let live = true
     setLoading(true)
     setError('')
     const key = `${topic}\u0000${debounced}\u0000${refresh}`
     const sameScope = resetKey.current === key
     resetKey.current = key
     if (!sameScope) fitted.current = false
-    setData((current) => (current && !sameScope ? null : current))
+    // A scope change drops the old canvas; a focus change keeps it while the hop loads.
+    setData((current) => (sameScope ? current : null))
+    const ticket = gate.current.next()
     void window.api.knowledge
       .graph({
         topic: topic || undefined,
@@ -131,13 +135,11 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
         depth: focusId ? hop : undefined,
         limit: KNOWLEDGE_LIMITS.nodes
       })
-      .then((result) => {
-        if (!live) return
-        setData((current) => (sameScope && current ? mergeGraph(current, result) : result))
-      })
-      .catch((err) => { if (live) setError(messageOf(err)) })
-      .finally(() => { if (live) setLoading(false) })
-    return () => { live = false }
+      .then((result) => { setData((current) => acceptGraph(gate.current, ticket, result, current)) })
+      .catch((err) => { if (gate.current.isCurrent(ticket)) setError(messageOf(err)) })
+      .finally(() => { if (gate.current.isCurrent(ticket)) setLoading(false) })
+    // Leaving the selection invalidates whatever is still in flight for it.
+    return () => { gate.current.next() }
   }, [topic, debounced, focusId, hop, refresh])
 
   useEffect(() => {
@@ -147,7 +149,9 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
     return () => observer.disconnect()
   }, [])
 
-  const force = useMemo(() => toForceData(data ?? { nodes: [], edges: [], total: 0, shown: 0, truncated: false, limitedBy: null, focused: false, expanded: 0 }), [data])
+  /** One answer, one collection: the canvas, the list and the counts read this. */
+  const view = useMemo(() => graphView(data), [data])
+  const force = useMemo(() => ({ nodes: view.nodes, links: view.links }), [view])
 
   useEffect(() => {
     if (loading) return
@@ -156,7 +160,8 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
     graph.current?.d3ReheatSimulation()
   }, [force, loading])
 
-  const notice = data ? graphNotice(data) : null
+  const notice = view.notice
+  const counts = view.counts
   const node = data?.nodes.find((row) => row.id === selected) ?? null
   const neighbours = useMemo(() => {
     if (!data || !selected) return []
@@ -201,7 +206,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
           <Box sx={{ flex: 1 }} />
           <Tooltip title={t('knowledge.graphFit')}>
             <span>
-              <IconButton size="small" aria-label={t('knowledge.graphFit')} disabled={!data?.nodes.length} onClick={() => graph.current?.zoomToFit(300, 40)}>
+              <IconButton size="small" aria-label={t('knowledge.graphFit')} disabled={view.nodes.length === 0} onClick={() => graph.current?.zoomToFit(300, 40)}>
                 <CenterFocusStrongRounded fontSize="small" />
               </IconButton>
             </span>
@@ -259,7 +264,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
           data-knowledge-canvas
           sx={{ flex: 1, minHeight: 220, position: 'relative', border: 1, borderColor: 'divider', borderRadius: '16px', overflow: 'hidden', bgcolor: dark ? '#181b20' : '#f6f8fb' }}
         >
-          {data && data.nodes.length > 0 && (
+          {view.nodes.length > 0 && (
             <ForceGraph2D<ForceNode>
               ref={graph}
               graphData={force}
@@ -302,7 +307,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
               <CircularProgress size={22} aria-label={t('common.loading')} />
             </Box>
           )}
-          {data && data.nodes.length === 0 && !loading && (
+          {view.nodes.length === 0 && !loading && (
             <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 3, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">{t('knowledge.graphEmpty')}</Typography>
             </Box>
@@ -315,10 +320,13 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
         >
           <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
             <Typography variant="subtitle2">{t('knowledge.graphList')}</Typography>
-            <Typography variant="caption" color="text.secondary">{t('knowledge.graphCounts', { shown: data?.shown ?? 0, total: data?.total ?? 0 })}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('knowledge.graphCounts', { shown: counts.visible, total: counts.total })}
+              {counts.expanded > 0 ? ` · ${t('knowledge.graphExpanded', { count: counts.expanded })}` : ''}
+            </Typography>
           </Box>
           <List dense sx={{ flex: 1, minHeight: 0, overflow: 'auto' }} aria-label={t('knowledge.graphList')}>
-            {(data?.nodes ?? []).map((row) => (
+            {view.nodes.map((row) => (
               <ListItem key={row.id} disablePadding secondaryAction={
                 <Tooltip title={t('knowledge.open')}>
                   <IconButton edge="end" size="small" aria-label={`${t('knowledge.open')} ${row.title}`} onClick={() => onOpenCard(row.id)}>

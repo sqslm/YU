@@ -33,7 +33,15 @@ export interface TargetDeps {
   chat(threadId: string, messageId: string): LocalRecord | undefined
   /** Where an attachment lives, by attachment id alone. */
   attachment(id: string): { threadId: string; messageId: string } | undefined
-  file(path: string): boolean
+  /**
+   * The real path of a file the app itself owns, or null.
+   *
+   * A source row only carries a locator, and `knowledge.source-save` can write any
+   * locator. A path therefore counts as openable only when the main process can
+   * verify the file is one of its own records (the notes directory), which is the
+   * only read credential that does not come from the source row itself.
+   */
+  ownedFile(path: string): string | null
   /** True for the http(s) links the app is willing to hand to the OS. */
   url(value: string): boolean
 }
@@ -80,6 +88,8 @@ export function resolveSourceTarget(source: KnowledgeSource, deps: TargetDeps): 
       if (record) return { kind: 'record', record }
     }
   }
-  if (source.locator && deps.file(source.locator)) return { kind: 'file', path: source.locator }
-  return { kind: 'none', reason: '本地文件或附件已不存在' }
+  // A bare path is not evidence: only a file the app owns may be handed to the OS.
+  const owned = source.locator ? deps.ownedFile(source.locator) : null
+  if (owned) return { kind: 'file', path: owned }
+  return { kind: 'none', reason: '该来源没有可核验的读取记录' }
 }

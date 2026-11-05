@@ -15,9 +15,9 @@ import { personalCommand } from './tools/personal'
 import { taskDiagnosticSummary } from './task-diagnostics'
 import { app, clipboard, dialog, nativeTheme, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import os from 'node:os'
 import type { BrowserWindow } from 'electron'
 import type { BarActionId, BarState, CardAction, ModelListResult, Settings } from '@shared/types'
@@ -38,6 +38,8 @@ import { UiaHost } from './uia/host'
 import { KnowledgeHost } from './knowledge/host'
 import { createKnowledgeCompleter, selectProfile } from './knowledge/model'
 import { resolveSourceTarget } from './knowledge/targets'
+import { openSource } from './knowledge/open'
+import { extractSourceNow } from './knowledge/manual'
 import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
 import { ExtractEngine } from './knowledge/engine'
@@ -1551,6 +1553,22 @@ function registerIpc(): void {
   // typed request; none of them accepts a path, SQL, or a model prompt.
   const knowledgeOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从主界面管理知识库') }
   const workspaceSources = () => ({ notes: () => notes.list().notes, chat: chats.store, history, reminders: () => reminders!.store.list(), events: () => calendar!.list() })
+  /**
+   * A stored locator is written by the collector but can also be written through
+   * `knowledge:source-save`, so the row itself proves nothing. Only a file inside
+   * the notes directory this process already owns is handed to the OS; anything
+   * else stays a metadata row with an honest reason.
+   */
+  const ownedFile = (value: string): string | null => {
+    try {
+      const real = realpathSync(value)
+      if (!statSync(real).isFile()) return null
+      const base = realpathSync(roots().notes)
+      return real === base || real.startsWith(base.endsWith(sep) ? base : base + sep) ? real : null
+    } catch {
+      return null
+    }
+  }
   const resolveTarget = (source: KnowledgeSource): SourceTarget => resolveSourceTarget(source, {
     note: noteId => notes.list().notes.find(note => note.id === noteId),
     chat: (threadId, messageId) => {
@@ -1561,7 +1579,7 @@ function registerIpc(): void {
       }
     },
     attachment: attachmentId => chats.store.attachmentOwner(attachmentId),
-    file: path => { try { return statSync(path).isFile() } catch { return false } },
+    ownedFile,
     url: value => isSafeLink(value)
   })
   /**
@@ -1690,17 +1708,29 @@ function registerIpc(): void {
   })
   handle('knowledge:source-open', async (event, id: string) => {
     knowledgeOwner(event)
-    const target = resolveTarget(await knowledge.getSource(knowledgeId(id, '来源 ID')))
-    if (target.kind === 'url') { openExternalSafely(target.url); return { opened: true, reason: '' } }
-    if (target.kind === 'file') {
-      const failure = await shell.openPath(target.path)
-      return { opened: failure === '', reason: failure }
-    }
-    return { opened: false, reason: target.kind === 'none' ? target.reason : '请打开对应记录' }
+    // Resolution and the actual open share one boundary, so nothing the renderer
+    // sends can widen what is allowed to reach the OS.
+    return openSource(await knowledge.getSource(knowledgeId(id, '来源 ID')), {
+      resolve: resolveTarget,
+      external: url => openExternalSafely(url),
+      file: path => shell.openPath(path)
+    })
   })
+  /**
+   * A manual extraction has to reach the same consumer every collected task uses:
+   * the helper only enqueues, so the body is read and the engine woken here. A
+   * source whose text is gone is reported as `needs_reread` instead of queued.
+   */
   handle('knowledge:source-extract', (event, id: string) => {
     knowledgeOwner(event)
-    return knowledge.extractSource(knowledgeId(id, '来源 ID'))
+    return extractSourceNow(knowledgeId(id, '来源 ID'), {
+      host: () => knowledge,
+      enabled: () => knowledgeCollector.enabled,
+      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+      resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
+      wake: () => extractEngine.wake(),
+      log: line => log(line)
+    })
   })
   handle('knowledge:model-info', event => { knowledgeOwner(event); return modelInfo() })
   handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })

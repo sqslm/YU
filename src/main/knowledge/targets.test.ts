@@ -46,7 +46,7 @@ function deps(over: Partial<TargetDeps> = {}): TargetDeps {
     note: () => undefined,
     chat: () => undefined,
     attachment: () => undefined,
-    file: () => false,
+    ownedFile: () => null,
     url: value => value.startsWith('https://'),
     ...over
   }
@@ -125,15 +125,17 @@ describe('resolveSourceTarget', () => {
     expect(target).toMatchObject({ kind: 'record', record: { id: 'm9', threadId: 't9' } })
   })
 
-  it('opens an existing local file and reports a vanished one', () => {
-    expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/a.pdf' }), deps({ file: () => true })))
-      .toEqual({ kind: 'file', path: 'C:/a.pdf' })
-    expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/gone.pdf' }), deps()))
-      .toEqual({ kind: 'none', reason: '本地文件或附件已不存在' })
+  it('opens an app-owned document and refuses a locator with no read credential', () => {
+    expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/notes/a.pdf' }), deps({ ownedFile: value => value })))
+      .toEqual({ kind: 'file', path: 'C:/notes/a.pdf' })
+    // A locator written through `source.save` proves nothing: without an owned
+    // read record it stays a metadata row.
+    expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/anywhere/gone.pdf' }), deps()))
+      .toEqual({ kind: 'none', reason: '该来源没有可核验的读取记录' })
   })
 
   it('prefers a safe web locator over the file branch for a reading source', () => {
-    expect(resolveSourceTarget(source({ kind: 'document', locator: 'https://example.com/p' }), deps({ file: () => true })))
+    expect(resolveSourceTarget(source({ kind: 'document', locator: 'https://example.com/p' }), deps({ ownedFile: value => value })))
       .toEqual({ kind: 'url', url: 'https://example.com/p' })
   })
 })
