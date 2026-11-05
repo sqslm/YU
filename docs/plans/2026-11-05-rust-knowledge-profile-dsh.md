@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2、阶段 3 已通过外部复核；阶段 4 外部复核未通过，复核提出的 P1～P6 修复已提交，等待外部复核。阶段 5～7 未开始；用户可见的知识库页面与画像页面尚未开放（后台画像与上下文接口已就绪，接入回答属阶段 6）。**
+**状态：阶段 1、阶段 2、阶段 3 已通过外部复核；阶段 4 外部复核未通过，P1～P6 与随后 T1～T4 的修复均已提交，等待外部复核。阶段 5～7 未开始；用户可见的知识库页面与画像页面尚未开放（后台画像与上下文接口已就绪，接入回答属阶段 6）。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -839,7 +839,7 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 
 ## 阶段 4 实施记录（2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
 
-**状态：阶段 4 外部复核未通过，复核提出的 P1～P6 修复已提交（见文末「阶段 4 复核问题修复」），等待外部复核。阶段 5～7 未开始；用户可见的画像页面尚未开放，但后台画像与上下文字符串已经可读。**
+**状态：阶段 4 外部复核未通过，P1～P6 与 T1～T4 的修复均已提交（见文末两节），等待外部复核。阶段 5～7 未开始；用户可见的画像页面尚未开放，但后台画像与上下文字符串已经可读。**
 
 ### 契约（本阶段对外行为）
 
@@ -936,3 +936,57 @@ Rust `native/knowledge/tests/profile.rs` 现 20 项（原 11 项 + 9 项）：�
 实现提交：`c30df7e` `fix(knowledge): close the stage 4 profile loop review gaps`。
 
 未测与边界：未调用真实付费模型（全部为注入 completer，模型调用次数由测试断言为 0 或 1）；未在打包 Electron 实例内运行；30 天窗口用注入时间验证，未等待真实日历；画像页面与聊天检索仍属阶段 5～7，`profile.context` 目前只有主进程消费者；`profile.retry` 只把 `failed` 放回 `pending`，不做自动重试。
+
+## 阶段 4 剩余复核修复（T1～T4，2026-11-05 第五轮，reportId `67b11b40-166f-4cf1-8111-6e0a081380e8`）
+
+外部复核在 `1944446` 上判阶段 4 仍未通过：P1～P6 的修复范围通过（21 文件 / 267 项 Vitest、`cargo test --locked --test profile` 20 项、`git diff --check fe3f127..HEAD`、交付哈希 `3bbf5711…`），但留下 T1～T4 四组控制/事务边界缺口。本节记录实测失败与修复，不覆盖上文已有的失败记录。
+
+| 项 | 外部实测失败 | 修复 |
+| --- | --- | --- |
+| T1 控制操作与 claim 释放不同步 | 模型调用在途时关总开关／关 chat／暂停，信号虽被中止，数据库仍是 `working` 加 claim；重新打开后 230 ms 内行确实回到 `pending`（`modelCalls` 仍为 1），但恢复时的唤醒已经看过空队列，之后再没有唤醒 | 释放放进写控制状态的同一个 Immediate 事务：`profile.configure` 在最终状态会停止循环时（`!enabled \|\| !chat \|\| pausedManual \|\| pausedGame`）执行 `UPDATE profile_pending SET state='pending', claim=NULL WHERE state='working'`，控制回包即代表释放已提交；`ProfileCollector.sync()` 改为先 `stop()` + `cancelInFlight('profile.learn.run')`，再 `await configureProfile`，最后按状态 park 或 `wake()`。迟到结算只作用于自己的 claim：`release()` 带 `state='working' AND claim=?` 条件，被重新领取的行不会被退回 |
+| T2 清空屏障不覆盖使用事件、关闭期撤回失效、来源失效仍进上下文 | 清空后重放同一 `opId`/`at` 仍 `counted=true`、`usageTotal` 回到 1；画像开关关闭时 `retractThread` 因 `enabled=false` 提前返回，重开后仍从已删除对话学习；自动条目唯一证据被撤回后 `context` 仍在引用（稳定偏好的时间例外盖过了来源有效性） | `record_event` 在自己的事务内用 `at <= cleared_at` 拒绝清空之前的事件（清空会删掉操作日志，屏障必须由判断承担）；`retractThread` 在 `host.running \|\| host.hasProfileData()` 时照常执行，关闭期也能撤回且先于恢复学习生效，从未创建过的画像仍不建库；`context` 增加 `origin` 与 `valid_evidence` 计数（按 `#` 截断来源 id 后匹配 `profile_source_state`），`!protected && origin != "manual" && valid == 0` 的条目退出上下文，条目详情仍返回 `evidence[].withdrawn` 供管理 |
+| T3 容量不计 failed、旧 done 正文留存 | 造出 200 条失败后第 201 条仍 `queued=1`（201 行 / 6523 字）；真实 schema2 库中一条 `done` 行在启动后 `user_version=3` 但 31 字正文仍在、`markers=0` | `active_usage` 计入 `pending/working/failed`（失败行仍保存待重试正文）；`Store::open` 每次打开都把 `state='done'` 行转成 `profile_markers` 再删除，schema2 升级与已在 schema3 的库同样生效；`retry` 只把已有失败放回队列，不产生新工作；`enqueue` 的容量拒绝带 `reason:"capacity"`，`ProfileCollector` 单独记一条「画像证据已满」日志，与重复投递区分 |
+| T4 槽位未按维度校验、同槽手写另建条目 | pinned `depth` 时模型借用本批 `focus:rust` 槽位回答 `dimension=depth` 成功，产生第二条矛盾 `depth`；两次手写同一 `dimension=depth, slot=depth` 产生两个 id、两行 | `apply` 校验候选槽位所属维度，跨维度引用报 `invalid_output` 并整事务拒绝（原未知槽位文案不变）；`save` 改为先按 `dimension+slot` 查找（无槽位的旧行回退按值匹配），同槽手写复用 id、保留证据与固定/更正，并按人工语义把 `corrected` 置真；可并存维度仍按值派生槽位，旧数据兼容 |
+
+接口与数据模型变化（仅本阶段）：无新增方法；`profile.configure` 的返回时机现在包含在途批次的释放；`save` 的匹配顺序变为槽位优先；画像 schema 仍为 3，`profile_markers` 兼作成功／清空／撤回三类去重记录；知识库 schema 仍为 5。
+
+### 新增回归与反向对照
+
+Rust `native/knowledge/tests/profile.rs` 现 27 项（20 + 7）：`a_control_change_releases_the_batch_in_its_own_transaction`、`an_event_before_a_clear_is_not_counted_after_a_restart`、`a_withdrawal_while_the_switch_is_off_still_drops_the_queued_source`、`a_retracted_source_takes_its_automatic_item_out_of_the_context`、`capacity_counts_work_that_failed_to_learn`、`a_manual_save_reuses_the_id_of_a_controlled_slot`、`a_slot_from_another_dimension_is_refused`。`native/knowledge/src/store.rs` 新增 1 项库内测试 `a_finished_stage_two_row_loses_its_text_when_the_database_opens`（真实 schema2 DDL 库 + 已在 schema3 的库各一次），lib 由 15 增至 16 项。
+
+`src/main/knowledge/profile.integration.test.ts` 现 12 项（8 + 4，真实 release helper + 生产 `KnowledgeHost`/`ProfileCollector`，0 次付费模型）：总开关「快速关→开」、chat 通道「快速关→开」、手动暂停「快速关→开」三个路径都在批次真正停在 gate 上时操作，且**不等待** `pending`、不手动 `wake()`、不调 `learn.fail`、不补新证据；第四项证明关闭画像期间的对话撤回仍生效。
+
+反向对照（逐项临时改回缺陷实现后实测失败，随后恢复）：
+
+| 临时改回 | 实测失败 |
+| --- | --- |
+| 去掉 `configure` 事务内释放 | `a_control_change_releases_the_batch_in_its_own_transaction` 失败（`pending` 0，期望 1） |
+| 去掉 `record_event` 的 `cleared_at` 判断 | `an_event_before_a_clear_is_not_counted_after_a_restart` 失败（重放仍计数） |
+| `active_usage` 退回 `pending/working` | `capacity_counts_work_that_failed_to_learn` 失败（201 条被接受，`left 1 / right 0`） |
+| 去掉 `apply` 的维度校验 | `a_slot_from_another_dimension_is_refused` 失败 |
+| `save` 退回按值匹配 | `a_manual_save_reuses_the_id_of_a_controlled_slot` 失败（两个不同 id） |
+| `Store::open` 不迁移 `done` | `a_finished_stage_two_row_loses_its_text_when_the_database_opens` 失败（`markers` 0） |
+| `context` 不查来源有效性 | `a_retracted_source_takes_its_automatic_item_out_of_the_context` 失败 |
+| `retractThread` 退回 `!enabled` 提前返回 | `retracts a held chat while the switch is off so it is never learned` 失败 |
+
+调试过程中的一条实测事实（记录以免重复踩坑）：TS 集成测试用的是 `native/bin/yu-knowledge.exe`，Rust 改动后不先 `node scripts/build-native.mjs`，测试仍在跑旧行为——本轮最初三次「控制不释放」的失败就是旧二进制造成的，不能据此推断 Rust 逻辑有问题。
+
+### 验证（最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | 0 |
+| `cargo test --locked` | 0（16 lib + 11 extract + 11 process + 27 profile + 18 queue = 83 项） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture`） |
+| `node scripts/build-native.mjs` | 0（20.33 s） |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` / `-p tsconfig.web.json` | 0 / 0 |
+| `pnpm exec vitest run src/main/knowledge src/main/chat.test.ts src/main/notes.test.ts src/main/assistant.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 0（21 文件 / 271 项） |
+| `pnpm test:native` | 0（7 个 crate 全部构建并测试通过） |
+| `pnpm test` | 0（268 文件通过 / 3 跳过；3825 项通过 / 8 跳过；99.29 s） |
+| `pnpm build` | 0（`settings-*.js` 4,687.76 kB） |
+| `git diff --check` | 0（本轮提交前） |
+| `git diff --check 7987aed..HEAD` | 0（阶段 3 验收点到本轮之前） |
+
+交付产物：`native/bin/yu-knowledge.exe` 2,897,408 字节，SHA-256 `10ed0e8743a94a102685db4fb7061f24bc6fa5a48eb5a526fe95be117edca01c`（MSVC 重建哈希会变）；debug `native/knowledge/target/debug/yu-knowledge.exe`、fixture `yu-knowledge-fixture.exe` 与 `native/knowledge/target`（1.6 GB，已 gitignore）不计入交付。`%TEMP%/yu-knowledge*` 已清空（提交前实测 0 个）。
+
+未测与边界：未调用真实付费模型（全部注入 completer，模型调用次数由测试断言为 0 或 1）；未在打包 Electron 实例内运行；30 天窗口仍用注入时间；「快速关→开」三条路径覆盖总开关、chat 通道与手动暂停，游戏暂停走同一条 `configure` 释放路径但未单独做快速开关回归；`profile.retry` 仍只人工触发。阶段 5～7 未开始，用户可见的画像页面尚未开放。
