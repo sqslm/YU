@@ -143,8 +143,13 @@ pub fn run() -> i32 {
                                 Ok(outcome) => protocol::result_frame(&request.id, &outcome.result),
                                 Err(error) => protocol::error_frame(&request.id, error),
                             };
-                            let shutdown = outcome.map(|outcome| outcome.shutdown).unwrap_or(false);
-                            let scope = outcome_scope(&request.method);
+                            // The method says which slice of the page it touched, and
+                            // a method that changed nothing says nothing: a failed or
+                            // cancelled call must not refresh a view.
+                            let (shutdown, scope) = match outcome {
+                                Ok(outcome) => (outcome.shutdown, outcome.scope),
+                                Err(_) => (false, None),
+                            };
                             let _ = write_answer(&worker_link, &request.id, &answer);
                             if let Some(scope) = scope {
                                 let _ = worker_link.write(&protocol::changed_frame(scope));
@@ -188,16 +193,6 @@ fn write_answer(link: &Link, id: &str, frame: &serde_json::Value) -> protocol::A
         "the response does not fit in one 2 MiB frame; request a narrower page or a shorter body",
     );
     link.write_line(&encode(&protocol::error_frame(id, &error))?)
-}
-
-fn outcome_scope(method: &str) -> Option<&'static str> {
-    match method {
-        "source.save" | "source.invalidate" => Some("sources"),
-        "card.save" | "card.update" | "card.delete" | "card.merge" | "relation.add"
-        | "relation.remove" => Some("cards"),
-        "profile.save" | "profile.update" | "profile.delete" => Some("profile"),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ import {
 } from '@mui/material'
 import AddRounded from '@mui/icons-material/AddRounded'
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded'
+import AutorenewRounded from '@mui/icons-material/AutorenewRounded'
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded'
 import FileDownloadRounded from '@mui/icons-material/FileDownloadRounded'
 import HistoryRounded from '@mui/icons-material/HistoryRounded'
@@ -25,12 +26,11 @@ import StarBorderRounded from '@mui/icons-material/StarBorderRounded'
 import StarRounded from '@mui/icons-material/StarRounded'
 import TipsAndUpdatesRounded from '@mui/icons-material/TipsAndUpdatesRounded'
 import { useTranslation } from 'react-i18next'
-import { isSafeLink } from '@shared/links'
 import type { CardKind, KnowledgeCard, KnowledgeSource, RelationKind, RelationList } from '@shared/knowledge'
 import type { LocalRecord } from '@shared/workspace'
 import { NoteMarkdownBody, noteMarkdownSx } from '../pages/NoteMarkdown'
 import { formatStamp } from '../pages/notesView'
-import { CARD_KINDS, groupRelations, kindKey, relationKey, sourceKindKey } from '../pages/knowledgeView'
+import { CARD_KINDS, extractStatus, groupRelations, kindKey, relationKey, sourceKindKey } from '../pages/knowledgeView'
 import { DeleteCardDialog, MergeDialog, RelationDialog, RevisionsDialog, SuggestionsDialog } from './KnowledgeCardDialogs'
 
 const RELATION_LIMIT = 40
@@ -63,30 +63,68 @@ function topicsOf(text: string): string[] {
 }
 
 /** One source row: the real id, where it came from, and why it is unusable when it is. */
-function SourceRow({ source, onOpenNote, openRecord }: {
+function SourceRow({ source, openRecord }: {
   source: KnowledgeSource
-  onOpenNote: (id: string) => void
   openRecord: (record: LocalRecord) => void
 }): JSX.Element {
   const { t } = useTranslation()
-  const web = source.locator && isSafeLink(source.locator) ? source.locator : ''
-  const open = (): void => {
-    if (source.kind === 'note') onOpenNote(source.originRef)
-    else if (source.kind === 'chat') openRecord({ kind: 'chat', id: source.originRef, title: source.title, text: '', at: 0 })
-    else if (web) void window.api.app.openExternal(web)
+  const [locating, setLocating] = useState(false)
+  const [denied, setDenied] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [extractNote, setExtractNote] = useState('')
+  const active = source.state === 'active'
+
+  // The main process owns the identity: a chat origin is a compound ref and only
+  // `sourceTarget` can turn it back into a record with its thread.
+  const locate = async (): Promise<void> => {
+    setDenied('')
+    setLocating(true)
+    try {
+      const target = await window.api.knowledge.sourceTarget(source.id)
+      if (target.kind === 'record') return openRecord(target.record)
+      if (target.kind === 'none') return setDenied(target.reason)
+      const result = await window.api.knowledge.openSource(source.id)
+      if (!result.opened) setDenied(result.reason)
+    } catch (err) {
+      setDenied(messageOf(err))
+    } finally {
+      setLocating(false)
+    }
   }
-  const canOpen = source.state === 'active' && (source.kind === 'note' || source.kind === 'chat' || Boolean(web))
+
+  const extract = async (): Promise<void> => {
+    setExtractNote('')
+    setExtracting(true)
+    try {
+      const status = extractStatus(await window.api.knowledge.extractSource(source.id))
+      setExtractNote(status.queued ? t('knowledge.extractQueued', { count: status.count }) : status.reason)
+    } catch (err) {
+      setExtractNote(messageOf(err))
+    } finally {
+      setExtracting(false)
+    }
+  }
+
   return (
     <Box sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
         <Chip size="small" label={t(sourceKindKey(source.kind))} />
         <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{source.title || source.id}</Typography>
-        {source.state === 'invalid' && <Chip size="small" color="warning" variant="outlined" label={t('knowledge.sourceInvalid')} />}
-        {canOpen && (
-          <Tooltip title={t('knowledge.open')}>
-            <IconButton size="small" aria-label={t('knowledge.open')} onClick={open}>
-              <OpenInNewRounded fontSize="small" />
+        {!active && <Chip size="small" color="warning" variant="outlined" label={t('knowledge.sourceInvalid')} />}
+        <Tooltip title={t('knowledge.extract')}>
+          <span>
+            <IconButton size="small" aria-label={`${t('knowledge.extract')} ${source.title || source.id}`} disabled={extracting} onClick={() => void extract()}>
+              <AutorenewRounded fontSize="small" />
             </IconButton>
+          </span>
+        </Tooltip>
+        {active && (
+          <Tooltip title={t('knowledge.open')}>
+            <span>
+              <IconButton size="small" aria-label={t('knowledge.open')} disabled={locating} onClick={() => void locate()}>
+                <OpenInNewRounded fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
         )}
       </Stack>
@@ -94,9 +132,11 @@ function SourceRow({ source, onOpenNote, openRecord }: {
         <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{source.id}</Typography>
         {source.locator && <Typography variant="caption" color="text.secondary" sx={{ minWidth: 0, overflowWrap: 'anywhere' }} noWrap>{source.locator}</Typography>}
       </Stack>
-      {source.state === 'invalid' && (
+      {!active && (
         <Typography variant="caption" color="warning.main" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{source.invalidReason}</Typography>
       )}
+      {denied && <Typography variant="caption" color="warning.main" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{denied}</Typography>}
+      {extractNote && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{extractNote}</Typography>}
     </Box>
   )
 }
@@ -107,14 +147,13 @@ interface DetailProps {
   refreshToken: number
   onChanged: () => void
   onSelect: (id: string) => void
-  onOpenNote: (id: string) => void
   openRecord: (record: LocalRecord) => void
   onPickTopic: (topic: string) => void
   onBack: () => void
   onDeleted: () => void
 }
 
-export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onSelect, onOpenNote, openRecord, onPickTopic, onBack, onDeleted }: DetailProps): JSX.Element {
+export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onSelect, openRecord, onPickTopic, onBack, onDeleted }: DetailProps): JSX.Element {
   const { t } = useTranslation()
   const [card, setCard] = useState<KnowledgeCard | null>(null)
   const [sources, setSources] = useState<KnowledgeSource[]>([])
@@ -361,7 +400,7 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
               <Typography variant="caption" color="text.secondary">{t('knowledge.sourcesEmpty')}</Typography>
             )}
             {sources.map((source) => (
-              <SourceRow key={source.id} source={source} onOpenNote={onOpenNote} openRecord={openRecord} />
+              <SourceRow key={source.id} source={source} openRecord={openRecord} />
             ))}
             {missing.map((id) => (
               <Box key={id} sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}>

@@ -159,6 +159,10 @@ struct ModelEdge {
     to: String,
     kind: String,
     evidence: String,
+    /// The one segment the basis was quoted from, fixed at parse time so the
+    /// edge can be traced to the text that produced it.
+    source_id: String,
+    segment: usize,
 }
 
 fn lock(store: &Store) -> ApiResult<std::sync::MutexGuard<'_, Connection>> {
@@ -638,11 +642,6 @@ fn parse_relations(value: Option<&Value>, batch: &[Segment]) -> ApiResult<Vec<Mo
             format!("单批关系数量超过上限（{MAX_RELATIONS}）"),
         ));
     }
-    let material: String = batch
-        .iter()
-        .map(|segment| segment.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
     let mut edges = Vec::new();
     for item in items {
         let object = item
@@ -671,31 +670,36 @@ fn parse_relations(value: Option<&Value>, batch: &[Segment]) -> ApiResult<Vec<Mo
         if from == to {
             return Err(ApiError::new(Code::InvalidOutput, "关系不能指向自己"));
         }
-        // A relation is only traceable if its basis is a quote from the material
-        // the model was given.
-        if evidence.trim().is_empty() || !material.contains(&evidence) {
+        if evidence.trim().is_empty() {
             return Err(ApiError::new(
                 Code::InvalidOutput,
                 "关系依据不是本批材料原文",
             ));
         }
+        // The basis has to sit inside one segment of the material the model was
+        // given. Two segments, or two sources, do not add up to a quote: joining
+        // them would let an answer cite text that appears in neither.
+        let segment = batch
+            .iter()
+            .find(|segment| segment.text.contains(&evidence))
+            .ok_or_else(|| ApiError::new(Code::InvalidOutput, "关系依据必须来自同一段原文"))?;
         edges.push(ModelEdge {
             from,
             to,
             kind,
             evidence,
+            source_id: segment.source_id.clone(),
+            segment: segment.index,
         });
     }
     Ok(edges)
 }
 
-/// Resolves one relation endpoint: `draft:N` names a card this batch wrote, any
-/// other reference must be a card id the batch offered.
-fn resolve_edge(
-    reference: &str,
-    batch_cards: &BTreeMap<usize, String>,
-    offered: &BTreeSet<String>,
-) -> ApiResult<String> {
+/// Resolves one relation endpoint against the snapshot this request put in front
+/// of the model: only the drafts this answer wrote are addressable. A card id
+/// the model was never shown cannot be guessed into an edge, not even one the
+/// comparison call will offer later.
+fn resolve_edge(reference: &str, batch_cards: &BTreeMap<usize, String>) -> ApiResult<String> {
     if let Some(index) = reference
         .strip_prefix("draft:")
         .and_then(|value| value.parse::<usize>().ok())
@@ -707,12 +711,9 @@ fn resolve_edge(
             )
         });
     }
-    if offered.contains(reference) {
-        return Ok(reference.to_string());
-    }
     Err(ApiError::new(
         Code::InvalidOutput,
-        format!("关系引用了本批之外的卡片：{reference}"),
+        format!("关系引用了本次提炼未展示的卡片：{reference}"),
     ))
 }
 
@@ -1501,18 +1502,27 @@ fn apply(
         }
     }
 
-    // Relations land last: they need the ids this batch actually wrote. A
-    // reference to anything else means the model invented it.
+    // Relations land last: they need the ids this batch actually wrote. The
+    // endpoints this request may name are the drafts it was shown, so a card that
+    // only the comparison stage will offer cannot be referenced here; and each
+    // edge carries the one segment its basis was quoted from.
     if !relations.is_empty() {
-        let mut offered: BTreeSet<String> = candidates.iter().map(|card| card.id.clone()).collect();
-        offered.extend(batch_cards.values().cloned());
         for edge in relations {
-            let from = resolve_edge(&edge.from, &batch_cards, &offered)?;
-            let to = resolve_edge(&edge.to, &batch_cards, &offered)?;
+            let from = resolve_edge(&edge.from, &batch_cards)?;
+            let to = resolve_edge(&edge.to, &batch_cards)?;
             if from == to {
                 return Err(ApiError::new(Code::InvalidOutput, "关系不能指向自己"));
             }
-            relations::link_model(&transaction, &from, &to, &edge.kind, &edge.evidence, now)?;
+            relations::link_model(
+                &transaction,
+                &from,
+                &to,
+                &edge.kind,
+                &edge.evidence,
+                &edge.source_id,
+                edge.segment as i64,
+                now,
+            )?;
         }
     }
 

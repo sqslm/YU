@@ -15,7 +15,7 @@ import { personalCommand } from './tools/personal'
 import { taskDiagnosticSummary } from './task-diagnostics'
 import { app, clipboard, dialog, nativeTheme, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join, resolve } from 'node:path'
 import os from 'node:os'
@@ -36,7 +36,9 @@ import { StatsStore, statsAccountKey } from './stats'
 import { HotkeyHost, type HotkeyHostEvent } from './hotkey/host'
 import { UiaHost } from './uia/host'
 import { KnowledgeHost } from './knowledge/host'
-import { createKnowledgeCompleter } from './knowledge/model'
+import { createKnowledgeCompleter, selectProfile } from './knowledge/model'
+import { resolveSourceTarget } from './knowledge/targets'
+import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
 import { ExtractEngine } from './knowledge/engine'
 import { HistoryDriver } from './knowledge/history'
@@ -57,7 +59,10 @@ import {
   type UpdateProfileInput,
   type AddRelationInput,
   type GraphQuery,
-  type MergeCardsInput
+  type KnowledgeModelInfo,
+  type KnowledgeSource,
+  type MergeCardsInput,
+  type SourceTarget
 } from '@shared/knowledge'
 import { Updater } from './updater'
 import { Pipeline } from './pipeline'
@@ -1545,6 +1550,41 @@ function registerIpc(): void {
   // Knowledge and profile data belong to the helper. Each channel forwards one
   // typed request; none of them accepts a path, SQL, or a model prompt.
   const knowledgeOwner = (event: Electron.IpcMainInvokeEvent): void => { if (event.sender !== settingsWindow?.webContents) throw Error('请从主界面管理知识库') }
+  const workspaceSources = () => ({ notes: () => notes.list().notes, chat: chats.store, history, reminders: () => reminders!.store.list(), events: () => calendar!.list() })
+  const resolveTarget = (source: KnowledgeSource): SourceTarget => resolveSourceTarget(source, {
+    note: noteId => notes.list().notes.find(note => note.id === noteId),
+    chat: (threadId, messageId) => {
+      try {
+        return readWorkspaceRecord(workspaceSources(), { kind: 'chat', id: messageId, threadId, title: '', text: '', at: 0 })
+      } catch {
+        return undefined
+      }
+    },
+    attachment: attachmentId => chats.store.attachmentOwner(attachmentId),
+    file: path => { try { return statSync(path).isFile() } catch { return false } },
+    url: value => isSafeLink(value)
+  })
+  /**
+   * The profiles the helper can actually reach. A stored choice that has since
+   * been disabled or removed falls back to the first enabled one, and the panel
+   * says so instead of showing a configuration that is not being used.
+   */
+  const modelInfo = (): KnowledgeModelInfo => {
+    const current = store.get()
+    const profiles = current.profiles.filter(profile => profile.kind === 'llm').map(profile => ({
+      id: profile.id, label: profile.model || profile.name, enabled: profile.enabled
+    }))
+    const stored = current.knowledge.profileId ?? null
+    const effective = selectProfile(current, stored ?? '')
+    return {
+      profiles,
+      selectedId: stored,
+      effectiveId: effective?.id ?? null,
+      effectiveLabel: effective ? (effective.model || effective.name) : '',
+      fallback: Boolean(stored) && effective?.id !== stored
+    }
+  }
+
   handle('knowledge:status', event => { knowledgeOwner(event); return knowledge.status() })
   handle('knowledge:source-save', (event, input: SaveSourceInput) => { knowledgeOwner(event); return knowledge.saveSource(input) })
   handle('knowledge:source-get', (event, id: string) => { knowledgeOwner(event); return knowledge.getSource(knowledgeId(id, '来源 ID')) })
@@ -1639,6 +1679,30 @@ function registerIpc(): void {
     knowledgeOwner(event)
     return knowledge.queryGraph({ ...query, focusId: query.focusId ? knowledgeId(query.focusId, '卡片 ID') : undefined })
   })
+  /**
+   * A source row carries an origin the renderer cannot act on by itself, so the
+   * main process resolves it against the real stores first. Only the resolved
+   * target reaches the renderer, and opening it happens here too.
+   */
+  handle('knowledge:source-target', async (event, id: string) => {
+    knowledgeOwner(event)
+    return resolveTarget(await knowledge.getSource(knowledgeId(id, '来源 ID')))
+  })
+  handle('knowledge:source-open', async (event, id: string) => {
+    knowledgeOwner(event)
+    const target = resolveTarget(await knowledge.getSource(knowledgeId(id, '来源 ID')))
+    if (target.kind === 'url') { openExternalSafely(target.url); return { opened: true, reason: '' } }
+    if (target.kind === 'file') {
+      const failure = await shell.openPath(target.path)
+      return { opened: failure === '', reason: failure }
+    }
+    return { opened: false, reason: target.kind === 'none' ? target.reason : '请打开对应记录' }
+  })
+  handle('knowledge:source-extract', (event, id: string) => {
+    knowledgeOwner(event)
+    return knowledge.extractSource(knowledgeId(id, '来源 ID'))
+  })
+  handle('knowledge:model-info', event => { knowledgeOwner(event); return modelInfo() })
   handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })
   handle('profile:update', (event, input: UpdateProfileInput) => {
     knowledgeOwner(event)

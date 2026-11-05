@@ -12,12 +12,14 @@
 import type {
   CardKind,
   CardQuery,
+  ExtractSourceResult,
   GraphEdge,
   GraphNode,
   KnowledgeCard,
   KnowledgeCardPage,
   KnowledgeCardSummary,
   KnowledgeGraph,
+  KnowledgeModelInfo,
   ProfileCategory,
   ProfileItem,
   RelationKind,
@@ -139,6 +141,22 @@ export function paneMode(wide: boolean, hasSelection: boolean): PaneMode {
   return hasSelection ? 'detail' : 'list'
 }
 
+/**
+ * Width the split actually needs: a 320px list plus a card pane that can still
+ * show a body. The window breakpoint is not a substitute — the nav rail and the
+ * page margins take ~250px away from it, so a 900px window has no split left.
+ */
+export const SPLIT_MIN_WIDTH = 720
+
+export function splitFit(availableWidth: number): boolean {
+  return availableWidth >= SPLIT_MIN_WIDTH
+}
+
+/** Pane layout from the space the page really has, measured on its own box. */
+export function paneModeFor(availableWidth: number, hasSelection: boolean): PaneMode {
+  return paneMode(splitFit(availableWidth), hasSelection)
+}
+
 export type LibraryEmpty = 'none' | 'library' | 'filters'
 
 /**
@@ -256,7 +274,9 @@ export function mergeGraph(current: KnowledgeGraph | null, next: KnowledgeGraph)
     total: next.total,
     shown: next.shown,
     truncated: next.truncated,
-    limitedBy: next.limitedBy
+    limitedBy: next.limitedBy,
+    focused: next.focused,
+    expanded: next.expanded
   }
 }
 
@@ -283,4 +303,50 @@ export function groupProfile(items: readonly ProfileItem[]): ProfileGroup[] {
   return PROFILE_CATEGORIES.map((category) => ({ category, items: items.filter((item) => item.category === category) })).filter(
     (group) => group.items.length > 0
   )
+}
+
+export interface ExtractStatus {
+  /** `true` only when the helper really took the source back into the queue. */
+  queued: boolean
+  count: number
+  /** The helper's own words when it queued nothing; the row shows them as-is. */
+  reason: string
+}
+
+/**
+ * What `extractSource` answered, in the shape the source row shows. Zero queued
+ * is not an error: the helper says why (capacity, needs reread, already queued)
+ * and that reason is the only honest thing to display.
+ */
+export function extractStatus(result: Pick<ExtractSourceResult, 'queued' | 'reason'>): ExtractStatus {
+  const count = Math.max(0, Math.trunc(result.queued))
+  return { queued: count > 0, count, reason: (result.reason ?? '').trim() }
+}
+
+export interface ModelOption {
+  id: string
+  label: string
+}
+
+export interface ModelView {
+  /** Enabled profiles only: a disabled one can never receive the request. */
+  options: ModelOption[]
+  /** The stored choice that is no longer selectable, so the select can name it. */
+  staleId: string | null
+  effectiveLabel: string
+  /** `true` whenever what is stored and what the helper would use differ. */
+  fallback: boolean
+}
+
+/**
+ * The model select from the helper's own report. Rendering `settings.profiles`
+ * directly lists disabled entries as if they were usable; this filters them and
+ * still names an unavailable stored choice instead of silently showing another.
+ */
+export function modelView(info: KnowledgeModelInfo): ModelView {
+  const options = info.profiles
+    .filter((profile) => profile.enabled)
+    .map((profile) => ({ id: profile.id, label: profile.label }))
+  const staleId = info.selectedId && !options.some((option) => option.id === info.selectedId) ? info.selectedId : null
+  return { options, staleId, effectiveLabel: info.effectiveLabel, fallback: info.fallback || staleId !== null }
 }

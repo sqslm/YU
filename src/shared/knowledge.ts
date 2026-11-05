@@ -129,6 +129,8 @@ export interface ProfileEvidence {
   originRef: string
   locator: string
   createdAt: number
+  /** The source behind this evidence was withdrawn; the item keeps the trace. */
+  withdrawn?: boolean
 }
 
 export interface ProfileItem {
@@ -229,6 +231,9 @@ export interface KnowledgeRelation {
   origin: RelationOrigin
   /** Quoted basis for a model relation; empty for a hand-drawn one. */
   evidence: string
+  /** Source and segment the quoted basis came from; null when there is none. */
+  sourceId: string | null
+  segment: number | null
   createdAt: number
 }
 
@@ -277,6 +282,10 @@ export interface KnowledgeGraph {
   truncated: boolean
   /** Which budget stopped the expansion; `null` when nothing was dropped. */
   limitedBy: 'nodes' | 'bytes' | null
+  /** The requested focus survived the budget and is in `nodes`. */
+  focused: boolean
+  /** Nodes brought in by the focus that the filter did not match. */
+  expanded: number
 }
 
 export interface TopicCount {
@@ -322,6 +331,10 @@ export interface MergedCards {
   sources: number
   /** Relations repointed onto the kept card. */
   relations: number
+  /** Whose body the merged card keeps: the request's or the kept card's. */
+  bodySource: 'request' | 'keep'
+  /** The kept body's opening characters, so the dialog can show what won. */
+  preview: string
 }
 
 export interface CardExport {
@@ -386,6 +399,7 @@ export type KnowledgeMethod =
   | 'source.publish'
   | 'queue.list'
   | 'queue.status'
+  | 'queue.extract'
   | 'queue.pause'
   | 'queue.cancel'
   | 'queue.retry'
@@ -568,6 +582,53 @@ export interface QueueStatus {
   pausedReasons: { manual: boolean; game: boolean }
   channels: CollectChannels
   windowMs: number
+  /**
+   * The newest groups, so a failing one can be retried by its real id instead of
+   * by a channel name that would reset a group the caller never saw.
+   */
+  groups: QueueGroup[]
+}
+
+export interface QueueGroup {
+  id: string
+  channel: CollectChannel
+  state: QueueState
+  threadKey: string | null
+  title: string
+  items: number
+  updatedAt: number
+}
+
+/**
+ * Result of asking the helper to re-queue an existing source for extraction.
+ * A refusal carries a reason instead of a group, so both are optional here and
+ * the panel shows whichever one the helper really sent.
+ */
+export interface ExtractSourceResult {
+  queued: number
+  reason?: string
+  groupId?: string | null
+  state?: string
+}
+
+/**
+ * What the main process will do with a source, resolved from the stored source
+ * itself. The renderer never builds a path or a chat id on its own.
+ */
+export type SourceTarget =
+  | { kind: 'record'; record: import('./workspace').LocalRecord }
+  | { kind: 'url'; url: string }
+  | { kind: 'file'; path: string }
+  | { kind: 'none'; reason: string }
+
+/** One enabled model profile plus the one the helper would actually use. */
+export interface KnowledgeModelInfo {
+  profiles: { id: string; label: string; enabled: boolean }[]
+  selectedId: string | null
+  effectiveId: string | null
+  effectiveLabel: string
+  /** True when the stored choice is disabled or gone, so the effective one differs. */
+  fallback: boolean
 }
 
 export interface ExclusionEntry {

@@ -918,3 +918,153 @@ fn the_export_writes_markdown_and_sanitises_the_filename() {
         "the document keeps the whole title"
     );
 }
+
+#[test]
+fn an_unedited_merge_keeps_both_current_bodies() {
+    let root = Root::new("merge-unedited");
+    let mut helper = Helper::start(&root, vec![]);
+    let kept = helper.save(
+        "a1",
+        card_params(
+            "concept",
+            "甲",
+            "甲的摘要",
+            "甲的正文，从来没有被人改过。",
+            &["rust"],
+            &[],
+            &[],
+        ),
+    );
+    let merged = helper.save(
+        "b1",
+        card_params(
+            "concept",
+            "乙",
+            "乙的摘要",
+            "乙的正文，也从来没有被人改过。",
+            &["rust"],
+            &[],
+            &[],
+        ),
+    );
+    let kept_before = helper.ok("g1", "card.get", json!({"id": kept}));
+    let merged_before = helper.ok("g2", "card.get", json!({"id": merged}));
+
+    let joined = helper.ok(
+        "m1",
+        "card.merge",
+        json!({
+            "keepId": kept,
+            "mergeId": merged,
+            "keepRevision": kept_before["revision"],
+            "mergeRevision": merged_before["revision"],
+            "body": "合并后的正文。",
+        }),
+    );
+    assert_eq!(joined["card"]["body"], "合并后的正文。", "{joined}");
+    assert_eq!(
+        joined["bodySource"], "request",
+        "the preview says the body came from the request: {joined}"
+    );
+    assert_eq!(
+        joined["preview"], "合并后的正文。",
+        "and carries the text the interface shows: {joined}"
+    );
+
+    // Neither card had a revision list before the merge, so both current bodies
+    // have to be written down as part of it.
+    let revisions = helper.ok("v1", "card.revisions", json!({"id": kept}));
+    let entries = revisions["revisions"].as_array().expect("revisions");
+    let bodies: Vec<&str> = entries
+        .iter()
+        .map(|entry| entry["body"].as_str().expect("body"))
+        .collect();
+    assert!(
+        bodies.iter().any(|body| body.contains("从来没有被人改过")),
+        "the kept card's old body survives: {revisions}"
+    );
+    assert!(
+        bodies
+            .iter()
+            .any(|body| body.contains("也从来没有被人改过")),
+        "the merged card's old body survives: {revisions}"
+    );
+    let mut numbers: Vec<i64> = entries
+        .iter()
+        .map(|entry| entry["revision"].as_i64().expect("revision"))
+        .collect();
+    numbers.sort_unstable();
+    let count = numbers.len();
+    numbers.dedup();
+    assert_eq!(
+        count,
+        numbers.len(),
+        "snapshot numbers stay unique: {revisions}"
+    );
+    assert_eq!(
+        joined["card"]["revision"].as_i64().expect("revision"),
+        kept_before["revision"].as_i64().expect("revision") + 1
+    );
+}
+
+#[test]
+fn a_merge_folds_the_two_contrast_edges_into_one() {
+    let root = Root::new("merge-contrast");
+    let mut helper = Helper::start(&root, vec![]);
+    let kept = helper.save(
+        "a1",
+        card_params("concept", "甲", "", "甲的正文。", &["rust"], &[], &[]),
+    );
+    let merged = helper.save(
+        "b1",
+        card_params("concept", "乙", "", "乙的正文。", &["rust"], &[], &[]),
+    );
+    let other = helper.save(
+        "c1",
+        card_params("concept", "丙", "", "丙的正文。", &["rust"], &[], &[]),
+    );
+    helper.ok(
+        "r1",
+        "relation.add",
+        json!({"fromId": kept, "toId": other, "kind": "contrast",
+               "evidence": "两者相反"}),
+    );
+    helper.ok(
+        "r2",
+        "relation.add",
+        json!({"fromId": merged, "toId": other, "kind": "contrast",
+               "evidence": "乙与丙也相反"}),
+    );
+    let kept_before = helper.ok("g1", "card.get", json!({"id": kept}));
+    let merged_before = helper.ok("g2", "card.get", json!({"id": merged}));
+    helper.ok(
+        "m1",
+        "card.merge",
+        json!({
+            "keepId": kept,
+            "mergeId": merged,
+            "keepRevision": kept_before["revision"],
+            "mergeRevision": merged_before["revision"],
+        }),
+    );
+
+    // Repointing turns both edges into the same pair, and a contrast pair is one
+    // edge however many times it is written.
+    let around = helper.ok("l1", "relation.list", json!({"cardId": other}));
+    assert_eq!(around["total"], 1, "one contrast edge survives: {around}");
+    let items = around["items"].as_array().expect("items");
+    assert_eq!(items[0]["kind"], "contrast");
+    assert_eq!(items[0]["origin"], "manual", "the hand-drawn origin stays");
+    let from = items[0]["fromId"].as_str().expect("fromId");
+    let to = items[0]["toId"].as_str().expect("toId");
+    assert!(
+        from < to,
+        "a symmetric edge keeps its canonical direction: {around}"
+    );
+    assert!(
+        items[0]["evidence"] == "两者相反" || items[0]["evidence"] == "乙与丙也相反",
+        "the surviving edge keeps real evidence: {around}"
+    );
+    let node = helper.ok("l2", "relation.list", json!({"cardId": kept}));
+    assert_eq!(node["total"], 1, "{node}");
+}

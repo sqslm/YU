@@ -859,3 +859,321 @@ fn replaying_the_same_batch_does_not_scan_twice() {
     let status = helper.ok("r4", "history.status", json!({ "jobId": job }));
     assert_eq!(status["job"]["scanned"], 1, "{status}");
 }
+
+impl Helper {
+    /// Sends one request and reports the scopes of every `changed` frame it
+    /// produced before the answer, in order.
+    fn call_scopes(&mut self, id: &str, method: &str, params: Value) -> (Value, Vec<String>) {
+        self.send(id, method, params);
+        let mut scopes = Vec::new();
+        loop {
+            let frame = self.recv();
+            if frame["type"] == "changed" {
+                scopes.push(frame["scope"].as_str().unwrap_or_default().to_string());
+                continue;
+            }
+            if frame["type"] == "result" && frame["id"] == id {
+                return (frame, scopes);
+            }
+        }
+    }
+
+    /// Sends one request that the page must hear about and checks the announcement
+    /// that follows its answer.
+    fn notified(&mut self, id: &str, method: &str, params: Value, scope: &str) -> Value {
+        let (answer, early) = self.call_scopes(id, method, params);
+        assert!(
+            early.is_empty(),
+            "no stale announcement before {method}: {early:?}"
+        );
+        let frame = self.recv();
+        assert_eq!(frame["type"], "changed", "{method}: {frame}");
+        assert_eq!(frame["scope"], scope, "{method} announced the wrong slice");
+        assert_eq!(frame["v"], 1);
+        answer
+    }
+}
+
+#[test]
+fn every_write_names_the_slice_it_changed() {
+    let root = Root::new("scopes");
+    let mut helper = Helper::start(&root, 0);
+    // The switch `start` flipped is itself a write, so its announcement is first.
+    let opening = helper.recv();
+    assert_eq!(opening["type"], "changed", "{opening}");
+    assert_eq!(opening["scope"], "queue", "{opening}");
+
+    // Collection used to be the one write the page never heard about.
+    let configured = helper.notified(
+        "s1",
+        "collect.configure",
+        json!({ "enabled": true }),
+        "queue",
+    );
+    assert_eq!(configured["ok"], true, "{configured}");
+
+    let published = helper.notified(
+        "s2",
+        "source.publish",
+        publish(
+            "note",
+            "note",
+            "note-s:v1",
+            "note-s",
+            "一段随记正文。",
+            now_ms(),
+        ),
+        "queue",
+    );
+    assert_eq!(published["ok"], true, "{published}");
+    let group = published["result"]["groupId"]
+        .as_str()
+        .expect("groupId")
+        .to_string();
+
+    let saved = helper.notified(
+        "s3",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "甲",
+            "summary": "",
+            "body": "甲的正文。",
+            "topics": ["rust"],
+            "aliases": [],
+            "sourceIds": [],
+        }),
+        "cards",
+    );
+    assert_eq!(saved["ok"], true, "{saved}");
+    let card = saved["result"]["id"].as_str().expect("id").to_string();
+    let second = helper.notified(
+        "s4",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "乙",
+            "summary": "",
+            "body": "乙的正文。",
+            "topics": ["rust"],
+            "aliases": [],
+            "sourceIds": [],
+        }),
+        "cards",
+    );
+    let other = second["result"]["id"].as_str().expect("id").to_string();
+    let linked = helper.notified(
+        "s5",
+        "relation.add",
+        json!({"fromId": card, "toId": other, "kind": "contains"}),
+        "cards",
+    );
+    assert_eq!(linked["ok"], true, "{linked}");
+
+    // A read reports nothing, and neither does a write that never happened: any
+    // announcement they produced would surface as a stale frame in the next call.
+    let (status, scopes) = helper.call_scopes("s6", "queue.status", json!({}));
+    assert_eq!(status["ok"], true, "{status}");
+    assert!(scopes.is_empty(), "a read changes nothing: {scopes:?}");
+    let (refused, scopes) = helper.call_scopes("s7", "queue.retry", json!({"groupId": group}));
+    assert_eq!(refused["ok"], false, "{refused}");
+    assert!(
+        scopes.is_empty(),
+        "a refused write must not refresh a page: {scopes:?}"
+    );
+    let (read, scopes) = helper.call_scopes("s8", "card.list", json!({}));
+    assert_eq!(read["ok"], true, "{read}");
+    assert!(
+        scopes.is_empty(),
+        "the refused write left no announcement behind: {scopes:?}"
+    );
+}
+
+#[test]
+fn the_status_names_the_groups_a_retry_can_reach() {
+    let root = Root::new("status-groups");
+    let mut helper = Helper::start(&root, 0);
+    let mut newest = String::new();
+    for index in 0..25 {
+        let group = format!("note-status-{index:02}");
+        let published = helper.ok(
+            &format!("p{index}"),
+            "source.publish",
+            publish(
+                "note",
+                "note",
+                &format!("{group}:v1"),
+                &group,
+                "一段随记正文。",
+                now_ms(),
+            ),
+        );
+        newest = published["groupId"].as_str().expect("groupId").to_string();
+    }
+
+    let status = helper.ok("st1", "queue.status", json!({}));
+    let groups = status["groups"].as_array().expect("groups");
+    assert_eq!(groups.len(), 20, "the list is bounded: {status}");
+    let first = &groups[0];
+    assert_eq!(
+        first["id"], newest,
+        "the newest group comes first: {status}"
+    );
+    assert_eq!(first["channel"], "note");
+    assert_eq!(first["state"], "ready", "{first}");
+    assert_eq!(first["title"], "note-status-24 标题");
+    assert_eq!(first["items"], 1);
+    assert!(first["updatedAt"].as_i64().expect("updatedAt") > 0);
+
+    // A failed group is exactly what the panel needs the id for.
+    let claimed = helper.ok("st2", "extract.next", json!({}));
+    let group = claimed["group"]["groupId"]
+        .as_str()
+        .expect("groupId")
+        .to_string();
+    helper.ok(
+        "st3",
+        "extract.fail",
+        json!({
+            "groupId": group,
+            "claim": claimed["group"]["claim"],
+            "code": "model_unavailable",
+            "reason": "模型暂时不可用",
+        }),
+    );
+    let status = helper.ok("st4", "queue.status", json!({}));
+    let failed = status["groups"]
+        .as_array()
+        .expect("groups")
+        .iter()
+        .find(|item| item["id"] == group)
+        .expect("the failed group is listed");
+    assert_eq!(failed["state"], "failed", "{status}");
+    let retried = helper.ok("st5", "queue.retry", json!({"groupId": failed["id"]}));
+    assert_eq!(retried["groupId"], group, "{retried}");
+    assert_eq!(retried["state"], "stabilizing", "{retried}");
+}
+
+#[test]
+fn an_existing_source_can_be_queued_for_extraction_again() {
+    let root = Root::new("extract-again");
+    let mut helper = Helper::start(&root, 0);
+    let published = helper.ok(
+        "r1",
+        "source.publish",
+        publish(
+            "note",
+            "note",
+            "note-again:v1",
+            "note-again",
+            "一段等待提炼的正文。",
+            now_ms(),
+        ),
+    );
+    let source = published["sourceId"]
+        .as_str()
+        .expect("sourceId")
+        .to_string();
+    let group = published["groupId"].as_str().expect("groupId").to_string();
+
+    let queued = helper.ok("r2", "queue.extract", json!({"sourceId": source}));
+    assert_eq!(queued["queued"], 1, "{queued}");
+    assert_eq!(queued["groupId"], group, "{queued}");
+    assert_eq!(queued["state"], "stabilizing", "{queued}");
+
+    // The re-queued task is claimable again, and re-running it is a no-op while a
+    // batch holds it.
+    let claimed = helper.ok("r3", "extract.next", json!({}));
+    assert_eq!(claimed["group"]["groupId"], group, "{claimed}");
+    let held = helper.ok("r4", "queue.extract", json!({"sourceId": source}));
+    assert_eq!(held["queued"], 0, "{held}");
+    assert_eq!(held["reason"], "working", "{held}");
+
+    // A source that was never read through has nothing to extract.
+    let blank = helper.ok(
+        "r5",
+        "source.save",
+        json!({
+            "kind": "note",
+            "originRef": "note-blank:v1",
+            "title": "空来源",
+            "version": "v1",
+            "text": "占位文本",
+        }),
+    );
+    let blank_id = blank["id"].as_str().expect("id").to_string();
+    let missing = helper.ok("r6", "queue.extract", json!({"sourceId": blank_id}));
+    assert_eq!(missing["queued"], 0, "{missing}");
+    assert_eq!(missing["reason"], "no_group", "{missing}");
+
+    let unknown = helper.call("r7", "queue.extract", json!({"sourceId": "src_missing"}));
+    assert_eq!(unknown["ok"], false, "{unknown}");
+    assert_eq!(unknown["error"]["code"], "not_found", "{unknown}");
+}
+
+#[test]
+fn a_requeue_refuses_the_states_the_publish_path_refuses() {
+    let root = Root::new("extract-refused");
+    let mut helper = Helper::start(&root, 0);
+    let first = helper.ok(
+        "r1",
+        "source.publish",
+        publish(
+            "note",
+            "note",
+            "note-off:v1",
+            "note-off",
+            "一段等待提炼的正文。",
+            now_ms(),
+        ),
+    );
+    helper.ok("r2", "collect.configure", json!({ "notes": false }));
+    let off = helper.call(
+        "r3",
+        "queue.extract",
+        json!({"sourceId": first["sourceId"]}),
+    );
+    assert_eq!(off["ok"], false, "{off}");
+    assert_eq!(off["error"]["code"], "channel_disabled", "{off}");
+    helper.ok("r4", "collect.configure", json!({ "notes": true }));
+
+    // An excluded group is not collected again either.
+    helper.ok(
+        "r5",
+        "exclude.add",
+        json!({"kind": "note", "key": "note-off", "reason": "用户排除"}),
+    );
+    let excluded = helper.call(
+        "r6",
+        "queue.extract",
+        json!({"sourceId": first["sourceId"]}),
+    );
+    assert_eq!(excluded["ok"], false, "{excluded}");
+    assert_eq!(excluded["error"]["code"], "excluded", "{excluded}");
+
+    // A source that lost its body cannot be queued: the text is never stored.
+    let second = helper.ok(
+        "r7",
+        "source.publish",
+        publish(
+            "note",
+            "note",
+            "note-gone:v1",
+            "note-gone",
+            "另一段正文。",
+            now_ms(),
+        ),
+    );
+    helper.ok(
+        "r8",
+        "source.invalidate",
+        json!({"id": second["sourceId"], "reason": "deleted"}),
+    );
+    let gone = helper.ok(
+        "r9",
+        "queue.extract",
+        json!({"sourceId": second["sourceId"]}),
+    );
+    assert_eq!(gone["queued"], 0, "{gone}");
+    assert_eq!(gone["reason"], "needs_reread", "{gone}");
+}

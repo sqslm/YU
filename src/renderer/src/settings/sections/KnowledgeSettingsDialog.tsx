@@ -20,8 +20,9 @@ import {
 import CloseRounded from '@mui/icons-material/CloseRounded'
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded'
 import { useTranslation } from 'react-i18next'
-import type { CollectChannel, ExclusionEntry, HistoryJob, QueueStatus, QueueTask } from '@shared/knowledge'
+import type { CollectChannel, ExclusionEntry, HistoryJob, KnowledgeModelInfo, QueueGroup, QueueStatus } from '@shared/knowledge'
 import type { Settings } from '@shared/types'
+import { modelView } from '../pages/knowledgeView'
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -34,7 +35,6 @@ const CHANNEL_KEY: Record<CollectChannel, string> = {
   chat: 'knowledge.channelChat',
   reading: 'knowledge.channelReading'
 }
-const FAILED_LIMIT = 5
 
 function Row({ label, children }: { label: string; children: ReactNode }): JSX.Element {
   return (
@@ -57,7 +57,7 @@ export function KnowledgeSettingsDialog({ settings, patch, open, onClose }: Prop
   const { t } = useTranslation()
   const knowledge = settings.knowledge
   const [status, setStatus] = useState<QueueStatus | null>(null)
-  const [failed, setFailed] = useState<QueueTask[]>([])
+  const [model, setModel] = useState<KnowledgeModelInfo | null>(null)
   const [exclusions, setExclusions] = useState<ExclusionEntry[]>([])
   const [job, setJob] = useState<HistoryJob | null>(null)
   const [scopes, setScopes] = useState({ notes: true, chat: true })
@@ -71,14 +71,14 @@ export function KnowledgeSettingsDialog({ settings, patch, open, onClose }: Prop
     setError('')
     void Promise.all([
       window.api.knowledge.queueStatus(),
-      window.api.knowledge.listQueue({ state: 'failed', offset: 0, limit: FAILED_LIMIT }),
+      window.api.knowledge.modelInfo(),
       window.api.knowledge.listExclusions(),
       window.api.knowledge.latestHistory()
     ])
-      .then(([queueStatus, queuePage, exclusionList, latest]) => {
+      .then(([queueStatus, modelInfo, exclusionList, latest]) => {
         if (!live) return
         setStatus(queueStatus)
-        setFailed(queuePage.items)
+        setModel(modelInfo)
         setExclusions(exclusionList)
         setJob(latest.job)
       })
@@ -86,12 +86,13 @@ export function KnowledgeSettingsDialog({ settings, patch, open, onClose }: Prop
     return () => { live = false }
   }, [open, reload])
 
+  // Each scope refreshes only its own section; nothing here polls.
   useEffect(() => {
     if (!open) return
     return window.api.knowledge.onChanged((scope) => {
-      if (scope === 'queue' || scope === 'cards' || scope === 'sources') {
+      if (scope === 'queue') {
         void window.api.knowledge.queueStatus().then(setStatus).catch(() => undefined)
-        void window.api.knowledge.listQueue({ state: 'failed', offset: 0, limit: FAILED_LIMIT }).then((page) => setFailed(page.items)).catch(() => undefined)
+        void window.api.knowledge.modelInfo().then(setModel).catch(() => undefined)
       }
       if (scope === 'history') void window.api.knowledge.latestHistory().then((latest) => setJob(latest.job)).catch(() => undefined)
       if (scope === 'sources') void window.api.knowledge.listExclusions().then(setExclusions).catch(() => undefined)
@@ -100,7 +101,9 @@ export function KnowledgeSettingsDialog({ settings, patch, open, onClose }: Prop
 
   if (!open) return null
 
-  const llmProfiles = settings.profiles.filter((profile) => profile.kind === 'llm')
+  const view = model ? modelView(model) : null
+  const groups: QueueGroup[] = status?.groups ?? []
+  const failedGroups = groups.filter((group) => group.state === 'failed')
   const paused = status?.paused ?? false
 
   const run = async (key: string, action: () => Promise<unknown>): Promise<void> => {
@@ -164,26 +167,35 @@ export function KnowledgeSettingsDialog({ settings, patch, open, onClose }: Prop
           <TextField
             select
             size="small"
-            fullWidth
+            fullWidth={false}
             label={t('knowledge.model')}
             value={knowledge.profileId ?? ''}
             onChange={(event) => patchKnowledge({ profileId: event.target.value || null })}
+            sx={{ flex: '1 1 240px', minWidth: 0 }}
           >
             <MenuItem value="">{t('knowledge.modelDefault')}</MenuItem>
-            {llmProfiles.map((profile) => <MenuItem key={profile.id} value={profile.id}>{profile.model || profile.name}</MenuItem>)}
+            {view?.staleId && <MenuItem value={view.staleId} disabled>{t('knowledge.modelStale')}</MenuItem>}
+            {(view?.options ?? []).map((option) => <MenuItem key={option.id} value={option.id}>{option.label}</MenuItem>)}
           </TextField>
           <TextField
             select
             size="small"
-            fullWidth
+            fullWidth={false}
             label={t('knowledge.effort')}
             value={knowledge.effort ?? ''}
             onChange={(event) => patchKnowledge({ effort: event.target.value })}
+            sx={{ flex: '0 1 180px', minWidth: 0 }}
           >
             {EFFORTS.map((value) => <MenuItem key={value || 'default'} value={value}>{t(value ? `knowledge.effort${value[0].toUpperCase()}${value.slice(1)}` : 'knowledge.effortDefault')}</MenuItem>)}
           </TextField>
         </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{t('knowledge.modelHint')}</Typography>
+        {view && (
+          <Typography variant="caption" color={view.fallback ? 'warning.main' : 'text.secondary'} sx={{ display: 'block', mt: 0.5 }}>
+            {view.fallback
+              ? t('knowledge.modelUnavailable', { label: view.effectiveLabel })
+              : t('knowledge.modelEffective', { label: view.effectiveLabel })}
+          </Typography>
+        )}
 
         <Divider sx={{ my: 2 }} />
 
@@ -206,18 +218,42 @@ export function KnowledgeSettingsDialog({ settings, patch, open, onClose }: Prop
             <Chip size="small" label={`${t('knowledge.queueTotal')} ${status.total}`} />
           </Stack>
         )}
-        {failed.length > 0 && (
+        {groups.length > 0 && (
           <Box sx={{ mt: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{t('knowledge.queueFailed')}</Typography>
-              <Button size="small" disabled={busy !== ''} onClick={() => void run('retry', async () => {
-                for (const task of failed) await window.api.knowledge.retryTask({ channel: task.channel, groupKey: task.groupKey })
-              })}>{t('knowledge.queueRetryFailed')}</Button>
+              <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{t('knowledge.queueGroups')}</Typography>
+              {failedGroups.length > 0 && (
+                <Button
+                  size="small"
+                  disabled={busy !== ''}
+                  onClick={() => void run('retry', async () => {
+                    for (const group of failedGroups) await window.api.knowledge.retryTask({ groupId: group.id })
+                  })}
+                >
+                  {t('knowledge.queueRetryFailed')}
+                </Button>
+              )}
             </Stack>
-            {failed.map((task) => (
-              <Stack key={task.id} direction="row" spacing={1} alignItems="center" sx={{ py: 0.25 }}>
-                <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{task.title}</Typography>
-                <Typography variant="caption" color="error.main" sx={{ maxWidth: '50%', overflowWrap: 'anywhere' }} noWrap>{task.error || task.reason || ''}</Typography>
+            {groups.map((group) => (
+              <Stack key={group.id} direction="row" spacing={0.75} alignItems="center" sx={{ py: 0.25, minWidth: 0 }}>
+                <Chip size="small" label={t(CHANNEL_KEY[group.channel])} />
+                <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{group.title || group.threadKey || group.id}</Typography>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color={group.state === 'failed' || group.state === 'needs_reread' ? 'warning' : group.state === 'working' ? 'primary' : 'default'}
+                  label={`${t(`knowledge.queueState.${group.state}`)} · ${group.items}`}
+                />
+                {group.state === 'failed' && (
+                  <Button size="small" disabled={busy !== ''} onClick={() => void run('retry', () => window.api.knowledge.retryTask({ groupId: group.id }))}>
+                    {t('knowledge.queueRetry')}
+                  </Button>
+                )}
+                {group.state === 'needs_reread' && (
+                  <Button size="small" disabled={busy !== ''} onClick={() => void run('reread', () => window.api.knowledge.needsReread({ groupId: group.id }))}>
+                    {t('knowledge.queueMarkReread')}
+                  </Button>
+                )}
               </Stack>
             ))}
           </Box>

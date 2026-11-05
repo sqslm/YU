@@ -80,7 +80,7 @@ describe('the Rust helper and the host around a real model callback', () => {
     // The production ready frame must declare the shared object shape.
     await expect(instance.status()).resolves.toMatchObject({
       running: true,
-      schema: { knowledge: 6, profile: 3 }
+      schema: { knowledge: 7, profile: 3 }
     })
   }, 60_000)
 
@@ -239,5 +239,41 @@ describe('the stage 5 bridge over the real fixture', () => {
     expect(graph.nodes[0].favorite).toBe(true)
 
     expect(await instance.removeRelation(listed.items[0].id)).toEqual({ removed: true })
+  }, 60_000)
+})
+
+/**
+ * The review's own findings, read back through the production host: a group id
+ * a retry can name, a manual re-queue that answers with a real state, a merge
+ * that says whose body won, relations that carry the segment they quote, and a
+ * graph that reports whether the focus survived and what it expanded.
+ */
+describe('the stage 5 review fields over the real fixture', () => {
+  it('names the groups a retry can reach', async () => {
+    const status = await host().queueStatus()
+    expect(status.groups).toHaveLength(1)
+    expect(status.groups[0]).toEqual({ id: 'grp_1', channel: 'note', state: 'failed', title: '夹具任务', items: 1, updatedAt: 2 })
+  }, 60_000)
+
+  it('re-queues one existing source and reports the real state', async () => {
+    const result = await host().extractSource('fixture-source')
+    expect(result.queued).toBe(1)
+    expect(result.groupId).toBe('grp_1')
+    expect(result.state).toBe('stabilizing')
+  }, 60_000)
+
+  it('says which body a merge kept and what the graph expanded', async () => {
+    const instance = host()
+    const merged = await instance.mergeCards({ keepId: 'c1', mergeId: 'c2', keepRevision: 2, mergeRevision: 1 })
+    expect(merged.bodySource).toBe('request')
+    expect(merged.preview).toBe('合并正文')
+
+    const listed = await instance.listRelations('c1', 10)
+    expect(listed.items[0].sourceId).toBeNull()
+    expect(listed.items[0].segment).toBeNull()
+
+    const graph = await instance.queryGraph({ focusId: 'c1', limit: 2 })
+    expect(graph.focused).toBe(false)
+    expect(graph.expanded).toBe(0)
   }, 60_000)
 })

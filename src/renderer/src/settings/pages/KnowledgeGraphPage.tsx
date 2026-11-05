@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next'
 import { KNOWLEDGE_LIMITS } from '@shared/knowledge'
 import type { CardKind, KnowledgeGraph, RelationKind } from '@shared/knowledge'
 import { dampenNodeDrag } from '../sections/memoryGraphDrag'
-import { graphNotice, kindKey, mergeGraph, relationKey, toForceData, type ForceNode } from './knowledgeView'
+import { graphNotice, kindKey, mergeGraph, relationKey, splitFit, toForceData, type ForceNode } from './knowledgeView'
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -76,16 +76,28 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
   const [focusId, setFocusId] = useState<string | null>(null)
   const [hop, setHop] = useState(1)
   const [size, setSize] = useState({ width: 600, height: 420 })
+  /** The page's own width decides the column layout; the window is a guess. */
+  const [available, setAvailable] = useState(0)
   const [topics, setTopics] = useState<string[]>([])
   const container = useRef<HTMLDivElement>(null)
+  const measure = useRef<ResizeObserver | null>(null)
   const graph = useRef<ForceGraphMethods<ForceNode>>()
   const fitted = useRef(false)
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
   const resetKey = useRef('')
+  const wide = splitFit(available)
+  const attachPage = useCallback((node: HTMLElement | null) => {
+    measure.current?.disconnect()
+    measure.current = null
+    if (!node) return
+    const observer = new ResizeObserver(([entry]) => setAvailable(entry.contentRect.width))
+    observer.observe(node)
+    measure.current = observer
+  }, [])
 
   // Cards changing underneath → refetch. Nothing is polled; the subscription lives with the view.
   useEffect(() => window.api.knowledge.onChanged((scope) => {
-    if (scope === 'cards' || scope === 'sources') setRefresh((value) => value + 1)
+    if (scope === 'cards') setRefresh((value) => value + 1)
   }), [])
 
   useEffect(() => {
@@ -135,7 +147,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
     return () => observer.disconnect()
   }, [])
 
-  const force = useMemo(() => toForceData(data ?? { nodes: [], edges: [], total: 0, shown: 0, truncated: false, limitedBy: null }), [data])
+  const force = useMemo(() => toForceData(data ?? { nodes: [], edges: [], total: 0, shown: 0, truncated: false, limitedBy: null, focused: false, expanded: 0 }), [data])
 
   useEffect(() => {
     if (loading) return
@@ -178,7 +190,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
   }
 
   return (
-    <Box data-knowledge-graph sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    <Box ref={attachPage} data-knowledge-graph sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ flex: '0 0 auto', px: { xs: 2, lg: 4 }, pt: 2, pb: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Tooltip title={t('knowledge.graphBack')}>
@@ -198,8 +210,8 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
             <IconButton size="small" aria-label={t('knowledge.graphRefresh')} onClick={reset}><RefreshRounded fontSize="small" /></IconButton>
           </Tooltip>
         </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, border: 1, borderColor: 'divider', borderRadius: 2, px: 1, height: 36, minWidth: 0, flex: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, flexWrap: 'wrap', gap: 1, alignItems: { sm: 'center' } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, border: 1, borderColor: 'divider', borderRadius: 2, px: 1, height: 36, flex: '1 1 200px', minWidth: 120 }}>
             <SearchRounded fontSize="small" sx={{ color: 'text.secondary' }} />
             <InputBase
               value={query}
@@ -212,10 +224,11 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
           <TextField
             select
             size="small"
+            fullWidth={false}
             label={t('knowledge.graphTopic')}
             value={topic}
             onChange={(event) => { setTopic(event.target.value); setSelected(null); setFocusId(null) }}
-            sx={{ minWidth: 160 }}
+            sx={{ width: { xs: '100%', sm: 152 }, flex: { sm: '0 1 152px' }, minWidth: 0 }}
           >
             <MenuItem value="">{t('knowledge.topicAll')}</MenuItem>
             {topics.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
@@ -231,7 +244,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
                 : t('knowledge.graphLimitedNodes', { shown: notice.shown, total: notice.total })}
             />
           )}
-        </Stack>
+        </Box>
       </Box>
 
       {error && (
@@ -240,7 +253,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
         </Box>
       )}
 
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, px: { xs: 2, lg: 4 }, pb: 2 }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: wide ? 'row' : 'column', gap: 1.5, px: { xs: 2, lg: 4 }, pb: 2 }}>
         <Box
           ref={container}
           data-knowledge-canvas
@@ -298,7 +311,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
 
         <Box
           data-knowledge-graph-list
-          sx={{ flex: { xs: '0 0 auto', md: '0 0 300px' }, maxHeight: { xs: 260, md: 'none' }, minHeight: 0, display: 'flex', flexDirection: 'column', border: 1, borderColor: 'divider', borderRadius: '16px', bgcolor: 'background.paper', overflow: 'hidden' }}
+          sx={{ flex: wide ? '0 0 300px' : '0 0 auto', maxHeight: wide ? 'none' : 260, minHeight: 0, display: 'flex', flexDirection: 'column', border: 1, borderColor: 'divider', borderRadius: '16px', bgcolor: 'background.paper', overflow: 'hidden' }}
         >
           <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
             <Typography variant="subtitle2">{t('knowledge.graphList')}</Typography>

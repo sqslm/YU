@@ -70,6 +70,12 @@ pub struct Relation {
     pub kind: String,
     pub origin: String,
     pub evidence: String,
+    /// The source a deduced relation was quoted from. `None` on a hand-drawn
+    /// edge and on edges written before the segment was recorded: those never
+    /// carried a basis and cannot be made to look like they did.
+    pub source_id: Option<String>,
+    /// The segment of `source_id` the evidence sits in, counting from zero.
+    pub segment: Option<i64>,
     pub created_at: i64,
 }
 
@@ -134,10 +140,17 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     /// Cards matching the filter, before any budget trimmed the view.
     pub total: i64,
+    /// Nodes in this frame: the matching cards plus anything the focus pulled in.
     pub shown: usize,
     pub truncated: bool,
     #[serde(rename = "limitedBy")]
     pub limited_by: Option<&'static str>,
+    /// True when the requested focus card is one of `nodes`: the focus outranks
+    /// the filter, so a full page replaces its last card rather than dropping it.
+    pub focused: bool,
+    /// Nodes the filter did not match, i.e. the focus and the neighbours pulled
+    /// in around it. `shown - expanded` is how many matching cards survived.
+    pub expanded: usize,
 }
 
 fn sqlite(error: rusqlite::Error) -> ApiError {
@@ -172,6 +185,8 @@ fn canonicalise(from: &str, to: &str, kind: &str) -> (String, String) {
 }
 
 fn read(row: &rusqlite::Row<'_>) -> rusqlite::Result<Relation> {
+    let source_id: String = row.get(7)?;
+    let segment: i64 = row.get(8)?;
     Ok(Relation {
         id: row.get(0)?,
         from_id: row.get(1)?,
@@ -179,6 +194,8 @@ fn read(row: &rusqlite::Row<'_>) -> rusqlite::Result<Relation> {
         kind: row.get(3)?,
         origin: row.get(4)?,
         evidence: row.get(5)?,
+        source_id: (!source_id.is_empty()).then_some(source_id),
+        segment: (segment >= 0).then_some(segment),
         created_at: row.get(6)?,
     })
 }
@@ -191,8 +208,9 @@ fn find(
 ) -> ApiResult<Option<Relation>> {
     transaction
         .query_row(
-            "SELECT id, from_id, to_id, kind, origin, evidence, created_at FROM card_relations
-              WHERE from_id = ?1 AND to_id = ?2 AND kind = ?3",
+            "SELECT id, from_id, to_id, kind, origin, evidence, created_at, source_id, segment
+                   FROM card_relations
+                  WHERE from_id = ?1 AND to_id = ?2 AND kind = ?3",
             params![from, to, kind],
             read,
         )
@@ -252,21 +270,24 @@ pub fn add(connection: &mut Connection, params: AddParams) -> ApiResult<Relation
 
 /// Stores one relation the model proposed. A duplicate is ignored, so the same
 /// answer twice never doubles an edge.
+#[allow(clippy::too_many_arguments)]
 pub fn link_model(
     transaction: &Transaction<'_>,
     from: &str,
     to: &str,
     kind: &str,
     evidence: &str,
+    source_id: &str,
+    segment: i64,
     now: i64,
 ) -> ApiResult<bool> {
     let (from, to) = canonicalise(from, to, kind);
     let inserted = transaction
         .execute(
             "INSERT OR IGNORE INTO card_relations
-                (id, from_id, to_id, kind, origin, evidence, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'model', ?5, ?6, ?6)",
-            params![new_id("rel"), from, to, kind, evidence, now],
+                (id, from_id, to_id, kind, origin, evidence, source_id, segment, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, 'model', ?5, ?6, ?7, ?8, ?8)",
+            params![new_id("rel"), from, to, kind, evidence, source_id, segment, now],
         )
         .map_err(sqlite)?;
     Ok(inserted > 0)
@@ -324,7 +345,7 @@ pub fn list(connection: &Connection, params: ListParams) -> ApiResult<RelationLi
     let mut statement = connection
         .prepare(
             "SELECT r.id, r.from_id, r.to_id, r.kind, r.origin, r.evidence, r.created_at,
-                    c.id, c.title, c.kind
+                    r.source_id, r.segment, c.id, c.title, c.kind
                FROM card_relations r
                JOIN cards c ON c.id = CASE WHEN r.from_id = ?1 THEN r.to_id ELSE r.from_id END
               WHERE r.from_id = ?1 OR r.to_id = ?1
@@ -343,9 +364,9 @@ pub fn list(connection: &Connection, params: ListParams) -> ApiResult<RelationLi
             Ok(Neighbour {
                 relation,
                 card: NeighbourCard {
-                    id: row.get(7)?,
-                    title: row.get(8)?,
-                    kind: row.get(9)?,
+                    id: row.get(9)?,
+                    title: row.get(10)?,
+                    kind: row.get(11)?,
                 },
                 direction,
             })
@@ -380,7 +401,7 @@ pub fn graph(connection: &Connection, params: GraphParams) -> ApiResult<Graph> {
         Plan::Fts(_) => "bm25(cards_fts, 0.0, 10.0, 4.0, 1.0, 8.0, 8.0), c.updated_at DESC, c.id",
         _ => "c.updated_at DESC, c.id",
     };
-    let mut selected: Vec<String> = {
+    let matched: Vec<String> = {
         let mut paging = Where::new();
         let join = cards::plan_condition(&plan, &mut paging);
         filter.apply(&mut paging);
@@ -398,11 +419,14 @@ pub fn graph(connection: &Connection, params: GraphParams) -> ApiResult<Graph> {
             .and_then(|rows| rows.collect::<rusqlite::Result<Vec<String>>>())
             .map_err(sqlite)?
     };
-    // The focused card is always part of its own graph, so it takes the last
-    // slot when the filter already filled the cap.
-    if let Some(focus) = params.focus_id.as_deref().filter(|id| !id.is_empty()) {
+    // The focused card and its neighbours are what the panel was opened to look
+    // at, so they are chosen first: when the filter already fills the page they
+    // take its lowest-ranked slots instead of being appended after the cap.
+    let focus = params.focus_id.clone().filter(|id| !id.is_empty());
+    let mut priority: Vec<String> = Vec::new();
+    if let Some(focus) = focus.as_deref() {
         check_chars("focusId", focus, 128)?;
-        if !selected.iter().any(|id| id == focus) {
+        if !matched.iter().any(|id| id == focus) {
             let exists: i64 = connection
                 .query_row("SELECT count(*) FROM cards WHERE id = ?1", [focus], |row| {
                     row.get(0)
@@ -411,20 +435,38 @@ pub fn graph(connection: &Connection, params: GraphParams) -> ApiResult<Graph> {
             if exists == 0 {
                 return Err(ApiError::not_found(format!("unknown card: {focus}")));
             }
-            if selected.len() as u32 >= limit {
-                selected.pop();
-            }
-            selected.push(focus.to_string());
         }
         let depth = params.depth.unwrap_or(1).clamp(1, 2);
-        expand(connection, &mut selected, focus, depth, limit)?;
+        priority.push(focus.to_string());
+        expand(connection, &mut priority, focus, depth, limit)?;
     }
+    let mut selected: Vec<String> = Vec::with_capacity(limit as usize);
+    for id in priority {
+        if !selected.iter().any(|seen| seen == &id) {
+            selected.push(id);
+        }
+    }
+    for id in &matched {
+        if selected.len() as u32 >= limit {
+            break;
+        }
+        if !selected.iter().any(|seen| seen == id) {
+            selected.push(id.clone());
+        }
+    }
+    selected.truncate(limit as usize);
     let mut nodes = load_nodes(connection, &selected)?;
     let mut byte_cut = false;
     loop {
         let ids: Vec<String> = nodes.iter().map(|node| node.id.clone()).collect();
         let edges = load_edges(connection, &ids)?;
-        let truncated = (nodes.len() as i64) < total;
+        // Only matching cards answer to `total`: the focus and its neighbours are
+        // context the filter did not select, so they are reported apart.
+        let matched_shown = nodes
+            .iter()
+            .filter(|node| matched.contains(&node.id))
+            .count();
+        let truncated = (matched_shown as i64) < total || byte_cut;
         let graph = Graph {
             nodes: nodes.clone(),
             edges,
@@ -438,28 +480,34 @@ pub fn graph(connection: &Connection, params: GraphParams) -> ApiResult<Graph> {
             } else {
                 Some("nodes")
             },
+            focused: focus
+                .as_deref()
+                .is_some_and(|id| ids.iter().any(|seen| seen == id)),
+            expanded: nodes.len() - matched_shown,
         };
         let size = serde_json::to_vec(&graph).map_or(0, |bytes| bytes.len());
         if size <= GRAPH_BUDGET_BYTES || nodes.len() <= 1 {
             return Ok(graph);
         }
+        // Trimming starts at the tail, where the lowest-ranked matches and the
+        // outermost neighbours sit; the focus itself is at the head.
         nodes.pop();
         byte_cut = true;
     }
 }
 
-/// Walks `depth` hops from `focus`, adding cards that the filter did not already
-/// select, while the node cap allows.
+/// Collects `depth` hops from `focus` into `priority`, the list of nodes the
+/// filter did not select, while the node cap allows.
 fn expand(
     connection: &Connection,
-    selected: &mut Vec<String>,
+    priority: &mut Vec<String>,
     focus: &str,
     depth: u32,
     limit: u32,
 ) -> ApiResult<()> {
     let mut frontier = vec![focus.to_string()];
     for _ in 0..depth {
-        if selected.len() as u32 >= limit {
+        if priority.len() as u32 >= limit {
             return Ok(());
         }
         let mut next = Vec::new();
@@ -475,11 +523,11 @@ fn expand(
                 .and_then(|rows| rows.collect::<rusqlite::Result<Vec<String>>>())
                 .map_err(sqlite)?;
             for neighbour in neighbours {
-                if selected.len() as u32 >= limit {
+                if priority.len() as u32 >= limit {
                     return Ok(());
                 }
-                if !selected.iter().any(|seen| seen == &neighbour) {
-                    selected.push(neighbour.clone());
+                if !priority.iter().any(|seen| seen == &neighbour) {
+                    priority.push(neighbour.clone());
                     next.push(neighbour);
                 }
             }

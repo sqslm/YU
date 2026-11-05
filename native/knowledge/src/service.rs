@@ -408,6 +408,12 @@ impl Service {
                 let result = queue::retry(&connection, decode(params)?)?;
                 Ok(changed(result, "queue"))
             }
+            "queue.extract" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let result = queue::extract(&mut connection, decode(params)?)?;
+                Ok(changed(result, "queue"))
+            }
             "queue.invalidate" => {
                 let store = self.store()?;
                 let mut connection = store.knowledge.lock().map_err(lock_error)?;

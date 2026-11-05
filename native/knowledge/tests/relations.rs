@@ -135,13 +135,13 @@ impl Helper {
         saved["id"].as_str().expect("card id").to_string()
     }
 
-    fn publish(&mut self, group: &str, text: &str) -> String {
+    fn publish_on(&mut self, channel: &str, group: &str, text: &str) -> (String, String) {
         let id = self.next_id();
         let result = self.ok(
             &id,
             "source.publish",
             json!({
-                "channel": "note",
+                "channel": channel,
                 "kind": "note",
                 "originRef": group,
                 "groupKey": group,
@@ -156,32 +156,46 @@ impl Helper {
             .as_str()
             .expect("fingerprint")
             .to_string();
-        self.source_id.clone()
+        (self.source_id.clone(), self.fingerprint.clone())
+    }
+
+    fn publish_full(&mut self, group: &str, text: &str) -> (String, String) {
+        self.publish_on("note", group, text)
+    }
+
+    /// Claims the next batch and slices every planned range out of the test's own
+    /// copy of that source's text, so the helper proves each range itself.
+    fn claim_parts(&mut self, prefix: &str, sources: &[(String, String, String)]) -> Value {
+        let next = self.ok(&format!("{prefix}-next"), "extract.next", json!({}));
+        let claimed = next["group"].clone();
+        let mut items = Vec::new();
+        for item in claimed["items"].as_array().expect("items") {
+            let planned = item["sourceId"].as_str().expect("sourceId");
+            let (_, fingerprint, text) = sources
+                .iter()
+                .find(|(source, _, _)| source == planned)
+                .expect("planned source");
+            let chars: Vec<char> = text.chars().collect();
+            let start = item["start"].as_u64().expect("start") as usize;
+            let end = item["end"].as_u64().expect("end") as usize;
+            items.push(json!({
+                "sourceId": item["sourceId"],
+                "version": item["version"],
+                "fingerprint": fingerprint,
+                "segment": item["segment"],
+                "start": item["start"],
+                "end": item["end"],
+                "text": chars[start..end].iter().collect::<String>(),
+            }));
+        }
+        json!({"groupId": claimed["groupId"], "claim": claimed["claim"], "items": items})
     }
 
     /// Publishes one note, claims the task it creates and builds the `extract.run`
     /// params out of the test's own copy of the body.
     fn claim(&mut self, group: &str, text: &str, prefix: &str) -> Value {
-        self.publish(group, text);
-        let next = self.ok(&format!("{prefix}-next"), "extract.next", json!({}));
-        let claimed = next["group"].clone();
-        let chars: Vec<char> = text.chars().collect();
-        let mut items = Vec::new();
-        for item in claimed["items"].as_array().expect("items") {
-            let start = item["start"].as_u64().expect("start") as usize;
-            let end = item["end"].as_u64().expect("end") as usize;
-            let slice: String = chars[start..end].iter().collect();
-            items.push(json!({
-                "sourceId": item["sourceId"],
-                "version": item["version"],
-                "fingerprint": self.fingerprint,
-                "segment": item["segment"],
-                "start": item["start"],
-                "end": item["end"],
-                "text": slice,
-            }));
-        }
-        json!({"groupId": claimed["groupId"], "claim": claimed["claim"], "items": items})
+        let (id, fingerprint) = self.publish_full(group, text);
+        self.claim_parts(prefix, &[(id, fingerprint, text.to_string())])
     }
 
     fn run(&mut self, group: &str, text: &str, prefix: &str) -> Value {
@@ -667,7 +681,7 @@ fn a_relation_outside_the_batch_fails_the_batch() {
         &root,
         vec![
             json!({
-                "cards": [draft("甲卡", "甲卡的完整正文，说明结论与适用条件，够长。")],
+                "cards": [draft("甲卡", "甲卡的完整正文，说明第一件事的结论、适用条件与关键机制，并标出待验证的推断。")],
                 "relations": [
                     {"from": "draft:0", "to": "card_not_offered", "kind": "contains",
                      "evidence": "内容足够长"},
@@ -691,7 +705,7 @@ fn a_relation_whose_quote_is_missing_fails_the_batch() {
         &root,
         vec![
             json!({
-                "cards": [draft("甲卡", "甲卡的完整正文，说明结论与适用条件，够长。")],
+                "cards": [draft("甲卡", "甲卡的完整正文，说明第一件事的结论、适用条件与关键机制，并标出待验证的推断。")],
                 "relations": [
                     {"from": "draft:0", "to": "draft:1", "kind": "derives",
                      "evidence": "材料里没有这句话"},
@@ -721,7 +735,7 @@ fn too_many_relations_fail_the_batch() {
         &root,
         vec![
             json!({
-                "cards": [draft("甲卡", "甲卡的完整正文，说明结论与适用条件，够长。")],
+                "cards": [draft("甲卡", "甲卡的完整正文，说明第一件事的结论、适用条件与关键机制，并标出待验证的推断。")],
                 "relations": edges,
                 "reason": "ok",
             })
@@ -733,4 +747,284 @@ fn too_many_relations_fail_the_batch() {
     assert_eq!(failed["error"]["code"], "invalid_output", "{failed}");
     let listed = helper.ok("l1", "card.list", json!({}));
     assert_eq!(listed["total"], 0, "{listed}");
+}
+
+#[test]
+fn the_byte_budget_keeps_the_focus_and_its_neighbour() {
+    let root = Root::new("graph-focus-bytes");
+    let mut helper = Helper::start(&root, vec![]);
+    // The focus pair is written first, so the newest-first page would leave it at
+    // the tail the byte budget trims.
+    let focus = helper.save(
+        "f0",
+        card_params("concept", "焦点", "焦点的正文。", &["focus"]),
+    );
+    let neighbour = helper.save(
+        "n0",
+        card_params("concept", "邻居", "邻居的正文。", &["focus"]),
+    );
+    helper.ok(
+        "r0",
+        "relation.add",
+        json!({"fromId": focus, "toId": neighbour, "kind": "contains"}),
+    );
+    let topics: Vec<String> = std::iter::once("bulk".to_string())
+        .chain((0..31).map(|index| format!("{index:02}主{}", "题".repeat(97))))
+        .collect();
+    let topics: Vec<&str> = topics.iter().map(String::as_str).collect();
+    for index in 0..70 {
+        helper.save(
+            &format!("b{index}"),
+            json!({
+                "kind": "concept",
+                "title": format!("卡片{index:02}{}", "标".repeat(190)),
+                "summary": "",
+                "body": "",
+                "topics": topics,
+                "aliases": [],
+                "sourceIds": [],
+            }),
+        );
+    }
+
+    let graph = helper.ok(
+        "g1",
+        "graph.query",
+        json!({"topic": "bulk", "focusId": focus, "depth": 1, "limit": 200}),
+    );
+    assert_eq!(graph["total"], 70, "the filter's real total: {graph}");
+    let shown = node_ids(&graph);
+    assert!(
+        shown.len() < 70,
+        "the byte budget still trims the page: {}",
+        shown.len()
+    );
+    assert_eq!(graph["shown"].as_u64().expect("shown"), shown.len() as u64);
+    assert_eq!(graph["truncated"], true);
+    assert_eq!(graph["limitedBy"], "bytes", "{:?}", graph["limitedBy"]);
+    assert_eq!(
+        graph["focused"], true,
+        "the focus survived the cut: {graph}"
+    );
+    assert_eq!(
+        graph["expanded"], 2,
+        "the focus and its neighbour came in from outside the filter: {graph}"
+    );
+    assert!(
+        shown.iter().any(|id| id == &focus) && shown.iter().any(|id| id == &neighbour),
+        "the focus and the neighbour the panel asked for stay: {shown:?}"
+    );
+    for edge in graph["edges"].as_array().expect("edges") {
+        for end in ["fromId", "toId"] {
+            let id = edge[end].as_str().expect("endpoint");
+            assert!(
+                shown.iter().any(|node| node == id),
+                "every edge stays inside the view: {graph}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_full_page_still_admits_the_focus_and_one_neighbour() {
+    let root = Root::new("graph-focus-full");
+    let mut helper = Helper::start(&root, vec![]);
+    let neighbour = helper.save(
+        "n0",
+        card_params("concept", "邻居", "邻居的正文。", &["rust"]),
+    );
+    let focus = helper.save(
+        "f0",
+        card_params("concept", "焦点", "焦点的正文。", &["rust"]),
+    );
+    let mut others = Vec::new();
+    for index in 0..4 {
+        others.push(helper.save(
+            &format!("o{index}"),
+            card_params(
+                "concept",
+                &format!("其余{index}"),
+                "其余的正文。",
+                &["rust"],
+            ),
+        ));
+    }
+    helper.ok(
+        "r0",
+        "relation.add",
+        json!({"fromId": focus, "toId": neighbour, "kind": "prerequisite"}),
+    );
+
+    // The page is full and the filter does not rank the focus's neighbour into it.
+    let graph = helper.ok(
+        "g1",
+        "graph.query",
+        json!({"focusId": focus, "depth": 1, "limit": 2}),
+    );
+    let shown = node_ids(&graph);
+    assert_eq!(graph["shown"], 2, "{graph}");
+    assert_eq!(
+        graph["total"], 6,
+        "the filter's own total is unaffected: {graph}"
+    );
+    assert_eq!(graph["truncated"], true);
+    assert_eq!(graph["limitedBy"], "nodes", "{graph}");
+    assert_eq!(graph["focused"], true, "{graph}");
+    assert_eq!(
+        graph["expanded"], 2,
+        "the focus and the neighbour replaced two ranked cards: {graph}"
+    );
+    assert!(
+        shown.iter().any(|id| id == &focus),
+        "the focus is always in the view: {shown:?}"
+    );
+    assert!(
+        shown.iter().any(|id| id == &neighbour),
+        "so is the one neighbour it asked for: {shown:?}"
+    );
+    assert!(
+        !shown
+            .iter()
+            .any(|id| others.iter().any(|other| other == id)),
+        "the two lowest-ranked cards gave way: {shown:?}"
+    );
+    let edges = graph["edges"].as_array().expect("edges");
+    assert_eq!(edges.len(), 1, "the one edge inside the view: {graph}");
+    assert_eq!(edges[0]["kind"], "prerequisite");
+}
+
+#[test]
+fn a_quote_stitched_from_two_notes_fails_the_batch() {
+    let root = Root::new("model-stitched");
+    let first = "甲段原文，结尾写着甲乙相连";
+    let second = "乙段原文，开头也提到甲乙相连";
+    let mut helper = Helper::start(&root, vec![]);
+    // Two sources in one batch: the quote runs from the end of the first into the
+    // start of the second, so neither note holds it on its own.
+    let one = helper.publish_on("reading", "note-a", first);
+    let two = helper.publish_on("reading", "note-a", second);
+    helper.answers.push(
+        json!({
+            "cards": [draft("甲卡", "甲卡的完整正文，说明第一件事的结论、适用条件与关键机制，并标出待验证的推断。")],
+            "relations": [
+                {"from": "draft:0", "to": "draft:0", "kind": "derives",
+                 "evidence": "甲乙相连\n乙段原文"},
+            ],
+            "reason": "ok",
+        })
+        .to_string(),
+    );
+    helper.source_id = two.0.clone();
+    let params = helper.claim_parts(
+        "s",
+        &[
+            (one.0.clone(), one.1.clone(), first.to_string()),
+            (two.0.clone(), two.1.clone(), second.to_string()),
+        ],
+    );
+    assert_eq!(
+        params["items"].as_array().expect("items").len(),
+        2,
+        "both notes are in the batch: {params}"
+    );
+    let failed = helper.call("s-run", "extract.run", params);
+    assert_eq!(failed["ok"], false, "{failed}");
+    assert_eq!(failed["error"]["code"], "invalid_output", "{failed}");
+    let listed = helper.ok("l1", "card.list", json!({}));
+    assert_eq!(listed["total"], 0, "the batch is rolled back: {listed}");
+}
+
+#[test]
+fn a_model_relation_records_the_segment_it_quotes() {
+    let root = Root::new("model-segment");
+    let text = "第一段原文，讲卡片甲，也讲卡片乙。";
+    let mut helper = Helper::start(
+        &root,
+        vec![
+            json!({
+                "cards": [
+                    draft("甲卡", "甲卡的完整正文，说明第一件事的结论、适用条件与关键机制，并标出待验证的推断。"),
+                    draft("乙卡", "乙卡的完整正文，说明第二件事的结论、适用条件与关键机制，并标出待验证的推断。"),
+                ],
+                "relations": [
+                    {"from": "draft:0", "to": "draft:1", "kind": "contains",
+                     "evidence": "也讲卡片乙"},
+                ],
+                "reason": "ok",
+            })
+            .to_string(),
+        ],
+    );
+    let outcome = helper.run("note-a", text, "n");
+    assert_eq!(outcome["state"], "completed", "{outcome}");
+    let first = outcome["cards"][0]["cardId"]
+        .as_str()
+        .expect("card id")
+        .to_string();
+    let relations = helper.ok("l1", "relation.list", json!({"cardId": first}));
+    let item = &relations["items"][0];
+    assert_eq!(item["origin"], "model");
+    assert_eq!(
+        item["sourceId"], helper.source_id,
+        "the edge names the note it came from: {item}"
+    );
+    assert_eq!(
+        item["segment"], 0,
+        "and the segment that holds the quote: {item}"
+    );
+}
+
+#[test]
+fn a_relation_may_not_name_a_card_the_round_hid() {
+    let root = Root::new("model-hidden");
+    let text = "第一段正文，讲甲卡的内容，足够长以便提炼。";
+    let mut helper = Helper::start(&root, vec![]);
+    helper.answers.push(
+        json!({
+            "cards": [draft("甲卡", "甲卡的完整正文，说明第一件事的结论、适用条件与关键机制，并标出待验证的推断。")],
+            "reason": "ok",
+        })
+        .to_string(),
+    );
+    let first = helper.run("note-a", text, "a");
+    assert_eq!(first["state"], "completed", "{first}");
+    let known = first["cards"][0]["cardId"]
+        .as_str()
+        .expect("card id")
+        .to_string();
+
+    // The same note is extracted again, so the card above is a comparison
+    // candidate — but the extraction round never showed it.
+    let queued = helper.ok("q1", "queue.extract", json!({"sourceId": helper.source_id}));
+    assert_eq!(queued["queued"], 1, "{queued}");
+    helper.answers.push(
+        json!({
+            "cards": [draft("甲卡补编", "补编的完整正文，说明结论与适用条件，也够长。")],
+            "relations": [
+                {"from": "draft:0", "to": known, "kind": "derives",
+                 "evidence": "足够长以便提炼"},
+            ],
+            "reason": "ok",
+        })
+        .to_string(),
+    );
+    helper.answers.push(
+        json!({"decisions": [{"index": 0, "action": "new", "targetCardId": null, "reason": "新卡"}]})
+            .to_string(),
+    );
+    let params = helper.claim_parts(
+        "again",
+        &[(
+            helper.source_id.clone(),
+            helper.fingerprint.clone(),
+            text.to_string(),
+        )],
+    );
+    let failed = helper.call("again-run", "extract.run", params);
+    assert_eq!(failed["ok"], false, "{failed}");
+    assert_eq!(failed["error"]["code"], "invalid_output", "{failed}");
+    let listed = helper.ok("l1", "card.list", json!({}));
+    assert_eq!(listed["total"], 1, "only the first round's card: {listed}");
+    let relations = helper.ok("l2", "relation.list", json!({"cardId": known}));
+    assert_eq!(relations["total"], 0, "no edge was written: {relations}");
 }

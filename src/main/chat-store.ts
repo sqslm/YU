@@ -186,6 +186,15 @@ export class ChatStore {
     if (!file) throw Error('附件不存在，请刷新对话')
     return { name: String(file.name), url: file.image ? String(file.image) : undefined, text: file.text ? String(file.text) : undefined }
   }
+  /**
+   * The message an attachment belongs to, by attachment id alone. A knowledge
+   * source stores only the attachment id, so this is how its origin is proven
+   * instead of trusting a thread id the renderer supplied.
+   */
+  attachmentOwner(attachmentId: string): { threadId: string; messageId: string } | undefined {
+    const row = this.db.prepare('SELECT m.threadId AS threadId, a.messageId AS messageId FROM chat_attachments a JOIN chat_messages m ON m.id=a.messageId WHERE a.id=?').get(attachmentId)
+    return row ? { threadId: String(row.threadId), messageId: String(row.messageId) } : undefined
+  }
   begin(id: string, question: string): { userId: string; answerId: string } {
     this.get(id, 1)
     const userId = randomUUID(), answerId = randomUUID(), now = Date.now()

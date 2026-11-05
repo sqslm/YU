@@ -137,7 +137,31 @@ pub struct QueueStatus {
     pub paused_reasons: Value,
     pub channels: Value,
     pub window_ms: i64,
+    /// The newest groups, newest first. A panel that offers a retry needs the id
+    /// of every group it can see, and `counts` alone cannot name one.
+    pub groups: Vec<QueueGroup>,
 }
+
+/// One group as the status view reports it: the id `queue.retry` needs, plus the
+/// few fields a retry list shows without a second call.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueueGroup {
+    pub id: String,
+    pub channel: String,
+    /// The state a caller should act on: a settled `stabilizing` row is `ready`.
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_key: Option<String>,
+    /// The group's readable summary; empty when it never had one.
+    pub title: String,
+    pub items: i64,
+    pub updated_at: i64,
+}
+
+/// Groups one status call returns. The list is a retry affordance, not a listing:
+/// `queue.list` pages through everything.
+pub const STATUS_GROUPS: usize = 20;
 
 /// One task can hold a long conversation: its items are paged like everything
 /// else, so a 201st turn stays reachable instead of vanishing behind a LIMIT.
@@ -808,7 +832,37 @@ pub fn status(conn: &Connection) -> ApiResult<QueueStatus> {
         }),
         channels: channels_json(conn),
         window_ms: window_ms(),
+        groups: status_groups(conn, now)?,
     })
+}
+
+/// The newest groups, in the state a caller acts on, with their item counts.
+fn status_groups(conn: &Connection, now: i64) -> ApiResult<Vec<QueueGroup>> {
+    let mut statement = conn
+        .prepare(&format!(
+            "SELECT g.id, g.channel, {EFFECTIVE}, g.thread_key, g.title,
+                    (SELECT count(*) FROM queue_items i WHERE i.group_id = g.id),
+                    g.updated_at
+               FROM queue_groups g
+              ORDER BY g.updated_at DESC, g.id
+              LIMIT ?2"
+        ))
+        .map_err(|error| ApiError::storage(format!("cannot read the queue status: {error}")))?;
+    let rows = statement
+        .query_map(params![now, STATUS_GROUPS as i64], |row| {
+            Ok(QueueGroup {
+                id: row.get(0)?,
+                channel: row.get(1)?,
+                state: row.get(2)?,
+                thread_key: row.get(3)?,
+                title: row.get(4)?,
+                items: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })
+        .map_err(|error| ApiError::storage(format!("cannot read the queue status: {error}")))?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|error| ApiError::storage(format!("cannot read the queue status: {error}")))
 }
 
 // -------------------------------------------------------------------- mutate
@@ -910,6 +964,99 @@ pub fn retry(conn: &Connection, params: GroupParams) -> ApiResult<Value> {
         ));
     }
     Ok(json!({ "groupId": id, "state": "stabilizing" }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractParams {
+    /// The source whose text should be extracted again.
+    pub source_id: String,
+}
+
+/// Puts an existing source back in the queue so its text is extracted again.
+///
+/// The checks the publish path makes apply here too: the channel has to be on,
+/// the source must not be excluded, and a source without readable text cannot be
+/// queued. Nothing is sent to the model here; the group just becomes claimable
+/// again once the settling window passes.
+pub fn extract(conn: &mut Connection, params: ExtractParams) -> ApiResult<Value> {
+    check_chars("sourceId", &params.source_id, 128)?;
+    let now = now_ms();
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the queue transaction: {error}"))
+        })?;
+    let source = crate::sources::get(&transaction, &params.source_id)?;
+    // The group the source was collected into keeps its channel, key and thread,
+    // so a re-run is the same task instead of a copy of it.
+    let group: Option<(String, String, String, String)> = transaction
+        .query_row(
+            "SELECT g.id, g.channel, g.group_key, g.state
+               FROM queue_items i JOIN queue_groups g ON g.id = i.group_id
+              WHERE i.source_id = ?1
+              ORDER BY g.updated_at DESC, i.ordinal DESC
+              LIMIT 1",
+            [&params.source_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .optional()
+        .map_err(|error| ApiError::storage(format!("cannot read the queue: {error}")))?;
+    let Some((group_id, channel, group_key, state)) = group else {
+        return Ok(json!({ "queued": 0, "reason": "no_group" }));
+    };
+    // A batch already holds this task: re-queueing it would pull the claim out
+    // from under a running model call.
+    if state == "working" {
+        return Ok(json!({ "queued": 0, "reason": "working" }));
+    }
+    if !channel_enabled(&transaction, &channel) {
+        return Err(ApiError::new(
+            Code::ChannelDisabled,
+            format!("the {channel} channel is switched off"),
+        ));
+    }
+    if exclusion(&transaction, &channel, &group_key)
+        || exclusion(
+            &transaction,
+            "source_version",
+            &format!("{}:{}", source.id, source.version),
+        )
+    {
+        return Err(ApiError::new(
+            Code::Excluded,
+            "this source is excluded from collection",
+        ));
+    }
+    // The text itself is never stored, only its fingerprint, so a source that was
+    // never read through, or was invalidated since, has nothing to extract. Saying
+    // so is better than queueing work that can only fail.
+    if source.state != "active" || source.size <= 0 {
+        return Ok(json!({ "queued": 0, "reason": "needs_reread" }));
+    }
+    // This version starts over: an earlier run's progress would otherwise count
+    // every segment as done and close the task as empty.
+    transaction
+        .execute(
+            "DELETE FROM extract_progress WHERE source_id = ?1 AND version = ?2",
+            params![source.id, source.version],
+        )
+        .map_err(|error| ApiError::storage(format!("cannot reset the extraction: {error}")))?;
+    // The settling window applies again, so a burst of re-runs on one note
+    // collapses into a single task instead of a batch per click.
+    transaction
+        .execute(
+            "UPDATE queue_groups SET state = 'stabilizing', stable_at = ?2, reason = NULL,
+                    error = NULL, claim = NULL, updated_at = ?3
+              WHERE id = ?1",
+            params![group_id, now.saturating_add(window_ms()), now],
+        )
+        .map_err(|error| ApiError::storage(format!("cannot re-queue the task: {error}")))?;
+    ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the re-queue: {error}")))?;
+    Ok(json!({ "queued": 1, "groupId": group_id, "state": "stabilizing" }))
 }
 
 pub fn needs_reread(conn: &Connection, params: GroupParams) -> ApiResult<Value> {

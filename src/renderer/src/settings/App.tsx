@@ -1,5 +1,5 @@
 import { prepareForGameMode } from './gameModePreparation'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import {
   Box,
   CssBaseline,
@@ -25,7 +25,6 @@ import { WorkspaceSearch } from './WorkspaceSearch'
 import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded'
 import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
-import { KnowledgePage } from './pages/KnowledgePage'
 import { RemindersPage } from './pages/RemindersPage'
 import { CalendarPage } from './pages/CalendarPage'
 import type { ReminderView } from '@shared/reminders'
@@ -44,6 +43,9 @@ import { BrandLogo } from '../BrandLogo'
 import { MissedReminders } from './MissedReminders'
 import { UpdatePill } from './UpdatePill'
 import { QuotaProvider, QuotaSidebar } from './Quota'
+
+/** The library pulls in the force canvas, so it never enters the first-screen chunk. */
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })))
 
 type Page = 'chat' | 'home' | 'history' | 'knowledge' | 'notes' | 'dictionary' | 'reminders' | 'calendar'
 
@@ -203,12 +205,9 @@ export function App(): JSX.Element {
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} openNote={noteToOpen} />
     if (page === 'knowledge') {
       return (
-        <KnowledgePage
-          settings={settings}
-          patch={patch}
-          onOpenNote={(id) => { setNoteToOpen({ id }); setPage('notes') }}
-          openRecord={openRecord}
-        />
+        <Suspense fallback={null}>
+          <KnowledgePage settings={settings} patch={patch} openRecord={openRecord} />
+        </Suspense>
       )
     }
     if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen({ id }); setPage('notes') }} />

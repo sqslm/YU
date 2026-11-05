@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -15,9 +15,7 @@ import {
   Stack,
   TextField,
   Tooltip,
-  Typography,
-  useMediaQuery,
-  useTheme
+  Typography
 } from '@mui/material'
 import HubRounded from '@mui/icons-material/HubRounded'
 import PersonOutlineRounded from '@mui/icons-material/PersonOutlineRounded'
@@ -40,14 +38,17 @@ import {
   filtersActive,
   kindKey,
   mergePage,
-  paneMode,
+  paneModeFor,
+  splitFit,
   type CardFilters,
   type CardList
 } from './knowledgeView'
 import { KnowledgeCardDetail } from '../sections/KnowledgeCardDetail'
-import { KnowledgeGraphPage } from './KnowledgeGraphPage'
 import { KnowledgeProfilePanel } from '../sections/KnowledgeProfilePanel'
 import { KnowledgeSettingsDialog } from '../sections/KnowledgeSettingsDialog'
+
+/** The force canvas is a heavy dependency, so it only loads when the view asks for it. */
+const KnowledgeGraphPage = lazy(() => import('./KnowledgeGraphPage').then((module) => ({ default: module.KnowledgeGraphPage })))
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -58,14 +59,11 @@ const SEARCH_DEBOUNCE_MS = 160
 interface Props {
   settings: Settings
   patch: (delta: Partial<Settings>) => void
-  onOpenNote: (id: string) => void
   openRecord: (record: LocalRecord) => void
 }
 
-export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props): JSX.Element {
+export function KnowledgePage({ settings, patch, openRecord }: Props): JSX.Element {
   const { t } = useTranslation()
-  const theme = useTheme()
-  const wide = useMediaQuery(theme.breakpoints.up('md'))
   const [view, setView] = useState<'cards' | 'graph'>('cards')
   const [filters, setFilters] = useState<CardFilters>(EMPTY_FILTERS)
   const [query, setQuery] = useState('')
@@ -78,10 +76,22 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
   const [reload, setReload] = useState(0)
   const [topics, setTopics] = useState<string[]>([])
   const [dialog, setDialog] = useState('')
+  /** Width the page itself got, which is what decides the split — not the window. */
+  const [available, setAvailable] = useState(0)
   const gate = useRef(createGate())
+  const measure = useRef<ResizeObserver | null>(null)
   const scrollBox = useRef<HTMLElement | null>(null)
   const scrollTop = useRef(0)
-  const mode = paneMode(wide, Boolean(selectedId))
+  const wide = splitFit(available)
+  const mode = paneModeFor(available, Boolean(selectedId))
+  const attachPage = useCallback((node: HTMLElement | null) => {
+    measure.current?.disconnect()
+    measure.current = null
+    if (!node) return
+    const observer = new ResizeObserver(([entry]) => setAvailable(entry.contentRect.width))
+    observer.observe(node)
+    measure.current = observer
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query.trim()), SEARCH_DEBOUNCE_MS)
@@ -128,14 +138,13 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
 
   useEffect(() => {
     const off = window.api.knowledge.onChanged((scope) => {
-      if (scope === 'cards' || scope === 'sources' || scope === 'relations') {
-        if (view === 'cards') void fetchPage(0, active)
-        if (selectedId) setDetailToken((value) => value + 1)
-      }
+      if (scope !== 'cards') return
+      void fetchPage(0, active)
+      if (selectedId) setDetailToken((value) => value + 1)
     })
     return off
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, active, selectedId, fetchPage])
+  }, [active, selectedId, fetchPage])
 
   const restoreScroll = (): void => {
     const box = scrollBox.current
@@ -157,10 +166,12 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
 
   if (view === 'graph') {
     return (
-      <KnowledgeGraphPage
-        onBack={() => setView('cards')}
-        onOpenCard={(id) => { setView('cards'); setSelectedId(id) }}
-      />
+      <Suspense fallback={<Box sx={{ height: '100%', display: 'grid', placeItems: 'center' }}><CircularProgress size={22} aria-label={t('common.loading')} /></Box>}>
+        <KnowledgeGraphPage
+          onBack={() => setView('cards')}
+          onOpenCard={(id) => { setView('cards'); setSelectedId(id) }}
+        />
+      </Suspense>
     )
   }
 
@@ -168,7 +179,7 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
     <Box
       ref={(node: HTMLElement | null) => { scrollBox.current = node }}
       onScroll={(event) => { scrollTop.current = event.currentTarget.scrollTop }}
-      sx={{ flex: { xs: 1, md: '0 0 320px' }, minWidth: 0, minHeight: 0, overflow: 'auto', borderRight: { md: 1 }, borderColor: 'divider', bgcolor: 'background.default' }}
+      sx={{ flex: wide ? '0 0 320px' : '1 1 auto', minWidth: 0, minHeight: 0, overflow: 'auto', borderRight: wide ? 1 : 0, borderColor: 'divider', bgcolor: 'background.default' }}
       data-knowledge-list
     >
       {error && (
@@ -221,7 +232,7 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
   )
 
   return (
-    <Box data-knowledge-page sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    <Box ref={attachPage} data-knowledge-page sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box data-knowledge-toolbar sx={{ px: { xs: 2, lg: 4 }, pt: 2.5, pb: 2, display: 'flex', flexDirection: 'column', gap: 1.5, flex: '0 0 auto' }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography component="h1" variant="h5" sx={{ fontWeight: 600 }}>{t('knowledge.title')}</Typography>
@@ -237,8 +248,8 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
             <IconButton size="small" aria-label={t('knowledge.settingsTitle')} onClick={() => setDialog('settings')}><TuneRounded fontSize="small" /></IconButton>
           </Tooltip>
         </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, border: 1, borderColor: 'divider', borderRadius: 2, px: 1, height: 36, minWidth: 0, flex: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, flexWrap: 'wrap', gap: 1, alignItems: { sm: 'center' } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, border: 1, borderColor: 'divider', borderRadius: 2, px: 1, height: 36, flex: '1 1 220px', minWidth: 120 }}>
             <SearchRounded fontSize="small" sx={{ color: 'text.secondary' }} />
             <InputBase
               value={query}
@@ -251,10 +262,11 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
           <TextField
             select
             size="small"
+            fullWidth={false}
             label={t('knowledge.topic')}
             value={filters.topic}
             onChange={(event) => setFilters({ ...filters, topic: event.target.value })}
-            sx={{ minWidth: 150 }}
+            sx={{ width: { xs: '100%', sm: 152 }, flex: { sm: '0 1 152px' }, minWidth: 0 }}
           >
             <MenuItem value="">{t('knowledge.topicAll')}</MenuItem>
             {topics.map((topic) => <MenuItem key={topic} value={topic}>{topic}</MenuItem>)}
@@ -262,10 +274,11 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
           <TextField
             select
             size="small"
+            fullWidth={false}
             label={t('knowledge.kind')}
             value={filters.kind}
             onChange={(event) => setFilters({ ...filters, kind: event.target.value as CardKind | '' })}
-            sx={{ minWidth: 130 }}
+            sx={{ width: { xs: '100%', sm: 132 }, flex: { sm: '0 1 132px' }, minWidth: 0 }}
           >
             <MenuItem value="">{t('knowledge.kindAll')}</MenuItem>
             {CARD_KINDS.map((kind) => <MenuItem key={kind} value={kind}>{t(kindKey(kind))}</MenuItem>)}
@@ -276,13 +289,13 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
               aria-label={t('knowledge.favoriteOnly')}
               aria-pressed={filters.favorite}
               onClick={() => setFilters({ ...filters, favorite: !filters.favorite })}
-              sx={{ border: 1, borderColor: filters.favorite ? 'warning.main' : 'divider', borderRadius: 2, width: 36, height: 36 }}
+              sx={{ border: 1, borderColor: filters.favorite ? 'warning.main' : 'divider', borderRadius: 2, width: 36, height: 36, flex: '0 0 36px' }}
             >
               {filters.favorite ? <StarRounded fontSize="small" color="warning" /> : <StarBorderRounded fontSize="small" />}
             </IconButton>
           </Tooltip>
           {filtering && <Button size="small" onClick={() => { setQuery(''); setFilters(EMPTY_FILTERS) }}>{t('knowledge.clearFilters')}</Button>}
-        </Stack>
+        </Box>
       </Box>
 
       <Box
@@ -298,7 +311,6 @@ export function KnowledgePage({ settings, patch, onOpenNote, openRecord }: Props
               refreshToken={detailToken}
               onChanged={() => { void fetchPage(0, active) }}
               onSelect={(id) => select(id)}
-              onOpenNote={onOpenNote}
               openRecord={openRecord}
               onPickTopic={(topic) => setFilters({ ...filters, topic })}
               onBack={back}

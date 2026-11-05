@@ -3,6 +3,8 @@
 //! All seven card kinds share one table and one editing path; the kind only
 //! groups and filters. Extraction strategy per kind arrives in a later stage.
 
+use std::collections::BTreeMap;
+
 use rusqlite::types::Value;
 use rusqlite::{
     Connection, OptionalExtension, Row, Transaction, TransactionBehavior, params, params_from_iter,
@@ -240,6 +242,12 @@ pub struct MergedCards {
     pub sources: i64,
     /// Relations on the kept card after the merge.
     pub relations: i64,
+    /// `request` when the caller typed the body, `keep` when the kept card's own
+    /// text survived: a preview can say which text the merge keeps.
+    pub body_source: &'static str,
+    /// The head of the stored body, so a panel can label the result without
+    /// loading 200,000 characters on every merge.
+    pub preview: String,
 }
 
 #[derive(Deserialize)]
@@ -1090,11 +1098,17 @@ pub fn merge(connection: &mut Connection, params: MergeParams) -> ApiResult<Merg
     }
     let title = title.unwrap_or_else(|| keep.title.clone());
     let summary = summary.unwrap_or_else(|| keep.summary.clone());
+    let body_source = if body.is_some() { "request" } else { "keep" };
     let body = body.unwrap_or_else(|| keep.body.clone());
     let topics = encode_list(&union_terms(&keep.topics, &merged.topics))?;
     let aliases = encode_list(&union_terms(&keep.aliases, &merged.aliases))?;
     let favorite = keep.favorite || merged.favorite;
     let revision = keep.revision + 1;
+    // Both current versions are snapshotted before anything changes. A merge of
+    // two cards nobody edited has no history rows of its own, so without this the
+    // texts being replaced would be gone after the commit.
+    snapshot(&transaction, &keep, "合并前保留：保留卡片当前版本", now)?;
+    snapshot(&transaction, &merged, "合并前保留：被合并卡片当前版本", now)?;
     transaction
         .execute(
             "UPDATE cards SET title = ?2, summary = ?3, body = ?4, topics = ?5, aliases = ?6, edited = 1,
@@ -1155,6 +1169,14 @@ pub fn merge(connection: &mut Connection, params: MergeParams) -> ApiResult<Merg
         } else {
             to
         };
+        // `contrast` is symmetric, so its endpoints are ordered the way
+        // `relation.add` orders them: the repointed edge then lands on the row
+        // that already exists instead of sitting next to its mirror image.
+        let (from, to) = if kind == "contrast" && from > to {
+            (to, from)
+        } else {
+            (from, to)
+        };
         // A relation that now starts and ends on the kept card no longer says
         // anything.
         if from == to {
@@ -1198,6 +1220,10 @@ pub fn merge(connection: &mut Connection, params: MergeParams) -> ApiResult<Merg
                 .map_err(sqlite_error)?;
         }
     }
+    // Repointing can leave the same symmetric pair in both directions, and a
+    // database written before the ordering was enforced can hold both. One row
+    // per pair survives.
+    dedupe_contrast(&transaction, &params.keep_id, now)?;
     // The merged card's snapshots move with it; the revision offset keeps the
     // numbers unique and their order intact, so every old version stays readable.
     transaction
@@ -1240,7 +1266,119 @@ pub fn merge(connection: &mut Connection, params: MergeParams) -> ApiResult<Merg
         removed_id: params.merge_id,
         sources,
         relations,
+        body_source,
+        preview: preview_of(&body),
     })
+}
+
+/// The head of a body, cut on a character boundary and marked when it goes on.
+fn preview_of(body: &str) -> String {
+    const PREVIEW_CHARS: usize = 200;
+    let mut preview: String = body.chars().take(PREVIEW_CHARS).collect();
+    if body.chars().count() > PREVIEW_CHARS {
+        preview.push('…');
+    }
+    preview
+}
+
+/// Records the card's current version, unless that revision is already in its
+/// history. Called before a merge replaces text, so neither side of the merge
+/// loses what it said.
+fn snapshot(transaction: &Transaction<'_>, card: &Card, reason: &str, now: i64) -> ApiResult<()> {
+    transaction
+        .execute(
+            "INSERT INTO card_history
+                (id, card_id, revision, title, summary, body, topics, edited, reason, created_at)
+             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
+              WHERE NOT EXISTS (
+                SELECT 1 FROM card_history WHERE card_id = ?2 AND revision = ?3
+              )",
+            params![
+                new_id("his"),
+                card.id,
+                card.revision,
+                card.title,
+                card.summary,
+                card.body,
+                encode_list(&card.topics)?,
+                i64::from(card.edited),
+                reason,
+                now
+            ],
+        )
+        .map_err(sqlite_error)?;
+    Ok(())
+}
+
+/// `contrast` is symmetric, so one pair can exist twice, once in each direction.
+/// One row survives: the hand-drawn edge when there is one, otherwise the older
+/// row. It keeps the first basis either of them carried, and its endpoints end up
+/// ordered the way every other contrast edge is.
+fn dedupe_contrast(transaction: &Transaction<'_>, card_id: &str, now: i64) -> ApiResult<()> {
+    let rows: Vec<(String, String, String, String, String)> = {
+        let mut statement = transaction
+            .prepare(
+                "SELECT id, from_id, to_id, origin, evidence FROM card_relations
+                  WHERE kind = 'contrast' AND (from_id = ?1 OR to_id = ?1)
+                  ORDER BY created_at, id",
+            )
+            .map_err(sqlite_error)?;
+        statement
+            .query_map([card_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>())
+            .map_err(sqlite_error)?
+    };
+    let mut winners: BTreeMap<(String, String), (String, String, String)> = BTreeMap::new();
+    let mut losers: Vec<String> = Vec::new();
+    for (id, from, to, origin, evidence) in rows {
+        let pair = if from <= to {
+            (from.clone(), to.clone())
+        } else {
+            (to.clone(), from.clone())
+        };
+        match winners.get_mut(&pair) {
+            None => {
+                winners.insert(pair, (id, origin, evidence));
+            }
+            Some(winner) => {
+                if origin == "manual" && winner.1 != "manual" {
+                    let deduced = std::mem::replace(&mut winner.0, id);
+                    winner.1 = origin;
+                    losers.push(deduced);
+                } else {
+                    losers.push(id);
+                }
+                if winner.2.is_empty() {
+                    winner.2 = evidence;
+                }
+            }
+        }
+    }
+    for id in losers {
+        transaction
+            .execute("DELETE FROM card_relations WHERE id = ?1", [&id])
+            .map_err(sqlite_error)?;
+    }
+    for ((from, to), (id, _, evidence)) in winners {
+        // The guard leaves a pair that already points the right way, and already
+        // carries a basis, untouched.
+        transaction
+            .execute(
+                "UPDATE card_relations SET from_id = ?2, to_id = ?3, evidence = ?4, updated_at = ?5
+                  WHERE id = ?1 AND (from_id != ?2 OR to_id != ?3 OR evidence != ?4)",
+                params![id, from, to, evidence, now],
+            )
+            .map_err(sqlite_error)?;
+    }
+    Ok(())
 }
 
 /// One card as Markdown, with its sources listed so the text can be read away

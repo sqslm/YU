@@ -173,7 +173,9 @@ fn main() {
                                         },
                                         "removedId": merge,
                                         "sources": 1,
-                                        "relations": 1
+                                        "relations": 1,
+                                        "bodySource": "request",
+                                        "preview": "合并正文"
                                     }),
                                 )
                             }
@@ -241,6 +243,8 @@ fn main() {
                                         "kind": kind,
                                         "origin": "manual",
                                         "evidence": evidence,
+                                        "sourceId": Value::Null,
+                                        "segment": Value::Null,
                                         "createdAt": 1
                                     }),
                                 )
@@ -258,6 +262,8 @@ fn main() {
                                         "kind": "contains",
                                         "origin": "manual",
                                         "evidence": "",
+                                        "sourceId": Value::Null,
+                                        "segment": Value::Null,
                                         "createdAt": 1,
                                         "card": { "id": "c2", "title": "夹具邻居", "kind": "concept" },
                                         "direction": "out"
@@ -265,6 +271,34 @@ fn main() {
                                     "total": 1
                                 }),
                             ),
+                            // The panel needs no database to exercise its retry path:
+                            // one failed group is enough to name an id.
+                            "queue.status" => protocol::result_frame(
+                                &request.id,
+                                &json!({
+                                    "counts": { "failed": 1, "ready": 1 },
+                                    "total": 2,
+                                    "paused": false,
+                                    "pausedReasons": { "manual": false, "game": false },
+                                    "channels": { "note": true, "chat": true, "reading": true },
+                                    "windowMs": 60000,
+                                    "groups": [{
+                                        "id": "grp_1",
+                                        "channel": "note",
+                                        "state": "failed",
+                                        "title": "夹具任务",
+                                        "items": 1,
+                                        "updatedAt": 2
+                                    }]
+                                }),
+                            ),
+                            "queue.extract" => {
+                                let _source = param(&request.params, "sourceId", "fixture-source");
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({ "queued": 1, "groupId": "grp_1", "state": "stabilizing" }),
+                                )
+                            }
                             "graph.query" => protocol::result_frame(
                                 &request.id,
                                 &json!({
@@ -279,7 +313,9 @@ fn main() {
                                     "total": 1,
                                     "shown": 1,
                                     "truncated": false,
-                                    "limitedBy": Value::Null
+                                    "limitedBy": Value::Null,
+                                    "focused": false,
+                                    "expanded": 0
                                 }),
                             ),
                             other => protocol::error_frame(

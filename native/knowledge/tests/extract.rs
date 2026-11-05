@@ -159,6 +159,25 @@ impl Helper {
         answer["result"].clone()
     }
 
+    /// Runs a method and keeps the `changed` frames it produced, so a test can
+    /// see which slice the views are told to refresh.
+    fn call_scopes(&mut self, id: &str, method: &str, params: Value) -> (Value, Vec<String>) {
+        self.send(json!({"v": 1, "type": "request", "id": id, "method": method, "params": params}));
+        let mut scopes = Vec::new();
+        loop {
+            let frame = self.read();
+            if frame["type"] == "model.request" {
+                self.answer_model(&frame);
+                continue;
+            }
+            if frame["type"] == "changed" {
+                scopes.push(frame["scope"].as_str().unwrap_or("").to_string());
+                continue;
+            }
+            return (frame, scopes);
+        }
+    }
+
     fn next_id(&mut self) -> String {
         self.counter += 1;
         format!("r{}", self.counter)
@@ -320,6 +339,55 @@ fn the_same_body_twice_only_adds_a_source() {
     let card_id = listed["items"][0]["id"].as_str().expect("card").to_string();
     let full = helper.ok("l2", "card.get", json!({"id": card_id}));
     assert_eq!(full["sourceIds"].as_array().expect("sources").len(), 2);
+}
+
+#[test]
+fn a_finished_extraction_only_refreshes_the_cards() {
+    let root = Root::new("scope");
+    let mut helper = Helper::start(
+        &root,
+        vec![drafts_answer(json!([card("通知提炼", BODY, "src/1")]))],
+    );
+    let text = "这一段正文足够长，用来验证通知落在哪个作用域。";
+    let published = helper.publish("note-scope", text);
+    let fingerprint = published["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    // The publish answer lands before its own announcement: drain that frame so
+    // the assertions below only see what the extraction step announces.
+    let published_scope = helper.read();
+    assert_eq!(published_scope["scope"], "queue", "{published_scope}");
+    let (planned, quiet) = helper.call_scopes("s1", "extract.next", json!({}));
+    assert_eq!(
+        quiet,
+        Vec::<String>::new(),
+        "planning a batch writes nothing"
+    );
+    let claimed = planned["result"]["group"].clone();
+    let (items, _) = Helper::items(
+        &claimed,
+        &[(helper.source_id.clone(), fingerprint, text.to_string())],
+    );
+    let (outcome, before_answer) = helper.call_scopes(
+        "s2",
+        "extract.run",
+        json!({
+            "groupId": claimed["groupId"],
+            "claim": claimed["claim"],
+            "items": items,
+        }),
+    );
+    assert_eq!(before_answer, Vec::<String>::new(), "{before_answer:?}");
+    assert_eq!(outcome["ok"], true, "{outcome}");
+    assert_eq!(outcome["result"]["cards"][0]["action"], "new", "{outcome}");
+    // The announcement follows the answer frame, exactly as the shell reads it.
+    let announced = helper.read();
+    assert_eq!(announced["type"], "changed", "{announced}");
+    assert_eq!(
+        announced["scope"], "cards",
+        "an automatic extraction refreshes the card slice"
+    );
 }
 
 #[test]

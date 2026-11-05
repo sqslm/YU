@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { KnowledgeCard, KnowledgeCardPage, KnowledgeGraph, ProfileItem, RelationList } from '@shared/knowledge'
+import type { KnowledgeCard, KnowledgeCardPage, KnowledgeGraph, KnowledgeModelInfo, ProfileItem, RelationList } from '@shared/knowledge'
 import {
   CARD_PAGE_SIZE,
   EMPTY_FILTERS,
   EMPTY_LIST,
+  SPLIT_MIN_WIDTH,
   cardRequest,
   createGate,
   emptyState,
+  extractStatus,
   filtersActive,
   graphNotice,
   groupProfile,
@@ -16,9 +18,12 @@ import {
   mergePage,
   mergePreview,
   mergeQuery,
+  modelView,
   paneMode,
+  paneModeFor,
   relationKey,
   selectedSummary,
+  splitFit,
   toForceData
 } from './knowledgeView'
 
@@ -145,9 +150,9 @@ describe('labels', () => {
     const list: RelationList = {
       total: 3,
       items: [
-        { id: 'r1', fromId: 'x', toId: 'y', kind: 'contains', origin: 'manual', evidence: '', createdAt: 1, card: { id: 'y', title: 'Y', kind: 'concept' }, direction: 'out' },
-        { id: 'r2', fromId: 'z', toId: 'x', kind: 'derives', origin: 'model', evidence: 'q', createdAt: 2, card: { id: 'z', title: 'Z', kind: 'method' }, direction: 'in' },
-        { id: 'r3', fromId: 'x', toId: 'w', kind: 'contrast', origin: 'manual', evidence: '', createdAt: 3, card: { id: 'w', title: 'W', kind: 'decision' }, direction: 'out' }
+        { id: 'r1', fromId: 'x', toId: 'y', kind: 'contains', origin: 'manual', evidence: '', sourceId: null, segment: null, createdAt: 1, card: { id: 'y', title: 'Y', kind: 'concept' }, direction: 'out' },
+        { id: 'r2', fromId: 'z', toId: 'x', kind: 'derives', origin: 'model', evidence: 'q', sourceId: 's1', segment: 0, createdAt: 2, card: { id: 'z', title: 'Z', kind: 'method' }, direction: 'in' },
+        { id: 'r3', fromId: 'x', toId: 'w', kind: 'contrast', origin: 'manual', evidence: '', sourceId: null, segment: null, createdAt: 3, card: { id: 'w', title: 'W', kind: 'decision' }, direction: 'out' }
       ]
     }
     const groups = groupRelations(list)
@@ -192,7 +197,9 @@ describe('graph adaptation', () => {
     total: 8,
     shown: 2,
     truncated: true,
-    limitedBy: 'nodes'
+    limitedBy: 'nodes',
+    focused: false,
+    expanded: 0
   }
 
   it('maps nodes and drops an edge whose endpoint was trimmed away', () => {
@@ -204,7 +211,7 @@ describe('graph adaptation', () => {
   it('says which budget limited the graph', () => {
     expect(graphNotice(graph)).toEqual({ limitedBy: 'nodes', total: 8, shown: 2 })
     expect(graphNotice({ ...graph, limitedBy: 'bytes' })?.limitedBy).toBe('bytes')
-    expect(graphNotice({ ...graph, truncated: false, limitedBy: null })).toBeNull()
+    expect(graphNotice({ ...graph, truncated: false, limitedBy: null,   focused: false,   expanded: 0 })).toBeNull()
   })
 
   it('unions an expanded hop without duplicating what is already drawn', () => {
@@ -215,7 +222,9 @@ describe('graph adaptation', () => {
       total: 9,
       shown: 3,
       truncated: false,
-      limitedBy: null
+      limitedBy: null,
+      focused: true,
+      expanded: 1
     }
     const merged = mergeGraph(first, next)
     expect(merged.nodes.map((node) => node.id)).toEqual(['a', 'b', 'c'])
@@ -245,5 +254,78 @@ describe('an untouched list', () => {
   it('starts empty and unpaged', () => {
     expect(EMPTY_LIST.items).toHaveLength(0)
     expect(EMPTY_LIST.nextOffset).toBeNull()
+  })
+})
+
+describe('split from the measured width', () => {
+  it('needs the list pane plus a readable card pane', () => {
+    expect(splitFit(SPLIT_MIN_WIDTH - 1)).toBe(false)
+    expect(splitFit(SPLIT_MIN_WIDTH)).toBe(true)
+    // A 1080px window minus the rail and margins still leaves room for both panes.
+    expect(splitFit(1080 - 260)).toBe(true)
+    // A 900px window does not, which is why the window breakpoint was the wrong input.
+    expect(splitFit(900 - 260)).toBe(false)
+  })
+
+  it('swaps master and detail instead of squeezing both', () => {
+    expect(paneModeFor(560, false)).toBe('list')
+    expect(paneModeFor(560, true)).toBe('detail')
+    expect(paneModeFor(900, true)).toBe('split')
+    expect(paneModeFor(0, false)).toBe('list')
+  })
+})
+
+describe('manual extraction status', () => {
+  it('reports a real queue', () => {
+    expect(extractStatus({ queued: 2, reason: 'queued' })).toEqual({ queued: true, count: 2, reason: 'queued' })
+  })
+
+  it('keeps the helper reason when nothing was queued', () => {
+    expect(extractStatus({ queued: 0, reason: ' capacity full ' })).toEqual({ queued: false, count: 0, reason: 'capacity full' })
+    expect(extractStatus({ queued: 0, reason: 'needs_reread' }).queued).toBe(false)
+  })
+
+  it('never reports a negative count', () => {
+    expect(extractStatus({ queued: -3, reason: '' }).count).toBe(0)
+  })
+})
+
+describe('model selection view', () => {
+  const info = (patch: Partial<KnowledgeModelInfo> = {}): KnowledgeModelInfo => ({
+    profiles: [
+      { id: 'p1', label: 'A', enabled: true },
+      { id: 'p2', label: 'B', enabled: false },
+      { id: 'p3', label: 'C', enabled: true }
+    ],
+    selectedId: '',
+    effectiveId: 'p1',
+    effectiveLabel: 'A',
+    fallback: false,
+    ...patch
+  })
+
+  it('offers only enabled profiles', () => {
+    expect(modelView(info()).options).toEqual([{ id: 'p1', label: 'A' }, { id: 'p3', label: 'C' }])
+    expect(modelView(info()).fallback).toBe(false)
+  })
+
+  it('names a stored choice that is no longer enabled', () => {
+    const view = modelView(info({ selectedId: 'p2', effectiveId: 'p1', effectiveLabel: 'A', fallback: true }))
+    expect(view.staleId).toBe('p2')
+    expect(view.fallback).toBe(true)
+    expect(view.effectiveLabel).toBe('A')
+    expect(view.options.some((option) => option.id === 'p2')).toBe(false)
+  })
+
+  it('treats a stored profile that vanished as stale even when the helper says otherwise', () => {
+    const view = modelView(info({ selectedId: 'gone', fallback: false }))
+    expect(view.staleId).toBe('gone')
+    expect(view.fallback).toBe(true)
+  })
+
+  it('ignores an empty selection', () => {
+    const view = modelView(info({ profiles: [] }))
+    expect(view.options).toEqual([])
+    expect(view.staleId).toBeNull()
   })
 })

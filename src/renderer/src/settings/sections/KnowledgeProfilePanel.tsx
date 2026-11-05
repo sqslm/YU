@@ -23,8 +23,7 @@ import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded'
 import StarBorderRounded from '@mui/icons-material/StarBorderRounded'
 import StarRounded from '@mui/icons-material/StarRounded'
 import { useTranslation } from 'react-i18next'
-import { isSafeLink } from '@shared/links'
-import type { ProfileContext, ProfileItem, ProfileStatus } from '@shared/knowledge'
+import type { ProfileContext, ProfileEvidence, ProfileItem, ProfileStatus } from '@shared/knowledge'
 import type { Settings } from '@shared/types'
 import type { LocalRecord } from '@shared/workspace'
 import { formatStamp } from '../pages/notesView'
@@ -32,6 +31,61 @@ import { groupProfile, sourceKindKey, type ProfileGroup } from '../pages/knowled
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * One piece of evidence. The compound origin ref never becomes a record id here —
+ * the main process resolves the identity, and a withdrawn evidence is not a
+ * target at all, so it says so instead of failing on click.
+ */
+function EvidenceRow({ evidence, openRecord }: {
+  evidence: ProfileEvidence
+  openRecord: (record: LocalRecord) => void
+}): JSX.Element {
+  const { t } = useTranslation()
+  const [denied, setDenied] = useState('')
+  const [busy, setBusy] = useState(false)
+  const withdrawn = evidence.withdrawn === true
+
+  const locate = async (): Promise<void> => {
+    setDenied('')
+    setBusy(true)
+    try {
+      const target = await window.api.knowledge.sourceTarget(evidence.sourceId)
+      if (target.kind === 'record') return openRecord(target.record)
+      if (target.kind === 'none') return setDenied(target.reason)
+      const result = await window.api.knowledge.openSource(evidence.sourceId)
+      if (!result.opened) setDenied(result.reason)
+    } catch (err) {
+      setDenied(messageOf(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ pl: 1, minWidth: 0 }}>
+        <Chip size="small" variant="outlined" label={t(sourceKindKey(evidence.sourceKind))} />
+        <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 0 }} noWrap>
+          {evidence.locator || evidence.originRef}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">{formatStamp(evidence.createdAt).full}</Typography>
+        {withdrawn
+          ? <Chip size="small" color="warning" variant="outlined" label={t('knowledge.profileWithdrawn')} />
+          : (
+            <Tooltip title={t('knowledge.profileSource')}>
+              <span>
+                <IconButton size="small" aria-label={t('knowledge.profileSource')} disabled={busy} onClick={() => void locate()}>
+                  <OpenInNewRounded sx={{ fontSize: 14 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+      </Stack>
+      {denied && <Typography variant="caption" color="warning.main" sx={{ display: 'block', pl: 1, overflowWrap: 'anywhere' }}>{denied}</Typography>}
+    </>
+  )
 }
 
 const PAGE_SIZE = 20
@@ -151,31 +205,6 @@ export function KnowledgeProfilePanel({ settings, patch, open, onClose, openReco
   const recent = new Set((context?.items ?? []).filter((item) => item.recent).map((item) => item.id))
   const groups: ProfileGroup[] = groupProfile(items)
 
-  const evidenceRow = (item: ProfileItem): JSX.Element[] =>
-    item.evidence.map((evidence, index) => {
-      const web = evidence.locator && isSafeLink(evidence.locator) ? evidence.locator : ''
-      const openable = evidence.sourceKind === 'note' || evidence.sourceKind === 'chat' || Boolean(web)
-      const open = (): void => {
-        if (evidence.sourceKind === 'note') openRecord({ kind: 'note', id: evidence.originRef, title: '', text: '', at: 0 })
-        else if (evidence.sourceKind === 'chat') openRecord({ kind: 'chat', id: evidence.originRef, title: '', text: '', at: 0 })
-        else if (web) void window.api.app.openExternal(web)
-      }
-      return (
-        <Stack key={`${evidence.sourceId}:${index}`} direction="row" spacing={0.75} alignItems="center" sx={{ pl: 1, minWidth: 0 }}>
-          <Chip size="small" variant="outlined" label={t(sourceKindKey(evidence.sourceKind))} />
-          <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 0 }} noWrap>
-            {evidence.locator || evidence.originRef}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">{formatStamp(evidence.createdAt).full}</Typography>
-          {openable && (
-            <Tooltip title={t('knowledge.profileSource')}>
-              <IconButton size="small" aria-label={t('knowledge.profileSource')} onClick={open}><OpenInNewRounded sx={{ fontSize: 14 }} /></IconButton>
-            </Tooltip>
-          )}
-        </Stack>
-      )
-    })
-
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md" PaperProps={{ sx: { height: 'min(720px, 88vh)' } }}>
       <DialogTitle sx={{ pb: 1 }}>
@@ -240,7 +269,7 @@ export function KnowledgeProfilePanel({ settings, patch, open, onClose, openReco
                       : <Typography variant="body2" sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{item.value}</Typography>}
                     {recent.has(item.id) && <Chip size="small" label={t('knowledge.profileRecent')} />}
                     {item.pinned && <Chip size="small" color="primary" variant="outlined" label={t('knowledge.profilePinned')} />}
-                    {item.corrected && <Chip size="small" variant="outlined" label={t('knowledge.profileWithdrawn')} />}
+                    {item.corrected && <Chip size="small" variant="outlined" label={t('knowledge.profileCorrected')} />}
                     {editing?.id === item.id
                       ? (
                         <>
@@ -279,7 +308,9 @@ export function KnowledgeProfilePanel({ settings, patch, open, onClose, openReco
                       )}
                   </Stack>
                   <Typography variant="caption" color="text.secondary">{item.dimension}</Typography>
-                  {evidenceRow(item)}
+                  {item.evidence.map((evidence, index) => (
+                    <EvidenceRow key={`${evidence.sourceId}:${index}`} evidence={evidence} openRecord={openRecord} />
+                  ))}
                 </Box>
               ))}
             </Box>

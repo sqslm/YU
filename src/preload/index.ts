@@ -90,6 +90,10 @@ const api: TypelessApi = {
     removeRelation: id => ipcRenderer.invoke('knowledge:relation-remove', id),
     listRelations: (cardId, limit) => ipcRenderer.invoke('knowledge:relation-list', cardId, limit),
     graph: (query = {}) => ipcRenderer.invoke('knowledge:graph', query),
+    sourceTarget: id => ipcRenderer.invoke('knowledge:source-target', id),
+    openSource: id => ipcRenderer.invoke('knowledge:source-open', id),
+    extractSource: id => ipcRenderer.invoke('knowledge:source-extract', id),
+    modelInfo: () => ipcRenderer.invoke('knowledge:model-info'),
     onChanged: callback => {
       const listener = (_event: Electron.IpcRendererEvent, scope: string): void => callback(scope)
       ipcRenderer.on('knowledge:changed', listener)

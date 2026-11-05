@@ -13,7 +13,7 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 6;
+pub const KNOWLEDGE_SCHEMA: i64 = 7;
 pub const PROFILE_SCHEMA: i64 = 3;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
@@ -194,6 +194,16 @@ CREATE INDEX card_relations_from ON card_relations (from_id);
 CREATE INDEX card_relations_to ON card_relations (to_id);
 ALTER TABLE card_history ADD COLUMN topics TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE card_history ADD COLUMN edited INTEGER NOT NULL DEFAULT 0;
+"#;
+
+/// Stage 6 records the segment a deduced relation was quoted from, so every
+/// model edge can be traced back to the one paragraph that produced it. Edges
+/// written before this column existed keep an empty source and no segment: what
+/// they were built from is not recoverable, and guessing would be a lie.
+const RELATION_SOURCE_SQL: &str = r#"
+ALTER TABLE card_relations ADD COLUMN source_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE card_relations ADD COLUMN segment INTEGER NOT NULL DEFAULT -1;
+CREATE INDEX card_relations_source ON card_relations (source_id, segment);
 "#;
 
 pub const CARD_KINDS: [&str; 7] = [
@@ -401,6 +411,7 @@ impl Store {
                 HISTORY_BOUND_SQL,
                 EXTRACT_SQL,
                 GRAPH_SQL,
+                RELATION_SOURCE_SQL,
             ],
         )?;
         let profile = open_db(

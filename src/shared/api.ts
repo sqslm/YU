@@ -141,6 +141,14 @@ export interface TypelessApi {
     removeRelation(id: string): Promise<{ removed: boolean }>
     listRelations(cardId: string, limit?: number): Promise<import('./knowledge').RelationList>
     graph(query?: import('./knowledge').GraphQuery): Promise<import('./knowledge').KnowledgeGraph>
+    /** Resolves a source into something openable, using the stored source only. */
+    sourceTarget(sourceId: string): Promise<import('./knowledge').SourceTarget>
+    /** Opens a resolved source in its real place; false when it is gone. */
+    openSource(sourceId: string): Promise<{ opened: boolean; reason: string }>
+    /** Re-queues an existing source; never calls a model directly. */
+    extractSource(sourceId: string): Promise<import('./knowledge').ExtractSourceResult>
+    /** The profiles the helper can actually reach, and the one it would use. */
+    modelInfo(): Promise<import('./knowledge').KnowledgeModelInfo>
     /** Fires when the helper wrote something; the scope names what to re-read. */
     onChanged(callback: (scope: string) => void): () => void
   }
