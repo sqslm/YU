@@ -2004,3 +2004,75 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
   - `src/main/knowledge/settle.ts`（默认路径不再 `find`、勾选只回传票据）、`src/main/knowledge/host.ts`（`onReady`）、`src/main/index.ts`（`onReady` → `settling.retry()`）
   - `src/main/knowledge/settle.integration.test.ts`（8 项）、`src/main/ask-knowledge.integration.test.ts`（桩不再复用连接）
 - 本节由随后的 docs 提交记录。
+## 阶段 6 B 收尾（2026-11-06 第十七轮）：删除后的知识清理重试
+
+起始 `8d4599d`（工作区干净；B 的实现基线 `2d5350c`，之后只更新计划文档；release 助手 3,247,104 字节 `66731bd3…93ab7f`）。本轮只补 B 的用户操作闭环：记录已落盘删除、勾选的关联知识清理失败时，用户能对**自己已经确认过的范围**重试，而不是只剩一条无法操作的错误。C1/C2、D、阶段 7 未动，本轮无 Rust 改动。
+
+### 交付
+
+| 项 | 实现 | 位置 |
+| --- | --- | --- |
+| 删除顺序不变 | 勾选时先 `verifyKnowledge`（记录仍在，票据不符即整体拒绝、记录不删），再 `store.remove` / `chats.edit`，最后结清知识 | `src/main/notes-ipc.ts`、`src/main/chat-delete.ts` |
+| 失败即登记（勾选路径） | 记录已删且结清失败时不再抛错，改为返回 `{ id, reason, cards: true }`；身份与票据留在主进程，页面只拿到不透明 `id` | `src/main/knowledge/cleanup.ts`（`CleanupRetries`） |
+| 默认路径不变 | 未勾选仍是记录级撤回 + `RecordReleaser` 的 `onReady`/`onChanged` 补做；失败文案与行为与本轮前一致 | 同上、`src/main/index.ts` |
+| 窄 IPC | `knowledge:cleanup-retry` 只收 `{ id, action: 'purge' \| 'release' }`，走既有 `ipc-trust` 的 `handle` 与知识窗口 owner 校验；动作非法抛「请选择知识清理的方式」 | `src/main/index.ts` |
+| 重试语义 | `purge` 重发用户原确认票据，由 Rust 再核验；`source_changed` → `stale`（不删卡、登记保留、给「仅标记来源失效，保留卡片」）；其它失败 → `failed`（登记与原因都保留）；成功后清除登记 | `cleanup.ts` + 既有 `card.purge` |
+| 降级语义 | 只有用户显式选 `release` 才走记录级撤回：来源 invalid、队列结清、卡片与其失效链接保留 | 同上 + `RecordReleaser` |
+| 并发 | 同一 `id` 的在途重试复用同一个 promise，重复点击只产生一次 helper 事务 | `CleanupRetries.retry` |
+| 契约 | `CleanupAction`、`CleanupPending`、`CleanupRetryResult`；`notes.remove` 与 `chat.edit(delete)` 的返回类型改为 `CleanupPending \| void`；preload 暴露 `knowledge.retryCleanup` | `src/shared/knowledge.ts`、`src/shared/api.ts`、`src/preload/index.ts` |
+| 界面 | 随记页与聊天页在原本的错误位置显示「记录已删除，但关联知识清理失败：{{reason}}」+「重试知识清理」；`purge` 报 `stale` 时出现「仅标记来源失效，保留卡片」；重试中按钮禁用，成功撤下，失败保留原因；原记录已从列表消失仍可操作 | `NotesPage.tsx`、`ChatPage.tsx`、`locales/{zh-CN,en-US}.json` |
+
+### 回归（新增与改写）
+
+| 用例 | 覆盖 |
+| --- | --- |
+| `src/main/knowledge/cleanup.test.ts`（7 项，新） | purge 成功清登记、不可达保留登记、`code === 'source_changed'` → `stale` 且不删卡、release 成功/失败、重复点击共用一个 promise、未知 id 抛「这次知识清理已经结束，不需要再重试」 |
+| `src/main/chat-delete.test.ts`（6 项，新） | 顺序 `verify → edit → purge` 与参数、未勾选不 verify 且 `cards: false`、勾选失败返回句柄、默认败抛「对话已删除，但关联知识清理失败」且不登记、`edit` 失败保留原错误且不 purge、`verify` 失败不 edit |
+| `src/main/notes-ipc.test.ts`（19 项，+2） | 勾选失败在给了 `pendingCleanup` 时 resolve 出句柄、记录已删、broadcast 一次；默认路径仍抛包装错误且不登记 |
+| `src/main/knowledge/settle.integration.test.ts`（11 项，+3） | 真 helper + 第二连接 `BEGIN IMMEDIATE` 持写锁：①落盘后清理失败 → 句柄（reason 含 lock）、记录已删、卡片与来源未动 → 解锁重试 → `done`、卡删、来源 invalid；②同样 pending 后为同一 origin 发布第二版使记录变宽 → `purge` 返回 `stale` 且卡片仍在 → `release` 返回 `done`、来源全 invalid、卡片保留且仍指向失效来源；③预检（`stalePreview`）在落盘前拒绝 → 记录仍在、无登记 |
+| 改写 | 原「refuses an opt-in whose preview no longer matches」改为「hands the moved range back as a retry and keeps the card」，断言新契约而非抛错 |
+
+### 验证（本轮实测，命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt --manifest-path native/knowledge/Cargo.toml -- --check` | 0（本轮无 Rust 改动，仍复核） |
+| `cargo test --locked --manifest-path native/knowledge/Cargo.toml` | 0（含 doc-tests 0 项；Rust 未改动） |
+| `cargo clippy --locked --manifest-path native/knowledge/Cargo.toml --all-targets -- -D warnings` | 0 |
+| `pnpm exec vitest run src/main/knowledge src/main/notes-ipc.test.ts src/main/chat.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts src/renderer/src/settings/pages/knowledgeView.test.ts src/main/chat-delete.test.ts` | 0，31 文件 / 317 项全过（14.06 s） |
+| `pnpm typecheck` | 0（node + web） |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0，282 文件通过 / 3 跳过，4007 项通过 / 8 跳过（99.70 s） |
+| `pnpm build` | 0（14.14 s，含 `node scripts/build-native.mjs`） |
+| release 助手 | 3,247,104 字节 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`（未变） |
+| `git diff --check` / 提交后 `git diff --check 8d4599d..HEAD` | 0 / 0 |
+
+### 实窗证据（第十七轮：隔离实例、合成库、本地模型桩、真实 release 助手）
+
+`E:/code/deepseek-harness/rea/typeless/.tmp/stage6b4-evidence/`（`report.md`、`run-{A,A2,B,B2,C2,D2}.json`、`logs/{app,stub,cdp}.log`、`requests/`、`shots/`、`scripts/`）。启动：包装 app 目录（`app/boot.js` 只 `require` 仓库 `out/main/index.js`）＋`--user-data-dir=E:\CpanQianYi\Temp\yu-w6b4\userdata`＋`--remote-debugging-port=18994`＋只监听 `127.0.0.1:19194` 的 OpenAI 兼容桩；真实鼠标点击走 `Input.dispatchMouseEvent`（点击前 `scrollIntoView` + 两帧 + `elementFromPoint` 命中校验）；视口实测 1080×750、dpr 1；复用本轮 02:16 构建，未重建。
+
+| 场景 | 断言 | 实测 |
+| --- | --- | --- |
+| A2 随记入口 | 20/20 | 持写锁删除 → 5,686 ms 后出现 `data-notes-cleanup`、`stale="off"`，文案「记录已删除，但关联知识清理失败：cannot start the purge transaction: database is locked」+「重试知识清理」；同刻库里来源 `active`、卡片与其链接都在；解锁后点重试 → 两行来源 invalid、卡片 `unknown card`、`card_sources` 空、队列组 `cancelled`（原因 `记录已清除`） |
+| B2 对话入口 | 20/20 | 同构：`data-chat-cleanup`、`stale="off"`、5,722 ms 出现；重试后来源 invalid、卡片删、链接清空、队列 `cancelled` |
+| C2 重复点击 | 19/19 | 3 次真实点击、2 次真正 IPC：`logs/app.log` 恰好 1 行失败 + 1 行成功，第二次点击落在 `disabled` 的按钮上；最终提示撤下 |
+| D2 stale → 保留卡片 | 19/19 | 删除后为已删 noteId 发布新版本（`saveSource` 合成来源 `v-after-delete`）使记录变宽 → 重试返回 `stale`，横幅 `stale="on"` 并出现「仅标记来源失效，保留卡片」；点后来源全 invalid、卡片保留、`card_sources` 仍指向失效来源、队列 `cancelled`（原因 `记录已删除`） |
+
+### 未测与边界
+
+- 待重试状态只在主进程内存里：应用重启后该登记消失，页面也不再显示（本轮未在实窗覆盖重启路径）。
+- 实窗只把随记入口的 `stale → 保留卡片` 走通；对话入口的 stale/release 分支由 `chat-delete`/`cleanup` 单测与 `settle.integration` 覆盖，未在实窗点。
+- D2 的「记录变宽」由 `saveSource` 直接写合成来源完成（真实窗口没有再次发布同一随记的入口）；不是产品路径，只用于让票据失效。
+- `unknown card` 的存在性用文本 + 截图目视，没有语义选择器断言。
+- 实窗顺带观察到一条与本轮无关的既有缺陷：任意随记详情都会报 `knowledge:by-source: unknown source: <noteId>`（`data-notes-knowledge-error`），本轮未修，断言里按 data 属性排除。
+- `settle.integration` 的持锁用例每个约 5.6 s（helper 写锁等待），属预期；`--features fixture` 本轮未跑（无夹具变更）。
+
+### 提交
+
+- 代码与回归：`fdbf357` `feat(knowledge): let the user finish a ticked cleanup after the record is gone`
+  - 新增 `src/main/knowledge/cleanup.ts`、`src/main/chat-delete.ts` 与各自用例
+  - `src/main/notes-ipc.ts`（`pendingCleanup` 钩子与勾选失败分支）、`src/main/index.ts`（`knowledge:cleanup-retry`、`cleanups`、`chat:edit` 改走 `deleteThread`、`registerNotesIpc` 的 `pendingCleanup`）
+  - `src/shared/knowledge.ts`（`CleanupAction`/`CleanupPending`/`CleanupRetryResult`）、`src/shared/api.ts`、`src/preload/index.ts`
+  - `NotesPage.tsx`、`ChatPage.tsx`、`locales/{zh-CN,en-US}.json`
+  - `src/main/knowledge/settle.integration.test.ts`（真实持锁重试三项）、`src/main/notes-ipc.test.ts`
+- 本节由随后的 docs 提交记录；未 push / merge / rebase / reset。
