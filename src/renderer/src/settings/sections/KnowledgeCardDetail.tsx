@@ -345,13 +345,39 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
     return t('knowledge.todoCreated', { title: result.title })
   }
 
+  /**
+   * One close control for every state. Loading and a card that cannot be read
+   * keep the same way out as a loaded card, so a narrow window never traps the
+   * reader in a full-screen dialog with only a retry button.
+   */
+  const closeLabelText = closeLabel ?? t('knowledge.back')
+  const closeControl = (): JSX.Element => (
+    <Tooltip title={closeLabelText}>
+      <IconButton size="small" aria-label={closeLabelText} onClick={onBack} data-knowledge-detail-close>
+        <ArrowBackRounded fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  )
+
   if (loading && !card) {
-    return <Box sx={{ p: 3 }}><CircularProgress size={22} aria-label={t('common.loading')} /></Box>
+    return (
+      <Box data-knowledge-detail sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: '0 0 auto', px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Stack direction="row" spacing={0.5} alignItems="center">{closeControl()}</Stack>
+        </Box>
+        <Box sx={{ p: 3 }}><CircularProgress size={22} aria-label={t('common.loading')} /></Box>
+      </Box>
+    )
   }
   if (!card) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert severity="error" action={<Button color="inherit" size="small" onClick={reloadAll}>{t('common.retry')}</Button>}>{loadError || t('knowledge.detailEmpty')}</Alert>
+      <Box data-knowledge-detail sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: '0 0 auto', px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Stack direction="row" spacing={0.5} alignItems="center">{closeControl()}</Stack>
+        </Box>
+        <Box sx={{ p: 2 }}>
+          <Alert severity="error" action={<Button color="inherit" size="small" onClick={reloadAll}>{t('common.retry')}</Button>}>{loadError || t('knowledge.detailEmpty')}</Alert>
+        </Box>
       </Box>
     )
   }
@@ -377,13 +403,7 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
     <Box data-knowledge-detail sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ flex: '0 0 auto', px: 2, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-          {(!wide || closeLabel) && (
-            <Tooltip title={closeLabel ?? t('knowledge.back')}>
-              <IconButton size="small" aria-label={closeLabel ?? t('knowledge.back')} onClick={onBack} data-knowledge-detail-close>
-                <ArrowBackRounded fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
+          {(!wide || closeLabel) && closeControl()}
           <Typography variant="subtitle1" component="h2" sx={{ flex: 1, minWidth: 0, fontWeight: 600 }} noWrap>{draft?.title || card.title}</Typography>
           <Tooltip title={t(card.favorite ? 'knowledge.unfavorite' : 'knowledge.favorite')}>
             <IconButton size="small" aria-label={t('knowledge.favorite')} aria-pressed={card.favorite} onClick={() => void toggleFavorite(card)}>

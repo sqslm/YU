@@ -93,6 +93,10 @@ export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpen
   const [topics, setTopics] = useState<string[]>([])
   const [dialog, setDialog] = useState('')
   const [graphMounted, setGraphMounted] = useState(false)
+  /** The preview's keyboard list, kept here so a graph round trip keeps it. */
+  const [nodesOpen, setNodesOpen] = useState(false)
+  /** Bumped by card changes, which are also graph changes. */
+  const [cardsToken, setCardsToken] = useState(0)
   /** Width the page itself got, which is what decides the column count. */
   const [available, setAvailable] = useState(0)
   const gate = useRef(createGate())
@@ -152,10 +156,14 @@ export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, reload, fetchPage])
 
+  // A card change is a graph change too: a deleted node must leave the canvas
+  // and the keyboard list, and a new card or a relation has to appear without
+  // leaving the page. The preview takes the same real topic and query back.
   useEffect(() => {
     const off = window.api.knowledge.onChanged((scope) => {
       if (scope !== 'cards') return
       void fetchPage(0, active)
+      setCardsToken((value) => value + 1)
       if (detailId) setDetailToken((value) => value + 1)
     })
     return off
@@ -182,7 +190,12 @@ export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpen
   const restore = (): void => {
     const box = scrollBox.current
     if (box) box.scrollTop = scrollTop.current
-    opener.current?.focus()
+    // The card that opened the detail can be gone by the time it closes (it was
+    // deleted, or a filter moved it). Then focus goes to the page itself rather
+    // than the document body, so Tab continues inside the grid.
+    const start = opener.current
+    if (start && start.isConnected) start.focus()
+    else box?.focus()
   }
 
   const openCard = (id: string): void => {
@@ -272,8 +285,10 @@ export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpen
             <KnowledgeGraphPreview
               topic={active.topic}
               query={active.query}
-              refreshToken={reload}
+              refreshToken={reload + cardsToken}
               onOpenCard={openCard}
+              nodesOpen={nodesOpen}
+              onToggleNodes={() => setNodesOpen((value) => !value)}
             />
           </Suspense>
         )}
@@ -333,7 +348,10 @@ export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpen
         scrollBox.current = node
       }}
       data-knowledge-page
-      sx={{ height: '100%', minHeight: 0, overflow: 'auto' }}
+      // Focusable so closing a detail whose card is gone can hand focus back to
+      // the page instead of the document body.
+      tabIndex={-1}
+      sx={{ height: '100%', minHeight: 0, overflow: 'auto', outline: 'none' }}
       onScroll={(event) => { scrollTop.current = event.currentTarget.scrollTop }}
     >
       <Box sx={{ maxWidth: 1180, mx: 'auto', px: { xs: 2, lg: 4 }, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
