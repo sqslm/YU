@@ -570,7 +570,7 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - `src/main/knowledge/pages.test.ts`：按字节预算装箱（20 行上限下只发 17 行）、单个超大正文仍可达下一页。
 - `src/main/knowledge/collector.test.ts`：暂存超过 16 MiB 后最早的分组重试落到 `needs_reread`；`queue.items` 返回的是分组条目而不是分组本身（真实形状）。
 
-**第三轮（R1～R5）修复后验证（实际命令与退出码，依赖顺序执行）**
+**第三轮（R1～R5）修复后验证（实现提交 `16f52ae`、文档 `f0eb4f3`、测试收尾 `b97f173`；实际命令与退出码，依赖顺序执行）**
 
 | 命令 | 退出码 | 结果 |
 | --- | --- | --- |
@@ -581,9 +581,10 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 | `pnpm exec vitest run src/main/knowledge src/main/notes.test.ts src/main/chat.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 0 | 11 文件 / 161 项 |
 | `pnpm typecheck` | 0 | node + web |
 | `pnpm test:native` | 0 | 7 个 crate |
-| `pnpm test` | 0 | 259 文件通过 / 3 跳过（262）；3772 项通过 / 8 跳过（3780） |
+| `pnpm test` | 0 | 259 文件通过 / 3 跳过（262）；3772 项通过 / 8 跳过（3780）；（在最终 `b97f173` 树上复跑一次仍为 0） |
 | `pnpm build` | 0 | renderer 与主进程构建通过 |
 
 - 交付 release：`native/bin/yu-knowledge.exe`，2,497,536 字节，SHA-256 `085f3ec8cb272de639adf26a893e7bc80e6514ceac7cb1cce5ae9069b0dca20f`（每次重建都会变）。
 - 仅用于测试的二进制：`target/debug/yu-knowledge.exe`（3,927,040 字节，`2f47e92afd61de7bd4db2f16d0773a201431a1c1af9d9ebbfb9220f2a3086d66`）、`target/debug/yu-knowledge-fixture.exe`（2,412,544 字节，`393df85ac02f8945e9da4cbc6fdc5fbd4947dee82a4dd5ac61abf53a5fc7657c`），不随安装包分发。
+- 临时产物：本轮删除了先前遗留的 15 个 `%TEMP%/yu-knowledge-scan-*` 目录；`history.integration.test.ts` 现在在 `afterEach` 关闭 `ChatStore` 再删根目录（Windows 会锁住打开中的数据库），复跑后 `%TEMP%/yu-knowledge*` 为 0；`native/knowledge/target` 为 1.2 GB（`.gitignore` 已忽略，沿用仓库保留编译缓存的习惯）。
 - 仍未覆盖：真实 Electron 启动、打包安装后的六程序联动、60 秒稳定期的真实时长（仍用 `YU_KNOWLEDGE_STABLE_MS` 缩短验证）、阶段 3 的卡片生成（本阶段不调用任何模型）。
