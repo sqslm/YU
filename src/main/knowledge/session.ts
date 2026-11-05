@@ -9,6 +9,7 @@
  * real game-mode flow.
  */
 
+import type { CollectChannel } from '@shared/knowledge'
 import type { KnowledgeCollector } from './collector'
 import type { HistoryDriver } from './history'
 
@@ -16,7 +17,11 @@ export interface KnowledgeWiring {
   collector: Pick<KnowledgeCollector, 'sync' | 'enabled'>
   history: Pick<HistoryDriver, 'resume'>
   /** Woken only after the switch and the game state have been confirmed. */
-  engine?: { wake: () => void; abort?: (reason?: string) => void }
+  engine?: {
+    wake: () => void
+    park?: (reason?: string) => Promise<void>
+    abortChannel?: (channel: CollectChannel, reason?: string) => void
+  }
 }
 
 /**
@@ -26,14 +31,19 @@ export interface KnowledgeWiring {
  * touched: `resume()` accepts `running` jobs only.
  */
 export async function syncKnowledge(wiring: KnowledgeWiring, game: boolean): Promise<void> {
-  await wiring.collector.sync({ game })
+  // The collector knows which channels the helper was told about, so a channel
+  // that was closed by this very call is reported instead of guessed.
+  const { closed } = await wiring.collector.sync({ game })
   if (!wiring.collector.enabled || game) {
     // A batch already waiting for a provider must not finish after the switch
-    // closed. Telling the helper to cancel is the fast path; Rust re-checks the
-    // configuration before it writes anything either way.
-    wiring.engine?.abort?.(game ? '游戏模式已开启' : '采集已关闭')
+    // closed, and the caller stops the helper right after this: waiting for the
+    // release keeps a normal pause from looking like a crash on the next start.
+    await wiring.engine?.park?.(game ? '游戏模式已开启' : '采集已关闭')
     return
   }
+  // A channel that was closed mid-batch cannot be written any more, so its batch is
+  // stopped now instead of paying for an answer Rust would refuse.
+  for (const name of closed) wiring.engine?.abortChannel?.(name)
   await wiring.history.resume().catch(() => undefined)
   // Extraction looks for one runnable batch; Rust decides whether anything is due.
   wiring.engine?.wake()

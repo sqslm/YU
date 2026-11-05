@@ -31,6 +31,12 @@ export interface HistoryDeps {
   /** False once the feature is switched off: the walk then parks the job. */
   allowed?: () => boolean
   /**
+   * Called after a batch really committed sources. Extraction must look for the new
+   * work without waiting for the next publish event: a scan is the only producer
+   * that can queue dozens of groups without any other traffic.
+   */
+  onBatch?: () => void
+  /**
    * The scan bounds read from the stores right before a job starts. They are
    * persisted by the helper, so resuming a job after a restart keeps its own set.
    */
@@ -101,13 +107,27 @@ export class HistoryDriver {
         if (!job || job.state !== 'running') return
         if (scopes.notes && !job.noteDone) {
           const page = this.deps.pages.notes(job.noteCursor, job.noteBound ?? null)
-          await host.stepHistory({ jobId, kind: 'note', cursor: page.cursor, rows: page.rows, done: page.done })
+          const step = await host.stepHistory({
+            jobId,
+            kind: 'note',
+            cursor: page.cursor,
+            rows: page.rows,
+            done: page.done
+          })
+          this.notify(step.job.scanned, job.scanned)
           await tick()
           continue
         }
         if (scopes.chat && !job.chatDone) {
           const page = this.deps.pages.chat(job.chatCursor, job.chatBound ?? null)
-          await host.stepHistory({ jobId, kind: 'chat', cursor: page.cursor, rows: page.rows, done: page.done })
+          const step = await host.stepHistory({
+            jobId,
+            kind: 'chat',
+            cursor: page.cursor,
+            rows: page.rows,
+            done: page.done
+          })
+          this.notify(step.job.scanned, job.scanned)
           await tick()
           continue
         }
@@ -119,6 +139,16 @@ export class HistoryDriver {
       this.deps.log?.(`[knowledge] 历史整理中断：${this.error(error)}`)
     } finally {
       this.walking.delete(jobId)
+    }
+  }
+
+  /** Wakes extraction only when this batch actually added sources. */
+  private notify(scanned: number, before: number): void {
+    if (scanned <= before) return
+    try {
+      this.deps.onBatch?.()
+    } catch (error) {
+      this.deps.log?.(`[knowledge] 扫描通知失败：${this.error(error)}`)
     }
   }
 }

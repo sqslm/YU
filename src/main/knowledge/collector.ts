@@ -152,6 +152,8 @@ export class KnowledgeCollector {
   private confirmed: Promise<void> = Promise.resolve()
   /** True only while a hand-over is in flight, so the common path stays synchronous. */
   private confirming = false
+  /** The channel switches the helper already knows about. */
+  private sent: Record<CollectChannel, boolean> | null = null
 
   constructor(private readonly deps: CollectorDeps) {}
 
@@ -183,15 +185,24 @@ export class KnowledgeCollector {
    * nobody to tell it to: spawning a process just to write "off" would create the
    * databases the default is meant to leave alone.
    */
-  async sync(options: { game?: boolean } = {}): Promise<void> {
+  async sync(options: { game?: boolean } = {}): Promise<{ closed: CollectChannel[] }> {
     const host = this.host()
-    if (!host) return
+    if (!host) return { closed: [] }
     const knowledge = this.deps.settings().knowledge
     const enabled = knowledge?.enabled === true
+    // A channel that was on and is now off cannot be written any more, so a batch
+    // already waiting for a provider has to be stopped instead of being paid for.
+    const current: Record<CollectChannel, boolean> = {
+      note: this.channel('note'),
+      chat: this.channel('chat'),
+      reading: this.channel('reading')
+    }
+    const closed = this.sent ? (Object.keys(current) as CollectChannel[]).filter(name => this.sent![name] && !current[name]) : []
+    this.sent = current
     if (!enabled && !host.running) {
       this.confirmed = Promise.resolve()
       this.clear()
-      return
+      return { closed }
     }
     this.confirming = true
     const handover = host
@@ -211,6 +222,7 @@ export class KnowledgeCollector {
     this.confirmed = handover.finally(() => { this.confirming = false })
     await this.confirmed
     if (!enabled) this.clear()
+    return { closed }
   }
 
   /** Drops every in-memory body; called when the feature is switched off. */

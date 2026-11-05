@@ -258,6 +258,9 @@ const historyDriver = new HistoryDriver({
   host: () => knowledge,
   pages: historyPages,
   allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+  // A scan is the only producer that queues many groups without any other traffic,
+  // so extraction has to be told; nothing else would ever look at them.
+  onBatch: () => extractEngine.wake(),
   // Fixed once per job: content newer than these bounds arrives through the live
   // hooks instead, so a scan over a library the user keeps editing terminates.
   bounds: () => {

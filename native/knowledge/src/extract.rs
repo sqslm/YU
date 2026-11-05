@@ -217,37 +217,142 @@ pub fn next(store: &Store) -> ApiResult<Value> {
                 .map_err(sqlite)?;
             continue;
         }
+        let group = match planned_group(
+            &group_id, &claim, &channel, &title, &scope, &sources, &items,
+        ) {
+            Ok(Some(group)) => group,
+            // Nothing to do after all: the claim goes back without pretending the
+            // group finished.
+            Ok(None) => {
+                release_claim(&connection, &group_id, &claim, now)?;
+                continue;
+            }
+            Err(error) => {
+                // A plan that cannot be serialized must not leave a claim behind.
+                release_claim(&connection, &group_id, &claim, now)?;
+                return Err(error);
+            }
+        };
         return Ok(json!({
             "enabled": true,
             "paused": false,
             "nextDueAt": Value::Null,
-            "group": {
-                "groupId": group_id,
-                "channel": channel,
-                "title": title,
-                "scope": scope,
-                "claim": claim,
-                "sources": sources.iter().map(|source| json!({
-                    "sourceId": source.source_id,
-                    "version": source.version,
-                    "fingerprint": source.fingerprint,
-                    "kind": source.kind,
-                    "originRef": source.origin_ref,
-                    "scope": source.scope,
-                    "title": source.title,
-                    "size": source.size,
-                    "segments": segment_bounds(source.size.max(0) as usize).len(),
-                })).collect::<Vec<_>>(),
-                "items": items.iter().map(|item| json!({
-                    "sourceId": item.source_id,
-                    "version": item.version,
-                    "segment": item.index,
-                    "start": item.start,
-                    "end": item.end,
-                })).collect::<Vec<_>>(),
-            },
+            "group": group,
         }));
     }
+}
+
+/// Puts a claimed group back exactly as it was, so a failed plan never strands it.
+fn release_claim(connection: &Connection, group_id: &str, claim: &str, now: i64) -> ApiResult<()> {
+    connection
+        .execute(
+            "UPDATE queue_groups SET state = 'ready', claim = NULL, updated_at = ?3
+             WHERE id = ?1 AND claim = ?2",
+            params![group_id, claim, now],
+        )
+        .map_err(sqlite)?;
+    Ok(())
+}
+
+/// Builds the group description, packed by real UTF-8 bytes.
+///
+/// A group can hold hundreds of sources with long titles, scopes and origins. The
+/// frame limit is a transport fact, not a business rule, so the plan is cut to fit
+/// it: only the sources the kept items need are described, and the next call
+/// continues from the progress this batch leaves behind.
+fn planned_group(
+    group_id: &str,
+    claim: &str,
+    channel: &str,
+    title: &str,
+    scope: &str,
+    sources: &[ClaimedSource],
+    items: &[Planned],
+) -> ApiResult<Option<Value>> {
+    let mut budget = crate::protocol::RESULT_BUDGET_BYTES.saturating_sub(HEADROOM_BYTES);
+    let envelope = serde_json::to_string(&json!({
+        "groupId": group_id,
+        "channel": channel,
+        "title": title,
+        "scope": scope,
+        "claim": claim,
+        "sources": Value::Array(Vec::new()),
+        "items": Value::Array(Vec::new()),
+    }))
+    .map_err(|error| ApiError::new(Code::Internal, format!("读取计划无法序列化：{error}")))?;
+    budget = budget.saturating_sub(envelope.len());
+    let mut kept_sources: Vec<Value> = Vec::new();
+    let mut kept_items: Vec<Value> = Vec::new();
+    let mut described: BTreeSet<&str> = BTreeSet::new();
+    for item in items {
+        let item_json = json!({
+            "sourceId": item.source_id,
+            "version": item.version,
+            "segment": item.index,
+            "start": item.start,
+            "end": item.end,
+        });
+        let mut cost = serde_json::to_string(&item_json)
+            .map_err(serialize_error)?
+            .len()
+            + 1;
+        let mut source_json = None;
+        if !described.contains(item.source_id.as_str()) {
+            let source = sources
+                .iter()
+                .find(|source| source.source_id == item.source_id)
+                .ok_or_else(|| ApiError::new(Code::Internal, "读取计划引用了未知来源"))?;
+            let value = json!({
+                "sourceId": source.source_id,
+                "version": source.version,
+                "fingerprint": source.fingerprint,
+                "kind": source.kind,
+                "originRef": source.origin_ref,
+                "scope": source.scope,
+                "title": source.title,
+                "size": source.size,
+                "segments": segment_bounds(source.size.max(0) as usize).len(),
+            });
+            cost += serde_json::to_string(&value)
+                .map_err(serialize_error)?
+                .len()
+                + 1;
+            source_json = Some(value);
+        }
+        if cost > budget {
+            if kept_items.is_empty() {
+                // Even one item does not fit: say so instead of returning a plan the
+                // caller cannot use. The claim is released by the caller.
+                return Err(ApiError::new(
+                    Code::TooLarge,
+                    "来源描述超过单帧预算，无法给出可用的读取计划",
+                ));
+            }
+            break;
+        }
+        budget -= cost;
+        if let Some(value) = source_json {
+            described.insert(item.source_id.as_str());
+            kept_sources.push(value);
+        }
+        kept_items.push(item_json);
+    }
+    if kept_items.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(json!({
+        "groupId": group_id,
+        "channel": channel,
+        "title": title,
+        "scope": scope,
+        "claim": claim,
+        "sources": kept_sources,
+        "items": kept_items,
+    })))
+}
+
+fn serialize_error(error: serde_json::Error) -> ApiError {
+    ApiError::new(Code::Internal, format!("读取计划无法序列化：{error}"))
 }
 
 /// The first runnable group whose channel is still allowed.
@@ -338,6 +443,20 @@ fn plan_batch(connection: &Connection, sources: &[ClaimedSource]) -> ApiResult<V
         }
     }
     Ok(out)
+}
+
+/// Slack kept under the frame budget for the envelope the caller adds around the
+/// plan: the plan is serialized twice (measured, then sent inside a result frame).
+const HEADROOM_BYTES: usize = 4_096;
+
+/// True when the card moved past the revision the comparison was made against.
+fn moved_under_us(candidates: &[Candidate], id: &str, revision: i64) -> bool {
+    match candidates.iter().find(|candidate| candidate.id == id) {
+        Some(candidate) => candidate.revision != revision,
+        // The card was not in the candidate list this batch offered: the decision
+        // cannot be re-endorsed either.
+        None => true,
+    }
 }
 
 /// Turns the slices the main process read into the segments of this batch, after
@@ -1039,9 +1158,36 @@ fn apply(
             None => exact_card(&transaction, &fingerprint)?,
         };
         if let Some(id) = exact_id {
-            attach(&transaction, &id, &source_ids, now)?;
-            created.push(json!({"cardId": id, "action": "reference"}));
-            continue;
+            // The judgement is only valid for the card it was made against: a card
+            // deleted or rewritten while the model was answering must not silently
+            // gain sources from an old comparison.
+            let current: Option<String> = transaction
+                .query_row(
+                    "SELECT fingerprint FROM cards WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(sqlite)?;
+            match current {
+                Some(fingerprint_now) if fingerprint_now == fingerprint => {
+                    attach(&transaction, &id, &source_ids, now)?;
+                    created.push(json!({"cardId": id, "action": "reference"}));
+                    continue;
+                }
+                Some(_) => {
+                    return Err(ApiError::new(
+                        Code::SourceChanged,
+                        "目标卡片在提炼期间已变化",
+                    ));
+                }
+                None => {
+                    return Err(ApiError::new(
+                        Code::SourceChanged,
+                        "目标卡片在提炼期间已删除",
+                    ));
+                }
+            }
         }
         let known = |id: &str| -> ApiResult<Option<(i64, i64)>> {
             transaction
@@ -1054,11 +1200,28 @@ fn apply(
                 .map_err(sqlite)
         };
         let target = match target {
-            Some(id) => known(&id)?.map(|_| id),
+            Some(id) => match known(&id)? {
+                Some(_) => Some(id),
+                // The comparison named a card that no longer exists. Falling back to
+                // `new` would write a card the model never judged.
+                None => {
+                    return Err(ApiError::new(
+                        Code::SourceChanged,
+                        "目标卡片在提炼期间已删除",
+                    ));
+                }
+            },
             None => None,
         };
         match (action, target) {
             ("reference", Some(id)) => {
+                let (revision, _) = known(&id)?.expect("checked above");
+                if moved_under_us(candidates, &id, revision) {
+                    return Err(ApiError::new(
+                        Code::SourceChanged,
+                        "目标卡片在提炼期间已更新",
+                    ));
+                }
                 attach(&transaction, &id, &source_ids, now)?;
                 created.push(json!({"cardId": id, "action": "reference"}));
             }
@@ -1129,6 +1292,14 @@ fn apply(
             }
             ("propose", Some(id)) => {
                 let (revision, _) = known(&id)?.expect("checked above");
+                // The same rule as a merge: a suggestion may only be anchored to the
+                // revision the model actually judged, never to a newer one.
+                if moved_under_us(candidates, &id, revision) {
+                    return Err(ApiError::new(
+                        Code::SourceChanged,
+                        "目标卡片在提炼期间已更新",
+                    ));
+                }
                 let written = suggest(
                     &transaction,
                     draft,
@@ -1142,6 +1313,14 @@ fn apply(
                 if written {
                     proposals.push(json!({"targetCardId": id, "action": "propose"}));
                 }
+            }
+            // A judgement that named a card but lost it must never become a `new`
+            // card: there is nothing left to justify the write.
+            (action, None) if action != "new" => {
+                return Err(ApiError::new(
+                    Code::InvalidOutput,
+                    format!("判断 {action} 缺少可用的目标卡片"),
+                ));
             }
             _ => {
                 let id = new_id("card");
@@ -1378,11 +1557,12 @@ fn suggest(
 pub fn fail(store: &Store, params: FailParams) -> ApiResult<Value> {
     let connection = lock(store)?;
     let state = match params.code.as_str() {
-        // The body a person can re-read is the only honest way forward, so these
-        // all park the task instead of failing it.
-        "cancelled" | "source_changed" | "needs_reread" => "needs_reread",
-        // A pause or a closed switch must not consume the task: it stays runnable.
-        "paused" => "ready",
+        // A cancelled batch was stopped by a control operation (switch, channel,
+        // pause, game mode, deletion): the task stays runnable and continues with
+        // the same bodies once the control is lifted.
+        "cancelled" | "paused" => "ready",
+        // The body itself is gone or changed: only a real re-read helps.
+        "source_changed" | "needs_reread" => "needs_reread",
         _ => "failed",
     };
     let reason = params.reason.unwrap_or_else(|| params.code.clone());

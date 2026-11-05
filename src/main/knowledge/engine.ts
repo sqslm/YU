@@ -23,6 +23,16 @@ import type { RecoveredBody } from './collector'
 /** Extraction that waits for a provider is slow; never busy-poll for it. */
 const MAX_IDLE_WAIT_MS = 60_000
 
+/** A source that cannot be read for a reason Rust has to know about. */
+class MissingSource extends Error {
+  constructor(
+    message: string,
+    readonly code: string = 'source_changed'
+  ) {
+    super(message)
+  }
+}
+
 export interface ExtractDeps {
   host: () => KnowledgeHost | null
   /**
@@ -72,6 +82,8 @@ export class ExtractEngine {
   private busy = false
   private stopped = false
   private again = false
+  private runningChannel: CollectChannel | null = null
+  private inflight: Promise<void> | null = null
 
   constructor(deps: ExtractDeps) {
     this.deps = deps
@@ -97,6 +109,24 @@ export class ExtractEngine {
    */
   abort(reason = '采集已暂停'): void {
     this.deps.host()?.cancelInFlight(reason)
+  }
+
+  /**
+   * Stops the in-flight batch and waits until its claim was really released.
+   *
+   * The caller stops the helper right after a control operation, so the `extract.fail`
+   * that parks the task has to reach Rust before the process goes away; otherwise the
+   * next start repairs the task as failed and a pause looks like a crash.
+   */
+  async park(reason = '采集已暂停'): Promise<void> {
+    this.abort(reason)
+    const inflight = this.inflight
+    if (inflight) await inflight
+  }
+
+  /** Stops only a batch that belongs to this channel. */
+  abortChannel(channel: CollectChannel, reason = '来源渠道已关闭'): void {
+    if (this.runningChannel === channel) this.abort(reason)
   }
 
   stop(): void {
@@ -163,25 +193,61 @@ export class ExtractEngine {
 
   /** Runs one claimed batch. Returns false when the loop should stop. */
   private async runGroup(host: KnowledgeHost, group: ExtractGroup): Promise<boolean> {
+    this.runningChannel = group.channel
+    const done = this.execute(host, group)
+    this.inflight = done.then(
+      () => undefined,
+      () => undefined
+    )
+    try {
+      return await done
+    } finally {
+      this.inflight = null
+      this.runningChannel = null
+    }
+  }
+
+  /**
+   * Everything after the claim lives inside one settlement boundary: whatever throws
+   * releases the claim with a real reason, so a source store that raises is not
+   * mistaken for a deletion and no task stays `working` while the helper is alive.
+   */
+  private async execute(host: KnowledgeHost, group: ExtractGroup): Promise<boolean> {
+    let items: ExtractSourceInput[]
+    try {
+      items = this.read(group)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      if (error instanceof MissingSource) {
+        await this.settle(host, group, error.code, reason)
+        return true
+      }
+      this.log(`[knowledge] 读取正文失败：${reason}`)
+      await this.settle(host, group, 'internal', `读取正文失败：${reason}`)
+      return true
+    }
+    return this.run(host, group, items)
+  }
+
+  /** Slices the planned ranges out of the stores; throws on a real read failure. */
+  private read(group: ExtractGroup): ExtractSourceInput[] {
     const texts = new Map<string, string[]>()
     const hashes = new Map<string, string>()
     const items: ExtractSourceInput[] = []
     for (const item of group.items) {
       const ref = group.sources.find(source => source.sourceId === item.sourceId)
-      if (!ref) {
-        await this.settle(host, group, 'source_changed', '来源已不属于该任务')
-        return true
-      }
+      if (!ref) throw new MissingSource('来源已不属于该任务')
       let chars = texts.get(item.sourceId)
       if (!chars) {
         const body = this.deps.readBody(group.channel, ref.originRef)
         if ('missing' in body) {
           // A reading body lives only in memory: once it is gone the task needs a
           // real re-read instead of being failed or silently retried.
-          const code = group.channel === 'reading' && body.missing === 'unknown' ? 'needs_reread' : missingCode(body.missing)
-          const reason = group.channel === 'reading' && body.missing === 'unknown' ? '正文已不在内存' : missingReason(body.missing)
-          await this.settle(host, group, code, reason)
-          return true
+          const gone = group.channel === 'reading' && body.missing === 'unknown'
+          throw new MissingSource(
+            gone ? '正文已不在内存' : missingReason(body.missing),
+            gone ? 'needs_reread' : missingCode(body.missing)
+          )
         }
         chars = Array.from(body.text)
         texts.set(item.sourceId, chars)
@@ -198,6 +264,10 @@ export class ExtractEngine {
         text: slice
       })
     }
+    return items
+  }
+
+  private async run(host: KnowledgeHost, group: ExtractGroup, items: ExtractSourceInput[]): Promise<boolean> {
     const knowledge = this.deps.settings().knowledge
     try {
       const outcome = await host.extractRun({
