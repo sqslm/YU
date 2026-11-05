@@ -1552,3 +1552,63 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - 验证：`tsc` node/web 0/0；定向 72 文件 / 986 项全过；`pnpm test` 全过（新增 2 项）；`pnpm build` 0（12.14 s）；`git diff --check` 0；release 助手未变（无 Rust 改动）。
 
 未交付：A 的 Ask/聊天引用点击端到端与隔离 Electron、C 的草稿关联卡片界面与实窗导航、D 的生产执行器回归；B 的 `incomplete` 与竞态仍无自动化用例。
+
+## 阶段 6 A 交付（2026-11-05 第十二轮）
+
+起始 `602e99c`（工作区干净，release 助手 3,199,488 字节 `7e55ca98…0b66e87`）。本轮只做 A：聊天与浮动 Ask 的真实知识卡片引用、点击定位与生产验证；B/C/D 与阶段 7 未动。
+
+### 交付
+
+| 项 | 实现 | 位置 |
+| --- | --- | --- |
+| 引用口径（聊天与 Ask 共用） | `citedKnowledgeIds(cards, answer, opened)`：搜索结果只是候选，仅当回答复述其标题（长度 ≥ 2）或本回合用 `get_knowledge` 打开过该 id 才计入；两路输入都来自工具回执，模型自造的 id 无行可匹配；去重、上限 `MAX_CITED_CARDS = 12` | `src/shared/workspace.ts` |
+| 单卡读取的记录化 | `RECORD_KINDS` 增加 `get_knowledge`；`recordsFromTool` 支持 `data.card`/`data.item`，正文回退到 `body` | 同上 |
+| 聊天真实引用 | 回合内收集工具回执里的知识行与 `get_knowledge` 打开集合，落库 records 保留真实 id（可点击），`onCompleted.citedCardIds` 只给被选用的卡 | `src/main/chat.ts` |
+| Ask 真实引用 | `onLocalResult` 收知识行（`kind === 'knowledge'`）进入会话登记表与本回合卡列表，阅读投影带 `citedCardIds` | `src/main/assistant.ts` |
+| Ask 点击闭环 | `openItem` 返回 `'knowledge'` 或 `'item'`：知识卡走 `deps.openCard`（主窗导航、不花模型回合、不覆盖原答案），文件/应用行仍执行原 Windows 工具，未知 id 仍抛 `请先查找并选择真实结果` | 同上 |
+| 主窗导航落地 | 新 `focusKnowledgeCard(cardId)` 设置 `hubView = { page: 'knowledge', cardId }` 并 `ensureSettingsWindow()` + `assistant:navigate`；`handleCardAction` 对知识卡直接返回（不写「读结果」提示） | `src/main/index.ts` |
+| 渲染侧 | `App.tsx` 的 `navigate()` 消费 `page === 'knowledge'` → `setKnowledgeToOpen(cardId)` + `setPage('knowledge')`；`KnowledgePage` 的 `focusCardId` 选中该卡，详情按 id 加载，已删卡显示页面自身缺失态 | `src/renderer/src/settings/App.tsx`、`pages/KnowledgePage.tsx` |
+| 契约 | `hubView()` 返回类型增加 `'knowledge'` 与 `cardId?`；`ReadingProjection.citedCardIds` 进入 `readingFinished` 的发布 | `src/shared/api.ts`、`src/main/knowledge/collector.ts` |
+| 尾随空格 | `src/main/tools/registry.ts:892` 行末空格删除，`git diff --check c8ace19..HEAD` 恢复 0 | 同上 |
+
+### 旧点击反例与修复后（真实构建、真实 IPC、隔离数据根）
+
+| 反例 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 浮动 Ask 卡片点知识条目「打开」 | 抛 `请先查找并选择真实结果`（`windows.operation` 无此 id） | 主窗落到该卡片详情；hub 已关闭时新建窗口后挂载即消费 pending `hubView` 并选中 |
+| 聊天页点「查看原记录 · 卡片」 | `get_knowledge` 的单卡读取不落记录，只有搜索结果能点 | 单卡读取同样是知识记录，落到知识页并选中该卡 |
+| 已删卡片的引用 | 同上抛错 | 知识页在、详情缺省，弹出真实缺失 `unknown card: card_…` + 重试 |
+| 候选当已引用 | 搜索结果全部写入 `citedCardIds` | 只有被复述或被打开的卡进入采集 |
+
+### 端到端回归（真实 ChatService / askAgent / registry / release 助手，仅替模型网络）
+
+`src/main/ask-knowledge.integration.test.ts`（609 行，唯一替换是 loopback `node:http` 的 OpenAI 兼容桩；DB 断言用 `node:sqlite` `DatabaseSync` 只读打开 helper 的 `knowledge.db`）。8 项全过：工具表两项只读 / 真实检索并引用 helper 返回的卡 / 只打开真实收到的 id 且不二次问模型 / 开关关闭时零检索 / `extract_knowledge` 不在表内也够不到 / 引用 id 进入 helper 的 `sources.cited_card_ids` 且无引用不落库 / helper 起不来时无引用 / 检索无命中时无引用 / delta 到达后取消不完成。实测：卡片 `card_6a66cd00e2d49b06`，普通回合恰好 2 次 `chat/completions`（round 0 带 tools，round 1 `tools: []`），落库记录 `[{kind:"knowledge",id:…,title:"检索粒度基线"}]`，helper 库中 chat 行 `cited_card_ids` 为 `["card_1dce866bf848b9e6"]`、纯复述行为 `"[]"`、网页材料行为同一 id。
+
+顺带测到的既有行为（未改代码，按实测断言）：helper 不可用时失败的 `search_knowledge` 让该轮 `taskState='failed'`，聊天以 `state='error'` 落库且 `onCompleted` 不触发——既不产生引用也不进知识库；`onDelta` 只存在于回答轮；线程首轮会额外发一次 `title()`；`better-sqlite3` 在 Node 24 下 `ERR_DLOPEN_FAILED`，只读库用 `node:sqlite`。
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run src/main/knowledge src/main/tools/knowledge.test.ts src/main/ask-knowledge.integration.test.ts src/main/chat.test.ts src/main/assistant.test.ts src/main/agent.test.ts src/main/workspace.test.ts src/main/ipc-trust.test.ts src/preload/index.test.ts src/renderer/src/settings` | 67 文件 / 854 项全过，退出码 0 |
+| `pnpm exec vitest run src/main/ask-knowledge.integration.test.ts` | 1 文件 / 8 项，连跑 4 次全过 |
+| `pnpm typecheck` | 0（node + web） |
+| `pnpm build` | 0（11.97 s，含 Rust helper 步骤；`settings-CXJH6bQi.js` 4,709.11 kB） |
+| `git diff --check` / `git diff --check c8ace19..HEAD` | 0 / 0 |
+| release 助手 | 未变，3,199,488 字节 `7e55ca9896336a878f613eb0ee251d8153c80fb347ff02780b0b7b32a0b66e87`（本轮无 Rust 改动） |
+
+### 实窗证据（隔离临时目录，合成数据，本地模型桩）
+
+`E:/code/deepseek-harness/rea/typeless/.tmp/stage6a-evidence/`（19 个文件，gitignored）：`report.md`、`app.log`、`stub.log` 与 12 张截图，关键三张 `03-A-knowledge-page-after-citation-click.png`（聊天引用点击后知识页选中该卡）、`04-B-knowledge-page-missing-card.png`（删卡后同一点击的真实缺失与重试）、`07-D-hub-landed-on-card.png` 与 `10-C-hub-opened-on-card.png`（hub 关闭后新建窗口仍落到同一张卡）。运行方式：`pnpm build` 后用临时 app 目录 + `--user-data-dir` 启动 `out/main`，CDP 真实鼠标点击；浮动 Ask 经真实托盘菜单 `Ask` 拉起（全局热键 `RightAlt+Space` 按设计过滤注入按键，无法自动化）。
+
+### 未测与边界
+
+- 完整全量 `pnpm test` 仍是阶段 6 收尾门槛，本轮只跑上述定向集合；未重跑 `cargo fmt/test/clippy`（无 Rust 改动）。
+- 实窗证据取自 `cards` 由 `Map` 收窄为 `Set` 之前的那次构建；该重构只改成员集合类型，行为不变，随后在最终代码上重建 `pnpm build` 退出码 0。
+- 浮动 Ask 的回答轮在本仓库走非流式跟随请求，实窗未触发 SSE 流式分支（集成测试的单测分支已覆盖取消）。
+- 候选行在 AnswerCard 中仍可打开（无「已引用」徽标）；引用边界只体现在采集的 `citedCardIds` 上，未新增 UI 标记。
+- B 的 `incomplete` 拒绝与 `settlingRecords` 竞态、C 的草稿界面与实窗导航、D 的工作流真实执行器回归仍未交付。
+
+### 提交
+
+- `a32bb69` `feat(knowledge): open a really cited card from chat and the floating ask` —— 12 个文件（含新增 `src/main/ask-knowledge.integration.test.ts`）；本节由随后的 docs 提交记录。
