@@ -2141,3 +2141,79 @@ Rust 本轮未改，`native/bin/yu-knowledge.exe` 复用 `66731bd317674ff537c954
 
 - 代码：`81ea7bd` `fix(knowledge): keep every pending cleanup reachable in the app session`（11 文件：`src/main/index.ts`、`src/main/knowledge/cleanup.ts`、`src/main/knowledge/cleanup.test.ts`、`src/main/knowledge/settle.integration.test.ts`、`src/preload/index.ts`、`src/renderer/src/settings/pages/ChatPage.tsx`、`src/renderer/src/settings/pages/NotesPage.tsx`、`src/renderer/src/settings/pages/cleanupQueue.ts`、`src/renderer/src/settings/pages/cleanupQueue.test.ts`、`src/shared/api.ts`、`src/shared/knowledge.ts`）
 - 本节由随后的 docs 提交记录；未 push / merge / rebase / reset。
+
+## 阶段 6 B 补修（2026-11-06 第十九轮）：待清理待办以主进程快照为准
+
+### 外部复核结论与本轮缺口
+
+外部已核对第十八轮实窗 A～E、同一真实 release 助手（3,247,104 B，SHA-256 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`）、独立定向 Vitest 7 文件 65 项与 `git diff --check 90fdc7d..HEAD`。在此之上用当前构建、独立 userData/库、真鼠标复现了两条时序缺口：
+
+1. 持锁勾选删除后，在主进程尚未登记时切到知识库再回随记页，读到登记 0；等清理报锁失败、主进程登记 1 之后，同一页面仍显示 0 —— 同页不会自行发现待办。
+2. 重新持锁点重试、按钮已 `disabled` 后，在重试仍进行时切页再回，新页面显示该行但按钮可点；解锁后卡片确已删除、主进程登记 0，当前页仍显示 1 条失败与重试按钮。
+
+两条都不是数据误删，而是「提示与可操作性」的闭环缺口。根因在渲染层：`NotesPage.tsx` / `ChatPage.tsx` 只在挂载查询与本页 IPC 回包时维护本地投影，页面卸载期间发生的登记与结算不会更新新页面；`cleanupQueue.ts` 的 `mergeList` 是并集合并，缺少「主进程已撤下」的权威表达。
+
+### 实现
+
+| 位置 | 改动 | 作用 |
+| --- | --- | --- |
+| `src/main/knowledge/cleanup.ts` | 构造函数增第二个参数 `changed(channel)`；`revision` 在登记、开始重试、结算时各 +1；`snapshot(channel)` 返回 `{ revision, rows }`，行投影增 `busy: running.has(id)`；`list()` 保留为 `snapshot().rows` | 主进程是唯一权威；页面据 revision 丢弃旧答复，据 busy 禁用在途行 |
+| `src/main/index.ts` | 新增 `notifyCleanups(channel)`，只向主窗口发 `knowledge:cleanups-changed`，payload 仅 `{ channel }`；`CleanupRetries` 注入该回调；`knowledge:cleanup-list` 返回 `snapshot` | 变化通知窄到「只说哪个渠道变了」，身份、票据、正文一律不出主进程 |
+| `src/shared/knowledge.ts` | `CleanupPending` 增 `busy?: boolean`；新增 `CleanupSnapshot { revision, rows }` | 契约与主进程一致 |
+| `src/shared/api.ts` / `src/preload/index.ts` | `knowledge.cleanups(channel)` 返回 `CleanupSnapshot`；新增 `onCleanupsChanged(listener)`（订阅 `knowledge:cleanups-changed`，返回解绑函数） | preload 只转发渠道名 |
+| `src/renderer/src/settings/pages/cleanupQueue.ts` | 由并集 reducer 改为权威投影：`applySnapshot`（低 revision 直接返回原对象，否则整表替换并按 `at` 倒序）、`markRetry` / `clearRetry` / `isBusy` | 不再叠第二套队列；旧答复不能复活已结算行 |
+| `NotesPage.tsx` / `ChatPage.tsx` | 挂载「先订阅再查询」，变化时按渠道重新读快照；卸载置 `live=false` 并退订；删除回包不再写列表；重试用 `markRetry` 标记、异常 `clearRetry` | 切页、窗口重建、在途重试都走同一条同步路径 |
+
+保留不变：票据仍由 Rust 每次核验；默认撤回仍走 `release_record`，`onReady`/`onChanged` 自动补做照常；失败原因、`stale` 之后明确选「仅标记来源失效，保留卡片」、卡片与失效链接、共享归属、队列结清语义均未改；切页、重建窗口、读列表都不会自动触发破坏性清理，只有用户点按钮才执行。
+
+### 回归
+
+| 文件 | 用例 | 断言 |
+| --- | --- | --- |
+| `src/main/knowledge/cleanup.test.ts`（12 项） | 键集投影 | 行只回 `at/busy/cards/id/reason/stale`，不含身份与票据 |
+| 同上 | `names the channel on every change a page can see, and never the record` | 登记报 `note`；重试开始与结算各报一次；`chat` 行只报 `chat` |
+| 同上 | `reports the attempt as in flight while it runs, and settles the revision` | 运行中 `snapshot` 的 `busy=true` 且 revision 增大；结算后 revision 再增大、行消失 |
+| `src/renderer/src/settings/pages/cleanupQueue.test.ts`（6 项） | 快照投影 | 整表替换与倒序；旧 revision 返回原对象且不复活已结算行；`busy` 重挂仍忙；`markRetry` 只锁该行；一笔结算不影响另一笔 |
+| `src/main/knowledge/settle.integration.test.ts`（13 项，真 helper + 真 NotesStore + 真 handler） | `shows an attempt as in flight while it runs, and drops the row once it settles` | 第一次持锁删除后 `busy=false`；第二次持锁发起重试后 `snapshot` 的 `busy=true` 且 `snapshot('chat')` 为空（渠道隔离）；解锁后 `status=done`、行清空、卡片 `unknown card` |
+| 同上既有 12 项 | 第十八轮行为 | 登记前失败、默认删除、两版变宽、旧票据拒绝、release 再遇锁后仍可选保留卡片等均保持 |
+| `src/main/chat-delete.test.ts`（6 项）、`src/main/notes-ipc.test.ts`（19 项）、`src/main/ipc-trust.test.ts`、`src/preload/index.test.ts`、`src/main/chat.test.ts`（19 项）、`src/renderer/src/settings`（含 `knowledgeView`） | 未改契约的既有回归 | 全部保持通过：删除回包仍只描述原记录，清理行一律由快照提供 |
+
+### 验证命令与结果（本机实测）
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `pnpm exec vitest run src/main/knowledge/cleanup.test.ts src/main/knowledge/settle.integration.test.ts src/main/chat-delete.test.ts src/main/notes-ipc.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts src/renderer/src/settings/pages/cleanupQueue.test.ts src/renderer/src/settings src/main/chat.test.ts` | 0 | 45 文件 / 592 项全过（36.92 s） |
+| `pnpm typecheck` | 0 | `tsc -p tsconfig.node.json` 与 `tsc -p tsconfig.web.json` 均 0 |
+| `pnpm build` | 0 | 14.75 s；实窗取证用的就是这次产物 |
+| `git diff --check` | 0 | 无空白问题 |
+| `git diff --check 41713b7..HEAD` | 0 | 提交后复跑，见提交一节 |
+| Rust | 未运行 | 本轮未改 Rust、未重建助手，复用 `66731bd3…ab7f` |
+
+改动文件（11）：`src/main/index.ts`、`src/main/knowledge/cleanup.ts`、`src/main/knowledge/cleanup.test.ts`、`src/main/knowledge/settle.integration.test.ts`、`src/preload/index.ts`、`src/renderer/src/settings/pages/ChatPage.tsx`、`NotesPage.tsx`、`cleanupQueue.ts`、`cleanupQueue.test.ts`、`src/shared/api.ts`、`src/shared/knowledge.ts`。
+
+### 实窗证据（第十九轮：隔离实例、合成库、本地模型桩、真实 release 助手）
+
+`.tmp/stage6b6-evidence/`：`report.md`、`results/{AB,C,D,E2,E3,E4,E5,E6,chat-drain,drain,...}.json`、`shots/` 20 张、`logs/`（app-stdout、stub、cdp、run-e2..e6）、`scripts/` 17 个、`requests/`。启动方式：包装 app 目录（`app/boot.js` 只 `require` 仓库 `out/main/index.js`）、`--user-data-dir` 指向 `E:\CpanQianYi\Temp\yu-wb6\userdata`、`--remote-debugging-port=19196`、只监听 `127.0.0.1:19197` 的 OpenAI 兼容桩；真实鼠标点击走 `Input.dispatchMouseEvent`（点击前用 `elementFromPoint` 校验命中，未用 `element.click()`）；视口 1080×750；持锁用 `node:sqlite` `DatabaseSync` 第二连接 `BEGIN IMMEDIATE`。外部两条反例按原读数重跑：
+
+| 场景 | 断言 | 实测 |
+| --- | --- | --- |
+| A 登记前离开页面 → 自动出现（`results/AB.json`，A+B 合计 35/35） | 回到随记页读到 0 行，之后不切页自动补齐 | 确认框 190 ms 关闭；+1421 ms 回到随记页时 DOM 0 行、`snapshot={revision:6,rows:[]}`、`navCount=3`；保持该页不动，+5656 ms 自动出现 1 行，`revision 6→7`、`stale=off`、无 release 按钮 |
+| B 在途重试跨页 | 新页面仍 busy，解锁后当前页自动撤下 | 点重试后投影 `revision:8, busy:true`、按钮 `disabled`；点击→切页 1309 ms，新页面同一行仍 `disabled`、`busy` 未变；释放锁后 1468 ms 行自动消失（未再切页，`revision 8→9`），该 note 来源全 `invalid`、`card_sources` 空、队列 `cancelled`、`getCard → unknown card` |
+| C 两笔互不干扰（`results/C.json` 17/17） | 只有被点的那行 busy | 两行并存（`68924fb4…` / `c4e7f45f…`，rev 19）；点第一行后其 `disabled`、第二行 DOM 与 stale 逐字段不变，投影 `busy:true/false`（rev 20）；5445 ms 失败回包后两行都在、按钮恢复，主进程「重试知识清理失败」1→2、「重试知识清理：」5→5 |
+| D stale → release 再失败（`results/D.json` 27/27） | 失败后 stale 仍 on、按钮保留、重进仍可选 | `knowledge.saveSource` 为同一 originRef 再发一版造真 stale（288 ms 后 `stale=on`、出现「仅标记来源失效，保留卡片」、卡片可读）；持锁点 release → 5737 ms 失败但 `stale` 仍 `on`、两按钮恢复；切页重进仍在且可选；解锁点 release 262 ms 成功、行消失、卡片 `card_320a0499f5148dea` 保留、4 条来源全 `invalid`、日志「保留卡片并只撤回来源」+1 |
+| E 对话渠道 + 真实关窗重启（`results/E6.json` 35/35） | 真实销毁 + 真实第二次启动后对话页自动补齐 | `WM_CLOSE` → `visibility:hidden` → CDP 在 18428 ms 断开（15 s hubRetire + prepareHubRelease）；再 `electron.exe` 走 `second-instance → ensureSettingsWindow()` 重建（新 target id、`timeOrigin` 变化、旧文档标记消失）；进「语」页不点任何按钮即出现该行（id `f211a06b…` 与关闭前一致、`stale off`）；解锁重试 793 ms 行消失，会话来源全 `invalid`、卡片 `card_9724e8f2ac36e25f` 删除、队列 `cancelled` |
+
+### 未测与边界
+
+- 「主进程登记数」没有直读 IPC，实窗用 `cleanups(channel)` 投影与知识库 SQLite 双向佐证，不宣称读到了内部 Map。
+- E 的销毁时刻不能用 `/json` 判定（隐藏后它立即返回空数组），改为盯 CDP WebSocket 关闭；`E-2-after-close.png` 截不到（窗口已 hide），用 hidden 状态 JSON 替代。报告记录了 6 次判据迭代。
+- 只验证既有 `out/` 构建（本轮 `pnpm build` 产物），没有在实窗里再跑一次构建。
+- 登记仍是主进程内存：进程退出后消失，本轮只覆盖「窗口重建、主进程存活」。
+- 未走「界面编辑随记再保存」造 stale，仍用应用 IPC `knowledge.saveSource`（与第十八轮一致）。
+- 既有无关缺陷仍在：随记详情 `knowledge:by-source` 报 `unknown source`（`data-notes-knowledge-error`），属 C2 范围。
+
+### 提交
+
+- 代码：`2ca63d7` `fix(knowledge): keep pending cleanups in step with the main process`（11 文件，同上）
+- 计划：`__DOCS_SHA__` `docs(plan): record the cleanup snapshot sync and the round-19 window evidence`
+- 未 push / merge / rebase / reset。
