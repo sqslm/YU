@@ -15,6 +15,8 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 import {
   KNOWLEDGE_LIMITS,
@@ -174,6 +176,14 @@ export class KnowledgeHost {
 
   get running(): boolean {
     return this.child !== undefined
+  }
+
+  /**
+   * Whether a profile database already exists on disk. A withdrawal still has to be
+   * applied while the switch is closed, but it must not create the database itself.
+   */
+  hasProfileData(): boolean {
+    return existsSync(join(this.options.root, 'data', 'profile', 'profile.db'))
   }
 
   private log(message: string): void {

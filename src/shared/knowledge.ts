@@ -709,6 +709,9 @@ export interface ProfileStatus extends ProfileState {
   pending: number
   items: number
   usageTotal: number
+  /** Rows a real failure left behind; only the explicit retry moves them again. */
+  failed: number
+  failedItems: { id: string; reason: string; chars: number; at: number }[]
   nextDueAt: number | null
 }
 

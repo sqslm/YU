@@ -23,6 +23,10 @@ pub struct Evidence {
     pub origin_ref: String,
     pub locator: String,
     pub created_at: i64,
+    /// The source this evidence came from was deleted or retracted. The item keeps
+    /// the record so management can show it, but the text no longer supports the
+    /// conclusion it was learned from.
+    pub withdrawn: bool,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -165,7 +169,15 @@ fn attach_evidence(connection: &Connection, items: &mut [ProfileItem]) -> ApiRes
     for item in items {
         let mut statement = connection
             .prepare(
-                "SELECT source_kind, source_id, origin_ref, locator, created_at FROM profile_evidence WHERE item_id = ?1 ORDER BY created_at, source_kind, source_id",
+                "SELECT source_kind, source_id, origin_ref, locator, created_at,
+                        EXISTS (
+                          SELECT 1 FROM profile_source_state s
+                          WHERE s.source_kind = profile_evidence.source_kind
+                            AND s.source_id = substr(profile_evidence.source_id, 1,
+                                  instr(profile_evidence.source_id, '#') - 1)
+                            AND s.state = 'invalid') AS withdrawn
+                 FROM profile_evidence WHERE item_id = ?1
+                 ORDER BY created_at, source_kind, source_id",
             )
             .map_err(sqlite_error)?;
         let rows = statement
@@ -176,6 +188,7 @@ fn attach_evidence(connection: &Connection, items: &mut [ProfileItem]) -> ApiRes
                     origin_ref: row.get(2)?,
                     locator: row.get(3)?,
                     created_at: row.get(4)?,
+                    withdrawn: row.get::<_, i64>(5)? != 0,
                 })
             })
             .map_err(sqlite_error)?
@@ -219,6 +232,19 @@ fn write_evidence(
             .map_err(sqlite_error)?;
     }
     Ok(())
+}
+
+fn find_by_slot(
+    connection: &Connection,
+    dimension: &str,
+    slot: &str,
+) -> ApiResult<Option<ProfileItem>> {
+    let sql = format!("{ITEM_SELECT} WHERE dimension = ?1 AND slot = ?2 AND slot <> ''");
+    match connection.query_row(&sql, params![dimension, slot], map) {
+        Ok(item) => Ok(Some(item)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(sqlite_error(error)),
+    }
 }
 
 fn find_by_value(
@@ -278,7 +304,13 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Profil
         ));
     }
     let now = now_ms();
-    let existing = find_by_value(&transaction, &dimension, &value)?;
+    // A slot is the item's identity: saving a new value for the same controlled slot
+    // replaces that item instead of creating a second one beside it. The value lookup
+    // stays as the legacy path for rows written before slots existed.
+    let existing = match find_by_slot(&transaction, &dimension, &slot)? {
+        Some(item) => Some(item),
+        None => find_by_value(&transaction, &dimension, &value)?,
+    };
     let id = match existing {
         Some(item) => {
             if automatic && protected(&item) {
@@ -289,8 +321,18 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Profil
             }
             transaction
                 .execute(
-                    "UPDATE profile_items SET value = ?5, category = ?2, origin = ?3, updated_at = ?4 WHERE id = ?1",
-                    params![item.id, params.category, origin, now, value],
+                    "UPDATE profile_items SET value = ?5, category = ?2, origin = ?3, updated_at = ?4,
+                     corrected = max(corrected, ?6) WHERE id = ?1",
+                    params![
+                        item.id,
+                        params.category,
+                        origin,
+                        now,
+                        value,
+                        // A manual write of a different value is a correction: the
+                        // user's word must win over a later automatic restatement.
+                        i64::from(!automatic && item.value != value)
+                    ],
                 )
                 .map_err(sqlite_error)?;
             item.id

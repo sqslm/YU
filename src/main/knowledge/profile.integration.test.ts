@@ -311,4 +311,186 @@ describe('the profile loop over the compiled helper', () => {
     expect((await host.profileStatus()).items).toBe(0)
   })
 
+  /** A gated answer keeps one batch genuinely in flight while the switches move. */
+  function held(): { waiting: Promise<void>; release: () => void } {
+    let release: () => void = () => {}
+    const waiting = new Promise<void>(resolve => {
+      release = () => resolve()
+    })
+    return { waiting, release }
+  }
+
+  it('learns the held batch when the master switch is flicked off and on', { timeout: 90_000 }, async () => {
+    let calls = 0
+    const gate = held()
+    const { host, profile, prompts, settings } = harness({
+      answer: async () => {
+        calls += 1
+        if (calls === 1) {
+          await gate.waiting
+          return '{"items":[]}'
+        }
+        return JSON.stringify({
+          items: [
+            {
+              dimension: 'project',
+              category: 'explicit',
+              value: '先把阶段四收尾',
+              evidence: [{ quote: '先把阶段四收尾' }]
+            }
+          ]
+        })
+      }
+    })
+    await profile.sync()
+    await profile.completedChat({
+      threadId: 't7',
+      userId: 'm1',
+      answerId: 'm2',
+      question: '我先把阶段四收尾',
+      at: Date.now()
+    })
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
+    // Flick the switch without waiting for anything: the helper releases the claim
+    // inside the control transaction, so the queue is already back to pending.
+    settings.userProfile.enabled = false
+    await profile.sync()
+    settings.userProfile.enabled = true
+    await profile.sync()
+    await new Promise(resolve => setTimeout(resolve, 500))
+    // The original batch runs again by itself; the refused answer writes nothing.
+    await until(async () => ((await host.profileStatus()).items === 1 ? true : undefined), 'the resumed batch')
+    gate.release()
+    await gate.waiting
+    const status = await host.profileStatus()
+    expect(status.pending).toBe(0)
+    expect(status.failed).toBe(0)
+  })
+
+  it('learns the held batch when the chat channel is flicked off and on', { timeout: 90_000 }, async () => {
+    let calls = 0
+    const gate = held()
+    const { host, profile, prompts, settings } = harness({
+      answer: async () => {
+        calls += 1
+        if (calls === 1) {
+          await gate.waiting
+          return '{"items":[]}'
+        }
+        return JSON.stringify({
+          items: [
+            {
+              dimension: 'goal',
+              category: 'inferred',
+              value: '把画像循环做扎实',
+              evidence: [{ quote: '把画像循环做扎实' }]
+            }
+          ]
+        })
+      }
+    })
+    await profile.sync()
+    await profile.completedChat({
+      threadId: 't8',
+      userId: 'm1',
+      answerId: 'm2',
+      question: '我想把画像循环做扎实',
+      at: Date.now()
+    })
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
+    settings.userProfile.chat = false
+    await profile.sync()
+    settings.userProfile.chat = true
+    await profile.sync()
+    await until(async () => ((await host.profileStatus()).items === 1 ? true : undefined), 'the resumed batch')
+    gate.release()
+    await gate.waiting
+    const status = await host.profileStatus()
+    expect(status.pending).toBe(0)
+    expect(status.failed).toBe(0)
+  })
+
+  it('learns the held batch when the manual pause is flicked off and on', { timeout: 90_000 }, async () => {
+    let calls = 0
+    const gate = held()
+    const { host, profile, prompts } = harness({
+      answer: async () => {
+        calls += 1
+        if (calls === 1) {
+          await gate.waiting
+          return '{"items":[]}'
+        }
+        return JSON.stringify({
+          items: [
+            {
+              dimension: 'expression',
+              category: 'inferred',
+              value: '讲解时先给结论',
+              evidence: [{ quote: '先给结论' }]
+            }
+          ]
+        })
+      }
+    })
+    await profile.sync()
+    await profile.completedChat({
+      threadId: 't10',
+      userId: 'm1',
+      answerId: 'm2',
+      question: '讲解时先给结论再展开',
+      at: Date.now()
+    })
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
+    await profile.pause(true)
+    await profile.pause(false)
+    await until(async () => ((await host.profileStatus()).items === 1 ? true : undefined), 'the resumed batch')
+    gate.release()
+    await gate.waiting
+    const status = await host.profileStatus()
+    expect(status.pending).toBe(0)
+    expect(status.failed).toBe(0)
+  })
+
+  it('retracts a held chat while the switch is off so it is never learned', { timeout: 90_000 }, async () => {
+    const gate = held()
+    const { host, profile, prompts, settings } = harness({
+      answer: async () => {
+        await gate.waiting
+        return JSON.stringify({
+          items: [
+            {
+              dimension: 'focus',
+              category: 'inferred',
+              value: '被删掉的对话',
+              evidence: [{ quote: '被删掉的对话' }]
+            }
+          ]
+        })
+      }
+    })
+    await profile.sync()
+    await profile.completedChat({
+      threadId: 't9',
+      userId: 'm1',
+      answerId: 'm2',
+      question: '这段对话稍后会被删掉',
+      at: Date.now()
+    })
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
+    settings.userProfile.enabled = false
+    await profile.sync()
+    // The deletion arrives while the switch is closed: it must still reach the helper,
+    // because the queued sentence is the user's data, not the loop's state.
+    await profile.retractThread('t9', '对话已删除')
+    expect((await host.profileStatus()).pending).toBe(0)
+    settings.userProfile.enabled = true
+    await profile.sync()
+    gate.release()
+    await gate.waiting
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const status = await host.profileStatus()
+    expect(status.items).toBe(0)
+    expect(status.pending).toBe(0)
+    expect(prompts).toHaveLength(1)
+  })
 })

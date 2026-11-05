@@ -404,6 +404,27 @@ impl Store {
             .map_err(|error| {
                 ApiError::storage(format!("cannot recover interrupted profile work: {error}"))
             })?;
+        // Schema 2 kept a finished batch as a `done` row carrying its full text, and
+        // nothing ever collected it. The text is not needed to keep a replay
+        // idempotent, so a `done` row becomes the lightweight marker it always was
+        // and the body goes. This runs on every open, so a database that already
+        // passed the migration cannot keep text written by an older build.
+        profile
+            .execute(
+                "INSERT OR IGNORE INTO profile_markers
+                 (source_kind, source_id, version, segment, created_at)
+                 SELECT source_kind, source_id, version, segment, updated_at
+                 FROM profile_pending WHERE state = 'done'",
+                [],
+            )
+            .map_err(|error| {
+                ApiError::storage(format!("cannot archive finished profile work: {error}"))
+            })?;
+        profile
+            .execute("DELETE FROM profile_pending WHERE state = 'done'", [])
+            .map_err(|error| {
+                ApiError::storage(format!("cannot reclaim finished profile text: {error}"))
+            })?;
         Ok(Store {
             knowledge: Mutex::new(knowledge),
             profile: Mutex::new(profile),
@@ -635,5 +656,94 @@ mod tests {
             trigram,
             "the bundled SQLite must ship the trigram tokenizer"
         );
+    }
+
+    /// A schema-2 file kept finished batches as `done` rows carrying their full text,
+    /// and nothing ever collected them. Opening it must fold those rows into the
+    /// lightweight marker and drop the text — for the upgrade itself and for a file
+    /// that already reached schema 3 under a build that still wrote `done` rows.
+    #[test]
+    fn a_finished_stage_two_row_loses_its_text_when_the_database_opens() {
+        let root = temp_root("stage-two-done");
+        let directory = root.join("data").join("profile");
+        fs::create_dir_all(&directory).expect("directory");
+        let insert = |connection: &Connection| {
+            connection
+                .execute(
+                    "INSERT INTO profile_pending
+                     (id, source_kind, source_id, version, segment, origin_ref, locator,
+                      text, state, claim, reason, at, updated_at)
+                     VALUES ('pp_done', 'chat', 't1', 'v1', 0, 't1:v1', '对话',
+                             '一整段已经归纳过的原文', 'done', NULL, '', 7, 7)",
+                    [],
+                )
+                .expect("done row");
+        };
+        {
+            let connection = Connection::open(directory.join("profile.db")).expect("open");
+            connection
+                .execute_batch(PROFILE_SQL)
+                .expect("stage one schema");
+            connection
+                .execute_batch(PROFILE_LEARN_SQL)
+                .expect("stage two schema");
+            insert(&connection);
+            connection
+                .execute("PRAGMA user_version = 2", [])
+                .expect("version");
+        }
+        let store = Store::open(&root).expect("open");
+        {
+            let profile = store.profile.lock().expect("lock");
+            let version: i64 = profile
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .expect("version");
+            assert_eq!(version, PROFILE_SCHEMA);
+            let pending: i64 = profile
+                .query_row("SELECT count(*) FROM profile_pending", [], |row| row.get(0))
+                .expect("pending");
+            let markers: i64 = profile
+                .query_row("SELECT count(*) FROM profile_markers", [], |row| row.get(0))
+                .expect("markers");
+            assert_eq!(pending, 0, "finished rows are records, not work");
+            assert_eq!(markers, 1, "the deduplication key survives the text");
+            // The marker keeps a replay of the same segment idempotent.
+            let marked: i64 = profile
+                .query_row(
+                    "SELECT count(*) FROM profile_markers
+                     WHERE source_kind = 'chat' AND source_id = 't1' AND version = 'v1'
+                       AND segment = 0",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("marked");
+            assert_eq!(marked, 1);
+            // A file that already reached schema 3 is repaired the same way.
+            profile
+                .execute(
+                    "INSERT INTO profile_pending
+                     (id, source_kind, source_id, version, segment, origin_ref, locator,
+                      text, state, claim, reason, at, updated_at)
+                     VALUES ('pp_done2', 'ask', 'a1', 'v1', 0, 'ask:a1', '提问',
+                             '另一段残留的原文', 'done', NULL, '', 9, 9)",
+                    [],
+                )
+                .expect("late done row");
+        }
+        drop(store);
+        let reopened = Store::open(&root).expect("reopen");
+        {
+            let profile = reopened.profile.lock().expect("lock");
+            let pending: i64 = profile
+                .query_row("SELECT count(*) FROM profile_pending", [], |row| row.get(0))
+                .expect("pending");
+            let markers: i64 = profile
+                .query_row("SELECT count(*) FROM profile_markers", [], |row| row.get(0))
+                .expect("markers");
+            assert_eq!(pending, 0);
+            assert_eq!(markers, 2);
+        }
+        drop(reopened);
+        let _ = fs::remove_dir_all(&root);
     }
 }

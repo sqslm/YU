@@ -75,12 +75,26 @@ export class ProfileCollector {
     const settings = this.settings
     const host = this.deps.host()
     if (!settings || !host) return
-    if (!settings.enabled) {
-      // A closed switch parks the loop and frees the timer; the stored profile
-      // stays in the database for explicit management. A batch already waiting on
-      // a provider is released instead of staying `working` until a restart.
+    if (!settings.enabled && !host.running) {
+      // Nothing is running: there is no batch to release and a switch that was never
+      // on must not create the database it was meant to leave alone.
       await this.park('画像学习已关闭')
-      if (!host.running) return
+      return
+    }
+    const reason = !settings.enabled
+      ? '画像学习已关闭'
+      : options.game === true
+        ? '游戏模式已暂停画像学习'
+        : !settings.chat
+          ? '画像学习已停止收集对话'
+          : null
+    if (reason !== null) {
+      // The helper answers one frame at a time: while it waits for the model, a control
+      // frame sent behind that run is not read yet, so the release inside its transaction
+      // cannot happen. Cancel first — the run unwinds and puts its claim back before the
+      // control frame is processed — then let the reply prove the settled state.
+      this.stop()
+      host.cancelInFlight(reason, 'profile.learn.run')
     }
     try {
       await host.configureProfile({
@@ -93,16 +107,22 @@ export class ProfileCollector {
       this.deps.log?.(`画像设置同步失败：${describe(error)}`)
       return
     }
-    if (!settings.enabled) return
-    if (!settings.chat) {
-      // Only chat and Ask questions are evidence; with the channel closed nothing
-      // new can arrive, so an in-flight batch is released as a pause.
-      await this.park('画像学习已停止收集对话')
+    if (!settings.enabled) {
+      // A closed switch parks the loop and frees the timer; the stored profile stays
+      // in the database for explicit management.
+      await this.park('画像学习已关闭')
+      return
     }
     if (options.game) {
-      // Game mode parks before the helper is stopped, so the release is recorded
-      // as a pause instead of looking like a crashed batch.
+      // Game mode parks before the helper is stopped, so the release is recorded as
+      // a pause instead of looking like a crashed batch.
       await this.park('游戏模式已暂停画像学习')
+      return
+    }
+    if (!settings.chat) {
+      // Only chat and Ask questions are evidence; with the channel closed nothing new
+      // can arrive, so an in-flight batch is released as a pause.
+      await this.park('画像学习已停止收集对话')
       return
     }
     if (this.deps.allowed()) this.wake()
@@ -167,6 +187,8 @@ export class ProfileCollector {
         pending: 0,
         items: 0,
         usageTotal: 0,
+        failed: 0,
+        failedItems: [],
         nextDueAt: null
       }
     }
@@ -195,7 +217,11 @@ export class ProfileCollector {
   /** A deleted or temporary thread can no longer be evidence. */
   async retractThread(threadId: string, reason: string): Promise<void> {
     const host = this.deps.host()
-    if (!host || !this.enabled) return
+    if (!host) return
+    // A withdrawal concerns data that already exists, so it must run even while the
+    // switch is closed: otherwise the queued source would be learned the moment the
+    // switch reopens. A profile that was never created has nothing to withdraw.
+    if (!this.enabled && !host.running && !host.hasProfileData()) return
     try {
       await host.retractProfileSource('chat', threadId, reason)
     } catch (error) {
@@ -356,8 +382,10 @@ export class ProfileCollector {
     try {
       const result = await host.queueProfileEvidence([input])
       // New evidence the helper really accepted is what wakes the loop. A duplicate
-      // settles as `queued: 0` and must not spend a model call.
+      // settles as `queued: 0` and must not spend a model call, while a full queue is
+      // worth saying out loud: nothing was stored, so the sentence is not learned yet.
       if (result.queued > 0) this.wake()
+      else if (result.reason === 'capacity') this.deps.log?.('画像证据已满，等这一批学完再排队')
     } catch (error) {
       // Collection never breaks the answer it was observing, but the failure is
       // reported instead of swallowed.

@@ -210,17 +210,23 @@ pub fn configure(connection: &mut Connection, params: ConfigureParams) -> ApiRes
     }
     if let Some(paused) = params.paused_game {
         set_flag(&transaction, "paused_game", paused)?;
-        // A paused game only parks work that is still legal; a batch that was in
-        // flight is released so it can run again once the game ends.
-        if paused {
-            transaction
-                .execute(
-                    "UPDATE profile_pending SET state = 'pending', claim = NULL, updated_at = ?1
-                     WHERE state = 'working'",
-                    params![now_ms()],
-                )
-                .map_err(sqlite)?;
-        }
+    }
+    // Whatever stops the loop releases the batch it was holding, inside this same
+    // transaction. A caller may re-enable the moment this returns, and the wake that
+    // follows must already see those rows as pending instead of `working` until the
+    // cancelled run gets around to releasing them.
+    if !flag(&transaction, "enabled")?
+        || !flag(&transaction, "chat")?
+        || flag(&transaction, "paused_manual")?
+        || flag(&transaction, "paused_game")?
+    {
+        transaction
+            .execute(
+                "UPDATE profile_pending SET state = 'pending', claim = NULL, reason = '',
+                 updated_at = ?1 WHERE state = 'working'",
+                params![now_ms()],
+            )
+            .map_err(sqlite)?;
     }
     ensure_not_cancelled()?;
     transaction.commit().map_err(sqlite)?;
@@ -362,6 +368,12 @@ pub fn record_event(connection: &mut Connection, params: EventParams) -> ApiResu
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sqlite)?;
+    // A clear is a barrier: an event observed before it, replayed verbatim after a
+    // restart, must not come back as a fresh count. The operation id alone cannot
+    // catch that replay because a clear deletes the operation log as well.
+    if at <= cleared_at(&transaction)? {
+        return Ok(json!({"counted": false, "reason": "an earlier clear covers this event"}));
+    }
     let inserted = transaction
         .execute(
             "INSERT OR IGNORE INTO profile_usage_ops (op_id, feature, at) VALUES (?1, ?2, ?3)",
@@ -517,8 +529,11 @@ fn cleared_at(connection: &Connection) -> ApiResult<i64> {
 fn active_usage(connection: &Connection) -> ApiResult<(i64, i64)> {
     connection
         .query_row(
+            // A failed row keeps its text until a retry runs it, so it has to count
+            // against the budget: otherwise a batch that keeps failing could fill the
+            // database while every capacity check still reported room.
             "SELECT count(*), coalesce(sum(length(text)), 0) FROM profile_pending
-             WHERE state IN ('pending', 'working')",
+             WHERE state IN ('pending', 'working', 'failed')",
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
@@ -1097,8 +1112,8 @@ fn apply(
         // slot would be a new identity, which is how a restatement used to slip past
         // a pinned or corrected item.
         let offered = match &update.slot {
-            Some(slot) => Some(
-                snapshot
+            Some(slot) => {
+                let entry = snapshot
                     .iter()
                     .find(|entry| &entry.slot == slot)
                     .ok_or_else(|| {
@@ -1106,8 +1121,21 @@ fn apply(
                             Code::InvalidOutput,
                             format!("the answer referenced an unknown slot: {slot}"),
                         )
-                    })?,
-            ),
+                    })?;
+                // A slot carries the dimension it was offered under. Borrowing the
+                // slot of another dimension would mint a second, contradictory
+                // identity for this one, next to the protected item it names.
+                if entry.dimension != dimension {
+                    return Err(ApiError::new(
+                        Code::InvalidOutput,
+                        format!(
+                            "the answer referenced slot {slot} of another dimension: {}",
+                            entry.dimension
+                        ),
+                    ));
+                }
+                Some(entry)
+            }
             None => None,
         };
         let slot = match (offered, &update.slot) {
@@ -1395,13 +1423,21 @@ pub fn context(connection: &Connection) -> ApiResult<Value> {
     let mut statement = connection
         .prepare(
             "SELECT i.id, i.dimension, i.value, i.category, i.pinned, i.corrected, i.updated_at,
+                    i.origin,
                     (SELECT max(e.created_at) FROM profile_evidence e WHERE e.item_id = i.id
                       AND NOT EXISTS (
                         SELECT 1 FROM profile_source_state s
                         WHERE s.source_kind = e.source_kind
                           AND s.source_id = substr(e.source_id, 1, instr(e.source_id, '#') - 1)
                           AND s.state = 'invalid'))
-               AS recent_at
+               AS recent_at,
+                    (SELECT count(*) FROM profile_evidence e WHERE e.item_id = i.id
+                      AND NOT EXISTS (
+                        SELECT 1 FROM profile_source_state s
+                        WHERE s.source_kind = e.source_kind
+                          AND s.source_id = substr(e.source_id, 1, instr(e.source_id, '#') - 1)
+                          AND s.state = 'invalid'))
+               AS valid_evidence
              FROM profile_items i
              ORDER BY i.pinned DESC, i.corrected DESC,
                       CASE i.category WHEN 'explicit' THEN 0 WHEN 'observed' THEN 1 ELSE 2 END,
@@ -1418,7 +1454,9 @@ pub fn context(connection: &Connection) -> ApiResult<Value> {
                 row.get::<_, i64>(4)?,
                 row.get::<_, i64>(5)?,
                 row.get::<_, i64>(6)?,
-                row.get::<_, Option<i64>>(7)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, Option<i64>>(8)?,
+                row.get::<_, i64>(9)?,
             ))
         })
         .map_err(sqlite)?
@@ -1427,9 +1465,15 @@ pub fn context(connection: &Connection) -> ApiResult<Value> {
     let mut lines = Vec::new();
     let mut items = Vec::new();
     let mut bytes = 0usize;
-    for (id, dimension, value, category, pinned, corrected, _, recent_at) in rows {
+    for (id, dimension, value, category, pinned, corrected, _, origin, recent_at, valid) in rows {
         let protected = pinned != 0 || corrected != 0;
         let fresh = recent_at.map(|at| at >= recent_after).unwrap_or(false);
+        // An automatic item whose every source was retracted has lost its footing,
+        // even when the observation itself is recent. A manual one is the user's own
+        // word and stays; its detail still reports the retracted evidence.
+        if !protected && origin != "manual" && valid == 0 {
+            continue;
+        }
         // The 30-day window is about *now*: which interests and projects are alive.
         // A stable preference the user stated is not retracted by the calendar.
         if !protected && is_multi(&dimension) && !fresh {

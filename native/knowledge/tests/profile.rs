@@ -1032,3 +1032,292 @@ fn an_interrupted_batch_becomes_retryable_after_a_real_crash() {
     );
     assert_eq!(result["ok"], true, "{result}");
 }
+
+#[test]
+fn a_control_change_releases_the_batch_in_its_own_transaction() {
+    let root = Root::new("control-release");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "回答请先给结论。")] }),
+    );
+    let next = helper.ok("n1", "profile.learn.next", json!({}));
+    assert_eq!(
+        next["batch"]["items"].as_array().map(Vec::len),
+        Some(1),
+        "{next}"
+    );
+    // The switch closes while that batch is `working`. The control write has to hand
+    // the rows back before it answers: a reader right after it already sees pending
+    // work, without waiting for the cancelled run to release anything.
+    helper.ok("c1", "profile.configure", json!({ "enabled": false }));
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(1), "{status}");
+    helper.ok("c2", "profile.configure", json!({ "enabled": true }));
+    // Reopening and waking is enough: no manual retry, no waiting for a release.
+    let done = run_learn(&mut helper, "n2", "r2", json!({ "items": [] }));
+    assert_eq!(done["ok"], true, "{done}");
+    let status = helper.ok("s2", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(0), "{status}");
+}
+
+#[test]
+fn an_event_before_a_clear_is_not_counted_after_a_restart() {
+    let root = Root::new("event-barrier");
+    let observed = now_ms() - 1_000;
+    let mut helper = Helper::start(&root);
+    let counted = helper.ok(
+        "e1",
+        "profile.event",
+        json!({ "opId": "chat:t1:a1", "feature": "chat", "at": observed }),
+    );
+    assert_eq!(counted["counted"], true, "{counted}");
+    helper.ok("c1", "profile.clear", json!({}));
+    // The same callback delivered again, with the time it was observed: the clear is
+    // a barrier for usage numbers exactly as it is for evidence text.
+    let replay = helper.ok(
+        "e2",
+        "profile.event",
+        json!({ "opId": "chat:t1:a1", "feature": "chat", "at": observed }),
+    );
+    assert_eq!(replay["counted"], false, "{replay}");
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["usageTotal"], json!(0), "{status}");
+    // The barrier is stored, so a restart does not forget it either.
+    drop(helper);
+    let mut helper = Helper::start(&root);
+    let replay = helper.ok(
+        "e3",
+        "profile.event",
+        json!({ "opId": "chat:t1:a1", "feature": "chat", "at": observed }),
+    );
+    assert_eq!(replay["counted"], false, "{replay}");
+    let status = helper.ok("s2", "profile.status", json!({}));
+    assert_eq!(status["usageTotal"], json!(0), "{status}");
+    // A new event after the clear still counts.
+    let fresh = helper.ok(
+        "e4",
+        "profile.event",
+        json!({ "opId": "chat:t2:a1", "feature": "chat", "at": now_ms() }),
+    );
+    assert_eq!(fresh["counted"], true, "{fresh}");
+}
+
+#[test]
+fn a_withdrawal_while_the_switch_is_off_still_drops_the_queued_source() {
+    let root = Root::new("retract-off");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t9", "v1", "这段对话稍后会被删除。")] }),
+    );
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(1), "{status}");
+    helper.ok("c1", "profile.configure", json!({ "enabled": false }));
+    // With the loop closed a deleted thread is still a deleted thread: the queue must
+    // not keep it and learn it the moment the switch reopens.
+    let retracted = helper.ok(
+        "rt1",
+        "profile.retract",
+        json!({ "sourceKind": "chat", "sourceId": "t9", "reason": "thread deleted" }),
+    );
+    assert_eq!(retracted["dropped"], json!(1), "{retracted}");
+    helper.ok("c2", "profile.configure", json!({ "enabled": true }));
+    let status = helper.ok("s2", "profile.status", json!({}));
+    assert_eq!(status["pending"], json!(0), "{status}");
+    let next = helper.ok("n1", "profile.learn.next", json!({}));
+    assert!(next["batch"].is_null(), "{next}");
+}
+
+#[test]
+fn a_retracted_source_takes_its_automatic_item_out_of_the_context() {
+    let root = Root::new("retract-context");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "回答请先给结论。")] }),
+    );
+    let learned = run_learn(
+        &mut helper,
+        "n1",
+        "r1",
+        one_item("先给结论", "explicit", "先给结论"),
+    );
+    assert_eq!(learned["ok"], true, "{learned}");
+    let id = learned["result"]["written"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let context = helper.ok("c1", "profile.context", json!({}));
+    assert!(context["text"].as_str().unwrap().contains("先给结论"));
+    helper.ok(
+        "rt1",
+        "profile.retract",
+        json!({ "sourceKind": "chat", "sourceId": "t1", "reason": "thread deleted" }),
+    );
+    // The only evidence behind this automatic item is gone, so the conclusion it
+    // supported leaves the readable context...
+    let context = helper.ok("c2", "profile.context", json!({}));
+    assert!(
+        !context["text"].as_str().unwrap().contains("先给结论"),
+        "{context}"
+    );
+    // ...while the item and its evidence stay readable, with the withdrawal marked.
+    let item = helper.ok("g1", "profile.get", json!({ "id": id }));
+    assert_eq!(item["value"], json!("先给结论"), "{item}");
+    assert_eq!(item["evidence"][0]["withdrawn"], json!(true), "{item}");
+}
+
+#[test]
+fn capacity_counts_work_that_failed_to_learn() {
+    let root = Root::new("capacity-failed");
+    let mut helper = Helper::start(&root);
+    let items = (0..200)
+        .map(|index| {
+            evidence(
+                "chat",
+                &format!("t{index}"),
+                "v1",
+                &format!("第{index}段话。"),
+            )
+        })
+        .collect::<Vec<_>>();
+    let queued = helper.ok("q1", "profile.evidence", json!({ "items": items }));
+    assert_eq!(queued["queued"], json!(200), "{queued}");
+    // Every batch fails for a real reason: a failed row still holds its text, so it
+    // keeps occupying the budget instead of letting the next callback in for free.
+    let mut guard = 0;
+    loop {
+        let next = helper.ok("n1", "profile.learn.next", json!({}));
+        if next["batch"].is_null() {
+            break;
+        }
+        let claim = next["batch"]["claim"].as_str().unwrap().to_string();
+        helper.ok(
+            "f1",
+            "profile.learn.fail",
+            json!({ "claim": claim, "code": "provider_error" }),
+        );
+        guard += 1;
+        assert!(guard < 20, "the queue did not drain into failures");
+    }
+    let refused = helper.ok(
+        "q2",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t-extra", "v1", "再来一段。")] }),
+    );
+    assert_eq!(refused["queued"], json!(0), "{refused}");
+    assert_eq!(refused["reason"], json!("capacity"), "{refused}");
+    let status = helper.ok("s1", "profile.status", json!({}));
+    assert_eq!(status["failed"], json!(200), "{status}");
+    // A retry turns failures back into real work, and finishing it frees the budget.
+    let retried = helper.ok("r1", "profile.retry", json!({}));
+    assert_eq!(retried["retried"], json!(200), "{retried}");
+    let mut guard = 0;
+    loop {
+        let next = helper.ok("n2", "profile.learn.next", json!({}));
+        if next["batch"].is_null() {
+            break;
+        }
+        let claim = next["batch"]["claim"].as_str().unwrap().to_string();
+        helper.send(
+            "run",
+            "profile.learn.run",
+            json!({ "claim": claim, "profileId": "fixture-profile", "effort": "high" }),
+        );
+        let request = helper.recv_model();
+        let model_id = request["id"].as_str().unwrap().to_string();
+        helper.answer_model(&model_id, &json!({ "items": [] }).to_string());
+        let answer = helper.answer("run");
+        assert_eq!(answer["ok"], true, "{answer}");
+        guard += 1;
+        assert!(guard < 20, "the retried queue did not drain");
+    }
+    let queued = helper.ok(
+        "q3",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t-extra", "v1", "再来一段。")] }),
+    );
+    assert_eq!(queued["queued"], json!(1), "{queued}");
+}
+
+#[test]
+fn a_manual_save_reuses_the_id_of_a_controlled_slot() {
+    let root = Root::new("save-slot");
+    let mut helper = Helper::start(&root);
+    let first = helper.ok(
+        "m1",
+        "profile.save",
+        json!({
+            "dimension": "depth",
+            "value": "先给结论",
+            "category": "explicit",
+            "slot": "depth",
+            "evidence": [{ "sourceKind": "chat", "sourceId": "t1", "locator": "对话" }]
+        }),
+    );
+    let id = first["id"].as_str().unwrap().to_string();
+    // The same controlled slot with a different value: still one item, one id, its
+    // evidence intact, and the change recorded as the user's correction.
+    let second = helper.ok(
+        "m2",
+        "profile.save",
+        json!({ "dimension": "depth", "value": "先给结论再给细节", "category": "explicit", "slot": "depth" }),
+    );
+    assert_eq!(second["id"], json!(id), "{second}");
+    assert_eq!(second["value"], json!("先给结论再给细节"), "{second}");
+    assert_eq!(second["corrected"], json!(true), "{second}");
+    assert_eq!(
+        second["evidence"].as_array().map(Vec::len),
+        Some(1),
+        "{second}"
+    );
+    let page = helper.ok("p1", "profile.list", json!({}));
+    assert_eq!(page["items"].as_array().map(Vec::len), Some(1), "{page}");
+}
+
+#[test]
+fn a_slot_from_another_dimension_is_refused() {
+    let root = Root::new("cross-dimension");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "m1",
+        "profile.save",
+        json!({ "dimension": "depth", "value": "先给结论", "category": "explicit", "pinned": true, "slot": "depth" }),
+    );
+    helper.ok(
+        "m2",
+        "profile.save",
+        json!({ "dimension": "focus", "value": "Rust 性能", "category": "observed", "slot": "focus:rust" }),
+    );
+    helper.ok(
+        "q1",
+        "profile.evidence",
+        json!({ "items": [evidence("chat", "t1", "v1", "我最近在写 Rust，回答请先给结论。")] }),
+    );
+    // Borrowing the slot of the focus candidate to reach the depth dimension would
+    // mint a second, contradictory depth identity next to the pinned one.
+    let answer = json!({
+        "items": [{
+            "dimension": "depth",
+            "category": "explicit",
+            "value": "先给细节",
+            "slot": "focus:rust",
+            "evidence": [{ "quote": "先给结论" }]
+        }]
+    });
+    let refused = run_learn(&mut helper, "n1", "r1", answer);
+    assert_eq!(refused["ok"], json!(false), "{refused}");
+    assert_eq!(
+        refused["error"]["code"],
+        json!("invalid_output"),
+        "{refused}"
+    );
+    let page = helper.ok("p1", "profile.list", json!({}));
+    let items = page["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2, "{page}");
+    assert!(items.iter().all(|item| item["value"] != json!("先给细节")));
+}
