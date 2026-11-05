@@ -887,10 +887,22 @@ async function runTaskTool(name: string, args: Record<string, unknown>, ctx: Too
     if (outcome.ok && name === 'get_current_folder' && typeof outcome.data.folder === 'string') task.directory = outcome.data.folder
     if (outcome.ok && ['get_current_page', 'read_current_content'].includes(name) && typeof outcome.data.url === 'string') task.pageUrl = outcome.data.url
   }
-  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary, status, taskId: task?.id,
+  if ([...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, ...KNOWLEDGE_TOOLS, 'analyze_screenshot'].includes(name)) ctx.onLocalResult?.({ tool: name, ok: outcome.ok, summary: outcome.summary, status, taskId: task?.id,
     ...(needsFileSearchFallback(name, outcome) ? { fallback: true } : {}),
-    items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : undefined,
+    items: WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) ? outcome.data.items as import('@shared/assistant').AssistantItem[] | undefined : knowledgeItems(name, outcome), 
     detail: [outcome.data.coverage, name === 'read_current_content' && outcome.data.truncated ? mt('当前内容仅读取了部分，摘要可能不完整。') : '', outcome.data.indexUnavailable ? mt('Windows 索引不可用，已使用限定目录搜索。') : '', outcome.data.partial ? mt('结果已截断，最多显示 40 项；请缩小范围。') : ''].filter(Boolean).join(' ') || undefined })
   ctx.log(`[task ${task?.id ?? 'unscoped'}] tool=${tool?.name ?? 'unknown'} status=${status} ms=${durationMs}${outcome.reused ? ' reused=true' : ''}`)
   return outcome
+}
+
+/** A knowledge answer names real cards; each one becomes a clickable reference. */
+function knowledgeItems (name: string, outcome: ToolOutcome): import('@shared/assistant').AssistantItem[] | undefined {
+  if (name !== 'search_knowledge' && name !== 'get_knowledge') return undefined
+  const rows = (name === 'get_knowledge' ? [outcome.data.card] : outcome.data.items ?? []) as
+    | { id?: unknown; title?: unknown; summary?: unknown }[]
+    | undefined
+  const items = (rows ?? [])
+    .filter(row => typeof row?.id === 'string' && row.id)
+    .map(row => ({ id: row.id as string, name: String(row.title ?? row.id), path: String(row.summary ?? ''), kind: 'knowledge' as const }))
+  return items.length ? items : undefined
 }
