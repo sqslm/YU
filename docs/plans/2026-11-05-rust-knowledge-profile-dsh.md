@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5（知识库页面与独立图谱）已提交，等待外部复核。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
+**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6 的修复已提交，等待外部复核（见文末「阶段 5 外部复核与修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -1089,3 +1089,76 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - 图谱是知识库页内的视图（`view: 'cards' | 'graph'`）而不是独立一级导航；知识库设置是知识库页顶栏打开的对话框，没有并入全局设置树。
 - 图谱的 Byte 预算与节点上限有 Rust 侧实测，但 200+ 节点在真实窗口里的渲染表现未目视确认。
 - 阶段 6 的聊天检索引用、系列、工作流联动与删除联动，阶段 7 的备份/卸载/安装包验证仍未开始。
+
+## 阶段 5 外部复核与修复（R1～R6，2026-11-05 第六轮，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+复核方：外部 Codex 线程 `01a1a846-2e68-7062-89a9-bc2ed962ce86`，本次汇报 `7f829dea-b12d-4dac-9a84-bed5c45da242`；起始 HEAD `2ced462c2283333b0699bfc98e9894b2326a531e`（master，工作区干净）。复核结论：阶段 5 暂不验收，仅修 R1～R6；阶段 6～7 另派。
+
+### 复核自行实测通过、本轮回修不重做的部分
+
+- `cargo test --locked --quiet` 101 项通过；`git diff --check efc0b9b..HEAD` 通过；release SHA-256 `5dc8d3ba733f8e86d1d6058fde5e4ae81df3ecfb55e128130c5942fdb3900b66` 与 DSH 汇报一致。
+- 真实 schema 5→6 探针：卡片、来源、修订、建议、排除与既有标记全部保留，更高未知 schema 被拒绝。
+- 合并的过期/超长原子拒绝、来源保留、删除边级联实测通过。
+- 外部用 Playwright 连隔离 Electron 开发构建加载 `settings.html`（真实 preload/IPC 与 release helper）：合成库里验证了「随记」下方的知识库入口、空态、详情、收藏入库、画像面板、2 节点 1 边图谱，以及模拟 760px 窄版返回。
+- 未使用个人库或付费模型；安装包验收留在阶段 7。
+
+### 未通过项与本轮修复状态
+
+| 编号 | 复核证据 | 根因 | 状态 |
+| --- | --- | --- | --- |
+| R1 | 真实 1080×750 与 940×690 窗口下，知识库搜索 input 与 `InputBase` 宽度实测为 0，Playwright 无法输入；图谱有同类并排筛选结构 | 筛选下拉继承了主题的 `MuiTextField.fullWidth=true`，在 flex 行里没有可收缩列宽；页面与力图仍是静态导入 | 已修复 |
+| R2 | 卡片详情把聊天复合 `originRef` 当 messageId，缺 `threadId`，真实点击报「原记录已不存在」；PDF/有效附件无打开入口；画像证据重复同一错误且忽略 Rust 已返回的 `withdrawn` | 渲染层自行拼记录标识；`document` 来源无分支 | 已修复 |
+| R3 | 失败组重试用 `{channel, groupKey}` 走错分支，把没有原文的 reading 重置成 ready（wake=0）；缺少「指定来源手动提炼」；`lib.rs` 丢弃 `Outcome.scope`，`collect.configure`/`source.publish`/`history.*`/`profile.clear` 成功后无通知；模型选择把 disabled 档位当可用项 | 队列状态没有 group id；通知用硬编码方法表；下拉未过滤 `enabled` | 已修复 |
+| R4 | 两张从未编辑的卡合并后修订里只剩合并后正文，双方旧稿丢失；保留卡与被并卡各与第三卡相连的 contrast 合并后出现 K→T 与 T→K 两条 | 合并事务只迁移已有历史，未登记双方当前版本；重指向未对对称关系规范化 | 已修复 |
+| R5 | 70 个大元数据命中 + 焦点邻居裁到 54 节点/522585 字节时，尾部追加的焦点与邻居被裁掉；`limit=2` 满页时唯一邻居无法展开 | 追加焦点节点在压缩之后，没有优先级 | 已修复 |
+| R6 | 真实 release 接受两个来源末尾/开头用合成换行拼出的 quote（任一来源都不含完整引文）并提交模型边，边缺 source/segment；首轮未展示的旧卡 ID 被提前引用仍建边成功 | 只校验了「引文出现在任一候选文本」，未绑定单个来源/段，也未按本轮可引用端点集合校验 | 已修复 |
+
+### 本轮实现范围（不含阶段 6～7）
+
+- Rust：R4/R5/R6 + `queue.status` 分组 + `queue.extract` 手动提炼 + 通知改用 `Outcome.scope`。
+- 主进程：`knowledge:source-target|source-open|source-extract|model-info` 四个受信通道，来源身份由主进程从已存来源或附件记录解析（`src/main/knowledge/targets.ts`），`chat-store.attachmentOwner` 按附件 id 反查所属消息。
+- 渲染层：R1 布局与懒加载、R2 来源定位/撤回态、R3 重试/手动提炼/通知刷新/模型选择。
+
+### 修复实现（R1～R6）
+
+- R1（渲染层，`src/renderer/**`）：`theme.ts` 的 `MuiTextField.defaultProps.fullWidth` 未改，改为在筛选行调用点收紧——工具行 `flexWrap`，搜索框 `flex: '1 1 220px'`、`minWidth: 120`，两个下拉显式 `fullWidth={false}` + 固定 152/132px 列宽 + `minWidth: 0`，收藏按钮 `flex: '0 0 36px'`。主/从布局改为用 `ResizeObserver` 量知识面板自身的宽度，新增纯函数 `SPLIT_MIN_WIDTH = 720`、`splitFit(w)`、`paneModeFor(w, hasSelection)`；图谱页同一判定（<720 上下堆叠，列表 `maxHeight: 260`）。`App.tsx` 与 `KnowledgePage.tsx` 改为 `React.lazy` + `Suspense`。
+- R2（主进程 + 渲染层）：来源身份改由主进程解析。新增纯逻辑 `src/main/knowledge/targets.ts`（`parseChatRef`、`resolveSourceTarget`）与 `src/main/chat-store.ts` 的 `attachmentOwner(attachmentId)`（按附件 id 反查 thread/message）。`knowledge:source-target` 返回 `record`（交给既有 `openRecord`）、`url`/`file`（交给 `knowledge:source-open`，`safeLink` 校验）或 `none` + 真实原因；`knowledge:source-open` 只用主进程自己解析出的路径或链接，渲染层不传路径。卡片详情与画像证据共用该语义：`withdrawn === true` 显示「已撤回」且不可点击，条目级纠正改用独立标签。
+- R3：`queue.status` 增加 `groups`（≤20，按最近更新倒序，含 `id/channel/state/title/items/updatedAt`），队列页按真实 `group.id` 重试与标记需重读；新增 `queue.extract`（只入队并复用既有稳定窗口与去重，返回 `queued/groupId/state` 或 `needs_reread`/`working`/`no_group`），卡片详情来源行提供「手动提炼」；`lib.rs` 通知改用真实 `Outcome.scope`，取消/失败/无变化不广播；模型下拉只列 `enabled` 档位，已选档位被停用时显示实际使用的档位。
+- R4：`cards.rs` 合并事务在 UPDATE 之前把双方当前正文各写一条 `card_history`（`WHERE NOT EXISTS` 幂等），再迁移其他历史；返回新增 `bodySource`（`request`/`keep`）与 `preview`；contrast 边重指向后按 `(min,max)` 规范化并用 `dedupe_contrast` 去重，保留人工边与其依据。
+- R5：`relations.rs` 图查询先取匹配集，再把焦点与请求的邻居放进优先集，`selected` 先放优先集再补匹配集，字节裁剪只从尾部弹出，满页时用优先节点替换优先级最低的匹配节点；返回 `focused`、`expanded`，`truncated` 在节点或字节任一超限时为真。
+- R6：`extract.rs` 关系解析不再跨段拼接——引文必须完整落在同一来源段内，否则 `invalid_output`「关系依据必须来自同一段原文」；`resolve_edge` 只接受本轮展示给模型的端点（首轮即本轮草稿），模型边写入 `source_id`/`segment`，`origin` 仍为 `model`。
+
+### 新增回归
+
+- Rust：`tests/relations.rs` 15（R5 焦点/邻居优先、满页替换、字节裁剪、`focused`/`expanded`/`truncated`、非法端点/自环/重复边、删除级联；R6 同段引文、跨段拒绝、未展示卡片拒绝、边带来源与段号），`tests/cards_view.rs` 9（R4 双方正文进历史、`bodySource`/`preview`、contrast 规范化去重、过期/超长/失败原子性），`tests/queue.rs` 22（R3 分组、按组重试、`queue.extract` 四种返回、稳定窗口内重复提炼去重），`tests/extract.rs` 12（R6 关系端点集合与引文同段）。
+- TypeScript：`src/main/knowledge/targets.test.ts` 13（聊天复合标识、缺 threadId、附件、文档、伪造路径、缺失来源、不可信链接）；`src/main/knowledge/loop.test.ts` 增加 3 项真实夹具契约（`queueStatus().groups`、`extractSource`、合并/关系/图新字段）；`src/renderer/src/settings/pages/knowledgeView.test.ts` 33（含 `splitFit`/`paneModeFor`/`extractStatus`/`modelView`）；`src/main/knowledge/host.integration.test.ts` 与 `loop.test.ts` 的 ready schema 断言同步到 `{knowledge: 7, profile: 3}`。
+
+### 真实窗口证据（隔离配置，非个人数据）
+
+探针脚本 `C:/Users/17133/AppData/Local/Temp/yu-stage5/probe.mjs`（仓库外）用 `--remote-debugging-port` 启动真实构建（真实 preload/IPC 与 release helper），在隔离 `user-data-dir` 下经 `window.api.knowledge.saveCard` 造 3 张合成卡片并加 1 条 `contains` 关系，点击侧栏「知识库」，测量、输入、截图；未调用付费模型。
+
+- 1080×750：搜索 input 宽 **434px**（复核时为 0），两个下拉 152/132px；聚焦后输入「探针乙」得到 `hasHit: true`、`hasMiss: false`（只出现命中卡片）；图谱页 canvas 508×585、节点「显示 3 / 3」、可展开；画像面板可打开、3 个开关、空态「还没有画像条目」；渲染进程错误 0；截图 `k-1080.png`、`k-1080-graph.png`、`k-1080-profile.png`。
+- 940×690：搜索 input 宽 **294px**，下拉 152/132px，同样聚焦可输入并只出命中项；窄版主从切换为单列列表；图谱 canvas 680×253（上下堆叠）；画像面板可用；错误 0；截图 `k-940.png`、`k-940-graph.png`、`k-940-profile.png`。
+- 说明：该 Electron 构建未暴露 `Browser.setWindowBounds`，探针用 `Emulation.setDeviceMetricsOverride` 固定视口，报告里标注为 `viewport-emulation`；1080×750 与应用自身默认窗口尺寸一致。
+
+### 验证（最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（native/knowledge） | 0 |
+| `cargo test --locked` | 0；113 项（lib 17 / cards_view 9 / extract 12 / process 11 / profile 27 / queue 22 / relations 15） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 |
+| 同上 `--features fixture` | 0 |
+| `node scripts/build-native.mjs` | 0；`native/bin/yu-knowledge.exe` 3,076,608 字节，SHA-256 `67c5a55e2b112e0d656dca9a73dae5d6016678f7908b10e5d98068a6cd409188` |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` / `-p tsconfig.web.json` | 0 / 0 |
+| 定向 vitest（knowledge / chat / notes / assistant / preload / ipc-trust / renderer） | 74 文件 / 857 项通过 |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0；270 文件通过 / 3 跳过，3876 项通过 / 8 跳过，98.48s |
+| `pnpm build` | 0；11.82s；`KnowledgePage-iHPQ5e0U.js` 200,441 字节与 `KnowledgeGraphPage-CXEJRLc-.js` 18,250 字节为独立 chunk，主包 `settings-BcbIafwQ.js` 4,689,684 字节内无 `d3Force` |
+
+### 未测与边界
+
+- 未调用任何付费模型；R6 的模型关系用注入的 completions 覆盖。
+- 未在打包安装包上点测（阶段 7）；本轮证据来自真实 Electron 构建 + 隔离 `user-data-dir`。
+- 图谱仍是知识页内的视图（通过知识页工具栏进入），不是一等侧栏路由；知识设置仍是页面自有对话框，未并入全局设置分区。
+- 来源定位对已删除或本机不可读的文件只显示真实原因，不提供重建入口。
