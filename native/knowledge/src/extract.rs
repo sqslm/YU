@@ -21,7 +21,8 @@ use crate::protocol::{
     ApiError, ApiResult, Code, MAX_BODY_CHARS, MAX_SUMMARY_CHARS, MAX_TITLE_CHARS,
 };
 use crate::queue;
-use crate::store::{CARD_KINDS, Store};
+use crate::relations;
+use crate::store::{CARD_KINDS, RELATION_KINDS, Store};
 use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms};
 
 /// Characters of source material one model call may carry.
@@ -33,6 +34,8 @@ pub const SEGMENT_OVERLAP: usize = 500;
 pub const MAX_CANDIDATES: usize = 8;
 pub const MAX_CANDIDATE_CHARS: usize = 6_000;
 pub const MAX_CARDS: usize = 3;
+/// Relations one batch may propose.
+pub const MAX_RELATIONS: usize = 12;
 pub const MAX_TOKENS: u32 = 8_192;
 /// A card shorter than this carries no reusable knowledge.
 const MIN_BODY_CHARS: usize = 30;
@@ -48,7 +51,8 @@ const SYSTEM_PROMPT: &str = "你是知识提炼器。只输出一个 JSON 对象
 5. body 目标 300～800 字，写结论、适用条件、关键机制、取舍理由、反例和待验证问题；不要堆空模板。\n\
 6. 必须能在正文里区分：原材料陈述、对话结论、模型推导、待验证内容。未联网核验不得写成已核实事实。\n\
 7. 不写个人身份、凭据、联系方式；不把资料作者的观点写成用户自己的立场。\n\
-8. sources 只能引用本批次给出的 sourceId 与该来源在本批次出现的 segment，不能编造或引用未给出的分段。问候、确认、纯操作回执等没有复用价值时返回空数组。";
+8. sources 只能引用本批次给出的 sourceId 与该来源在本批次出现的 segment，不能编造或引用未给出的分段。问候、确认、纯操作回执等没有复用价值时返回空数组。\n\
+9. 需要表达卡片关系时加一个 relations 数组，形如 {\"from\":\"draft:0\",\"to\":\"draft:1\",\"kind\":\"contains\",\"evidence\":\"材料原文\"}；kind 只能是 contains（包含）、prerequisite（前置）、applies（应用）、contrast（对比）、derives（推导），最多 12 条。from/to 只能是本批草稿的 draft:序号 或候选卡片 id；evidence 必须是本批材料中的原文片段，不能改写。没有关系就不写这个字段。";
 
 const COMPARE_PROMPT: &str = "你是知识库去重器。只输出一个 JSON 对象，形如 \
 {\"decisions\":[{\"index\":0,\"action\":\"new|reference|merge|propose\",\"targetCardId\":\"card_…\",\"reason\":\"…\"}]}。\n\
@@ -147,6 +151,15 @@ struct Draft {
 
 /// One comparison decision: draft index, action, optional target and its reason.
 type Decision = (usize, String, Option<String>, String);
+
+/// One relation the model proposed. `from` and `to` are references: either
+/// `draft:N` for a card of this batch, or a card id the batch offered.
+struct ModelEdge {
+    from: String,
+    to: String,
+    kind: String,
+    evidence: String,
+}
 
 fn lock(store: &Store) -> ApiResult<std::sync::MutexGuard<'_, Connection>> {
     store
@@ -565,7 +578,10 @@ fn batch_sources(batch: &[Segment]) -> BTreeMap<String, BTreeSet<usize>> {
     allowed
 }
 
-fn parse_drafts(answer: &str, batch: &[Segment]) -> ApiResult<(Vec<Draft>, String)> {
+fn parse_drafts(
+    answer: &str,
+    batch: &[Segment],
+) -> ApiResult<(Vec<Draft>, Vec<ModelEdge>, String)> {
     let allowed = batch_sources(batch);
     let value: Value = serde_json::from_str(strip_fence(answer)).map_err(|error| {
         ApiError::new(Code::InvalidOutput, format!("提炼结果不是 JSON：{error}"))
@@ -603,7 +619,101 @@ fn parse_drafts(answer: &str, batch: &[Segment]) -> ApiResult<(Vec<Draft>, Strin
             drafts.push(draft);
         }
     }
-    Ok((drafts, reason))
+    let relations = parse_relations(object.get("relations"), batch)?;
+    Ok((drafts, relations, reason))
+}
+
+/// Relations are optional: an answer without them is complete. `from`/`to` are
+/// only checked for shape here; whether they name something the batch offered is
+/// decided when the cards exist.
+fn parse_relations(value: Option<&Value>, batch: &[Segment]) -> ApiResult<Vec<ModelEdge>> {
+    let items = match value {
+        None | Some(Value::Null) => return Ok(Vec::new()),
+        Some(Value::Array(items)) => items,
+        Some(_) => return Err(ApiError::new(Code::InvalidOutput, "relations 必须是数组")),
+    };
+    if items.len() > MAX_RELATIONS {
+        return Err(ApiError::new(
+            Code::InvalidOutput,
+            format!("单批关系数量超过上限（{MAX_RELATIONS}）"),
+        ));
+    }
+    let material: String = batch
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut edges = Vec::new();
+    for item in items {
+        let object = item
+            .as_object()
+            .ok_or_else(|| ApiError::new(Code::InvalidOutput, "关系必须是对象"))?;
+        let text = |key: &str| -> ApiResult<String> {
+            object
+                .get(key)
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| ApiError::new(Code::InvalidOutput, format!("关系缺少 {key}")))
+        };
+        let from = text("from")?;
+        let to = text("to")?;
+        let kind = text("kind")?;
+        let evidence = text("evidence")?;
+        if !RELATION_KINDS.contains(&kind.as_str()) {
+            return Err(ApiError::new(
+                Code::InvalidOutput,
+                format!("未知关系类型：{kind}"),
+            ));
+        }
+        if from.trim().is_empty() || to.trim().is_empty() {
+            return Err(ApiError::new(Code::InvalidOutput, "关系缺少端点"));
+        }
+        if from == to {
+            return Err(ApiError::new(Code::InvalidOutput, "关系不能指向自己"));
+        }
+        // A relation is only traceable if its basis is a quote from the material
+        // the model was given.
+        if evidence.trim().is_empty() || !material.contains(&evidence) {
+            return Err(ApiError::new(
+                Code::InvalidOutput,
+                "关系依据不是本批材料原文",
+            ));
+        }
+        edges.push(ModelEdge {
+            from,
+            to,
+            kind,
+            evidence,
+        });
+    }
+    Ok(edges)
+}
+
+/// Resolves one relation endpoint: `draft:N` names a card this batch wrote, any
+/// other reference must be a card id the batch offered.
+fn resolve_edge(
+    reference: &str,
+    batch_cards: &BTreeMap<usize, String>,
+    offered: &BTreeSet<String>,
+) -> ApiResult<String> {
+    if let Some(index) = reference
+        .strip_prefix("draft:")
+        .and_then(|value| value.parse::<usize>().ok())
+    {
+        return batch_cards.get(&index).cloned().ok_or_else(|| {
+            ApiError::new(
+                Code::InvalidOutput,
+                format!("关系引用了本批未写出的草稿：{reference}"),
+            )
+        });
+    }
+    if offered.contains(reference) {
+        return Ok(reference.to_string());
+    }
+    Err(ApiError::new(
+        Code::InvalidOutput,
+        format!("关系引用了本批之外的卡片：{reference}"),
+    ))
 }
 
 fn parse_draft(value: &Value, allowed: &BTreeMap<String, BTreeSet<usize>>) -> ApiResult<Draft> {
@@ -966,7 +1076,7 @@ pub fn run(store: &Store, link: &Link, parent: &str, params: RunParams) -> ApiRe
         ]),
         max_tokens: Some(MAX_TOKENS),
     })?;
-    let (drafts, reason) = parse_drafts(&answer, &batch)?;
+    let (drafts, relations, reason) = parse_drafts(&answer, &batch)?;
 
     // Candidates and the single comparison call, both without holding the lock
     // across the model request.
@@ -1001,6 +1111,7 @@ pub fn run(store: &Store, link: &Link, parent: &str, params: RunParams) -> ApiRe
         &params,
         &batch,
         &drafts,
+        &relations,
         &decisions,
         &exact,
         &candidates,
@@ -1055,6 +1166,7 @@ fn apply(
     params: &RunParams,
     batch: &[Segment],
     drafts: &[Draft],
+    relations: &[ModelEdge],
     decisions: &[Decision],
     exact: &[Option<String>],
     candidates: &[Candidate],
@@ -1121,7 +1233,9 @@ fn apply(
     let mut created = Vec::new();
     let mut proposals = Vec::new();
     let mut skipped = 0usize;
+    let mut batch_cards: BTreeMap<usize, String> = BTreeMap::new();
     for (index, draft) in drafts.iter().enumerate() {
+        let before = created.len();
         let decision = decisions.iter().find(|(at, _, _, _)| *at == index);
         let action = decision
             .map(|(_, action, _, _)| action.as_str())
@@ -1258,11 +1372,25 @@ fn apply(
                         proposals.push(json!({"targetCardId": id, "action": "propose"}));
                     }
                 } else {
-                    let (title, summary, body): (String, String, String) = transaction
+                    let (title, summary, body, topics, edited): (
+                        String,
+                        String,
+                        String,
+                        String,
+                        i64,
+                    ) = transaction
                         .query_row(
-                            "SELECT title, summary, body FROM cards WHERE id = ?1",
+                            "SELECT title, summary, body, topics, edited FROM cards WHERE id = ?1",
                             params![id],
-                            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                            |row| {
+                                Ok((
+                                    row.get(0)?,
+                                    row.get(1)?,
+                                    row.get(2)?,
+                                    row.get(3)?,
+                                    row.get(4)?,
+                                ))
+                            },
                         )
                         .map_err(sqlite)?;
                     // A merge adds detail; it never replaces what the card already
@@ -1271,9 +1399,21 @@ fn apply(
                     let merged_fingerprint = cards::fingerprint_of(&merged);
                     transaction
                         .execute(
-                            "INSERT INTO card_history (id, card_id, revision, title, summary, body, reason, created_at)
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                            params![new_id("his"), id, revision, title, summary, body, why, now],
+                            "INSERT INTO card_history
+                                (id, card_id, revision, title, summary, body, topics, edited, reason, created_at)
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                            params![
+                                new_id("his"),
+                                id,
+                                revision,
+                                title,
+                                summary,
+                                body,
+                                topics,
+                                edited,
+                                why,
+                                now
+                            ],
                         )
                         .map_err(sqlite)?;
                     transaction
@@ -1352,6 +1492,27 @@ fn apply(
                 cards::reindex(&transaction, &id)?;
                 created.push(json!({"cardId": id, "action": "new"}));
             }
+        }
+        if created.len() > before
+            && let Some(id) = created.last().and_then(|item| item.get("cardId"))
+            && let Some(id) = id.as_str()
+        {
+            batch_cards.insert(index, id.to_string());
+        }
+    }
+
+    // Relations land last: they need the ids this batch actually wrote. A
+    // reference to anything else means the model invented it.
+    if !relations.is_empty() {
+        let mut offered: BTreeSet<String> = candidates.iter().map(|card| card.id.clone()).collect();
+        offered.extend(batch_cards.values().cloned());
+        for edge in relations {
+            let from = resolve_edge(&edge.from, &batch_cards, &offered)?;
+            let to = resolve_edge(&edge.to, &batch_cards, &offered)?;
+            if from == to {
+                return Err(ApiError::new(Code::InvalidOutput, "关系不能指向自己"));
+            }
+            relations::link_model(&transaction, &from, &to, &edge.kind, &edge.evidence, now)?;
         }
     }
 

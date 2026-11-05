@@ -13,6 +13,7 @@ pub mod profile;
 pub mod profile_learning;
 pub mod protocol;
 pub mod queue;
+pub mod relations;
 pub mod service;
 pub mod sources;
 pub mod store;
@@ -192,7 +193,8 @@ fn write_answer(link: &Link, id: &str, frame: &serde_json::Value) -> protocol::A
 fn outcome_scope(method: &str) -> Option<&'static str> {
     match method {
         "source.save" | "source.invalidate" => Some("sources"),
-        "card.save" | "card.update" | "card.delete" => Some("cards"),
+        "card.save" | "card.update" | "card.delete" | "card.merge" | "relation.add"
+        | "relation.remove" => Some("cards"),
         "profile.save" | "profile.update" | "profile.delete" => Some("profile"),
         _ => None,
     }

@@ -17,7 +17,7 @@ use serde::Deserialize;
 use crate::protocol::{ApiError, ApiResult, Code};
 use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA, Store};
 use crate::util::ensure_not_cancelled;
-use crate::{cards, history, profile, queue, sources};
+use crate::{cards, history, profile, queue, relations, sources};
 
 #[derive(Deserialize)]
 struct IdParams {
@@ -227,6 +227,83 @@ impl Service {
                 let page = cards::search(&connection, decode(params)?)?;
                 Ok(Outcome {
                     result: serde_json::to_value(page).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "card.revisions" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let revisions = cards::revisions(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(revisions).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "card.merge" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let merged = cards::merge(&mut connection, decode(params)?)?;
+                Ok(changed(
+                    serde_json::to_value(merged).map_err(encode_error)?,
+                    "cards",
+                ))
+            }
+            "card.export" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let export = cards::export(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(export).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "topic.list" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let topics = cards::topics(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(topics).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "relation.add" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let relation = relations::add(&mut connection, decode(params)?)?;
+                Ok(changed(
+                    serde_json::to_value(relation).map_err(encode_error)?,
+                    "cards",
+                ))
+            }
+            "relation.remove" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let removed = relations::remove(&mut connection, decode(params)?)?;
+                Ok(changed(
+                    serde_json::to_value(removed).map_err(encode_error)?,
+                    "cards",
+                ))
+            }
+            "relation.list" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let list = relations::list(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(list).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "graph.query" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let graph = relations::graph(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(graph).map_err(encode_error)?,
                     scope: None,
                     shutdown: false,
                 })

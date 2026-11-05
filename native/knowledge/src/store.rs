@@ -13,7 +13,7 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 5;
+pub const KNOWLEDGE_SCHEMA: i64 = 6;
 pub const PROFILE_SCHEMA: i64 = 3;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
@@ -172,6 +172,30 @@ CREATE INDEX suggestions_state ON suggestions (state, created_at DESC);
 CREATE INDEX suggestions_target ON suggestions (target_card_id, fingerprint, state);
 "#;
 
+/// Stage 5 adds the favourite mark and the card graph. Only additive
+/// statements, so a schema-5 database keeps every card, source, history row,
+/// suggestion and exclusion it already had.
+const GRAPH_SQL: &str = r#"
+ALTER TABLE cards ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX cards_favorite ON cards (favorite, updated_at DESC);
+
+CREATE TABLE card_relations (
+  id TEXT PRIMARY KEY,
+  from_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  to_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('contains','prerequisite','applies','contrast','derives')),
+  origin TEXT NOT NULL CHECK (origin IN ('manual','model')),
+  evidence TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (from_id, to_id, kind)
+);
+CREATE INDEX card_relations_from ON card_relations (from_id);
+CREATE INDEX card_relations_to ON card_relations (to_id);
+ALTER TABLE card_history ADD COLUMN topics TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE card_history ADD COLUMN edited INTEGER NOT NULL DEFAULT 0;
+"#;
+
 pub const CARD_KINDS: [&str; 7] = [
     "concept",
     "method",
@@ -182,6 +206,9 @@ pub const CARD_KINDS: [&str; 7] = [
     "review",
 ];
 pub const SOURCE_KINDS: [&str; 4] = ["note", "chat", "web", "document"];
+/// The five card relations. `contrast` is the only symmetric one.
+pub const RELATION_KINDS: [&str; 5] =
+    ["contains", "prerequisite", "applies", "contrast", "derives"];
 pub const CATEGORIES: [&str; 3] = ["explicit", "observed", "inferred"];
 
 const KNOWLEDGE_SQL: &str = r#"
@@ -373,6 +400,7 @@ impl Store {
                 THREAD_SQL,
                 HISTORY_BOUND_SQL,
                 EXTRACT_SQL,
+                GRAPH_SQL,
             ],
         )?;
         let profile = open_db(
@@ -623,6 +651,105 @@ mod tests {
             assert_eq!(exists, 1, "{table} must exist after the upgrade");
         }
         // Windows keeps every file of the database open while the store lives.
+        drop(connection);
+        drop(store);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Stage 5 only adds a column, an index and one table. A schema-5 file must
+    /// keep every card, source, history row, suggestion and exclusion it already
+    /// had, and the new column has to arrive with a usable default.
+    #[test]
+    fn a_stage_four_database_gains_favourites_and_the_card_graph() {
+        let root = temp_root("stage-four");
+        let directory = root.join("data").join("knowledge");
+        fs::create_dir_all(&directory).expect("directory");
+        {
+            let connection = Connection::open(directory.join("knowledge.db")).expect("open");
+            for migration in [
+                KNOWLEDGE_SQL,
+                QUEUE_SQL,
+                THREAD_SQL,
+                HISTORY_BOUND_SQL,
+                EXTRACT_SQL,
+            ] {
+                connection
+                    .execute_batch(migration)
+                    .expect("stage four schema");
+            }
+            connection
+                .execute_batch(
+                    "PRAGMA user_version = 5;
+                     INSERT INTO sources
+                       (id, kind, origin_ref, version, fingerprint, read_at, created_at, updated_at)
+                       VALUES ('src_1', 'note', 'n1', 'v1', 'f', 1, 1, 1);
+                     INSERT INTO cards
+                       (id, kind, title, summary, body, topics, aliases, edited,
+                        fingerprint, revision, created_at, updated_at)
+                       VALUES ('card_1', 'concept', '既有卡片', '摘要', '正文', '[\"rust\"]', '[]',
+                               1, 'f', 2, 5, 5);
+                     INSERT INTO card_sources (card_id, source_id, created_at)
+                       VALUES ('card_1', 'src_1', 5);
+                     INSERT INTO card_history
+                       (id, card_id, revision, title, summary, body, reason, created_at)
+                       VALUES ('his_1', 'card_1', 1, '旧标题', '旧摘要', '旧正文', '手工编辑', 4);
+                     INSERT INTO suggestions
+                       (id, kind, target_card_id, target_revision, action, draft, reason,
+                        source_ids, fingerprint, state, created_at, updated_at)
+                       VALUES ('sug_1', 'merge', 'card_1', 2, 'merge', '{}', '',
+                               '[\"src_1\"]', 'f', 'open', 5, 5);
+                     INSERT INTO exclusions (kind, key, reason, created_at)
+                       VALUES ('card', 'card_gone', '', 5);",
+                )
+                .expect("stage four rows");
+        }
+        let store = Store::open(&root).expect("upgrade");
+        let connection = store.knowledge.lock().expect("lock");
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("version");
+        assert_eq!(version, KNOWLEDGE_SCHEMA);
+        for table in [
+            "sources",
+            "cards",
+            "card_sources",
+            "card_history",
+            "suggestions",
+        ] {
+            let rows: i64 = connection
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .expect("rows");
+            assert_eq!(rows, 1, "{table} must survive the upgrade");
+        }
+        let (title, favorite, revision): (String, i64, i64) = connection
+            .query_row(
+                "SELECT title, favorite, revision FROM cards WHERE id = 'card_1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("kept card");
+        assert_eq!(title, "既有卡片");
+        assert_eq!(favorite, 0, "an old card starts unfavourited");
+        assert_eq!(revision, 2);
+        let (topics, edited): (String, i64) = connection
+            .query_row(
+                "SELECT topics, edited FROM card_history WHERE id = 'his_1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("kept history");
+        assert_eq!(topics, "[]", "an old snapshot keeps an empty topic list");
+        assert_eq!(edited, 0);
+        let relations: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'card_relations'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("relations table");
+        assert_eq!(relations, 1, "the graph table arrives with the upgrade");
         drop(connection);
         drop(store);
         let _ = fs::remove_dir_all(&root);

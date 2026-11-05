@@ -38,10 +38,20 @@ fn card(title: &str) -> Value {
         "aliases": [],
         "sourceIds": [],
         "bodyChars": 0,
+        "favorite": false,
         "edited": false,
         "createdAt": 1,
         "updatedAt": 1
     })
+}
+
+/// Reads one string parameter, falling back to a synthetic value.
+fn param(params: &Value, key: &str, fallback: &str) -> String {
+    params
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or(fallback)
+        .to_string()
 }
 
 fn page(title: &str) -> Value {
@@ -140,6 +150,138 @@ fn main() {
                                 let _ = worker_link.write(&frame);
                                 std::process::exit(0);
                             }
+                            "card.merge" => {
+                                let keep = param(&request.params, "keepId", "fixture-keep");
+                                let merge = param(&request.params, "mergeId", "fixture-merge");
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({
+                                        "card": {
+                                            "id": keep,
+                                            "kind": "concept",
+                                            "title": "合并后的卡片",
+                                            "summary": "",
+                                            "body": "合并正文",
+                                            "topics": ["rust"],
+                                            "aliases": [],
+                                            "sourceIds": ["s1"],
+                                            "favorite": true,
+                                            "edited": true,
+                                            "revision": 3,
+                                            "createdAt": 1,
+                                            "updatedAt": 2
+                                        },
+                                        "removedId": merge,
+                                        "sources": 1,
+                                        "relations": 1
+                                    }),
+                                )
+                            }
+                            "card.export" => {
+                                let id = param(&request.params, "id", "fixture-card");
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({
+                                        "id": id,
+                                        "filename": "夹具闭环答案.md",
+                                        "markdown": "# 夹具闭环答案\n\n- 类型：concept\n"
+                                    }),
+                                )
+                            }
+                            "card.revisions" => {
+                                let id = param(&request.params, "id", "fixture-card");
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({
+                                        "id": id,
+                                        "revisions": [
+                                            {
+                                                "revision": 2,
+                                                "title": "夹具闭环答案",
+                                                "summary": "",
+                                                "body": "夹具正文",
+                                                "topics": ["rust"],
+                                                "edited": false,
+                                                "createdAt": 1
+                                            },
+                                            {
+                                                "revision": 1,
+                                                "title": "夹具闭环答案",
+                                                "summary": "",
+                                                "body": "夹具正文",
+                                                "topics": ["rust"],
+                                                "edited": false,
+                                                "createdAt": 1
+                                            }
+                                        ]
+                                    }),
+                                )
+                            }
+                            "topic.list" => protocol::result_frame(
+                                &request.id,
+                                &json!({
+                                    "topics": [
+                                        { "topic": "rust", "count": 2 },
+                                        { "topic": "sqlite", "count": 1 }
+                                    ],
+                                    "total": 2
+                                }),
+                            ),
+                            "relation.add" => {
+                                let from = param(&request.params, "fromId", "fixture-from");
+                                let to = param(&request.params, "toId", "fixture-to");
+                                let kind = param(&request.params, "kind", "contains");
+                                let evidence = param(&request.params, "evidence", "");
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({
+                                        "id": "rel_1",
+                                        "fromId": from,
+                                        "toId": to,
+                                        "kind": kind,
+                                        "origin": "manual",
+                                        "evidence": evidence,
+                                        "createdAt": 1
+                                    }),
+                                )
+                            }
+                            "relation.remove" => {
+                                protocol::result_frame(&request.id, &json!({ "removed": true }))
+                            }
+                            "relation.list" => protocol::result_frame(
+                                &request.id,
+                                &json!({
+                                    "items": [{
+                                        "id": "rel_1",
+                                        "fromId": "c1",
+                                        "toId": "c2",
+                                        "kind": "contains",
+                                        "origin": "manual",
+                                        "evidence": "",
+                                        "createdAt": 1,
+                                        "card": { "id": "c2", "title": "夹具邻居", "kind": "concept" },
+                                        "direction": "out"
+                                    }],
+                                    "total": 1
+                                }),
+                            ),
+                            "graph.query" => protocol::result_frame(
+                                &request.id,
+                                &json!({
+                                    "nodes": [{
+                                        "id": "c1",
+                                        "title": "夹具节点",
+                                        "kind": "concept",
+                                        "topics": ["rust"],
+                                        "favorite": true
+                                    }],
+                                    "edges": [],
+                                    "total": 1,
+                                    "shown": 1,
+                                    "truncated": false,
+                                    "limitedBy": Value::Null
+                                }),
+                            ),
                             other => protocol::error_frame(
                                 &request.id,
                                 &ApiError::new(Code::UnknownMethod, format!("unknown: {other}")),

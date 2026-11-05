@@ -3,18 +3,22 @@
 //! All seven card kinds share one table and one editing path; the kind only
 //! groups and filters. Extraction strategy per kind arrives in a later stage.
 
-use rusqlite::{Connection, Row, Transaction, TransactionBehavior, params};
+use rusqlite::types::Value;
+use rusqlite::{
+    Connection, OptionalExtension, Row, Transaction, TransactionBehavior, params, params_from_iter,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
-    ApiError, ApiResult, Code, MAX_BODY_CHARS, MAX_QUERY_CHARS, MAX_SUMMARY_CHARS, MAX_TITLE_CHARS,
-    fit_page,
+    ApiError, ApiResult, Code, MAX_BODY_CHARS, MAX_FRAME_BYTES, MAX_QUERY_CHARS, MAX_SUMMARY_CHARS,
+    MAX_TITLE_CHARS, MAX_TOPIC_CHARS, MAX_TOPICS, fit_page,
 };
 use crate::store::CARD_KINDS;
 use crate::util::{check_chars, new_id, now_ms, page, require_text};
 
 const CARD_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.body, c.topics, c.aliases, c.edited, c.created_at, c.updated_at, c.revision,
-       (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids
+       (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids,
+       c.favorite
   FROM cards c";
 
 /// A listing never carries the body: eleven legal cards of 200,000 characters
@@ -23,8 +27,19 @@ const CARD_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.body, c.to
 const CARD_LIST_SELECT: &str = "SELECT c.id, c.kind, c.title, c.summary, c.topics, c.aliases, c.edited, c.created_at, c.updated_at,
        length(c.body) AS body_chars,
        (SELECT group_concat(source_id) FROM card_sources WHERE card_id = c.id) AS source_ids,
-       c.revision
+       c.revision, c.favorite
   FROM cards c";
+
+/// `topic.list` returns the most used topics first; a knowledge base with more
+/// than this many topics answers with the head of that list.
+const DEFAULT_TOPIC_COUNT: u32 = 50;
+const MAX_TOPIC_COUNT: u32 = 200;
+/// Revisions one card returns; the oldest are dropped, and the frame budget may
+/// drop more.
+const DEFAULT_REVISIONS: u32 = 10;
+const MAX_REVISIONS: u32 = 20;
+/// Room left in a frame for the envelope around the payload.
+const FRAME_HEADROOM: usize = 4_096;
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +52,8 @@ pub struct Card {
     pub topics: Vec<String>,
     pub aliases: Vec<String>,
     pub source_ids: Vec<String>,
+    /// Persisted favourite mark. It is a human label, not a content edit.
+    pub favorite: bool,
     pub edited: bool,
     /// Bumped by every write, so a proposal can say which version it applies to.
     pub revision: i64,
@@ -56,6 +73,7 @@ pub struct CardSummary {
     pub aliases: Vec<String>,
     pub source_ids: Vec<String>,
     pub body_chars: i64,
+    pub favorite: bool,
     pub edited: bool,
     /// Bumped by every write, so a proposal can say which version it applies to.
     pub revision: i64,
@@ -112,6 +130,10 @@ pub struct UpdateParams {
     pub aliases: Option<Vec<String>>,
     #[serde(default)]
     pub source_ids: Option<Vec<String>>,
+    /// A favourite flip is not a content edit: it touches neither `revision` nor
+    /// `edited`, and only moves `updated_at`.
+    #[serde(default)]
+    pub favorite: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -119,6 +141,10 @@ pub struct UpdateParams {
 pub struct ListParams {
     #[serde(default)]
     pub kind: Option<String>,
+    #[serde(default)]
+    pub topic: Option<String>,
+    #[serde(default)]
+    pub favorite: Option<bool>,
     #[serde(default)]
     pub offset: Option<u32>,
     #[serde(default)]
@@ -130,16 +156,111 @@ pub struct ListParams {
 pub struct SearchParams {
     pub query: String,
     #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub topic: Option<String>,
+    #[serde(default)]
+    pub favorite: Option<bool>,
+    #[serde(default)]
     pub offset: Option<u32>,
     #[serde(default)]
     pub limit: Option<u32>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicParams {
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicCount {
+    pub topic: String,
+    pub count: i64,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicList {
+    pub topics: Vec<TopicCount>,
+    /// Distinct topics, before the limit trimmed the list.
+    pub total: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevisionsParams {
+    pub id: String,
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CardRevision {
+    pub revision: i64,
+    pub title: String,
+    pub summary: String,
+    pub body: String,
+    pub topics: Vec<String>,
+    pub edited: bool,
+    pub created_at: i64,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CardRevisions {
+    pub id: String,
+    pub revisions: Vec<CardRevision>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeParams {
+    pub keep_id: String,
+    pub merge_id: String,
+    pub keep_revision: i64,
+    pub merge_revision: i64,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MergedCards {
+    pub card: Card,
+    pub removed_id: String,
+    /// Sources on the kept card after the merge.
+    pub sources: i64,
+    /// Relations on the kept card after the merge.
+    pub relations: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportParams {
+    pub id: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CardExport {
+    pub id: String,
+    pub filename: String,
+    pub markdown: String,
 }
 
 fn sqlite_error(error: rusqlite::Error) -> ApiError {
     ApiError::storage(format!("card statement failed: {error}"))
 }
 
-fn decode_list(text: &str) -> Vec<String> {
+pub(crate) fn decode_list(text: &str) -> Vec<String> {
     serde_json::from_str::<Vec<String>>(text).unwrap_or_default()
 }
 
@@ -163,6 +284,7 @@ fn map(row: &Row<'_>) -> rusqlite::Result<Card> {
         topics: decode_list(&topics),
         aliases: decode_list(&aliases),
         source_ids,
+        favorite: row.get::<_, i64>(12)? != 0,
         edited: row.get::<_, i64>(7)? != 0,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
@@ -193,6 +315,7 @@ fn map_summary(row: &Row<'_>) -> rusqlite::Result<CardSummary> {
         updated_at: row.get(8)?,
         body_chars: row.get(9)?,
         source_ids,
+        favorite: row.get::<_, i64>(12)? != 0,
         revision: row.get(11)?,
     })
 }
@@ -224,6 +347,204 @@ fn encode_list(values: &[String]) -> ApiResult<String> {
             Code::Internal,
             format!("cannot encode the term list: {error}"),
         )
+    })
+}
+
+/// Accumulates conditions and their bindings in one order, so a statement with
+/// an optional filter never has to guess placeholder numbers. Every condition is
+/// `?N`-numbered and the values are bound in the same sequence.
+pub(crate) struct Where {
+    conditions: String,
+    values: Vec<Value>,
+}
+
+impl Where {
+    pub(crate) fn new() -> Where {
+        Where {
+            conditions: String::new(),
+            values: Vec::new(),
+        }
+    }
+
+    /// Binds one value and answers its placeholder, so a condition can use the
+    /// same value twice (`LIKE ?1 ... OR ... LIKE ?1`).
+    pub(crate) fn bind(&mut self, value: Value) -> String {
+        self.values.push(value);
+        format!("?{}", self.values.len())
+    }
+
+    pub(crate) fn and(&mut self, condition: String) {
+        if !self.conditions.is_empty() {
+            self.conditions.push_str(" AND ");
+        }
+        self.conditions.push_str(&condition);
+    }
+
+    /// Empty when nothing was added, so callers can concatenate it directly.
+    pub(crate) fn sql(&self) -> String {
+        if self.conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", self.conditions)
+        }
+    }
+
+    pub(crate) fn values(&self) -> &[Value] {
+        &self.values
+    }
+}
+
+/// Which cards a listing shows. Every filter runs in SQL, so `total` and the
+/// page describe the same set.
+pub(crate) struct Filter {
+    kind: Option<String>,
+    topic: Option<String>,
+    favorite: Option<bool>,
+}
+
+impl Filter {
+    pub(crate) fn new(
+        kind: Option<&str>,
+        topic: Option<&str>,
+        favorite: Option<bool>,
+    ) -> ApiResult<Filter> {
+        let kind = match kind.filter(|value| !value.is_empty()) {
+            Some(kind) => {
+                check_kind(kind)?;
+                Some(kind.to_string())
+            }
+            None => None,
+        };
+        let topic = match topic.filter(|value| !value.trim().is_empty()) {
+            Some(topic) => {
+                check_chars("topic", topic, MAX_TOPIC_CHARS)?;
+                Some(topic.to_string())
+            }
+            None => None,
+        };
+        Ok(Filter {
+            kind,
+            topic,
+            favorite,
+        })
+    }
+
+    pub(crate) fn apply(&self, target: &mut Where) {
+        if let Some(kind) = &self.kind {
+            let at = target.bind(Value::Text(kind.clone()));
+            target.and(format!("c.kind = {at}"));
+        }
+        if let Some(topic) = &self.topic {
+            let at = target.bind(Value::Text(topic.clone()));
+            target.and(format!(
+                "EXISTS (SELECT 1 FROM json_each(c.topics) WHERE json_each.value = {at})"
+            ));
+        }
+        if let Some(favorite) = self.favorite {
+            let flag = if favorite { 1 } else { 0 };
+            target.and(format!("c.favorite = {flag}"));
+        }
+    }
+}
+
+/// How the text query is answered. Queries shorter than one trigram (1-2
+/// characters, which covers two-character Chinese words) cannot use the index
+/// and fall back to a literal LIKE scan.
+pub(crate) enum Plan {
+    All,
+    Like(String),
+    Fts(String),
+}
+
+pub(crate) fn plan_for(query: &str) -> ApiResult<Plan> {
+    check_chars("query", query, MAX_QUERY_CHARS)?;
+    let query = query.trim();
+    if query.is_empty() {
+        Ok(Plan::All)
+    } else if query.chars().count() < 3 {
+        Ok(Plan::Like(like_pattern(query)))
+    } else {
+        Ok(Plan::Fts(fts_phrase(query)))
+    }
+}
+
+/// Adds the query condition to `target` and answers the JOIN the statement
+/// needs. Ranking stays in the caller's ORDER BY.
+pub(crate) fn plan_condition(plan: &Plan, target: &mut Where) -> &'static str {
+    match plan {
+        Plan::All => "",
+        Plan::Like(pattern) => {
+            let at = target.bind(Value::Text(pattern.clone()));
+            target.and(format!(
+                "(c.title LIKE {at} ESCAPE '\\' OR c.summary LIKE {at} ESCAPE '\\'
+                  OR c.body LIKE {at} ESCAPE '\\' OR c.topics LIKE {at} ESCAPE '\\'
+                  OR c.aliases LIKE {at} ESCAPE '\\')"
+            ));
+            ""
+        }
+        Plan::Fts(phrase) => {
+            let at = target.bind(Value::Text(phrase.clone()));
+            target.and(format!("cards_fts MATCH {at}"));
+            " JOIN cards_fts ON cards_fts.card_id = c.id"
+        }
+    }
+}
+
+/// One page of the filtered, ordered listing, with every filter already applied
+/// to both the page and its count.
+fn query_page(
+    connection: &Connection,
+    filter: &Filter,
+    plan: &Plan,
+    offset: u32,
+    limit: u32,
+) -> ApiResult<CardPage> {
+    let mut counting = Where::new();
+    let join = plan_condition(plan, &mut counting);
+    filter.apply(&mut counting);
+    let total: i64 = connection
+        .query_row(
+            &format!("SELECT count(*) FROM cards c{join}{}", counting.sql()),
+            params_from_iter(counting.values().iter()),
+            |row| row.get(0),
+        )
+        .map_err(sqlite_error)?;
+    let mut paging = Where::new();
+    let join = plan_condition(plan, &mut paging);
+    filter.apply(&mut paging);
+    let ranking = match plan {
+        Plan::All => "c.updated_at DESC, c.id".to_string(),
+        Plan::Like(pattern) => {
+            let at = paging.bind(Value::Text(pattern.clone()));
+            format!(
+                "CASE WHEN c.title LIKE {at} ESCAPE '\\' OR c.aliases LIKE {at} ESCAPE '\\'
+                    OR c.topics LIKE {at} ESCAPE '\\' THEN 0 ELSE 1 END, c.updated_at DESC, c.id"
+            )
+        }
+        Plan::Fts(_) => {
+            "bm25(cards_fts, 0.0, 10.0, 4.0, 1.0, 8.0, 8.0), c.updated_at DESC, c.id".to_string()
+        }
+    };
+    let limit_at = paging.bind(Value::Integer(i64::from(limit)));
+    let offset_at = paging.bind(Value::Integer(i64::from(offset)));
+    let sql = format!(
+        "{CARD_LIST_SELECT}{join}{} ORDER BY {ranking} LIMIT {limit_at} OFFSET {offset_at}",
+        paging.sql()
+    );
+    let mut statement = connection.prepare(&sql).map_err(sqlite_error)?;
+    let rows = statement
+        .query_map(params_from_iter(paging.values().iter()), map_summary)
+        .map_err(sqlite_error)?
+        .collect::<rusqlite::Result<Vec<CardSummary>>>()
+        .map_err(sqlite_error)?;
+    let (items, has_more, next_offset) = fit_page(rows, total, offset);
+    Ok(CardPage {
+        items,
+        total,
+        offset,
+        limit,
+        has_more,
+        next_offset,
     })
 }
 
@@ -363,6 +684,33 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Card> 
 pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Card> {
     check_chars("id", &params.id, 128)?;
     let existing = load(connection, &params.id)?;
+    let touches_content = params.title.is_some()
+        || params.summary.is_some()
+        || params.body.is_some()
+        || params.topics.is_some()
+        || params.aliases.is_some()
+        || params.source_ids.is_some();
+    // A favourite flip is a label, not an edit: it must not bump the revision the
+    // model uses to spot a hand-edited card, and must not raise the edit flag.
+    if !touches_content && let Some(favorite) = params.favorite {
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|error| {
+                ApiError::storage(format!("cannot start the card transaction: {error}"))
+            })?;
+        transaction
+            .execute(
+                "UPDATE cards SET favorite = ?2, updated_at = ?3 WHERE id = ?1",
+                params![params.id, i64::from(favorite), now_ms()],
+            )
+            .map_err(sqlite_error)?;
+        let card = load(&transaction, &params.id)?;
+        crate::util::ensure_not_cancelled()?;
+        transaction
+            .commit()
+            .map_err(|error| ApiError::storage(format!("cannot commit the card: {error}")))?;
+        return Ok(card);
+    }
     let title = match params.title {
         Some(title) => {
             let title = require_text("title", &title)?;
@@ -403,6 +751,7 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Ca
     // A human update always marks the card as edited: the model may never clear
     // that protection, and no caller can pass `edited: false` to get around it.
     let edited = true;
+    let favorite = params.favorite.unwrap_or(existing.favorite);
     let now = now_ms();
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -412,7 +761,7 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Ca
     transaction
         .execute(
             "UPDATE cards SET title = ?2, summary = ?3, body = ?4, topics = ?5, aliases = ?6, edited = ?7,
-             fingerprint = ?9, revision = revision + 1, updated_at = ?8 WHERE id = ?1",
+             fingerprint = ?9, favorite = ?10, revision = revision + 1, updated_at = ?8 WHERE id = ?1",
             params![
                 params.id,
                 title,
@@ -422,7 +771,8 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Ca
                 aliases,
                 i64::from(edited),
                 now,
-                fingerprint_of(&body)
+                fingerprint_of(&body),
+                i64::from(favorite)
             ],
         )
         .map_err(sqlite_error)?;
@@ -504,46 +854,12 @@ pub fn get(connection: &Connection, id: &str) -> ApiResult<Card> {
 
 pub fn list(connection: &Connection, params: ListParams) -> ApiResult<CardPage> {
     let (offset, limit) = page(params.offset, params.limit);
-    let filter = match params.kind.as_deref() {
-        None | Some("") => None,
-        Some(kind) => {
-            check_kind(kind)?;
-            Some(kind.to_string())
-        }
-    };
-    let total: i64 = match filter.as_deref() {
-        Some(kind) => connection
-            .query_row(
-                "SELECT count(*) FROM cards WHERE kind = ?1",
-                [kind],
-                |row| row.get(0),
-            )
-            .map_err(sqlite_error)?,
-        None => connection
-            .query_row("SELECT count(*) FROM cards", [], |row| row.get(0))
-            .map_err(sqlite_error)?,
-    };
-    let sql = format!(
-        "{CARD_LIST_SELECT} WHERE (?1 IS NULL OR c.kind = ?1) ORDER BY c.updated_at DESC, c.id LIMIT ?2 OFFSET ?3"
-    );
-    let mut statement = connection.prepare(&sql).map_err(sqlite_error)?;
-    let rows = statement
-        .query_map(
-            params![filter, i64::from(limit), i64::from(offset)],
-            map_summary,
-        )
-        .map_err(sqlite_error)?
-        .collect::<rusqlite::Result<Vec<CardSummary>>>()
-        .map_err(sqlite_error)?;
-    let (items, has_more, next_offset) = fit_page(rows, total, offset);
-    Ok(CardPage {
-        items,
-        total,
-        offset,
-        limit,
-        has_more,
-        next_offset,
-    })
+    let filter = Filter::new(
+        params.kind.as_deref(),
+        params.topic.as_deref(),
+        params.favorite,
+    )?;
+    query_page(connection, &filter, &Plan::All, offset, limit)
 }
 
 /// Escapes the LIKE wildcards so user text is never a pattern.
@@ -582,85 +898,430 @@ fn fts_phrase(query: &str) -> String {
 /// covers two-character Chinese words) fall back to a literal LIKE scan with
 /// title, aliases and topics ranked before the body.
 pub fn search(connection: &Connection, params: SearchParams) -> ApiResult<CardPage> {
-    check_chars("query", &params.query, MAX_QUERY_CHARS)?;
-    let query = params.query.trim().to_string();
     let (offset, limit) = page(params.offset, params.limit);
-    if query.is_empty() {
-        return list(
-            connection,
-            ListParams {
-                kind: None,
-                offset: Some(offset),
-                limit: Some(limit),
-            },
-        );
-    }
-    if query.chars().count() < 3 {
-        let pattern = like_pattern(&query);
-        let total: i64 = connection
-            .query_row(
-                "SELECT count(*) FROM cards c WHERE c.title LIKE ?1 ESCAPE '\\' OR c.summary LIKE ?1 ESCAPE '\\'
-                 OR c.body LIKE ?1 ESCAPE '\\' OR c.topics LIKE ?1 ESCAPE '\\' OR c.aliases LIKE ?1 ESCAPE '\\'",
-                [&pattern],
-                |row| row.get(0),
-            )
-            .map_err(sqlite_error)?;
-        let sql = format!(
-            "{CARD_LIST_SELECT} WHERE c.title LIKE ?1 ESCAPE '\\' OR c.summary LIKE ?1 ESCAPE '\\'
-             OR c.body LIKE ?1 ESCAPE '\\' OR c.topics LIKE ?1 ESCAPE '\\' OR c.aliases LIKE ?1 ESCAPE '\\'
-             ORDER BY CASE WHEN c.title LIKE ?1 ESCAPE '\\' OR c.aliases LIKE ?1 ESCAPE '\\'
-                OR c.topics LIKE ?1 ESCAPE '\\' THEN 0 ELSE 1 END, c.updated_at DESC, c.id
-             LIMIT ?2 OFFSET ?3"
-        );
-        let mut statement = connection.prepare(&sql).map_err(sqlite_error)?;
-        let rows = statement
-            .query_map(
-                params![pattern, i64::from(limit), i64::from(offset)],
-                map_summary,
-            )
-            .map_err(sqlite_error)?
-            .collect::<rusqlite::Result<Vec<CardSummary>>>()
-            .map_err(sqlite_error)?;
-        let (items, has_more, next_offset) = fit_page(rows, total, offset);
-        return Ok(CardPage {
-            items,
-            total,
-            offset,
-            limit,
-            has_more,
-            next_offset,
-        });
-    }
-    let phrase = fts_phrase(&query);
+    let filter = Filter::new(
+        params.kind.as_deref(),
+        params.topic.as_deref(),
+        params.favorite,
+    )?;
+    let plan = plan_for(&params.query)?;
+    query_page(connection, &filter, &plan, offset, limit)
+}
+
+/// Every distinct topic across the cards, most used first, then alphabetically
+/// so the order is stable between calls.
+pub fn topics(connection: &Connection, params: TopicParams) -> ApiResult<TopicList> {
+    let limit = params
+        .limit
+        .unwrap_or(DEFAULT_TOPIC_COUNT)
+        .clamp(1, MAX_TOPIC_COUNT);
     let total: i64 = connection
         .query_row(
-            "SELECT count(*) FROM cards_fts WHERE cards_fts MATCH ?1",
-            [&phrase],
+            "SELECT count(*) FROM (SELECT DISTINCT json_each.value FROM cards, json_each(cards.topics))",
+            [],
             |row| row.get(0),
         )
         .map_err(sqlite_error)?;
-    let sql = format!(
-        "{CARD_LIST_SELECT} JOIN cards_fts ON cards_fts.card_id = c.id
-         WHERE cards_fts MATCH ?1
-         ORDER BY bm25(cards_fts, 0.0, 10.0, 4.0, 1.0, 8.0, 8.0), c.updated_at DESC, c.id
-         LIMIT ?2 OFFSET ?3"
-    );
-    let mut statement = connection.prepare(&sql).map_err(sqlite_error)?;
-    let rows = statement
-        .query_map(
-            params![phrase, i64::from(limit), i64::from(offset)],
-            map_summary,
+    let mut statement = connection
+        .prepare(
+            "SELECT json_each.value AS topic, count(*) AS count
+               FROM cards, json_each(cards.topics)
+              GROUP BY topic
+              ORDER BY count DESC, topic ASC
+              LIMIT ?1",
         )
-        .map_err(sqlite_error)?
-        .collect::<rusqlite::Result<Vec<CardSummary>>>()
         .map_err(sqlite_error)?;
-    let (items, has_more, next_offset) = fit_page(rows, total, offset);
-    Ok(CardPage {
-        items,
-        total,
-        offset,
-        limit,
-        has_more,
-        next_offset,
+    let topics = statement
+        .query_map([i64::from(limit)], |row| {
+            Ok(TopicCount {
+                topic: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })
+        .and_then(|rows| rows.collect::<rusqlite::Result<Vec<TopicCount>>>())
+        .map_err(sqlite_error)?;
+    Ok(TopicList { topics, total })
+}
+
+/// The versions of one card: the stored card first, then the snapshots an
+/// automatic update kept, newest first, stopping before the frame budget fills.
+pub fn revisions(connection: &Connection, params: RevisionsParams) -> ApiResult<CardRevisions> {
+    check_chars("id", &params.id, 128)?;
+    let card = load(connection, &params.id)?;
+    let limit = params
+        .limit
+        .unwrap_or(DEFAULT_REVISIONS)
+        .clamp(1, MAX_REVISIONS) as usize;
+    let mut revisions = vec![CardRevision {
+        revision: card.revision,
+        title: card.title.clone(),
+        summary: card.summary.clone(),
+        body: card.body.clone(),
+        topics: card.topics.clone(),
+        edited: card.edited,
+        created_at: card.updated_at,
+    }];
+    let budget = MAX_FRAME_BYTES.saturating_sub(FRAME_HEADROOM);
+    let mut used = encoded_len(&revisions[0]);
+    let mut statement = connection
+        .prepare(
+            "SELECT revision, title, summary, body, topics, edited, created_at
+               FROM card_history WHERE card_id = ?1
+              ORDER BY revision DESC, created_at DESC, id DESC",
+        )
+        .map_err(sqlite_error)?;
+    let history = statement
+        .query_map([&params.id], |row| {
+            Ok(CardRevision {
+                revision: row.get(0)?,
+                title: row.get(1)?,
+                summary: row.get(2)?,
+                body: row.get(3)?,
+                topics: decode_list(&row.get::<_, String>(4)?),
+                edited: row.get::<_, i64>(5)? != 0,
+                created_at: row.get(6)?,
+            })
+        })
+        .and_then(|rows| rows.collect::<rusqlite::Result<Vec<CardRevision>>>())
+        .map_err(sqlite_error)?;
+    for revision in history {
+        if revisions.len() >= limit {
+            break;
+        }
+        let size = encoded_len(&revision);
+        if used + size > budget {
+            break;
+        }
+        used += size;
+        revisions.push(revision);
+    }
+    Ok(CardRevisions {
+        id: params.id,
+        revisions,
     })
+}
+
+fn encoded_len(revision: &CardRevision) -> usize {
+    serde_json::to_string(revision).map_or(0, |text| text.len())
+}
+
+/// Joins two topic or alias lists, keeping the kept card's order first and
+/// capping the result at the topic limit.
+fn union_terms(kept: &[String], merged: &[String]) -> Vec<String> {
+    let mut union: Vec<String> = Vec::new();
+    for value in kept.iter().chain(merged.iter()) {
+        if union.len() >= MAX_TOPICS {
+            break;
+        }
+        if !union.iter().any(|seen| seen == value) {
+            union.push(value.clone());
+        }
+    }
+    union
+}
+
+/// Checks a merge override. A merge reports bad text as `invalid_params`: it is
+/// a two-card decision the caller can fix, not a single oversized field.
+fn merge_text(field: &str, value: &str, max: usize) -> ApiResult<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(ApiError::invalid(format!("{field} 不能为空")));
+    }
+    let length = trimmed.chars().count();
+    if length > max {
+        return Err(ApiError::invalid(format!(
+            "{field} 超过 {max} 个字符（{length}）"
+        )));
+    }
+    Ok(trimmed.to_string())
+}
+
+/// Joins two cards into the kept one. Everything runs in one `IMMEDIATE`
+/// transaction, so a rejected merge leaves both cards exactly as they were.
+pub fn merge(connection: &mut Connection, params: MergeParams) -> ApiResult<MergedCards> {
+    check_chars("id", &params.keep_id, 128)?;
+    check_chars("id", &params.merge_id, 128)?;
+    if params.keep_id.trim().is_empty() || params.merge_id.trim().is_empty() {
+        return Err(ApiError::invalid("合并需要两张卡片"));
+    }
+    if params.keep_id == params.merge_id {
+        return Err(ApiError::invalid("不能把一张卡片合并到它自己"));
+    }
+    let title = match &params.title {
+        Some(title) => Some(merge_text("title", title, MAX_TITLE_CHARS)?),
+        None => None,
+    };
+    let summary = match &params.summary {
+        Some(summary) => {
+            let summary = summary.trim();
+            if summary.chars().count() > MAX_SUMMARY_CHARS {
+                return Err(ApiError::invalid(format!(
+                    "summary 超过 {MAX_SUMMARY_CHARS} 个字符"
+                )));
+            }
+            Some(summary.to_string())
+        }
+        None => None,
+    };
+    let body = match &params.body {
+        Some(body) => {
+            if body.chars().count() > MAX_BODY_CHARS {
+                return Err(ApiError::invalid(format!(
+                    "body 超过 {MAX_BODY_CHARS} 个字符"
+                )));
+            }
+            Some(body.clone())
+        }
+        None => None,
+    };
+    let now = now_ms();
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            ApiError::storage(format!("cannot start the merge transaction: {error}"))
+        })?;
+    let keep = load(&transaction, &params.keep_id)?;
+    let merged = load(&transaction, &params.merge_id)?;
+    if keep.revision != params.keep_revision || merged.revision != params.merge_revision {
+        return Err(ApiError::new(
+            Code::SourceChanged,
+            "卡片已被修改，请重新对比后再合并",
+        ));
+    }
+    let title = title.unwrap_or_else(|| keep.title.clone());
+    let summary = summary.unwrap_or_else(|| keep.summary.clone());
+    let body = body.unwrap_or_else(|| keep.body.clone());
+    let topics = encode_list(&union_terms(&keep.topics, &merged.topics))?;
+    let aliases = encode_list(&union_terms(&keep.aliases, &merged.aliases))?;
+    let favorite = keep.favorite || merged.favorite;
+    let revision = keep.revision + 1;
+    transaction
+        .execute(
+            "UPDATE cards SET title = ?2, summary = ?3, body = ?4, topics = ?5, aliases = ?6, edited = 1,
+             favorite = ?7, fingerprint = ?8, revision = ?9, updated_at = ?10 WHERE id = ?1",
+            params![
+                params.keep_id,
+                title,
+                summary,
+                body,
+                topics,
+                aliases,
+                i64::from(favorite),
+                fingerprint_of(&body),
+                revision,
+                now
+            ],
+        )
+        .map_err(sqlite_error)?;
+    transaction
+        .execute(
+            "INSERT OR IGNORE INTO card_sources (card_id, source_id, created_at)
+             SELECT ?1, source_id, created_at FROM card_sources WHERE card_id = ?2",
+            params![params.keep_id, params.merge_id],
+        )
+        .map_err(sqlite_error)?;
+    transaction
+        .execute(
+            "DELETE FROM card_sources WHERE card_id = ?1",
+            [&params.merge_id],
+        )
+        .map_err(sqlite_error)?;
+    let mut statement = transaction
+        .prepare(
+            "SELECT id, from_id, to_id, kind, origin FROM card_relations WHERE from_id = ?1 OR to_id = ?1",
+        )
+        .map_err(sqlite_error)?;
+    let edges = statement
+        .query_map([&params.merge_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>())
+        .map_err(sqlite_error)?;
+    drop(statement);
+    for (id, from, to, kind, origin) in edges {
+        let from = if from == params.merge_id {
+            params.keep_id.clone()
+        } else {
+            from
+        };
+        let to = if to == params.merge_id {
+            params.keep_id.clone()
+        } else {
+            to
+        };
+        // A relation that now starts and ends on the kept card no longer says
+        // anything.
+        if from == to {
+            transaction
+                .execute("DELETE FROM card_relations WHERE id = ?1", [&id])
+                .map_err(sqlite_error)?;
+            continue;
+        }
+        let existing: Option<(String, String)> = transaction
+            .query_row(
+                "SELECT id, origin FROM card_relations
+                  WHERE from_id = ?1 AND to_id = ?2 AND kind = ?3 AND id != ?4",
+                params![from, to, kind, id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(sqlite_error)?;
+        let keep_moving = match existing {
+            None => true,
+            Some((other_id, other_origin)) => {
+                if other_origin == "manual" || origin == "model" {
+                    transaction
+                        .execute("DELETE FROM card_relations WHERE id = ?1", [&id])
+                        .map_err(sqlite_error)?;
+                    false
+                } else {
+                    // The moved hand-drawn relation outranks the stored model one.
+                    transaction
+                        .execute("DELETE FROM card_relations WHERE id = ?1", [&other_id])
+                        .map_err(sqlite_error)?;
+                    true
+                }
+            }
+        };
+        if keep_moving {
+            transaction
+                .execute(
+                    "UPDATE card_relations SET from_id = ?2, to_id = ?3, updated_at = ?4 WHERE id = ?1",
+                    params![id, from, to, now],
+                )
+                .map_err(sqlite_error)?;
+        }
+    }
+    // The merged card's snapshots move with it; the revision offset keeps the
+    // numbers unique and their order intact, so every old version stays readable.
+    transaction
+        .execute(
+            "UPDATE card_history SET card_id = ?2, revision = revision + ?3 WHERE card_id = ?1",
+            params![params.merge_id, params.keep_id, revision],
+        )
+        .map_err(sqlite_error)?;
+    transaction
+        .execute(
+            "DELETE FROM cards_fts WHERE card_id = ?1",
+            [&params.merge_id],
+        )
+        .map_err(sqlite_error)?;
+    transaction
+        .execute("DELETE FROM cards WHERE id = ?1", [&params.merge_id])
+        .map_err(sqlite_error)?;
+    let sources: i64 = transaction
+        .query_row(
+            "SELECT count(*) FROM card_sources WHERE card_id = ?1",
+            [&params.keep_id],
+            |row| row.get(0),
+        )
+        .map_err(sqlite_error)?;
+    let relations: i64 = transaction
+        .query_row(
+            "SELECT count(*) FROM card_relations WHERE from_id = ?1 OR to_id = ?1",
+            [&params.keep_id],
+            |row| row.get(0),
+        )
+        .map_err(sqlite_error)?;
+    let card = load(&transaction, &params.keep_id)?;
+    reindex(&transaction, &params.keep_id)?;
+    crate::util::ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the merge: {error}")))?;
+    Ok(MergedCards {
+        card,
+        removed_id: params.merge_id,
+        sources,
+        relations,
+    })
+}
+
+/// One card as Markdown, with its sources listed so the text can be read away
+/// from the app. Rust builds it: the renderer never invents the note body.
+pub fn export(connection: &Connection, params: ExportParams) -> ApiResult<CardExport> {
+    check_chars("id", &params.id, 128)?;
+    let card = load(connection, &params.id)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT s.kind, s.title, s.origin_ref, s.state
+               FROM card_sources cs JOIN sources s ON s.id = cs.source_id
+              WHERE cs.card_id = ?1
+              ORDER BY s.created_at, s.id",
+        )
+        .map_err(sqlite_error)?;
+    let sources = statement
+        .query_map([&params.id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
+        .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>())
+        .map_err(sqlite_error)?;
+    let mut markdown = String::new();
+    markdown.push_str(&format!("# {}\n\n", card.title));
+    markdown.push_str(&format!("- 类型：{}\n", card.kind));
+    markdown.push_str(&format!(
+        "- 主题：{}\n",
+        if card.topics.is_empty() {
+            "（无）".to_string()
+        } else {
+            card.topics.join("、")
+        }
+    ));
+    markdown.push_str(&format!("- 版本：{}\n\n", card.revision));
+    let summary = card.summary.trim();
+    if !summary.is_empty() {
+        markdown.push_str(summary);
+        markdown.push_str("\n\n");
+    }
+    let body = card.body.trim();
+    if !body.is_empty() {
+        markdown.push_str(body);
+        markdown.push_str("\n\n");
+    }
+    markdown.push_str("## 来源\n\n");
+    if sources.is_empty() {
+        markdown.push_str("（无）\n");
+    }
+    for (kind, title, origin_ref, state) in sources {
+        markdown.push_str(&format!("- {kind} · {title} · {origin_ref} · {state}\n"));
+    }
+    let filename = export_filename(&card.id, &card.title);
+    Ok(CardExport {
+        id: card.id,
+        filename,
+        markdown,
+    })
+}
+
+/// A file name a desktop file picker accepts on every platform.
+fn export_filename(id: &str, title: &str) -> String {
+    let mut name = String::new();
+    for character in title.chars() {
+        if name.chars().count() >= 60 {
+            break;
+        }
+        let safe = !character.is_control()
+            && !matches!(
+                character,
+                '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+            );
+        name.push(if safe { character } else { '_' });
+    }
+    let name = name.trim().trim_end_matches('.').trim();
+    if name.is_empty() {
+        format!("{id}.md")
+    } else {
+        format!("{name}.md")
+    }
 }

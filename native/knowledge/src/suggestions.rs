@@ -167,17 +167,32 @@ pub fn accept(conn: &mut Connection, id: &str) -> ApiResult<Value> {
     let body = text("body");
     let fingerprint = cards::fingerprint_of(&body);
     let now = now_ms();
-    let (title, summary, previous): (String, String, String) = transaction
+    let (title, summary, previous, previous_topics, previous_edited): (
+        String,
+        String,
+        String,
+        String,
+        i64,
+    ) = transaction
         .query_row(
-            "SELECT title, summary, body FROM cards WHERE id = ?1",
+            "SELECT title, summary, body, topics, edited FROM cards WHERE id = ?1",
             params![target],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .map_err(sqlite)?;
     transaction
         .execute(
-            "INSERT INTO card_history (id, card_id, revision, title, summary, body, reason, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO card_history
+                (id, card_id, revision, title, summary, body, topics, edited, reason, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 crate::util::new_id("his"),
                 target,
@@ -185,6 +200,8 @@ pub fn accept(conn: &mut Connection, id: &str) -> ApiResult<Value> {
                 title,
                 summary,
                 previous,
+                previous_topics,
+                previous_edited,
                 "接受建议",
                 now
             ],
