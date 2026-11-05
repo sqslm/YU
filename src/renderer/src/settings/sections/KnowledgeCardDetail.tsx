@@ -158,6 +158,12 @@ interface DetailProps {
   onPickTopic: (topic: string) => void
   onBack: () => void
   onDeleted: () => void
+  /**
+   * When the detail is a dialog, this names its close control: the arrow is then
+   * always shown and labelled 关闭 instead of 返回, because nothing is being
+   * navigated back to — the browser page is still behind the dialog.
+   */
+  closeLabel?: string
 }
 
 /**
@@ -170,7 +176,7 @@ type CardAction =
   | { kind: 'todo'; id: string; title: string }
   | { kind: 'note'; noteId: string }
 
-export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onSelect, openRecord, onOpenChat, onOpenNote, onPickTopic, onBack, onDeleted }: DetailProps): JSX.Element {
+export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onSelect, openRecord, onOpenChat, onOpenNote, onPickTopic, onBack, onDeleted, closeLabel }: DetailProps): JSX.Element {
   const { t } = useTranslation()
   const [card, setCard] = useState<KnowledgeCard | null>(null)
   const [sources, setSources] = useState<KnowledgeSource[]>([])
@@ -371,9 +377,11 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
     <Box data-knowledge-detail sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ flex: '0 0 auto', px: 2, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-          {!wide && (
-            <Tooltip title={t('knowledge.back')}>
-              <IconButton size="small" aria-label={t('knowledge.back')} onClick={onBack}><ArrowBackRounded fontSize="small" /></IconButton>
+          {(!wide || closeLabel) && (
+            <Tooltip title={closeLabel ?? t('knowledge.back')}>
+              <IconButton size="small" aria-label={closeLabel ?? t('knowledge.back')} onClick={onBack} data-knowledge-detail-close>
+                <ArrowBackRounded fontSize="small" />
+              </IconButton>
             </Tooltip>
           )}
           <Typography variant="subtitle1" component="h2" sx={{ flex: 1, minWidth: 0, fontWeight: 600 }} noWrap>{draft?.title || card.title}</Typography>

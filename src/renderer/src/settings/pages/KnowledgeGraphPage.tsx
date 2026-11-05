@@ -28,9 +28,9 @@ import SearchRounded from '@mui/icons-material/SearchRounded'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { useTranslation } from 'react-i18next'
 import { KNOWLEDGE_LIMITS } from '@shared/knowledge'
-import type { CardKind, KnowledgeGraph, RelationKind } from '@shared/knowledge'
+import type { KnowledgeGraph, RelationKind } from '@shared/knowledge'
 import { dampenNodeDrag } from '../sections/memoryGraphDrag'
-import { acceptGraph, createGate, graphView, kindKey, relationKey, splitFit, type ForceNode } from './knowledgeView'
+import { acceptGraph, createGate, graphView, kindColor, kindKey, relationKey, splitFit, type ForceNode } from './knowledgeView'
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -38,23 +38,12 @@ function messageOf(error: unknown): string {
 
 const SEARCH_DEBOUNCE_MS = 200
 
-/** Node colours follow the card kinds, so the canvas and the lists agree. */
-function kindColor(kind: CardKind, dark: boolean): string {
-  const palette: Record<CardKind, [string, string]> = {
-    concept: ['#286fc1', '#8bbdff'],
-    method: ['#1f8a5f', '#7fd6ae'],
-    question: ['#9a6b13', '#e0be79'],
-    decision: ['#8b4ca5', '#d4a8ed'],
-    comparison: ['#0f7d8c', '#79d6e2'],
-    reading: ['#b0552f', '#f0a986'],
-    review: ['#5b6474', '#aeb8c8']
-  }
-  return dark ? palette[kind][1] : palette[kind][0]
-}
-
 interface Props {
   onOpenCard: (id: string) => void
   onBack: () => void
+  /** The browsing page's scope, so opening the full graph keeps it. */
+  initialTopic?: string
+  initialQuery?: string
 }
 
 /**
@@ -62,13 +51,13 @@ interface Props {
  * Every expansion is a backend question; the canvas never invents nodes, and it
  * draws exactly the newest answer rather than unioning the previous hop in.
  */
-export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
+export function KnowledgeGraphPage({ onOpenCard, onBack, initialTopic, initialQuery }: Props): JSX.Element {
   const { t } = useTranslation()
   const theme = useTheme()
   const dark = theme.palette.mode === 'dark'
-  const [topic, setTopic] = useState('')
-  const [query, setQuery] = useState('')
-  const [debounced, setDebounced] = useState('')
+  const [topic, setTopic] = useState(initialTopic ?? '')
+  const [query, setQuery] = useState(initialQuery ?? '')
+  const [debounced, setDebounced] = useState((initialQuery ?? '').trim())
   const [data, setData] = useState<KnowledgeGraph | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

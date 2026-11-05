@@ -1650,7 +1650,10 @@
       "pending": "The record is deleted, but its knowledge cleanup failed: {{reason}}",
       "retry": "Retry cleanup",
       "keepCards": "Keep the cards and only mark the sources deleted"
-    }
+    },
+    "openGraph": "Open graph",
+    "cardsTitle": "Cards",
+    "cardsTotal": "{{total}} in total"
   },
   "nav": {
     "home": "Overview",

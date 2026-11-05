@@ -108,6 +108,66 @@ export function mergePage(current: CardList | null, page: KnowledgeCardPage): Ca
 }
 
 /**
+ * Node colours follow the card kinds, so the preview canvas, the full canvas and
+ * the chips agree on what a colour means.
+ */
+export function kindColor(kind: CardKind, dark: boolean): string {
+  const palette: Record<CardKind, [string, string]> = {
+    concept: ['#286fc1', '#8bbdff'],
+    method: ['#1f8a5f', '#7fd6ae'],
+    question: ['#9a6b13', '#e0be79'],
+    decision: ['#8b4ca5', '#d4a8ed'],
+    comparison: ['#0f7d8c', '#79d6e2'],
+    reading: ['#b0552f', '#f0a986'],
+    review: ['#5b6474', '#aeb8c8']
+  }
+  return dark ? palette[kind][1] : palette[kind][0]
+}
+
+/** Content width that fits a third card column; two gaps included in the number. */
+export const GRID_THREE_WIDTH = 900
+
+/** Content width below which one column is the only readable choice. */
+export const GRID_TWO_WIDTH = 600
+
+/**
+ * Columns the card grid may use. The decision is made from the width the page
+ * itself measured, not the window: the nav rail and the page margins eat ~250px,
+ * so a 1080px window has roughly 780px to lay cards out in — two columns there,
+ * three only once the page really has the room.
+ */
+export function gridColumns(availableWidth: number): 1 | 2 | 3 {
+  if (availableWidth >= GRID_THREE_WIDTH) return 3
+  if (availableWidth >= GRID_TWO_WIDTH) return 2
+  return 1
+}
+
+/** Nodes the default page draws in its preview; the full graph asks for its own. */
+export const GRAPH_PREVIEW_NODES = 40
+
+/** Height of the preview canvas. It is a glance, not a workspace. */
+export const GRAPH_PREVIEW_HEIGHT = 260
+
+/** Topics the card face shows before it stops stacking chips. */
+export const CARD_TOPIC_LIMIT = 3
+
+/**
+ * The chips a card face may print. A card with eight topics gets three and a
+ * count: the grid is for scanning titles and summaries, and a chip wall would
+ * push the summary out of the card. An empty topic list is allowed — many cards
+ * have none, and the face then simply has no third line.
+ */
+export function cardTopics(topics: readonly string[], limit = CARD_TOPIC_LIMIT): { shown: string[]; rest: number } {
+  const unique: string[] = []
+  for (const topic of topics) {
+    const text = topic.trim()
+    if (text && !unique.includes(text)) unique.push(text)
+  }
+  const keep = Math.max(0, Math.min(limit, unique.length))
+  return { shown: unique.slice(0, keep), rest: unique.length - keep }
+}
+
+/**
  * Monotonic request gate. Every request takes a ticket; only the newest ticket
  * may write, so a slow answer for a filter the user already left cannot replace
  * the newer selection's rows.

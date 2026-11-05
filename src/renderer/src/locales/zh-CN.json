@@ -1589,7 +1589,10 @@
       "pending": "记录已删除，但关联知识清理失败：{{reason}}",
       "retry": "重试知识清理",
       "keepCards": "仅标记来源失效，保留卡片"
-    }
+    },
+    "openGraph": "展开图谱",
+    "cardsTitle": "知识卡片",
+    "cardsTotal": "共 {{total}} 条"
   },
   "nav": {
     "home": "概览",

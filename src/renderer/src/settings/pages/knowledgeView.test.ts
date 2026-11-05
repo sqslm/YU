@@ -5,11 +5,13 @@ import {
   CARDS_SECTION_REQUESTS,
   EMPTY_FILTERS,
   EMPTY_LIST,
+  GRID_TWO_WIDTH,
   IMPACT_DETAIL_ALONE_KEY,
   IMPACT_DETAIL_KEY,
   IMPACT_LABEL_KEY,
   SPLIT_MIN_WIDTH,
   acceptGraph,
+  cardTopics,
   cardRequest,
   cardsSection,
   createGate,
@@ -19,6 +21,7 @@ import {
   graphCounts,
   graphNotice,
   graphView,
+  gridColumns,
   groupProfile,
   groupRelations,
   impactNotice,
@@ -497,5 +500,39 @@ describe('model selection view', () => {
     const view = modelView(info({ profiles: [] }))
     expect(view.options).toEqual([])
     expect(view.staleId).toBeNull()
+  })
+})
+
+describe('the browsing grid', () => {
+  it('adds a column only when the page itself has the width for it', () => {
+    expect(gridColumns(1180)).toBe(3)
+    expect(gridColumns(900)).toBe(3)
+    expect(gridColumns(899)).toBe(2)
+    expect(gridColumns(GRID_TWO_WIDTH)).toBe(2)
+    expect(gridColumns(599)).toBe(1)
+    expect(gridColumns(0)).toBe(1)
+  })
+
+  it('reads the width the page measured, not the window', () => {
+    // A 940px window still leaves the page under three columns once the rail and
+    // margins are gone; the page must keep two readable cards rather than three
+    // cramped ones.
+    const pageWidth = 940 - 250
+    expect(gridColumns(pageWidth)).toBe(2)
+  })
+})
+
+describe('the card face topics', () => {
+  it('keeps a few topics and counts the rest', () => {
+    expect(cardTopics(['检索', '索引', 'SQL'])).toEqual({ shown: ['检索', '索引', 'SQL'], rest: 0 })
+    expect(cardTopics(['检索', '索引', 'SQL', '缓存', '队列'])).toEqual({ shown: ['检索', '索引', 'SQL'], rest: 2 })
+  })
+
+  it('drops duplicates and blank topics so the row does not repeat itself', () => {
+    expect(cardTopics(['检索', ' 检索 ', '  ', '索引'])).toEqual({ shown: ['检索', '索引'], rest: 0 })
+  })
+
+  it('has no topics to show when a card has none', () => {
+    expect(cardTopics([])).toEqual({ shown: [], rest: 0 })
   })
 })
