@@ -1832,3 +1832,80 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 ### 提交
 
 - `26244c0` `fix(knowledge): settle a deleted record by what it really owned` —— 13 个文件（4 个 Rust 源文件 + 新增 `native/knowledge/tests/ownership.rs`、`src/main/knowledge/release.ts`、`src/main/knowledge/ownership.integration.test.ts`，以及 `src/main/index.ts`、`host.ts`、`knowledge.ts`、两处 schema 断言与一处渲染夹具）。本节由随后的 docs 提交记录。
+
+## 阶段 6 B 定点补修（2026-11-06 第十六轮）
+
+起始 `26b4164`（工作区干净，release 助手 3,215,872 字节 `0820276e57dfb150459c0536543cf963721c7bbb39dbdc34a2d89124a4960d58`）。外部复核确认上一轮的归属语义方向正确，但给出四个真实反例：票据不绑有效范围、队列结不清、旧库歧义被当独占、生产入口重复登记。本轮只补这四项；C/D 与阶段 7 未动。
+
+### 四条反例与本轮结果
+
+| 反例（外部实测） | 旧行为 | 现在 |
+| --- | --- | --- |
+| A 有独占卡 X + 与 B 共用版本支持的卡 Y；A 预览 `cards=1/shared=1`，B 默认删除后 A 预览变 `cards=2/shared=0`，用 A 的旧票据加勾选提交 | 票据只对来源 id 取哈希，B 让出后 A 的卡片集合变了票据却没变 ⇒ 误删 Y 且 IPC 无错 | 票据绑定「记录身份 + 当前有效来源 + 保留/退休分组 + 真正要删的卡 + 保留卡解链影响」；旧票据在写事务内被拒（`source_changed`），两卡与来源零变更 |
+| 勾选清理后来源与卡片已删，reading 组仍 `stabilizing`；两会话各读同一网址不同版本，依次默认删除后两版 invalid 但组仍 stabilizing | `card.purge` 不结清队列；`invalidate_thread` 只认本轮退休的行 | `purge` 在与删除同一事务里用实际状态结清队列；`invalidate_thread` 按 `state <> 'invalid'` 判定，兼容上一轮已退休的行 |
+| 同一随记 201 个版本，默认删除报成功却只失效 200 个 | `releaseRecord` 先 `findSources`（`RECORD_SOURCES = 200` 截断）再逐条失效 | 新 `source.release_record` 在 helper 单事务内按记录身份做集合 UPDATE，一次撤整条记录，响应只有计数与任务 id |
+| `settleOnDelete` 与 `purgeRecordKnowledge` 各自登记裸 id Set（嵌套登记，内层 finally 提前释放），`chat:edit` 与 `notes:remove` 两条生产入口都受影响 | 重叠删除可能提前释放登记，回调里的 `threadRemoved`/`noteRemoved` 会误触发 | 抽 `SettleRegistry`：键为 `channel:id`、引用计数、失败留待 `retry()`；单次登记覆盖「落盘 + 结清」 |
+
+### 交付
+
+| 项 | 实现 | 位置 |
+| --- | --- | --- |
+| 记录级撤回 | 新 `release_record(params)`：单事务内收集该记录拥有的行（note 按 `origin_ref`、chat 按 `source_records` ∪ 旧 `queue_items`），按「是否有他人拥有」退休或只让出，随后结清/修复队列组，返回 `{retired, detached, cancelled}` | `native/knowledge/src/release.rs`（新）、`service.rs` 注册 `source.release_record`、`lib.rs` |
+| 票据绑定实际影响 | `describe()` 产出「存活来源 / shared / lost / 要退休的卡 / 保留卡解链」；`digest()` 把它们与记录身份一起哈希；`purge` 在 `Immediate` 事务内重算同一份描述，票据不符即 `source_changed`；已失效来源进 `skipped` 如实回报 | `native/knowledge/src/purge.rs` |
+| 队列结清 | `settle_after(conn, ids, reason, now)` 按组内**实际有效**来源决定 `cancelled`，否则把 `thread_key` 修到剩余拥有者；与退休写在同一事务 | `native/knowledge/src/queue.rs` |
+| 旧库歧义 | schema `9 → 10`：chat 归属按 `group_key` 回填（可核实，保留）；旧 reading 行只回填成 `exclusive = 0` 的**hint**，不构成独占授权，删该会话只退休它自己的回合 | `native/knowledge/src/store.rs`（`SOURCE_OWNER_SQL`） |
+| 入口登记 | `SettleRegistry`（`settleKey` = `channel:id`、引用计数、`run/release/retry/waiting/holds`）；`settleRecordKnowledge(deps, input, identity, options)` 统一「无匹配＝成功空操作、知识库关闭不阻塞、默认走 release、勾选走 purgeCards」 | `src/main/knowledge/settle.ts`（新） |
+| 接线 | `settling.run('chat'|'note', id, body)` 覆盖落盘与结清；失败留待 `retry()`；回调守卫改 `settling.holds(...)`；`notes:remove` 无论勾选与否都把失败包成「记录已删除，但关联知识清理失败：…」 | `src/main/index.ts`、`src/main/notes-ipc.ts` |
+| 宿主契约 | `host.releaseRecord(input, reason)`；`CardImpact.shared`、`PurgeCardsResult.detached`；`KnowledgeMethod` 增 `source.release_record` | `src/main/knowledge/host.ts`、`src/shared/knowledge.ts` |
+| 预览调用形状（实窗发现） | 渲染层原先传裸 id，`knowledge:impact` 把它当 `{sourceId}` ⇒ 确认框显示「无法预览关联知识」。新增 `sourceIdentityOf(target)` 做 `{threadId}→chat / {noteId}→note / {sourceId}` 映射，渲染层改传记录身份，主进程只收 `SourceRef`，空身份抛「请指定要预览的记录」 | `src/shared/knowledge.ts`、`src/shared/api.ts`、`src/main/index.ts`、`ChatPage.tsx`、`NotesPage.tsx` |
+
+### 回归（真实件，非手工拼投影）
+
+| 用例 | 覆盖 |
+| --- | --- |
+| `native/knowledge/tests/ownership.rs`（真 helper + 真 SQLite，8 项） | 原有 3 项保留；新增 5 项：A/B 交错旧票据被拒且零变更、确认后删卡的 purge 结清它清空的 reading 组、早前调用已退休的版本仍能结清组、201 版随记一次撤完（预览页仍 `incomplete`）、v8 旧库的 hint 永不授权退休 |
+| `native/knowledge/tests/queue.rs` / `relations.rs` | 既有语义不变；`relations.rs::two_versions_of_one_note_are_one_record` 的「最早在前」改用 `rowid ASC`，消除同 `read_at` 时的随机排序（本轮实测 50/50 抖动） |
+| `src/main/knowledge/settle.integration.test.ts`（新，真 helper + 真 `NotesStore` + 真 `notes:remove` handler + 生产 collector，5 项） | 默认删除让出归属；helper 真的起不来 ⇒ 记录已删、清理失败进 `retry()`、重启后补做成功；无来源随记照常成功（无匹配不是错误）；`channel:id` 隔离与重叠计数不提前释放；201 版随记经 TS 路径全撤（不受 200 行窗口限制） |
+| `src/main/knowledge/ownership.integration.test.ts` | 断言收紧为「默认删除 `retired === 1` 且 `detached >= 1`」「并发两次合计 3」——记录自己的回合行也会退休，这是真实语义 |
+| `src/shared/knowledge.test.ts`（新，2 项） | `sourceIdentityOf` 的三种身份与空输入 |
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cd native/knowledge && cargo fmt -- --check` | 0 |
+| `cd native/knowledge && cargo test --locked` | 0，138 项全过（lib 18、cards_view 11、extract 15、ownership 8、process 11、profile 27、queue 22、relations 26） |
+| `cd native/knowledge && cargo test --locked --features fixture` | 0（夹具变更，按派单要求加跑） |
+| `cd native/knowledge && cargo clippy --locked --all-targets -- -D warnings` | 0 |
+| `node scripts/build-native.mjs` | 0（28.19 s，先重建再跑根目录测试） |
+| release 助手 | 3,243,008 字节 `44d2b14e53eb08ca944eaabd9891345bf65f14e1d2ff6e7cbf31b71b97789f45`（有 Rust 改动，已重建） |
+| `pnpm exec vitest run src/main/knowledge src/main/tools/knowledge.test.ts src/main/ask-knowledge.integration.test.ts src/main/chat.test.ts src/main/assistant.test.ts src/main/agent.test.ts src/main/workspace.test.ts src/main/ipc-trust.test.ts src/preload/index.test.ts src/renderer/src/settings src/shared/knowledge.test.ts` | 0，70 文件 / 877 项全过（上一轮 870） |
+| `pnpm typecheck` | 0（node + web） |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0，280 文件通过 / 3 跳过，3986 项通过 / 8 跳过（99.17 s） |
+| `pnpm build` | 0（13.94 s） |
+| `git diff --check` / `git diff --check 26b4164..HEAD` | 0 / 0 |
+
+### 实窗证据（两轮，隔离数据，本地模型桩，真实 release 助手）
+
+第一轮 `E:/code/deepseek-harness/rea/typeless/.tmp/stage6b2-evidence/` 抓到了 HEAD 既有缺陷：删除确认框显示「无法预览关联知识：Error invoking remote method 'knowledge:impact': KnowledgeError: unknown source: <记录 id>」，勾选项不渲染，勾选路径在界面上不可达——后端撤回归属本身正确（同接口用 `{threadId}`/`{noteId}` 调用结果正确），是渲染层传了裸 id。修复后的第二轮证据在 `.tmp/stage6b2b-evidence/`（`report.md`、`shots/` 12 张、`logs/`、`requests/`、`db-*.txt`、`build.log`、`cleanup.txt`），运行方式：`pnpm build`（14.03 s，退出码 0）＋隔离 app 目录与独立 userData（`E:\CpanQianYi\Temp\yu-w6b2b`，Junction 引仓库 `out/main`/`native`/`resources`/`node_modules`）＋`--remote-debugging-port=18783`＋只监听 `127.0.0.1:18993` 的 OpenAI 兼容桩＋`Input.dispatchMouseEvent` 真实点击；视口 1080×750；`knowledge.status` 报 `schema 10 / fts5 / trigram`。
+
+| 场景 | 观察 |
+| --- | --- |
+| A 对话删除（不勾选） | 预览原文「同时删除仅依赖这条记录的知识（1 条）」＋「这些知识只有这一条来源，删除后无法再从记录追溯。」，错误块消失，勾选项存在且可勾/取消；结果来源 `invalid`（`记录已删除`）、`source_records` 清空、卡片与 `card_sources` 保留、队列组 `cancelled`、日志「失效 1 个来源，保留 0 条共享出处，停止 1 项排队任务，卡片与来源关联保留」 |
+| B 随记删除（勾选删卡） | 同样有真实预览与勾选项；结果卡片 `unknown card`、来源 `invalid`（`记录已清除`）、日志「移除 1 张卡片，保留 0 张，跳过 0 个已变更来源」 |
+| C 共享来源（随记与对话同引一卡） | 预览走多来源分支「其中 1 条还有别的有效来源，只会失去这条引用。」（IPC `cards=1, single=0, multi=1`）；删随记并勾选后对话来源仍 `active`、`source_records` 2→1、卡片保留且 `card_sources` 只剩对话那条 |
+| D 对话勾选删卡 | `cards=1, single=1`，卡片被删、来源 `invalid`、无错误 |
+
+实窗记录到的差异（真实事实）：默认路径 `release_record` 会清掉该记录的 `source_records` claim；勾选删卡走 `card.purge` 的 `retract()` 只置 `state='invalid'`，claim 行仍留在表里；失效原因文案分 `记录已删除`（release）与 `记录已清除`（purge），界面不展示该字段。
+
+### 未测与边界
+
+- 实窗未覆盖：抽取流水线自动产卡（卡片经 `window.api.knowledge.saveCard` 手造）、删除分组与重命名/移组、界面上的「预览已失效」复现、`reading` 通道的共享来源（本轮实窗只看 `chat` 与 `note`）。
+- 旧库只有单值 `thread_key`，无法证明旧 reading 来源的独占性，所以一律回填为 `exclusive = 0` 的 hint：删任一会话都不会退休它，也不会因它删卡。这是安全侧选择，代价是旧库那些来源可能永远留在库里（可读、可查，只是不再被删除驱动）。
+- `settleOnDelete` 的并发用例经 helper `Mutex` 串行，验证的是「重叠登记不提前释放、两次删除先后生效也不半状态」，不是真并行写入。
+- 修复前的确认框缺陷属于 HEAD 既有行为（上一轮未点删除对话框才漏掉），本轮一并修掉并记录在案；`ChatPage` 的失败态正文仍显示在红字上方（既有行为，未改）。
+
+### 提交
+
+- `7e627ce` `fix(knowledge): bind the delete ticket to the current effect and settle the queue it empties` —— 22 个文件（6 个 Rust 源文件 + 新增 `native/knowledge/src/release.rs`、`ownership.rs` 8 项；新增 `src/main/knowledge/settle.ts`、`settle.integration.test.ts`、`src/shared/knowledge.test.ts`，以及 `index.ts`/`notes-ipc.ts`/`host.ts`/`api.ts`/`knowledge.ts`/两个渲染页与两处 schema 断言）。本节由随后的 docs 提交记录。
