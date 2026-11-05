@@ -163,6 +163,32 @@ impl Helper {
         self.publish_on("note", group, text)
     }
 
+    /// Publishes one chat message. The thread is the group key, so every message
+    /// of one conversation lands on the same queue group.
+    fn publish_chat(&mut self, group: &str, text: &str) -> (String, String) {
+        let id = self.next_id();
+        let result = self.ok(
+            &id,
+            "source.publish",
+            json!({
+                "channel": "chat",
+                "kind": "chat",
+                "originRef": format!("{group}:{id}"),
+                "groupKey": group,
+                "title": group,
+                "scope": "chats",
+                "text": text,
+                "at": 1_700_000_000_000i64 + self.counter as i64,
+            }),
+        );
+        self.source_id = result["sourceId"].as_str().expect("sourceId").to_string();
+        self.fingerprint = result["fingerprint"]
+            .as_str()
+            .expect("fingerprint")
+            .to_string();
+        (self.source_id.clone(), self.fingerprint.clone())
+    }
+
     /// Claims the next batch and slices every planned range out of the test's own
     /// copy of that source's text, so the helper proves each range itself.
     fn claim_parts(&mut self, prefix: &str, sources: &[(String, String, String)]) -> Value {
@@ -1088,4 +1114,446 @@ fn a_page_out_focus_that_matches_the_filter_is_counted_as_a_match() {
         expanded["expanded"], 0,
         "the search filter matches the focus too: {expanded}"
     );
+}
+
+/// A `card.save` payload that binds the card to the records it came from.
+fn linked(kind: &str, title: &str, body: &str, sources: &[String]) -> Value {
+    json!({
+        "kind": kind,
+        "title": title,
+        "summary": format!("{title}的摘要"),
+        "body": body,
+        "topics": [],
+        "aliases": [],
+        "sourceIds": sources,
+    })
+}
+
+/// The ids one purge list names, sorted: the helper reports them in set order and
+/// the test only cares about membership.
+fn sorted_ids(value: &Value) -> Vec<String> {
+    let mut ids: Vec<String> = value
+        .as_array()
+        .expect("array")
+        .iter()
+        .map(|item| item.as_str().expect("id").to_string())
+        .collect();
+    ids.sort();
+    ids
+}
+
+#[test]
+fn an_impact_previews_what_purging_a_record_would_do() {
+    let root = Root::new("impact");
+    let mut helper = Helper::start(&root, vec![]);
+    let (first, first_version) =
+        helper.publish_full("note-a", "第一条随记的正文，说明了适用条件。");
+    let (second, _) = helper.publish_full("note-b", "第二条随记的正文，说明了关键机制。");
+    let (third, _) = helper.publish_full("note-c", "第三条随记的正文，已经被收回。");
+    helper.ok("inv", "source.invalidate", json!({"id": third}));
+
+    let only_first = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "甲",
+            "甲的正文只引用第一条记录，因此没有别的退路。",
+            std::slice::from_ref(&first),
+        ),
+    );
+    let both = helper.save(
+        "c2",
+        linked(
+            "concept",
+            "乙",
+            "乙的正文引用两条有效记录，因此还能活下来。",
+            &[first.clone(), second.clone()],
+        ),
+    );
+    let retracted = helper.save(
+        "c3",
+        linked(
+            "concept",
+            "丙",
+            "丙的正文第二条来源已经作废，因此仍然只有一条。",
+            &[first.clone(), third.clone()],
+        ),
+    );
+
+    let impact = helper.ok("i1", "card.impact", json!({"sourceId": first}));
+    assert_eq!(impact["sourceId"], first);
+    assert_eq!(impact["version"], first_version);
+    assert_eq!(impact["cards"], 3, "{impact}");
+    assert_eq!(impact["single"], 2, "{impact}");
+    assert_eq!(impact["multi"], 1, "{impact}");
+    assert_eq!(impact["more"], false, "{impact}");
+    let named = impact["sources"].as_array().expect("sources");
+    assert_eq!(named.len(), 1, "one record, ready for the purge: {impact}");
+    assert_eq!(named[0]["id"], first);
+    assert_eq!(named[0]["version"], first_version);
+
+    let items = impact["items"].as_array().expect("items").clone();
+    assert_eq!(items.len(), 3, "{impact}");
+    let entry = |id: &str| -> Value {
+        items
+            .iter()
+            .find(|item| item["id"] == id)
+            .cloned()
+            .expect("preview item")
+    };
+    assert_eq!(entry(&only_first)["single"], true, "{impact}");
+    assert_eq!(entry(&only_first)["sources"], 1, "{impact}");
+    assert_eq!(entry(&both)["single"], false, "{impact}");
+    assert_eq!(entry(&both)["sources"], 2, "{impact}");
+    assert_eq!(
+        entry(&retracted)["single"],
+        true,
+        "an invalid second source does not keep a card alive: {impact}"
+    );
+    assert_eq!(entry(&retracted)["sources"], 1, "{impact}");
+
+    let unknown = helper.call("i2", "card.impact", json!({"sourceId": "src_missing"}));
+    assert_eq!(unknown["ok"], false, "{unknown}");
+    assert_eq!(unknown["error"]["code"], "not_found", "{unknown}");
+
+    let by_identity = helper.ok(
+        "i3",
+        "card.impact",
+        json!({"channel": "note", "originRef": "note-a"}),
+    );
+    assert_eq!(by_identity["cards"], 3, "{by_identity}");
+    assert_eq!(by_identity["sources"][0]["id"], first, "{by_identity}");
+
+    let unresolved = helper.ok(
+        "i4",
+        "card.impact",
+        json!({"channel": "note", "originRef": "note-missing"}),
+    );
+    assert_eq!(unresolved["cards"], 0, "{unresolved}");
+    assert_eq!(unresolved["more"], false, "{unresolved}");
+    assert_eq!(unresolved["sources"], json!([]), "{unresolved}");
+}
+
+#[test]
+fn the_impact_preview_stops_at_twenty_and_says_so() {
+    let root = Root::new("impact-cap");
+    let mut helper = Helper::start(&root, vec![]);
+    let (first, _) = helper.publish_full("note-a", "一条随记，却产生了二十一张卡片。");
+    for index in 0..21 {
+        helper.save(
+            &format!("s{index}"),
+            linked(
+                "concept",
+                &format!("卡{index}"),
+                &format!("第{index}张卡片说明了第{index}件独立的事实，没有重复。"),
+                std::slice::from_ref(&first),
+            ),
+        );
+    }
+    let impact = helper.ok("i1", "card.impact", json!({"sourceId": first}));
+    assert_eq!(impact["cards"], 21, "{impact}");
+    assert_eq!(impact["single"], 21, "{impact}");
+    assert_eq!(
+        impact["items"].as_array().expect("items").len(),
+        20,
+        "the preview is bounded: {impact}"
+    );
+    assert_eq!(impact["more"], true, "{impact}");
+}
+
+#[test]
+fn purging_a_record_deletes_its_single_source_cards_and_unlinks_the_rest() {
+    let root = Root::new("purge");
+    let mut helper = Helper::start(&root, vec![]);
+    let (first, first_version) = helper.publish_full("note-a", "第一条随记的正文，会被整条删掉。");
+    let (second, _) = helper.publish_full("note-b", "第二条随记的正文，仍然留在库里。");
+    let alone = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "甲",
+            "甲的正文只引用那条会被删掉的记录，所以它也会消失。",
+            std::slice::from_ref(&first),
+        ),
+    );
+    let shared = helper.save(
+        "c2",
+        linked(
+            "concept",
+            "乙",
+            "乙的正文同时引用两条记录，因此只会丢掉一个链接。",
+            &[first.clone(), second.clone()],
+        ),
+    );
+    helper.ok(
+        "rel",
+        "relation.add",
+        json!({"fromId": alone, "toId": shared, "kind": "contains"}),
+    );
+    assert_eq!(
+        helper.ok("l1", "relation.list", json!({"cardId": shared}))["total"],
+        1
+    );
+
+    let purged = helper.ok(
+        "p1",
+        "card.purge",
+        json!({"sources": [{"id": first, "version": first_version}], "cards": true}),
+    );
+    assert_eq!(
+        sorted_ids(&purged["removed"]),
+        vec![alone.clone()],
+        "{purged}"
+    );
+    assert_eq!(
+        sorted_ids(&purged["kept"]),
+        vec![shared.clone()],
+        "{purged}"
+    );
+    assert_eq!(purged["skipped"], json!([]), "{purged}");
+
+    let gone = helper.call("g1", "card.get", json!({"id": alone}));
+    assert_eq!(gone["error"]["code"], "not_found", "{gone}");
+    let kept = helper.ok("g2", "card.get", json!({"id": shared}));
+    assert_eq!(
+        kept["sourceIds"],
+        json!([second]),
+        "the surviving card only loses the link: {kept}"
+    );
+    let listed = helper.ok("b1", "card.by_source", json!({"sourceId": first}));
+    assert_eq!(
+        listed["total"], 0,
+        "the purged record claims no card: {listed}"
+    );
+    let relations = helper.ok("l2", "relation.list", json!({"cardId": shared}));
+    assert_eq!(
+        relations["total"], 0,
+        "the deleted card took its relations with it: {relations}"
+    );
+    let impact = helper.ok("i1", "card.impact", json!({"sourceId": first}));
+    assert_eq!(
+        impact["cards"], 0,
+        "a retracted record threatens nothing: {impact}"
+    );
+}
+
+#[test]
+fn a_stale_version_is_skipped_and_cards_false_only_unlinks() {
+    let root = Root::new("purge-more");
+    let mut helper = Helper::start(&root, vec![]);
+    let (first, first_version) = helper.publish_full("note-a", "第一条随记的正文，稍后会被清除。");
+    let (second, _) = helper.publish_full("note-b", "第二条随记的正文，先看版本校验。");
+    let (third, _) = helper.publish_full("note-c", "第三条随记的正文，只做陪衬。");
+    let dead = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "甲",
+            "甲的正文只引用第一条记录，链接一断就没有来源了。",
+            std::slice::from_ref(&first),
+        ),
+    );
+    let mixed = helper.save(
+        "c2",
+        linked(
+            "concept",
+            "乙",
+            "乙的正文引用第一条与第二条记录，能扛住一次清除。",
+            &[first.clone(), second.clone()],
+        ),
+    );
+    let _spare = helper.save(
+        "c3",
+        linked(
+            "concept",
+            "丙",
+            "丙的正文引用第二条与第三条记录，跟这次清除无关。",
+            &[second.clone(), third.clone()],
+        ),
+    );
+
+    // The version the caller saw is not the version on disk: nothing may move.
+    let stale = helper.ok(
+        "p1",
+        "card.purge",
+        json!({"sources": [{"id": second, "version": "stale-version"}], "cards": true}),
+    );
+    assert_eq!(stale["skipped"], json!([second]), "{stale}");
+    assert_eq!(stale["removed"], json!([]), "{stale}");
+    assert_eq!(stale["kept"], json!([]), "{stale}");
+    let untouched = helper.ok("g1", "card.get", json!({"id": mixed}));
+    assert_eq!(
+        untouched["sourceIds"].as_array().expect("sourceIds").len(),
+        2,
+        "{untouched}"
+    );
+    let record = helper.ok("s1", "source.get", json!({"id": second}));
+    assert_eq!(
+        record["state"], "active",
+        "a skipped record stays live: {record}"
+    );
+
+    // cards:false drops the links and keeps every card alive.
+    let unlinked = helper.ok(
+        "p2",
+        "card.purge",
+        json!({"sources": [{"id": first, "version": first_version}], "cards": false}),
+    );
+    assert_eq!(unlinked["removed"], json!([]), "{unlinked}");
+    let mut expected = vec![dead.clone(), mixed.clone()];
+    expected.sort();
+    assert_eq!(sorted_ids(&unlinked["kept"]), expected, "{unlinked}");
+    let emptied = helper.ok("g2", "card.get", json!({"id": dead}));
+    assert_eq!(emptied["sourceIds"], json!([]), "{emptied}");
+    let trimmed = helper.ok("g3", "card.get", json!({"id": mixed}));
+    assert_eq!(trimmed["sourceIds"], json!([second]), "{trimmed}");
+
+    // Two records in one call: the card that loses its last valid source goes, the
+    // one that keeps another only loses the link.
+    let (fourth, fourth_version) = helper.publish_full("note-d", "第四条随记的正文，只喂一张卡。");
+    let (fifth, _) = helper.publish_full("note-e", "第五条随记的正文，和第四条一起喂另一张卡。");
+    let (sixth, sixth_version) = helper.publish_full("note-f", "第六条随记的正文，没有卡片引用。");
+    let only_fourth = helper.save(
+        "c4",
+        linked(
+            "concept",
+            "丁",
+            "丁的正文只引用第四条记录，这次会被删掉。",
+            std::slice::from_ref(&fourth),
+        ),
+    );
+    let fourth_and_fifth = helper.save(
+        "c5",
+        linked(
+            "concept",
+            "戊",
+            "戊的正文引用第四条与第五条记录，会留下来。",
+            &[fourth.clone(), fifth.clone()],
+        ),
+    );
+    let both = helper.ok(
+        "p3",
+        "card.purge",
+        json!({
+            "sources": [
+                {"id": fourth, "version": fourth_version},
+                {"id": sixth, "version": sixth_version}
+            ],
+            "cards": true
+        }),
+    );
+    assert_eq!(
+        sorted_ids(&both["removed"]),
+        vec![only_fourth.clone()],
+        "{both}"
+    );
+    assert_eq!(
+        sorted_ids(&both["kept"]),
+        vec![fourth_and_fifth.clone()],
+        "{both}"
+    );
+    assert_eq!(both["skipped"], json!([]), "{both}");
+    let survivor = helper.ok("g4", "card.get", json!({"id": fourth_and_fifth}));
+    assert_eq!(
+        survivor["sourceIds"],
+        json!([fifth]),
+        "the card keeps the record nobody purged: {survivor}"
+    );
+}
+
+#[test]
+fn a_chat_thread_answers_every_record_it_produced() {
+    let root = Root::new("thread");
+    let mut helper = Helper::start(&root, vec![]);
+    let (first, first_version) =
+        helper.publish_chat("thread-1", "会话里的第一句话，说明了第一个结论。");
+    let (second, second_version) =
+        helper.publish_chat("thread-1", "会话里的第二句话，补充了第二个结论。");
+    let (other, _) = helper.publish_chat("thread-2", "另一个会话里的句子，不属于这个线程。");
+
+    let thread = helper.ok(
+        "f1",
+        "source.find",
+        json!({"channel": "chat", "groupKey": "thread-1"}),
+    );
+    let sources = thread["sources"].as_array().expect("sources");
+    assert_eq!(sources.len(), 2, "a thread answers every record: {thread}");
+    assert_eq!(sources[0]["id"], first, "oldest first: {thread}");
+    assert_eq!(sources[1]["id"], second, "{thread}");
+    assert!(
+        sources.iter().all(|source| source["channel"] == "chat"),
+        "{thread}"
+    );
+    assert!(
+        sources.iter().all(|source| source["id"] != other),
+        "another thread's record must not appear: {thread}"
+    );
+    let missing = helper.ok(
+        "f2",
+        "source.find",
+        json!({"channel": "chat", "groupKey": "thread-missing"}),
+    );
+    assert_eq!(missing["sources"], json!([]), "{missing}");
+
+    let union = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "甲",
+            "甲的正文引用同一会话里的两句话，因此只有一个来源集合。",
+            &[first.clone(), second.clone()],
+        ),
+    );
+    let listed = helper.ok(
+        "b1",
+        "card.by_source",
+        json!({"channel": "chat", "groupKey": "thread-1"}),
+    );
+    assert_eq!(
+        listed["total"], 1,
+        "the thread's records answer one card: {listed}"
+    );
+    assert_eq!(listed["items"][0]["id"], union, "{listed}");
+
+    let impact = helper.ok(
+        "i1",
+        "card.impact",
+        json!({"channel": "chat", "groupKey": "thread-1"}),
+    );
+    assert_eq!(impact["cards"], 1, "{impact}");
+    assert_eq!(
+        impact["single"], 1,
+        "both sources are in the thread: {impact}"
+    );
+    assert_eq!(impact["multi"], 0, "{impact}");
+    assert_eq!(
+        impact["sources"].as_array().expect("sources").len(),
+        2,
+        "{impact}"
+    );
+    assert_eq!(
+        impact["version"], "",
+        "a thread has no single version: {impact}"
+    );
+
+    // Purging the whole thread removes the card it produced.
+    let purged = helper.ok(
+        "p1",
+        "card.purge",
+        json!({
+            "sources": [
+                {"id": first, "version": first_version},
+                {"id": second, "version": second_version}
+            ],
+            "cards": true
+        }),
+    );
+    assert_eq!(
+        sorted_ids(&purged["removed"]),
+        vec![union.clone()],
+        "{purged}"
+    );
+    assert_eq!(purged["skipped"], json!([]), "{purged}");
+    let gone = helper.call("g1", "card.get", json!({"id": union}));
+    assert_eq!(gone["error"]["code"], "not_found", "{gone}");
 }

@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ChatStore } from './chat-store'
 import { readWorkspaceRecord, searchWorkspace, type WorkspaceSources } from './workspace'
 import type { NoteEntry } from '@shared/types'
+import { recordsFromTool } from '@shared/workspace'
 
 const roots: string[] = [], stores: ChatStore[] = []
 afterEach(() => { vi.restoreAllMocks(); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -13,6 +14,15 @@ function fixture(): WorkspaceSources {
   const chat = new ChatStore(join(root, 'chats.db')); stores.push(chat)
   return { chat, notes: () => [], history: { list: () => [], get: () => undefined }, reminders: () => [], events: () => [] }
 }
+it('turns a knowledge hit into a knowledge record and survives a deleted card', () => {
+  const sources = fixture()
+  const rows = recordsFromTool('search_knowledge', { items: [{ id: 'card_1', title: '锁粒度', summary: '锁的粒度决定竞争范围', kind: 'concept', topics: ['锁'], updatedAt: 7 }] })
+  expect(rows).toEqual([expect.objectContaining({ kind: 'knowledge', id: 'card_1', title: '锁粒度' })])
+  // The renderer routes a knowledge record to the knowledge page before asking
+  // the workspace for it; this store deliberately has no knowledge card to read.
+  expect(() => readWorkspaceRecord(sources, rows[0])).toThrow('原记录已不存在')
+})
+
 it('finds Chinese text in message bodies and document attachments and opens the exact old message', () => {
   const sources = fixture(), thread = sources.chat.create(), first = sources.chat.begin(thread.id, '采购预算 50%_预算')
   sources.chat.finish(first.answerId, '批准', 'done')

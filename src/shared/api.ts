@@ -149,6 +149,16 @@ export interface TypelessApi {
     extractSource(sourceId: string): Promise<import('./knowledge').ExtractSourceResult>
     /** The profiles the helper can actually reach, and the one it would use. */
     modelInfo(): Promise<import('./knowledge').KnowledgeModelInfo>
+    /** Cards extracted from one record, paged in the helper. */
+    bySource(query: import('./knowledge').SourceRef & { offset?: number; limit?: number }): Promise<import('./knowledge').KnowledgeCardPage>
+    /** What deleting a record would do to the knowledge it produced. */
+    impact(target: import('./knowledge').SourceRef | string): Promise<import('./knowledge').CardImpact>
+    /** Opens a new chat that carries only this card's id and bounded context. */
+    continueDiscussion(cardId: string): Promise<{ threadId: string }>
+    /** Saves a real todo from a card the user picked; never runs card instructions. */
+    cardTodo(cardId: string): Promise<{ id: string; title: string }>
+    /** Saves a card as a new note through the note store's own save path. */
+    saveCardAsNote(cardId: string): Promise<{ noteId: string }>
     /** Fires when the helper wrote something; the scope names what to re-read. */
     onChanged(callback: (scope: string) => void): () => void
   }
@@ -410,7 +420,12 @@ export interface TypelessApi {
       tags?: string[]
     }): Promise<NoteEntry>
     update(id: string, patch: NotePatch): Promise<NoteEntry | undefined>
-    remove(id: string): Promise<void>
+    /**
+     * Deletes the note. `deleteKnowledge` is the user's explicit opt-in in the
+     * confirmation: the default keeps extracted knowledge and only marks the
+     * source deleted.
+     */
+    remove(id: string, options?: { deleteKnowledge?: boolean }): Promise<void>
     /**
      * One change over a selection of notes: delete, set/clear category, add or
      * remove tags. Main applies it in a single write.

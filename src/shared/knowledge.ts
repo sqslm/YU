@@ -217,6 +217,84 @@ export interface CardSearchQuery extends CardQuery {
   query: string
 }
 
+/** Cards generated from one original record (a note, a turn, a reading). */
+export interface SourceCardsQuery extends CardQuery, SourceRef {}
+
+/**
+ * The sources one record already published.
+ *
+ * A note page only knows the note id and a thread page only knows the thread id,
+ * and publishing again just to learn the source id would be a write, so this is
+ * the read-only lookup. The group form matches every source of one chat thread.
+ */
+export type FindSourceInput =
+  | { channel: 'note' | 'chat' | 'reading'; originRef: string }
+  | { channel: 'chat'; groupKey: string }
+
+export interface FoundSource {
+  sources: KnowledgeSource[]
+}
+
+/** Which record a detail page or a delete dialog is talking about. */
+export interface SourceRef {
+  /** The helper's own source id, when the caller already has one. */
+  sourceId?: string
+  /** A note id; the source is looked up read-only. */
+  noteId?: string
+  /** A chat thread id; every source of the thread matches. */
+  threadId?: string
+}
+
+/** One card that quotes an original record, as the delete dialog lists it. */
+export interface CardImpactItem {
+  id: string
+  title: string
+  kind: CardKind
+  /** How many valid sources the card still has, this record included. */
+  sources: number
+  /** True when this record is the card's only valid source. */
+  single: boolean
+}
+
+/**
+ * What deleting one original record would do to the knowledge derived from it.
+ *
+ * Counting happens in Rust against the current rows, so a preview and the delete
+ * that follows it agree on the same numbers.
+ */
+export interface CardImpact {
+  sourceId: string
+  version: string
+  /** Cards that quote this record at all. */
+  cards: number
+  /** Cards whose only valid source is this record: they go when the user opts in. */
+  single: number
+  /** Cards that keep another valid source: they stay, minus this link. */
+  multi: number
+  items: CardImpactItem[]
+  /** True when `items` is a bounded preview rather than every card. */
+  more: boolean
+}
+
+/** The original record a purge was asked for, at the version the preview saw. */
+export interface PurgeSource {
+  id: string
+  version: string
+}
+
+export interface PurgeCardsInput {
+  sources: PurgeSource[]
+  /** Remove the cards that this record alone supports; otherwise only unlink. */
+  cards: boolean
+}
+
+export interface PurgeCardsResult {
+  removed: string[]
+  kept: string[]
+  /** Ids the purge refused because the record moved since the preview. */
+  skipped: string[]
+}
+
 /** Relation kinds, in the order the UI offers them. */
 export type RelationKind = 'contains' | 'prerequisite' | 'applies' | 'contrast' | 'derives'
 
@@ -390,6 +468,10 @@ export type KnowledgeMethod =
   | 'card.update'
   | 'card.delete'
   | 'card.search'
+  | 'card.by_source'
+  | 'card.impact'
+  | 'card.purge'
+  | 'source.find'
   | 'profile.save'
   | 'profile.get'
   | 'profile.list'
@@ -847,6 +929,12 @@ export interface PublishInput {
   threadKey?: string
   /** Position inside the group; several reading materials share one thread. */
   ordinal?: number
+  /**
+   * Cards the answer really cited. They travel with the projection so a later
+   * extraction can reuse their source chain instead of minting a duplicate card
+   * from the same text.
+   */
+  citedCardIds?: string[]
 }
 
 export interface PublishResult {

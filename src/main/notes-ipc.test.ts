@@ -86,4 +86,34 @@ describe('markdown import', () => {
     expect(await mock.handlers.get('notes:importMarkdown')!(null, undefined)).toBeNull()
     expect(createText).not.toHaveBeenCalled()
   })
+
+describe('deleting a note with the knowledge option', () => {
+  it('removes the dependent knowledge first so a refusal leaves the note readable', async () => {
+    const order: string[] = []
+    const purgeKnowledge = vi.fn(async (id: string) => { order.push('knowledge:' + id) })
+    const remove = vi.fn(async (id: string) => { order.push('note:' + id) })
+    const broadcast = vi.fn()
+    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast, purgeKnowledge })
+    await mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true })
+    expect(order).toEqual(['knowledge:n1', 'note:n1'])
+    expect(broadcast).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the note when the knowledge cleanup refuses', async () => {
+    const remove = vi.fn(), broadcast = vi.fn()
+    const purgeKnowledge = vi.fn(async () => { throw new Error('knowledge helper is not ready') })
+    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast, purgeKnowledge })
+    await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true })).rejects.toThrow('not ready')
+    expect(remove).not.toHaveBeenCalled()
+    expect(broadcast).not.toHaveBeenCalled()
+  })
+
+  it('never asks for a purge when the option was not ticked', async () => {
+    const remove = vi.fn(async () => undefined), purgeKnowledge = vi.fn()
+    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast: vi.fn(), purgeKnowledge })
+    await mock.handlers.get('notes:remove')!(null, 'n1')
+    expect(purgeKnowledge).not.toHaveBeenCalled()
+    expect(remove).toHaveBeenCalledWith('n1')
+  })
+})
 })

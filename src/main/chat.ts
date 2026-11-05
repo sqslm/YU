@@ -46,7 +46,7 @@ export class ChatService {
   private titles = new Set<AbortController>()
   private closing = false
   constructor(path: string, private settings: () => Settings, private changed: (event: ChatEvent) => void,
-    private localQueries: () => Pick<AgentOptions, 'personal' | 'life' | 'toolAccess'> = () => ({}),
+    private localQueries: () => Pick<AgentOptions, 'personal' | 'life' | 'toolAccess' | 'knowledge'> = () => ({}),
     /**
      * Told about a turn that really completed. The knowledge collector decides
      * whether the answer becomes a chat source or a reading one; nothing here
@@ -75,7 +75,11 @@ export class ChatService {
     }
     this.changed({ type: 'changed' })
   }
-  async send(id: string, question: string, uploads: ChatUpload[] = []): Promise<void> {
+  /**
+   * Answers one message. `seed` is context the caller already resolved (the card a
+   * discussion continues from), recorded with the answer so it stays clickable.
+   */
+  async send(id: string, question: string, uploads: ChatUpload[] = [], seed: LocalRecord[] = []): Promise<void> {
     validateChatUploads(uploads)
     if (typeof question !== 'string' || (!question.trim() && !uploads.length) || question.length > 12000) throw Error('请输入 1–12000 字的消息')
     question = question.trim() || '请分析这些附件，概括主要内容。'
@@ -122,8 +126,11 @@ export class ChatService {
         the web" keeps the web tools for such a request.
       */
       const summarizing = isCurrentContentRequest(question.trim()) && !/搜索|检索|联网|上网|\b(?:search|browse|look up)\b/iu.test(question)
-      const local = this.localQueries(), records: LocalRecord[] = []
-      const queryTools = LOCAL_QUERY_TOOLS.filter(name => name === 'list_events' ? local.life : local.personal)
+      const local = this.localQueries(), records: LocalRecord[] = [...seed]
+      const queryTools: string[] = [...LOCAL_QUERY_TOOLS.filter(name => name === 'list_events' ? local.life : local.personal)]
+      // The knowledge base is offered only while the user has it switched on, and
+      // only as a read: it never writes during an ordinary answer.
+      if (local.knowledge) queryTools.push('search_knowledge')
       const allowedTools = [...(summarizing ? ['get_weather', 'get_datetime', 'calculate'] : ['web_search', 'read_webpage', 'get_weather', 'get_datetime', 'calculate']), ...queryTools]
       const pending = askAgent(effective, question.trim(), {}, active.controller.signal, () => {}, {
         ...local,

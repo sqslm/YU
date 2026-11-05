@@ -1068,3 +1068,134 @@ fn a_merge_folds_the_two_contrast_edges_into_one() {
     let node = helper.ok("l2", "relation.list", json!({"cardId": kept}));
     assert_eq!(node["total"], 1, "{node}");
 }
+
+#[test]
+fn a_note_lists_only_the_cards_it_produced_and_filters_before_paging() {
+    let root = Root::new("by-source");
+    let mut helper = Helper::start(
+        &root,
+        vec![
+            drafts_answer(json!([
+                draft(
+                    "甲",
+                    "甲这条正文说明了适用条件、关键机制与失败时的退路，并标出仍然待验证的推断。",
+                    "src/1"
+                ),
+                draft(
+                    "乙",
+                    "乙这条正文记录了另一组结论、边界与代价，同样标出哪些部分还没有被验证过。",
+                    "src/1"
+                ),
+                json!({
+                    "kind": "method",
+                    "title": "丙",
+                    "summary": "丙的摘要",
+                    "body": "丙这条正文给出了一串可以照做的步骤，从准备到收尾都有明确的判断条件。",
+                    "topics": ["方法"],
+                    "aliases": [],
+                    "sources": [{"sourceId": "src/1", "segment": 0}],
+                    "reason": "可复用",
+                }),
+            ])),
+            drafts_answer(json!([draft(
+                "丁",
+                "丁这条正文属于另一条随记，只写了一段可以复用的结论与它的适用前提。",
+                "src/2"
+            )])),
+        ],
+    );
+    helper.run("note-a", "第一条随记写下了三段可以复用的结论。", "a");
+    let first = helper.source_id.clone();
+    helper.run("note-b", "第二条随记只写了一段结论。", "b");
+    let second = helper.source_id.clone();
+    assert_ne!(first, second, "each note owns its own record");
+
+    let all = helper.ok("b1", "card.by_source", json!({"sourceId": first}));
+    assert_eq!(all["total"], 3, "{all}");
+    assert_eq!(ids(&all).len(), 3, "{all}");
+    assert_eq!(all["hasMore"], false, "{all}");
+    assert_eq!(all["nextOffset"], Value::Null, "{all}");
+    let titles: Vec<&str> = all["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|item| item["title"].as_str().expect("title"))
+        .collect();
+    assert!(
+        titles.contains(&"甲") && titles.contains(&"乙") && titles.contains(&"丙"),
+        "{all}"
+    );
+    assert!(
+        !titles.contains(&"丁"),
+        "another note's card must not appear: {all}"
+    );
+
+    let other = helper.ok("b2", "card.by_source", json!({"sourceId": second}));
+    assert_eq!(other["total"], 1, "{other}");
+    assert_eq!(other["items"][0]["title"], "丁");
+
+    // The filters narrow the record's cards before the page, so the total is real.
+    let methods = helper.ok(
+        "b3",
+        "card.by_source",
+        json!({"sourceId": first, "kind": "method"}),
+    );
+    assert_eq!(methods["total"], 1, "{methods}");
+    assert_eq!(methods["items"][0]["title"], "丙");
+    let topic = helper.ok(
+        "b4",
+        "card.by_source",
+        json!({"sourceId": first, "topic": "方法"}),
+    );
+    assert_eq!(topic["total"], 1, "{topic}");
+
+    let paged = helper.ok(
+        "b5",
+        "card.by_source",
+        json!({"sourceId": first, "offset": 1, "limit": 1}),
+    );
+    assert_eq!(
+        paged["total"], 3,
+        "the total counts the whole record: {paged}"
+    );
+    assert_eq!(ids(&paged).len(), 1, "{paged}");
+    assert_eq!(paged["hasMore"], true, "{paged}");
+    assert_eq!(paged["nextOffset"], 2, "{paged}");
+
+    let unknown = helper.call("b6", "card.by_source", json!({"sourceId": "src_missing"}));
+    assert_eq!(unknown["ok"], false, "{unknown}");
+    assert_eq!(unknown["error"]["code"], "not_found", "{unknown}");
+
+    // The identity a detail view holds resolves to the same page.
+    let found = helper.ok(
+        "f1",
+        "source.find",
+        json!({"channel": "note", "originRef": "note-a"}),
+    );
+    let found = found["sources"].as_array().expect("sources");
+    assert_eq!(found.len(), 1, "a note matches one record");
+    assert_eq!(found[0]["id"], first);
+    assert_eq!(found[0]["originRef"], "note-a");
+    assert_eq!(found[0]["channel"], "note");
+    assert_eq!(found[0]["state"], "active");
+    let by_identity = helper.ok(
+        "b7",
+        "card.by_source",
+        json!({"channel": "note", "originRef": "note-a"}),
+    );
+    assert_eq!(by_identity["total"], 3, "{by_identity}");
+
+    let unresolved = helper.ok(
+        "b8",
+        "card.by_source",
+        json!({"channel": "note", "originRef": "note-missing"}),
+    );
+    assert_eq!(unresolved["total"], 0, "{unresolved}");
+    assert_eq!(unresolved["items"], json!([]), "{unresolved}");
+    let empty = helper.ok(
+        "f2",
+        "source.find",
+        json!({"channel": "note", "originRef": "note-missing"}),
+    );
+    assert_eq!(empty["sources"], json!([]), "{empty}");
+}

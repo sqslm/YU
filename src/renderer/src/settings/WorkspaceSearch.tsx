@@ -7,7 +7,7 @@ import { searchErrorText } from './searchError'
 import { groupRecords } from './workspaceSearchGroups'
 import { hitClock } from './searchHitTime'
 
-const KINDS = { chat: '聊天', note: '随记', history: '历史记录', reminder: '提醒与待办', event: '日程' }
+const KINDS = { chat: '聊天', note: '随记', history: '历史记录', reminder: '提醒与待办', event: '日程', knowledge: '知识' }
 
 /**
  * The sidebar's search entry.

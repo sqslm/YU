@@ -1624,6 +1624,27 @@
       "paused": "Paused",
       "completed": "Done",
       "cancelled": "Cancelled"
+    },
+    "continueDiscussion": "Continue discussion",
+    "makeTodo": "Create todo",
+    "saveAsNote": "Save as note",
+    "actionOpen": "Open",
+    "chatStarted": "New chat created",
+    "todoCreated": "Todo “{{title}}” created",
+    "noteCreated": "Saved as a note",
+    "noteCards": {
+      "title": "Knowledge from this note",
+      "empty": "No knowledge from this note yet",
+      "total": "{{total}} total",
+      "more": "View all",
+      "capped": "Showing the first {{shown}}; the rest is in Knowledge"
+    },
+    "deleteImpact": {
+      "cardsLabel": "Also delete the {{count}} knowledge card(s) that only rely on this record",
+      "cardsKeepOther": "{{multi}} of them have another valid source and only lose this link.",
+      "cardsOnlyHere": "They have no other source, so the record can no longer back them.",
+      "checking": "Checking dependent knowledge…",
+      "failed": "Could not preview dependent knowledge: {{message}}. The record is deleted and the knowledge is kept."
     }
   },
   "nav": {
@@ -2888,5 +2909,6 @@
   "备份路径包含指向目录外的链接": "A backup path links outside the data directory.",
   "备份不包含符号链接，请使用实际数据目录": "Backups cannot contain symbolic links. Use the actual data directory.",
   "恢复目标包含符号链接": "A restore destination contains a symbolic link.",
-  "恢复日志无效，未修改用户数据": "The restore journal is invalid. User data has not been modified."
+  "恢复日志无效，未修改用户数据": "The restore journal is invalid. User data has not been modified.",
+  "送入知识提炼": "Send to knowledge extraction"
 }

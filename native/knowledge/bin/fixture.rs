@@ -219,6 +219,72 @@ fn main() {
                                     }),
                                 )
                             }
+                            // The record a note produced, by the identity the detail
+                            // view already holds: one card, no database needed.
+                            "card.by_source" => {
+                                protocol::result_frame(&request.id, &page("夹具来源卡片"))
+                            }
+                            "card.impact" => {
+                                let id = param(&request.params, "sourceId", "fixture-source");
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({
+                                        "sourceId": id,
+                                        "version": "v1",
+                                        "sources": [{ "id": id, "version": "v1" }],
+                                        "cards": 2,
+                                        "single": 1,
+                                        "multi": 1,
+                                        "items": [{
+                                            "id": "fixture-card",
+                                            "title": "夹具来源卡片",
+                                            "kind": "concept",
+                                            "sources": 1,
+                                            "single": true
+                                        }],
+                                        "more": true
+                                    }),
+                                )
+                            }
+                            "card.purge" => {
+                                let removed: Vec<Value> = request
+                                    .params
+                                    .get("sources")
+                                    .and_then(Value::as_array)
+                                    .map(|entries| {
+                                        entries
+                                            .iter()
+                                            .filter_map(|entry| entry.get("id").cloned())
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({
+                                        "removed": removed,
+                                        "kept": Vec::<String>::new(),
+                                        "skipped": Vec::<String>::new()
+                                    }),
+                                )
+                            }
+                            "source.find" => {
+                                let origin = param(&request.params, "originRef", "fixture-note");
+                                protocol::result_frame(
+                                    &request.id,
+                                    &json!({
+                                        "sources": [{
+                                            "id": "fixture-source",
+                                            "kind": "note",
+                                            "channel": "note",
+                                            "state": "active",
+                                            "version": "v1",
+                                            "title": "夹具随记",
+                                            "originRef": origin,
+                                            "size": 12
+                                        }]
+                                    }),
+                                )
+                            }
                             "topic.list" => protocol::result_frame(
                                 &request.id,
                                 &json!({

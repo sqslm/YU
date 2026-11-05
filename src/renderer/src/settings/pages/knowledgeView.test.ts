@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphEdge, GraphNode, KnowledgeCard, KnowledgeCardPage, KnowledgeGraph, KnowledgeModelInfo, ProfileItem, RelationList } from '@shared/knowledge'
+import type { CardImpact, GraphEdge, GraphNode, KnowledgeCard, KnowledgeCardPage, KnowledgeGraph, KnowledgeModelInfo, ProfileItem, RelationList } from '@shared/knowledge'
 import {
   CARD_PAGE_SIZE,
+  CARDS_SECTION_REQUESTS,
   EMPTY_FILTERS,
   EMPTY_LIST,
+  IMPACT_DETAIL_ALONE_KEY,
+  IMPACT_DETAIL_KEY,
+  IMPACT_LABEL_KEY,
   SPLIT_MIN_WIDTH,
   acceptGraph,
   cardRequest,
+  cardsSection,
   createGate,
   emptyState,
   extractStatus,
@@ -16,6 +21,7 @@ import {
   graphView,
   groupProfile,
   groupRelations,
+  impactNotice,
   kindKey,
   mergePage,
   mergePreview,
@@ -337,6 +343,76 @@ describe('profile grouping', () => {
   it('returns nothing for an empty profile', () => {
     expect(groupProfile([])).toEqual([])
     expect(groupProfile([item('e1', 'explicit')]).map((group) => group.category)).toEqual(['explicit'])
+  })
+})
+
+describe('delete impact', () => {
+  const impact = (patch: Partial<CardImpact> = {}): CardImpact => ({
+    sourceId: 'n1',
+    version: 'v1',
+    cards: 0,
+    single: 0,
+    multi: 0,
+    items: [],
+    more: false,
+    ...patch
+  })
+
+  it('offers nothing when no card quotes the record', () => {
+    expect(impactNotice(impact())).toBeNull()
+  })
+
+  it('names every depending card and says the multi-source ones survive', () => {
+    const notice = impactNotice(impact({ cards: 4, single: 1, multi: 3 }))
+    expect(notice).toEqual({ labelKey: IMPACT_LABEL_KEY, count: 4, detailKey: IMPACT_DETAIL_KEY, single: 1, multi: 3 })
+  })
+
+  it('says the cards go with the record when they have no other source', () => {
+    const notice = impactNotice(impact({ cards: 2, single: 2, multi: 0 }))
+    expect(notice?.detailKey).toBe(IMPACT_DETAIL_ALONE_KEY)
+    expect(notice?.multi).toBe(0)
+  })
+
+  it('never reports a negative or inconsistent split', () => {
+    const notice = impactNotice(impact({ cards: 2, single: 5, multi: 9 }))
+    expect(notice?.count).toBe(2)
+    expect(notice?.single).toBe(2)
+    expect(notice?.multi).toBe(0)
+    expect(impactNotice(impact({ cards: -1 }))).toBeNull()
+  })
+})
+
+describe('cards generated from a record', () => {
+  it('shows one line instead of a section when nothing was generated', () => {
+    const section = cardsSection({ shown: 0, total: 0, hasMore: false, requests: 1 })
+    expect(section.empty).toBe(true)
+    expect(section.moreRows).toBe(false)
+    expect(section.capped).toBe(false)
+  })
+
+  it('carries the real total, not the number of rows in hand', () => {
+    const section = cardsSection({ shown: 5, total: 12, hasMore: true, requests: 1 })
+    expect(section.total).toBe(12)
+    expect(section.shown).toBe(5)
+    expect(section.moreRows).toBe(true)
+    expect(section.capped).toBe(false)
+  })
+
+  it('stops offering more once the request budget is spent, and says it is capped', () => {
+    const section = cardsSection({ shown: 15, total: 40, hasMore: true, requests: CARDS_SECTION_REQUESTS })
+    expect(section.moreRows).toBe(false)
+    expect(section.capped).toBe(true)
+  })
+
+  it('is not capped when the backend has nothing more to give', () => {
+    const section = cardsSection({ shown: 3, total: 3, hasMore: false, requests: 1 })
+    expect(section.moreRows).toBe(false)
+    expect(section.capped).toBe(false)
+    expect(section.empty).toBe(false)
+  })
+
+  it('never counts more rows than the total', () => {
+    expect(cardsSection({ shown: 9, total: 4, hasMore: false, requests: 2 }).shown).toBe(4)
   })
 })
 

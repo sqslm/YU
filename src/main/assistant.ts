@@ -17,6 +17,7 @@ import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/per
 import { readAloudCommand } from './read-aloud-command'
 import { LIFE_TOOLS, type LifeTools } from './tools/life'
 import { WORKFLOW_TOOLS, workflowCommand, type WorkflowTools } from './tools/workflow'
+import type { KnowledgeTools } from './tools/knowledge'
 import { egressFetch } from './net/egress'
 import { directVoiceIntent, isBareSummaryRequest, isCurrentContentRequest, isDictatedContent, needsAssistantContext, screenshotNeedsEditor, stopSpeakingRequest, speechPlaybackRequest } from './voice-intent'
 
@@ -421,6 +422,8 @@ export class AssistantSession {
     personal?: PersonalTools
     life?: LifeTools
     workflow?: WorkflowTools
+    /** The user's own knowledge base, present only while it is switched on. */
+    knowledge?: KnowledgeTools
     readSelection?: (context: PromptContext, signal: AbortSignal) => Promise<string>
     analyzeScreenshot?: (context: PromptContext, question: string, ocr: boolean, signal: AbortSignal) => Promise<string>
   }) {}
@@ -453,7 +456,7 @@ export class AssistantSession {
     options: Pick<ToolContext, 'onStatus' | 'onLocalResult'> & { personal?: Partial<PersonalTools> } = {}): Promise<ToolOutcome> {
     return runTool(name, args, { settings: this.deps.settings(), question, taskContext: context, signal, submittedAt,
       access: () => this.deps.settings().assistantAccess,
-      log: this.deps.log, windows: this.deps.windows, personal: this.deps.personal ? { ...this.deps.personal, ...options.personal } : undefined, life: this.deps.life, workflow: this.deps.workflow,
+      log: this.deps.log, windows: this.deps.windows, personal: this.deps.personal ? { ...this.deps.personal, ...options.personal } : undefined, life: this.deps.life, workflow: this.deps.workflow, knowledge: this.deps.knowledge,
       allowedTools: this.allowedTools(question), onStatus: options.onStatus, onLocalResult: options.onLocalResult })
   }
   snapshot(): AssistantState {
@@ -600,7 +603,7 @@ export class AssistantSession {
         analyzeScreenshot: this.deps.analyzeScreenshot ? (question, ocr) => this.deps.analyzeScreenshot!(context, question, ocr, taskSignal) : undefined,
         readSelection: this.deps.readSelection ? () => this.deps.readSelection!(context, taskSignal) : undefined,
         conversation: this.conversation, allowedTools,
-        windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, submittedAt,
+        windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, knowledge: this.deps.knowledge, submittedAt,
         onLocalResult: receipt => { if (this.controller === controller && !taskSignal.aborted) { turn.localResults!.push(receipt); this.notify() } },
         onToolResult: (name, result) => {
           if (!result.ok || !isReadingTool(name)) return
@@ -618,12 +621,12 @@ export class AssistantSession {
         }
       }
       options.allowedTools = availableToolNames({ settings, question: turn.question, log: logTool, allowedTools,
-        windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, analyzeScreenshot: options.analyzeScreenshot })
+        windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, knowledge: this.deps.knowledge, analyzeScreenshot: options.analyzeScreenshot })
       let result: AgentResult
       if (direct) {
         const outcome = await runTool(direct.name, direct.args, { settings, question: turn.question, signal: taskSignal,
           access: options.toolAccess,
-          log: logTool, windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, taskContext: context, submittedAt, allowedTools, onLocalResult: options.onLocalResult,
+          log: logTool, windows, personal: this.deps.personal, life: this.deps.life, workflow: this.deps.workflow, knowledge: this.deps.knowledge, taskContext: context, submittedAt, allowedTools, onLocalResult: options.onLocalResult,
           analyzeScreenshot: options.analyzeScreenshot, readSelection: options.readSelection, onStatus: options.onStatus })
         taskSignal.throwIfAborted()
         result = { text: direct.name === 'analyze_screenshot' && outcome.ok ? String(outcome.data.text) : outcome.summary, sources: [], searched: false,

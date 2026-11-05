@@ -775,3 +775,227 @@ fn a_killed_helper_leaves_a_retryable_task() {
         "a retried task becomes runnable again: {retried}"
     );
 }
+
+/// Publishes one note that already knows the cards it cites, claims it and runs the
+/// single batch — the cited ids travel with the record, not with the batch.
+fn extract_citing(
+    helper: &mut Helper,
+    group: &str,
+    text: &str,
+    cited: &[String],
+    id_prefix: &str,
+) -> Value {
+    let id = helper.next_id();
+    let published = helper.ok(
+        &id,
+        "source.publish",
+        json!({
+            "channel": "note",
+            "kind": "note",
+            "originRef": group,
+            "groupKey": group,
+            "title": group,
+            "scope": "notes",
+            "text": text,
+            "at": 1_700_000_000_000i64,
+            "citedCardIds": cited,
+        }),
+    );
+    let fingerprint = published["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    helper.version = published["version"].as_str().expect("version").to_string();
+    helper.source_id = published["sourceId"]
+        .as_str()
+        .expect("sourceId")
+        .to_string();
+    helper.fingerprint = fingerprint.clone();
+    let next = helper.ok(&format!("{id_prefix}-next"), "extract.next", json!({}));
+    let claimed = next["group"].clone();
+    let (items, _) = Helper::items(
+        &claimed,
+        &[(helper.source_id.clone(), fingerprint, text.to_string())],
+    );
+    helper.ok(
+        &format!("{id_prefix}-run"),
+        "extract.run",
+        json!({
+            "groupId": claimed["groupId"],
+            "claim": claimed["claim"],
+            "items": items,
+        }),
+    )
+}
+
+/// The same conclusion in other words: different fingerprint, same knowledge.
+const RESTATED: &str = "换一套说法复述：提炼的结论、适用条件与关键机制都已经在上一条随记里写下，并标出了待验证的推断。";
+
+/// A statement nothing in the library says yet.
+const FRESH: &str = "这条结论此前没有被记下：写入时先固定版本，再删除卡片，最后把关系与历史一起收尾，不留悬空链接。";
+
+#[test]
+fn a_cited_card_absorbs_a_restatement_instead_of_minting_a_duplicate() {
+    let root = Root::new("cited");
+    let mut helper = Helper::start(
+        &root,
+        vec![
+            drafts_answer(json!([
+                card("甲", BODY, "src/1"),
+                card("丁", FRESH, "src/1"),
+            ])),
+            drafts_answer(json!([card("甲", RESTATED, "src/2")])),
+            json!({"decisions": [{
+                "index": 0,
+                "action": "reference",
+                "targetCardId": "CARD/1",
+                "reason": "同一结论的另一种说法",
+            }]})
+            .to_string(),
+        ],
+    );
+    let first = extract_one(
+        &mut helper,
+        "note-a",
+        "第一条随记写下了这条结论的完整表述与它的适用条件。",
+        "a",
+    );
+    assert_eq!(
+        first["cards"].as_array().expect("cards").len(),
+        2,
+        "{first}"
+    );
+    let listed = helper.ok("l0", "card.list", json!({}));
+    let id_of = |title: &str| -> String {
+        listed["items"]
+            .as_array()
+            .expect("items")
+            .iter()
+            .find(|item| item["title"] == title)
+            .map(|item| item["id"].as_str().expect("id").to_string())
+            .expect("card")
+    };
+    let cited = id_of("甲");
+    let other = id_of("丁");
+    helper.card_id = cited.clone();
+
+    // Both cards travel with the record; the second note only restates the first.
+    let run = extract_citing(
+        &mut helper,
+        "note-b",
+        "第二条随记用另一套措辞复述了同一条结论，没有补充新东西。",
+        &[cited.clone(), other],
+        "b",
+    );
+    assert_eq!(run["state"], "completed", "{run}");
+    assert_eq!(run["cards"][0]["action"], "reference", "{run}");
+    assert_eq!(run["cards"][0]["cardId"], cited, "{run}");
+    let after = helper.ok("l1", "card.list", json!({}));
+    assert_eq!(
+        after["total"], 2,
+        "a pure restatement mints no duplicate: {after}"
+    );
+}
+
+#[test]
+fn a_cited_card_does_not_swallow_a_genuinely_new_statement() {
+    let root = Root::new("cited-new");
+    let mut helper = Helper::start(
+        &root,
+        vec![
+            drafts_answer(json!([card("甲", BODY, "src/1")])),
+            drafts_answer(json!([
+                card("甲", RESTATED, "src/1"),
+                card("乙", FRESH, "src/1"),
+            ])),
+            json!({"decisions": [
+                {
+                    "index": 0,
+                    "action": "reference",
+                    "targetCardId": "CARD/1",
+                    "reason": "同一结论的另一种说法",
+                },
+                {"index": 1, "action": "new", "reason": "这条结论库里还没有"},
+            ]})
+            .to_string(),
+        ],
+    );
+    let first = extract_one(
+        &mut helper,
+        "note-a",
+        "第一条随记写下了这条结论的完整表述与它的适用条件。",
+        "a",
+    );
+    let cited = first["cards"][0]["cardId"]
+        .as_str()
+        .expect("cardId")
+        .to_string();
+    helper.card_id = cited.clone();
+
+    let run = extract_citing(
+        &mut helper,
+        "note-b",
+        "第二条随记复述了旧结论，同时写下了一条真正的新结论。",
+        std::slice::from_ref(&cited),
+        "b",
+    );
+    assert_eq!(run["state"], "completed", "{run}");
+    let actions: Vec<&str> = run["cards"]
+        .as_array()
+        .expect("cards")
+        .iter()
+        .map(|entry| entry["action"].as_str().expect("action"))
+        .collect();
+    assert_eq!(actions, vec!["reference", "new"], "{run}");
+
+    let listed = helper.ok("l1", "card.list", json!({}));
+    assert_eq!(
+        listed["total"], 2,
+        "the new statement becomes a card: {listed}"
+    );
+    let titles: Vec<&str> = listed["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|item| item["title"].as_str().expect("title"))
+        .collect();
+    assert!(titles.contains(&"乙"), "{listed}");
+}
+
+#[test]
+fn a_cited_card_that_was_deleted_does_not_fail_the_batch() {
+    let root = Root::new("cited-gone");
+    let mut helper = Helper::start(
+        &root,
+        vec![
+            drafts_answer(json!([card("甲", BODY, "src/1")])),
+            drafts_answer(json!([card("丙", FRESH, "src/2")])),
+        ],
+    );
+    let first = extract_one(
+        &mut helper,
+        "note-a",
+        "第一条随记写下了这条结论的完整表述与它的适用条件。",
+        "a",
+    );
+    let cited = first["cards"][0]["cardId"]
+        .as_str()
+        .expect("cardId")
+        .to_string();
+    helper.ok("d1", "card.delete", json!({"id": cited}));
+    assert_eq!(helper.ok("l0", "card.list", json!({}))["total"], 0);
+
+    // One cited id is gone, another never existed: the batch still runs.
+    let run = extract_citing(
+        &mut helper,
+        "note-b",
+        "第二条随记引用了一张已经不存在的卡片，并写下另一条结论。",
+        &[cited, "card_ghost".to_string()],
+        "b",
+    );
+    assert_eq!(run["state"], "completed", "{run}");
+    assert_eq!(run["cards"][0]["action"], "new", "{run}");
+    let listed = helper.ok("l1", "card.list", json!({}));
+    assert_eq!(listed["total"], 1, "{listed}");
+    assert_eq!(listed["items"][0]["title"], "丙");
+}

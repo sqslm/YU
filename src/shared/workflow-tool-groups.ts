@@ -1,7 +1,7 @@
 import type { WorkflowTool } from './workflow'
 const GROUPS: Array<{ name: string; tools: string[] }> = [
   { name: '日程与提醒', tools: ['list_events', 'create_event', 'manage_event', 'list_reminders', 'create_reminder', 'manage_reminder', 'daily_briefing', 'send_briefing', 'briefing_delivery_status'] },
-  { name: '随记与历史', tools: ['create_note', 'search_notes', 'search_history', 'control_note_audio', 'note_sync_status'] },
+  { name: '随记与历史', tools: ['create_note', 'search_notes', 'search_history', 'control_note_audio', 'note_sync_status', 'extract_knowledge'] },
   { name: '搜索与网页', tools: ['web_search', 'read_webpage', 'open_url', 'get_current_page'] },
   { name: '文件与应用', tools: ['open_application', 'open_folder', 'open_file', 'search_files', 'search_file_contents', 'search_files_everything', 'search_file_activity', 'get_current_folder', 'get_disk_space'] },
   { name: '朗读与音量', tools: ['speak_text', 'stop_speaking', 'control_speech', 'configure_speech', 'get_system_volume', 'set_system_volume'] },

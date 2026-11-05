@@ -145,7 +145,10 @@ async function runWorkflow(
       results.push({ label: step.label, tool: step.tool, ok: false, summary: mt('这一步的工具不在允许范围内：{{tool}}', { tool: step.tool }) })
       break
     }
-    if (granted && !granted.includes(step.tool)) {
+    // A knowledge step is granted by the knowledge switch itself: the workflow
+    // is the user's own saved intent, and the tool only touches local cards.
+    const knowledgeStep = step.tool === 'extract_knowledge' && Boolean(ctx.knowledge)
+    if (granted && !granted.includes(step.tool) && !knowledgeStep) {
       results.push({ label: step.label, tool: step.tool, ok: false, summary: mt('第 {{step}} 步未获本轮授权', { step: index + 1 }) })
       break
     }

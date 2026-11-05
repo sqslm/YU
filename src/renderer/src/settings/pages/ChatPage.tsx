@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItemButton, Menu, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, InputAdornment, List, ListItemButton, Menu, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material'
 import AddRounded from '@mui/icons-material/AddRounded'
 import CreateNewFolderOutlined from '@mui/icons-material/CreateNewFolderOutlined'
 import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded'
@@ -15,6 +15,7 @@ import CloseRounded from '@mui/icons-material/CloseRounded'
 import GraphicEqRounded from '@mui/icons-material/GraphicEqRounded'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import type { ChatDetail, ChatGroup, ChatIndex, ChatThread } from '@shared/chat'
+import type { CardImpact } from '@shared/knowledge'
 import { CHAT_ATTACHMENT_BYTES, CHAT_ATTACHMENT_LIMIT, CHAT_ATTACHMENT_TOTAL, CHAT_FILE_ACCEPT } from '@shared/chat'
 import type { Settings } from '@shared/types'
 import type { LocalRecord } from '@shared/workspace'
@@ -22,6 +23,7 @@ import { stripSourceTail } from '@shared/sourceText'
 import { MarkdownView } from '../../card/MarkdownView'
 import i18n from '../../i18n'
 import { registerGameModePreparation } from '../gameModePreparation'
+import { impactNotice } from './knowledgeView'
 import { useTranslation } from 'react-i18next'
 
 function messageOf(error: unknown): string { return i18n.t((error instanceof Error ? error.message : String(error)).replace(/^Error: /, '').replace(/^Error invoking remote method '[^']+': Error: /, '')) }
@@ -57,6 +59,41 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
   const [menu, setMenu] = useState<{ element: HTMLElement; thread?: ChatThread; group?: ChatGroup } | null>(null)
   const [edit, setEdit] = useState<{ action: 'rename' | 'group-create' | 'group-rename'; id?: string; name: string } | null>(null)
   const [remove, setRemove] = useState<{ action: 'delete' | 'group-delete'; id: string; name: string } | null>(null)
+  /** What deleting the thread would do to the cards that quote it. */
+  const [impact, setImpact] = useState<CardImpact | null>(null)
+  const [impactError, setImpactError] = useState('')
+  const [impactLoading, setImpactLoading] = useState(false)
+  /** Secondary choice in the delete dialog: off unless the user ticks it. */
+  const [deleteKnowledge, setDeleteKnowledge] = useState(false)
+  /**
+   * Deleting a thread previews the cards that quote it. A group delete touches no
+   * conversation, so it never asks. A failed preview is shown as-is and keeps the
+   * conservative default — the thread goes, the knowledge stays.
+   */
+  useEffect(() => {
+    setDeleteKnowledge(false)
+    setImpact(null)
+    setImpactError('')
+    if (remove?.action !== 'delete') return
+    const threadId = remove.id
+    let live = true
+    setImpactLoading(true)
+    void window.api.knowledge
+      .impact(threadId)
+      .then(next => {
+        if (live) setImpact(next)
+      })
+      .catch(error => {
+        if (live) setImpactError(messageOf(error))
+      })
+      .finally(() => {
+        if (live) setImpactLoading(false)
+      })
+    return () => {
+      live = false
+    }
+  }, [remove?.action, remove?.id])
+  const deleteNotice = impact ? impactNotice(impact) : null
   const [moving, setMoving] = useState(false), [saving, setSaving] = useState(false)
   const [limit, setLimit] = useState(100), limitRef = useRef(100), ticket = useRef(0), scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true)
   // Layout state lives in localStorage: which groups are folded and whether the rail is open are
@@ -108,7 +145,7 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
   useEffect(() => { void refresh() }, [selected, limit, refresh])
   useEffect(() => {
     if (!focusRecord?.threadId) return
-    choose(focusRecord.threadId); focusedRef.current = focusRecord.id; flashedRef.current = undefined; setFocused(focusRecord.id); nearBottom.current = false
+    choose(focusRecord.threadId); focusedRef.current = focusRecord.id || undefined; flashedRef.current = undefined; setFocused(focusRecord.id || undefined); nearBottom.current = false
     void refresh()
   }, [focusRecord, refresh])
   useEffect(() => () => clearFlashTimers(), [])
@@ -310,6 +347,13 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
           : menu?.group ? [<MenuItem key="new" onClick={() => { void create(menu.group!.id); setMenu(null) }}>{t('在分组中新建对话')}</MenuItem>, <MenuItem key="rename" onClick={() => { setEdit({ action: 'group-rename', id: menu.group!.id, name: menu.group!.name }); setMenu(null) }}>{t('重命名分组')}</MenuItem>, <MenuItem key="delete" onClick={() => { setRemove({ action: 'group-delete', id: menu.group!.id, name: menu.group!.name }); setMenu(null) }}>{t('删除分组')}</MenuItem>] : null}
     </Menu>
     <Dialog open={Boolean(edit)} onClose={() => { if (!saving) setEdit(null) }} fullWidth maxWidth="xs"><DialogTitle>{t(edit?.action === 'group-create' ? '新建分组' : '重命名')}</DialogTitle><DialogContent><TextField autoFocus fullWidth margin="dense" label={t('名称')} value={edit?.name ?? ''} inputProps={{ maxLength: 80 }} onChange={event => setEdit(previous => previous ? { ...previous, name: event.target.value } : null)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) void saveName() }} /></DialogContent><DialogActions><Button disabled={saving} onClick={() => setEdit(null)}>{t('取消')}</Button><Button disabled={saving || !edit?.name.trim()} onClick={() => void saveName()}>{t('保存')}</Button></DialogActions></Dialog>
-    <Dialog open={Boolean(remove)} onClose={() => setRemove(null)}><DialogTitle>{t(remove?.action === 'group-delete' ? '删除分组' : '删除对话')}</DialogTitle><DialogContent><Typography>{remove?.name}</Typography><Typography variant="body2" color="text.secondary">{t(remove?.action === 'group-delete' ? '分组中的对话会移到未分组，不会删除对话。' : '此对话的消息将从本机删除，无法撤销。')}</Typography></DialogContent><DialogActions><Button onClick={() => setRemove(null)}>{t('取消')}</Button><Button color="error" onClick={() => { if (remove) void window.api.chat.edit(remove).then(() => { setRemove(null); return refresh() }).catch(error => setError(messageOf(error))) }}>{t('删除')}</Button></DialogActions></Dialog>
+    <Dialog open={Boolean(remove)} onClose={() => setRemove(null)}><DialogTitle>{t(remove?.action === 'group-delete' ? '删除分组' : '删除对话')}</DialogTitle><DialogContent><Typography>{remove?.name}</Typography><Typography variant="body2" color="text.secondary">{t(remove?.action === 'group-delete' ? '分组中的对话会移到未分组，不会删除对话。' : '此对话的消息将从本机删除，无法撤销。')}</Typography>
+      {remove?.action === 'delete' && impactLoading && <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}><CircularProgress size={12} /><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{t('knowledge.deleteImpact.checking')}</Typography></Stack>}
+      {remove?.action === 'delete' && impactError && <Alert severity="warning" data-chat-delete-impact-error sx={{ mt: 1.5, fontSize: 12 }}>{t('knowledge.deleteImpact.failed', { message: impactError })}</Alert>}
+      {remove?.action === 'delete' && deleteNotice && <Box data-chat-delete-impact sx={{ mt: 1 }}>
+        <FormControlLabel data-chat-delete-knowledge sx={{ alignItems: 'flex-start', mr: 0 }} control={<Checkbox size="small" checked={deleteKnowledge} onChange={event => setDeleteKnowledge(event.target.checked)} sx={{ py: 0.25 }} />} label={<Typography sx={{ fontSize: 12.5, lineHeight: 1.5 }}>{t(deleteNotice.labelKey, { count: deleteNotice.count })}</Typography>} />
+        <Typography sx={{ fontSize: 11.5, lineHeight: 1.6, color: 'text.secondary', pl: 3.25 }}>{t(deleteNotice.detailKey, { multi: deleteNotice.multi, single: deleteNotice.single })}</Typography>
+      </Box>}
+    </DialogContent><DialogActions><Button onClick={() => setRemove(null)}>{t('取消')}</Button><Button color="error" onClick={() => { if (remove) { const input = remove.action === 'delete' ? { action: 'delete' as const, id: remove.id, deleteKnowledge } : remove; void window.api.chat.edit(input).then(() => { setRemove(null); return refresh() }).catch(error => setError(messageOf(error))) } }}>{t('删除')}</Button></DialogActions></Dialog>
   </Box>
 }

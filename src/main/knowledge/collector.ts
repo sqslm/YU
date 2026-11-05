@@ -46,6 +46,8 @@ export interface ChatTurnDone {
   answer: string
   at: number
   materials: ReadingMaterial[]
+  /** Card ids the answer really cited this turn, from the tools' own results. */
+  citedCardIds?: string[]
 }
 
 /** One finished question in the main-window chat. */
@@ -57,6 +59,11 @@ export interface ThreadProjection {
   question: string
   answer: string
   at: number
+  /**
+   * Card ids the answer really cited, so the projection can reuse their source
+   * chain instead of minting a duplicate card from the same text.
+   */
+  citedCardIds?: string[]
 }
 
 /**
@@ -112,6 +119,8 @@ export function materialKind(material: ReadingMaterial): SourceKind {
 
 const MAX_MATERIALS = 5
 const MAX_MATERIAL_CHARS = 48_000
+/** Cited ids travel with the projection; the helper caps them again. */
+const MAX_CITED = 12
 const STASH_BYTES = 16 * 1024 * 1024
 
 /** What a store says about the text a pending task quoted. */
@@ -239,16 +248,27 @@ export class KnowledgeCollector {
 
   /** A note version reached a saved body; empty or unsaved bodies create nothing. */
   noteSettled(note: NoteProjection): void {
-    if (!this.allows('note')) return
-    if (note.polishStatus === 'pending') return
+    void this.publishNote(note)
+  }
+
+  /**
+   * Publishes one note as a source and answers with what the store made of it.
+   *
+   * Publishing is idempotent for unchanged text, so an explicit "extract this
+   * note" action goes through the same call the save path uses: the same source
+   * chain, the same dedupe, no second copy of the same knowledge.
+   */
+  async publishNote(note: NoteProjection): Promise<PublishResult | null> {
+    if (!this.allows('note')) return null
+    if (note.polishStatus === 'pending') return null
     const text = noteBody(note)
     if (!text) {
       // The body was cleared on purpose: the task that quoted the old text is
       // retracted rather than left pointing at something the user removed.
       this.noteRemoved(note.id, 'note body cleared')
-      return
+      return null
     }
-    void this.publish({
+    return this.publish({
       channel: 'note',
       kind: 'note',
       originRef: note.id,
@@ -285,6 +305,7 @@ export class KnowledgeCollector {
     const answer = turn.answer.trim()
     if (!turn.question.trim() || !answer) return
     const text = [turn.question.trim(), answer].join('\n\n')
+    const cited = [...new Set((turn.citedCardIds ?? []).filter(Boolean))].slice(0, MAX_CITED)
     void this.publish({
       channel: 'chat',
       kind: 'chat',
@@ -294,7 +315,8 @@ export class KnowledgeCollector {
       title: turn.threadTitle ?? turn.question.slice(0, 40),
       scope: '主界面问答',
       text,
-      at: turn.at
+      at: turn.at,
+      ...(cited.length ? { citedCardIds: cited } : {})
     })
   }
 

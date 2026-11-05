@@ -86,6 +86,20 @@ describe('whole-name workflow routing', () => {
 })
 
 describe('run_workflow authorizes each step against this round', () => {
+  it('replays a knowledge extraction step only while the feature is on', async () => {
+    const extracted: string[] = []
+    const knowledge = { search: vi.fn(), get: vi.fn(), extractFromNote: vi.fn(async (noteId: string) => { extracted.push(noteId); return { queued: 1, groupId: 'grp_1', state: 'stabilizing' } }) }
+    vi.mocked(store.get).mockReturnValue(workflowOf([step('extract_knowledge', { noteId: 'n1' })]))
+    // The round granted only run_workflow: a knowledge step is granted by the
+    // knowledge switch, not by the chat allowlist.
+    const on = await runTool('run_workflow', { id: 'wf-1' }, { ...context(['run_workflow']), knowledge })
+    expect(on.ok).toBe(true)
+    expect(extracted).toEqual(['n1'])
+    const off = await runTool('run_workflow', { id: 'wf-1' }, context(['run_workflow']))
+    expect(off.ok).toBe(false)
+    expect(extracted).toEqual(['n1'])
+  })
+
   it('replays an explicitly bound real file result without permitting arbitrary same-round opens', async () => {
     const folder = await realpath(await mkdtemp(join(tmpdir(), 'yu-workflow-selection-')))
     const first = join(folder, 'new.pdf'), second = join(folder, 'old.pdf'), openPath = vi.fn().mockResolvedValue('')

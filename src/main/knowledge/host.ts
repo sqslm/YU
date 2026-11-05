@@ -73,7 +73,13 @@ import {
   type MergeCardsInput,
   type MergedCards,
   type RelationList,
-  type TopicList
+  type TopicList,
+  type CardImpact,
+  type PurgeCardsInput,
+  type PurgeCardsResult,
+  type SourceCardsQuery,
+  type FindSourceInput,
+  type FoundSource
 } from '@shared/knowledge'
 
 import type { KnowledgeCompleter } from './model'
@@ -711,6 +717,36 @@ export class KnowledgeHost {
 
   searchCards(query: CardSearchQuery): Promise<KnowledgeCardPage> {
     return this.call<KnowledgeCardPage>('card.search', query)
+  }
+
+  /** Cards generated from one original record, paged and sorted by the store. */
+  /**
+   * Cards one record produced.
+   *
+   * A detail page only knows the record, so the record identity is translated
+   * here: the helper answers by source id, or by the channel and origin the
+   * record published under.
+   */
+  cardsBySource(query: SourceCardsQuery): Promise<KnowledgeCardPage> {
+    const { sourceId, noteId, threadId, ...rest } = query
+    if (noteId) return this.call<KnowledgeCardPage>('card.by_source', { channel: 'note', originRef: noteId, ...rest })
+    if (threadId) return this.call<KnowledgeCardPage>('card.by_source', { channel: 'chat', groupKey: threadId, ...rest })
+    return this.call<KnowledgeCardPage>('card.by_source', { sourceId, ...rest })
+  }
+
+  /** The sources a record already published; empty when it published none. */
+  findSources(input: FindSourceInput): Promise<FoundSource> {
+    return this.call<FoundSource>('source.find', input)
+  }
+
+  /** What deleting this record would do to the cards derived from it. */
+  cardImpact(sourceId: string): Promise<CardImpact> {
+    return this.call<CardImpact>('card.impact', { sourceId })
+  }
+
+  /** Removes or unlinks the cards of records that were just deleted, atomically. */
+  purgeCards(input: PurgeCardsInput): Promise<PurgeCardsResult> {
+    return this.call<PurgeCardsResult>('card.purge', input)
   }
 
   listTopics(limit?: number): Promise<TopicList> {

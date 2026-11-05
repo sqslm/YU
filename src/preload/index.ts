@@ -94,6 +94,11 @@ const api: TypelessApi = {
     openSource: id => ipcRenderer.invoke('knowledge:source-open', id),
     extractSource: id => ipcRenderer.invoke('knowledge:source-extract', id),
     modelInfo: () => ipcRenderer.invoke('knowledge:model-info'),
+    bySource: (query) => ipcRenderer.invoke('knowledge:by-source', query),
+    impact: (target) => ipcRenderer.invoke('knowledge:impact', target),
+    continueDiscussion: (cardId) => ipcRenderer.invoke('knowledge:continue', cardId),
+    cardTodo: (cardId) => ipcRenderer.invoke('knowledge:card-todo', cardId),
+    saveCardAsNote: (cardId) => ipcRenderer.invoke('knowledge:card-note', cardId),
     onChanged: callback => {
       const listener = (_event: Electron.IpcRendererEvent, scope: string): void => callback(scope)
       ipcRenderer.on('knowledge:changed', listener)
@@ -322,7 +327,7 @@ const api: TypelessApi = {
     create: (input: { pcm: Int16Array; durationMs: number; categoryId?: string; tags?: string[] }) =>
       ipcRenderer.invoke('notes:create', input),
     update: (id: string, patch: unknown) => ipcRenderer.invoke('notes:update', id, patch),
-    remove: (id: string) => ipcRenderer.invoke('notes:remove', id),
+    remove: (id: string, options?: { deleteKnowledge?: boolean }) => ipcRenderer.invoke('notes:remove', id, options),
     applyBulk: (ids: string[], bulk: unknown) => ipcRenderer.invoke('notes:applyBulk', ids, bulk),
     repolish: (id: string) => ipcRenderer.invoke('notes:repolish', id),
     setCategories: (categories: unknown) => ipcRenderer.invoke('notes:setCategories', categories),

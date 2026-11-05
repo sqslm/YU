@@ -26,6 +26,12 @@ export interface NotesIpcOptions {
   persistDir: (dir: string) => Promise<void>
   /** Pushes `notes:changed` to every window that may be showing notes. */
   broadcast: () => void
+  /**
+   * Removes the knowledge only this note supported, when the user ticked the
+   * option. Runs before the note is deleted: a failure leaves both sides intact
+   * and the caller sees the real reason.
+   */
+  purgeKnowledge?: (noteId: string) => Promise<void>
 }
 
 /** IPC hands us a real `Int16Array`, but a stray array must not throw. */
@@ -86,7 +92,7 @@ async function serveAudio(file: string, range: string | null, attachment = false
 }
 
 export function registerNotesIpc(options: NotesIpcOptions): void {
-  const { store, persistDir, broadcast } = options
+  const { store, persistDir, broadcast, purgeKnowledge } = options
   let audioJob: AbortController | null = null
 
   ipcHandle('notes:cancelAudioJob', () => audioJob?.abort())
@@ -240,7 +246,11 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     return note
   })
 
-  ipcHandle('notes:remove', async (_event, id: string) => {
+  ipcHandle('notes:remove', async (_event, id: string, options?: { deleteKnowledge?: boolean }) => {
+    // Order matters: knowledge first, so a refused purge leaves the note readable
+    // and the user can retry. The default keeps the knowledge and only marks the
+    // source deleted, which the collector already does when the note disappears.
+    if (options?.deleteKnowledge) await purgeKnowledge?.(id)
     await store.remove(id)
     broadcast()
   })

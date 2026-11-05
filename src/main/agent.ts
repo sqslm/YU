@@ -100,6 +100,7 @@ export interface AgentOptions {
   personal?: ToolContext['personal']
   life?: ToolContext['life']
   workflow?: ToolContext['workflow']
+  knowledge?: ToolContext['knowledge']
   windows?: ToolContext['windows']
   onLocalResult?: ToolContext['onLocalResult']
   onToolResult?: ToolContext['onToolResult']

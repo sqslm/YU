@@ -107,6 +107,21 @@ describe('knowledge collector chat turns', () => {
     })
   })
 
+  it('carries the cards this answer really cited, deduped and capped', () => {
+    const host = fakeHost(), subject = collector(settings(), host)
+    const many = ['c1', 'c2', 'c1', '', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12', 'c13']
+    subject.threadFinished({ threadId: 't1', userId: 'u1', answerId: 'a1', question: '问题', answer: '回答', at: 5, citedCardIds: many })
+    const published = host.publishSource.mock.calls[0][0] as { citedCardIds?: string[] }
+    // Duplicates and blanks collapse; the cap keeps the frame small.
+    expect(published.citedCardIds).toEqual(['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12'])
+  })
+
+  it('sends no cited list when the answer cited nothing', () => {
+    const host = fakeHost(), subject = collector(settings(), host)
+    subject.threadFinished({ threadId: 't1', userId: 'u1', answerId: 'a1', question: '问题', answer: '回答', at: 5, citedCardIds: [] })
+    expect(host.publishSource.mock.calls[0][0]).not.toHaveProperty('citedCardIds')
+  })
+
   it('ignores a turn without a question or an answer', () => {
     const host = fakeHost(), subject = collector(settings(), host)
     subject.threadFinished({ threadId: 't1', userId: 'u1', answerId: 'a1', question: '  ', answer: '回答', at: 5 })

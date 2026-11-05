@@ -18,10 +18,13 @@ import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded'
 import AutorenewRounded from '@mui/icons-material/AutorenewRounded'
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded'
 import FileDownloadRounded from '@mui/icons-material/FileDownloadRounded'
+import ForumRounded from '@mui/icons-material/ForumRounded'
 import HistoryRounded from '@mui/icons-material/HistoryRounded'
 import MergeTypeRounded from '@mui/icons-material/MergeTypeRounded'
 import ModeEditOutlineRounded from '@mui/icons-material/ModeEditOutlineRounded'
+import NoteAddOutlined from '@mui/icons-material/NoteAddOutlined'
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded'
+import PlaylistAddRounded from '@mui/icons-material/PlaylistAddRounded'
 import StarBorderRounded from '@mui/icons-material/StarBorderRounded'
 import StarRounded from '@mui/icons-material/StarRounded'
 import TipsAndUpdatesRounded from '@mui/icons-material/TipsAndUpdatesRounded'
@@ -148,12 +151,26 @@ interface DetailProps {
   onChanged: () => void
   onSelect: (id: string) => void
   openRecord: (record: LocalRecord) => void
+  /** Opens the chat the card seeded; the main process already created it. */
+  onOpenChat: (threadId: string) => void
+  /** Opens the note `saveCardAsNote` created. */
+  onOpenNote: (noteId: string) => void
   onPickTopic: (topic: string) => void
   onBack: () => void
   onDeleted: () => void
 }
 
-export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onSelect, openRecord, onPickTopic, onBack, onDeleted }: DetailProps): JSX.Element {
+/**
+ * What one of the three explicit actions produced. The row keeps the real
+ * answer — the todo's own title, the new thread's id, the new note's id — so the
+ * user can open it through the normal navigation instead of trusting a toast.
+ */
+type CardAction =
+  | { kind: 'chat'; threadId: string }
+  | { kind: 'todo'; id: string; title: string }
+  | { kind: 'note'; noteId: string }
+
+export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onSelect, openRecord, onOpenChat, onOpenNote, onPickTopic, onBack, onDeleted }: DetailProps): JSX.Element {
   const { t } = useTranslation()
   const [card, setCard] = useState<KnowledgeCard | null>(null)
   const [sources, setSources] = useState<KnowledgeSource[]>([])
@@ -167,6 +184,10 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
   const [notice, setNotice] = useState('')
   const [dialog, setDialog] = useState('')
   const [relationError, setRelationError] = useState('')
+  /** Which of the three card actions is running, so all of them stay disabled. */
+  const [running, setRunning] = useState<'' | CardAction['kind']>('')
+  const [actionError, setActionError] = useState('')
+  const [actionResult, setActionResult] = useState<CardAction | null>(null)
 
   // Switching cards drops the previous card, its unsaved draft and any stale notice.
   useEffect(() => {
@@ -177,6 +198,9 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
     setSaveError('')
     setNotice('')
     setRelationError('')
+    setRunning('')
+    setActionError('')
+    setActionResult(null)
   }, [cardId])
 
   useEffect(() => {
@@ -266,6 +290,55 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
     }
   }
 
+  /**
+   * One click, one request, one real answer. Nothing here runs on mount: the
+   * three actions are the only path that creates a chat, a todo or a note, and
+   * a failure keeps the thrown message instead of a fake success.
+   */
+  const runAction = async (kind: CardAction['kind'], work: () => Promise<CardAction>): Promise<void> => {
+    setRunning(kind)
+    setActionError('')
+    setActionResult(null)
+    try {
+      setActionResult(await work())
+    } catch (err) {
+      setActionError(messageOf(err))
+    } finally {
+      setRunning('')
+    }
+  }
+
+  const continueDiscussion = (): Promise<void> =>
+    runAction('chat', async () => {
+      const { threadId } = await window.api.knowledge.continueDiscussion(cardId)
+      return { kind: 'chat', threadId }
+    })
+
+  const makeTodo = (): Promise<void> =>
+    runAction('todo', async () => {
+      const todo = await window.api.knowledge.cardTodo(cardId)
+      return { kind: 'todo', id: todo.id, title: todo.title }
+    })
+
+  const saveAsNote = (): Promise<void> =>
+    runAction('note', async () => {
+      const { noteId } = await window.api.knowledge.saveCardAsNote(cardId)
+      return { kind: 'note', noteId }
+    })
+
+  const openAction = (result: CardAction): void => {
+    if (result.kind === 'chat') return onOpenChat(result.threadId)
+    if (result.kind === 'note') return onOpenNote(result.noteId)
+    // A todo is a reminder, so the record path the app already has opens it.
+    openRecord({ kind: 'reminder', id: result.id, title: result.title, text: '', at: 0 })
+  }
+
+  const actionText = (result: CardAction): string => {
+    if (result.kind === 'chat') return t('knowledge.chatStarted')
+    if (result.kind === 'note') return t('knowledge.noteCreated')
+    return t('knowledge.todoCreated', { title: result.title })
+  }
+
   if (loading && !card) {
     return <Box sx={{ p: 3 }}><CircularProgress size={22} aria-label={t('common.loading')} /></Box>
   }
@@ -348,6 +421,18 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
           {card.edited && <Chip size="small" variant="outlined" label={t('knowledge.edited')} />}
           <Typography variant="caption" color="text.secondary">{formatStamp(card.updatedAt).full}</Typography>
         </Stack>
+        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.75, flexWrap: 'wrap', gap: 0.75 }} data-knowledge-actions>
+          <Button size="small" startIcon={<ForumRounded fontSize="small" />} disabled={running !== ''} onClick={() => void continueDiscussion()}>
+            {t('knowledge.continueDiscussion')}
+          </Button>
+          <Button size="small" startIcon={<PlaylistAddRounded fontSize="small" />} disabled={running !== ''} onClick={() => void makeTodo()}>
+            {t('knowledge.makeTodo')}
+          </Button>
+          <Button size="small" startIcon={<NoteAddOutlined fontSize="small" />} disabled={running !== ''} onClick={() => void saveAsNote()}>
+            {t('knowledge.saveAsNote')}
+          </Button>
+          {running !== '' && <CircularProgress size={14} aria-label={t('common.loading')} />}
+        </Stack>
       </Box>
 
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 2, py: 1.5 }}>
@@ -356,6 +441,19 @@ export function KnowledgeCardDetail({ cardId, wide, refreshToken, onChanged, onS
         {saveError && (
           <Alert severity="error" sx={{ mb: 1 }} action={draft ? <Button color="inherit" size="small" onClick={() => void save()}>{t('common.retry')}</Button> : undefined}>
             {saveError}
+          </Alert>
+        )}
+        {actionError && (
+          <Alert severity="error" sx={{ mb: 1 }} onClose={() => setActionError('')}>{actionError}</Alert>
+        )}
+        {actionResult && (
+          <Alert
+            severity="success"
+            sx={{ mb: 1 }}
+            onClose={() => setActionResult(null)}
+            action={<Button color="inherit" size="small" onClick={() => openAction(actionResult)}>{t('knowledge.actionOpen')}</Button>}
+          >
+            {actionText(actionResult)}
           </Alert>
         )}
 

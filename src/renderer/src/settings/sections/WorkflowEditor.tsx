@@ -15,7 +15,7 @@ const LABELS: Record<string, string> = {
   search_files_everything: 'Everything 搜索', get_current_folder: '当前文件夹', get_current_page: '当前网页地址', get_system_info: '系统信息',
   get_system_volume: '读取音量', set_system_volume: '设置音量', stop_speaking: '停止朗读', search_file_activity: '搜索最近文件',
   control_note_audio: '随记录音播放', get_prompt_info: '查看提示词信息', note_sync_status: '随记同步状态', control_speech: '朗读控制',
-  configure_speech: '朗读设置', briefing_delivery_status: '简报投递状态', send_briefing: '发送简报'
+  configure_speech: '朗读设置', briefing_delivery_status: '简报投递状态', send_briefing: '发送简报', extract_knowledge: '送入知识提炼'
 }
 const FIELDS: Record<string, string> = { text: '文字', title: '标题', content: '内容', query: '关键词', url: '网页地址', location: '城市',
   expression: '算式', name: '名称', folder: '文件夹', timezone: '时区', offsetDays: '日期偏移', when: '时间范围', language: '语言', limit: '数量上限',

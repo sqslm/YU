@@ -10,6 +10,7 @@
  */
 
 import type {
+  CardImpact,
   CardKind,
   CardQuery,
   ExtractSourceResult,
@@ -353,6 +354,102 @@ export interface ExtractStatus {
 export function extractStatus(result: Pick<ExtractSourceResult, 'queued' | 'reason'>): ExtractStatus {
   const count = Math.max(0, Math.trunc(result.queued))
   return { queued: count > 0, count, reason: (result.reason ?? '').trim() }
+}
+
+/** The checkbox the delete dialog adds when cards still depend on the record. */
+export const IMPACT_LABEL_KEY = 'knowledge.deleteImpact.cardsLabel'
+
+/** The one line under that checkbox; both variants are fixed keys, not prose. */
+export const IMPACT_DETAIL_KEY = 'knowledge.deleteImpact.cardsKeepOther'
+export const IMPACT_DETAIL_ALONE_KEY = 'knowledge.deleteImpact.cardsOnlyHere'
+
+export interface ImpactNotice {
+  /** Checkbox text key; `count` is `cards`. */
+  labelKey: string
+  /** Cards that quote the record at all — the number in the checkbox. */
+  count: number
+  /** Explanation key: whether any card survives on another source. */
+  detailKey: string
+  /** Cards that leave with the record (their only valid source). */
+  single: number
+  /** Cards that stay and only lose this link. */
+  multi: number
+}
+
+/**
+ * The destructive option a delete dialog may offer, or `null` when nothing is
+ * derived from the record. The checkbox is never pre-ticked: deleting knowledge
+ * is a second decision, and `multi` is what the explanation has to name so the
+ * user knows a card with another source survives instead of vanishing.
+ */
+export function impactNotice(impact: Pick<CardImpact, 'cards' | 'single' | 'multi'>): ImpactNotice | null {
+  const count = Math.max(0, Math.trunc(impact.cards))
+  if (count === 0) return null
+  const single = Math.min(count, Math.max(0, Math.trunc(impact.single)))
+  const multi = count - single
+  return {
+    labelKey: IMPACT_LABEL_KEY,
+    count,
+    detailKey: multi > 0 ? IMPACT_DETAIL_KEY : IMPACT_DETAIL_ALONE_KEY,
+    single,
+    multi
+  }
+}
+
+/** Rows the note-detail section asks for first. */
+export const CARDS_SECTION_LIMIT = 5
+
+/**
+ * Requests the section may spend, the first page included. The section is a
+ * footnote of the note, not a second card browser: three pages of five cover
+ * what a single record generates, and the rest belongs to the knowledge page.
+ */
+export const CARDS_SECTION_REQUESTS = 3
+
+export const CARDS_SECTION_TITLE_KEY = 'knowledge.noteCards.title'
+
+export interface CardsSectionInput {
+  /** Rows already in hand for the open note. */
+  shown: number
+  /** `total` from the last page: every card the backend counted for this record. */
+  total: number
+  /** `hasMore` from the last page. */
+  hasMore: boolean
+  /** Requests already spent on this note, the first page counted as 1. */
+  requests: number
+}
+
+export interface CardsSection {
+  titleKey: string
+  /** No card at all: the section shows one line and nothing else. */
+  empty: boolean
+  /** The real total, never `shown`. */
+  total: number
+  shown: number
+  /** 「查看全部」 is offered while another page is allowed. */
+  moreRows: boolean
+  /** Cards exist beyond the budget: the section says so instead of pretending it ended. */
+  capped: boolean
+}
+
+/**
+ * What the note-detail section may render. Paging follows the backend's
+ * `hasMore`, and the request budget is a cap on the UI, so a record with forty
+ * cards cannot turn the note into an endless list — it says it is capped.
+ */
+export function cardsSection(input: CardsSectionInput): CardsSection {
+  const total = Math.max(0, Math.trunc(input.total))
+  const shown = Math.min(total, Math.max(0, Math.trunc(input.shown)))
+  const spent = Math.max(0, Math.trunc(input.requests))
+  const moreRows = input.hasMore && spent < CARDS_SECTION_REQUESTS && shown < total
+  return {
+    titleKey: CARDS_SECTION_TITLE_KEY,
+    empty: shown === 0 && total === 0,
+    total,
+    shown,
+    moreRows,
+    capped: input.hasMore && !moreRows
+  }
 }
 
 export interface ModelOption {

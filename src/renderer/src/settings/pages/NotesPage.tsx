@@ -53,6 +53,7 @@ import { matchHeadingIndex, noteHeadings } from './noteOutline'
 import { noteBodyField } from '@shared/noteBody'
 import { attachmentMarkdown } from '@shared/noteAttachments'
 import type { NoteAttachment } from '@shared/noteAttachments'
+import type { CardImpact, KnowledgeCardSummary } from '@shared/knowledge'
 import type { NoteBulk, NoteCategory, NoteEntry, NoteExportFormat, NotePatch, Settings } from '@shared/types'
 import { MicCapture } from '../../bar/capture'
 import { IconMic, IconPlus, IconSearch, IconSparkles, IconTrash } from '../icons'
@@ -92,6 +93,7 @@ import {
   validateNotesView,
   type NotesViewState
 } from './pageState'
+import { CARDS_SECTION_LIMIT, cardsSection, impactNotice, kindKey } from './knowledgeView'
 
 /** Typing pause before a text edit is written; blur and navigation flush earlier. */
 const SAVE_DEBOUNCE_MS = 600
@@ -177,6 +179,11 @@ export interface NotesPageProps {
    */
   recordTicket?: number
   openNote?: { id: string }
+  /**
+   * Opens a card the 知识库 generated from this note. The hub owns the page
+   * switch, so the note only names the card.
+   */
+  onOpenKnowledge: (cardId: string) => void
 }
 
 /**
@@ -196,7 +203,7 @@ export interface NotesPageProps {
  */
 let lastRecordTicket = 0
 
-export function NotesPage({ settings, patch, recordTicket = 0, openNote }: NotesPageProps): JSX.Element {
+export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenKnowledge }: NotesPageProps): JSX.Element {
   const { t } = useTranslation()
 
   const [notes, setNotes] = useState<NoteEntry[]>([])
@@ -246,6 +253,23 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
 
   const [repolishOpen, setRepolishOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  /**
+   * The cards the open note generated. The section is a footnote of the note,
+   * so it keeps its own bounded page state instead of borrowing the 知识库 list.
+   */
+  const [cardRows, setCardRows] = useState<KnowledgeCardSummary[]>([])
+  const [cardTotal, setCardTotal] = useState(0)
+  const [cardMore, setCardMore] = useState(false)
+  const [cardOffset, setCardOffset] = useState<number | null>(null)
+  const [cardPages, setCardPages] = useState(0)
+  const [cardsLoading, setCardsLoading] = useState(false)
+  const [cardsError, setCardsError] = useState('')
+  /** What deleting this note would do to the cards that quote it. */
+  const [impact, setImpact] = useState<CardImpact | null>(null)
+  const [impactError, setImpactError] = useState('')
+  const [impactLoading, setImpactLoading] = useState(false)
+  /** Secondary choice in the delete dialog: off unless the user ticks it. */
+  const [deleteKnowledge, setDeleteKnowledge] = useState(false)
   /** The 分类 manager: the hub had no way to create a bucket, only to filter by one. */
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -360,6 +384,48 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
   const selectedNoteId = selected?.id ?? null
   const selectedRef = useRef<NoteEntry | null>(selected)
   selectedRef.current = selected
+
+  /**
+   * One page of the open note's cards. Offset 0 replaces (a new note, a retry),
+   * anything else appends — and a slow answer for a note the user already left is
+   * dropped instead of landing in the new note's section.
+   */
+  const loadCards = useCallback(async (noteId: string, offset: number): Promise<void> => {
+    setCardsLoading(true)
+    setCardsError('')
+    try {
+      const page = await window.api.knowledge.bySource({ sourceId: noteId, offset, limit: CARDS_SECTION_LIMIT })
+      if (selectedRef.current?.id !== noteId) return
+      setCardRows((current) => {
+        if (offset === 0) return page.items
+        const known = new Set(current.map((row) => row.id))
+        return [...current, ...page.items.filter((row) => !known.has(row.id))]
+      })
+      setCardTotal(page.total)
+      setCardMore(page.hasMore)
+      setCardOffset(page.nextOffset ?? null)
+      setCardPages((count) => count + 1)
+    } catch (err) {
+      if (selectedRef.current?.id === noteId) setCardsError(messageOf(err))
+    } finally {
+      setCardsLoading(false)
+    }
+  }, [])
+
+  /** Opening a note reloads its first cards; the section never grows on its own. */
+  useEffect(() => {
+    setCardRows([])
+    setCardTotal(0)
+    setCardMore(false)
+    setCardOffset(null)
+    setCardPages(0)
+    setCardsError('')
+    if (!selectedNoteId) return
+    void loadCards(selectedNoteId, 0)
+  }, [selectedNoteId, loadCards])
+
+  const cardsView = cardsSection({ shown: cardRows.length, total: cardTotal, hasMore: cardMore, requests: cardPages })
+  const deleteNotice = impact ? impactNotice(impact) : null
 
   const audioKey = selected?.audioPath ?? ''
   const primaryField = selected ? noteBodyField(selected) : 'transcript'
@@ -1177,12 +1243,42 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
     }
   }
 
-  const deleteNote = async (): Promise<void> => {
+  /**
+   * The delete dialog previews what the note takes with it. A failed preview is
+   * shown as-is and leaves the conservative default: delete the note, keep the
+   * knowledge — never "no impact" when nothing was read.
+   */
+  useEffect(() => {
+    setDeleteKnowledge(false)
+    setImpact(null)
+    setImpactError('')
+    if (!deleteOpen) return
+    const note = selectedRef.current
+    if (!note) return
+    let live = true
+    setImpactLoading(true)
+    void window.api.knowledge
+      .impact(note.id)
+      .then((next) => {
+        if (live) setImpact(next)
+      })
+      .catch((err) => {
+        if (live) setImpactError(messageOf(err))
+      })
+      .finally(() => {
+        if (live) setImpactLoading(false)
+      })
+    return () => {
+      live = false
+    }
+  }, [deleteOpen])
+
+  const deleteNote = async (deleteKnowledge: boolean): Promise<void> => {
     const note = selectedRef.current
     setDeleteOpen(false)
     if (!note) return
     try {
-      await window.api.notes.remove(note.id)
+      await window.api.notes.remove(note.id, { deleteKnowledge })
       pendingRef.current = null
       setNotes((prev) => prev.filter((item) => item.id !== note.id))
       setSelectedId(null)
@@ -2061,6 +2157,90 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
                   </Tooltip>
                 </Stack>
               </Box> : selected.durationMs > 0 ? <Typography data-notes-no-audio sx={{ mt: 2, fontSize: 11.5, color: 'text.secondary' }}>{t('notes.noLocalAudio')}</Typography> : null}
+
+              {/* 由这条随记生成的知识: a footnote of the note, bounded on purpose — the
+                  knowledge page owns the full list, this only shows the note fed it. */}
+              <Box data-notes-knowledge sx={{ mt: 2.5, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Stack direction="row" spacing={1} alignItems="baseline">
+                  <Typography sx={{ flex: 1, fontSize: 11.5, fontWeight: 600, color: 'text.secondary' }}>
+                    {t(cardsView.titleKey)}
+                  </Typography>
+                  {cardTotal > 0 && (
+                    <Typography data-notes-knowledge-total sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+                      {t('knowledge.noteCards.total', { total: cardTotal })}
+                    </Typography>
+                  )}
+                </Stack>
+                {cardsError && (
+                  <Alert
+                    severity="error"
+                    data-notes-knowledge-error
+                    sx={{ mt: 1, fontSize: 11.5 }}
+                    action={
+                      <Button size="small" color="inherit" onClick={() => void loadCards(selected.id, 0)}>
+                        {t('common.retry')}
+                      </Button>
+                    }
+                  >
+                    {cardsError}
+                  </Alert>
+                )}
+                {!cardsError && cardsLoading && cardRows.length === 0 && <CircularProgress size={12} sx={{ mt: 1 }} />}
+                {!cardsError && !cardsLoading && cardsView.empty && (
+                  <Typography data-notes-knowledge-empty sx={{ mt: 1, fontSize: 11.5, color: 'text.disabled' }}>
+                    {t('knowledge.noteCards.empty')}
+                  </Typography>
+                )}
+                {cardRows.map((row) => (
+                  <Button
+                    key={row.id}
+                    data-notes-knowledge-card={row.id}
+                    size="small"
+                    onClick={() => onOpenKnowledge(row.id)}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-start',
+                      width: '100%',
+                      mt: 0.75,
+                      px: 0.75,
+                      py: 0.5,
+                      textAlign: 'left',
+                      textTransform: 'none',
+                      color: 'text.primary',
+                      borderRadius: '8px',
+                      '&:hover': { bgcolor: 'action.hover' }
+                    }}
+                  >
+                    <Chip label={t(kindKey(row.kind))} size="small" sx={{ height: 18, fontSize: 10, mr: 1, flex: 'none' }} />
+                    <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12.5 }}>
+                      {row.title}
+                    </Box>
+                  </Button>
+                ))}
+                {(cardsView.moreRows || cardsView.capped || (cardsLoading && cardRows.length > 0)) && (
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
+                    {cardsView.moreRows && (
+                      <Button
+                        size="small"
+                        data-notes-knowledge-more
+                        disabled={cardsLoading}
+                        onClick={() => {
+                          if (cardOffset !== null) void loadCards(selected.id, cardOffset)
+                        }}
+                        sx={{ fontSize: 11.5, px: 0.75 }}
+                      >
+                        {t('knowledge.noteCards.more')}
+                      </Button>
+                    )}
+                    {cardsView.capped && (
+                      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
+                        {t('knowledge.noteCards.capped', { shown: cardsView.shown })}
+                      </Typography>
+                    )}
+                    {cardsLoading && cardRows.length > 0 && <CircularProgress size={12} />}
+                  </Stack>
+                )}
+              </Box>
             </Box>
           )}
         </Box>
@@ -2169,6 +2349,42 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
         <DialogTitle sx={{ fontSize: 15, fontWeight: 600, pb: 1 }}>{t('notes.deleteTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ fontSize: 12.5, lineHeight: 1.7 }}>{t('notes.deleteBody')}</DialogContentText>
+          {impactLoading && (
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}>
+              <CircularProgress size={12} />
+              <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{t('knowledge.deleteImpact.checking')}</Typography>
+            </Stack>
+          )}
+          {impactError && (
+            <Alert severity="warning" data-notes-delete-impact-error sx={{ mt: 1.5, fontSize: 12 }}>
+              {t('knowledge.deleteImpact.failed', { message: impactError })}
+            </Alert>
+          )}
+          {deleteNotice && (
+            <Box data-notes-delete-impact sx={{ mt: 1 }}>
+              <FormControlLabel
+                data-notes-delete-knowledge
+                sx={{ alignItems: 'flex-start', mr: 0 }}
+                control={
+                  <Checkbox
+                    size="small"
+                    data-notes-delete-knowledge-box
+                    checked={deleteKnowledge}
+                    onChange={(event) => setDeleteKnowledge(event.target.checked)}
+                    sx={{ py: 0.25 }}
+                  />
+                }
+                label={
+                  <Typography sx={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                    {t(deleteNotice.labelKey, { count: deleteNotice.count })}
+                  </Typography>
+                }
+              />
+              <Typography sx={{ fontSize: 11.5, lineHeight: 1.6, color: 'text.secondary', pl: 3.25 }}>
+                {t(deleteNotice.detailKey, { multi: deleteNotice.multi, single: deleteNotice.single })}
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 2.5, pb: 2 }}>
           <Button size="small" data-notes-delete-cancel onClick={() => setDeleteOpen(false)}>
@@ -2179,7 +2395,7 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote }: Notes
             variant="contained"
             color="error"
             data-notes-delete-confirm
-            onClick={() => void deleteNote()}
+            onClick={() => void deleteNote(deleteKnowledge)}
             sx={{ fontSize: 12 }}
           >
             {t('common.delete')}

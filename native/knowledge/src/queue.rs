@@ -60,6 +60,11 @@ pub struct PublishParams {
     /// Position inside the group. Reading publishes several materials at once.
     #[serde(default)]
     pub ordinal: Option<i64>,
+    /// Cards the projection itself cited while answering. They are stored with
+    /// the source so a later extraction can offer them to the comparison round as
+    /// already-known knowledge, and refuse to mint a duplicate of one.
+    #[serde(default)]
+    pub cited_card_ids: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -400,6 +405,31 @@ pub fn publish(conn: &mut Connection, params: PublishParams) -> ApiResult<Publis
     Ok(result)
 }
 
+/// The cited cards a host attaches to a projection, validated and normalized.
+///
+/// Bounded because the list rides into the extraction prompt later: at most 12
+/// ids of at most 128 characters, deduplicated so a repeated id costs nothing.
+const MAX_CITED_IDS: usize = 12;
+const MAX_CITED_ID_CHARS: usize = 128;
+
+fn cited_ids(values: &[String]) -> ApiResult<Vec<String>> {
+    if values.len() > MAX_CITED_IDS {
+        return Err(ApiError::invalid(format!(
+            "citedCardIds holds {} ids, at most {MAX_CITED_IDS} are allowed",
+            values.len()
+        )));
+    }
+    let mut ids: Vec<String> = Vec::with_capacity(values.len());
+    for value in values {
+        let id = require_text("citedCardIds", value)?;
+        check_chars("citedCardIds", &id, MAX_CITED_ID_CHARS)?;
+        if !ids.iter().any(|seen| seen == &id) {
+            ids.push(id);
+        }
+    }
+    Ok(ids)
+}
+
 /// The body of a publish, run inside a transaction the caller already owns so a
 /// history batch can store sources and its checkpoint in one commit.
 pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<PublishResult> {
@@ -446,6 +476,11 @@ pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<Publish
     let title = params.title.clone().unwrap_or_default();
     let scope = params.scope.clone().unwrap_or_default();
     let locator = params.locator.clone().unwrap_or_default();
+    // What the host already knows this record produced. Stored with the source so
+    // extraction can treat those cards as known and refuse to mint them again.
+    let cited = cited_ids(params.cited_card_ids.as_deref().unwrap_or_default())?;
+    let cited_json = serde_json::to_string(&cited)
+        .map_err(|error| ApiError::storage(format!("cannot encode the cited cards: {error}")))?;
 
     // One source row per (kind, origin, content). Re-publishing the same text is
     // how a restarted host proves it can still project the body, so it must be a
@@ -465,8 +500,9 @@ pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<Publish
             transaction
                 .execute(
                     "UPDATE sources SET title = ?2, scope = ?3, locator = ?4, read_at = ?5, size = ?6,
-                     state = 'active', invalid_reason = NULL, updated_at = ?7 WHERE id = ?1",
-                    params![id, title, scope, locator, read_at, size, now_ms()],
+                     state = 'active', invalid_reason = NULL, cited_card_ids = ?8, updated_at = ?7
+                     WHERE id = ?1",
+                    params![id, title, scope, locator, read_at, size, now_ms(), cited_json],
                 )
                 .map_err(|error| ApiError::storage(format!("cannot refresh the source: {error}")))?;
             id.clone()
@@ -476,8 +512,8 @@ pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<Publish
             transaction
                 .execute(
                     "INSERT INTO sources (id, kind, origin_ref, locator, title, version, scope, read_at,
-                       fingerprint, size, state, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'active', ?11, ?11)",
+                       fingerprint, size, state, created_at, updated_at, cited_card_ids)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'active', ?11, ?11, ?12)",
                     params![
                         id,
                         params.kind,
@@ -489,7 +525,8 @@ pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<Publish
                         read_at,
                         fingerprint,
                         size,
-                        now_ms()
+                        now_ms(),
+                        cited_json
                     ],
                 )
                 .map_err(|error| ApiError::storage(format!("cannot save the source: {error}")))?;

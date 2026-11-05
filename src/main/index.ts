@@ -41,6 +41,8 @@ import { resolveSourceTarget } from './knowledge/targets'
 import { documentPath } from './knowledge/documents'
 import { openSource } from './knowledge/open'
 import { extractSourceNow } from './knowledge/manual'
+import type { KnowledgeTools } from './tools/knowledge'
+import type { FindSourceInput, SourceRef } from '@shared/knowledge'
 import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
 import { ExtractEngine } from './knowledge/engine'
@@ -298,6 +300,57 @@ const profileCollector = new ProfileCollector({
   log: line => log(line)
 })
 
+/**
+ * The knowledge base as the model sees it: two reads and one explicit write.
+ * Every call goes through the same host and collector the UI uses, so the model
+ * sees the user's real library and can never widen it.
+ */
+const knowledgeTools: KnowledgeTools = {
+  async search(query, limit) {
+    const page = await knowledge.searchCards({ query, offset: 0, limit })
+    return {
+      total: page.total,
+      items: page.items.map(card => ({ id: card.id, title: card.title, summary: card.summary, kind: card.kind, topics: card.topics, updatedAt: card.updatedAt }))
+    }
+  },
+  get(id) {
+    return knowledge.getCard(id)
+  },
+  async extractFromNote(noteId) {
+    // Reading the note back through its own store is the only way in: the tool
+    // never accepts a body handed to it from outside.
+    const note = notes.list().notes.find(entry => entry.id === noteId)
+    if (!note) throw new Error('这条随记已不存在')
+    const published = await knowledgeCollector.publishNote(note)
+    if (!published) return { queued: 0, reason: '这条随记还不能提炼' }
+    return extractSourceNow(published.sourceId, {
+      host: () => knowledge,
+      enabled: () => knowledgeCollector.enabled,
+      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+      resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
+      wake: () => extractEngine.wake(),
+      log: line => log(line)
+    })
+  }
+}
+
+/**
+ * Removes the knowledge one record alone supported, right before the record
+ * itself is deleted. It throws: nothing has been deleted when it does, so the
+ * caller keeps both sides intact and can retry with the real reason.
+ */
+async function purgeRecordKnowledge(input: FindSourceInput): Promise<void> {
+  if (!knowledgeCollector.enabled) return
+  const found = await knowledge.findSources(input)
+  const sources = found.sources.filter(source => source.state !== 'invalid').map(source => ({ id: source.id, version: source.version }))
+  // Nothing was published for this record: there is no knowledge to remove.
+  if (!sources.length) return
+  const result = await knowledge.purgeCards({ sources, cards: true })
+  log(`[knowledge] 删除记录时移除 ${result.removed.length} 张卡片，保留 ${result.kept.length} 张，跳过 ${result.skipped.length} 个已变更来源`)
+}
+/** Characters of a card body handed to a continued discussion. */
+const MAX_CARD_CONTEXT = 2000
+
 /** The switch/game facts and the scan they authorize, in one call. */
 const knowledgeWiring = { collector: knowledgeCollector, history: historyDriver, engine: extractEngine }
 
@@ -378,6 +431,9 @@ const windowsTools = new WindowsTools({
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
   onReading: reading => knowledgeCollector.readingFinished(reading),
   onCompleted: ask => void profileCollector.completedAsk(ask),
+  // The knowledge tools come and go with the user's switch; availability is
+  // re-checked per call, so turning the feature off retires them immediately.
+  knowledge: knowledgeTools,
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
     const target = await captureSelectionTarget(store.get(), context, signal)
@@ -1737,6 +1793,95 @@ function registerIpc(): void {
     })
   })
   handle('knowledge:model-info', event => { knowledgeOwner(event); return modelInfo() })
+  /**
+   * The cards one record produced. A note page only knows the note id, so the
+   * source is looked up read-only; an unpublished note simply has none yet.
+   */
+  /** A detail page knows the record, not the source; this is the read-only bridge. */
+  const sourceIdFor = async (query: SourceRef): Promise<string | null> => {
+    if (typeof query?.sourceId === 'string' && query.sourceId) return knowledgeId(query.sourceId, '来源 ID')
+    const noteId = typeof query?.noteId === 'string' ? query.noteId.trim() : ''
+    if (!noteId) return null
+    const found = await knowledge.findSources({ channel: 'note', originRef: noteId })
+    return found.sources[0]?.id ?? null
+  }
+  /** Every source one record produced, for the delete preview. */
+  const sourcesFor = async (target: SourceRef): Promise<KnowledgeSource[]> => {
+    if (typeof target?.sourceId === 'string' && target.sourceId) return [await knowledge.getSource(knowledgeId(target.sourceId, '来源 ID'))]
+    const noteId = typeof target?.noteId === 'string' ? target.noteId.trim() : ''
+    if (noteId) return (await knowledge.findSources({ channel: 'note', originRef: noteId })).sources
+    const threadId = typeof target?.threadId === 'string' ? target.threadId.trim() : ''
+    if (threadId) return (await knowledge.findSources({ channel: 'chat', groupKey: threadId })).sources
+    return []
+  }
+  handle('knowledge:by-source', async (event, query: SourceRef & { offset?: number; limit?: number }) => {
+    knowledgeOwner(event)
+    const offset = Math.max(0, Math.trunc(Number(query?.offset) || 0))
+    const limit = Math.min(50, Math.max(1, Math.trunc(Number(query?.limit) || 20)))
+    const sourceId = await sourceIdFor(query)
+    if (!sourceId) return { items: [], total: 0, offset, limit, hasMore: false, nextOffset: null }
+    return knowledge.cardsBySource({ sourceId, offset, limit })
+  })
+  /** What deleting the record would do; a failure here is reported, not swallowed. */
+  handle('knowledge:impact', async (event, target: SourceRef | string) => {
+    knowledgeOwner(event)
+    // The dialog knows a record id; the page may already hold a source id.
+    const sources: KnowledgeSource[] = await sourcesFor(typeof target === 'string' ? { sourceId: target } : target)
+    if (!sources.length) return { sourceId: '', version: '', cards: 0, single: 0, multi: 0, items: [], more: false }
+    // One record can have several sources (a thread holds one per turn), so the
+    // preview is the union of their cards, counted once each.
+    let more = false
+    const seen = new Map<string, import('@shared/knowledge').CardImpactItem>()
+    for (const source of sources.slice(0, 50)) {
+      const impact = await knowledge.cardImpact(source.id)
+      for (const item of impact.items) {
+        const previous = seen.get(item.id)
+        // A card that has another valid source anywhere is not single-source.
+        seen.set(item.id, previous ? { ...previous, single: previous.single && item.single, sources: Math.max(previous.sources, item.sources) } : item)
+      }
+      if (impact.more) more = true
+    }
+    const items = [...seen.values()]
+    const single = items.filter(item => item.single)
+    return {
+      sourceId: sources[0]!.id,
+      version: sources[0]!.version,
+      cards: items.length,
+      single: single.length,
+      multi: items.length - single.length,
+      items: items.slice(0, 20),
+      more: more || items.length > 20
+    }
+  })
+  /**
+   * Continue a card in a new conversation. Only the card's own id and a bounded
+   * body travel; the thread itself is the ordinary chat thread.
+   */
+  handle('knowledge:continue', async (event, id: string) => {
+    knowledgeOwner(event)
+    const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
+    const thread = chats.create(null)
+    const seed = [{ kind: 'knowledge' as const, id: card.id, title: card.title, text: card.summary, at: card.updatedAt }]
+    // Bounded context: the card body is the material, the question is a pointer to it.
+    const question = `继续讨论这张知识卡片。\n\n【卡片】${card.title}\n${card.body.slice(0, MAX_CARD_CONTEXT)}`
+    void chats.send(thread.id, question, [], seed).catch(error => log(`continue chat: ${String(error)}`))
+    return { threadId: thread.id }
+  })
+  /** A real todo from a card the user picked; the card's text is data, not orders. */
+  handle('knowledge:card-todo', async (event, id: string) => {
+    knowledgeOwner(event)
+    if (!reminders) throw new Error('待办服务尚未就绪')
+    const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
+    const todo = reminders.save({ title: card.title.slice(0, 200), description: card.summary.slice(0, 2000), dueAt: null, level: 'normal', recurrence: null, source: 'manual' })
+    return { id: todo.id, title: todo.title }
+  })
+  /** A card becomes a note through the note store's own save path. */
+  handle('knowledge:card-note', async (event, id: string) => {
+    knowledgeOwner(event)
+    const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
+    const note = await notes.createText({ text: `# ${card.title}\n\n${card.body}\n` })
+    return { noteId: note.id }
+  })
   handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })
   handle('profile:update', (event, input: UpdateProfileInput) => {
     knowledgeOwner(event)
@@ -1883,7 +2028,13 @@ function registerIpc(): void {
   handle('chat:get', (event, id: string, limit?: number, messageId?: string) => { chatOwner(event); return chats.get(id, limit, messageId) })
   handle('chat:attachment', (event, id: string, attachmentId: string) => { chatOwner(event); return chats.store.attachment(id, attachmentId) })
   handle('chat:create', (event, group: string | null) => { chatOwner(event); return chats.create(group) })
-  handle('chat:edit', (event, input: import('@shared/chat').ChatEdit) => { chatOwner(event); return chats.edit(input) })
+  handle('chat:edit', async (event, input: import('@shared/chat').ChatEdit) => {
+    chatOwner(event)
+    // An explicit opt-in removes the cards this thread alone supported, before the
+    // thread row goes away; a failure here leaves the thread untouched.
+    if (input?.action === 'delete' && input.deleteKnowledge) await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id })
+    return chats.edit(input)
+  })
   handle('chat:send', async (event, id: string, text: string, attachments?: import('@shared/chat').ChatUpload[]) => {
     chatOwner(event)
     if (gameMode.snapshot().active) throw Error('游戏模式下已暂停聊天生成')
@@ -3055,6 +3206,9 @@ async function bootstrap(): Promise<void> {
   if (reminders.store.missed().length) ensureSettingsWindow()
   registerNotesIpc({
     store: notes,
+    // The user ticked 「同时删除关联知识」 in the confirmation: remove the cards
+    // this note alone supported, before the note row itself goes away.
+    purgeKnowledge: noteId => purgeRecordKnowledge({ channel: 'note', originRef: noteId }),
     persistDir: async (dir) => {
       await store.update({ notesDir: dir })
     },

@@ -60,9 +60,13 @@ interface Props {
   settings: Settings
   patch: (delta: Partial<Settings>) => void
   openRecord: (record: LocalRecord) => void
+  /** A card another page asked to show; the page only moves its selection. */
+  focusCardId?: string
+  onOpenChat: (threadId: string) => void
+  onOpenNote: (noteId: string) => void
 }
 
-export function KnowledgePage({ settings, patch, openRecord }: Props): JSX.Element {
+export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpenChat, onOpenNote }: Props): JSX.Element {
   const { t } = useTranslation()
   const [view, setView] = useState<'cards' | 'graph'>('cards')
   const [filters, setFilters] = useState<CardFilters>(EMPTY_FILTERS)
@@ -155,6 +159,17 @@ export function KnowledgePage({ settings, patch, openRecord }: Props): JSX.Eleme
     setSelectedId(id)
     scrollTop.current = scrollBox.current?.scrollTop ?? 0
   }
+
+  /**
+   * A card the notes page asked for. The selection state already exists and the
+   * detail pane loads the card by id, so nothing here touches the list: refetching
+   * would throw away the filter the user left the page on.
+   */
+  useEffect(() => {
+    if (!focusCardId) return
+    setView('cards')
+    setSelectedId(focusCardId)
+  }, [focusCardId])
 
   const back = (): void => {
     setSelectedId(null)
@@ -312,6 +327,8 @@ export function KnowledgePage({ settings, patch, openRecord }: Props): JSX.Eleme
               onChanged={() => { void fetchPage(0, active) }}
               onSelect={(id) => select(id)}
               openRecord={openRecord}
+              onOpenChat={onOpenChat}
+              onOpenNote={onOpenNote}
               onPickTopic={(topic) => setFilters({ ...filters, topic })}
               onBack={back}
               onDeleted={() => { setSelectedId(null); setReload((value) => value + 1) }}

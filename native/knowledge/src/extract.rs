@@ -33,6 +33,12 @@ pub const MAX_SEGMENT_CHARS: usize = 12_000;
 pub const SEGMENT_OVERLAP: usize = 500;
 pub const MAX_CANDIDATES: usize = 8;
 pub const MAX_CANDIDATE_CHARS: usize = 6_000;
+/// Cited cards one compare round carries: the host already declared them, so the
+/// cap keeps them from pushing the fingerprint matches out of the prompt.
+pub const CITED_CARDS: usize = 6;
+/// Characters of one cited card. A cited card can be long; 400 characters of body
+/// are enough for the compare round to recognize a restatement of it.
+pub const CITED_CARD_CHARS: usize = 400;
 pub const MAX_CARDS: usize = 3;
 /// Relations one batch may propose.
 pub const MAX_RELATIONS: usize = 12;
@@ -881,6 +887,42 @@ fn candidates_for(
     Ok(out)
 }
 
+/// The cards the host already declared as products of these records.
+///
+/// A cited id that no longer exists is skipped: the list is a hint, not a
+/// contract, and a purge between publish and extraction must not fail the batch.
+fn cited_candidates(connection: &Connection, source_ids: &[String]) -> ApiResult<Vec<Candidate>> {
+    if source_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ids = serde_json::to_string(source_ids)
+        .map_err(|error| ApiError::storage(format!("knowledge database error: {error}")))?;
+    let mut statement = connection
+        .prepare(
+            "SELECT c.id, c.title, c.summary, substr(c.body, 1, ?2), c.revision
+             FROM cards c
+             WHERE c.id IN (SELECT json_each.value
+                            FROM sources, json_each(sources.cited_card_ids)
+                            WHERE sources.id IN (SELECT value FROM json_each(?1)))
+             ORDER BY c.updated_at DESC, c.id",
+        )
+        .map_err(sqlite)?;
+    let rows = statement
+        .query_map(params![ids, CITED_CARD_CHARS as i64], |row| {
+            Ok(Candidate {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                summary: row.get(2)?,
+                body: row.get(3)?,
+                revision: row.get(4)?,
+            })
+        })
+        .map_err(sqlite)?
+        .collect::<Result<Vec<Candidate>, _>>()
+        .map_err(sqlite)?;
+    Ok(rows)
+}
+
 fn exact_card(connection: &Connection, fingerprint: &str) -> ApiResult<Option<String>> {
     connection
         .query_row(
@@ -1086,6 +1128,21 @@ pub fn run(store: &Store, link: &Link, parent: &str, params: RunParams) -> ApiRe
     if !drafts.is_empty() {
         let connection = lock(store)?;
         let mut seen = BTreeSet::new();
+        // The cards the host already declared for these records go first: a pure
+        // restatement of one of them must meet its own card in the compare round
+        // instead of a hint list another draft already filled.
+        let claimed_ids: Vec<String> = claimed
+            .iter()
+            .map(|source| source.source_id.clone())
+            .collect();
+        for candidate in cited_candidates(&connection, &claimed_ids)? {
+            if candidates.len() >= CITED_CARDS {
+                break;
+            }
+            if seen.insert(candidate.id.clone()) {
+                candidates.push(candidate);
+            }
+        }
         for draft in &drafts {
             let fingerprint = cards::fingerprint_of(&draft.body);
             let found = exact_card(&connection, &fingerprint)?;

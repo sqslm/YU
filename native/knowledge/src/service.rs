@@ -17,7 +17,7 @@ use serde::Deserialize;
 use crate::protocol::{ApiError, ApiResult, Code};
 use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA, Store};
 use crate::util::ensure_not_cancelled;
-use crate::{cards, history, profile, queue, relations, sources};
+use crate::{cards, history, profile, purge, queue, relations, sources};
 
 #[derive(Deserialize)]
 struct IdParams {
@@ -175,6 +175,16 @@ impl Service {
                     "sources",
                 ))
             }
+            "source.find" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let found = sources::find(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(found).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
             "card.save" => {
                 let store = self.store()?;
                 let mut connection = store.knowledge.lock().map_err(lock_error)?;
@@ -230,6 +240,35 @@ impl Service {
                     scope: None,
                     shutdown: false,
                 })
+            }
+            "card.by_source" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let page = cards::by_source(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(page).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "card.impact" => {
+                let store = self.store()?;
+                let connection = store.knowledge.lock().map_err(lock_error)?;
+                let impact = purge::impact(&connection, decode(params)?)?;
+                Ok(Outcome {
+                    result: serde_json::to_value(impact).map_err(encode_error)?,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "card.purge" => {
+                let store = self.store()?;
+                let mut connection = store.knowledge.lock().map_err(lock_error)?;
+                let purged = purge::purge(&mut connection, decode(params)?)?;
+                Ok(changed(
+                    serde_json::to_value(purged).map_err(encode_error)?,
+                    "cards",
+                ))
             }
             "card.revisions" => {
                 let store = self.store()?;

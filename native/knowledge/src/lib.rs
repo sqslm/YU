@@ -12,6 +12,7 @@ pub mod link;
 pub mod profile;
 pub mod profile_learning;
 pub mod protocol;
+pub mod purge;
 pub mod queue;
 pub mod relations;
 pub mod service;

@@ -42,6 +42,7 @@ import type { AssistantLocalResult } from '@shared/assistant'
 import { PERSONAL_DEFINITIONS, PERSONAL_TOOLS, type PersonalTools } from './personal'
 import { LIFE_DEFINITIONS, LIFE_TOOLS, type LifeTools } from './life'
 import { WORKFLOW_DEFINITIONS, WORKFLOW_TOOLS, type WorkflowTools } from './workflow'
+import { KNOWLEDGE_DEFINITIONS, KNOWLEDGE_TOOLS, type KnowledgeTools } from './knowledge'
 import type { TaskContext, ToolState } from '@shared/task'
 import { argumentError } from './schema'
 import { requestsContextRead } from '../context-access'
@@ -61,6 +62,8 @@ export interface ToolContext {
   life?: LifeTools
   /** Saved workflows: replay needs the store, not the model. */
   workflow?: WorkflowTools
+  /** The user's own knowledge base, present only while it is switched on. */
+  knowledge?: KnowledgeTools
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
   onToolResult?: (name: string, result: ToolOutcome) => void
@@ -590,6 +593,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   ...LIFE_DEFINITIONS,
   readAloudDefinition(runTool),
   ...WORKFLOW_DEFINITIONS,
+  ...KNOWLEDGE_DEFINITIONS,
   ...WINDOWS_DEFINITIONS,
   {
     name: 'get_weather',
@@ -700,7 +704,7 @@ export const TOOL_NAMES: string[] = TOOL_DEFINITIONS.map((tool) => tool.name)
 /** OpenAI `tools` array. */
 export function toolSchemas(allowed?: readonly string[], ctx?: ToolContext): Array<Record<string, unknown>> {
   if (ctx) allowed = availableToolNames({ ...ctx, allowedTools: allowed ?? ctx.allowedTools })
-  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, 'analyze_screenshot'].includes(tool.name)).map((tool) => ({
+  return TOOL_DEFINITIONS.filter(tool => allowed ? allowed.includes(tool.name) : ![...WINDOWS_TOOLS, ...PERSONAL_TOOLS, ...LIFE_TOOLS, ...WORKFLOW_TOOLS, ...KNOWLEDGE_TOOLS, 'analyze_screenshot'].includes(tool.name)).map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -725,6 +729,7 @@ export function availableToolNames(ctx: ToolContext): string[] {
     if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number])) return Boolean(ctx.personal && ctx.allowedTools)
     if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number])) return Boolean(ctx.life && ctx.allowedTools)
     if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number])) return Boolean(ctx.workflow && ctx.allowedTools)
+    if (KNOWLEDGE_TOOLS.includes(name as typeof KNOWLEDGE_TOOLS[number])) return Boolean(ctx.knowledge && ctx.allowedTools)
     if (name === 'analyze_screenshot') return Boolean(ctx.analyzeScreenshot && ctx.allowedTools)
     return name !== 'web_search' || ctx.settings.search?.enabled !== false
   }).map(tool => tool.name)
@@ -807,6 +812,7 @@ async function runRegisteredTool(
   if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number]) && (!ctx.life || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
   if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number]) && (!ctx.workflow || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
   if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) && (!ctx.windows || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (KNOWLEDGE_TOOLS.includes(name as typeof KNOWLEDGE_TOOLS[number]) && (!ctx.knowledge || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
   if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
   if (!tool) return reject(mt('未知工具：{{name}}', { name }))
   const input = args ?? {}

@@ -56,7 +56,10 @@ export const WORKFLOW_STEP_TOOLS: readonly string[] = [
   'get_active_window',
   'get_disk_space'
   ,'open_application','open_folder','open_file','open_url','search_files','search_file_contents','search_files_everything','get_current_folder','get_current_page',
-  'search_file_activity','get_system_info','get_system_volume','set_system_volume','control_note_audio','get_prompt_info','note_sync_status','control_speech','configure_speech','stop_speaking','briefing_delivery_status','send_briefing'
+  'search_file_activity','get_system_info','get_system_volume','set_system_volume','control_note_audio','get_prompt_info','note_sync_status','control_speech','configure_speech','stop_speaking','briefing_delivery_status','send_briefing',
+  // Re-queues one note for extraction. It only reads the note's own store and the
+  // queue the user already owns, so a saved workflow may replay it.
+  'extract_knowledge'
 ]
 
 export interface WorkflowStep {

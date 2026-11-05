@@ -13,7 +13,7 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 7;
+pub const KNOWLEDGE_SCHEMA: i64 = 8;
 pub const PROFILE_SCHEMA: i64 = 3;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
@@ -204,6 +204,15 @@ const RELATION_SOURCE_SQL: &str = r#"
 ALTER TABLE card_relations ADD COLUMN source_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE card_relations ADD COLUMN segment INTEGER NOT NULL DEFAULT -1;
 CREATE INDEX card_relations_source ON card_relations (source_id, segment);
+"#;
+
+/// Stage 6 lets a projection name the cards its own answer cited. The list is a
+/// JSON array of card ids on the source row, so a later extraction can offer
+/// those cards to the comparison round as already-known knowledge instead of
+/// minting a duplicate. Additive only: every source, card, link, history row and
+/// exclusion a schema-7 database had is kept.
+const CITED_SQL: &str = r#"
+ALTER TABLE sources ADD COLUMN cited_card_ids TEXT NOT NULL DEFAULT '[]';
 "#;
 
 pub const CARD_KINDS: [&str; 7] = [
@@ -412,6 +421,7 @@ impl Store {
                 EXTRACT_SQL,
                 GRAPH_SQL,
                 RELATION_SOURCE_SQL,
+                CITED_SQL,
             ],
         )?;
         let profile = open_db(
@@ -761,6 +771,69 @@ mod tests {
             )
             .expect("relations table");
         assert_eq!(relations, 1, "the graph table arrives with the upgrade");
+        drop(connection);
+        drop(store);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Stage 6 only adds one column to `sources`. A schema-7 file must keep every
+    /// row it already had, and the new column must arrive with a usable default so
+    /// an old publishes' citations read as "none".
+    #[test]
+    fn a_stage_six_database_gains_the_cited_card_list() {
+        let root = temp_root("stage-six");
+        let directory = root.join("data").join("knowledge");
+        fs::create_dir_all(&directory).expect("directory");
+        {
+            let connection = Connection::open(directory.join("knowledge.db")).expect("open");
+            for migration in [
+                KNOWLEDGE_SQL,
+                QUEUE_SQL,
+                THREAD_SQL,
+                HISTORY_BOUND_SQL,
+                EXTRACT_SQL,
+                GRAPH_SQL,
+                RELATION_SOURCE_SQL,
+            ] {
+                connection
+                    .execute_batch(migration)
+                    .expect("stage six schema");
+            }
+            connection
+                .execute_batch(
+                    "PRAGMA user_version = 7;
+                     INSERT INTO sources
+                       (id, kind, origin_ref, version, fingerprint, read_at, size,
+                        state, created_at, updated_at)
+                       VALUES ('src_1', 'note', 'n1', 'v1', 'f', 1, 12, 'active', 1, 1);
+                     INSERT INTO cards
+                       (id, kind, title, summary, body, topics, aliases, edited,
+                        fingerprint, revision, created_at, updated_at, favorite)
+                       VALUES ('card_1', 'concept', '既有卡片', '摘要', '正文', '[\"rust\"]', '[]',
+                                0, 'f', 1, 5, 5, 1);
+                     INSERT INTO card_sources (card_id, source_id, created_at)
+                       VALUES ('card_1', 'src_1', 5);",
+                )
+                .expect("stage six rows");
+        }
+        let store = Store::open(&root).expect("upgrade");
+        let connection = store.knowledge.lock().expect("lock");
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("version");
+        assert_eq!(version, KNOWLEDGE_SCHEMA);
+        let cited: String = connection
+            .query_row(
+                "SELECT cited_card_ids FROM sources WHERE id = 'src_1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("cited column");
+        assert_eq!(cited, "[]", "an old source cited nothing");
+        let links: i64 = connection
+            .query_row("SELECT count(*) FROM card_sources", [], |row| row.get(0))
+            .expect("links");
+        assert_eq!(links, 1, "the upgrade must not drop an existing link");
         drop(connection);
         drop(store);
         let _ = fs::remove_dir_all(&root);

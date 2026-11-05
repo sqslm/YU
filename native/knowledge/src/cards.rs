@@ -498,17 +498,38 @@ pub(crate) fn plan_condition(plan: &Plan, target: &mut Where) -> &'static str {
     }
 }
 
+/// Restricts a listing to the cards generated from the given original records,
+/// ignoring links whose source row was invalidated: a retracted record no longer
+/// claims the cards it once produced. An empty list restricts nothing.
+fn limit_to_sources(target: &mut Where, sources: &[String]) {
+    if sources.is_empty() {
+        return;
+    }
+    let ids = serde_json::to_string(sources).unwrap_or_else(|_| "[]".to_string());
+    let at = target.bind(Value::Text(ids));
+    target.and(format!(
+        "c.id IN (SELECT cs.card_id FROM card_sources cs JOIN sources s ON s.id = cs.source_id
+                   WHERE cs.source_id IN (SELECT value FROM json_each({at}))
+                     AND s.state <> 'invalid')"
+    ));
+}
+
 /// One page of the filtered, ordered listing, with every filter already applied
-/// to both the page and its count.
+/// to both the page and its count. `sources` restricts the listing to the cards
+/// extracted from those original records — a chat thread passes several, a note
+/// one — and the join runs before the count and before paging, so `total` is the
+/// real number of cards those records produced.
 fn query_page(
     connection: &Connection,
     filter: &Filter,
     plan: &Plan,
+    sources: &[String],
     offset: u32,
     limit: u32,
 ) -> ApiResult<CardPage> {
     let mut counting = Where::new();
     let join = plan_condition(plan, &mut counting);
+    limit_to_sources(&mut counting, sources);
     filter.apply(&mut counting);
     let total: i64 = connection
         .query_row(
@@ -519,6 +540,7 @@ fn query_page(
         .map_err(sqlite_error)?;
     let mut paging = Where::new();
     let join = plan_condition(plan, &mut paging);
+    limit_to_sources(&mut paging, sources);
     filter.apply(&mut paging);
     let ranking = match plan {
         Plan::All => "c.updated_at DESC, c.id".to_string(),
@@ -805,6 +827,18 @@ pub fn delete(connection: &mut Connection, id: &str) -> ApiResult<bool> {
         .map_err(|error| {
             ApiError::storage(format!("cannot start the card transaction: {error}"))
         })?;
+    delete_in(&transaction, id)?;
+    crate::util::ensure_not_cancelled()?;
+    transaction
+        .commit()
+        .map_err(|error| ApiError::storage(format!("cannot commit the card delete: {error}")))?;
+    Ok(true)
+}
+
+/// The delete itself, run inside a transaction the caller owns. `card.purge`
+/// removes several cards under one commit through this, so the exclusions, the
+/// links, the search row and the cascade behave exactly as a single delete.
+pub(crate) fn delete_in(transaction: &Connection, id: &str) -> ApiResult<()> {
     let existing: i64 = transaction
         .query_row("SELECT count(*) FROM cards WHERE id = ?1", [id], |row| {
             row.get(0)
@@ -848,11 +882,7 @@ pub fn delete(connection: &mut Connection, id: &str) -> ApiResult<bool> {
     transaction
         .execute("DELETE FROM cards WHERE id = ?1", [id])
         .map_err(sqlite_error)?;
-    crate::util::ensure_not_cancelled()?;
-    transaction
-        .commit()
-        .map_err(|error| ApiError::storage(format!("cannot commit the card delete: {error}")))?;
-    Ok(true)
+    Ok(())
 }
 
 pub fn get(connection: &Connection, id: &str) -> ApiResult<Card> {
@@ -867,7 +897,65 @@ pub fn list(connection: &Connection, params: ListParams) -> ApiResult<CardPage> 
         params.topic.as_deref(),
         params.favorite,
     )?;
-    query_page(connection, &filter, &Plan::All, offset, limit)
+    query_page(connection, &filter, &Plan::All, &[], offset, limit)
+}
+
+/// The cards generated from the original records a caller names.
+///
+/// `sourceId` names one bound record; `channel` + `originRef` name it by the
+/// identity the host still holds while rendering a note; `channel` + `groupKey`
+/// name a whole chat thread and answer the union of its records' cards. A note
+/// that never produced a record is a normal state for that detail view, so an
+/// unresolved identity answers an empty page instead of `not_found`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceCardsParams {
+    #[serde(default)]
+    pub source_id: Option<String>,
+    #[serde(default)]
+    pub channel: Option<String>,
+    #[serde(default)]
+    pub origin_ref: Option<String>,
+    #[serde(default)]
+    pub group_key: Option<String>,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub topic: Option<String>,
+    #[serde(default)]
+    pub favorite: Option<bool>,
+    #[serde(default)]
+    pub offset: Option<u32>,
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+pub fn by_source(connection: &Connection, params: SourceCardsParams) -> ApiResult<CardPage> {
+    let (offset, limit) = page(params.offset, params.limit);
+    let filter = Filter::new(
+        params.kind.as_deref(),
+        params.topic.as_deref(),
+        params.favorite,
+    )?;
+    let found = crate::sources::resolve_many(
+        connection,
+        params.source_id.as_deref(),
+        params.channel.as_deref(),
+        params.origin_ref.as_deref(),
+        params.group_key.as_deref(),
+    )?;
+    if found.is_empty() {
+        return Ok(CardPage {
+            items: Vec::new(),
+            total: 0,
+            offset,
+            limit,
+            has_more: false,
+            next_offset: None,
+        });
+    }
+    let ids: Vec<String> = found.into_iter().map(|source| source.id).collect();
+    query_page(connection, &filter, &Plan::All, &ids, offset, limit)
 }
 
 /// Escapes the LIKE wildcards so user text is never a pattern.
@@ -913,7 +1001,7 @@ pub fn search(connection: &Connection, params: SearchParams) -> ApiResult<CardPa
         params.favorite,
     )?;
     let plan = plan_for(&params.query)?;
-    query_page(connection, &filter, &plan, offset, limit)
+    query_page(connection, &filter, &plan, &[], offset, limit)
 }
 
 /// Every distinct topic across the cards, most used first, then alphabetically
