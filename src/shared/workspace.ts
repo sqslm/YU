@@ -61,9 +61,21 @@ export function parseCardCitations(answer: string, received: Iterable<string>): 
 }
 
 /**
- * The user asked their own library by name. A read that fails there is a real
- * failure to report; the same read failing in passing must not sink the answer.
+ * The library a question can point at, in the words people use for their own.
+ * Naming it is not enough: discussing how a knowledge base should be designed is
+ * a topic, not a request to read this machine's cards.
+ */
+const LIBRARY = /知识库|知识卡片|我的卡片|卡片里|我的笔记|笔记里|资料库|knowledge\s*base|my\s+(?:library|cards|notes)/iu
+
+/** Looking inside it: a search verb, in Chinese or English. */
+const LOOKUP = /搜索|搜一下|搜过|查找|查一下|查查|检索|翻一下|翻翻|找一下|找找|有没有|有哪些|讲|提到|记过|记录过|\b(?:search|look\s*up|look\s*for|find|query|browse|check)\b/iu
+
+/**
+ * The user asked their own library by name, to look something up in it. A read
+ * that fails there is a real failure to report; the same read failing in passing
+ * — a question about the topic, or a "I remember" aside — must not sink the answer.
  */
 export function asksOwnKnowledge(question: string): boolean {
-  return /知识库|知识卡片|我的卡片|卡片里|我记|记过|之前记|笔记里|资料库里/.test(question ?? '')
+  const text = question ?? ''
+  return LIBRARY.test(text) && LOOKUP.test(text)
 }

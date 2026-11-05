@@ -605,6 +605,31 @@ describe('knowledge card references in the floating answer', () => {
     expect(turn.answer).toContain('知识库暂时不可用')
   })
 
+  it('treats a question about the topic as ordinary, not as a library read', async () => {
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn() })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: false, status: 'failed', summary: '知识库暂时不可用' })
+      return { text: '备份分冷备与热备，先定恢复目标。', sources: [], searched: false }
+    })
+    await current.send('知识库的备份策略怎么设计？')
+    const turn = current.snapshot().turns.at(-1)!
+    // Designing a knowledge base is a topic: the failed optional read must not sink it.
+    expect(turn.state).toBe('done')
+    expect(turn.answer).toBe('备份分冷备与热备，先定恢复目标。')
+  })
+
+  it('still fails an explicit English request for the local library', async () => {
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn() })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: false, status: 'failed', summary: '知识库暂时不可用' })
+      return { text: 'No cards found.', sources: [], searched: false }
+    })
+    await current.send('Search my knowledge base for deduplication.')
+    const turn = current.snapshot().turns.at(-1)!
+    expect(turn.state).not.toBe('done')
+    expect(turn.answer).toContain('知识库暂时不可用')
+  })
+
   it('cites nothing when the knowledge tools never ran', async () => {
     const readings: import('./knowledge/collector').ReadingProjection[] = []
     const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), onReading: reading => readings.push(reading) })

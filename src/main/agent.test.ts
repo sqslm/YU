@@ -207,6 +207,33 @@ describe('native function calling', () => {
     expect(run).toHaveBeenCalledTimes(2)
     expect(result.text).toBe('Built-in search used')
   })
+  it('judges a failed library read by whether the question asked for the library', async () => {
+    const knowledge = {
+      enabled: () => true,
+      search: async () => { throw new Error('知识库暂时不可用') },
+      get: async () => { throw new Error('知识库暂时不可用') },
+      extractFromNote: async () => { throw new Error('never offered') }
+    } as unknown as import('./tools/knowledge').KnowledgeTools
+    const options = { reset: true, knowledge, allowedTools: ['search_knowledge'] }
+    // The same failing tool: ordinary in the first question, the whole point in the second.
+    const ordinary = await askAgent(makeSettings(), '普通数据库写入如何避免重复？', {}, signal, () => {}, {
+      ...options, fetchImpl: makeFetch(toolCallResponse('search_knowledge', { query: '去重' }), textResponse('建议在数据库里加唯一约束。')) as unknown as typeof fetch
+    })
+    expect(ordinary.taskState).toBe('completed')
+    expect(ordinary.text).toBe('建议在数据库里加唯一约束。')
+    const topic = await askAgent(makeSettings(), '知识库的备份策略怎么设计？', {}, signal, () => {}, {
+      ...options, fetchImpl: makeFetch(toolCallResponse('search_knowledge', { query: '备份' }), textResponse('先定恢复目标，再谈冷备与热备。')) as unknown as typeof fetch
+    })
+    expect(topic.taskState).toBe('completed')
+    const chineseAsk = await askAgent(makeSettings(), '请搜索我的知识库中关于去重的卡片。', {}, signal, () => {}, {
+      ...options, fetchImpl: makeFetch(toolCallResponse('search_knowledge', { query: '去重' }), textResponse('没有找到。')) as unknown as typeof fetch
+    })
+    expect(chineseAsk.taskState).toBe('failed')
+    const englishAsk = await askAgent(makeSettings(), 'Search my knowledge base for deduplication.', {}, signal, () => {}, {
+      ...options, fetchImpl: makeFetch(toolCallResponse('search_knowledge', { query: 'deduplication' }), textResponse('No cards found.')) as unknown as typeof fetch
+    })
+    expect(englishAsk.taskState).toBe('failed')
+  })
   it('queries then updates a note in separate rounds without requiring Windows tools', async () => {
     const note = { id: 'actual-note', tags: [], transcript: 'Owned note', createdAt: 1, updatedAt: 1 }
     const updateNoteTags = vi.fn().mockResolvedValue({ ...note, tags: ['work'] })

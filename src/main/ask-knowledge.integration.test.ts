@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import type { Settings } from '@shared/types'
@@ -30,17 +30,27 @@ import type { Settings } from '@shared/types'
 import { AssistantSession } from './assistant'
 import { ChatService } from './chat'
 import { KnowledgeCollector, type ChatTurnDone } from './knowledge/collector'
+import { ExtractEngine } from './knowledge/engine'
 import { KnowledgeHost } from './knowledge/host'
+import { createSourceRecovery } from './knowledge/recover'
 import type { KnowledgeTools } from './tools/knowledge'
 import { runTool } from './tools/registry'
 
 /** The compiled helper. Already built in this working tree; never rebuilt here. */
 const ENTRY = join(process.cwd(), 'native', 'bin', 'yu-knowledge.exe')
 
+/**
+ * The settling window is real in production; a test that has already written the
+ * whole answer shortens it instead of sleeping through it.
+ */
+beforeAll(() => { process.env.YU_KNOWLEDGE_STABLE_MS = '0' })
+
 /** Synthetic card: no user data, and its title is what the citation rule matches. */
 const CARD_TITLE = '检索粒度基线'
 const CARD_BODY = '知识图谱检索先命中标题，再落到正文；两三个字也能命中。'
 const QUESTION = '我之前记过的检索粒度基线是什么'
+/** Names the library *and* asks to search it — the explicit case, in Chinese. */
+const EXPLICIT = '请搜索我的知识库中关于检索粒度基线的卡片。'
 /** The chat allowlist the production code builds: two reads, never the write. */
 const CHAT_KNOWLEDGE_TOOLS = ['search_knowledge', 'get_knowledge']
 
@@ -179,6 +189,7 @@ afterEach(async () => {
 })
 
 afterAll(() => {
+  delete process.env.YU_KNOWLEDGE_STABLE_MS
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -510,7 +521,7 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     expect(JSON.parse(reading!.cited_card_ids)).toEqual([card.id])
   }, 60_000)
 
-  it('answers without a citation when the helper cannot start', async () => {
+  it('reports a failed explicit library search and hands nothing to the collector', async () => {
     const root = newRoot()
     const host = trackHost(root, join(root, 'missing', 'yu-knowledge.exe'))
     const fake = await fakeModel((body) =>
@@ -530,7 +541,7 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     const seed = service.store.begin(thread.id, '上一轮的问题')
     service.store.finish(seed.answerId, '上一轮的回答', 'done')
 
-    await service.send(thread.id, QUESTION)
+    await service.send(thread.id, EXPLICIT)
 
     expect(fake.requests).toHaveLength(2)
     const followUp = JSON.stringify(fake.requests[1].body.messages)
@@ -580,6 +591,57 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     expect(completed[0].citedCardIds).toEqual([])
   }, 60_000)
 
+  it('judges a failed library read by the question, not by the tool name', async () => {
+    // The same failing helper and the same generic answer, four questions: the
+    // real chat decides from the question alone whether the read was required.
+    async function run(question: string): Promise<{ state: string; text: string; cited: string[] }> {
+      const root = newRoot()
+      const host = trackHost(root, join(root, 'missing', 'yu-knowledge.exe'))
+      const fake = await fakeModel((body) =>
+        hasToolResult(body)
+          ? answer('建议在数据库里加唯一约束。')
+          : callTool('search_knowledge', { query: '去重' })
+      )
+      const settings = settingsFor(fake.baseUrl, true)
+      const { tools } = knowledgeToolsFor(host, () => true)
+      const completed: ChatTurnDone[] = []
+      const service = trackService(new ChatService(
+        join(root, 'chats.db'),
+        () => settings,
+        () => {},
+        () => ({ knowledge: tools }),
+        (turn) => completed.push(turn)
+      ))
+      const thread = service.create(null)
+      const seed = service.store.begin(thread.id, '上一轮的问题')
+      service.store.finish(seed.answerId, '上一轮的回答', 'done')
+      await service.send(thread.id, question)
+      const stored = service.get(thread.id).messages.at(-1)!
+      return { state: stored.state, text: stored.text, cited: completed[0]?.citedCardIds ?? [] }
+    }
+
+    const ordinary = await run('普通数据库写入如何避免重复？')
+    expect(ordinary.state).toBe('done')
+    expect(ordinary.text).toBe('建议在数据库里加唯一约束。')
+    expect(ordinary.cited).toEqual([])
+
+    const topic = await run('知识库的备份策略怎么设计？')
+    // Discussing a knowledge base is a topic, not a request to read this one.
+    expect(topic.state).toBe('done')
+    expect(topic.text).toBe('建议在数据库里加唯一约束。')
+    expect(topic.cited).toEqual([])
+
+    // An explicit request keeps the real failure: the turn is reported as failed
+    // rather than as a successful "no hit", and nothing is collected.
+    const explicit = await run(EXPLICIT)
+    expect(explicit.state).toBe('error')
+    expect(explicit.cited).toEqual([])
+
+    const english = await run('Search my knowledge base for deduplication.')
+    expect(english.state).toBe('error')
+    expect(english.cited).toEqual([])
+  }, 120_000)
+
   it('hands a restatement and a new conclusion to the helper as two real sources', async () => {
     const root = newRoot()
     const host = trackHost(root)
@@ -614,8 +676,9 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     expect(JSON.parse(first[0].cited_card_ids)).toEqual([card.id])
     expect(first[0].version).toMatch(/^[0-9a-f]{64}$/)
 
-    // The same question answered the same way has the same content fingerprint —
-    // the identity extraction uses to refuse a second copy of the same knowledge.
+    // The same question answered the same way has the same content fingerprint:
+    // this is the projection-level identity only. Whether extraction really
+    // refuses a duplicate card is asserted by the suite below.
     await service.send(thread.id, '检索粒度是什么')
     // A different conclusion is its own material, and still names the same card.
     await service.send(thread.id, '怎么减少重复写入')
@@ -708,4 +771,137 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     expect(stored.state).toBe('done')
     expect(stored.records).toEqual([])
   }, 60_000)
+})
+
+/** The same conclusion in other words: a restatement must not mint a card. */
+const RESTATED = '换一套说法复述：知识图谱检索先命中标题，再落到正文，两三个字也能命中。'
+/** A statement the library does not hold yet. */
+const FRESH = '写入顺序固定为先认领版本、再删卡片，最后收尾关系，不留悬空链接。'
+
+describe('extraction over the citation a real chat turn produced', () => {
+  it('absorbs a restatement into the cited card and keeps a genuinely new conclusion', async () => {
+    const root = newRoot()
+    let citedCardId = ''
+    const prompts: string[] = []
+    let drafts = 0
+    // The provider seam the host already exposes: the helper builds the prompt,
+    // this stand-in only answers it. Which card is "the same" is decided by the
+    // real Rust comparison, given the candidates the helper puts in front of it.
+    const completer = async (call: { messages: { content: string }[] }): Promise<string> => {
+      const text = call.messages.map((message) => message.content).join('\n')
+      prompts.push(text)
+      if (text.includes('知识库去重器')) {
+        // The card this turn cited has to be a candidate, or a restatement has
+        // nothing to attach to and would be minted twice.
+        expect(text).toContain(citedCardId)
+        const fresh = text.includes(FRESH)
+        return JSON.stringify({
+          decisions: [{
+            index: 0,
+            action: fresh ? 'new' : 'reference',
+            ...(fresh ? {} : { targetCardId: citedCardId }),
+            reason: fresh ? '这条结论库里还没有' : '同一结论的另一种说法'
+          }]
+        })
+      }
+      drafts += 1
+      const named = /来源 (\S+)（第 0 段/.exec(text)
+      expect(named, 'the prompt must name the source it read').not.toBeNull()
+      return JSON.stringify({
+        cards: [{
+          kind: 'concept',
+          title: CARD_TITLE,
+          summary: '检索先命中标题',
+          body: drafts === 1 ? RESTATED : FRESH,
+          topics: ['检索'],
+          aliases: [],
+          sources: [{ sourceId: named![1], segment: 0 }],
+          reason: '可复用'
+        }],
+        reason: 'ok'
+      })
+    }
+    const host = new KnowledgeHost({ entry: ENTRY, root, requestMs: 20_000, idleMs: 60_000, completer: completer as never })
+    hosts.push(host)
+    const card = await host.saveCard({ kind: 'concept', title: CARD_TITLE, body: CARD_BODY, topics: ['检索'] })
+    citedCardId = card.id
+
+    let turn = 0
+    const fake = await fakeModel((body) => {
+      if (!hasToolResult(body)) return callTool('search_knowledge', { query: CARD_TITLE, limit: 3 })
+      turn += 1
+      return answer(turn === 1
+        ? `检索先命中标题，再落到正文。[[card:${card.id}]]`
+        : `另外，写入顺序要先认领版本再删卡片。[[card:${card.id}]]`)
+    })
+    const settings = settingsFor(fake.baseUrl, true)
+    const { tools } = knowledgeToolsFor(host, () => true)
+
+    let service!: ChatService
+    const recovery = createSourceRecovery({
+      notes: () => ({ list: () => ({ notes: [] }) }),
+      chats: () => service.store
+    })
+    const collector = new KnowledgeCollector({
+      settings: () => settings,
+      host: () => host,
+      readBody: (channel, originRef) => recovery(channel, originRef)
+    })
+    await collector.sync()
+    // The production hook, not a hand-made projection: the collector receives
+    // exactly the turn the real ChatService completed.
+    service = trackService(new ChatService(
+      join(root, 'chats.db'),
+      () => settings,
+      () => {},
+      () => ({ knowledge: tools }),
+      (done) => { collector.threadFinished(done) }
+    ))
+    const engine = new ExtractEngine({
+      host: () => host,
+      readBody: (channel, originRef) => collector.resolveBody(channel, originRef),
+      settings: () => settings,
+      allowed: () => true
+    })
+
+    const thread = service.create(null)
+    const seed = service.store.begin(thread.id, '上一轮的问题')
+    service.store.finish(seed.answerId, '上一轮的回答', 'done')
+
+    await service.send(thread.id, QUESTION)
+    // The projection really carries the cited id before extraction starts.
+    const first = await until(() => readSources(root), (rows) => rows.length === 1, 'the first chat source')
+    expect(JSON.parse(first[0].cited_card_ids)).toEqual([card.id])
+
+    await engine.tick()
+
+    // A restatement attaches to the card the answer cited: no second card.
+    const afterFirst = await host.listCards()
+    expect(afterFirst.total, 'a pure restatement mints no duplicate').toBe(1)
+    const absorbed = await host.getCard(card.id)
+    expect(absorbed.sourceIds).toHaveLength(1)
+    expect(prompts.some((text) => text.includes('知识库去重器') && text.includes(card.id))).toBe(true)
+
+    await service.send(thread.id, QUESTION)
+    const both = await until(() => readSources(root), (rows) => rows.length === 2, 'the second chat source')
+    expect(JSON.parse(both[1].cited_card_ids)).toEqual([card.id])
+
+    await engine.tick()
+
+    // A genuinely new conclusion is a new card, and the cited one stays as it was.
+    const afterSecond = await host.listCards()
+    expect(afterSecond.total, 'a new conclusion becomes a card').toBe(2)
+    const minted = afterSecond.items.find((item) => item.id !== card.id)
+    expect(minted, 'the second card is a different card').toBeDefined()
+    expect(minted!.title).toBe(CARD_TITLE)
+    const fresh = await host.getCard(minted!.id)
+    expect(fresh.body).toBe(FRESH)
+    // The cited card absorbed the first restatement and did not swallow the new one.
+    const citedAfter = await host.getCard(card.id)
+    expect(citedAfter.body).not.toBe(FRESH)
+    expect(prompts.some((text) => text.includes('知识库去重器') && text.includes(FRESH))).toBe(true)
+    const stillOne = service.get(thread.id).messages.at(-1)!
+    expect(stillOne.state).toBe('done')
+    expect(stillOne.text).not.toContain('[[card:')
+  }, 120_000)
 })

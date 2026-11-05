@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ChatStore } from './chat-store'
 import { readWorkspaceRecord, searchWorkspace, type WorkspaceSources } from './workspace'
 import type { NoteEntry } from '@shared/types'
-import { recordsFromTool, parseCardCitations, MAX_CITED_CARDS } from '@shared/workspace'
+import { recordsFromTool, parseCardCitations, asksOwnKnowledge, MAX_CITED_CARDS } from '@shared/workspace'
 
 const roots: string[] = [], stores: ChatStore[] = []
 afterEach(() => { vi.restoreAllMocks(); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -85,4 +85,19 @@ it('keeps pages stable when many chat messages have the same timestamp', () => {
   for (let i = 0; i < 40; i++) { const ids = sources.chat.begin(thread.id, '同时创建'); sources.chat.finish(ids.answerId, '完成', 'done') }
   const first = searchWorkspace(sources, '同时'), next = searchWorkspace(sources, '同时', 30)
   expect(new Set([...first.items, ...next.items].map(row => row.id)).size).toBe(40)
+})
+
+it('tells an explicit search of the local library from a question about it', () => {
+  // The four probes that motivated the rule: an ordinary write question, a
+  // Chinese request to search the library, a design question about the topic,
+  // and an English request to search the library.
+  expect(asksOwnKnowledge('普通数据库写入如何避免重复？')).toBe(false)
+  expect(asksOwnKnowledge('请搜索我的知识库中关于去重的卡片。')).toBe(true)
+  expect(asksOwnKnowledge('知识库的备份策略怎么设计？')).toBe(false)
+  expect(asksOwnKnowledge('Search my knowledge base for deduplication.')).toBe(true)
+  // A "I remember" aside is still an ordinary question about the world.
+  expect(asksOwnKnowledge('我记得之前写过去重的实现')).toBe(false)
+  expect(asksOwnKnowledge('我的知识库里有讲重复写入的卡片吗')).toBe(true)
+  // An English topic question names no library, so it stays optional.
+  expect(asksOwnKnowledge('How should a knowledge base be backed up?')).toBe(false)
 })
