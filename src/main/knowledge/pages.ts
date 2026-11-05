@@ -135,7 +135,9 @@ export function createHistoryPages(deps: {
           if (page.done) break
           position = page.nextSeq
         }
-        cursor = threadId
+        // Keep the sequence, never a bare thread id: a bare id would be read back
+        // as "sequence 0 of that thread" and restart it from the beginning.
+        cursor = `${threadId}:${position}`
       }
       return { rows, cursor, done: true }
     }

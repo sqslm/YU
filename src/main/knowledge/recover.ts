@@ -21,12 +21,30 @@ export type RecoveryBody =
   | { text: string }
   | { missing: 'deleted' | 'temporary' | 'empty' | 'unknown' }
 
+/** The slice of a thread this module reads. */
+export interface ChatThreadView {
+  memoryTemporary?: boolean
+  messages: { id: string; role: string; text: string; state: string }[]
+}
+
 export interface RecoveryDeps {
   notes: () => { list(): { notes: NoteProjection[] } }
   chats: () => {
-    get(id: string): { memoryTemporary?: boolean; messages: { id: string; role: string; text: string; state: string }[] } | undefined
+    /**
+     * `messageId` anchors the read at that message instead of the newest ones,
+     * so a source bound to an old turn is still found in a long thread. The real
+     * store throws when the thread or that message is gone.
+     */
+    get(id: string, limit?: number, messageId?: string): ChatThreadView | undefined
   }
 }
+
+/**
+ * Messages read around the anchored question. A question is followed by its
+ * answer and possibly a tool record, so a small window is enough and the read
+ * stays bounded no matter how long the thread grew.
+ */
+const CHAT_MESSAGE_WINDOW = 8
 
 /** `${threadId}:${userId}:${answerId}` — ids never contain a colon. */
 export function chatReference(threadId: string, userId: string, answerId: string): string {
@@ -65,12 +83,22 @@ export function createSourceRecovery(
     if (channel === 'chat') {
       const parsed = splitChatReference(originRef)
       if (!parsed) return { missing: 'unknown' }
-      const thread = deps.chats().get(parsed.threadId)
+      // The store throws when the thread or the anchored message is gone, which is
+      // exactly the "deleted" answer this function must give.
+      let thread: ChatThreadView | undefined
+      try {
+        thread = deps.chats().get(parsed.threadId, CHAT_MESSAGE_WINDOW, parsed.userId)
+      } catch {
+        return { missing: 'deleted' }
+      }
       if (!thread) return { missing: 'deleted' }
       if (thread.memoryTemporary) return { missing: 'temporary' }
       const question = thread.messages.find(message => message.id === parsed.userId)
       const answer = thread.messages.find(message => message.id === parsed.answerId)
-      if (!question || !answer || answer.state !== 'done') return { missing: 'deleted' }
+      // The window is anchored at the question, so a missing question really is a
+      // removed message — it is not "older than the newest hundred".
+      if (!question || !answer) return { missing: 'deleted' }
+      if (answer.state !== 'done') return { missing: 'unknown' }
       const questionText = question.text.trim()
       const answerText = answer.text.trim()
       if (!questionText || !answerText) return { missing: 'empty' }

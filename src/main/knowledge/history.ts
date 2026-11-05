@@ -91,12 +91,10 @@ export class HistoryDriver {
         const host = this.deps.host()
         if (!host) return
         if (this.deps.allowed && !this.deps.allowed()) {
-          // The switch was closed mid-scan: park the job instead of feeding it
-          // content the user just turned off. Resuming continues from the
-          // checkpoint the helper committed.
-          await host.pauseHistory(jobId).catch(error => {
-            this.deps.log?.(`[knowledge] 历史整理暂停失败：${this.error(error)}`)
-          })
+          // Automatic suspension (game mode, or the feature switched off) only
+          // stops this walk. The job keeps its `running` state in the helper, so an
+          // authorized resume continues from the checkpoint the helper committed.
+          // A manual pause is the user's own decision and stays `paused`.
           return
         }
         const job = (await host.historyStatus(jobId)).job
