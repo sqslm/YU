@@ -80,7 +80,7 @@ describe('the Rust helper and the host around a real model callback', () => {
     // The production ready frame must declare the shared object shape.
     await expect(instance.status()).resolves.toMatchObject({
       running: true,
-      schema: { knowledge: 5, profile: 3 }
+      schema: { knowledge: 6, profile: 3 }
     })
   }, 60_000)
 
@@ -187,4 +187,57 @@ describe('the Rust helper and the host around a real model callback', () => {
     const size = statSync(fixturePath).size
     expect(size).toBeGreaterThan(1_000_000)
   })
+})
+
+/**
+ * Stage 5 adds view and graph methods that never touch a model. The fixture
+ * answers them with fixed synthetic payloads, so these tests prove the bridge
+ * itself — method name, parameter shape, and that the answer comes back as the
+ * shared type — over the real pipe, not through a stub.
+ */
+describe('the stage 5 bridge over the real fixture', () => {
+  it('reads topics, revisions and an export without a model call', async () => {
+    const instance = host()
+    const topics = await instance.listTopics(10)
+    expect(topics.total).toBe(2)
+    expect(topics.topics[0]).toEqual({ topic: 'rust', count: 2 })
+
+    const revisions = await instance.cardRevisions('c1', 5)
+    expect(revisions.id).toBe('c1')
+    expect(revisions.revisions.map(entry => entry.revision)).toEqual([2, 1])
+    expect(revisions.revisions[0].title).toBe('夹具闭环答案')
+
+    const exported = await instance.exportCard('c1')
+    expect(exported.filename).toBe('夹具闭环答案.md')
+    expect(exported.markdown).toContain('# 夹具闭环答案')
+  }, 60_000)
+
+  it('merges two cards and reads the resulting graph', async () => {
+    const instance = host()
+    const merged = await instance.mergeCards({ keepId: 'c1', mergeId: 'c2', keepRevision: 2, mergeRevision: 1 })
+    expect(merged.removedId).toBe('c2')
+    expect(merged.sources).toBe(1)
+    expect(merged.relations).toBe(1)
+    expect(merged.card.id).toBe('c1')
+    expect(merged.card.favorite).toBe(true)
+    expect(merged.card.edited).toBe(true)
+
+    const relation = await instance.addRelation({ fromId: 'c1', toId: 'c2', kind: 'contains' })
+    expect(relation.origin).toBe('manual')
+    expect(relation.kind).toBe('contains')
+
+    const listed = await instance.listRelations('c1', 10)
+    expect(listed.total).toBe(1)
+    expect(listed.items[0].direction).toBe('out')
+    expect(listed.items[0].card.title).toBe('夹具邻居')
+
+    const graph = await instance.queryGraph({ topic: 'rust', limit: 200 })
+    expect(graph.nodes.map(node => node.id)).toEqual(['c1'])
+    expect(graph.shown).toBe(1)
+    expect(graph.truncated).toBe(false)
+    expect(graph.limitedBy).toBeNull()
+    expect(graph.nodes[0].favorite).toBe(true)
+
+    expect(await instance.removeRelation(listed.items[0].id)).toEqual({ removed: true })
+  }, 60_000)
 })

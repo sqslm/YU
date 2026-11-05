@@ -61,7 +61,17 @@ import {
   type SaveProfileInput,
   type SaveSourceInput,
   type UpdateCardInput,
-  type UpdateProfileInput
+  type UpdateProfileInput,
+  type AddRelationInput,
+  type CardExport,
+  type CardRevisions,
+  type GraphQuery,
+  type KnowledgeGraph,
+  type KnowledgeRelation,
+  type MergeCardsInput,
+  type MergedCards,
+  type RelationList,
+  type TopicList
 } from '@shared/knowledge'
 
 import type { KnowledgeCompleter } from './model'
@@ -699,6 +709,38 @@ export class KnowledgeHost {
 
   searchCards(query: CardSearchQuery): Promise<KnowledgeCardPage> {
     return this.call<KnowledgeCardPage>('card.search', query)
+  }
+
+  listTopics(limit?: number): Promise<TopicList> {
+    return this.call<TopicList>('topic.list', { limit })
+  }
+
+  cardRevisions(id: string, limit?: number): Promise<CardRevisions> {
+    return this.call<CardRevisions>('card.revisions', { id, limit })
+  }
+
+  mergeCards(input: MergeCardsInput): Promise<MergedCards> {
+    return this.call<MergedCards>('card.merge', input)
+  }
+
+  exportCard(id: string): Promise<CardExport> {
+    return this.call<CardExport>('card.export', { id })
+  }
+
+  addRelation(input: AddRelationInput): Promise<KnowledgeRelation> {
+    return this.call<KnowledgeRelation>('relation.add', input)
+  }
+
+  removeRelation(id: string): Promise<{ removed: boolean }> {
+    return this.call<{ removed: boolean }>('relation.remove', { id })
+  }
+
+  listRelations(cardId: string, limit?: number): Promise<RelationList> {
+    return this.call<RelationList>('relation.list', { cardId, limit })
+  }
+
+  queryGraph(query: GraphQuery = {}): Promise<KnowledgeGraph> {
+    return this.call<KnowledgeGraph>('graph.query', query)
   }
 
   saveProfile(input: SaveProfileInput): Promise<ProfileItem> {

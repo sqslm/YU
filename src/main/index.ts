@@ -54,7 +54,10 @@ import {
   type SaveProfileInput,
   type SaveSourceInput,
   type UpdateCardInput,
-  type UpdateProfileInput
+  type UpdateProfileInput,
+  type AddRelationInput,
+  type GraphQuery,
+  type MergeCardsInput
 } from '@shared/knowledge'
 import { Updater } from './updater'
 import { Pipeline } from './pipeline'
@@ -221,7 +224,8 @@ const knowledge = new KnowledgeHost({
   entry: app.isPackaged ? join(process.resourcesPath, 'native', 'yu-knowledge.exe') : join(app.getAppPath(), 'native', 'bin', 'yu-knowledge.exe'),
   root: app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(),
   completer: createKnowledgeCompleter({ settings: () => store.get() }),
-  log: line => log(line)
+  log: line => log(line),
+  onChanged: scope => broadcastKnowledge(scope)
 })
 /**
  * Turns finished notes, questions and readings into sources and pending tasks.
@@ -727,6 +731,17 @@ const localAsr: LocalAsrHost = new LocalAsrHost(() => store.get().localAsr, {
 function broadcastNotes(): void {
   for (const win of [settingsWindow, barWindow]) {
     if (win && !win.isDestroyed()) win.webContents.send('notes:changed')
+  }
+}
+
+/**
+ * Tells the windows that a page is looking at that the helper changed something.
+ * The scope is the helper's own word (`cards`, `queue`, `profile`…), so a page
+ * refreshes only what it shows instead of re-reading the whole store.
+ */
+function broadcastKnowledge(scope: string): void {
+  for (const win of [settingsWindow]) {
+    if (win && !win.isDestroyed()) win.webContents.send('knowledge:changed', scope)
   }
 }
 let updater: Updater | null = null
@@ -1570,6 +1585,60 @@ function registerIpc(): void {
   handle('knowledge:card-delete', (event, id: string) => { knowledgeOwner(event); return knowledge.deleteCard(knowledgeId(id, '卡片 ID')) })
   handle('knowledge:card-list', (event, query: CardQuery = {}) => { knowledgeOwner(event); return knowledge.listCards(query) })
   handle('knowledge:card-search', (event, query: CardSearchQuery) => { knowledgeOwner(event); return knowledge.searchCards(query) })
+  handle('knowledge:topic-list', (event, limit?: number) => { knowledgeOwner(event); return knowledge.listTopics(limit) })
+  handle('knowledge:card-revisions', (event, id: string, limit?: number) => {
+    knowledgeOwner(event)
+    return knowledge.cardRevisions(knowledgeId(id, '卡片 ID'), limit)
+  })
+  handle('knowledge:card-merge', (event, input: MergeCardsInput) => {
+    knowledgeOwner(event)
+    return knowledge.mergeCards({
+      ...input,
+      keepId: knowledgeId(input?.keepId, '卡片 ID'),
+      mergeId: knowledgeId(input?.mergeId, '卡片 ID')
+    })
+  })
+  handle('knowledge:card-export', async (event, id: string) => {
+    knowledgeOwner(event)
+    return knowledge.exportCard(knowledgeId(id, '卡片 ID'))
+  })
+  /**
+   * Writes the exported markdown where the user says. The renderer hands over a
+   * card id only, so the content and the file name stay a helper decision and
+   * the path stays a main-process decision.
+   */
+  handle('knowledge:card-export-save', async (event, id: string) => {
+    knowledgeOwner(event)
+    const file = await knowledge.exportCard(knowledgeId(id, '卡片 ID'))
+    const options: Electron.SaveDialogOptions = {
+      defaultPath: file.filename,
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    }
+    const picked = settingsWindow ? await dialog.showSaveDialog(settingsWindow, options) : await dialog.showSaveDialog(options)
+    if (picked.canceled || !picked.filePath) return { saved: false as const }
+    await writeFile(picked.filePath, file.markdown, 'utf8')
+    return { saved: true as const, path: picked.filePath }
+  })
+  handle('knowledge:relation-add', (event, input: AddRelationInput) => {
+    knowledgeOwner(event)
+    return knowledge.addRelation({
+      ...input,
+      fromId: knowledgeId(input?.fromId, '卡片 ID'),
+      toId: knowledgeId(input?.toId, '卡片 ID')
+    })
+  })
+  handle('knowledge:relation-remove', (event, id: string) => {
+    knowledgeOwner(event)
+    return knowledge.removeRelation(knowledgeId(id, '关系 ID'))
+  })
+  handle('knowledge:relation-list', (event, cardId: string, limit?: number) => {
+    knowledgeOwner(event)
+    return knowledge.listRelations(knowledgeId(cardId, '卡片 ID'), limit)
+  })
+  handle('knowledge:graph', (event, query: GraphQuery = {}) => {
+    knowledgeOwner(event)
+    return knowledge.queryGraph({ ...query, focusId: query.focusId ? knowledgeId(query.focusId, '卡片 ID') : undefined })
+  })
   handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })
   handle('profile:update', (event, input: UpdateProfileInput) => {
     knowledgeOwner(event)

@@ -26,6 +26,10 @@ export const KNOWLEDGE_LIMITS = {
   topics: 32,
   page: 30,
   maxPage: 100,
+  /** Revisions one card may return; the oldest are dropped. */
+  revisions: 20,
+  /** Nodes a graph query returns before it truncates the view. */
+  nodes: 200,
   /** Total deadline of one data request. */
   requestMs: 15_000,
   /** Total deadline of a request that waits for a model callback. */
@@ -76,6 +80,8 @@ export interface KnowledgeCard {
   topics: string[]
   aliases: string[]
   sourceIds: string[]
+  /** Persisted favourite mark; filtering happens in the helper, not here. */
+  favorite: boolean
   edited: boolean
   revision: number
   createdAt: number
@@ -96,6 +102,7 @@ export interface KnowledgeCardSummary {
   aliases: string[]
   sourceIds: string[]
   bodyChars: number
+  favorite: boolean
   edited: boolean
   revision: number
   createdAt: number
@@ -191,15 +198,145 @@ export interface UpdateCardInput {
   topics?: string[]
   aliases?: string[]
   sourceIds?: string[]
+  favorite?: boolean
 }
 
 export interface CardQuery {
   offset?: number
   limit?: number
+  /** Only cards carrying this exact topic. Applied before paging. */
+  topic?: string
+  /** `true` — favourites only; `false` — the rest; omitted — both. */
+  favorite?: boolean
+  kind?: CardKind
 }
 
 export interface CardSearchQuery extends CardQuery {
   query: string
+}
+
+/** Relation kinds, in the order the UI offers them. */
+export type RelationKind = 'contains' | 'prerequisite' | 'applies' | 'contrast' | 'derives'
+
+/** Manual relations are drawn by a user; model relations carry a citation. */
+export type RelationOrigin = 'manual' | 'model'
+
+export interface KnowledgeRelation {
+  id: string
+  fromId: string
+  toId: string
+  kind: RelationKind
+  origin: RelationOrigin
+  /** Quoted basis for a model relation; empty for a hand-drawn one. */
+  evidence: string
+  createdAt: number
+}
+
+/** One relation as seen from a card, with the card at the other end. */
+export interface RelationNeighbour extends KnowledgeRelation {
+  card: { id: string; title: string; kind: CardKind }
+  /** `out` when the listed card is the source of the relation. */
+  direction: 'out' | 'in'
+}
+
+export interface RelationList {
+  items: RelationNeighbour[]
+  total: number
+}
+
+export interface AddRelationInput {
+  fromId: string
+  toId: string
+  kind: RelationKind
+  evidence?: string
+}
+
+export interface GraphNode {
+  id: string
+  title: string
+  kind: CardKind
+  topics: string[]
+  favorite: boolean
+}
+
+export interface GraphEdge {
+  id: string
+  fromId: string
+  toId: string
+  kind: RelationKind
+  origin: RelationOrigin
+}
+
+/** A trimmed graph: both endpoints of every edge are inside `nodes`. */
+export interface KnowledgeGraph {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  /** Cards matching the filter before the budget cut the view. */
+  total: number
+  shown: number
+  truncated: boolean
+  /** Which budget stopped the expansion; `null` when nothing was dropped. */
+  limitedBy: 'nodes' | 'bytes' | null
+}
+
+export interface TopicCount {
+  topic: string
+  count: number
+}
+
+export interface TopicList {
+  topics: TopicCount[]
+  total: number
+}
+
+export interface CardRevision {
+  revision: number
+  title: string
+  summary: string
+  body: string
+  topics: string[]
+  edited: boolean
+  createdAt: number
+}
+
+export interface CardRevisions {
+  id: string
+  revisions: CardRevision[]
+}
+
+/** Two cards the user chose to join. Both revisions pin the preview. */
+export interface MergeCardsInput {
+  keepId: string
+  mergeId: string
+  keepRevision: number
+  mergeRevision: number
+  title?: string
+  summary?: string
+  body?: string
+}
+
+export interface MergedCards {
+  card: KnowledgeCard
+  removedId: string
+  /** Sources repointed onto the kept card. */
+  sources: number
+  /** Relations repointed onto the kept card. */
+  relations: number
+}
+
+export interface CardExport {
+  id: string
+  filename: string
+  markdown: string
+}
+
+export interface GraphQuery {
+  topic?: string
+  query?: string
+  focusId?: string
+  /** Hops around `focusId`; 1 when omitted. */
+  depth?: number
+  limit?: number
 }
 
 export interface SaveProfileInput {
@@ -286,6 +423,14 @@ export type KnowledgeMethod =
   | 'profile.retract'
   | 'profile.clear'
   | 'profile.retry'
+  | 'topic.list'
+  | 'card.revisions'
+  | 'card.merge'
+  | 'card.export'
+  | 'relation.add'
+  | 'relation.remove'
+  | 'relation.list'
+  | 'graph.query'
 
 export type KnowledgeErrorCode =
   | 'invalid_request'

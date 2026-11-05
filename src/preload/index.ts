@@ -80,7 +80,21 @@ const api: TypelessApi = {
     listSuggestions: query => ipcRenderer.invoke('knowledge:suggestion-list', query),
     getSuggestion: id => ipcRenderer.invoke('knowledge:suggestion-get', id),
     acceptSuggestion: id => ipcRenderer.invoke('knowledge:suggestion-accept', id),
-    rejectSuggestion: id => ipcRenderer.invoke('knowledge:suggestion-reject', id)
+    rejectSuggestion: id => ipcRenderer.invoke('knowledge:suggestion-reject', id),
+    listTopics: limit => ipcRenderer.invoke('knowledge:topic-list', limit),
+    cardRevisions: (id, limit) => ipcRenderer.invoke('knowledge:card-revisions', id, limit),
+    mergeCards: input => ipcRenderer.invoke('knowledge:card-merge', input),
+    exportCard: id => ipcRenderer.invoke('knowledge:card-export', id),
+    saveExport: id => ipcRenderer.invoke('knowledge:card-export-save', id),
+    addRelation: input => ipcRenderer.invoke('knowledge:relation-add', input),
+    removeRelation: id => ipcRenderer.invoke('knowledge:relation-remove', id),
+    listRelations: (cardId, limit) => ipcRenderer.invoke('knowledge:relation-list', cardId, limit),
+    graph: (query = {}) => ipcRenderer.invoke('knowledge:graph', query),
+    onChanged: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, scope: string): void => callback(scope)
+      ipcRenderer.on('knowledge:changed', listener)
+      return () => ipcRenderer.removeListener('knowledge:changed', listener)
+    }
   },
   profile: {
     save: input => ipcRenderer.invoke('profile:save', input),

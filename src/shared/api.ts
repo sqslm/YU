@@ -130,6 +130,19 @@ export interface TypelessApi {
     getSuggestion(id: string): Promise<import('./knowledge').KnowledgeSuggestion>
     acceptSuggestion(id: string): Promise<import('./knowledge').AcceptedSuggestion>
     rejectSuggestion(id: string): Promise<import('./knowledge').RejectedSuggestion>
+    listTopics(limit?: number): Promise<import('./knowledge').TopicList>
+    cardRevisions(id: string, limit?: number): Promise<import('./knowledge').CardRevisions>
+    mergeCards(input: import('./knowledge').MergeCardsInput): Promise<import('./knowledge').MergedCards>
+    /** Builds the markdown in the helper; the renderer never serialises a card. */
+    exportCard(id: string): Promise<import('./knowledge').CardExport>
+    /** Save dialog plus a UTF-8 write; `saved: false` when the user cancels. */
+    saveExport(id: string): Promise<{ saved: false } | { saved: true; path: string }>
+    addRelation(input: import('./knowledge').AddRelationInput): Promise<import('./knowledge').KnowledgeRelation>
+    removeRelation(id: string): Promise<{ removed: boolean }>
+    listRelations(cardId: string, limit?: number): Promise<import('./knowledge').RelationList>
+    graph(query?: import('./knowledge').GraphQuery): Promise<import('./knowledge').KnowledgeGraph>
+    /** Fires when the helper wrote something; the scope names what to re-read. */
+    onChanged(callback: (scope: string) => void): () => void
   }
   profile: {
     save(input: import('./knowledge').SaveProfileInput): Promise<import('./knowledge').ProfileItem>

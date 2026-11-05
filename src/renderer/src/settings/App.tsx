@@ -25,10 +25,12 @@ import { WorkspaceSearch } from './WorkspaceSearch'
 import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded'
 import { HistoryPage } from './pages/HistoryPage'
 import { NotesPage } from './pages/NotesPage'
+import { KnowledgePage } from './pages/KnowledgePage'
 import { RemindersPage } from './pages/RemindersPage'
 import { CalendarPage } from './pages/CalendarPage'
 import type { ReminderView } from '@shared/reminders'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
+import HubRounded from '@mui/icons-material/HubRounded'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import { DictionaryPage } from './pages/Dictionary'
 import { IconBook, IconChart, IconClock, IconSettings } from './icons'
@@ -43,13 +45,14 @@ import { MissedReminders } from './MissedReminders'
 import { UpdatePill } from './UpdatePill'
 import { QuotaProvider, QuotaSidebar } from './Quota'
 
-type Page = 'chat' | 'home' | 'history' | 'notes' | 'dictionary' | 'reminders' | 'calendar'
+type Page = 'chat' | 'home' | 'history' | 'knowledge' | 'notes' | 'dictionary' | 'reminders' | 'calendar'
 
 /** Label keys resolve through i18next; the ids stay stable for routing. */
 const NAV: Array<{ id: Page; labelKey: string; icon: JSX.Element }> = [
   { id: 'chat', labelKey: '语', icon: <ChatBubbleOutlineRounded sx={{ fontSize: 18 }} /> },
   { id: 'home', labelKey: 'nav.home', icon: <IconChart /> },
   { id: 'notes', labelKey: 'nav.notes', icon: <StickyNote2Icon sx={{ fontSize: 18 }} /> },
+  { id: 'knowledge', labelKey: 'nav.knowledge', icon: <HubRounded sx={{ fontSize: 18 }} /> },
   { id: 'reminders', labelKey: '提醒与待办', icon: <NotificationsNoneIcon sx={{ fontSize: 18 }} /> },
   { id: 'calendar', labelKey: '日程', icon: <CalendarMonthIcon sx={{ fontSize: 18 }} /> },
   { id: 'history', labelKey: 'nav.history', icon: <IconClock /> },
@@ -198,6 +201,16 @@ export function App(): JSX.Element {
       return <HistoryPage key={historyId ?? 'all'} settings={settings} patch={patch} initialQuery={historyQuery} initialId={historyId} onClearFocus={() => setHistoryId(undefined)} />
     }
     if (page === 'notes') return <NotesPage settings={settings} patch={patch} recordTicket={recordTicket} openNote={noteToOpen} />
+    if (page === 'knowledge') {
+      return (
+        <KnowledgePage
+          settings={settings}
+          patch={patch}
+          onOpenNote={(id) => { setNoteToOpen({ id }); setPage('notes') }}
+          openRecord={openRecord}
+        />
+      )
+    }
     if (page === 'reminders') return <RemindersPage view={reminderView} onViewConsumed={() => setReminderView(null)} onOpenNote={id => { setNoteToOpen({ id }); setPage('notes') }} />
     if (page === 'calendar') return (
       <CalendarPage
