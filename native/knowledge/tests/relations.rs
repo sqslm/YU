@@ -1894,3 +1894,297 @@ fn a_thread_that_only_fed_one_card_still_counts_it_as_single() {
     let left = helper.ok("g1", "card.list", json!({}));
     assert_eq!(left["items"], json!([]), "the card is gone: {left}");
 }
+
+/// The older row-level form names rows, not a record, so the rows themselves
+/// decide what may go. A row that moved to another version, was already
+/// retracted or never existed is skipped — and a skipped row never takes its
+/// card, its links or its relations with it.
+#[test]
+fn a_stale_row_in_the_listed_purge_touches_nothing() {
+    let root = Root::new("listed-stale");
+    let mut helper = Helper::start(&root, vec![]);
+    let (fresh, fresh_version) = publish_version(
+        &mut helper,
+        "note-fresh",
+        "note-fresh",
+        "仍然有效的那条记录正文，说明适用条件。",
+    );
+    let (moved, moved_version) = publish_version(
+        &mut helper,
+        "note-moved",
+        "note-moved",
+        "这条记录的正文会被重新发布，所以它的版本会先变一次。",
+    );
+    let (other, _) = publish_version(
+        &mut helper,
+        "note-other",
+        "note-other",
+        "另一条与本次删除无关的记录正文。",
+    );
+    let doomed = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "将随之消失",
+            "只引用那条真正会被撤下的记录。",
+            std::slice::from_ref(&fresh),
+        ),
+    );
+    let moved_card = helper.save(
+        "c2",
+        linked(
+            "concept",
+            "必须留下",
+            "只引用那条版本对不上的记录，它不该被删掉。",
+            std::slice::from_ref(&moved),
+        ),
+    );
+    let bystander = helper.save(
+        "c3",
+        linked(
+            "concept",
+            "无关卡片",
+            "只引用与本次删除无关的记录。",
+            std::slice::from_ref(&other),
+        ),
+    );
+    helper.ok(
+        "rel",
+        "relation.add",
+        json!({"fromId": moved_card, "toId": bystander, "kind": "contains"}),
+    );
+
+    let purged = helper.ok(
+        "p1",
+        "card.purge",
+        json!({
+            "sources": [
+                {"id": fresh, "version": fresh_version},
+                {"id": moved, "version": "not-the-version-the-row-carries"}
+            ],
+            "cards": true
+        }),
+    );
+    assert_eq!(
+        sorted_ids(&purged["removed"]),
+        vec![doomed.clone()],
+        "{purged}"
+    );
+    assert_eq!(
+        sorted_ids(&purged["skipped"]),
+        vec![moved.clone()],
+        "{purged}"
+    );
+    assert_eq!(
+        purged["kept"],
+        json!([]),
+        "a card of a skipped row is not even unlinked: {purged}"
+    );
+
+    let kept = helper.ok("g1", "card.get", json!({"id": moved_card}));
+    assert_eq!(
+        kept["sourceIds"],
+        json!([moved]),
+        "the skipped row still supports its card: {kept}"
+    );
+    let found = helper.ok(
+        "f1",
+        "source.find",
+        json!({"channel": "note", "originRef": "note-moved"}),
+    );
+    assert_eq!(
+        found["sources"][0]["state"], "active",
+        "the skipped row is untouched: {found}"
+    );
+    assert_eq!(
+        found["sources"][0]["version"],
+        json!(moved_version),
+        "the row keeps the version it had: {found}"
+    );
+    let relations = helper.ok("l1", "relation.list", json!({"cardId": moved_card}));
+    assert_eq!(relations["total"], 1, "the relation survives: {relations}");
+}
+
+/// Naming only rows that can no longer be retired is a no-op, not a card wipe.
+#[test]
+fn listing_only_stale_rows_removes_no_card() {
+    let root = Root::new("listed-all-stale");
+    let mut helper = Helper::start(&root, vec![]);
+    let (source, version) = publish_version(
+        &mut helper,
+        "note-stale",
+        "note-stale",
+        "唯一一条记录，被点名两次都是旧数据。",
+    );
+    let card = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "仍然在",
+            "只引用那条记录。",
+            std::slice::from_ref(&source),
+        ),
+    );
+    let purged = helper.ok(
+        "p1",
+        "card.purge",
+        json!({
+            "sources": [
+                {"id": source, "version": "one-version-too-early"},
+                {"id": "src_does_not_exist", "version": "nothing"}
+            ],
+            "cards": true
+        }),
+    );
+    assert_eq!(purged["removed"], json!([]), "{purged}");
+    assert_eq!(purged["kept"], json!([]), "{purged}");
+    assert_eq!(sorted_ids(&purged["skipped"]).len(), 2, "{purged}");
+    let kept = helper.ok("g1", "card.get", json!({"id": card}));
+    assert_eq!(kept["sourceIds"], json!([source]), "{kept}");
+    let found = helper.ok(
+        "f1",
+        "source.find",
+        json!({"channel": "note", "originRef": "note-stale"}),
+    );
+    assert_eq!(found["sources"][0]["version"], json!(version), "{found}");
+    assert_eq!(found["sources"][0]["state"], "active", "{found}");
+}
+
+#[test]
+fn a_preview_survives_the_record_retiring_its_own_old_version() {
+    let root = Root::new("preview-stale-history");
+    let mut helper = Helper::start(&root, vec![]);
+    let (old, _) = publish_version(
+        &mut helper,
+        "note-two-versions",
+        "note-two-versions",
+        "第一版正文：去重靠指纹。",
+    );
+    let (current, _) = publish_version(
+        &mut helper,
+        "note-two-versions",
+        "note-two-versions",
+        "第二版正文：去重靠指纹，指纹由问题与回答一起算出。",
+    );
+    let card = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "指纹去重",
+            "指纹由问题与回答一起算出。",
+            std::slice::from_ref(&current),
+        ),
+    );
+
+    // The preview counts the whole record: both versions, one card.
+    let first = helper.ok(
+        "i1",
+        "card.impact",
+        json!({"channel": "note", "originRef": "note-two-versions"}),
+    );
+    assert_eq!(first["cards"], 1);
+    assert_eq!(first["sources"].as_array().expect("sources").len(), 2);
+
+    // The first version goes stale on its own, exactly as it does when a note has
+    // been published twice. That is history, not a change of range.
+    helper.ok(
+        "v1",
+        "source.invalidate",
+        json!({"id": old, "reason": "旧版本"}),
+    );
+    let again = helper.ok(
+        "i2",
+        "card.impact",
+        json!({"channel": "note", "originRef": "note-two-versions"}),
+    );
+    assert_eq!(
+        again["ticket"], first["ticket"],
+        "the preview moved on its own"
+    );
+    assert_eq!(again["cards"], 1);
+
+    // So the confirmation the user read still carries the deletion it promised.
+    let purged = helper.ok(
+        "p1",
+        "card.purge",
+        json!({
+            "channel": "note",
+            "originRef": "note-two-versions",
+            "confirm": {"sources": [], "ticket": first["ticket"]},
+            "cards": true,
+        }),
+    );
+    assert_eq!(sorted_ids(&purged["removed"]), vec![card]);
+    let after = helper.ok(
+        "f1",
+        "source.find",
+        json!({"channel": "note", "originRef": "note-two-versions"}),
+    );
+    assert!(
+        after["sources"]
+            .as_array()
+            .expect("sources")
+            .iter()
+            .all(|row| row["state"] == "invalid")
+    );
+}
+
+#[test]
+fn a_widened_record_still_refuses_the_older_ticket() {
+    let root = Root::new("preview-widened");
+    let mut helper = Helper::start(&root, vec![]);
+    let (only, _) = publish_version(
+        &mut helper,
+        "note-growing",
+        "note-growing",
+        "第一版正文：先认领版本再删卡片。",
+    );
+    let card = helper.save(
+        "c1",
+        linked(
+            "concept",
+            "写入顺序",
+            "先认领版本再删卡片。",
+            std::slice::from_ref(&only),
+        ),
+    );
+    let first = helper.ok(
+        "i1",
+        "card.impact",
+        json!({"channel": "note", "originRef": "note-growing"}),
+    );
+
+    publish_version(
+        &mut helper,
+        "note-growing",
+        "note-growing",
+        "第二版正文：先认领版本，再删卡片，最后收尾关系。",
+    );
+    let refused = helper.call(
+        "p1",
+        "card.purge",
+        json!({
+            "channel": "note",
+            "originRef": "note-growing",
+            "confirm": {"sources": [], "ticket": first["ticket"]},
+            "cards": true,
+        }),
+    );
+    assert_eq!(refused["ok"], false);
+    assert_eq!(refused["error"]["code"], "source_changed");
+    // Nothing widened: the card and the readable version are still there.
+    let kept = helper.ok("g1", "card.get", json!({"id": card}));
+    assert_eq!(kept["id"], card);
+    let rows = helper.ok(
+        "f1",
+        "source.find",
+        json!({"channel": "note", "originRef": "note-growing"}),
+    );
+    assert!(
+        rows["sources"]
+            .as_array()
+            .expect("sources")
+            .iter()
+            .any(|row| row["state"] != "invalid")
+    );
+}

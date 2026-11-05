@@ -11,6 +11,8 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { DatabaseSync } from 'node:sqlite'
+
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_SETTINGS, mergeSettings } from '@shared/defaults'
@@ -65,6 +67,8 @@ afterAll(() => {
 })
 
 interface Rig {
+  dir: string
+  sourceStates: (originRef: string) => { id: string; state: string; version: string }[]
   knowledge: () => KnowledgeHost
   restart: () => Promise<void>
   settling: SettleRegistry
@@ -85,8 +89,20 @@ async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig>
     notesDir: join(dir, 'notes'),
     knowledge: { enabled: true, notes: true, chat: true, reading: true }
   })
+  // The app's own recovery wiring: whenever a helper answers `ready`, queued
+  // cleanups are tried again. A helper that could not be spawned leaves no change
+  // notification behind, so its first successful start is the only signal there is.
+  let releaseQueue: { retry: () => Promise<number> } | undefined
   const open = (): KnowledgeHost => {
-    const host = new KnowledgeHost({ entry: ENTRY, root: dir, requestMs: 30_000, idleMs: 60_000 })
+    const host = new KnowledgeHost({
+      entry: ENTRY,
+      root: dir,
+      requestMs: 30_000,
+      idleMs: 60_000,
+      onReady: () => {
+        void releaseQueue?.retry()
+      }
+    })
     hosts.push(host)
     return host
   }
@@ -101,6 +117,7 @@ async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig>
   const knowledge = (): KnowledgeHost => current
   const collector = new KnowledgeCollector({ settings: () => settings, host: knowledge })
   const settling = new SettleRegistry(new RecordReleaser(() => releaseHost))
+  releaseQueue = settling
   const notes = new NotesStore({
     log: () => undefined,
     getSettings: () => settings,
@@ -114,7 +131,6 @@ async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig>
   const deps: SettleRecordDeps = {
     release: (input, reason) => settling.release(input, reason),
     active: () => true,
-    find: input => knowledge().findSources(input),
     purgeCards: input => knowledge().purgeCards(input),
     log: () => undefined
   }
@@ -145,12 +161,26 @@ async function rig(options: { unreachableRelease?: boolean } = {}): Promise<Rig>
     const found = await knowledge().findSources(input as never)
     return found.sources.map(source => ({ id: source.id, state: source.state, version: source.version }))
   }
+  const sourceStates = (originRef: string): { id: string; state: string; version: string }[] => {
+    const db = new DatabaseSync(join(dir, 'data', 'knowledge', 'knowledge.db'), { readOnly: true })
+    try {
+      return db
+        .prepare('SELECT id, state, version FROM sources WHERE origin_ref = ? ORDER BY rowid')
+        .all(originRef) as { id: string; state: string; version: string }[]
+    } finally {
+      db.close()
+    }
+  }
   return {
+    dir,
+    sourceStates,
     knowledge,
     restart: async () => {
       current = open()
-      await current.configureCollect(channels)
+      // The host is the one cleanups will use before it is started, exactly as the
+      // app wires it: the start is what fires `ready`, which is what retries.
       releaseHost = current
+      await current.configureCollect(channels)
     },
     settling,
     collector,
@@ -208,8 +238,10 @@ describe('deleting a record settles exactly what it owned', () => {
     expect((await app.rows('note', note.id)).every(row => row.state !== 'invalid')).toBe(true)
 
     await app.restart()
-    expect(await app.settling.retry()).toBe(1)
-    expect(app.settling.waiting).toBe(0)
+    // Nothing here calls the retry: the next ordinary use of the library starts the
+    // healthy helper, whose `ready` is what picks the waiting cleanup up again.
+    await app.knowledge().findSources({ channel: 'note', originRef: note.id })
+    await until(async () => app.settling.waiting === 0, 'the queued cleanup')
     await until(async () => (await app.rows('note', note.id)).every(row => row.state === 'invalid'), 'retired rows')
   }, 60_000)
 
@@ -225,7 +257,6 @@ describe('deleting a record settles exactly what it owned', () => {
     const deps: SettleRecordDeps = {
       release: async () => ({ retired: 0, detached: 0, cancelled: [], failures: [] }),
       active: () => true,
-      find: async () => ({ sources: [{ id: 'src', version: '1', state: 'invalid' }] }),
       purgeCards: async () => ({ removed: [], kept: [], skipped: [] }),
       log: () => undefined
     }
@@ -301,7 +332,6 @@ describe('deleting a record settles exactly what it owned', () => {
     const deps: SettleRecordDeps = {
       release: (input, reason) => app.settling.release(input, reason),
       active: () => true,
-      find: input => app.knowledge().findSources(input),
       purgeCards: input => app.knowledge().purgeCards(input),
       log: () => undefined
     }
@@ -312,5 +342,97 @@ describe('deleting a record settles exactly what it owned', () => {
     const after = await app.knowledge().findSources({ channel: 'note', originRef: id })
     expect(after.sources.every(row => row.state === 'invalid')).toBe(true)
     expect(app.settling.waiting).toBe(0)
+  }, 60_000)
+
+  it('retires a version the paged preview never reached, through the handler', async () => {
+    const app = await rig()
+    const id = 'note-paged-versions'
+    for (let version = 0; version < 201; version += 1) {
+      await app.collector.publishNote({
+        id,
+        title: '分页随记',
+        transcript: `第 ${version} 版正文`,
+        polished: `第 ${version} 版正文`,
+        updatedAt: Date.now() + version,
+        polishStatus: 'ok'
+      })
+    }
+    const all = app.sourceStates(id)
+    expect(all.length).toBe(201)
+    // The first page of the record goes stale on its own; the newest version — the
+    // only live one, and the one the user can still read — is what the delete has to
+    // take with it. Paging cannot see it, so the settlement must not go through paging.
+    for (const row of all.slice(0, 200)) {
+      await app.knowledge().invalidateSource(row.id, '旧版本')
+    }
+    const live = app.sourceStates(id).filter(row => row.state !== 'invalid')
+    expect(live.length).toBe(1)
+
+    await app.removeNote(id)
+
+    expect(app.notes.list().notes.some(entry => entry.id === id)).toBe(false)
+    expect(app.settling.waiting).toBe(0)
+    // The newest version was never on the preview page; the settlement still took it.
+    await until(() => Promise.resolve(app.sourceStates(id).every(row => row.state === 'invalid')), 'every version')
+  }, 60_000)
+
+  it('confirms exactly the rows the preview showed, including a stale one', async () => {
+    const app = await rig()
+    const note = await app.notes.createText({ text: '第一版：去重靠指纹。' })
+    await until(async () => (await app.rows('note', note.id)).length > 0, 'the first version')
+    const [first] = await app.rows('note', note.id)
+    await app.knowledge().invalidateSource(first.id, '旧版本')
+    await app.notes.update(note.id, { transcript: '第二版：去重靠指纹，指纹含问答。', polished: '' })
+    await until(async () => (await app.rows('note', note.id)).length > 1, 'the second version')
+    const current = (await app.rows('note', note.id)).find(row => row.state !== 'invalid')
+    if (!current) throw new Error('the current version is missing')
+    const card = await app.knowledge().saveCard({
+      kind: 'concept',
+      title: '指纹去重',
+      body: '指纹由问题与回答一起算出。',
+      topics: ['去重'],
+      sourceIds: [current.id]
+    })
+
+    // The preview the user actually reads counts both versions and one card.
+    const impact = await app.knowledge().cardImpact({ channel: 'note', originRef: note.id })
+    expect(impact.sources.length).toBe(2)
+    expect(impact.cards).toBe(1)
+    expect(impact.single).toBe(1)
+
+    // The same ticket, handed to the production settlement, must hold: the confirm is
+    // the preview, and the stale row it listed does not widen anything.
+    await app.removeNote(note.id, { deleteKnowledge: true, ticket: impact.ticket })
+
+    expect(app.notes.list().notes.some(entry => entry.id === note.id)).toBe(false)
+    await expect(app.knowledge().getCard(card.id)).rejects.toThrow('unknown card')
+    expect((await app.rows('note', note.id)).every(row => row.state === 'invalid')).toBe(true)
+  }, 60_000)
+
+  it('refuses an opt-in whose preview no longer matches and keeps the card', async () => {
+    const app = await rig()
+    const note = await app.notes.createText({ text: '只此一版：先认领版本再删卡片。' })
+    await until(async () => (await app.rows('note', note.id)).length > 0, 'the note source')
+    const [source] = await app.rows('note', note.id)
+    const card = await app.knowledge().saveCard({
+      kind: 'concept',
+      title: '写入顺序',
+      body: '先认领版本再删卡片。',
+      topics: ['写入'],
+      sourceIds: [source.id]
+    })
+    const impact = await app.knowledge().cardImpact({ channel: 'note', originRef: note.id })
+    // The record gains a version after the user read the preview, so the range the
+    // ticket names is not the range that would be deleted now.
+    await app.notes.update(note.id, { transcript: '第二版：先认领版本，再删卡片，最后收尾关系。', polished: '' })
+    await until(async () => (await app.rows('note', note.id)).length > 1, 'the new version')
+
+    await expect(app.removeNote(note.id, { deleteKnowledge: true, ticket: impact.ticket })).rejects.toThrow(
+      '预览已失效，请重新确认'
+    )
+    // Nothing widened: the card is still there and the new version is still readable.
+    const kept = await app.knowledge().getCard(card.id)
+    expect(kept.id).toBe(card.id)
+    expect((await app.rows('note', note.id)).some(row => row.state !== 'invalid')).toBe(true)
   }, 60_000)
 })

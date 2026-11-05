@@ -122,6 +122,13 @@ export interface KnowledgeHostOptions {
   requestMs?: number
   log?: (message: string) => void
   onChanged?: (scope: string) => void
+  /**
+   * A helper answered `ready`, so work that failed while it was unreachable can be
+   * picked up again. Fired on every start, not only the first: a helper that could
+   * not be spawned earlier leaves no change notification behind, and the next call
+   * that does start it is the only signal the queue of failures will ever get.
+   */
+  onReady?: () => void
   /** Test seam: replace the executable with a script run by another runtime. */
   spawn?: (entry: string, root: string) => ChildProcessWithoutNullStreams
 }
@@ -353,6 +360,7 @@ export class KnowledgeHost {
         this.settleReady?.resolve()
         this.settleReady = undefined
         this.armIdle()
+        this.options.onReady?.()
         return
       }
       case 'changed':

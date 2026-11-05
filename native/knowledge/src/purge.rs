@@ -321,15 +321,6 @@ impl Effect {
         self.remove.len() as i64 + self.keep.len() as i64
     }
 
-    /// The two halves of the card work, sorted, so the purge acts in a stable order.
-    fn split(&self) -> (Vec<String>, Vec<String>) {
-        let mut remove = self.remove.clone();
-        let mut keep = self.keep.clone();
-        remove.sort();
-        keep.sort();
-        (remove, keep)
-    }
-
     fn into_impact(self, source_id: String, version: String) -> CardImpact {
         let cards = self.cards();
         let single = self.single();
@@ -358,19 +349,20 @@ fn describe(connection: &Connection, find: &FindParams) -> ApiResult<Effect> {
     // it as lost would promise a deletion that never happens, and would let a stale
     // ticket delete a card the other record still needs.
     let owner = owner_ref(&set.record);
+    // Ownership is asked about every row of the record, retired ones included: a row
+    // the record already gave up still belongs to it in this question, and letting
+    // its state decide would make the ticket move whenever the record's own rows
+    // were retired — the preview would then always look stale to the purge that
+    // follows the very deletion it was shown for.
     let mut shared: Vec<String> = Vec::new();
-    let mut lost: Vec<String> = Vec::new();
+    let mut claimed: Vec<String> = Vec::new();
     let gone: Vec<String> = set
         .sources
         .iter()
         .filter(|source| source.state == "invalid")
         .map(|source| source.id.clone())
         .collect();
-    for source in set
-        .sources
-        .iter()
-        .filter(|source| source.state != "invalid")
-    {
+    for source in &set.sources {
         // Shared unless this record alone proves the row: another claim protects it,
         // and a claim older databases could only guess is never proof enough to
         // retire a source or delete a card that cites it.
@@ -384,9 +376,17 @@ fn describe(connection: &Connection, find: &FindParams) -> ApiResult<Effect> {
         if also {
             shared.push(source.id.clone());
         } else {
-            lost.push(source.id.clone());
+            claimed.push(source.id.clone());
         }
     }
+    // What the purge may actually retire: the claimed rows that are still read.
+    let lost: Vec<String> = set
+        .sources
+        .iter()
+        .filter(|source| source.state != "invalid")
+        .map(|source| source.id.clone())
+        .filter(|id| claimed.contains(id))
+        .collect();
     let rows = card_rows(connection, &lost)?;
     let remove: Vec<String> = rows
         .iter()
@@ -400,7 +400,28 @@ fn describe(connection: &Connection, find: &FindParams) -> ApiResult<Effect> {
         .collect();
     let more = rows.len() > IMPACT_ITEMS;
     let items: Vec<ImpactItem> = rows.into_iter().take(IMPACT_ITEMS).collect();
-    let digest = ticket(&set.record, &sources, &shared, &lost, &remove, &keep);
+    // The ticket answers one thing: is this still the record the user looked at? It
+    // counts every row the record holds, which ones another record also owns, and
+    // the cards those rows support — none of it depending on whether a row is still
+    // readable, so retiring the record's own rows cannot invalidate its own preview.
+    let stable = card_rows(connection, &claimed)?;
+    let mut stable_remove: Vec<String> = Vec::new();
+    let mut stable_keep: Vec<String> = Vec::new();
+    for item in &stable {
+        if item.single {
+            stable_remove.push(item.id.clone());
+        } else {
+            stable_keep.push(item.id.clone());
+        }
+    }
+    let digest = ticket(
+        &set.record,
+        &sources,
+        &shared,
+        &claimed,
+        &stable_remove,
+        &stable_keep,
+    );
     Ok(Effect {
         record: set.record,
         sources,
@@ -419,7 +440,20 @@ fn describe(connection: &Connection, find: &FindParams) -> ApiResult<Effect> {
 /// The older, row-level form: a bare list of rows, with no record to ask about
 /// ownership. It still works for callers that hold ids and nothing else.
 fn listed_effect(connection: &Connection, listed: &[PurgeSource]) -> ApiResult<Effect> {
-    let lost: Vec<String> = listed.iter().map(|entry| entry.id.clone()).collect();
+    // The older form carries no ticket, so the rows alone decide what may go: a row
+    // that moved to another version, was already retracted or never existed stays
+    // untouched and is reported as skipped. Counting it as lost would delete a card
+    // that only the row it names still supports.
+    let mut lost: Vec<String> = Vec::new();
+    let mut gone: Vec<String> = Vec::new();
+    for entry in listed {
+        match state_of(connection, &entry.id)? {
+            Some((state, version)) if state != "invalid" && version == entry.version => {
+                lost.push(entry.id.clone());
+            }
+            _ => gone.push(entry.id.clone()),
+        }
+    }
     let sources: Vec<ImpactSource> = listed
         .iter()
         .map(|entry| ImpactSource {
@@ -447,7 +481,7 @@ fn listed_effect(connection: &Connection, listed: &[PurgeSource]) -> ApiResult<E
         sources,
         shared: Vec::new(),
         lost,
-        gone: Vec::new(),
+        gone,
         remove,
         keep,
         items,
@@ -496,17 +530,25 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
                 format!("这条记录超过 {RECORD_SOURCES} 条来源，无法一次确认清除"),
             ));
         }
-        let listed: Vec<(String, String)> = confirm
-            .sources
-            .iter()
-            .map(|entry| (entry.id.clone(), entry.version.clone()))
-            .collect();
-        let counted: Vec<(String, String)> = effect
-            .sources
-            .iter()
-            .map(|entry| (entry.id.clone(), entry.version.clone()))
-            .collect();
-        if confirm.ticket != effect.ticket || listed != counted {
+        // The ticket already digests the rows the preview counted, so echoing the
+        // ticket alone is a full check against the same set. A caller that also
+        // lists rows is held to a row-for-row match, which is how the older block
+        // form stayed honest.
+        let mut moved = confirm.ticket != effect.ticket;
+        if !moved && !confirm.sources.is_empty() {
+            let listed: Vec<(String, String)> = confirm
+                .sources
+                .iter()
+                .map(|entry| (entry.id.clone(), entry.version.clone()))
+                .collect();
+            let counted: Vec<(String, String)> = effect
+                .sources
+                .iter()
+                .map(|entry| (entry.id.clone(), entry.version.clone()))
+                .collect();
+            moved = listed != counted;
+        }
+        if moved {
             return Err(ApiError::new(Code::SourceChanged, STALE));
         }
     }
@@ -516,6 +558,30 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
     // Rows of this record that were already gone are reported, not re-retracted:
     // a second confirmed purge says exactly what it skipped.
     let mut skipped: Vec<String> = effect.gone.clone();
+    // Which rows may really go is settled before any card is judged: a row that
+    // moved, was already retracted or never existed is skipped, and a row that is
+    // skipped must not take its card, links or relations with it.
+    let mut retirable: Vec<String> = Vec::new();
+    for id in &effect.lost {
+        let version = version_of(&effect.sources, id);
+        match state_of(&transaction, id)? {
+            Some((state, current)) if state != "invalid" && current == version => {
+                retirable.push(id.clone());
+            }
+            _ => skipped.push(id.clone()),
+        }
+    }
+    let rows = card_rows(&transaction, &retirable)?;
+    let remove: Vec<String> = rows
+        .iter()
+        .filter(|item| item.single)
+        .map(|item| item.id.clone())
+        .collect();
+    let keep: Vec<String> = rows
+        .iter()
+        .filter(|item| !item.single)
+        .map(|item| item.id.clone())
+        .collect();
     for id in &effect.shared {
         // Another record still owns this row: only this record's claim goes.
         if let Some(record) = owner.as_deref() {
@@ -523,28 +589,23 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
             detached.insert(id.clone());
         }
     }
-    for id in &effect.lost {
-        let version = effect
-            .sources
-            .iter()
-            .find(|entry| &entry.id == id)
-            .map(|entry| entry.version.clone())
-            .unwrap_or_default();
+    for id in &retirable {
         let listed = PurgeSource {
             id: id.clone(),
-            version,
+            version: version_of(&effect.sources, id),
         };
         match retract(&transaction, &listed, now)? {
             Some(retired) => {
                 purged.insert(retired);
             }
-            None => skipped.push(id.clone()),
+            // The checks above and this retraction share one transaction, so a row
+            // that moved in between means the transaction is not the one we read.
+            None => return Err(ApiError::new(Code::SourceChanged, STALE)),
         }
     }
     let list: Vec<String> = purged.iter().cloned().collect();
     let encoded = serde_json::to_string(&list)
         .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
-    let (remove, keep) = effect.split();
     let mut removed: BTreeSet<String> = BTreeSet::new();
     if params.cards {
         for card in &remove {
@@ -592,21 +653,34 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
     })
 }
 
+/// The version a preview listed for one row.
+fn version_of(sources: &[ImpactSource], id: &str) -> String {
+    sources
+        .iter()
+        .find(|entry| entry.id == id)
+        .map(|entry| entry.version.clone())
+        .unwrap_or_default()
+}
+
+/// The state and version a row carries now, or nothing when the row is gone.
+fn state_of(connection: &Connection, id: &str) -> ApiResult<Option<(String, String)>> {
+    connection
+        .query_row(
+            "SELECT state, version FROM sources WHERE id = ?1",
+            [id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .map_err(sqlite)
+}
+
 /// Retracts one listed record when it still carries the version the caller saw.
 /// Returns its id when it was retracted, `None` when the entry must be skipped
 /// without touching anything.
 fn retract(transaction: &Connection, entry: &PurgeSource, now: i64) -> ApiResult<Option<String>> {
     check_chars("id", &entry.id, 128)?;
     check_chars("version", &entry.version, 200)?;
-    let current = transaction
-        .query_row(
-            "SELECT state, version FROM sources WHERE id = ?1",
-            [&entry.id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-        )
-        .optional()
-        .map_err(sqlite)?;
-    let Some((state, version)) = current else {
+    let Some((state, version)) = state_of(transaction, &entry.id)? else {
         return Ok(None);
     };
     if state == "invalid" || version != entry.version {

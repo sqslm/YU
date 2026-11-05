@@ -109,7 +109,15 @@ async function fakeModel(handler: Handler): Promise<{ baseUrl: string; requests:
       }
       requests.push({ path: String(request.url ?? ''), body })
       const reply = handler(body, requests.length - 1)
-      response.writeHead(reply.status ?? 200, { 'content-type': reply.type ?? 'application/json' })
+      // One connection per exchange: the client pools sockets per origin, and a port
+      // this stub has just been given can be one a previous stub in this file held.
+      // Reusing that pooled socket would fail the call before a request ever arrived,
+      // which is the one flake this file has shown.
+      response.shouldKeepAlive = false
+      response.writeHead(reply.status ?? 200, {
+        'content-type': reply.type ?? 'application/json',
+        connection: 'close'
+      })
       response.end(reply.body)
     })
   })

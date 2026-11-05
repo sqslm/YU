@@ -69,9 +69,9 @@ export interface SettleRecordDeps {
   release: (input: FindSourceInput, reason: string) => Promise<ReleaseOutcome>
   /** Whether the library still has anything worth settling. */
   active: () => boolean
-  find: (input: FindSourceInput) => Promise<{ sources: { id: string; version: string; state: string }[] }>
   purgeCards: (input: {
     record: SourceIdentity
+    /** The rows the user's preview listed; empty when the ticket alone names them. */
     confirm: { sources: { id: string; version: string }[]; ticket: string }
     cards: boolean
   }) => Promise<{ removed: string[]; kept: string[]; skipped: string[] }>
@@ -83,12 +83,18 @@ export interface SettleRecordDeps {
  *
  * The default keeps every card and the link that says where it came from: it only
  * takes back what this record really owned, so a material another record also read
- * keeps its row and its reader's queued work. A failed release is reported, never
- * swallowed into a false success — the record is already gone, so the caller sees a
- * retryable partial failure while the releaser keeps the same call queued.
+ * keeps its row and its reader's queued work. It hands the record identity straight
+ * to the helper — no preview and no paging — because the record is gone and every
+ * row it ever published has to go with it, however many versions that is. A failed
+ * release is reported, never swallowed into a false success: the record is gone, so
+ * the caller sees a retryable partial failure while the releaser keeps the same
+ * call queued for the next time the helper answers.
  *
- * With cards ticked, the helper re-checks the versions and the ticket inside its
- * write transaction, so a preview that no longer holds refuses instead of widening.
+ * With cards ticked, the confirmation is the preview the user read: the ticket is
+ * echoed back and the helper re-checks it against the rows as they are inside its
+ * write transaction, so a range that moved refuses instead of widening. The rows are
+ * not re-listed here — the ticket already digests them, and filtering them again in
+ * TypeScript would be a second, differently cut snapshot of the same record.
  */
 export async function settleRecordKnowledge(
   deps: SettleRecordDeps,
@@ -99,12 +105,6 @@ export async function settleRecordKnowledge(
   // A switched-off loop must not block the invalidation of knowledge that already
   // exists; with no database there is nothing to settle and no helper to wake.
   if (!deps.active()) return
-  const found = await deps.find(input)
-  const sources = found.sources
-    .filter(source => source.state !== 'invalid')
-    .map(source => ({ id: source.id, version: source.version }))
-  // Nothing was published for this record: there is no knowledge to settle.
-  if (!sources.length) return
   if (!options.cards) {
     const released = await deps.release(input, '记录已删除')
     if (released.failures.length) throw new Error(released.failures[0])
@@ -116,7 +116,7 @@ export async function settleRecordKnowledge(
   }
   const result = await deps.purgeCards({
     record: identity,
-    confirm: { sources, ticket: options.ticket ?? '' },
+    confirm: { sources: [], ticket: options.ticket ?? '' },
     cards: true
   })
   deps.log(

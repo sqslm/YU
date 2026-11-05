@@ -255,6 +255,12 @@ const knowledge = new KnowledgeHost({
     broadcastKnowledge(scope)
     // A cleanup whose record is gone finishes as soon as the helper is reachable.
     void settling.retry()
+  },
+  onReady: () => {
+    // The other half of the same promise: a helper that could not be spawned left no
+    // change notification behind, so its first successful start is what picks the
+    // waiting cleanups up again.
+    void settling.retry()
   }
 })
 /**
@@ -418,7 +424,6 @@ async function purgeRecordKnowledge(
 const settleDeps: SettleRecordDeps = {
   release: (input, reason) => settling.release(input, reason),
   active: () => knowledgeCollector.enabled || knowledge.running || knowledge.hasData(),
-  find: input => knowledge.findSources(input),
   purgeCards: input => knowledge.purgeCards(input),
   log: line => log(line)
 }
