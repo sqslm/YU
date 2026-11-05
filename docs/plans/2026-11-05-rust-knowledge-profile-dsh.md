@@ -1371,6 +1371,51 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - `d4318de` `fix(knowledge): recheck the source snapshot and the real read before acting` —— `native/knowledge/src/{queue,relations}.rs`、`native/knowledge/tests/relations.rs`、`src/main/knowledge/{manual,collector,documents}.ts`、`src/main/index.ts` 与六个回归文件（12 个文件，+314/−91）。
 - 本节由随后的 docs 提交记录，交付哈希已在「验证」表中给出。
 
+## 阶段 6 复核修复（R1～R4，2026-11-05 第十一轮，进行中）
+
+外部报告 reportId `d5bf9353-a61b-49e3-9ceb-6a8aba636e26`，基线 `01d31b1`。
+
+### R1 聊天与 Ask 真正拿到读工具和引用
+- 三处断点：`askAgent` 构建 `ToolContext` 时丢掉 `options.knowledge`；`AssistantSession.localQueries()` 不返回 `knowledge`（ChatService 因此拿不到）；`ChatService` 只加 `search_knowledge`。现在 ctx 透传 `knowledge`，`allowedTools()` 追加 `KNOWLEDGE_TOOLS`，chat 推入两个读工具。
+- 引用：`onCompleted` 把本轮 `kind === 'knowledge'` 记录的真实 ID 作为 `citedCardIds` 交给采集投影（此前完全没传，Rust 候选只在手拼 fixture 时生效）。
+
+### R2 删除按记录级预览与真实落盘顺序
+- `knowledge:impact` 改为**一次** `card.impact`（此前在 TS 里按来源合并、最多 50 条来源 ×20 项，正是 `single:0/multi:1` 误报来源）。
+- 顺序改为先删原记录、后结清知识（笔记与对话一致）；未勾选以 `{cards:false}` 只失效来源并解链；勾选时带用户确认的 `ticket`；清理失败抛「记录已删除，但关联知识清理失败：…」的部分失败，可重试。
+- 帮助器开关关闭但库已存在时仍执行撤回（此前 `enabled === false` 直接返回，关闭期删除遗留活跃来源）。
+- wire 对齐：`card.purge` 收「身份 + `confirm:{sources,ticket}` + `cards`」，ticket 不一致回 `source_changed / 预览已失效，请重新确认` 且事务零改动；`card.impact` 增 `record/incomplete/ticket/sources`。
+
+### R3 卡片动作
+- `knowledge:continue` 不再后台 `chats.send`：只建草稿并登记卡片种子，真正发送时消费（发送前零模型调用），卡片正文按不可信参考、`MAX_CARD_CONTEXT` 截断。
+- 另存为随记后立即以 `publishNote(note, [card.id])` 登记来源并引用该卡片，重复沉淀不再产新主卡。
+
+### R4 工作流从真实读取送提炼
+- 新增 `KnowledgeTools.reading(material)`：把本次工作流真的读过的材料经既有 `readingFinished` 投影发布，再按 origin 找回来源并 `extractSourceNow`（不重抓、不接受外部正文）。
+- `run_workflow` 记录上一成功读取步骤的材料；`queued === 0` 如实返回失败，不再合成 `ok:true`。
+
+### 真实回归（本轮）
+- `src/main/knowledge/linkage.integration.test.ts` 6 项（真 helper）：note/thread 来源查询；按来源分页；仅单来源卡被删、双来源卡只解链；同一随记两个版本仍算「单来源依赖」（`cards:1, single:1, multi:0` 并整体删除）；旧版本预览被拒且卡片与来源均未变。
+- `src/main/tools/knowledge.test.ts` 7 项：未授权轮次拒绝、`limit` 截到 8、超长查询拒绝（不截断）、无命中如实、`get_knowledge` 透出 helper 错误、`extract_knowledge` 透传 note id。
+- `src/main/tools/workflow.test.ts` 22 项：仅授 `run_workflow` 时保存的 `extract_knowledge` 步骤可重放；缺知识依赖时失败且不产生第二次提炼。
+- `src/main/notes-ipc.test.ts` 15 项：顺序为「先删记录、后结清的知识」、勾选回传 `ticket`、清理失败报部分失败、未勾选以 `{cards:false}` 结清。
+
+### 验证（本轮最终代码）
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | exit 0 |
+| `cargo test --locked` | exit 0，130 passed（lib 18 / cards_view 11 / extract 15 / process 11 / profile 27 / queue 22 / relations 26） |
+| `cargo clippy --locked --all-targets -- -D warnings`（含 `--features fixture`） | exit 0 / exit 0 |
+| 定向 Vitest（knowledge、tools、notes-ipc、chat、assistant、workspace、preload、ipc-trust、settings） | 77 文件 / 1071 项全过 |
+| `tsc -p tsconfig.node.json` / `-p tsconfig.web.json` | 0 / 0 |
+| `pnpm test` | exit 0，276 文件通过 / 3 跳过，3941 项通过 / 8 跳过 |
+| `pnpm build` | exit 0，11.87 s |
+| `git diff --check` | exit 0 |
+
+### 未测与边界
+- R1 的「真实 `ChatService`/`AssistantSession` + 仅替网络的传输替身」端到端断言尚未补齐（目前覆盖到工具注册、授权门、采集投影与单元级透传）。
+- 未做隔离 Electron 真窗口点击验证（继续讨论、随记↔卡片跳转）。
+- `card.purge` 的旧 `{sources,cards}` 无 ticket 形态仍被 Rust 接受为即时重算（向后兼容）；TS 只走身份 + `confirm` 形态。
+
 ## 阶段 5 外部验收与阶段 6 实施记录（2026-11-05 第十轮）
 
 外部 Codex 在 `0178d20` 上核对阶段 5：`cargo test --locked` 114 项、targeted vitest 24 文件 / 232 项、`git diff --check 15c134a..HEAD` 通过、release 3,085,824 字节 `f73ace70b183b43edf156a6c4bd896d4e5bdcbe601c058cacd958353258a00c9`，阶段 5 通过并授权阶段 6（软件联动）。阶段 7 未开始。
