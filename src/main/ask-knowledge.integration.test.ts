@@ -11,7 +11,7 @@
  *
  * The point is proving that a knowledge card citation is real all the way
  * through: the tool table the model is offered, the search the helper answers,
- * the citation rule in `citedKnowledgeIds`, the id stored on the chat message,
+ * the citation rule in `parseCardCitations`, the id stored on the chat message,
  * the projection the collector publishes, and the `sources.cited_card_ids`
  * column in the helper's own SQLite file.
  */
@@ -249,14 +249,26 @@ async function until<T>(read: () => T, done: (value: T) => boolean, label: strin
 interface SourceRow {
   kind: string
   origin_ref: string
+  version: string
   cited_card_ids: string
+}
+
+function readCardCount(root: string): number {
+  const file = join(root, 'data', 'knowledge', 'knowledge.db')
+  const db = new DatabaseSync(file, { readOnly: true })
+  try {
+    const row = db.prepare('SELECT count(*) AS count FROM cards').get() as unknown as { count: number }
+    return row.count
+  } finally {
+    db.close()
+  }
 }
 
 function readSources(root: string): SourceRow[] {
   const file = join(root, 'data', 'knowledge', 'knowledge.db')
   const db = new DatabaseSync(file, { readOnly: true })
   try {
-    return db.prepare('SELECT kind, origin_ref, cited_card_ids FROM sources').all() as unknown as SourceRow[]
+    return db.prepare('SELECT kind, origin_ref, version, cited_card_ids FROM sources ORDER BY rowid').all() as unknown as SourceRow[]
   } finally {
     db.close()
   }
@@ -269,7 +281,7 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     const card = await host.saveCard({ kind: 'concept', title: CARD_TITLE, body: CARD_BODY, topics: ['检索'] })
     const fake = await fakeModel((body) =>
       hasToolResult(body)
-        ? answer(`根据卡片《${CARD_TITLE}》，检索先命中标题，再落到正文。`)
+        ? answer(`根据卡片《${CARD_TITLE}》，检索先命中标题，再落到正文。[[card:${card.id}]]`)
         : callTool('search_knowledge', { query: CARD_TITLE, limit: 3 })
     )
     const settings = settingsFor(fake.baseUrl, true)
@@ -313,6 +325,8 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     const stored = service.get(thread.id).messages.at(-1)!
     expect(stored.state).toBe('done')
     expect(stored.text).toContain(CARD_TITLE)
+    // The model's marker is program markup: the reader never sees it.
+    expect(stored.text).not.toContain('[[card:')
     expect(stored.records).toEqual([expect.objectContaining({ kind: 'knowledge', id: card.id, title: CARD_TITLE })])
   }, 60_000)
 
@@ -529,6 +543,94 @@ describe('knowledge citations over the real chat, Ask, tool registry and helper'
     expect(stored.state).toBe('error')
     expect(stored.records).toEqual([])
   }, 60_000)
+
+  it('keeps an ordinary answer when the optional library read fails', async () => {
+    const root = newRoot()
+    // The helper cannot start, so the read the model chose on its own fails.
+    const host = trackHost(root, join(root, 'missing', 'yu-knowledge.exe'))
+    const fake = await fakeModel((body) =>
+      hasToolResult(body)
+        ? answer('建议在数据库里加唯一约束。')
+        : callTool('search_knowledge', { query: '重复写入' })
+    )
+    const settings = settingsFor(fake.baseUrl, true)
+    const { tools } = knowledgeToolsFor(host, () => true)
+    const completed: ChatTurnDone[] = []
+    const service = trackService(new ChatService(
+      join(root, 'chats.db'),
+      () => settings,
+      () => {},
+      () => ({ knowledge: tools }),
+      (turn) => completed.push(turn)
+    ))
+    const thread = service.create(null)
+    const seed = service.store.begin(thread.id, '上一轮的问题')
+    service.store.finish(seed.answerId, '上一轮的回答', 'done')
+
+    await service.send(thread.id, '如何避免重复写入？')
+
+    expect(fake.requests).toHaveLength(2)
+    const stored = service.get(thread.id).messages.at(-1)!
+    // The answer that exists survives the failed optional read...
+    expect(stored.text).toBe('建议在数据库里加唯一约束。')
+    expect(stored.state).toBe('done')
+    // ...and it carries no citation, because the card was never read.
+    expect(stored.records).toEqual([])
+    expect(completed).toHaveLength(1)
+    expect(completed[0].citedCardIds).toEqual([])
+  }, 60_000)
+
+  it('hands a restatement and a new conclusion to the helper as two real sources', async () => {
+    const root = newRoot()
+    const host = trackHost(root)
+    const card = await host.saveCard({ kind: 'concept', title: CARD_TITLE, body: CARD_BODY, topics: ['检索'] })
+    const SAME = `检索先命中标题，再落到正文。[[card:${card.id}]]`
+    const NEW = `写入前先查重，能少一半重复。[[card:${card.id}]]`
+    let round = 0
+    const fake = await fakeModel((body) =>
+      hasToolResult(body)
+        ? answer(round++ < 2 ? SAME : NEW)
+        : callTool('search_knowledge', { query: CARD_TITLE })
+    )
+    const settings = settingsFor(fake.baseUrl, true)
+    const { tools } = knowledgeToolsFor(host, () => true)
+    const collector = new KnowledgeCollector({ settings: () => settings, host: () => host, log: () => {} })
+    await collector.sync()
+    // The same wiring index.ts uses: one completed chat turn becomes one collection.
+    const service = trackService(new ChatService(
+      join(root, 'chats.db'),
+      () => settings,
+      () => {},
+      () => ({ knowledge: tools }),
+      (turn) => { void collector.threadFinished(turn) }
+    ))
+    const thread = service.create(null)
+    const seed = service.store.begin(thread.id, '上一轮的问题')
+    service.store.finish(seed.answerId, '上一轮的回答', 'done')
+
+    await service.send(thread.id, '检索粒度是什么')
+    const first = await until(() => readSources(root), (rows) => rows.length >= 1, 'the first cited source')
+    // The answer's marker became the helper's own cited_card_ids column.
+    expect(JSON.parse(first[0].cited_card_ids)).toEqual([card.id])
+    expect(first[0].version).toMatch(/^[0-9a-f]{64}$/)
+
+    // The same question answered the same way has the same content fingerprint —
+    // the identity extraction uses to refuse a second copy of the same knowledge.
+    await service.send(thread.id, '检索粒度是什么')
+    // A different conclusion is its own material, and still names the same card.
+    await service.send(thread.id, '怎么减少重复写入')
+    const rows = await until(() => readSources(root), (all) => all.length >= 3, 'three collected turns')
+    expect(rows).toHaveLength(3)
+    expect(new Set(rows.map((row) => row.version)).size).toBe(2)
+    expect(rows[0].version).toBe(rows[1].version)
+    expect(rows[2].version).not.toBe(rows[1].version)
+    for (const row of rows) {
+      expect(row.kind).toBe('chat')
+      // Every turn points back at the one real card instead of a copy per answer.
+      expect(JSON.parse(row.cited_card_ids)).toEqual([card.id])
+    }
+    expect(readCardCount(root)).toBe(1)
+  }, 90_000)
 
   it('never completes a turn that was cancelled while deltas were still arriving', async () => {
     const root = newRoot()

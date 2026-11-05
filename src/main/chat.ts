@@ -9,7 +9,7 @@ import { egressFetch } from './net/egress'
 import { isCurrentContentRequest } from './voice-intent'
 import { CHAT_IDENTITY_PROMPT } from '@shared/prompts'
 import { ChatStore } from './chat-store'
-import { LOCAL_QUERY_TOOLS, citedKnowledgeIds, recordsFromTool, type LocalRecord } from '@shared/workspace'
+import { LOCAL_QUERY_TOOLS, parseCardCitations, recordsFromTool, type LocalRecord } from '@shared/workspace'
 import type { AgentOptions } from './agent'
 import { attachmentMaterial, isReadingTool, readingMaterial } from './knowledge/collector'
 import { KNOWLEDGE_TOOLS } from './tools/knowledge'
@@ -141,7 +141,6 @@ ${JSON.stringify(card)}` }]
       const summarizing = isCurrentContentRequest(question.trim()) && !/搜索|检索|联网|上网|\b(?:search|browse|look up)\b/iu.test(question)
       const local = this.localQueries(), records: LocalRecord[] = [...seed]
       // A search hit is a candidate; a card this turn opened by id is a use.
-      const openedCards = new Set<string>()
       const queryTools: string[] = [...LOCAL_QUERY_TOOLS.filter(name => name === 'list_events' ? local.life : local.personal)]
       // The knowledge base is offered only while the user has it switched on, and
       // only as a read: it never writes during an ordinary answer.
@@ -162,8 +161,6 @@ ${JSON.stringify(card)}` }]
             if (material) materials.push(material)
           }
           if (result.ok) for (const row of recordsFromTool(name, result.data)) if (!records.some(item => item.kind === row.kind && item.id === row.id)) records.push(row)
-          const opened = result.ok && name === 'get_knowledge' ? result.data.card : undefined
-          if (opened && typeof opened === 'object' && typeof (opened as { id?: unknown }).id === 'string') openedCards.add((opened as { id: string }).id)
         },
         reset: false, conversation, allowedTools, timeouts: { llm: 90000 }, fetchImpl: egressFetch,
         // 「语」 answers as itself in the chat page; the voice bar stays generic.
@@ -178,8 +175,13 @@ ${JSON.stringify(card)}` }]
       if (temporary && !conversation.memoryTemporary) this.store.markTemporary(id)
       // The chat page renders `sources` as its own section, so the appended markdown list is
       // dropped before storing: otherwise every answer, and every later export, repeats it.
-      const answer = stripAppendedSources(result.text)
-      this.store.finish(answerId, answer, result.taskState === 'failed' ? 'error' : 'done', dedupeSources(result.sources), records.slice(0, 40))
+      // A card is cited only where the answer declared it with `[[card:ID]]`, and
+      // only when this turn's tools really returned that id: a card the model
+      // merely searched stays a candidate and is not stored as if it were used.
+      const cited = parseCardCitations(stripAppendedSources(result.text), records.filter(record => record.kind === 'knowledge').map(record => record.id))
+      const answer = cited.answer
+      const kept = records.filter(record => record.kind !== 'knowledge' || cited.cited.includes(record.id))
+      this.store.finish(answerId, answer, result.taskState === 'failed' ? 'error' : 'done', dedupeSources(result.sources), kept.slice(0, 40))
       if (first && result.taskState !== 'failed') void this.title(id, question, result.text)
       // Only a real completion is worth keeping: a failed, cancelled or still
       // waiting answer has no body, and a temporary thread was never stored at all.
@@ -197,7 +199,7 @@ ${JSON.stringify(card)}` }]
             question,
             answer,
             at: Date.now(),
-            citedCardIds: citedKnowledgeIds(records.filter(record => record.kind === 'knowledge'), answer, openedCards),
+            citedCardIds: cited.cited,
             materials
           })
         } catch (error) {

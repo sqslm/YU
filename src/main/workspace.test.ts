@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ChatStore } from './chat-store'
 import { readWorkspaceRecord, searchWorkspace, type WorkspaceSources } from './workspace'
 import type { NoteEntry } from '@shared/types'
-import { recordsFromTool, citedKnowledgeIds, MAX_CITED_CARDS } from '@shared/workspace'
+import { recordsFromTool, parseCardCitations, MAX_CITED_CARDS } from '@shared/workspace'
 
 const roots: string[] = [], stores: ChatStore[] = []
 afterEach(() => { vi.restoreAllMocks(); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -31,24 +31,26 @@ it('turns a single card read into a knowledge record', () => {
   expect(recordsFromTool('get_knowledge', { ok: false })).toEqual([])
 })
 
-it('cites only the cards the answer really used', () => {
-  const hits = recordsFromTool('search_knowledge', { items: [
-    { id: 'card_1', title: '锁粒度', summary: '锁的粒度决定竞争范围' },
-    { id: 'card_2', title: '幂等键', summary: '重复提交' },
-    { id: 'card_3', title: '缓存穿透', summary: '空值缓存' }
-  ] })
-  // A candidate the answer never named is not a citation.
-  expect(citedKnowledgeIds(hits, '锁粒度决定竞争范围。')).toEqual(['card_1'])
-  // A card the turn opened by id is a use even when the answer never repeats the title.
-  expect(citedKnowledgeIds(hits, '两件事都要注意。', ['card_2'])).toEqual(['card_2'])
-  // Nothing was fetched this turn, so an id the model wrote itself has no row to match.
-  expect(citedKnowledgeIds(hits, 'card_9 与 卡片', ['card_9'])).toEqual([])
-  // A one-character title is too weak to prove anything.
-  expect(citedKnowledgeIds([{ id: 'card_4', title: '锁' }], '锁')).toEqual([])
-  const many = Array.from({ length: 20 }, (_, index) => ({ id: `c${index}`, title: `卡片${index}` }))
-  expect(citedKnowledgeIds(many, many.map(card => card.title).join('，'))).toHaveLength(MAX_CITED_CARDS)
+it('cites only the cards the answer declared and this turn really received', () => {
+  const received = ['card_1', 'card_2', 'card_3']
+  // A searched card the answer never declared is a candidate, not a citation —
+  // even when the answer repeats its title word for word.
+  expect(parseCardCitations('锁的粒度决定竞争范围。', received)).toEqual({ answer: '锁的粒度决定竞争范围。', cited: [] })
+  const declared = parseCardCitations('锁的粒度决定竞争范围[[card:card_1]]。', received)
+  expect(declared.cited).toEqual(['card_1'])
+  // The marker is program markup: it never reaches the reader.
+  expect(declared.answer).toBe('锁的粒度决定竞争范围。')
+  // Two cards share a title, so the title proves nothing; the id decides.
+  expect(parseCardCitations('两篇同名卡片[[card:card_2]]', received).cited).toEqual(['card_2'])
+  // An id this turn never received has no row to match, so it is dropped with its marker.
+  expect(parseCardCitations('参考[[card:card_9]]', received)).toEqual({ answer: '参考', cited: [] })
+  // A card read but explicitly not used stays a candidate.
+  expect(parseCardCitations('不使用这两张卡片。', received).cited).toEqual([])
+  // Repeats count once, and the cap holds.
+  expect(parseCardCitations('[[card:card_1]]与[[card:card_1]]', received).cited).toEqual(['card_1'])
+  const many = Array.from({ length: 20 }, (_, index) => `c${index}`)
+  expect(parseCardCitations(many.map(id => `[[card:${id}]]`).join(''), many).cited).toHaveLength(MAX_CITED_CARDS)
 })
-
 
 it('finds Chinese text in message bodies and document attachments and opens the exact old message', () => {
   const sources = fixture(), thread = sources.chat.create(), first = sources.chat.begin(thread.id, '采购预算 50%_预算')

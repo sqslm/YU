@@ -37,24 +37,33 @@ export function recordsFromTool(name: string, data: Record<string, unknown>): Lo
 /** One card the tools of a turn returned; chat and Ask both describe them this way. */
 export interface KnowledgeCardRef { id: string; title: string }
 
+/** The two reads that can back a citation; nothing else may produce one. */
+export const KNOWLEDGE_READ_TOOLS: readonly string[] = ['search_knowledge', 'get_knowledge']
+
 /**
- * The cards an answer really used this turn.
- *
- * A search hit is a candidate, not a citation: it counts only when the answer
- * names it, or when the turn opened that very card by id. Both inputs come from
- * the tools' own results, so an id the model invented has no row to match and
- * can never be cited.
+ * The answer's own citation marker: `[[card:ID]]`, written after the sentence
+ * that used the card. A title that happens to appear, a card that was only read,
+ * or a search hit is not a citation — only this declaration is, and only for an
+ * id the tools of the same turn really returned.
  */
-export function citedKnowledgeIds(cards: KnowledgeCardRef[], answer: string, opened: Iterable<string> = []): string[] {
-  const used = new Set(opened)
-  const text = answer ?? ''
+const CARD_CITE = /\[\[card:([^\]\s]{1,128})\]\]/g
+
+/** The cards an answer declared, and the answer without the markers. */
+export function parseCardCitations(answer: string, received: Iterable<string>): { answer: string; cited: string[] } {
+  const known = new Set(received)
   const cited: string[] = []
-  for (const card of cards) {
-    if (!card.id || cited.includes(card.id)) continue
-    const title = card.title.trim()
-    if (!used.has(card.id) && (title.length < 2 || !text.includes(title))) continue
-    cited.push(card.id)
-    if (cited.length >= MAX_CITED_CARDS) break
-  }
-  return cited
+  const text = (answer ?? '').replace(CARD_CITE, (_mark: string, id: string) => {
+    if (!known.has(id) || cited.includes(id) || cited.length >= MAX_CITED_CARDS) return ''
+    cited.push(id)
+    return ''
+  })
+  return { answer: text, cited }
+}
+
+/**
+ * The user asked their own library by name. A read that fails there is a real
+ * failure to report; the same read failing in passing must not sink the answer.
+ */
+export function asksOwnKnowledge(question: string): boolean {
+  return /知识库|知识卡片|我的卡片|卡片里|我记|记过|之前记|笔记里|资料库里/.test(question ?? '')
 }

@@ -13,7 +13,7 @@ import { runTool, availableToolNames, type ToolContext, type ToolOutcome } from 
 import { redactSecrets } from './diagnostics'
 import { attachTask, createTask } from './task-context'
 import type { TaskContext } from '@shared/task'
-import { citedKnowledgeIds, type KnowledgeCardRef } from '@shared/workspace'
+import { parseCardCitations } from '@shared/workspace'
 import { localDayKey } from '@shared/calendar'
 import { PERSONAL_TOOLS, personalCommand, type PersonalTools } from './tools/personal'
 import { readAloudCommand } from './read-aloud-command'
@@ -611,10 +611,10 @@ export class AssistantSession {
     const turn: AssistantTurn = { id: ++this.nextId, taskId: task.id, taskState: 'running', question: input.trim(), answer: '', sources: [], state: 'working', localResults: [] }
     // Only what this turn really read: the collector never re-fetches a page.
     const materials: import('./knowledge/collector').ReadingMaterial[] = []
-    // The cards this turn really received, and the ones it opened by id; both come
-    // from the tool receipts, so a card id the model wrote itself has no entry.
-    const cards: KnowledgeCardRef[] = []
-    const openedCards = new Set<string>()
+    // The cards this turn really received: the only ids a citation may name, and
+    // the only rows the card may offer to open.
+    const received = new Set<string>()
+    let citedCards: string[] = []
     this.turns = [...this.turns, turn].slice(-12)
     this.lastUsed = this.now()
     this.status = mt('正在思考…')
@@ -643,10 +643,8 @@ export class AssistantSession {
           for (const item of receipt.items ?? []) {
             if (item.kind !== 'knowledge') continue
             this.cards.add(item.id)
-            if (!cards.some(card => card.id === item.id)) cards.push({ id: item.id, title: item.name })
+            received.add(item.id)
           }
-          const read = receipt.tool === 'get_knowledge' && receipt.ok ? receipt.items?.[0]?.id : undefined
-          if (read) openedCards.add(read)
           turn.localResults!.push(receipt); this.notify()
         },
         onToolResult: (name, result) => {
@@ -714,7 +712,7 @@ export class AssistantSession {
       }
       taskSignal.throwIfAborted()
       if (this.controller !== controller) return
-      const failedTool = unresolvedToolFailure(turn.localResults)
+      const failedTool = unresolvedToolFailure(turn.localResults, turn.question)
       if (failedTool?.status === 'awaiting_confirmation') {
         task.state = 'awaiting_confirmation'; turn.answer = failedTool.summary; turn.state = 'done'; return
       }
@@ -722,7 +720,19 @@ export class AssistantSession {
       if (taskEdit && !turn.localResults?.some(item => item.tool === 'manage_reminder' && item.ok)) {
         throw new Error(turn.localResults?.find(item => item.tool === 'manage_reminder' && !item.ok)?.summary ?? mt('本次未修改提醒或待办，请明确事项后重试'))
       }
-      turn.answer = result.text
+      // The answer declares the cards it used; an id it did not receive is dropped
+      // and a candidate it only searched stays a candidate. The markers are markup
+      // for this program, never part of what the user reads.
+      const cited = parseCardCitations(result.text, received)
+      citedCards = cited.cited
+      turn.answer = cited.answer
+      turn.localResults = (turn.localResults ?? []).map(receipt => {
+        if (!receipt.items?.some(item => item.kind === 'knowledge')) return receipt
+        const items = receipt.items.filter(item => item.kind !== 'knowledge' || citedCards.includes(item.id))
+        if (items.length) return { ...receipt, items }
+        const { items: _dropped, ...rest } = receipt
+        return rest
+      })
       turn.sources = result.sources
       turn.memories = result.memories; turn.memoryTemporary = result.memoryTemporary; turn.actions = result.actions
       turn.state = 'done'
@@ -761,7 +771,7 @@ export class AssistantSession {
             materials,
             answer: turn.answer,
             sources: turn.sources.map(item => ({ title: item.title, url: item.url })),
-            citedCardIds: citedKnowledgeIds(cards, turn.answer, openedCards),
+            citedCardIds: citedCards,
             at: this.now()
           })
         } catch {

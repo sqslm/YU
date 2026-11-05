@@ -1,11 +1,18 @@
+import { KNOWLEDGE_READ_TOOLS, asksOwnKnowledge } from './workspace'
 import type { SearchResult } from './types'
 import type { TaskState, ToolState } from './task'
 
 export interface AssistantItem { id: string; name: string; path: string; /** knowledge marks a card reference, never a path on disk. */ kind: 'file' | 'application' | 'knowledge'; appId?: string; bytes?: number; modified?: string }
 export interface AssistantLocalResult { tool: string; ok: boolean; summary: string; status?: ToolState; taskId?: string; items?: AssistantItem[]; detail?: string; fallback?: boolean }
 
-export function unresolvedToolFailure(results: readonly AssistantLocalResult[] = []): AssistantLocalResult | undefined {
-  return results.find((item, index) => !item.ok &&
+/**
+ * The tool failure that has to speak for the turn. A knowledge read is optional
+ * context unless the question asked for the library, so its failure leaves a
+ * normal answer intact; a cancelled run is never turned into a completion.
+ */
+export function unresolvedToolFailure(results: readonly AssistantLocalResult[] = [], question = ''): AssistantLocalResult | undefined {
+  const optional = (item: AssistantLocalResult): boolean => item.status !== 'cancelled' && KNOWLEDGE_READ_TOOLS.includes(item.tool) && !asksOwnKnowledge(question)
+  return results.find((item, index) => !item.ok && !optional(item) &&
     !(item.fallback && results.slice(index + 1).some(next => next.ok && ['search_files', 'search_file_contents'].includes(next.tool))))
 }
 

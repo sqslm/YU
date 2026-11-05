@@ -231,25 +231,27 @@ describe('knowledge citations in the chat page', () => {
     extractFromNote: vi.fn()
   } as unknown as import('./tools/knowledge').KnowledgeTools)
 
-  it('cites only the cards the answer really used and keeps every fetched card clickable', async () => {
+  it('cites only the card the answer declared, and stores the same card it cited', async () => {
     const turns: import('./knowledge/collector').ChatTurnDone[] = []
     const chat = new ChatService(join(root, 'citations.db'), () => settings, () => {}, () => ({ knowledge: knowledge() }), turn => turns.push(turn))
     try {
       const thread = chat.create(null)
       vi.mocked(askAgent).mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
-        options?.onToolResult?.('search_knowledge', { ok: true, summary: '知识库命中 2 条：锁粒度', data: { ok: true, query: '锁', total: 2, items: [hit('card_1', '锁粒度', '锁的粒度决定竞争范围'), hit('card_3', '缓存穿透', '空值缓存')] } })
-        return { text: '锁粒度决定竞争范围。', sources: [], searched: false, taskState: 'completed' }
+        // Two cards share a title, so only the declared id can prove which was used.
+        options?.onToolResult?.('search_knowledge', { ok: true, summary: '知识库命中 2 条：锁粒度', data: { ok: true, query: '锁', total: 2, items: [hit('card_1', '锁粒度', '锁的粒度决定竞争范围'), hit('card_3', '锁粒度', '空值缓存')] } })
+        return { text: '锁粒度决定竞争范围[[card:card_1]]。', sources: [], searched: false, taskState: 'completed' }
       })
       await chat.send(thread.id, '锁粒度是什么意思')
-      // card_3 was fetched but never named: it is a candidate, not a citation.
       expect(turns[0].citedCardIds).toEqual(['card_1'])
-      // Both stay clickable in the stored message, which is what reopening the thread shows.
-      const records = chat.get(thread.id).messages.at(-1)?.records ?? []
-      expect(records.filter(record => record.kind === 'knowledge').map(record => record.id)).toEqual(['card_1', 'card_3'])
+      const message = chat.get(thread.id).messages.at(-1)!
+      // The candidate is not stored as if the answer had used it.
+      expect(message.records?.filter(record => record.kind === 'knowledge').map(record => record.id)).toEqual(['card_1'])
+      // The marker never reaches the stored answer.
+      expect(message.text).toBe('锁粒度决定竞争范围。')
     } finally { chat.close() }
   })
 
-  it('cites a card the turn opened by id, and never an id the model invented', async () => {
+  it('cites nothing for a card that was only read, and drops an invented id', async () => {
     const turns: import('./knowledge/collector').ChatTurnDone[] = []
     const chat = new ChatService(join(root, 'citations-open.db'), () => settings, () => {}, () => ({ knowledge: knowledge() }), turn => turns.push(turn))
     try {
@@ -257,16 +259,18 @@ describe('knowledge citations in the chat page', () => {
       vi.mocked(askAgent).mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
         options?.onToolResult?.('search_knowledge', { ok: true, summary: '知识库命中 1 条：幂等键', data: { ok: true, query: '幂等', total: 1, items: [hit('card_2', '幂等键', '重复提交要用幂等键')] } })
         options?.onToolResult?.('get_knowledge', { ok: true, summary: '已读取卡片：幂等键', data: { ok: true, card: { id: 'card_2', title: '幂等键', kind: 'concept', topics: [], body: '重复提交要用幂等键。', sourceIds: [], updatedAt: 5 } } })
-        return { text: '两件事都要注意。', sources: [], searched: false, taskState: 'completed' }
+        return { text: '好的。', sources: [], searched: false, taskState: 'completed' }
       })
       await chat.send(thread.id, '这两件事')
-      expect(turns[0].citedCardIds).toEqual(['card_2'])
-      // A read of that card is also a real reference row, not only a citation id.
-      expect(chat.get(thread.id).messages.at(-1)?.records?.find(record => record.id === 'card_2')?.title).toBe('幂等键')
+      // Browsing and even opening a card is not a citation.
+      expect(turns[0].citedCardIds).toEqual([])
+      expect(chat.get(thread.id).messages.at(-1)?.records?.filter(record => record.kind === 'knowledge')).toEqual([])
 
-      vi.mocked(askAgent).mockResolvedValueOnce({ text: '我记得 card_9 这张卡片，标题是 幂等键。', sources: [], searched: false, taskState: 'completed' })
+      // An id this turn never received is dropped with its marker, and so is the row.
+      vi.mocked(askAgent).mockResolvedValueOnce({ text: '我记得[[card:card_9]]这张卡片。', sources: [], searched: false, taskState: 'completed' })
       await chat.send(thread.id, '再说一次')
       expect(turns[1].citedCardIds).toEqual([])
+      expect(chat.get(thread.id).messages.at(-1)?.text).toBe('我记得这张卡片。')
     } finally { chat.close() }
   })
 

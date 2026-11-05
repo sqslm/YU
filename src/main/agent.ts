@@ -36,6 +36,7 @@ import {
 } from '@shared/prompts'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
 import { stripSourceTail } from '@shared/sourceText'
+import { KNOWLEDGE_READ_TOOLS, asksOwnKnowledge } from '@shared/workspace'
 import { adaptChatBody, chatPath, complete } from './providers/llm'
 import { joinUrl, parseHeaderLines } from './providers/asr'
 import { isWeatherQuery } from './providers/weather'
@@ -1711,7 +1712,13 @@ async function askTask(
 
   const finish = (result: AgentResult): AgentResult => {
     abort.throwIfAborted()
-    const unresolved = lastRuns.find((run, index) => !run.ok && !(needsFileSearchFallback(run.name, run) && lastRuns.slice(index + 1).some(next => next.ok && ['search_files', 'search_file_contents'].includes(next.name))))
+    // A knowledge read is optional extra context when the question did not ask
+    // for the library: its failure leaves the answer that already exists intact,
+    // and the receipt still reports the real error. An explicit request for the
+    // library keeps failing, and a cancelled run stays cancelled.
+    const optionalRead = (run: ToolRun): boolean =>
+      run.status !== 'cancelled' && KNOWLEDGE_READ_TOOLS.includes(run.name) && !asksOwnKnowledge(question)
+    const unresolved = lastRuns.find((run, index) => !run.ok && !optionalRead(run) && !(needsFileSearchFallback(run.name, run) && lastRuns.slice(index + 1).some(next => next.ok && ['search_files', 'search_file_contents'].includes(next.name))))
     const pending = lastRuns.some(run => run.status === 'awaiting_confirmation')
     result.taskState = pending ? 'awaiting_confirmation' : unresolved ? unresolved.status === 'cancelled' ? 'cancelled' : 'failed' : 'completed'
     // Single choke point for anything that reaches the card or the cursor: tool

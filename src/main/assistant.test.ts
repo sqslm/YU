@@ -530,19 +530,79 @@ describe('knowledge card references in the floating answer', () => {
     expect(current.snapshot().turns.at(-1)?.state).toBe('done')
   })
 
-  it('hands the collector only the cards the answer used', async () => {
+  it('cites only the cards the answer declared, never a same-title candidate', async () => {
     const readings: import('./knowledge/collector').ReadingProjection[] = []
     const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), onReading: reading => readings.push(reading) })
     ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
       options?.onToolResult?.('read_webpage', { ok: true, summary: '已读取', data: { url: 'https://example.com/a', title: 'A', text: '页面正文' } })
-      options?.onLocalResult?.({ tool: 'search_knowledge', ok: true, summary: '命中 3 条', items: [card('card_1', '锁粒度'), card('card_2', '幂等键'), card('card_3', '缓存穿透')] })
-      options?.onLocalResult?.({ tool: 'get_knowledge', ok: true, summary: '已读取卡片：幂等键', items: [card('card_2', '幂等键')] })
-      return { text: '锁粒度决定竞争范围，幂等键防止重复写入。', sources: [], searched: false, taskState: 'completed' }
+      // Two cards with the same title: the title cannot prove which one was used.
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: true, summary: '命中 2 条', items: [card('card_1', '重复写入'), card('card_2', '重复写入')] })
+      return { text: '锁粒度决定竞争范围[[card:card_1]]，另一张不用。', sources: [], searched: false, taskState: 'completed' }
     })
     await current.send('这两个概念的关系')
     expect(readings).toHaveLength(1)
-    // card_3 was a candidate: fetched, never named, never opened.
-    expect(readings[0].citedCardIds).toEqual(['card_1', 'card_2'])
+    expect(readings[0].citedCardIds).toEqual(['card_1'])
+    // The marker is program markup, and the unused candidate stops being clickable.
+    const turn = current.snapshot().turns.at(-1)!
+    expect(turn.answer).toBe('锁粒度决定竞争范围，另一张不用。')
+    expect(turn.localResults?.flatMap(receipt => receipt.items ?? []).map(item => item.id)).toEqual(['card_1'])
+  })
+
+  it('says nothing was used when the answer only says OK', async () => {
+    const readings: import('./knowledge/collector').ReadingProjection[] = []
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), onReading: reading => readings.push(reading) })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onToolResult?.('read_webpage', { ok: true, summary: '已读取', data: { url: 'https://example.com/c', title: 'C', text: '正文' } })
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: true, summary: '命中 2 条', items: [card('card_1', '重复写入'), card('card_2', '重复写入')] })
+      options?.onLocalResult?.({ tool: 'get_knowledge', ok: true, summary: '已读取卡片：重复写入', items: [card('card_2', '重复写入')] })
+      return { text: '好的。', sources: [], searched: false, taskState: 'completed' }
+    })
+    await current.send('先看看')
+    expect(readings).toHaveLength(1)
+    // Searching or even opening a card is not a citation by itself.
+    expect(readings[0].citedCardIds).toEqual([])
+    const turn = current.snapshot().turns.at(-1)!
+    expect(turn.localResults?.flatMap(receipt => receipt.items ?? [])).toEqual([])
+    expect(turn.answer).toBe('好的。')
+  })
+
+  it('drops a marker for an id no tool returned', async () => {
+    const readings: import('./knowledge/collector').ReadingProjection[] = []
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn(), onReading: reading => readings.push(reading) })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onToolResult?.('read_webpage', { ok: true, summary: '已读取', data: { url: 'https://example.com/d', title: 'D', text: '正文' } })
+      return { text: '参考[[card:card_forged]]结论。', sources: [], searched: false, taskState: 'completed' }
+    })
+    await current.send('说说结论')
+    expect(readings[0].citedCardIds).toEqual([])
+    expect(current.snapshot().turns.at(-1)!.answer).toBe('参考结论。')
+  })
+
+  it('keeps an ordinary answer when the optional knowledge read fails', async () => {
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn() })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: false, status: 'failed', summary: '知识库暂时不可用' })
+      return { text: '建议在数据库里加唯一约束。', sources: [], searched: false }
+    })
+    await current.send('如何避免重复写入？')
+    const turn = current.snapshot().turns.at(-1)!
+    // The answer that exists is not replaced by the failure receipt.
+    expect(turn.state).toBe('done')
+    expect(turn.answer).toBe('建议在数据库里加唯一约束。')
+    // The real error stays visible in the receipts.
+    expect(turn.localResults?.map(receipt => receipt.summary)).toEqual(['知识库暂时不可用'])
+  })
+
+  it('still fails an explicit request for the local library', async () => {
+    const current = new AssistantSession({ settings: () => settings, ask, changed, log: vi.fn() })
+    ask.mockImplementationOnce(async (_settings, _text, _context, _signal, _log, options) => {
+      options?.onLocalResult?.({ tool: 'search_knowledge', ok: false, status: 'failed', summary: '知识库暂时不可用' })
+      return { text: '没有找到。', sources: [], searched: false }
+    })
+    await current.send('我的知识库里有讲重复写入的卡片吗')
+    const turn = current.snapshot().turns.at(-1)!
+    expect(turn.state).not.toBe('done')
+    expect(turn.answer).toContain('知识库暂时不可用')
   })
 
   it('cites nothing when the knowledge tools never ran', async () => {

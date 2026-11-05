@@ -7,7 +7,7 @@ const ACTIONS = new Set(['open_application', 'open_folder', 'open_file', 'open_u
 export function assistantAnswer(turn: AssistantTurn, fromCard = false): AnswerCardPayload | undefined {
   if (fromCard) {
     if (turn.state !== 'done' && turn.state !== 'error' || turn.taskState === 'cancelled') return undefined
-  } else if (turn.state !== 'done' || turn.taskState === 'failed' || turn.taskState === 'cancelled' || turn.taskState !== 'awaiting_confirmation' && (unresolvedToolFailure(turn.localResults) || turn.localResults?.some(result => ACTIONS.has(result.tool)))) return undefined
+  } else if (turn.state !== 'done' || turn.taskState === 'failed' || turn.taskState === 'cancelled' || turn.taskState !== 'awaiting_confirmation' && (unresolvedToolFailure(turn.localResults, turn.question) || turn.localResults?.some(result => ACTIONS.has(result.tool)))) return undefined
   // The card draws `sources` as its own clickable section, so the markdown list the agent
   // appended to the text would show up twice. Strip it only when there are cards to render;
   // without sources the text is the only place the links appear, so it is left alone.
