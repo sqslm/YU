@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6、补充复核 T1～T3 与二次复核 A～C 的修复均已提交，等待外部复核（见文末「阶段 5 外部复核与修复」「阶段 5 补充复核修复」「阶段 5 二次复核修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
+**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6、补充复核 T1～T3、二次复核 A～C 与二次复核残余 A～C 的修复均已提交，等待外部复核（见文末「阶段 5 外部复核与修复」「阶段 5 补充复核修复」「阶段 5 二次复核修复」「阶段 5 二次复核残余修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -1301,3 +1301,73 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 
 - `16ce29c` `fix(knowledge): verify manual extraction and document opening against real reads` —— `native/knowledge/src/queue.rs`、`src/main/knowledge/{manual,documents,open,targets,host,engine}.ts`、`src/main/index.ts`、`src/shared/knowledge.ts`、`src/renderer/**`（图谱计数）与对应回归。
 - 本节由随后的 docs 提交记录，提交编号与产物哈希在本节内回填。
+
+## 阶段 5 二次复核残余修复（A～C，2026-11-05 第九轮，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+外部复核（thread `01a1a846-2e68-7062-89a9-bc2ed962ce86`，reportId `62346e79-bc5f-4206-9b18-ed52dc84ba52`）在 `15c134a` 上指出上一轮 A～C 仍各留一处反例，并实测定向用例 23 文件通过 / 1 失败（`graph-budget.test.ts:57`，`expanded` 实测 0）。本轮只修这三处，阶段 6～7 仍未开始。
+
+### 三项残余反例
+
+- **A**：manual 提炼的「正文已丢失」分支不带版本与指纹，而且在活跃/大小、取消、快照三类检查之前就写了状态。外部在读取与请求之间插入真实的 `invalidateTask`（任务取消、来源失效），迟到的 missing 请求仍把任务改成 `needs_reread` 并回报成功。
+- **B**：`documentPath` 仍以来源行里的 `locator` 作为文件目标。外部用生产读取素材归集发布 `read.txt`（真实读到、可打开），再用真实 helper 的 `source.save` 把同一行 upsert 成同 kind / 同 originRef / 同版本 / 同正文，只把 locator 改成从未读过的 `unread.txt`；id 与指纹都没变，于是 `unread.txt` 被交给 opener。
+- **C**：`relations.rs` 把 `LIMIT` 之后的命中集合当成整个过滤集合。两张都匹配 `Match` 的卡片、`limit=1` 时，聚焦第一页放不下的那张，生产 `graphView` 给出 `matched:0, total:2, expanded:1`（正确应为 `1 / 2 / 0`）。同时 `graph-budget.test.ts` 的展开查询漏了 `topic`，导致「至少一个额外节点」依赖排序，外部实测 `expanded` 为 0。
+
+### 修复落点
+
+- `native/knowledge/src/queue.rs` `extract()`：顺序改为 取组 → `working` 拒绝 → 渠道 → 排除 → 来源失效/空正文（`needs_reread`）→ 任务已取消（`cancelled`）→ 快照比对（`source_changed`）→ 才进入 missing 分支（同一 Immediate 事务内 `set_state(..., "needs_reread", ...)` + `ensure_not_cancelled()` + commit）。迟到的 missing 报告因此不会再覆盖已取消/已失效/已换版本的任务；只有真正还能 park 的来源才会写入。
+- `src/main/knowledge/manual.ts`：missing 分支一并发送 `expectVersion` / `expectFingerprint`（来源自身快照）；Rust 未真正 park（如 `working`）时原样返回 Rust 的答复，`source_changed` 映射为「原文已变更，需要重新读取该来源」；`wake()` 仅在 `queued === 1` 时调用，删除了原先吞掉错误的 `.catch`。
+- `src/main/knowledge/collector.ts`：阅读素材缓冲改为 `{ text, size, path? }`，`remember(origin, groupKey, text, path?)` 记录真实读到的路径，新增只读视图 `readRecord(channel, originRef)`。
+- `src/main/knowledge/documents.ts`：目标文件改由读取记录决定 —— 空 locator / URL 拒绝、无记录拒绝、指纹不符拒绝、记录无路径（网页）拒绝，然后 `target = file(record.path)` 判类型，最后要求 `file(locator) === target`，否则「该来源的文件与读取记录不符」。类型判断作用在真正要交给 opener 的路径上。
+- `src/main/knowledge/relations.rs`：新增 `matches_among(connection, plan, filter, ids)`，对**已选中的节点**用与 `total` 完全相同的 topic/搜索计划/过滤条件再问一次，`expanded = nodes.len() - matched_shown` 因此诚实：页面装不下的匹配仍是匹配，只有不满足过滤的节点才算扩张。
+- `src/main/knowledge/graph-budget.test.ts`：展开查询补上 `topic:'Rust'`，并断言真实值 `total 200 / shown 200 / expanded 1 / truncated` 与 `counts {matched:199, total:200, expanded:1}`。
+- 顺带修掉一处真实的排序不确定性：`queue.status` 的 `ORDER BY g.updated_at DESC, g.id` 在同毫秒新组之间按随机 id 排序，导致 `the_status_names_the_groups_a_retry_can_reach` 抖动；改为 `g.rowid DESC`（同毫秒内后创建者在前），断言未改。
+
+### 反例修复前后（真实入口）
+
+| 反例 | 修复前 | 修复后 |
+| --- | --- | --- |
+| A：失效来源的迟到 missing | 写入 `needs_reread`、回报成功 | 返回已取消/来源已变更，任务与来源状态不变，0 次 wake |
+| A：快照不匹配的迟到 missing | 不比对快照 | `source_changed` →「原文已变更，需要重新读取该来源」，0 次 wake |
+| B：同 id/同版本/同指纹、只改 locator | 把未读文件交给 opener | 「该来源的文件与读取记录不符」，opener 调用 0 次 |
+| C：页面外的匹配聚焦 | `matched:0, expanded:1` | `matched:1, total:2, expanded:0` |
+
+### 负向控制（临时复原缺陷，确认对应用例确实失败）
+
+1. A：把活跃/取消/快照三类检查在 missing 请求时跳过（等价于旧顺序），重建 release helper 后 `manual.test.ts` 失败 1 项（`refuses a late missing report whose snapshot no longer matches the source`）。失效来源那条用例在控制下仍通过——真实 `invalidateTask` 会连带移除队列行，迟到请求只会得到「无任务」，因此 A 的顺序由快照用例证明。
+2. B：删掉 `claimed !== target` 检查，`documents/targets/open` 失败 4 项（含真实 helper 铸指纹后改写 locator 的用例）。
+3. C：把 `matches_among` 换回「只认 `LIMIT` 后的命中集合」，`relations` 失败 2 项（200 满页用例与页面外匹配聚焦用例）。
+
+### 新增回归
+
+- `src/main/knowledge/manual.test.ts` 增至 10 项：`does not park a source that was invalidated while the read was in flight`、`refuses a late missing report whose snapshot no longer matches the source`。
+- `src/main/knowledge/documents.test.ts` 增至 8 项（含真实 helper 铸指纹后改写 locator 被拒、类型按真实目标判定、网页读取无本地路径）。
+- `src/main/knowledge/open.test.ts` 增至 7 项、`targets.test.ts` 13 项：locator 与读取记录不一致时拒绝且 opener 0 调用。
+- `native/knowledge/tests/relations.rs` 增至 16 项：`a_page_out_focus_that_matches_the_filter_is_counted_as_a_match`（含 `query` 变体，页面外卡片取自第一页结果，不依赖时间戳或 id 顺序）、`a_full_page_still_admits_the_focus_and_one_neighbour` 改为无过滤时 `expanded == 0`。
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 |
+| `cargo test --locked` | 0；114 项（lib 17 / cards_view 9 / extract 12 / process 11 / profile 27 / queue 22 / relations 16） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture` 变体 0） |
+| `node scripts/build-native.mjs` | 0；release `native/bin/yu-knowledge.exe` 3,085,824 字节，SHA-256 `f73ace70b183b43edf156a6c4bd896d4e5bdcbe601c058cacd958353258a00c9` |
+| `pnpm typecheck` | 0（node + web） |
+| 定向 vitest（`src/main/knowledge`、`knowledgeView.test.ts`、`preload`、`ipc-trust`） | 24 文件 / 232 项通过（含上一轮外部实测失败的 `graph-budget.test.ts`） |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0；274 文件通过 / 3 跳过，3909 项通过 / 8 跳过，96.52s |
+| `pnpm build` | 0；11.78s；`KnowledgePage-CbpWfKjM.js` 200.48 kB 独立 chunk，`settings-yYYCVi9k.js` 4,689.68 kB |
+| `git diff --check` / `git diff --check 15c134a..HEAD` | 0 / 0 |
+
+### 未测与边界
+
+- 未调用付费模型；A 的快照反例用注入 host double 提供「调用方读到的旧行」并转发到真实 helper，B 的 opener 为注入函数，未真正打开任何文件。
+- B 的凭据仍只来自主进程进程内的读取记录：重启或缓冲淘汰后，历史 `document` 来源显示「该来源没有可核验的读取记录」，不提供重建入口（不引入磁盘索引或新授权存储）。
+- C 只改 Rust 的匹配计数来源，未改节点/字节预算、排序、协议字段与渲染布局；渲染侧本轮未动。
+- 仍未在打包安装包上点测（阶段 7）。
+
+### 提交
+
+- `fix(knowledge): recheck the source snapshot and the real read before acting` —— `native/knowledge/src/{queue,relations}.rs`、`src/main/knowledge/{manual,collector,documents,open,targets}.ts` 与对应回归、`graph-budget.test.ts`。
+- `d4318de` `fix(knowledge): recheck the source snapshot and the real read before acting` —— `native/knowledge/src/{queue,relations}.rs`、`native/knowledge/tests/relations.rs`、`src/main/knowledge/{manual,collector,documents}.ts`、`src/main/index.ts` 与六个回归文件（12 个文件，+314/−91）。
+- 本节由随后的 docs 提交记录，交付哈希已在「验证」表中给出。
