@@ -1081,6 +1081,12 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 
 交付产物：`native/bin/yu-knowledge.exe` 3,044,864 字节，SHA-256 `5dc8d3ba733f8e86d1d6058fde5e4ae81df3ecfb55e128130c5942fdb3900b66`（MSVC 重建哈希会变）；debug `native/knowledge/target/debug/yu-knowledge.exe`、fixture `yu-knowledge-fixture.exe` 与 `native/knowledge/target` 不计入交付。
 
+### 提交
+
+- `03842fc` `fix(knowledge): close the stage 5 review gaps in layout, sources, refresh, merge, graph and model relations`（33 文件，+2218/−220）。
+- `76d1fce` `docs(knowledge): record the stage 5 review and its R1-R6 repair`。
+- 阶段范围 `git diff --check 2ced462..HEAD` 与 `4e077a3..HEAD` 均通过；release 见上表，`native/knowledge/target` 2.0 GB（gitignore 内，沿用仓库惯例）。
+
 ### 未测与边界
 
 - 未调用真实付费模型：图谱与合并路径都不触发模型；模型关系只在既有提炼批次里接收，测试全部用注入 completer，并断言调用次数。
