@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 外部复核未通过，复核提出的 R1～R7 修复已提交，待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 外部复核未通过，两轮复核提出的 R1～R7 与 T1～T5 修复均已提交（见「阶段 3 外部复核」两节），待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -771,3 +771,46 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 交付产物（release，重新构建后实测）：`native/bin/yu-knowledge.exe` 2,704,896 字节，SHA-256 `62ade61d28668f28ba8c432dce890fc5725ae1d8c0f187ff9266c4fab1ea09a0`。调试与夹具二进制（`native/knowledge/target/debug/yu-knowledge.exe`、`yu-knowledge-fixture.exe`）不属于交付物。
 
 **未测与边界**：本阶段仍以注入完成器代替真实付费模型（0 次真实模型调用）；未在打包后的 Electron 实例里跑启动/退出；120 秒总预算只以较短期限验证取消路径；60 秒稳定期由 `YU_KNOWLEDGE_STABLE_MS` 缩短；无大批量并发压测。本轮全量套件一次通过，前几轮出现过的 `windows-native-browser-url` 30-pid、`cloud.live`/`search-pool` `fetch failed`、`tts` `listen EACCES` 抖动本轮未复现，也未放宽任何断言。
+
+## 阶段 3 外部复核（第二轮，2026-11-05，reportId `192782d4-6803-4d1e-808e-3a0613cb351c`）：T1～T5 修复
+
+外部在本轮基线 `3ae28e14d7b519077608ca5e098a78659fab46a8` 上确认通过：定向 Vitest 16 文件 / 125 项、`cargo test --locked --test extract` 11 项、`git diff --check 0c55630..HEAD` 为 0、release 2,704,896 字节与哈希 `62ade61d…` 一致；并用独立探针确认跨组排空、阅读材料经暂存提炼、非法 JSON/缺模型转 `failed`、关闭总开关不写卡、Rust 提交保护（暂停/失效源/同源删卡）、`{}` 与伪造分段 `invalid_output`、`edited` 不可清零、4×200 000 字符与 201 来源边界。以下五项仍不通过，本轮只修这些。
+
+### 失败与修复对照
+
+| 项 | 实测失败 | 修复 |
+| --- | --- | --- |
+| T1 历史扫描后不唤醒引擎 | 空闲引擎（无定时器）后由生产 `HistoryDriver.start` 完成扫描：`scan=completed`、`modelCalls=0`、`queue=[ready]`、`engineTimer=false` | `HistoryDriver` 新增 `onBatch` 通知，只在批次**真的提交**（`step.job.scanned` 增长）时触发；`src/main/index.ts` 接 `onBatch: () => extractEngine.wake()`。首次扫描与恢复扫描同路径，仍受手动暂停/游戏模式/总开关/`nextDueAt` 约束，不引入全库轮询 |
+| T2 读正文异常逃出结算边界 | `runGroup` 的 `readBody` 在 `try` 之外抛错时，活着的 helper 上任务持续 `working`，只有重启后的启动修复才转 `failed` | `runGroup` 取下占用后整条链路（解析/读取/切片/模型/结果）交给统一结算边界 `execute()`；`MissingSource` 按其 code 结算（来源缺失走既有缺失语义），其它异常记录「读取正文失败：…」并结算 `internal`，不把 store 异常一律当删除，也不吞掉真实错误 |
+| T3 比较期间目标被删仍新建并提交 | 目标卡只关联旧来源、新批次只引用新来源时，在比较回调中 `card.delete` 目标后回复 `merge(oldTarget)`：`runOk=true, cards=1, progress=1, completed` | `judge()` 的 `reference/merge/propose` 目标必须经 `known()` 存在性校验，缺失返回 `source_changed`（「比较目标已不存在（可能已被删除）」），不再落到新建分支；`moved_under_us()` 额外拒绝判定后 revision 已变化的目标；精确匹配同样复核目标当前内容/指纹后再挂来源；保留人工编辑与同源删卡排除保护 |
+| T4 单渠道关闭不 abort，正常停机被记成重读/失败 | 仅关闭 notes 渠道时 `signal.aborted=false`，放行后任务转 `needs_reread`（来源其实可读）；生产游戏进入顺序 `syncKnowledge(game=true)` → `stop` 后重开 helper 任务为 `failed` | `collector.sync()` 返回本次真正关闭的渠道（`{ closed }`），`syncKnowledge` 对其逐个 `engine.abortChannel()`；关闭/进入游戏时先 `await engine.park()` 再 `knowledge.stop()`（`extract.fail` 先落库）；`extract.rs::fail` 把 `cancelled|paused` 映射为 `ready`+`stable_at`（停放，可继续），`source_changed` 才转 `needs_reread`，其它故障才 `failed`；退出游戏/解除手动暂停/重开渠道后同一正文继续，无需重读网页，手动暂停不被游戏恢复覆盖 |
+| T5 `extract.next` 仍整组下发元数据 | 450 个来源（`originRef` 395 字符、title 200、scope 1000）时 `extractNext` 返回 `too_large`，组停在 `working=1` | 读取计划与来源描述按**实际 UTF-8 JSON 字节**一起打包：`HEADROOM_BYTES = 4_096`，预算取 `RESULT_BUDGET_BYTES - HEADROOM_BYTES`；只为保留的 items 附带描述，后续 item 以 `sourceId` 引用首次出现的描述；至少保留一项保证推进；序列化失败即释放占用并返回 `internal`，不留无计划占用。2 MiB 上限不变，不截断来源，下一批按已提交进度继续 |
+
+### 本轮落地位置
+
+- Rust：`extract.rs`（字节预算读取计划、目标存在性/版本复核、停放语义）、`protocol.rs`（沿用 `RESULT_BUDGET_BYTES`）。
+- TS：`engine.ts`（`park()`/`abortChannel()`/统一结算边界 `execute()`/`read()`）、`history.ts`（`onBatch` 提交后通知）、`collector.ts`（`sync()` 返回本次关闭的渠道）、`session.ts`（关闭与游戏先停放再停机、逐渠道取消后唤醒）、`src/main/index.ts`（`onBatch` 接线）。
+
+### 新增回归（真实 helper + 生产 host/engine/HistoryDriver）
+
+`src/main/knowledge/residual.integration.test.ts`（9 项）：T1 空闲引擎 → 生产 `HistoryDriver.start` 扫描后组自动完成（测试内不调用 `wake`/`tick`）；T2 `readBody` 抛 `EIO` → 立刻 `failed`、`working 0`、helper 未重启，故障消除后显式重试完成；T3 `reference`/`merge`/`propose` 三例在比较回调内删除目标 → 0 张替身卡、无已提交进度、`working 0`，另加「比较期间人工改卡」只产生一条有效建议且不覆盖正文；T4 仅关闭 notes 渠道 → provider `signal.aborted`、0 卡、任务留 `ready`，重开渠道后同一任务完成且 `needs_reread 0`，游戏模式先停放再 `host.stop()`，重启后为 `ready` 并在游戏结束后完成；T5 450 条长元数据来源 → 单组、全部可达（`seen.size === 450`）、计划确实分批、`completed`、`working 0`。
+
+### 本轮验证（实际命令与退出码，依赖顺序执行）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | 0 |
+| `cargo test --locked` | 0；15 lib + 11 extract + 11 process + 18 queue |
+| `cargo clippy --locked --all-targets -- -D warnings`（含 `--features fixture`） | 0 |
+| `pnpm exec vitest run src/main/knowledge src/preload/index.test.ts src/main/ipc-trust.test.ts` | 17 文件 / 134 项通过 |
+| `node scripts/build-native.mjs` | 0（release helper 重新构建） |
+| `pnpm typecheck` | 0 |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0；267 文件通过 / 3 跳过（270），3811 项通过 / 8 跳过（3819） |
+| `pnpm build` | 0（渲染层 `settings-*.js` 4,687.76 kB） |
+
+交付产物：`native/bin/yu-knowledge.exe` 2,714,624 字节，SHA-256 `00ea3c33761468ccb41c1f18a9a7607bbb2c509c370aa1eaf8e487d397e9fece`
+
+实现提交：`79e6f5e`（`fix(knowledge): settle every claim, bound the plan and park cleanly`）。上述验证在同一份代码的提交前工作区上各跑一次，提交内容与该工作区一致。
+
+**未测与边界**：真实付费模型调用 0 次（注入完成器）；未在打包后的 Electron 实例中跑启动/退出；120 秒预算只以较短期限验证取消；60 秒稳定期由 `YU_KNOWLEDGE_STABLE_MS` 缩短；未对 450 来源以上规模做并发压测。
