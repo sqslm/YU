@@ -1644,7 +1644,9 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 | `src/main/chat.test.ts` | 同标题两卡只存被声明那张、落库正文无标记；只读不引用时零知识行、伪造 id 剥离；临时线程不触发完成回调 |
 | `src/main/ask-knowledge.integration.test.ts` | 扩到 10 项（真 ChatService / askAgent / registry / release 助手，仅模型网络是 loopback 桩）：真实检索并引用 helper 返回的卡且落库正文无 `[[card:`；只打开真实收到的 id 且不二次问模型；开关关闭零检索；`extract_knowledge` 不在表内也够不到；引用 id 进 helper 的 `sources.cited_card_ids`、无引用不落库；helper 起不来时无引用；普通答案在可选知识读取失败时保留（`state=done`、正文原样、零记录、零引用）；真实 collector 去重节奏；流式未完成时取消不完成；真实检索无命中时无引用 |
 
-去重节奏的实测不变式（读 Rust 确认，非猜测）：`source.publish` 的身份是 `(kind, origin_ref, fingerprint)`，`origin_ref = threadId:userId:answerId`，`fingerprint = sha256(text)` 且 `text = 问题 + 空行 + 回答`。所以「同问同答的纯复述」产生的是同一 fingerprint、同一 `cited_card_ids`（`cards` 表仍为 1 张），不同结论才有第二 fingerprint；这正是 extraction 拒绝重复铸卡的依据。手工调 collector 传 `citedCardIds` 不算端到端证据，上述断言全部经由真实 `ChatService` 的完成回调进入 `KnowledgeCollector`。
+去重节奏的实测不变式（读 Rust 确认，非猜测）：`source.publish` 的身份是 `(kind, origin_ref, fingerprint)`，`origin_ref = threadId:userId:answerId`，`fingerprint = sha256(text)` 且 `text = 问题 + 空行 + 回答`。所以「同问同答的纯复述」产生的是同一 fingerprint、同一 `cited_card_ids`，不同结论才有第二 fingerprint；这正是 extraction 拒绝重复铸卡的依据。手工调 collector 传 `citedCardIds` 不算端到端证据，上述断言全部经由真实 `ChatService` 的完成回调进入 `KnowledgeCollector`。
+
+> **更正（第十四轮）**：上文把「`cards` 表仍为 1 张」当作去重已证是错的——那一轮根本没运行提炼引擎，卡片为 1 只说明没有提炼发生，「同问同答不同 `origin_ref`」也允许库里有多条来源。去重证据分三层，不能混：**①投影指纹**（`source.publish` 的 `(kind, origin_ref, fingerprint)` 身份，同内容同指纹，本文件前述断言到此为止）；**②实际提炼结果**（引擎消费该投影后，`reference` 复用原卡、`new` 才增卡，见下节新增用例）；**③模型质量**（真实模型对「是否等价」的判断准确率，仍属阶段 7 的真实模型评估，本轮只用可控回包验证管线）。
 
 ### 验证（本轮最终代码，实际命令与退出码）
 
@@ -1681,3 +1683,90 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 ### 提交
 
 - `939312c` `fix(knowledge): cite only the cards an answer really used, and keep a normal answer when a library read fails` —— 11 个文件（6 个生产文件 + 5 个测试文件）；本节由随后的 docs 提交记录。
+
+## 阶段 6 A 收尾（2026-11-05 第十四轮）
+
+起点 HEAD `4d14006`（工作区干净）；外部独立复跑上一轮定向 67 文件 / 860 项全过。本轮只做派单的两项：**明确检索意图的失败裁决**与**真正跑一次的提炼去重证据**，并把计划里「卡数 1 即去重已证」的旧表述更正为三层区分。
+
+### 1. 可选知识读取失败按「明确检索意图」裁决
+
+旧规则按宽泛中文词串（`知识库|我的卡片|我记|记过|…`）判定，导致「知识库的备份策略怎么设计？」这种只讨论主题的问题也被当成「读自己的库」，读失败就把整轮判 `failed`、答复被失败回执替换；而英文 `Search my knowledge base for deduplication.` 却因为不含中文词被判成普通问题，读失败后显示一般答复。两者都错。
+
+`src/shared/workspace.ts` 改成**库名 × 查找动词**两段判定，任一段不满足都算普通问题：
+
+| 片段 | 实际值 |
+| --- | --- |
+| `LIBRARY` | `/知识库|知识卡片|我的卡片|卡片里|我的笔记|笔记里|资料库|knowledge\s*base|my\s+(?:library|cards|notes)/iu` |
+| `LOOKUP` | `/搜索|搜一下|搜过|查找|查一下|查查|检索|翻一下|翻翻|找一下|找找|有没有|有哪些|讲|提到|记过|记录过|\b(?:search|look\s*up|look\s*for|find|query|browse|check)\b/iu` |
+| `asksOwnKnowledge(question)` | `LIBRARY.test(text) && LOOKUP.test(text)` |
+
+调用点不变：`src/main/agent.ts:finish()` 的 `optionalRead(run)` 与 `src/shared/assistant.ts:unresolvedToolFailure(results, question)` 共用这一个函数；`src/main/assistant-presentation.ts:10` 把 `turn.question` 传进来。取消仍是 `cancelled`（不回退成完成），显式检索失败仍 `failed`，总开关关闭时工具表里根本不出现这两个工具。
+
+四个外部探针的生产路径结果（同一失败 helper、同一句「建议在数据库里加唯一约束。」一般答复）：
+
+| 输入 | `askAgent`（`src/main/agent.test.ts`） | 浮动 Ask（`src/main/assistant.test.ts`） | 真 ChatService + helper（`src/main/ask-knowledge.integration.test.ts`） |
+| --- | --- | --- | --- |
+| 普通数据库写入如何避免重复？ | `completed` | `done`，答复保留 | `done`，正文原样、`records=[]`、`cited=[]` |
+| 知识库的备份策略怎么设计？ | `completed` | `done`，答复为「备份分冷备与热备，先定恢复目标。」 | `done`，正文原样、`cited=[]` |
+| 请搜索我的知识库中关于去重的卡片。 | `failed` | 非 `done`，答复含「知识库暂时不可用」 | `error`，`cited=[]`，未被伪装成「没有命中」 |
+| Search my knowledge base for deduplication. | `failed` | 非 `done`，答复含「知识库暂时不可用」 | `error`，`cited=[]` |
+
+附带的边界断言：`我记得之前写过去重的实现` 属普通问题（不是检索自己的库），`我的知识库里有讲重复写入的卡片吗` 属显式检索，`How should a knowledge base be backed up?` 未点名自己的库，仍是普通问题。
+
+### 2. 提炼去重：真 `ExtractEngine` + 真 release helper
+
+上一轮的「restatement/new」用例只走到投影层（`sources.cited_card_ids` 与 fingerprint），没有运行提炼引擎；本轮在 `src/main/ask-knowledge.integration.test.ts` 新增 `describe('extraction over the citation a real chat turn produced')`，让**真实 ChatService 完成回调产生的引用投影**流进**真实队列 + 真实 `ExtractEngine` + 真实 release helper**：
+
+- `process.env.YU_KNOWLEDGE_STABLE_MS = '0'` 缩短稳定窗口（不真的等待）；`await collector.sync()` 先完成渠道交接（否则 `publish` 等不到 channel，`readSources` 会超时——本轮实测踩到）。
+- helper 的模型回包用替身完成器注入：草拟阶段回一张「原文复述」卡，比较阶段（prompt 含「知识库去重器」）先断言候选里**确实带着被引用的真实 card id**，再按内容返回 `reference`（复述）或 `new`（新结论）。没有改动 Rust 提炼策略，也没有用 `card.save` 伪造产物。
+- 两轮真实提问都把 `[[card:<真实 id>]]` 指向同一张卡：第一轮是复述，第二轮追加「写入顺序固定为先认领版本、再删卡片」的新结论。断言链：两次 `sources.cited_card_ids` 都等于该 id → `engine.tick()` 后卡片总数 **1 → 1**（纯复述被吸收，只补来源，`sourceIds` 仍 1）、正文未被复述覆盖 → 再 `tick()` 后总数 **1 → 2**，新卡 `body` 恰为新结论、被引用卡的 `body` 未被新结论污染、两批比较 prompt 分别带 card id 与 `FRESH` 文本 → 末条消息 `state='done'` 且正文不含 `[[card:`。
+
+### 3. 去重证据的三层区分（更正旧表述）
+
+| 层 | 证明什么 | 证据位置 |
+| --- | --- | --- |
+| ① 投影指纹 | 同一内容重复采集是同一 `(kind, origin_ref, fingerprint)` 身份；同问同答同 fingerprint，不同结论才第二 fingerprint | 上一轮 `hands a restatement and a new conclusion to the helper as two real sources`（`sources` 行与 `version`） |
+| ② 实际提炼结果 | 引擎消费该投影后：复述 → `reference` 复用原卡不增卡；新结论 → `new` 增卡且不吞原卡 | 本轮新增用例（卡片总数 1→1→2、正文与来源归属） |
+| ③ 模型质量 | 真实模型判断「是否等价」的准确率 | **未验证**，属阶段 7 的真实模型评估；本轮只用可控回包验证管线 |
+
+### 4. 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run src/main/ask-knowledge.integration.test.ts` | 12 项全过（1.6 s），连跑多次 |
+| `pnpm exec vitest run src/main/ask-knowledge.integration.test.ts src/main/workspace.test.ts src/main/assistant.test.ts src/main/chat.test.ts src/main/tools/knowledge.test.ts src/main/agent.test.ts src/main/ipc-trust.test.ts src/preload/index.test.ts src/main/knowledge src/renderer/src/settings` | 67 文件 / 866 项全过，退出码 0（上一轮 860，本轮 +6） |
+| `pnpm exec vitest run src/main/agent.test.ts src/main/workspace.test.ts src/main/assistant.test.ts` | 3 文件 / 120 项全过 |
+| `pnpm typecheck` | 0（node + web） |
+| `pnpm build` | 0（13.95 s，含 `scripts/build-native.mjs`；`settings-CXJH6bQi.js` 4,709.11 kB） |
+| `git diff --check` / `git diff --check 4d14006..HEAD` | 0 / 0 |
+| release 助手 | 未变，3,199,488 字节 `7e55ca9896336a878f613eb0ee251d8153c80fb347ff02780b0b7b32a0b66e87`（本轮无 Rust 改动，未跑 cargo） |
+
+### 5. 实窗复验（最终构建，隔离数据，本地模型桩）
+
+证据目录 `E:/code/deepseek-harness/rea/typeless/.tmp/stage6c-evidence/`（gitignored）：`report.md`、`scenarioA/B/CD/E.json`、`shots/` 16 张截图、`logs/`、`requests/`（第二轮 system 段原文）、`build.log`、`session-start.txt`/`session-end.txt`。运行方式：`pnpm build`（13.80 s，`EXIT=0`，`out/` 23:54）＋隔离 app 目录与 userData（`E:\CpanQianYi\Temp\yu-w6c`）＋`--remote-debugging-port=18781`＋只监听 `127.0.0.1:18991` 的 OpenAI 兼容桩；hub 视口 1080×750；点击全部是 `Input.dispatchMouseEvent` 真实鼠标事件。复核 `out/` 与 HEAD 对齐：bundle 内能 grep 到新规则用词「记过」，且 C 场景只有新裁决才可能通过。
+
+| 场景 | 断言 | 实际观察 |
+| --- | --- | --- |
+| A 单一引用 + 点击 | 8/8 PASS | 记录行恰 1 个「查看原记录 · A组场景候选卡片」；助手节点无 `[[card:`；`state=done`；点击后 `[data-knowledge-detail]` = 「A组场景候选卡片 / 概念 / 第 1 版」 |
+| B 无引用（两张同名候选 + 「好的。」） | 9/9 PASS | 候选确实返回（`total=2`，`card_25a44f10fd1cdc02`、`card_4fd99479ac085ec0`），首次／切走再回／重开线程三次读数记录行均 0，正文不出现同名标题 |
+| C 主题提及 + helper 缺失 | 6/6 PASS | 「知识库的备份策略怎么设计？」⇒ `state=done`、0 records、0 行、无红字，正文为通用答复 |
+| D 显式检索 + helper 缺失 | D1 7/7、D2 6/6 PASS | 中文「请搜索我的知识库中关于去重的卡片。」与英文 `Search my knowledge base for deduplication.` 均 `state=error`、红字「本轮回答失败，可重新发送」、0 records、0 行；正文「读取知识库失败：本机知识库服务没有启动，无法确认有没有相关卡片。」不伪装成未命中；机制证据 `requests/002.json` 的第二轮 system 段含 `<tool_results> [1] search_knowledge（失败） {"ok":false,…ENOENT}` |
+| E 浮层 Ask | 9/9 PASS | 未引用时 `[data-card-open-item]` 0 个、无 `[data-card-items]`；引用时恰 1 个（`card_a042dc8c39931051`，标签「打开」）、浮层正文无 `[[card:`；真实点击「打开」后 hub 进入知识页并选中该卡 |
+
+两处与派单描述的取样差异，如实记录：
+
+1. **浮层不是从托盘打开的**：Win11 托盘溢出浮层是 XAML island（`TopLevelWindowForOverflowXamlIsland`），合成右键对该 tile 完全无效（tile rect 中心、真实圆心、hover+右键、UIA `SetFocus`+Apps 键、`SetFocus`+Shift+F10 全部不弹菜单），而同一 `mouse_event` 对音量图标能弹原生 `#32768` 菜单 ⇒ 是 island 不吃注入右键。改用隔离副本里的 `yu-hotkey.exe` 换成本地编译桩（向 stdout 写 `{"type":"ready"}`/`{"type":"assistant-toggle"}`），走的是与真实快捷键相同的 `src/main/index.ts:3015-3018` 分支 → `openAsk()`。**真实物理 `Ctrl+Shift+A` 未测。**
+2. helper 缺失只把隔离副本 `app/native/bin/yu-knowledge.exe` 改名（已还原）；仓库 `native/bin/` 的 `yu-knowledge.exe`（`7e55ca98…0b66e87`）与 `yu-hotkey.exe`（454,144 B）全程未改。合成卡片仍经应用自身 IPC `window.api.knowledge.saveCard` 写入（知识页无新建入口）。
+
+### 6. 未测与边界
+
+- 完整全量 `pnpm test` 仍未跑（阶段 6 收尾门槛），本轮只跑上述定向集合；本轮无 Rust 改动，未跑 `cargo fmt/test/clippy`，release 助手复用并记录哈希。
+- 提炼用例的「等价与否」由可控回包决定，只证明管线与去重落点；真实模型判断准确率属阶段 7。
+- 静态提示词约定依赖模型遵守 `[[card:ID]]` 格式：模型不写标记时结果只是「没有引用」，不会产生错误引用；未用真实模型验证遵守率。
+- 实窗未复验 `MAX_CITED_CARDS=12` 上限、跨轮旧卡引用丢弃、`get_knowledge`（读单卡）的失败裁决、packaged（安装后）路径、真实 Rust 钩子/语音链路、浮层其它按钮与 ESC 关闭。
+- `ChatPage.tsx:308` 渲染正文不区分 `state`，所以失败态里模型正文仍显示在红字上方（D 截图可见）。这是既有行为，不在本轮范围，未修改。
+- B 的 `incomplete` 拒绝与 `settlingRecords` 竞态、C 的草稿界面与实窗导航、D 的工作流真实执行器回归仍未交付。
+
+### 7. 提交
+
+- `b844592` `fix(knowledge): judge a failed library read by an explicit lookup request` —— 5 个文件（`src/shared/workspace.ts` + 4 个测试文件）；本节由随后的 docs 提交记录。
