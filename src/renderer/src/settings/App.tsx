@@ -81,7 +81,7 @@ export function App(): JSX.Element {
   const [reminderView, setReminderView] = useState<ReminderView | null>(null)
   const [noteToOpen, setNoteToOpen] = useState<{ id: string } | undefined>()
   /** The card the knowledge page must select on open; set when a note opens one. */
-  const [knowledgeToOpen, setKnowledgeToOpen] = useState<string | undefined>()
+  const [knowledgeToOpen, setKnowledgeToOpen] = useState<{ id: string; ticket: number } | undefined>()
   useEffect(() => {
     const open = (view: ReminderView): void => { setReminderView(view); setSettingsOpen(false); setPage('reminders') }
     const takeView = (): void => { void window.api.reminders.view().then(view => { if (view) open(view) }) }
@@ -97,7 +97,7 @@ export function App(): JSX.Element {
   const openRecord = async (input: LocalRecord): Promise<void> => {
     // A knowledge citation is not a workspace record: it has its own page, and a
     // card deleted in between shows that page's real missing state.
-    if (input.kind === 'knowledge') { setSettingsOpen(false); setKnowledgeToOpen(input.id); setPage('knowledge'); return }
+    if (input.kind === 'knowledge') return showKnowledgeCard(input.id)
     const record = await window.api.workspace.get(input)
     setSettingsOpen(false)
     if (record.kind === 'note') { setNoteToOpen({ id: record.id }); setPage('notes') }
@@ -107,11 +107,16 @@ export function App(): JSX.Element {
     else if (record.kind === 'chat') { setChatToOpen(record); setPage('chat') }
   }
   /** Opens the knowledge page on one card — the note section and a card's links use it. */
-  const openKnowledge = (cardId: string): void => {
+  /**
+   * Opens one card on the knowledge page. The ticket makes a repeated request for
+   * the very same card a new request: the page's focus effect keys on both.
+   */
+  const showKnowledgeCard = (cardId: string): void => {
     setSettingsOpen(false)
-    setKnowledgeToOpen(cardId)
+    setKnowledgeToOpen(previous => ({ id: cardId, ticket: (previous?.ticket ?? 0) + 1 }))
     setPage('knowledge')
   }
+  const openKnowledge = (cardId: string): void => showKnowledgeCard(cardId)
   /**
    * Continues a card into its new chat. The chat page already focuses a thread from a
    * record; an empty message id means the thread opens at its latest message.
@@ -142,7 +147,7 @@ export function App(): JSX.Element {
       if (view.page === 'notes') setNoteToOpen(view.noteId ? { id: view.noteId } : undefined)
       // A knowledge card the answer card asked for: the page only moves its selection,
       // so a card that no longer exists reports its own missing state.
-      if (view.page === 'knowledge') { setKnowledgeToOpen(view.cardId); setPage('knowledge'); return }
+      if (view.page === 'knowledge' && view.cardId) { showKnowledgeCard(view.cardId); return }
       // 简报 is a pane of 日程 now: the assistant's "打开简报" lands on it.
       if (view.page === 'briefing') setCalendarTab('briefing')
       if (view.page !== 'settings') setPage(view.page === 'overview' ? 'home' : view.page === 'corrections' ? 'dictionary' : view.page === 'briefing' ? 'calendar' : view.page)
@@ -233,7 +238,7 @@ export function App(): JSX.Element {
     if (page === 'knowledge') {
       return (
         <Suspense fallback={null}>
-          <KnowledgePage settings={settings} patch={patch} openRecord={openRecord} focusCardId={knowledgeToOpen} onOpenChat={openChatThread} onOpenNote={openNote} />
+          <KnowledgePage settings={settings} patch={patch} openRecord={openRecord} focusCardId={knowledgeToOpen?.id} focusTicket={knowledgeToOpen?.ticket} onOpenChat={openChatThread} onOpenNote={openNote} />
         </Suspense>
       )
     }

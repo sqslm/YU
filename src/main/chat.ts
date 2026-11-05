@@ -84,8 +84,10 @@ export class ChatService {
   /**
    * Answers one message. `seed` is context the caller already resolved (the card a
    * discussion continues from), recorded with the answer so it stays clickable.
+   * `started` runs once the turn is really under way — the point after which the
+   * caller's draft is consumed and no longer worth keeping.
    */
-  async send(id: string, question: string, uploads: ChatUpload[] = [], seed: LocalRecord[] = []): Promise<void> {
+  async send(id: string, question: string, uploads: ChatUpload[] = [], seed: LocalRecord[] = [], started?: () => void): Promise<void> {
     validateChatUploads(uploads)
     if (typeof question !== 'string' || (!question.trim() && !uploads.length) || question.length > 12000) throw Error('请输入 1–12000 字的消息')
     question = question.trim() || '请分析这些附件，概括主要内容。'
@@ -105,6 +107,7 @@ export class ChatService {
     const conversation: import('./agent').AgentConversation = { messages, toolNotes: '', memoryTemporary: Boolean(detail.memoryTemporary) }
     const materials: import('./knowledge/collector').ReadingMaterial[] = []
     const { userId, answerId } = this.store.begin(id, question.trim())
+    started?.()
     const active = { threadId: id, messageId: answerId, text: '', controller: new AbortController() }; this.active = active
     const progress = (status = ''): void => this.changed({ type: 'progress', threadId: id, messageId: answerId, text: active.text, status })
     this.changed({ type: 'changed' })

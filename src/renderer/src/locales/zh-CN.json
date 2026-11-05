@@ -1565,6 +1565,8 @@
       "cancelled": "已取消"
     },
     "continueDiscussion": "继续讨论",
+    "draftCard": "关联卡片",
+    "dropDraftCard": "移除关联卡片",
     "makeTodo": "生成待办",
     "saveAsNote": "另存为随记",
     "actionOpen": "打开",

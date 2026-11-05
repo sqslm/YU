@@ -1626,6 +1626,8 @@
       "cancelled": "Cancelled"
     },
     "continueDiscussion": "Continue discussion",
+    "draftCard": "Linked card",
+    "dropDraftCard": "Remove the linked card",
     "makeTodo": "Create todo",
     "saveAsNote": "Save as note",
     "actionOpen": "Open",

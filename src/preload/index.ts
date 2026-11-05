@@ -22,6 +22,7 @@ const api: TypelessApi = {
     attachment: (id, attachmentId) => ipcRenderer.invoke('chat:attachment', id, attachmentId),
     create: group => ipcRenderer.invoke('chat:create', group ?? null), edit: input => ipcRenderer.invoke('chat:edit', input),
     send: (id, text, attachments) => ipcRenderer.invoke('chat:send', id, text, attachments), cancel: () => ipcRenderer.invoke('chat:cancel'),
+    draftCard: id => ipcRenderer.invoke('chat:draft-card', id), dropDraftCard: id => ipcRenderer.invoke('chat:drop-draft-card', id),
     onEvent: callback => { const listener = (_event: Electron.IpcRendererEvent, event: import('@shared/chat').ChatEvent): void => callback(event); ipcRenderer.on('chat:event', listener); return () => ipcRenderer.removeListener('chat:event', listener) }
   },
   workspace: { get: record => ipcRenderer.invoke('workspace:get', record), search: (query, offset) => ipcRenderer.invoke('workspace:search', query, offset) },

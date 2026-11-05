@@ -47,6 +47,8 @@ import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
 import { RecordReleaser } from './knowledge/release'
 import { SettleRegistry, settleRecordKnowledge, type SettleRecordDeps } from './knowledge/settle'
+import { draftSeed, type DraftCard } from './knowledge/card-draft'
+import { saveCardAsNote } from './knowledge/card-notes'
 import { CleanupRetries } from './knowledge/cleanup'
 import { deleteThread } from './chat-delete'
 import { ExtractEngine } from './knowledge/engine'
@@ -453,10 +455,17 @@ async function settleRecord(
 ): Promise<void> {
   await settleRecordKnowledge(settleDeps, input, identity, options)
 }
-/** Characters of a card body handed to a continued discussion. */
-const MAX_CARD_CONTEXT = 2000
-/** Cards carried into a conversation that was opened from them, before it is sent. */
-const pendingSeeds = new Map<string, import('@shared/workspace').LocalRecord[]>()
+/**
+ * Cards a conversation was opened from and has not sent yet. Only the identity
+ * and the title are remembered: the body is read again on the send that quotes it.
+ */
+const draftCards = new Map<string, DraftCard>()
+/**
+ * Cards a note that is being saved must cite, by note id. Registered before the
+ * store writes, because the store publishes a finished note on its own and that
+ * first publication is the only one that note gets.
+ */
+const noteCitations = new Map<string, string[]>()
 
 /** The switch/game facts and the scan they authorize, in one call. */
 const knowledgeWiring = { collector: knowledgeCollector, history: historyDriver, engine: extractEngine }
@@ -869,7 +878,11 @@ function saveFeeds(feeds: ExternalCalendar[]): ExternalCalendar[] {
 const notes = new NotesStore({
   log: (line) => log(line),
   onSettled: (note, event) => {
-    knowledgeCollector.noteSettled(note)
+    const cited = noteCitations.get(note.id)
+    if (cited) {
+      noteCitations.delete(note.id)
+      void knowledgeCollector.publishNote(note, cited)
+    } else knowledgeCollector.noteSettled(note)
     // Only a note that was really created is a completed `note` action; editing an
     // old body is not a new note and must not raise the usage count.
     if (event === 'created') void profileCollector.completedNote(note.id)
@@ -2001,7 +2014,7 @@ function registerIpc(): void {
     knowledgeOwner(event)
     const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
     const thread = chats.create(null)
-    pendingSeeds.set(thread.id, [{ kind: 'knowledge', id: card.id, title: card.title, text: card.body.slice(0, MAX_CARD_CONTEXT), at: card.updatedAt }])
+    draftCards.set(thread.id, { id: card.id, title: card.title })
     return { threadId: thread.id, card: { id: card.id, title: card.title } }
   })
   /** A real todo from a card the user picked; the card's text is data, not orders. */
@@ -2019,14 +2032,14 @@ function registerIpc(): void {
    */
   handle('knowledge:card-note', async (event, id: string) => {
     knowledgeOwner(event)
-    const card = await knowledge.getCard(knowledgeId(id, '卡片 ID'))
-    const note = await notes.createText({ text: `# ${card.title}\n\n${card.body}\n` })
-    try {
-      await knowledgeCollector.publishNote({ id: note.id, title: card.title, transcript: `# ${card.title}\n\n${card.body}\n`, polished: '', updatedAt: note.updatedAt ?? Date.now() }, [card.id])
-    } catch (error) {
-      log(`[knowledge] 卡片另存随记后登记来源失败：${String(error)}`)
-    }
-    return { noteId: note.id }
+    // One note, one publication: the card is registered as its citation before the
+    // store writes, so the source the save produces already cites the card.
+    return saveCardAsNote({
+      read: cardId => knowledge.getCard(knowledgeId(cardId, '卡片 ID')),
+      nextId: () => randomUUID(),
+      save: input => notes.createText(input),
+      cite: (noteId, cardIds) => { noteCitations.set(noteId, cardIds) }
+    }, id)
   })
   handle('profile:save', (event, input: SaveProfileInput) => { knowledgeOwner(event); return knowledge.saveProfile(input) })
   handle('profile:update', (event, input: UpdateProfileInput) => {
@@ -2174,7 +2187,10 @@ function registerIpc(): void {
   handle('chat:get', (event, id: string, limit?: number, messageId?: string) => { chatOwner(event); return chats.get(id, limit, messageId) })
   handle('chat:attachment', (event, id: string, attachmentId: string) => { chatOwner(event); return chats.store.attachment(id, attachmentId) })
   handle('chat:create', (event, group: string | null) => { chatOwner(event); return chats.create(group) })
+  handle('chat:draft-card', (event, id: string) => { chatOwner(event); return draftCards.get(id) ?? null })
+  handle('chat:drop-draft-card', (event, id: string) => { chatOwner(event); draftCards.delete(id) })
   handle('chat:edit', async (event, input: import('@shared/chat').ChatEdit) => {
+    if (input?.action === 'delete') draftCards.delete(input.id)
     chatOwner(event)
     if (input?.action !== 'delete') return chats.edit(input)
     // The thread really goes first; its knowledge is settled afterwards, with the
@@ -2194,9 +2210,8 @@ function registerIpc(): void {
     if (gameMode.snapshot().active) throw Error('游戏模式下已暂停聊天生成')
     // A conversation opened from a card carries that card as its first reference,
     // as data the user did not write; it is consumed by the first real send.
-    const seed = pendingSeeds.get(id)
-    if (seed) pendingSeeds.delete(id)
-    return chats.send(id, text, attachments, seed ?? [])
+    const seed = await draftSeed(cardId => knowledge.getCard(cardId), draftCards.get(id))
+    return chats.send(id, text, attachments, seed, () => { draftCards.delete(id) })
   })
   handle('chat:cancel', event => { chatOwner(event); chats.cancel() })
   handle('card:explain', async (event, term: string) => {

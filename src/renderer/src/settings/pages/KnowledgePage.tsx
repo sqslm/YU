@@ -68,6 +68,12 @@ interface Props {
   openRecord: (record: LocalRecord) => void
   /** A card another page asked to open; the dialog loads it by id, filter or not. */
   focusCardId?: string
+  /**
+   * Bumped by the page that asks for a card. The same card asked for again —
+   * after the dialog was closed — is still a new request, so the id alone is not
+   * enough to tell them apart.
+   */
+  focusTicket?: number
   onOpenChat: (threadId: string) => void
   onOpenNote: (noteId: string) => void
 }
@@ -78,7 +84,7 @@ interface Props {
  * is a dialog opened by a card, a node or another page, so the browser stays a
  * browser and closing the dialog puts the user back where they were.
  */
-export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpenChat, onOpenNote }: Props): JSX.Element {
+export function KnowledgePage({ settings, patch, openRecord, focusCardId, focusTicket, onOpenChat, onOpenNote }: Props): JSX.Element {
   const { t } = useTranslation()
   const [view, setView] = useState<'browse' | 'graph'>('browse')
   const [filters, setFilters] = useState<CardFilters>(EMPTY_FILTERS)
@@ -251,7 +257,7 @@ export function KnowledgePage({ settings, patch, openRecord, focusCardId, onOpen
     if (!focusCardId) return
     setView('browse')
     setDetailId(focusCardId)
-  }, [focusCardId])
+  }, [focusCardId, focusTicket])
 
   const empty = emptyState({ shown: list.items.length, filters: active })
   const filtering = filtersActive(active)

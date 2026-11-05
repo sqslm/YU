@@ -503,13 +503,15 @@ export class NotesStore {
   }
 
   /** Create a text-only note without recording or invoking a model. */
-  async createText(input: { text: string; categoryId?: string }): Promise<NoteEntry> {
+  async createText(input: { text: string; categoryId?: string; id?: string }): Promise<NoteEntry> {
     if (typeof input.text !== 'string') throw new Error(mt('随记内容必须是文字'))
     if (input.text.length > MAX_TEXT_CHARS) throw new Error(mt('文字过长，最多支持 {{n}} 个字符', { n: MAX_TEXT_CHARS }))
     const now = Date.now()
     const categoryId = this.knownCategory(input.categoryId)
     const entry: NoteEntry = {
-      id: randomUUID(), createdAt: now, updatedAt: now, editedAt: now,
+      // The caller may name the id when something else must know it first — the note
+      // a card is saved as cites that card on its very first publication.
+      id: input.id ?? randomUUID(), createdAt: now, updatedAt: now, editedAt: now,
       transcript: input.text, polished: '', polishStatus: 'skipped',
       durationMs: 0, tags: [], pending: true,
       ...(categoryId ? { categoryId } : {})

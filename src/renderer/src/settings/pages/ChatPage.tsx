@@ -142,6 +142,8 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
   const [navOpen, setNavOpen] = useState<boolean>(() => !stored<boolean>('chat.nav.collapsed', false))
   const [models, setModels] = useState<Array<{ id: string; label: string }>>([])
   const [draftModel, setDraftModel] = useState<{ profileId: string | null; effort: string } | null>(null), [modelMenu, setModelMenu] = useState<HTMLElement | null>(null)
+  /** The card this draft was opened from, until the first message is really sent. */
+  const [draftCard, setDraftCard] = useState<{ id: string; title: string } | null>(null)
   const focusedRef = useRef<string | undefined>(), [focused, setFocused] = useState<string | undefined>()
   /**
    * The message a search jump landed on. `focused` is the anchor (it keeps the
@@ -204,6 +206,18 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
   useEffect(() => { if (nearBottom.current) scroll.current?.scrollTo({ top: scroll.current.scrollHeight }) }, [detail?.messages, status])
   useEffect(() => registerGameModePreparation(async () => !index.busyThreadId && !Object.values(drafts).some(text => text.trim()) && !Object.values(files).some(items => items.length)), [drafts, files, index.busyThreadId])
   const draftKey = selected ?? 'new', draft = drafts[draftKey] ?? ''
+  /**
+   * A card opened through 「继续讨论」 stays visible on the draft it belongs to.
+   * The main process keeps the association in memory, so reopening, switching
+   * back or rebuilding the window finds it again — and only for its own thread.
+   */
+  useEffect(() => {
+    let live = true
+    setDraftCard(null)
+    if (!selected || !detail || detail.messages.length) return () => { live = false }
+    void window.api.chat.draftCard(selected).then(card => { if (live) setDraftCard(card) }).catch(() => {})
+    return () => { live = false }
+  }, [selected, detail?.id, detail?.messages.length])
   const pendingFiles = files[draftKey] ?? []
   const addFiles = (incoming: File[]): void => {
     if (saving) return
@@ -354,6 +368,16 @@ export function ChatPage({ onModels, onOpenRecord, focusRecord }: { onModels(): 
         </Box>)}
       </Box>
       <Box sx={{ px: { xs: 2, lg: 4 }, pb: 2.5, pt: 1, width: '100%', maxWidth: 840, mx: 'auto' }}>
+        {draftCard && <Stack direction="row" alignItems="center" spacing={.75} sx={{ mb: 1 }} data-chat-draft-card={draftCard.id}>
+          <Button size="small" variant="outlined" sx={{ textTransform: 'none', minWidth: 0 }} onClick={() => void onOpenRecord({ kind: 'knowledge', id: draftCard.id, title: draftCard.title, text: '', at: 0 }).catch(error => setError(messageOf(error)))}>
+            <Typography noWrap sx={{ fontSize: 12 }}>{t('knowledge.draftCard')} · {draftCard.title}</Typography>
+          </Button>
+          <Tooltip title={t('knowledge.dropDraftCard')}><IconButton size="small" data-chat-draft-card-drop aria-label={t('knowledge.dropDraftCard')} onClick={() => {
+            const id = selected
+            if (!id) return
+            void window.api.chat.dropDraftCard(id).then(() => setDraftCard(null)).catch(error => setError(messageOf(error)))
+          }}><CloseRounded sx={{ fontSize: 16 }} /></IconButton></Tooltip>
+        </Stack>}
         {!!pendingFiles.length && <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 1 }}>{pendingFiles.map(item => <Stack key={item.id} direction="row" alignItems="center" sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: .5, maxWidth: 220 }}>
           <Button size="small" title={item.file.name} onClick={() => { if (item.preview) setPreview({ name: item.file.name, url: item.preview }); else void item.file.slice(0, 20000).text().then(text => setPreview({ name: item.file.name, text: /\.(?:pdf|docx|xlsx|pptx|odt|ods|odp)$/i.test(item.file.name) ? t('发送时提取正文；扫描版或加密文档暂不支持。') : text })) }} sx={{ minWidth: 0, textTransform: 'none', gap: .75 }}>
             {item.preview ? <Box component="img" src={item.preview} alt="" sx={{ width: 36, height: 36, objectFit: 'cover', borderRadius: .5 }} /> : <DescriptionOutlined fontSize="small" />}<Typography variant="caption" noWrap sx={{ maxWidth: 120 }}>{item.file.name}</Typography>

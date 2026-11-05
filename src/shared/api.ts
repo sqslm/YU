@@ -77,6 +77,13 @@ export interface TypelessApi {
      */
     edit(input: import('./chat').ChatEdit): Promise<import('./knowledge').CleanupPending | void>
     send(id: string, text: string, attachments?: import('./chat').ChatUpload[]): Promise<void>
+    /**
+     * The card a draft was opened from and has not sent yet, if any. Only the id
+     * and the title: the body is read again when the draft is sent.
+     */
+    draftCard(id: string): Promise<{ id: string; title: string } | null>
+    /** Forgets that card, so the draft becomes an ordinary conversation. */
+    dropDraftCard(id: string): Promise<void>
     cancel(): Promise<void>
     onEvent(callback: (event: import('./chat').ChatEvent) => void): () => void
   }

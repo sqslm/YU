@@ -432,7 +432,9 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
     setCardsLoading(true)
     setCardsError('')
     try {
-      const page = await window.api.knowledge.bySource({ sourceId: noteId, offset, limit: CARDS_SECTION_LIMIT })
+      // The note's identity, not a source id: one note keeps a source row per
+      // published version, so a source id would answer the newest version only.
+      const page = await window.api.knowledge.bySource({ noteId, offset, limit: CARDS_SECTION_LIMIT })
       if (selectedRef.current?.id !== noteId) return
       setCardRows((current) => {
         if (offset === 0) return page.items
@@ -460,6 +462,18 @@ export function NotesPage({ settings, patch, recordTicket = 0, openNote, onOpenK
     setCardsError('')
     if (!selectedNoteId) return
     void loadCards(selectedNoteId, 0)
+  }, [selectedNoteId, loadCards])
+
+  /**
+   * Extraction of a fresh note takes a stable window, so its cards arrive after the
+   * note is already open. The section follows the same change notice the knowledge
+   * page uses instead of waiting for the reader to reselect the note.
+   */
+  useEffect(() => {
+    if (!selectedNoteId) return
+    return window.api.knowledge.onChanged((scope) => {
+      if (scope === 'cards') void loadCards(selectedNoteId, 0)
+    })
   }, [selectedNoteId, loadCards])
 
   const cardsView = cardsSection({ shown: cardRows.length, total: cardTotal, hasMore: cardMore, requests: cardPages })
