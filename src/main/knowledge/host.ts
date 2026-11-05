@@ -402,6 +402,26 @@ export class KnowledgeHost {
     entry.reject(error)
   }
 
+  /**
+   * Fails the batch that is waiting for a provider. The helper is told to stop too,
+   * so a late answer cannot be written; the claim is released by the caller through
+   * `extract.fail`.
+   */
+  cancelInFlight(reason = 'the request was cancelled'): number {
+    let cancelled = 0
+    for (const [id, entry] of [...this.pending]) {
+      if (entry.method !== 'extract.run') continue
+      try {
+        this.writeTo(entry.child, { v: KNOWLEDGE_PROTOCOL_VERSION, type: 'cancel', id })
+      } catch {
+        // The pipe is already gone; the close handler fails the request.
+      }
+      this.rejectPending(id, new KnowledgeError('cancelled', reason))
+      cancelled += 1
+    }
+    return cancelled
+  }
+
   /** Stops every model call a finished request had started. */
   private abortModelsOf(parentId: string, generation: number): void {
     for (const [id, call] of this.models) {

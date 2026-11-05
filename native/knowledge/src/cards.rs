@@ -112,8 +112,6 @@ pub struct UpdateParams {
     pub aliases: Option<Vec<String>>,
     #[serde(default)]
     pub source_ids: Option<Vec<String>>,
-    #[serde(default)]
-    pub edited: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -402,7 +400,9 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Ca
         None => encode_list(&existing.aliases)?,
     };
     // Any edit through this API is a human edit unless the caller says otherwise.
-    let edited = params.edited.unwrap_or(true);
+    // A human update always marks the card as edited: the model may never clear
+    // that protection, and no caller can pass `edited: false` to get around it.
+    let edited = true;
     let now = now_ms();
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)

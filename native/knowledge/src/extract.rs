@@ -1,13 +1,15 @@
 //! Stage 3: turning a stable pending task into knowledge cards.
 //!
-//! The queue owns *what* may be extracted; this module owns *how*. It validates
-//! the material the main process read back out of the real stores, splits it into
-//! bounded segments, asks the model once for drafts (and at most once more to
-//! compare them with existing cards), then writes cards, sources, progress and the
-//! task state in a single transaction. No database lock is held across a model
-//! call, and nothing is written before the target cards are re-checked.
+//! The queue owns *what* may be extracted; this module owns *how*. It plans a
+//! bounded batch from stored metadata alone, so the main process never has to push
+//! a whole group of material through the pipe: `extract.next` returns the exact
+//! character ranges it wants, `extract.run` receives only those slices plus the
+//! whole-body fingerprint that identifies the version they came from. Drafts are
+//! parsed strictly against that batch, compared with existing cards in a single
+//! call, and applied in one transaction that re-checks the claim, the channel
+//! configuration, the source versions and the target card revisions.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::Deserialize;
@@ -20,7 +22,7 @@ use crate::protocol::{
 };
 use crate::queue;
 use crate::store::{CARD_KINDS, Store};
-use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms, sha256_hex};
+use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms};
 
 /// Characters of source material one model call may carry.
 pub const MAX_BATCH_CHARS: usize = 12_000;
@@ -34,27 +36,31 @@ pub const MAX_CARDS: usize = 3;
 pub const MAX_TOKENS: u32 = 8_192;
 /// A card shorter than this carries no reusable knowledge.
 const MIN_BODY_CHARS: usize = 30;
+/// Topics kept on one card after a merge.
+const MAX_MERGED_TOPICS: usize = 32;
 
 const SYSTEM_PROMPT: &str = "你是知识提炼器。只输出一个 JSON 对象，不要输出解释或多余文字。\n\
 规则：\n\
-1. 只从给定来源中提炼可复用的知识，最多 3 张卡片；没有可复用内容就返回空数组。\n\
+1. 只从给定来源中提炼可复用的知识，最多 3 张卡片；没有可复用内容就返回 {\"cards\":[],\"reason\":\"…\"}。\n\
 2. kind 只能是 concept（概念与原理）、method（方法与清单）、question（问题与解释）、decision（方案与决策）、comparison（对比与辨析）、reading（阅读与资料）、review（经验与复盘）。\n\
 3. 每张卡片形如 {\"kind\":\"concept\",\"title\":\"…\",\"summary\":\"…\",\"body\":\"…\",\"topics\":[\"…\"],\"aliases\":[\"…\"],\"sources\":[{\"sourceId\":\"…\",\"segment\":0}],\"reason\":\"…\"}。\n\
-4. body 目标 300～800 字，写结论、适用条件、关键机制、取舍理由、反例和待验证问题；不要堆空模板。\n\
-5. 必须能在正文里区分：原材料陈述、对话结论、模型推导、待验证内容。未联网核验不得写成已核实事实。\n\
-6. 不写个人身份、凭据、联系方式；不把资料作者的观点写成用户自己的立场。\n\
-7. sources 只能引用给定来源的 sourceId 与 segment，不能编造。问候、确认、纯操作回执等没有复用价值时返回 {\"cards\":[],\"reason\":\"…\"}。";
+4. cards 字段必须存在；没有可复用内容时写成空数组，不要省略。\n\
+5. body 目标 300～800 字，写结论、适用条件、关键机制、取舍理由、反例和待验证问题；不要堆空模板。\n\
+6. 必须能在正文里区分：原材料陈述、对话结论、模型推导、待验证内容。未联网核验不得写成已核实事实。\n\
+7. 不写个人身份、凭据、联系方式；不把资料作者的观点写成用户自己的立场。\n\
+8. sources 只能引用本批次给出的 sourceId 与该来源在本批次出现的 segment，不能编造或引用未给出的分段。问候、确认、纯操作回执等没有复用价值时返回空数组。";
 
 const COMPARE_PROMPT: &str = "你是知识库去重器。只输出一个 JSON 对象，形如 \
 {\"decisions\":[{\"index\":0,\"action\":\"new|reference|merge|propose\",\"targetCardId\":\"card_…\",\"reason\":\"…\"}]}。\n\
 规则：\n\
-- new：与候选都不同，需要新卡片。\n\
-- reference：同一结论，只是补充来源，正文不必改动。\n\
-- merge：同一结论且候选缺本批的细节，可以合并（只在候选未被人工编辑时才会被采用）。\n\
-- propose：结论冲突、前提不同、候选已人工编辑或依据不足，交给人工判断，保留原卡片。\n\
-- 适用条件或反例不同不算同一知识；标题相似不算同一知识。targetCardId 只能取自候选列表。";
+- 对每个草稿 index 必须给出且只给出一条判断。\n\
+- new：与候选都不同，需要新卡片；此时不需要 targetCardId。\n\
+- reference：同一结论，只是补充来源，正文不必改动；必须给出 targetCardId。\n\
+- merge：同一结论且候选缺本批的细节，可以合并（只在候选未被人工编辑时才会被采用）；必须给出 targetCardId。\n\
+- propose：结论冲突、前提不同、候选已人工编辑或依据不足，交给人工判断，保留原卡片；必须给出 targetCardId。\n\
+- 适用条件或反例不同不算同一知识；标题相似不算同一知识。targetCardId 只能取自候选列表，不能引用草稿自身。";
 
-/// What `extract.next` hands to the main process.
+/// One source of the claimed task, as stored.
 #[derive(Debug)]
 struct ClaimedSource {
     source_id: String,
@@ -65,6 +71,16 @@ struct ClaimedSource {
     scope: String,
     title: String,
     size: i64,
+}
+
+/// One character range the main process must read for this batch.
+#[derive(Debug, Clone)]
+struct Planned {
+    source_id: String,
+    version: String,
+    index: usize,
+    start: usize,
+    end: usize,
 }
 
 /// One segment of material, as sent to the model.
@@ -81,17 +97,21 @@ pub struct RunParams {
     #[serde(rename = "groupId")]
     pub group_id: String,
     pub claim: String,
-    pub sources: Vec<InputSource>,
+    pub items: Vec<RunItem>,
     #[serde(rename = "profileId")]
     pub profile_id: Option<String>,
     pub effort: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InputSource {
+pub struct RunItem {
     #[serde(rename = "sourceId")]
     pub source_id: String,
     pub version: String,
+    pub fingerprint: String,
+    pub segment: i64,
+    pub start: i64,
+    pub end: i64,
     pub text: String,
 }
 
@@ -110,9 +130,10 @@ struct Candidate {
     title: String,
     summary: String,
     body: String,
+    revision: i64,
 }
 
-/// A parsed draft card, already validated.
+/// A parsed draft card, already validated against the batch.
 struct Draft {
     kind: String,
     title: String,
@@ -123,6 +144,9 @@ struct Draft {
     sources: Vec<(String, usize)>,
     reason: String,
 }
+
+/// One comparison decision: draft index, action, optional target and its reason.
+type Decision = (usize, String, Option<String>, String);
 
 fn lock(store: &Store) -> ApiResult<std::sync::MutexGuard<'_, Connection>> {
     store
@@ -135,19 +159,99 @@ fn sqlite(error: rusqlite::Error) -> ApiError {
     ApiError::storage(format!("knowledge database error: {error}"))
 }
 
-/// Picks one runnable task and claims it. Nothing is claimed while collection is
-/// off or paused, and a disabled channel is skipped rather than consumed.
+/// Picks one runnable task, claims it and plans a bounded batch. Tasks with no
+/// unprocessed segment left are completed here instead of being claimed, so one
+/// wake can walk the whole backlog.
 pub fn next(store: &Store) -> ApiResult<Value> {
     let connection = lock(store)?;
-    if !queue::enabled(&connection) || queue::paused(&connection) {
+    let enabled = queue::enabled(&connection);
+    let paused = queue::paused(&connection);
+    if !enabled || paused {
         return Ok(json!({
-            "enabled": queue::enabled(&connection),
-            "paused": queue::paused(&connection),
+            "enabled": enabled,
+            "paused": paused,
             "group": Value::Null,
             "nextDueAt": Value::Null,
         }));
     }
     let now = now_ms();
+    loop {
+        let picked = pick(&connection, now)?;
+        let Some(group_id) = picked else {
+            let due: Option<i64> = connection
+                .query_row(
+                    "SELECT MIN(stable_at) FROM queue_groups
+                     WHERE state = 'stabilizing' AND stable_at > ?1",
+                    params![now],
+                    |row| row.get(0),
+                )
+                .map_err(sqlite)?;
+            return Ok(
+                json!({"enabled": true, "paused": false, "group": Value::Null, "nextDueAt": due}),
+            );
+        };
+        let claim = new_id("clm");
+        connection
+            .execute(
+                "UPDATE queue_groups SET state = 'working', claim = ?2, error = NULL, updated_at = ?3
+                 WHERE id = ?1",
+                params![group_id, claim, now],
+            )
+            .map_err(sqlite)?;
+        let (channel, title, scope): (String, String, String) = connection
+            .query_row(
+                "SELECT channel, title, scope FROM queue_groups WHERE id = ?1",
+                params![group_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .map_err(sqlite)?;
+        let sources = claimed_sources(&connection, &group_id)?;
+        let items = plan_batch(&connection, &sources)?;
+        if items.is_empty() {
+            connection
+                .execute(
+                    "UPDATE queue_groups SET state = 'completed', claim = NULL,
+                     reason = '没有新的分段需要提炼', updated_at = ?2 WHERE id = ?1 AND claim = ?3",
+                    params![group_id, now, claim],
+                )
+                .map_err(sqlite)?;
+            continue;
+        }
+        return Ok(json!({
+            "enabled": true,
+            "paused": false,
+            "nextDueAt": Value::Null,
+            "group": {
+                "groupId": group_id,
+                "channel": channel,
+                "title": title,
+                "scope": scope,
+                "claim": claim,
+                "sources": sources.iter().map(|source| json!({
+                    "sourceId": source.source_id,
+                    "version": source.version,
+                    "fingerprint": source.fingerprint,
+                    "kind": source.kind,
+                    "originRef": source.origin_ref,
+                    "scope": source.scope,
+                    "title": source.title,
+                    "size": source.size,
+                    "segments": segment_bounds(source.size.max(0) as usize).len(),
+                })).collect::<Vec<_>>(),
+                "items": items.iter().map(|item| json!({
+                    "sourceId": item.source_id,
+                    "version": item.version,
+                    "segment": item.index,
+                    "start": item.start,
+                    "end": item.end,
+                })).collect::<Vec<_>>(),
+            },
+        }));
+    }
+}
+
+/// The first runnable group whose channel is still allowed.
+fn pick(connection: &Connection, now: i64) -> ApiResult<Option<String>> {
     let mut statement = connection
         .prepare(
             "SELECT id, channel FROM queue_groups
@@ -161,85 +265,10 @@ pub fn next(store: &Store) -> ApiResult<Value> {
         .collect::<Result<_, _>>()
         .map_err(sqlite)?;
     drop(statement);
-
-    let picked = candidates
+    Ok(candidates
         .into_iter()
-        .find(|(_, channel)| queue::channel_enabled(&connection, channel));
-    let Some((group_id, _)) = picked else {
-        let due: Option<i64> = connection
-            .query_row(
-                "SELECT MIN(stable_at) FROM queue_groups WHERE state = 'stabilizing' AND stable_at > ?1",
-                params![now],
-                |row| row.get(0),
-            )
-            .map_err(sqlite)?;
-        return Ok(
-            json!({"enabled": true, "paused": false, "group": Value::Null, "nextDueAt": due}),
-        );
-    };
-
-    let claim = new_id("clm");
-    connection
-        .execute(
-            "UPDATE queue_groups SET state = 'working', claim = ?2, updated_at = ?3 WHERE id = ?1",
-            params![group_id, claim, now],
-        )
-        .map_err(sqlite)?;
-    let (channel, title, scope): (String, String, String) = connection
-        .query_row(
-            "SELECT channel, title, scope FROM queue_groups WHERE id = ?1",
-            params![group_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .map_err(sqlite)?;
-    let mut statement = connection
-        .prepare(
-            "SELECT s.id, s.version, s.fingerprint, s.kind, s.origin_ref, s.scope, s.title, s.size
-             FROM queue_items i JOIN sources s ON s.id = i.source_id
-             WHERE i.group_id = ?1 AND s.state = 'active'
-             ORDER BY i.ordinal",
-        )
-        .map_err(sqlite)?;
-    let sources: Vec<ClaimedSource> = statement
-        .query_map(params![group_id], |row| {
-            Ok(ClaimedSource {
-                source_id: row.get(0)?,
-                version: row.get(1)?,
-                fingerprint: row.get(2)?,
-                kind: row.get(3)?,
-                origin_ref: row.get(4)?,
-                scope: row.get(5)?,
-                title: row.get(6)?,
-                size: row.get(7)?,
-            })
-        })
-        .map_err(sqlite)?
-        .collect::<Result<_, _>>()
-        .map_err(sqlite)?;
-    drop(statement);
-
-    Ok(json!({
-        "enabled": true,
-        "paused": false,
-        "nextDueAt": Value::Null,
-        "group": {
-            "groupId": group_id,
-            "channel": channel,
-            "title": title,
-            "scope": scope,
-            "claim": claim,
-            "sources": sources.iter().map(|source| json!({
-                "sourceId": source.source_id,
-                "version": source.version,
-                "fingerprint": source.fingerprint,
-                "kind": source.kind,
-                "originRef": source.origin_ref,
-                "scope": source.scope,
-                "title": source.title,
-                "size": source.size,
-            })).collect::<Vec<_>>(),
-        },
-    }))
+        .find(|(_, channel)| queue::channel_enabled(connection, channel))
+        .map(|(id, _)| id))
 }
 
 /// Characters per segment, with the repeated head of the previous one.
@@ -260,17 +289,16 @@ fn segment_bounds(chars: usize) -> Vec<(usize, usize)> {
     out
 }
 
-fn slice_chars(text: &str, start: usize, end: usize) -> String {
-    text.chars().skip(start).take(end - start).collect()
-}
-
 fn done_segments(
     connection: &Connection,
     source_id: &str,
     version: &str,
 ) -> ApiResult<BTreeSet<usize>> {
     let mut statement = connection
-        .prepare("SELECT segment FROM extract_progress WHERE source_id = ?1 AND version = ?2 AND state = 'done'")
+        .prepare(
+            "SELECT segment FROM extract_progress
+             WHERE source_id = ?1 AND version = ?2 AND state = 'done'",
+        )
         .map_err(sqlite)?;
     let rows = statement
         .query_map(params![source_id, version], |row| row.get::<_, i64>(0))
@@ -280,67 +308,99 @@ fn done_segments(
     Ok(rows.into_iter().map(|value| value as usize).collect())
 }
 
-/// Every segment of the given material that has not been processed yet.
-fn pending_segments(
-    connection: &Connection,
-    sources: &[InputSource],
-    claimed: &[ClaimedSource],
-) -> ApiResult<Vec<Segment>> {
+/// The unprocessed segments of this task, packed into one character budget. The
+/// ranges are derived from the stored character count, so no material is needed
+/// to plan a batch.
+fn plan_batch(connection: &Connection, sources: &[ClaimedSource]) -> ApiResult<Vec<Planned>> {
     let mut out = Vec::new();
-    for input in sources {
-        let source = claimed
-            .iter()
-            .find(|item| item.source_id == input.source_id)
-            .ok_or_else(|| {
-                ApiError::new(
-                    Code::SourceChanged,
-                    format!("来源 {} 不在本批次中", input.source_id),
-                )
-            })?;
-        if source.version != input.version {
-            return Err(ApiError::new(Code::SourceChanged, "来源版本已变化"));
-        }
-        if sha256_hex(&input.text) != source.fingerprint {
-            return Err(ApiError::new(Code::SourceChanged, "来源正文已变化"));
-        }
-        let chars: Vec<char> = input.text.chars().collect();
-        let done = done_segments(connection, &input.source_id, &input.version)?;
-        for (index, (start, end)) in segment_bounds(chars.len()).into_iter().enumerate() {
+    let mut budget = 0usize;
+    for source in sources {
+        let done = done_segments(connection, &source.source_id, &source.version)?;
+        for (index, (start, end)) in segment_bounds(source.size.max(0) as usize)
+            .into_iter()
+            .enumerate()
+        {
             if done.contains(&index) {
                 continue;
             }
-            out.push(Segment {
-                source_id: input.source_id.clone(),
-                version: input.version.clone(),
+            let chars = end - start;
+            if !out.is_empty() && budget + chars > MAX_BATCH_CHARS {
+                return Ok(out);
+            }
+            budget += chars;
+            out.push(Planned {
+                source_id: source.source_id.clone(),
+                version: source.version.clone(),
                 index,
-                text: slice_chars(&input.text, start, end),
+                start,
+                end,
             });
         }
     }
     Ok(out)
 }
 
-/// Packs segments into one batch that stays inside the character budget.
-fn take_batch(segments: &[Segment], used: &mut BTreeSet<(String, String, usize)>) -> Vec<Segment> {
-    let mut batch = Vec::new();
-    let mut total = 0;
-    for segment in segments {
-        let key = (
-            segment.source_id.clone(),
-            segment.version.clone(),
-            segment.index,
-        );
-        if used.contains(&key) {
-            continue;
-        }
-        if !batch.is_empty() && total + segment.text.chars().count() > MAX_BATCH_CHARS {
-            break;
-        }
-        total += segment.text.chars().count();
-        used.insert(key);
-        batch.push(segment.clone());
+/// Turns the slices the main process read into the segments of this batch, after
+/// proving they belong to the version the task was claimed for.
+fn verified_segments(
+    connection: &Connection,
+    params: &RunParams,
+    claimed: &[ClaimedSource],
+) -> ApiResult<Vec<Segment>> {
+    if params.items.is_empty() {
+        return Err(ApiError::new(Code::InvalidParams, "本批没有待提炼分段"));
     }
-    batch
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for item in &params.items {
+        let source = claimed
+            .iter()
+            .find(|source| source.source_id == item.source_id)
+            .ok_or_else(|| {
+                ApiError::new(
+                    Code::SourceChanged,
+                    format!("来源 {} 不在本批次中", item.source_id),
+                )
+            })?;
+        if source.version != item.version {
+            return Err(ApiError::new(Code::SourceChanged, "来源版本已变化"));
+        }
+        if source.fingerprint != item.fingerprint {
+            return Err(ApiError::new(Code::SourceChanged, "来源正文指纹不符"));
+        }
+        if item.segment < 0 || item.start < 0 || item.end < item.start {
+            return Err(ApiError::new(Code::InvalidParams, "分段范围不合法"));
+        }
+        let index = item.segment as usize;
+        let bounds = segment_bounds(source.size.max(0) as usize);
+        let (start, end) = *bounds
+            .get(index)
+            .ok_or_else(|| ApiError::new(Code::InvalidParams, "分段索引超出范围"))?;
+        if start != item.start as usize || end != item.end as usize {
+            return Err(ApiError::new(Code::InvalidParams, "分段范围与来源不符"));
+        }
+        let chars = item.text.chars().count();
+        if chars != end - start {
+            return Err(ApiError::new(Code::InvalidParams, "分段正文长度不符"));
+        }
+        if !seen.insert((item.source_id.clone(), index)) {
+            return Err(ApiError::new(Code::InvalidParams, "同一分段被重复提交"));
+        }
+        if done_segments(connection, &item.source_id, &item.version)?.contains(&index) {
+            return Err(ApiError::new(
+                Code::SourceChanged,
+                "该分段已处理，重放不会再次提炼",
+            ));
+        }
+        out.push(Segment {
+            source_id: item.source_id.clone(),
+            version: item.version.clone(),
+            index,
+            text: item.text.clone(),
+        });
+        let _ = (start, end);
+    }
+    Ok(out)
 }
 
 fn material_block(batch: &[Segment], claimed: &[ClaimedSource]) -> String {
@@ -374,29 +434,49 @@ fn strip_fence(answer: &str) -> &str {
     }
 }
 
-fn parse_drafts(answer: &str, claimed: &[ClaimedSource]) -> ApiResult<(Vec<Draft>, String)> {
+/// The source ids and segment indexes that were really part of this batch.
+fn batch_sources(batch: &[Segment]) -> BTreeMap<String, BTreeSet<usize>> {
+    let mut allowed: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
+    for segment in batch {
+        allowed
+            .entry(segment.source_id.clone())
+            .or_default()
+            .insert(segment.index);
+    }
+    allowed
+}
+
+fn parse_drafts(answer: &str, batch: &[Segment]) -> ApiResult<(Vec<Draft>, String)> {
+    let allowed = batch_sources(batch);
     let value: Value = serde_json::from_str(strip_fence(answer)).map_err(|error| {
         ApiError::new(Code::InvalidOutput, format!("提炼结果不是 JSON：{error}"))
     })?;
     let object = value
         .as_object()
         .ok_or_else(|| ApiError::new(Code::InvalidOutput, "提炼结果不是对象"))?;
+    if let Some(reason) = object.get("reason")
+        && !reason.is_string()
+    {
+        return Err(ApiError::new(Code::InvalidOutput, "reason 必须是字符串"));
+    }
     let reason = object
         .get("reason")
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
+    // A missing list is an invalid answer, not "no knowledge": treating it as
+    // empty would silently skip the material for good.
     let cards = match object.get("cards") {
-        None => Vec::new(),
         Some(Value::Array(items)) => items.clone(),
         Some(_) => return Err(ApiError::new(Code::InvalidOutput, "cards 必须是数组")),
+        None => return Err(ApiError::new(Code::InvalidOutput, "提炼结果缺少 cards")),
     };
     if cards.len() > MAX_CARDS {
         return Err(ApiError::new(Code::InvalidOutput, "单批卡片数量超过上限"));
     }
     let mut drafts = Vec::new();
     for item in cards {
-        let draft = parse_draft(&item, claimed)?;
+        let draft = parse_draft(&item, &allowed)?;
         if !drafts
             .iter()
             .any(|existing: &Draft| existing.body == draft.body)
@@ -407,7 +487,7 @@ fn parse_drafts(answer: &str, claimed: &[ClaimedSource]) -> ApiResult<(Vec<Draft
     Ok((drafts, reason))
 }
 
-fn parse_draft(value: &Value, claimed: &[ClaimedSource]) -> ApiResult<Draft> {
+fn parse_draft(value: &Value, allowed: &BTreeMap<String, BTreeSet<usize>>) -> ApiResult<Draft> {
     let object = value
         .as_object()
         .ok_or_else(|| ApiError::new(Code::InvalidOutput, "卡片必须是对象"))?;
@@ -453,21 +533,37 @@ fn parse_draft(value: &Value, claimed: &[ClaimedSource]) -> ApiResult<Draft> {
     };
     let mut sources = Vec::new();
     match object.get("sources") {
-        None => {}
-        Some(Value::Array(items)) => {
+        Some(Value::Array(items)) if !items.is_empty() => {
             for item in items {
                 let source_id = item
                     .get("sourceId")
                     .and_then(Value::as_str)
                     .ok_or_else(|| ApiError::new(Code::InvalidOutput, "来源引用缺少 sourceId"))?;
-                let segment = item.get("segment").and_then(Value::as_i64).unwrap_or(0);
-                if !claimed.iter().any(|source| source.source_id == source_id) {
-                    return Err(ApiError::new(Code::InvalidOutput, "引用了本批次之外的来源"));
+                let segment = item
+                    .get("segment")
+                    .and_then(Value::as_i64)
+                    .ok_or_else(|| ApiError::new(Code::InvalidOutput, "来源引用缺少 segment"))?;
+                if segment < 0 {
+                    return Err(ApiError::new(Code::InvalidOutput, "来源分段号不合法"));
                 }
-                sources.push((source_id.to_string(), segment.max(0) as usize));
+                let index = segment as usize;
+                let known = allowed
+                    .get(source_id)
+                    .ok_or_else(|| ApiError::new(Code::InvalidOutput, "引用了本批次之外的来源"))?;
+                if !known.contains(&index) {
+                    return Err(ApiError::new(
+                        Code::InvalidOutput,
+                        "引用了本批次未给出的分段",
+                    ));
+                }
+                sources.push((source_id.to_string(), index));
             }
         }
+        Some(Value::Array(_)) => {
+            return Err(ApiError::new(Code::InvalidOutput, "卡片没有引用任何来源"));
+        }
         Some(_) => return Err(ApiError::new(Code::InvalidOutput, "sources 必须是数组")),
+        None => return Err(ApiError::new(Code::InvalidOutput, "卡片缺少 sources")),
     }
     Ok(Draft {
         kind,
@@ -499,11 +595,12 @@ fn candidates_for(
             title: row.get(1)?,
             summary: row.get(2)?,
             body: row.get(3)?,
+            revision: row.get(4)?,
         })
     };
     let mut statement = connection
         .prepare(
-            "SELECT DISTINCT c.id, c.title, c.summary, c.body
+            "SELECT DISTINCT c.id, c.title, c.summary, c.body, c.revision
              FROM cards c JOIN card_sources cs ON cs.card_id = c.id
              WHERE cs.source_id IN (SELECT value FROM json_each(?1)) LIMIT ?2",
         )
@@ -531,7 +628,7 @@ fn candidates_for(
             let pattern = format!("%{}%", needle.replace(['%', '_'], ""));
             let mut statement = connection
                 .prepare(
-                    "SELECT c.id, c.title, c.summary, c.body FROM cards c
+                    "SELECT c.id, c.title, c.summary, c.body, c.revision FROM cards c
                      WHERE c.title LIKE ?1 OR c.aliases LIKE ?1 OR c.topics LIKE ?1 LIMIT ?2",
                 )
                 .map_err(sqlite)?;
@@ -565,6 +662,7 @@ fn exact_card(connection: &Connection, fingerprint: &str) -> ApiResult<Option<St
         .map_err(sqlite)
 }
 
+/// Candidate text under one shared character budget for the whole batch.
 fn candidate_text(candidates: &[Candidate]) -> String {
     let mut out = String::new();
     let mut total = 0;
@@ -584,21 +682,33 @@ fn candidate_text(candidates: &[Candidate]) -> String {
     out
 }
 
-/// One comparison decision: action, optional target card and its reason.
-type Decision = (usize, String, Option<String>, String);
-
-fn decide(
+/// One comparison call for the whole batch, so the model budget stays at one
+/// extraction plus one comparison.
+fn decide_all(
     link: &Link,
     parent: &str,
     params: &RunParams,
-    draft: &Draft,
+    drafts: &[Draft],
     candidates: &[Candidate],
+    exact: &[Option<String>],
 ) -> ApiResult<Vec<Decision>> {
+    let mut cards_text = String::new();
+    let mut asked = Vec::new();
+    for (index, draft) in drafts.iter().enumerate() {
+        if exact[index].is_some() {
+            continue;
+        }
+        asked.push(index);
+        cards_text.push_str(&format!(
+            "\n--- 草稿 {index}\n标题：{}\n摘要：{}\n正文：{}\n",
+            draft.title, draft.summary, draft.body
+        ));
+    }
+    if asked.is_empty() || candidates.is_empty() {
+        return Ok(Vec::new());
+    }
     let body = format!(
-        "草稿：\n标题：{}\n摘要：{}\n正文：{}\n\n候选卡片：{}",
-        draft.title,
-        draft.summary,
-        draft.body,
+        "本批草稿：{cards_text}\n候选卡片：{}",
         candidate_text(candidates)
     );
     let answer = link.request_model(ModelRequest {
@@ -619,13 +729,32 @@ fn decide(
         .and_then(Value::as_array)
         .ok_or_else(|| ApiError::new(Code::InvalidOutput, "去重结果缺少 decisions"))?;
     let allowed: BTreeSet<&str> = candidates.iter().map(|item| item.id.as_str()).collect();
-    let mut out = Vec::new();
+    let mut out: Vec<Decision> = Vec::new();
+    let mut covered = BTreeSet::new();
     for decision in decisions {
         let index = decision
             .get("index")
             .and_then(Value::as_i64)
-            .unwrap_or(0)
-            .max(0) as usize;
+            .ok_or_else(|| ApiError::new(Code::InvalidOutput, "去重结果缺少 index"))?;
+        if index < 0 || index as usize >= drafts.len() {
+            return Err(ApiError::new(Code::InvalidOutput, "去重结果的 index 越界"));
+        }
+        let index = index as usize;
+        if exact[index].is_some() {
+            return Err(ApiError::new(
+                Code::InvalidOutput,
+                "去重结果包含了精确重复的草稿",
+            ));
+        }
+        if !asked.contains(&index) {
+            return Err(ApiError::new(Code::InvalidOutput, "去重结果重复或缺失"));
+        }
+        if !covered.insert(index) {
+            return Err(ApiError::new(
+                Code::InvalidOutput,
+                "去重结果重复提交同一草稿",
+            ));
+        }
         let action = decision
             .get("action")
             .and_then(Value::as_str)
@@ -641,13 +770,21 @@ fn decide(
             .get("targetCardId")
             .and_then(Value::as_str)
             .map(str::to_string);
-        if let Some(id) = &target
-            && !allowed.contains(id.as_str())
-        {
-            return Err(ApiError::new(
-                Code::InvalidOutput,
-                "去重结果引用了候选之外的卡片",
-            ));
+        match (action.as_str(), &target) {
+            ("new", _) => {}
+            (_, None) => {
+                return Err(ApiError::new(
+                    Code::InvalidOutput,
+                    "去重动作缺少 targetCardId",
+                ));
+            }
+            (_, Some(id)) if !allowed.contains(id.as_str()) => {
+                return Err(ApiError::new(
+                    Code::InvalidOutput,
+                    "去重结果引用了候选之外的卡片",
+                ));
+            }
+            _ => {}
         }
         out.push((
             index,
@@ -660,19 +797,25 @@ fn decide(
                 .to_string(),
         ));
     }
+    if covered.len() != asked.len() {
+        return Err(ApiError::new(
+            Code::InvalidOutput,
+            "去重结果没有覆盖本批全部草稿",
+        ));
+    }
     Ok(out)
 }
 
 /// Runs one extraction batch. The store lock is taken only for planning and for
 /// applying, never while a model call is in flight.
 pub fn run(store: &Store, link: &Link, parent: &str, params: RunParams) -> ApiResult<Value> {
-    let plan = {
+    let (claimed, batch) = {
         let connection = lock(store)?;
-        let (state, claim): (String, Option<String>) = connection
+        let (state, claim, channel): (String, Option<String>, String) = connection
             .query_row(
-                "SELECT state, claim FROM queue_groups WHERE id = ?1",
+                "SELECT state, claim, channel FROM queue_groups WHERE id = ?1",
                 params![params.group_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .optional()
             .map_err(sqlite)?
@@ -683,68 +826,55 @@ pub fn run(store: &Store, link: &Link, parent: &str, params: RunParams) -> ApiRe
                 "任务已被其他批次占用或已结束",
             ));
         }
-        claimed_sources(&connection, &params.group_id)?
+        if !queue::enabled(&connection) || queue::paused(&connection) {
+            return Err(ApiError::new(Code::Cancelled, "采集已暂停"));
+        }
+        if !queue::channel_enabled(&connection, &channel) {
+            return Err(ApiError::new(Code::Cancelled, "该来源通道已关闭"));
+        }
+        let claimed = claimed_sources(&connection, &params.group_id)?;
+        let batch = verified_segments(&connection, &params, &claimed)?;
+        (claimed, batch)
     };
 
-    let segments = {
-        let connection = lock(store)?;
-        pending_segments(&connection, &params.sources, &plan)?
-    };
-    if segments.is_empty() {
-        let mut connection = lock(store)?;
-        return finish_empty(&mut connection, &params, "没有新的分段需要提炼");
-    }
-    let mut used = BTreeSet::new();
-    let batch = take_batch(&segments, &mut used);
     let answer = link.request_model(ModelRequest {
         parent_id: parent,
         profile_id: params.profile_id.as_deref().unwrap_or(""),
         effort: params.effort.as_deref().unwrap_or("high"),
         messages: &json!([
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": format!("请提炼以下材料。\n{}", material_block(&batch, &plan))},
+            {"role": "user", "content": format!("请提炼以下材料。\n{}", material_block(&batch, &claimed))},
         ]),
         max_tokens: Some(MAX_TOKENS),
     })?;
-    let (drafts, reason) = parse_drafts(&answer, &plan)?;
+    let (drafts, reason) = parse_drafts(&answer, &batch)?;
 
-    // Candidates and the optional comparison call, both without holding the lock
+    // Candidates and the single comparison call, both without holding the lock
     // across the model request.
-    let mut decisions: Vec<Decision> = Vec::new();
+    let mut exact: Vec<Option<String>> = Vec::new();
+    let mut candidates: Vec<Candidate> = Vec::new();
     if !drafts.is_empty() {
-        let prepared = {
-            let connection = lock(store)?;
-            let mut rows = Vec::new();
-            for draft in &drafts {
-                let fingerprint = cards::fingerprint_of(&draft.body);
-                let exact = exact_card(&connection, &fingerprint)?;
+        let connection = lock(store)?;
+        let mut seen = BTreeSet::new();
+        for draft in &drafts {
+            let fingerprint = cards::fingerprint_of(&draft.body);
+            let found = exact_card(&connection, &fingerprint)?;
+            if found.is_none() {
                 let source_ids: Vec<String> =
                     draft.sources.iter().map(|(id, _)| id.clone()).collect();
-                let candidates = match &exact {
-                    Some(_) => Vec::new(),
-                    None => candidates_for(&connection, draft, &source_ids)?,
-                };
-                rows.push((fingerprint, exact, candidates));
-            }
-            rows
-        };
-        let needs_compare = prepared
-            .iter()
-            .any(|(_, exact, candidates)| exact.is_none() && !candidates.is_empty());
-        if needs_compare {
-            for (index, draft) in drafts.iter().enumerate() {
-                let candidates = &prepared[index].2;
-                if candidates.is_empty() {
-                    continue;
+                for candidate in candidates_for(&connection, draft, &source_ids)? {
+                    if candidates.len() >= MAX_CANDIDATES {
+                        break;
+                    }
+                    if seen.insert(candidate.id.clone()) {
+                        candidates.push(candidate);
+                    }
                 }
-                decisions.extend(
-                    decide(link, parent, &params, draft, candidates)?
-                        .into_iter()
-                        .map(|(_, action, target, why)| (index, action, target, why)),
-                );
             }
+            exact.push(found);
         }
     }
+    let decisions = decide_all(link, parent, &params, &drafts, &candidates, &exact)?;
 
     let mut connection = lock(store)?;
     apply(
@@ -753,6 +883,8 @@ pub fn run(store: &Store, link: &Link, parent: &str, params: RunParams) -> ApiRe
         &batch,
         &drafts,
         &decisions,
+        &exact,
+        &candidates,
         &reason,
     )
 }
@@ -784,26 +916,20 @@ fn claimed_sources(connection: &Connection, group_id: &str) -> ApiResult<Vec<Cla
     Ok(rows)
 }
 
-fn finish_empty(connection: &mut Connection, params: &RunParams, reason: &str) -> ApiResult<Value> {
-    let now = now_ms();
-    connection
-        .execute(
-            "UPDATE queue_groups SET state = 'completed', claim = NULL, reason = ?2, updated_at = ?3
-             WHERE id = ?1 AND claim = ?4",
-            params![params.group_id, reason, now, params.claim],
+/// Whether a source version was retracted by `card.delete` or an exclusion.
+fn excluded(connection: &Connection, source_id: &str, version: &str) -> ApiResult<bool> {
+    let key = format!("{source_id}:{version}");
+    let count: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM exclusions WHERE kind = 'source_version' AND key = ?1",
+            params![key],
+            |row| row.get(0),
         )
         .map_err(sqlite)?;
-    Ok(json!({
-        "groupId": params.group_id,
-        "state": "completed",
-        "cards": Vec::<Value>::new(),
-        "proposals": Vec::<Value>::new(),
-        "noKnowledge": true,
-        "reason": reason,
-        "remaining": false,
-    }))
+    Ok(count > 0)
 }
 
+/// Until the claim is checked and the sources re-read, nothing may be written.
 #[allow(clippy::too_many_arguments)]
 fn apply(
     connection: &mut Connection,
@@ -811,17 +937,19 @@ fn apply(
     batch: &[Segment],
     drafts: &[Draft],
     decisions: &[Decision],
+    exact: &[Option<String>],
+    candidates: &[Candidate],
     reason: &str,
 ) -> ApiResult<Value> {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sqlite)?;
     let now = now_ms();
-    let (state, claim): (String, Option<String>) = transaction
+    let (state, claim, channel): (String, Option<String>, String) = transaction
         .query_row(
-            "SELECT state, claim FROM queue_groups WHERE id = ?1",
+            "SELECT state, claim, channel FROM queue_groups WHERE id = ?1",
             params![params.group_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()
         .map_err(sqlite)?
@@ -832,9 +960,48 @@ fn apply(
             "任务已被其他批次占用或已结束",
         ));
     }
+    // Configuration and pause are re-read here: a switch turned off or a pause
+    // pressed while the model was answering must not let the batch land.
+    if !queue::enabled(&transaction) || queue::paused(&transaction) {
+        return Err(ApiError::new(Code::Cancelled, "采集已暂停"));
+    }
+    if !queue::channel_enabled(&transaction, &channel) {
+        return Err(ApiError::new(Code::Cancelled, "该来源通道已关闭"));
+    }
+
+    // Every source of this batch must still be active, unchanged, still linked to
+    // this task and not retracted.
+    for item in &params.items {
+        let row: Option<(String, String, String, i64)> = transaction
+            .query_row(
+                "SELECT s.state, s.version, s.fingerprint,
+                        (SELECT count(*) FROM queue_items i WHERE i.group_id = ?3 AND i.source_id = s.id)
+                 FROM sources s WHERE s.id = ?1",
+                params![item.source_id, item.version, params.group_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()
+            .map_err(sqlite)?;
+        let Some((source_state, version, fingerprint, linked)) = row else {
+            return Err(ApiError::new(Code::SourceChanged, "来源已不存在"));
+        };
+        if source_state != "active" {
+            return Err(ApiError::new(Code::SourceChanged, "来源已失效"));
+        }
+        if version != item.version || fingerprint != item.fingerprint {
+            return Err(ApiError::new(Code::SourceChanged, "来源版本已变化"));
+        }
+        if linked == 0 {
+            return Err(ApiError::new(Code::SourceChanged, "来源已不属于该任务"));
+        }
+        if excluded(&transaction, &item.source_id, &item.version)? {
+            return Err(ApiError::new(Code::SourceChanged, "来源已被排除"));
+        }
+    }
 
     let mut created = Vec::new();
     let mut proposals = Vec::new();
+    let mut skipped = 0usize;
     for (index, draft) in drafts.iter().enumerate() {
         let decision = decisions.iter().find(|(at, _, _, _)| *at == index);
         let action = decision
@@ -846,24 +1013,48 @@ fn apply(
             .unwrap_or_default();
         let fingerprint = cards::fingerprint_of(&draft.body);
         let source_ids: Vec<String> = draft.sources.iter().map(|(id, _)| id.clone()).collect();
+        let mut retracted = false;
+        for (source_id, _) in &draft.sources {
+            let version: String = transaction
+                .query_row(
+                    "SELECT version FROM sources WHERE id = ?1",
+                    params![source_id],
+                    |row| row.get(0),
+                )
+                .map_err(sqlite)?;
+            if excluded(&transaction, source_id, &version)? {
+                retracted = true;
+                break;
+            }
+        }
+        if retracted {
+            // The user deleted the knowledge this draft would recreate.
+            skipped += 1;
+            continue;
+        }
         // An exact content match wins over whatever the comparison call said: the
         // same conclusion is never written twice, it only gains sources.
-        if let Some(id) = exact_card(&transaction, &fingerprint)? {
+        let exact_id = match &exact[index] {
+            Some(id) => Some(id.clone()),
+            None => exact_card(&transaction, &fingerprint)?,
+        };
+        if let Some(id) = exact_id {
             attach(&transaction, &id, &source_ids, now)?;
             created.push(json!({"cardId": id, "action": "reference"}));
             continue;
         }
+        let known = |id: &str| -> ApiResult<Option<(i64, i64)>> {
+            transaction
+                .query_row(
+                    "SELECT revision, edited FROM cards WHERE id = ?1",
+                    params![id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()
+                .map_err(sqlite)
+        };
         let target = match target {
-            Some(id) => {
-                let known: i64 = transaction
-                    .query_row(
-                        "SELECT count(*) FROM cards WHERE id = ?1",
-                        params![id],
-                        |row| row.get(0),
-                    )
-                    .map_err(sqlite)?;
-                if known > 0 { Some(id) } else { None }
-            }
+            Some(id) => known(&id)?.map(|_| id),
             None => None,
         };
         match (action, target) {
@@ -872,25 +1063,28 @@ fn apply(
                 created.push(json!({"cardId": id, "action": "reference"}));
             }
             ("merge", Some(id)) => {
-                let (revision, edited): (i64, i64) = transaction
-                    .query_row(
-                        "SELECT revision, edited FROM cards WHERE id = ?1",
-                        params![id],
-                        |row| Ok((row.get(0)?, row.get(1)?)),
-                    )
-                    .map_err(sqlite)?;
-                if edited != 0 {
-                    let written = suggest(
+                let (revision, edited) = known(&id)?.expect("checked above");
+                let seen_revision = candidates
+                    .iter()
+                    .find(|candidate| candidate.id == id)
+                    .map(|candidate| candidate.revision);
+                let moved = matches!(seen_revision, Some(seen) if seen != revision);
+                if edited != 0 || moved {
+                    let why = if edited != 0 {
+                        "目标卡片已被人工编辑"
+                    } else {
+                        "目标卡片在提炼期间已更新"
+                    };
+                    if suggest(
                         &transaction,
                         draft,
                         &id,
                         revision,
                         "propose",
-                        "目标卡片已被人工编辑",
+                        why,
                         &source_ids,
                         now,
-                    )?;
-                    if written {
+                    )? {
                         proposals.push(json!({"targetCardId": id, "action": "propose"}));
                     }
                 } else {
@@ -901,6 +1095,10 @@ fn apply(
                             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
                         )
                         .map_err(sqlite)?;
+                    // A merge adds detail; it never replaces what the card already
+                    // established. The snapshot keeps the previous revision visible.
+                    let merged = merge_body(&body, &draft.body);
+                    let merged_fingerprint = cards::fingerprint_of(&merged);
                     transaction
                         .execute(
                             "INSERT INTO card_history (id, card_id, revision, title, summary, body, reason, created_at)
@@ -914,12 +1112,12 @@ fn apply(
                              fingerprint = ?7, revision = revision + 1, updated_at = ?8 WHERE id = ?1",
                             params![
                                 id,
-                                draft.title,
-                                draft.summary,
-                                draft.body,
-                                serde_json::to_string(&draft.topics).unwrap_or_else(|_| "[]".into()),
-                                serde_json::to_string(&draft.aliases).unwrap_or_else(|_| "[]".into()),
-                                fingerprint,
+                                if title.trim().is_empty() { draft.title.clone() } else { title },
+                                if summary.trim().is_empty() { draft.summary.clone() } else { summary },
+                                merged,
+                                merged_list(&transaction, &id, "topics", &draft.topics)?,
+                                merged_list(&transaction, &id, "aliases", &draft.aliases)?,
+                                merged_fingerprint,
                                 now
                             ],
                         )
@@ -930,13 +1128,7 @@ fn apply(
                 }
             }
             ("propose", Some(id)) => {
-                let revision: i64 = transaction
-                    .query_row(
-                        "SELECT revision FROM cards WHERE id = ?1",
-                        params![id],
-                        |row| row.get(0),
-                    )
-                    .map_err(sqlite)?;
+                let (revision, _) = known(&id)?.expect("checked above");
                 let written = suggest(
                     &transaction,
                     draft,
@@ -1024,7 +1216,7 @@ fn apply(
     }
     let state = if remaining { "ready" } else { "completed" };
 
-    transaction
+    let updated = transaction
         .execute(
             "UPDATE queue_groups SET state = ?2, claim = NULL, reason = ?3, updated_at = ?4
              WHERE id = ?1 AND claim = ?5",
@@ -1037,6 +1229,12 @@ fn apply(
             ],
         )
         .map_err(sqlite)?;
+    if updated == 0 {
+        return Err(ApiError::new(
+            Code::SourceChanged,
+            "任务已被其他批次占用或已结束",
+        ));
+    }
     ensure_not_cancelled()?;
     transaction.commit().map_err(sqlite)?;
 
@@ -1045,11 +1243,48 @@ fn apply(
         "state": state,
         "cards": created,
         "proposals": proposals,
+        "skipped": skipped,
         "noKnowledge": drafts.is_empty(),
         "reason": reason,
         "remaining": remaining,
         "segments": batch.len(),
     }))
+}
+
+/// Appends the new detail instead of replacing what the card already said.
+fn merge_body(existing: &str, incoming: &str) -> String {
+    let old = existing.trim();
+    let new = incoming.trim();
+    if old.is_empty() {
+        return new.to_string();
+    }
+    if new.is_empty() || old.contains(new) {
+        return old.to_string();
+    }
+    format!("{old}\n\n{new}")
+}
+
+fn merged_list(
+    transaction: &rusqlite::Transaction<'_>,
+    card_id: &str,
+    column: &str,
+    extra: &[String],
+) -> ApiResult<String> {
+    let current: String = transaction
+        .query_row(
+            &format!("SELECT {column} FROM cards WHERE id = ?1"),
+            params![card_id],
+            |row| row.get(0),
+        )
+        .map_err(sqlite)?;
+    let mut values: Vec<String> = serde_json::from_str(&current).unwrap_or_default();
+    for value in extra {
+        if !values.iter().any(|existing| existing == value) {
+            values.push(value.clone());
+        }
+    }
+    values.truncate(MAX_MERGED_TOPICS);
+    Ok(serde_json::to_string(&values).unwrap_or_else(|_| "[]".into()))
 }
 
 fn reason_or(reason: &str, cards: usize) -> String {
@@ -1143,10 +1378,11 @@ fn suggest(
 pub fn fail(store: &Store, params: FailParams) -> ApiResult<Value> {
     let connection = lock(store)?;
     let state = match params.code.as_str() {
-        "cancelled" | "source_changed" => "needs_reread",
-        "timeout" | "model_unavailable" | "invalid_output" | "internal" | "storage_error" => {
-            "failed"
-        }
+        // The body a person can re-read is the only honest way forward, so these
+        // all park the task instead of failing it.
+        "cancelled" | "source_changed" | "needs_reread" => "needs_reread",
+        // A pause or a closed switch must not consume the task: it stays runnable.
+        "paused" => "ready",
         _ => "failed",
     };
     let reason = params.reason.unwrap_or_else(|| params.code.clone());

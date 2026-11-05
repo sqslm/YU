@@ -425,6 +425,17 @@ export interface ExtractSourceRef {
   scope: string
   title: string
   size: number
+  /** How many segments this source is split into. */
+  segments: number
+}
+
+/** One character range the helper wants read back for this batch. */
+export interface ExtractItem {
+  sourceId: string
+  version: string
+  segment: number
+  start: number
+  end: number
 }
 
 /** The task `extract.next` claimed, or null when nothing is runnable. */
@@ -435,6 +446,11 @@ export interface ExtractGroup {
   scope: string
   claim: string
   sources: ExtractSourceRef[]
+  /**
+   * The bounded batch: the exact character ranges this run needs. Read only these,
+   * so a group of long sources never has to fit in one frame.
+   */
+  items: ExtractItem[]
 }
 
 export interface ExtractNext {
@@ -444,17 +460,25 @@ export interface ExtractNext {
   nextDueAt: number | null
 }
 
-/** Material the main process read out of its own stores, never the renderer. */
+/**
+ * Material the main process read out of its own stores, never the renderer. The
+ * fingerprint identifies the whole body the slice came from; the helper compares
+ * it with the version it stored before it uses the slice.
+ */
 export interface ExtractSourceInput {
   sourceId: string
   version: string
+  fingerprint: string
+  segment: number
+  start: number
+  end: number
   text: string
 }
 
 export interface ExtractRunInput {
   groupId: string
   claim: string
-  sources: ExtractSourceInput[]
+  items: ExtractSourceInput[]
   profileId?: string | null
   effort?: string
 }
@@ -472,6 +496,7 @@ export interface ExtractOutcome {
   cards: { cardId: string; action: 'new' | 'merge' | 'reference' }[]
   proposals: { targetCardId: string; action: string }[]
   noKnowledge: boolean
+  skipped?: number
   reason: string
   remaining: boolean
   segments?: number

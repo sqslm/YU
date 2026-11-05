@@ -304,6 +304,19 @@ impl Store {
             ],
         )?;
         let profile = open_db(&profile_path, PROFILE_SCHEMA, &[PROFILE_SQL])?;
+        // A helper that died mid-batch leaves a claim nobody can release. Turning
+        // such tasks into a retryable failure keeps them from sitting in `working`
+        // forever; segments already committed stay committed, so a retry does not
+        // redo the work that landed.
+        knowledge
+            .execute(
+                "UPDATE queue_groups SET state = 'failed', error = '助手中断，需重试',
+                 claim = NULL, updated_at = ?1 WHERE state = 'working'",
+                rusqlite::params![crate::util::now_ms()],
+            )
+            .map_err(|error| {
+                ApiError::storage(format!("cannot recover interrupted tasks: {error}"))
+            })?;
         Ok(Store {
             knowledge: Mutex::new(knowledge),
             profile: Mutex::new(profile),

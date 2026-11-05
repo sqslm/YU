@@ -215,8 +215,9 @@ export class KnowledgeCollector {
 
   /** Drops every in-memory body; called when the feature is switched off. */
   clear(): void {
-    // Bodies are dropped, but the tasks stay: the helper is the authority on them
-    // and a later retry reports `needs_reread` because the text is gone.
+    // Bodies are dropped, but the tasks stay: every group that quoted one is
+    // parked as needing a re-read, because nothing else holds that text.
+    for (const origin of [...this.stash.keys()]) this.forget(origin)
     this.stash.clear()
     this.keys.clear()
     this.stashed = 0
@@ -306,21 +307,11 @@ export class KnowledgeCollector {
     if (!kept.length) return
     kept.forEach((material, index) => {
       const range = `${index + 1}/${kept.length}，约 ${material.text.length} 字符${material.truncated ? '（已截断）' : ''}`
-      const parts = [
-        `【问题】\n${reading.request.trim()}`,
-        `【材料】${material.title}`,
-        material.coverage ? `【覆盖】${material.coverage}` : '',
-        material.text,
-        `【回答】\n${answer}`
-      ].filter(part => part !== '')
-      const links = reading.sources.filter(item => item.url).map(item => item.url as string)
-      if (links.length) parts.push(`【来源】\n${links.join('\n')}`)
-      // The composed text is what the user would re-open, so the stash keeps it;
-      // the source version itself is the material's own text, because a new
-      // question about the same page must not look like a new version of it.
-      const context = parts.join('\n\n')
+      // The stash holds the material's own text: that is the version the helper
+      // stored a fingerprint for, so extraction can prove it read the same body.
+      // The question and answer stay in the source scope, not in the version.
       const groupKey = readingKey(material.origin)
-      this.remember(material.origin, groupKey, context)
+      this.remember(material.origin, groupKey, material.text)
       void this.publish({
         channel: 'reading',
         kind: materialKind(material),
@@ -410,6 +401,19 @@ export class KnowledgeCollector {
             ? 'source body is empty'
             : 'source changed'
     await host.invalidateTask({ groupId }, text).catch(() => undefined)
+  }
+
+  /**
+   * Resolves one source body for extraction. A reading source lives only in this
+   * process, so a body that was evicted, or a restarted process, is reported as
+   * missing instead of being read again from the network or the disk.
+   */
+  resolveBody(channel: CollectChannel, originRef: string): RecoveredBody {
+    if (channel === 'reading') {
+      const text = this.stash.get(originRef)?.text ?? null
+      return text ? { text } : { missing: 'unknown' }
+    }
+    return this.deps.readBody?.(channel, originRef) ?? { missing: 'unknown' }
   }
 
   locate(origin: string): string | null {

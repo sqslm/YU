@@ -181,6 +181,9 @@ describe('proposals through the real helper', () => {
         })
       }
       const body = call === 1 ? first : second
+      // A card must reference a segment that was really in this batch.
+      const named = /来源 (\S+)（第 (\d+) 段/.exec(all)
+      expect(named, 'the prompt must name the source').not.toBeNull()
       return JSON.stringify({
         cards: [
           {
@@ -190,7 +193,7 @@ describe('proposals through the real helper', () => {
             body,
             topics: ['方法'],
             aliases: [],
-            sources: []
+            sources: [{ sourceId: named![1], segment: Number(named![2]) }]
           }
         ],
         reason: 'ok'

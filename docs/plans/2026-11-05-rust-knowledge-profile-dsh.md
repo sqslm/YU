@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 已实现，待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 外部复核未通过，复核提出的 R1～R7 修复已提交，待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -694,7 +694,7 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 去重与修订：正文指纹相同则只补来源（`reference`），保留原正文与 `edited`；`merge` 仅当目标未人工编辑时执行，且先把旧版本写入 `card_history` 并使 `revision + 1`；目标已被人工编辑、结论冲突或依据不足时只写建议。
 - 建议生命周期：`suggestion.list/get/accept/reject`；`accept` 在目标卡片 `revision` 与该建议记录的目标版本一致时才应用，否则把建议置为 `rejected`（原因"目标卡片已更新，建议已过期"）并返回 `source_changed`；同目标同草稿指纹的建议不重复写入，被拒绝的也不会因下一批而复活。`suggestions` 因此比原契约多一列 `fingerprint TEXT NOT NULL DEFAULT ''` 与索引 `suggestions_target`。
 - 失败语义：`cancelled`/`source_changed` → `needs_reread`，其余（非法 JSON、陌生 source/target、超时、缺模型）→ `failed` 并清空 `claim`；合法空数组 → `completed` 且 `noKnowledge: true`，写入 0 张卡也算有结论。
-- 关闭即静默：总开关关闭时 `extract.next` 返回 `enabled: false`、不占用任务；`ExtractEngine` 在未运行、未启用或游戏态下不发请求，空闲等待上限 60 秒，不轮询全库。
+- 关闭即静默（**经复核证伪并已修正，见下节 R4**）：最初只在「发起前」检查开关——批处理已在进行时关闭总开关，模型答案仍会写入卡片。现在关闭开关、手动/游戏暂停、来源失效、线程删除、取消与排除都会先取消在途请求，Rust 在提交事务里再次核对配置、暂停、来源状态与版本、占用、卡片修订与 `edited`、排除项，取消检查在 `commit()` 之前。`ExtractEngine` 在未运行、未启用或游戏态下不发请求，空闲等待上限 60 秒，不轮询全库。
 
 **本轮验证（实际命令与退出码，依赖顺序执行）**
 
@@ -724,3 +724,48 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 60 秒稳定期在测试中通过 `YU_KNOWLEDGE_STABLE_MS` 缩短；未做长时间多批并行压测。
 - 页面、图谱、画像、聊天检索仍未开始（阶段 5、6）。
 - 全量套件在本轮共跑四次，前三次各自出现不同失败：`src/main/windows-native-browser-url.test.ts` 的 30-pid 用例（单独运行 13 项全通过，48.9 秒）、`src/main/cloud.live.test.ts` 与 `src/main/providers/search-pool.test.ts` 的 `fetch failed`（`cloud.live.test.ts` 单独运行 3 项通过，462 毫秒，同期 `curl https://api.deepseek.com` 返回 401，说明网络正常）、以及 `src/main/providers/tts.test.ts` 的 `listen EACCES 127.0.0.1:49667`（临时端口占用）。这些用例与本阶段改动无关，属并发负载下的既有抖动；本轮没有放宽任何断言或跳过用例，第四次在最终代码上得到 265 文件 / 3792 项全绿。本轮自己新增的集成用例曾因采集在后台发布而抢跑，已改为等待队列与建议页出现（20 秒上限、25 毫秒步进），随后连续三次通过。
+
+## 阶段 3 外部复核（2026-11-05，reportId `24ae72ae-c8ed-44ba-be33-59276fd4913c`）：未通过及 R1～R7 修复
+
+复核基线 `0c55630…`，阶段起点 `4c05194…`。复核方实测通过并保留：定向 Vitest 15 文件 / **115** 项（原记录写成 116，以复核的 115 为准）、`git diff --check 4c05194..HEAD` 为 0、交付 release 哈希 `dc19de6b…` 一致。下列七项实测失败，因此阶段 3 本轮不验收；本轮只修这七项与其直接关联的契约、测试、文档。
+
+### 失败与修复对照
+
+| 项 | 实测失败 | 修复 |
+| --- | --- | --- |
+| R1 一次唤醒只推进一个任务 | 两个 `ready` 组只产生 `modelCalls=1` | `ExtractEngine.tick()` 循环 `extract.next` 直到无任务/未到期/暂停；忙时到达的唤醒记为 `again`，批次结束后补跑；历史扫描、显式重试、解除暂停也会唤醒；无到期任务时不保留定时器 |
+| R2 失败后任务永久 `working` | 读正文 I/O 错误、模型非法 JSON、未配置完成器都留下 `working`/`error=null`，`retryTask` 报 `invalid_params` | 取到占用后每条退出路径都由 `extract.fail` 带显式 code 结算；区分模型失败/超时/非法输出、来源缺失/变更、I/O；`store.rs` 启动时把上次进程遗留的 `working` 转为 `failed`（原因「进程已退出，任务未完成」）并清空 `claim`，保留已提交的分段进度；不做自动付费重试 |
+| R3 阅读材料进不了提炼 | 引擎接到 `knowledgeRecovery`，阅读来源一律 `unknown`，真实阅读批次 `failed`/`来源暂时无法读取`、`modelCalls=0` | `KnowledgeCollector.resolveBody()` 从 16 MiB 内存暂存返回**材料正文本身**（即发布时记录的指纹所对应的文本），问答上下文只留在 `scope`；引擎 `readBody` 改走它；暂存淘汰/重启/关闭 → `needs_reread`（`fail` 新增 `needs_reread` 映射） |
+| R4 提交前缺少取消/失效/删除/编辑保护 | 等待模型期间 `queue.pause`、`source.invalidate` 仍写卡；删除同源卡后仍重建；关闭总开关时 `signal.aborted=false` 且完成写卡；`card.update {edited:false}` 能清掉人工编辑标记 | `ExtractEngine.abort()` → `host.cancelInFlight()`（对在途 `extract.run` 写 `cancel` 帧并结算）；`syncKnowledge` 在关闭/进入游戏后先 abort；暂停 IPC 先 abort 再落标志；Rust `apply()` 在事务内重查开关+暂停、组占用、来源状态/版本/指纹、分段未完成、两类排除、`card.revision` 与 `edited`，`ensure_not_cancelled()` 在 `commit()` 前；`card.update` 的 `edited` 入参删除，人工更新恒置 `edited = true` |
+| R5 非法结构当成功 | `{}` 返回 `ok=true, noKnowledge=true, state=completed`；引用未发送的 `segment 999` 仍建卡 | 只有显式合法 `{"cards": []}` 才算无知识；`cards` 必须是数组、每张卡字段与类型齐全、正文 ≥30 字符、来源必须属于本批且分段号确实发送过；`reference/merge/propose` 缺合法目标即 `invalid_output`；只接受一段完整的 ```json 围栏，混杂内容拒绝 |
+| R6 预算超支与合并丢内容 | 一份草稿对同一候选连调三次比较（`modelCalls=4`）；`apply` 用草稿正文覆盖 `cards.body`，合并丢掉原结论 | 每批最多一次提炼 + 一次共享比较；候选按批累计 ≤8 条、≤6 000 字符；正文指纹已相同的草稿跳过比较；合并改为「原正文 + 新的补充」追加，无法保证保留时降级为建议 |
+| R7 整组塞进一帧 | 四个 200 000 字符来源使 `extract.run` 帧达 2 400 631 字节，真实 helper 返回 `too_large` | `extract.next` 改为返回**读取计划**（`items: [{sourceId, version, segment, start, end}]` 字符区间，不含正文）；主进程按区间切片并附整源指纹；`extract.run` 只带本批需要的分段，单段 ≤12 000 字符；帧上限仍是 2 MiB，不截断来源 |
+
+### 本轮落地位置
+
+- Rust：`extract.rs`（读取计划、严格输出校验、单次比较、合并追加、提交前重查）、`suggestions.rs`（不受影响）、`store.rs`（启动修复 `working`）、`cards.rs`（`update` 不再接受 `edited`）。
+- TS：`src/main/knowledge/engine.ts`（重写：排空循环、区间读取、显式结算、`abort`）、`host.ts`（`cancelInFlight`）、`collector.ts`（暂存材料正文、`resolveBody`、`clear()` 归还任务）、`session.ts`（关闭/游戏先 abort）、`src/main/index.ts`（引擎 `readBody` 走 `resolveBody`、暂停与重试接线）、`src/shared/knowledge.ts`（`ExtractItem`、`items` 协议、`skipped`）。
+
+### 新增回归（真实 helper，生产 host/engine，不借助 `card.save`）
+
+- `native/knowledge/tests/extract.rs`（11 项）：读取计划只带区间、超长来源分三批且每批 ≤12 000 字符、非法/缺字段/陌生分段被拒且不写卡、伪造指纹 `source_changed`、暂停期间完成仍不写卡、合并保留原结论并 `revision + 1`、三份草稿只调用两次模型、进程退出后任务不停在 `working` 且可重试。
+- `src/main/knowledge/engine.test.ts`（14 项）：一次唤醒排空两组、只读计划区间、整源指纹随批发送、正文缺失/暂存失效分别结算、模型错误码透传、关闭开关时批次转 `paused`、忙时唤醒不丢、`abort` 走 host、停止后不再请求。
+- `src/main/knowledge/repair.integration.test.ts`（5 项）：两条随记一次唤醒全部完成（同结论只补来源）、阅读材料经内存暂存取到正文并成卡、暂存清空后任务转 `needs_reread` 且不写卡、模型答非 JSON 后任务 `failed` 且可重试成功、等待回答时暂停并取消 → 不写卡。
+
+### 本轮验证（实际命令与退出码，依赖顺序执行，最终代码上各跑一次）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 |
+| `cargo test --locked` | 0；15 lib + 11 extract + 11 process + 18 queue |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture`） |
+| `pnpm exec vitest run src/main/knowledge src/preload/index.test.ts src/main/ipc-trust.test.ts` | 16 文件 / 125 项通过 |
+| `node scripts/build-native.mjs` | 0（release helper 重新构建） |
+| `pnpm typecheck` | 0 |
+| `pnpm test:native` | 0（6 个原生 crate 的恢复构建与测试） |
+| `pnpm test` | 0；266 文件通过 / 3 跳过（269），3802 项通过 / 8 跳过（3810），100.27 s |
+| `pnpm build` | 0（渲染层 `settings-*.js` 4,687.76 kB） |
+
+交付产物（release，重新构建后实测）：`native/bin/yu-knowledge.exe` 2,704,896 字节，SHA-256 `62ade61d28668f28ba8c432dce890fc5725ae1d8c0f187ff9266c4fab1ea09a0`。调试与夹具二进制（`native/knowledge/target/debug/yu-knowledge.exe`、`yu-knowledge-fixture.exe`）不属于交付物。
+
+**未测与边界**：本阶段仍以注入完成器代替真实付费模型（0 次真实模型调用）；未在打包后的 Electron 实例里跑启动/退出；120 秒总预算只以较短期限验证取消路径；60 秒稳定期由 `YU_KNOWLEDGE_STABLE_MS` 缩短；无大批量并发压测。本轮全量套件一次通过，前几轮出现过的 `windows-native-browser-url` 30-pid、`cloud.live`/`search-pool` `fetch failed`、`tts` `listen EACCES` 抖动本轮未复现，也未放宽任何断言。

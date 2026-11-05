@@ -233,7 +233,9 @@ const knowledgeRecovery = createSourceRecovery({ notes: () => notes, chats: () =
 // source can wake it; neither one spawns the helper by itself.
 const extractEngine = new ExtractEngine({
   host: () => knowledge,
-  readBody: (channel, originRef) => knowledgeRecovery(channel, originRef),
+  // Reading bodies live in the collector's stash; notes and chats come from the
+  // real stores. The engine never invents a body of its own.
+  readBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
   settings: () => store.get(),
   allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
   log: line => log(line)
@@ -1522,7 +1524,13 @@ function registerIpc(): void {
   })
   handle('knowledge:collect-pause', (event, reason: 'manual' | 'game', paused: boolean) => {
     knowledgeOwner(event)
-    return knowledge.pauseCollect(reason === 'game' ? 'game' : 'manual', Boolean(paused))
+    // Pausing must not wait for a provider to answer: cancel the batch that is in
+    // flight, then record the flag. Rust refuses the commit either way.
+    if (paused) extractEngine.abort(reason === 'game' ? '游戏模式已开启' : '采集已暂停')
+    return knowledge.pauseCollect(reason === 'game' ? 'game' : 'manual', Boolean(paused)).then(result => {
+      if (!paused) extractEngine.wake()
+      return result
+    })
   })
   handle('knowledge:queue-list', (event, query: { state?: string; offset?: number; limit?: number } = {}) => {
     knowledgeOwner(event)
@@ -1538,6 +1546,8 @@ function registerIpc(): void {
     if ('groupId' in (target ?? {})) {
       const groupId = knowledgeId((target as { groupId?: string }).groupId, '任务 ID')
       const retried = await knowledgeCollector.retry(groupId)
+      // A task that is runnable again is picked up by the next tick.
+      if (retried) extractEngine.wake()
       return { groupId, state: retried ? 'ready' : 'needs_reread' }
     }
     return knowledge.retryTask(target)

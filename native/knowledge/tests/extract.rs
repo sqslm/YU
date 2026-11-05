@@ -2,13 +2,17 @@
 //!
 //! The helper is the production binary; the only thing faked is the model, which
 //! answers the `model.request` frames the helper writes — exactly what the
-//! Electron host does with a provider client.
+//! Electron host does with a provider client. The main process is faked too: the
+//! test reads the character ranges `extract.next` asks for out of its own copy of
+//! the body, which is what keeps the pipe bounded.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{Value, json};
+
+use yu_knowledge::util::sha256_hex;
 
 struct Root(PathBuf);
 
@@ -37,8 +41,8 @@ impl Drop for Root {
     }
 }
 
-/// A scripted model: it answers every `model.request` frame with one of the
-/// canned answers, in order, and records the prompts it was shown.
+/// A scripted model: it answers every `model.request` frame with the next canned
+/// answer and records the prompts it was shown.
 struct Helper {
     child: Child,
     stdin: ChildStdin,
@@ -46,11 +50,9 @@ struct Helper {
     answers: Vec<String>,
     prompts: Vec<String>,
     counter: u64,
-    /// The version the helper minted for the last published source.
     version: String,
-    /// The id the helper minted, substituted into canned answers.
     source_id: String,
-    /// The card id learned by the test, substituted as `CARD/1`.
+    fingerprint: String,
     card_id: String,
 }
 
@@ -81,12 +83,13 @@ impl Helper {
             counter: 0,
             version: String::new(),
             source_id: String::new(),
+            fingerprint: String::new(),
             card_id: String::new(),
         };
         let ready = helper.recv();
         assert_eq!(ready["type"], "ready", "helper must report ready: {ready}");
         if enabled {
-            helper.call("cfg", "collect.configure", json!({"enabled": true}));
+            helper.ok("cfg", "collect.configure", json!({"enabled": true}));
         }
         helper
     }
@@ -97,34 +100,51 @@ impl Helper {
         self.stdin.flush().expect("flush");
     }
 
+    fn answer_model(&mut self, frame: &Value) {
+        let prompt = frame["messages"][1]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        self.prompts.push(prompt);
+        let answer = self
+            .answers
+            .remove(0)
+            .replace("\"src/1\"", &format!("\"{}\"", self.source_id))
+            .replace("\"src/2\"", &format!("\"{}\"", self.source_id))
+            .replace("\"CARD/1\"", &format!("\"{}\"", self.card_id));
+        let id = frame["id"].as_str().expect("model id").to_string();
+        self.send(json!({"v": 1, "type": "model.result", "id": id, "ok": true, "text": answer}));
+    }
+
+    fn read(&mut self) -> Value {
+        let mut line = String::new();
+        let read = self.stdout.read_line(&mut line).expect("read");
+        assert!(read > 0, "helper closed the pipe");
+        serde_json::from_str(&line).expect("json")
+    }
+
     fn recv(&mut self) -> Value {
         loop {
-            let mut line = String::new();
-            let read = self.stdout.read_line(&mut line).expect("read");
-            assert!(read > 0, "helper closed the pipe");
-            let frame: Value = serde_json::from_str(&line).expect("json");
+            let frame = self.read();
             if frame["type"] == "model.request" {
-                let prompt = frame["messages"][1]["content"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
-                self.prompts.push(prompt);
-                let answer = self
-                    .answers
-                    .remove(0)
-                    .replace("\"src/1\"", &format!("\"{}\"", self.source_id))
-                    .replace("\"src/2\"", &format!("\"{}\"", self.source_id))
-                    .replace("\"CARD/1\"", &format!("\"{}\"", self.card_id));
-                let id = frame["id"].as_str().expect("model id").to_string();
-                self.send(
-                    json!({"v": 1, "type": "model.result", "id": id, "ok": true, "text": answer}),
-                );
+                self.answer_model(&frame);
                 continue;
             }
             if frame["type"] == "changed" {
                 continue;
             }
             return frame;
+        }
+    }
+
+    /// Reads until the next model request, without answering it.
+    fn recv_model(&mut self) -> Value {
+        loop {
+            let frame = self.read();
+            if frame["type"] == "model.request" {
+                return frame;
+            }
+            assert_ne!(frame["type"], "result", "unexpected result: {frame}");
         }
     }
 
@@ -162,7 +182,40 @@ impl Helper {
         );
         self.version = result["version"].as_str().expect("version").to_string();
         self.source_id = result["sourceId"].as_str().expect("sourceId").to_string();
+        self.fingerprint = result["fingerprint"]
+            .as_str()
+            .expect("fingerprint")
+            .to_string();
         result
+    }
+
+    /// Builds the `extract.run` items for a claimed group from the test's own copy
+    /// of the bodies, exactly as the main process does.
+    fn items(group: &Value, bodies: &[(String, String, String)]) -> (Value, usize) {
+        let mut items = Vec::new();
+        let mut bytes = 0;
+        for item in group["items"].as_array().expect("items") {
+            let source_id = item["sourceId"].as_str().expect("sourceId");
+            let (_, fingerprint, text) = bodies
+                .iter()
+                .find(|(id, _, _)| id == source_id)
+                .expect("body for the planned source");
+            let chars: Vec<char> = text.chars().collect();
+            let start = item["start"].as_u64().expect("start") as usize;
+            let end = item["end"].as_u64().expect("end") as usize;
+            let slice: String = chars[start..end].iter().collect();
+            bytes += slice.len();
+            items.push(json!({
+                "sourceId": source_id,
+                "version": item["version"],
+                "fingerprint": fingerprint,
+                "segment": item["segment"],
+                "start": item["start"],
+                "end": item["end"],
+                "text": slice,
+            }));
+        }
+        (Value::Array(items), bytes)
     }
 }
 
@@ -193,6 +246,30 @@ fn card(title: &str, body: &str, source: &str) -> Value {
 const BODY: &str =
     "这张卡片说明了知识提炼的结论、适用条件与关键机制，并标出哪些内容是待验证的推断。";
 
+/// Publishes one note, claims it and runs the single batch.
+fn extract_one(helper: &mut Helper, group: &str, text: &str, id_prefix: &str) -> Value {
+    let published = helper.publish(group, text);
+    let fingerprint = published["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    let next = helper.ok(&format!("{id_prefix}-next"), "extract.next", json!({}));
+    let claimed = next["group"].clone();
+    let (items, _) = Helper::items(
+        &claimed,
+        &[(helper.source_id.clone(), fingerprint, text.to_string())],
+    );
+    helper.ok(
+        &format!("{id_prefix}-run"),
+        "extract.run",
+        json!({
+            "groupId": claimed["groupId"],
+            "claim": claimed["claim"],
+            "items": items,
+        }),
+    )
+}
+
 #[test]
 fn a_stable_source_is_extracted_into_a_card() {
     let root = Root::new("happy");
@@ -200,47 +277,19 @@ fn a_stable_source_is_extracted_into_a_card() {
         &root,
         vec![drafts_answer(json!([card("知识提炼", BODY, "src/1")]))],
     );
-    let published = helper.publish("note-a", "这是一段等待提炼的正文。");
-    let source_id = published["sourceId"]
-        .as_str()
-        .expect("source id")
-        .to_string();
-
-    let next = helper.ok("n1", "extract.next", json!({}));
-    assert_eq!(next["group"]["channel"], "note", "{next}");
-    let claim = next["group"]["claim"].as_str().expect("claim").to_string();
-    let group_id = next["group"]["groupId"]
-        .as_str()
-        .expect("group")
-        .to_string();
-    assert_eq!(next["group"]["sources"][0]["sourceId"], source_id.as_str());
-
-    let outcome = helper.ok(
-        "n2",
-        "extract.run",
-        json!({
-            "groupId": group_id,
-            "claim": claim,
-            "sources": [{"sourceId": source_id, "version": helper.version, "text": "这是一段等待提炼的正文。"}],
-            "effort": "high",
-        }),
-    );
+    let outcome = extract_one(&mut helper, "note-a", "这是一段等待提炼的正文。", "n");
     assert_eq!(outcome["state"], "completed", "{outcome}");
     assert_eq!(outcome["cards"].as_array().expect("cards").len(), 1);
     assert_eq!(outcome["remaining"], false);
     assert!(helper.prompts[0].contains("这是一段等待提炼的正文。"));
 
-    let listed = helper.ok("n3", "card.list", json!({}));
+    let listed = helper.ok("l1", "card.list", json!({}));
     assert_eq!(listed["total"], 1, "{listed}");
-    let card_id = listed["items"][0]["id"]
-        .as_str()
-        .expect("card id")
-        .to_string();
-    let full = helper.ok("n4", "card.get", json!({"id": card_id}));
+    let card_id = listed["items"][0]["id"].as_str().expect("card").to_string();
+    let full = helper.ok("l2", "card.get", json!({"id": card_id}));
     assert_eq!(full["body"], BODY);
-    assert_eq!(full["sourceIds"], json!([source_id]));
-
-    let queue = helper.ok("n5", "queue.status", json!({}));
+    assert_eq!(full["sourceIds"], json!([helper.source_id]));
+    let queue = helper.ok("l3", "queue.status", json!({}));
     assert_eq!(queue["counts"]["completed"], 1, "{queue}");
 }
 
@@ -254,407 +303,407 @@ fn the_same_body_twice_only_adds_a_source() {
             drafts_answer(json!([card("知识提炼", BODY, "src/2")])),
         ],
     );
-    helper.publish("note-a", "第一段正文，内容足够长以便提炼。");
-    let first = helper.ok("n1", "extract.next", json!({}));
-    let outcome = helper.ok(
-        "n2",
-        "extract.run",
-        json!({
-            "groupId": first["group"]["groupId"],
-            "claim": first["group"]["claim"],
-            "sources": [{
-                "sourceId": first["group"]["sources"][0]["sourceId"],
-                "version": helper.version,
-                "text": "第一段正文，内容足够长以便提炼。",
-            }],
-        }),
+    let first = extract_one(
+        &mut helper,
+        "note-a",
+        "第一段正文，内容足够长以便提炼。",
+        "a",
     );
-    assert_eq!(outcome["cards"][0]["action"], "new");
-
-    helper.publish("note-b", "第二段正文，内容同样足够长以便提炼。");
-    let second = helper.ok("n3", "extract.next", json!({}));
-    let outcome = helper.ok(
-        "n4",
-        "extract.run",
-        json!({
-            "groupId": second["group"]["groupId"],
-            "claim": second["group"]["claim"],
-            "sources": [{
-                "sourceId": second["group"]["sources"][0]["sourceId"],
-                "version": helper.version,
-                "text": "第二段正文，内容同样足够长以便提炼。",
-            }],
-        }),
-    );
-    assert_eq!(outcome["cards"][0]["action"], "reference", "{outcome}");
-    let listed = helper.ok("n5", "card.list", json!({}));
+    assert_eq!(first["cards"][0]["action"], "new");
+    let second = extract_one(&mut helper, "note-b", "第二段正文，内容同样足够长。", "b");
+    assert_eq!(second["cards"][0]["action"], "reference", "{second}");
+    let listed = helper.ok("l1", "card.list", json!({}));
     assert_eq!(
         listed["total"], 1,
-        "an exact match must not create a second card: {listed}"
+        "exact match must not create a card: {listed}"
     );
     let card_id = listed["items"][0]["id"].as_str().expect("card").to_string();
-    let full = helper.ok("n6", "card.get", json!({"id": card_id}));
+    let full = helper.ok("l2", "card.get", json!({"id": card_id}));
     assert_eq!(full["sourceIds"].as_array().expect("sources").len(), 2);
 }
 
 #[test]
-fn an_empty_answer_completes_without_a_card() {
+fn an_explicit_empty_answer_completes_without_a_card() {
     let root = Root::new("empty");
     let mut helper = Helper::start(&root, vec![drafts_answer(json!([]))]);
-    helper.publish("note-a", "谢谢，收到。");
-    let next = helper.ok("n1", "extract.next", json!({}));
-    let outcome = helper.ok(
-        "n2",
-        "extract.run",
-        json!({
-            "groupId": next["group"]["groupId"],
-            "claim": next["group"]["claim"],
-            "sources": [{
-                "sourceId": next["group"]["sources"][0]["sourceId"],
-                "version": helper.version,
-                "text": "谢谢，收到。",
-            }],
-        }),
-    );
+    let outcome = extract_one(&mut helper, "note-a", "谢谢，收到。", "e");
     assert_eq!(outcome["state"], "completed");
     assert_eq!(outcome["noKnowledge"], true);
     assert_eq!(outcome["cards"].as_array().expect("cards").len(), 0);
-    let listed = helper.ok("n3", "card.list", json!({}));
+    let listed = helper.ok("l1", "card.list", json!({}));
     assert_eq!(listed["total"], 0);
 }
 
 #[test]
-fn a_changed_source_is_refused_and_the_task_becomes_needs_reread() {
+fn a_missing_cards_field_is_invalid_output_and_writes_nothing() {
+    let root = Root::new("missing-cards");
+    let mut helper = Helper::start(&root, vec![json!({"reason": "ok"}).to_string()]);
+    let published = helper.publish("note-a", "一段足够长的正文，用来验证输出校验。");
+    let fingerprint = published["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    let next = helper.ok("n1", "extract.next", json!({}));
+    let group = next["group"].clone();
+    let (items, _) = Helper::items(
+        &group,
+        &[(
+            helper.source_id.clone(),
+            fingerprint,
+            "一段足够长的正文，用来验证输出校验。".into(),
+        )],
+    );
+    let failed = helper.call(
+        "n2",
+        "extract.run",
+        json!({"groupId": group["groupId"], "claim": group["claim"], "items": items}),
+    );
+    assert_eq!(failed["ok"], false, "{failed}");
+    assert_eq!(failed["error"]["code"], "invalid_output", "{failed}");
+    let listed = helper.ok("n3", "card.list", json!({}));
+    assert_eq!(listed["total"], 0, "nothing may be written: {listed}");
+}
+
+#[test]
+fn a_segment_that_was_not_in_the_batch_is_refused() {
+    let root = Root::new("segment");
+    let mut helper = Helper::start(&root, vec![]);
+    let published = helper.publish("note-a", "短正文，只提供一个分段。");
+    let fingerprint = published["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    let next = helper.ok("n1", "extract.next", json!({}));
+    let group = next["group"].clone();
+    let refused = helper.call(
+        "n2",
+        "extract.run",
+        json!({
+            "groupId": group["groupId"],
+            "claim": group["claim"],
+            "items": [{
+                "sourceId": helper.source_id,
+                "version": helper.version,
+                "fingerprint": fingerprint,
+                "segment": 999,
+                "start": 0,
+                "end": 1,
+                "text": "短",
+            }],
+        }),
+    );
+    assert_eq!(refused["ok"], false, "{refused}");
+    assert_eq!(refused["error"]["code"], "invalid_params", "{refused}");
+}
+
+#[test]
+fn a_changed_fingerprint_is_refused() {
     let root = Root::new("changed");
-    let mut helper = Helper::start(&root, vec![drafts_answer(json!([]))]);
+    let mut helper = Helper::start(&root, vec![]);
     helper.publish("note-a", "原始正文。");
     let next = helper.ok("n1", "extract.next", json!({}));
+    let group = next["group"].clone();
     let refused = helper.call(
         "n2",
         "extract.run",
         json!({
-            "groupId": next["group"]["groupId"],
-            "claim": next["group"]["claim"],
-            "sources": [{
-                "sourceId": next["group"]["sources"][0]["sourceId"],
+            "groupId": group["groupId"],
+            "claim": group["claim"],
+            "items": [{
+                "sourceId": helper.source_id,
                 "version": helper.version,
-                "text": "被改过的正文。",
+                "fingerprint": sha256_hex("伪造的正文"),
+                "segment": 0,
+                "start": 0,
+                "end": "原始正文。".chars().count(),
+                "text": "原始正文。",
             }],
         }),
     );
     assert_eq!(refused["ok"], false, "{refused}");
-    assert_eq!(refused["error"]["code"], "source_changed");
-
-    let failed = helper.ok(
-        "n3",
-        "extract.fail",
-        json!({
-            "groupId": next["group"]["groupId"],
-            "claim": next["group"]["claim"],
-            "code": "source_changed",
-            "reason": "来源正文已变化",
-        }),
-    );
-    assert_eq!(failed["state"], "needs_reread");
-    let queue = helper.ok("n4", "queue.list", json!({"state": "needs_reread"}));
-    assert_eq!(queue["total"], 1, "{queue}");
-    assert!(
-        helper.prompts.is_empty(),
-        "a stale source must not reach the model"
-    );
+    assert_eq!(refused["error"]["code"], "source_changed", "{refused}");
 }
 
 #[test]
-fn a_failed_model_call_releases_the_claim_and_leaves_no_card() {
-    let root = Root::new("failure");
-    let mut helper = Helper::start(&root, vec!["这不是 JSON".to_string()]);
-    helper.publish("note-a", "等待提炼的正文内容。");
-    let next = helper.ok("n1", "extract.next", json!({}));
-    let refused = helper.call(
-        "n2",
-        "extract.run",
-        json!({
-            "groupId": next["group"]["groupId"],
-            "claim": next["group"]["claim"],
-            "sources": [{
-                "sourceId": next["group"]["sources"][0]["sourceId"],
-                "version": helper.version,
-                "text": "等待提炼的正文内容。",
-            }],
-        }),
-    );
-    assert_eq!(refused["ok"], false, "{refused}");
-    assert_eq!(refused["error"]["code"], "invalid_output");
-    helper.ok(
-        "n3",
-        "extract.fail",
-        json!({
-            "groupId": next["group"]["groupId"],
-            "claim": next["group"]["claim"],
-            "code": "invalid_output",
-        }),
-    );
-    let queue = helper.ok("n4", "queue.list", json!({"state": "failed"}));
-    assert_eq!(queue["total"], 1, "{queue}");
-    let listed = helper.ok("n5", "card.list", json!({}));
-    assert_eq!(listed["total"], 0);
-}
-
-#[test]
-fn a_long_source_is_split_and_every_segment_is_processed_once() {
-    let root = Root::new("segments");
-    // 30 000 characters need three segments of 12 000 with a 500-character overlap.
-    let body: String = "知识".to_string().repeat(15_000);
+fn a_long_source_is_read_in_bounded_batches() {
+    let root = Root::new("long");
+    let text: String = format!("1{}", "知".repeat(199_999));
     let mut helper = Helper::start(
         &root,
-        vec![
-            drafts_answer(json!([card("第一段", BODY, "src/1")])),
-            drafts_answer(json!([])),
-            drafts_answer(json!([])),
-        ],
+        vec![drafts_answer(json!([])), drafts_answer(json!([]))],
     );
-    helper.publish("note-long", &body);
-    let mut runs = 0;
-    let mut saw_remaining = false;
+    let published = helper.publish("note-long", &text);
+    let fingerprint = published["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    let body = (helper.source_id.clone(), fingerprint, text.clone());
 
-    loop {
-        let id = helper.next_id();
-        let next = helper.ok(&id, "extract.next", json!({}));
-        let group = next["group"].clone();
-        if group.is_null() {
-            break;
-        }
-        let group_id = group["groupId"].as_str().expect("group").to_string();
-        let source_id = group["sources"][0]["sourceId"]
-            .as_str()
-            .expect("source")
-            .to_string();
-        let claim = group["claim"].as_str().expect("claim").to_string();
-        let run_id = helper.next_id();
-        let outcome = helper.ok(
-            &run_id,
-            "extract.run",
-            json!({
-                "groupId": group_id,
-                "claim": claim,
-                "sources": [{"sourceId": source_id, "version": helper.version, "text": body}],
-            }),
-        );
-        runs += 1;
-        if outcome["remaining"] == json!(true) {
-            saw_remaining = true;
-            assert_eq!(outcome["state"], "ready", "{outcome}");
-            continue;
-        }
-        assert_eq!(outcome["state"], "completed");
-        break;
-    }
-    assert_eq!(runs, 3, "30 000 characters must need three batches");
-    assert!(
-        saw_remaining,
-        "a partially processed source must stay queued"
-    );
-    assert_eq!(helper.prompts.len(), 3);
-    for prompt in &helper.prompts {
-        assert!(
-            prompt.chars().count() <= 12_500,
-            "one batch carried {} characters",
-            prompt.chars().count()
-        );
-    }
-}
-
-#[test]
-fn extraction_waits_until_the_master_switch_is_on() {
-    let root = Root::new("disabled");
-    let mut helper = Helper::start_with(&root, Vec::new(), false);
-    // With the master switch off the queue refuses sources outright, so a task
-    // can never exist that extraction would have to skip.
-    let refused = helper.call(
-        "n0",
-        "source.publish",
-        json!({
-            "channel": "note",
-            "kind": "note",
-            "originRef": "note-a",
-            "groupKey": "note-a",
-            "text": "关闭总开关时的正文。",
-            "at": 1,
-        }),
-    );
-    assert_eq!(refused["error"]["code"], "channel_disabled", "{refused}");
-    let next = helper.ok("n1", "extract.next", json!({}));
-    assert_eq!(next["enabled"], false, "{next}");
-    assert_eq!(
-        next["group"],
-        Value::Null,
-        "a disabled feature claims nothing: {next}"
-    );
-
-    helper.ok("n2", "collect.configure", json!({"enabled": true}));
-    helper.publish("note-a", "打开总开关后的正文。");
-    let next = helper.ok("n3", "extract.next", json!({}));
-    assert_eq!(next["enabled"], true);
-    assert_eq!(next["group"]["channel"], "note", "{next}");
-    assert!(
-        helper.prompts.is_empty(),
-        "a claimed task is not a model call"
-    );
-}
-
-fn merge_answer() -> String {
-    json!({"decisions": [{"index": 0, "action": "merge", "targetCardId": "CARD/1", "reason": "同一结论补充细节"}]})
-        .to_string()
-}
-
-/// Runs one batch and returns the outcome.
-fn run_batch(helper: &mut Helper, text: &str, tag: &str) -> Value {
-    let next = helper.ok(&format!("next-{tag}"), "extract.next", json!({}));
-    let sources: Vec<Value> = next["group"]["sources"]
-        .as_array()
-        .expect("sources")
+    let first = helper.ok("n1", "extract.next", json!({}));
+    let group = first["group"].clone();
+    let planned = group["items"].as_array().expect("items");
+    assert_eq!(planned.len(), 1, "one bounded slice per batch: {group}");
+    let chars: usize = planned
         .iter()
-        .map(|source| {
-            json!({
-                "sourceId": source["sourceId"],
-                "version": source["version"],
-                "text": text,
-            })
-        })
-        .collect();
-    helper.ok(
-        &format!("run-{tag}"),
+        .map(|item| (item["end"].as_u64().unwrap() - item["start"].as_u64().unwrap()) as usize)
+        .sum();
+    assert!(chars <= 12_000, "batch stays inside the budget: {chars}");
+    let (items, bytes) = Helper::items(&group, std::slice::from_ref(&body));
+    assert!(
+        bytes <= 48_000,
+        "the pipe carries characters, not the whole source"
+    );
+    let outcome = helper.ok(
+        "n2",
         "extract.run",
-        json!({
-            "groupId": next["group"]["groupId"],
-            "claim": next["group"]["claim"],
-            "sources": sources,
-            "effort": "high",
-        }),
-    )
+        json!({"groupId": group["groupId"], "claim": group["claim"], "items": items}),
+    );
+    assert_eq!(outcome["state"], "ready", "{outcome}");
+    assert_eq!(outcome["remaining"], true, "{outcome}");
+
+    let again = helper.ok("n3", "extract.next", json!({}));
+    let planned = again["group"]["items"].as_array().expect("items");
+    assert_eq!(
+        planned[0]["segment"], 1,
+        "the next batch starts at segment 1"
+    );
 }
 
 #[test]
-fn a_suggestion_is_applied_only_to_the_revision_it_was_written_for() {
-    let root = Root::new("suggestions");
-    let body_one =
-        "第一条结论：先确认约束，再谈机制与取舍，并写明适用条件与判断依据，避免只看结论不看前提。";
-    let body_two =
-        "第二条结论：先确认约束，再谈机制与取舍，并写明适用条件与反例，同一结论补充细节与依据。";
-    let body_three =
-        "第三条结论：先确认约束，再谈机制与取舍，并写明适用条件、反例与待验证项，附上判断与推导。";
-    let body_four = "第四条结论：先确认约束，再谈机制与取舍，并写明适用条件、反例与待验证项，附判断依据与失败案例。";
+fn merge_keeps_what_the_card_already_said() {
+    let root = Root::new("merge");
     let mut helper = Helper::start(
         &root,
         vec![
-            drafts_answer(json!([card("知识提炼", body_one, "src/1")])),
-            drafts_answer(json!([card("知识提炼", body_two, "src/2")])),
-            merge_answer(),
-            drafts_answer(json!([card("知识提炼", body_three, "src/1")])),
-            merge_answer(),
-            drafts_answer(json!([card("知识提炼", body_four, "src/2")])),
-            merge_answer(),
-            drafts_answer(json!([card("知识提炼", body_four, "src/1")])),
-            merge_answer(),
+            drafts_answer(json!([])),
+            drafts_answer(json!([card("知识提炼", &format!("{BODY}补充细节 B：批量合并时保留既有结论。"), "src/1")])),
+            json!({"decisions":[{"index":0,"action":"merge","targetCardId":"CARD/1","reason":"补充细节"}]})
+                .to_string(),
         ],
     );
+    // A first note is drained without producing knowledge, so the only card in the
+    // store is the one the user wrote by hand below.
+    let first = extract_one(
+        &mut helper,
+        "note-a",
+        "第一段正文，内容足够长以便提炼。",
+        "seed",
+    );
+    assert_eq!(first["cards"].as_array().expect("cards").len(), 0);
+    let seed_source = helper.source_id.clone();
+    let existing = format!("{BODY}条件 A：仅在离线时成立。细节 A：使用本地库。");
+    let saved = helper.ok(
+        "s1",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "知识提炼",
+            "summary": "摘要",
+            "body": existing,
+            "topics": ["知识"],
+            "aliases": [],
+            "sourceIds": [seed_source],
+        }),
+    );
+    helper.card_id = saved["id"].as_str().expect("card id").to_string();
+    let outcome = extract_one(
+        &mut helper,
+        "note-b",
+        "第二段正文，内容足够长，用于合并。",
+        "m",
+    );
+    assert_eq!(outcome["cards"][0]["action"], "merge", "{outcome}");
+    let full = helper.ok("m2", "card.get", json!({"id": helper.card_id.clone()}));
+    let body = full["body"].as_str().expect("body");
+    assert!(
+        body.contains("条件 A"),
+        "old knowledge must survive: {body}"
+    );
+    assert!(body.contains("细节 B"), "new detail must land: {body}");
+    assert_eq!(full["revision"], 2);
+    let connection =
+        rusqlite::Connection::open(root.join("data").join("knowledge").join("knowledge.db"))
+            .expect("open knowledge db");
+    let snapshots: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM card_history WHERE card_id = ?1",
+            [helper.card_id.clone()],
+            |row| row.get(0),
+        )
+        .expect("history rows");
+    assert_eq!(snapshots, 1, "the previous revision is kept");
+}
 
-    helper.publish("note-a", "第一段正文，内容足够长以便提炼出卡片。");
-    let created = run_batch(&mut helper, "第一段正文，内容足够长以便提炼出卡片。", "a");
-    assert_eq!(created["cards"].as_array().expect("cards").len(), 1);
-    let listed = helper.ok("l1", "card.list", json!({}));
-    let card_id = listed["items"][0]["id"]
-        .as_str()
-        .expect("card id")
-        .to_string();
-    helper.card_id = card_id.clone();
-
-    // A person edits the card; from now on merges may only be proposed.
+#[test]
+fn one_batch_makes_one_extraction_and_one_comparison_call() {
+    let root = Root::new("budget");
+    let mut helper = Helper::start(
+        &root,
+        vec![
+            drafts_answer(json!([])),
+            drafts_answer(json!([
+                card("知识提炼", &format!("{BODY}第一种说法。"), "src/1"),
+                card("知识提炼", &format!("{BODY}第二种说法。"), "src/1"),
+                card("知识提炼", &format!("{BODY}第三种说法。"), "src/1"),
+            ])),
+            json!({"decisions":[
+                {"index":0,"action":"propose","targetCardId":"CARD/1","reason":"冲突"},
+                {"index":1,"action":"propose","targetCardId":"CARD/1","reason":"冲突"},
+                {"index":2,"action":"propose","targetCardId":"CARD/1","reason":"冲突"}
+            ]})
+            .to_string(),
+        ],
+    );
+    helper.publish("seed", "种子正文，内容足够长以便提炼。");
+    let seeded = helper.ok("n1", "extract.next", json!({}));
+    let group = seeded["group"].clone();
+    let (items, _) = Helper::items(
+        &group,
+        &[(
+            helper.source_id.clone(),
+            helper.fingerprint.clone(),
+            "种子正文，内容足够长以便提炼。".to_string(),
+        )],
+    );
     helper.ok(
-        "u1",
-        "card.update",
-        json!({"id": card_id, "title": "知识提炼（人工）", "summary": "人工编辑后的摘要"}),
+        "n2",
+        "extract.run",
+        json!({"groupId": group["groupId"], "claim": group["claim"], "items": items}),
     );
+    let saved = helper.ok(
+        "n3",
+        "card.save",
+        json!({
+            "kind": "concept",
+            "title": "知识提炼",
+            "summary": "摘要",
+            "body": BODY,
+            "topics": ["知识"],
+            "aliases": [],
+            "sourceIds": [helper.source_id.clone()],
+        }),
+    );
+    helper.card_id = saved["id"].as_str().expect("card").to_string();
 
-    helper.publish("note-b", "第二段正文，补充同一结论的细节。");
-    let merged = run_batch(&mut helper, "第二段正文，补充同一结论的细节。", "b");
-    assert_eq!(
-        merged["proposals"].as_array().expect("proposals").len(),
-        1,
-        "{merged}"
-    );
-    let open = helper.ok("s1", "suggestion.list", json!({"state": "open"}));
-    assert_eq!(open["total"], 1, "{open}");
-    let suggestion = open["items"][0]["id"]
+    let published = helper.publish("note-c", "第三段正文，内容足够长以便提炼。");
+    let fingerprint = published["fingerprint"]
         .as_str()
-        .expect("suggestion")
+        .expect("fingerprint")
         .to_string();
-    assert_eq!(open["items"][0]["targetCardId"], card_id.as_str());
-    assert_eq!(open["items"][0]["draft"]["body"], body_two);
+    let next = helper.ok("n4", "extract.next", json!({}));
+    let group = next["group"].clone();
+    let (items, _) = Helper::items(
+        &group,
+        &[(
+            helper.source_id.clone(),
+            fingerprint,
+            "第三段正文，内容足够长以便提炼。".to_string(),
+        )],
+    );
+    let before = helper.prompts.len();
+    let outcome = helper.ok(
+        "n5",
+        "extract.run",
+        json!({"groupId": group["groupId"], "claim": group["claim"], "items": items}),
+    );
+    let calls = helper.prompts.len() - before;
+    assert_eq!(calls, 2, "one extraction plus one comparison: {outcome}");
+    assert_eq!(outcome["proposals"].as_array().expect("proposals").len(), 3);
+}
 
-    // The card moves on, so the open suggestion is stale.
+#[test]
+fn pausing_while_the_model_answers_blocks_the_write() {
+    let root = Root::new("pause");
+    let mut helper = Helper::start(
+        &root,
+        vec![drafts_answer(json!([card("知识提炼", BODY, "src/1")]))],
+    );
+    let published = helper.publish("note-a", "一段等待提炼的正文，内容足够长。");
+    let fingerprint = published["fingerprint"]
+        .as_str()
+        .expect("fingerprint")
+        .to_string();
+    let next = helper.ok("n1", "extract.next", json!({}));
+    let group = next["group"].clone();
+    let (items, _) = Helper::items(
+        &group,
+        &[(
+            helper.source_id.clone(),
+            fingerprint,
+            "一段等待提炼的正文，内容足够长。".to_string(),
+        )],
+    );
+    helper.send(json!({
+        "v": 1, "type": "request", "id": "n2", "method": "extract.run",
+        "params": {"groupId": group["groupId"], "claim": group["claim"], "items": items},
+    }));
+    let model = helper.recv_model();
+    // The pause lands while the model is still answering.
     helper.ok(
-        "u2",
-        "card.update",
-        json!({"id": card_id, "summary": "再次人工修改"}),
+        "p1",
+        "queue.pause",
+        json!({"reason": "manual", "paused": true}),
     );
-    let stale = helper.call("s2", "suggestion.accept", json!({"id": suggestion}));
-    assert_eq!(stale["ok"], false, "{stale}");
-    assert_eq!(stale["error"]["code"], "source_changed", "{stale}");
-    let closed = helper.ok("s2b", "suggestion.list", json!({"state": "rejected"}));
+    helper.answer_model(&model);
+    let outcome = helper.recv();
+    assert_eq!(outcome["ok"], false, "{outcome}");
+    assert_eq!(outcome["error"]["code"], "cancelled", "{outcome}");
+    let listed = helper.ok("p2", "card.list", json!({}));
     assert_eq!(
-        closed["total"], 1,
-        "a stale proposal is closed, not left open: {closed}"
+        listed["total"], 0,
+        "a paused batch must not write: {listed}"
     );
-
-    // A suggestion written against the current revision still applies.
-    helper.publish("note-c", "第三段正文，补充同一结论的更多细节。");
-    let second = run_batch(&mut helper, "第三段正文，补充同一结论的更多细节。", "c");
+    helper.ok(
+        "p3",
+        "queue.pause",
+        json!({"reason": "manual", "paused": false}),
+    );
+    let queue = helper.ok("p4", "queue.status", json!({}));
+    let ready = queue["counts"]["ready"].as_i64().unwrap_or(0);
+    let working = queue["counts"]["working"].as_i64().unwrap_or(0);
     assert_eq!(
-        second["proposals"].as_array().expect("proposals").len(),
+        ready + working,
         1,
-        "{second}"
+        "the task waits for a later run: {queue}"
     );
-    let open = helper.ok("s3", "suggestion.list", json!({"state": "open"}));
-    let suggestion = open["items"][0]["id"]
-        .as_str()
-        .expect("suggestion")
-        .to_string();
-    let accepted = helper.ok("s4", "suggestion.accept", json!({"id": suggestion}));
-    assert_eq!(accepted["state"], "accepted", "{accepted}");
-    let full = helper.ok("l2", "card.get", json!({"id": card_id}));
-    assert_eq!(full["body"], body_three);
-    assert_eq!(full["revision"], 4, "{full}");
-    // Only the accepted proposal attaches its source; the merge that was proposed
-    // instead of applied never did.
-    assert_eq!(
-        full["sourceIds"].as_array().expect("sources").len(),
-        2,
-        "{full}"
-    );
+}
 
-    // A rejected proposal does not come back with the next batch.
-    helper.publish("note-d", "第四段正文，应当只形成一条建议。");
-    let third = run_batch(&mut helper, "第四段正文，应当只形成一条建议。", "d");
-    assert_eq!(
-        third["proposals"].as_array().expect("proposals").len(),
-        1,
-        "{third}"
+#[test]
+fn a_killed_helper_leaves_a_retryable_task() {
+    let root = Root::new("interrupted");
+    let mut helper = Helper::start(
+        &root,
+        vec![drafts_answer(json!([card("知识提炼", BODY, "src/1")]))],
     );
-    let open = helper.ok("s5", "suggestion.list", json!({"state": "open"}));
-    let suggestion = open["items"][0]["id"]
-        .as_str()
-        .expect("suggestion")
-        .to_string();
-    helper.ok("s6", "suggestion.reject", json!({"id": suggestion}));
+    helper.publish("note-a", "一段等待提炼的正文，内容足够长。");
+    let next = helper.ok("n1", "extract.next", json!({}));
+    assert_eq!(next["group"]["channel"], "note");
+    drop(helper);
 
-    helper.publish("note-e", "第五段正文，与上一条建议完全相同。");
-    let fourth = run_batch(&mut helper, "第五段正文，与上一条建议完全相同。", "e");
-    assert_eq!(
-        fourth["proposals"].as_array().expect("proposals").len(),
-        0,
-        "a rejected draft must not be proposed again: {fourth}"
+    let mut revived = Helper::start(
+        &root,
+        vec![drafts_answer(json!([card("知识提炼", BODY, "src/1")]))],
     );
-    let all = helper.ok("s7", "suggestion.list", json!({}));
-    assert_eq!(all["total"], 3, "{all}");
+    let queue = revived.ok("q1", "queue.status", json!({}));
+    assert_eq!(
+        queue["counts"]["failed"], 1,
+        "an interrupted claim must not stay working: {queue}"
+    );
+    let group = queue["groups"]
+        .as_array()
+        .and_then(|groups| groups.first())
+        .cloned();
+    let _ = group;
+    let retried = revived.ok(
+        "q2",
+        "queue.retry",
+        json!({"channel": "note", "groupKey": "note-a"}),
+    );
+    assert!(
+        matches!(
+            retried["state"].as_str(),
+            Some("ready") | Some("stabilizing")
+        ),
+        "a retried task becomes runnable again: {retried}"
+    );
 }

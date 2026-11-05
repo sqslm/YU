@@ -194,7 +194,11 @@ describe('knowledge collector reading', () => {
       materials: [{ origin: 'https://example.test/y', title: '页面', text: '正文', url: 'https://example.test/y' }]
     })
     await new Promise(resolve => setTimeout(resolve, 0))
-    expect(subject.locate('https://example.test/y')).toContain('【回答】')
+    // The stash holds the material's own text — the version the helper stored a
+    // fingerprint for — not a composed summary that would never match it.
+    expect(subject.locate('https://example.test/y')).toBe('正文')
+    const published = host.publishSource.mock.calls[0]?.[0] as { text: string }
+    expect(published.text).toBe(subject.locate('https://example.test/y'))
     // The helper minted g1; the collector must be able to map it back to the body.
     expect(await subject.retry('g1')).toBe(true)
     expect(host.retryTask).toHaveBeenCalledWith({ groupId: 'g1' })
