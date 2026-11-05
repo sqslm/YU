@@ -28,7 +28,10 @@ export interface KnowledgeTools {
    * Extraction of a page this run really read. The material comes from a previous
    * step's own result, never from a string the model or the renderer supplied.
    */
-  reading?: (material: { origin: string; title: string; text?: string; url?: string }) => Promise<{ queued: number; reason?: string; groupId?: string | null }>
+  reading?: (
+    material: { origin: string; title: string; text?: string; url?: string },
+    options?: { signal?: AbortSignal }
+  ) => Promise<{ queued: number; reason?: string; groupId?: string | null }>
   /** Full-text search; the helper ranks and pages, we only bound the answer. */
   search(query: string, limit: number): Promise<{ items: KnowledgeCardHit[]; total: number }>
   get(id: string): Promise<KnowledgeCard>
@@ -119,11 +122,19 @@ export const KNOWLEDGE_DEFINITIONS: ToolDefinition[] = [
       const noteId = text(args.noteId)
       if (!ctx.knowledge) throw new Error(mt('知识库当前不可用：{{name}}', { name: 'extract_knowledge' }))
       if (!noteId) throw new Error(mt('工具参数无效：{{name}}', { name: 'noteId' }))
-      ctx.signal?.throwIfAborted()
+      // The user's own words, not the platform's: a stopped turn says so.
+      if (ctx.signal?.aborted) throw new Error(mt('本轮已取消'))
       ctx.onStatus?.(mt('正在加入提炼队列…'))
       const result = await ctx.knowledge.extractFromNote(noteId)
+      // Only a really accepted task counts as success: a refusal, a pause or a
+      // stale source must stop the step it belongs to instead of reporting a queue
+      // entry that does not exist.
       if (result.queued === 1) return { ok: true, summary: mt('已加入提炼队列'), data: { ok: true, ...result } }
-      return { ok: true, summary: result.reason ? mt('没有可以提炼的新内容：{{reason}}', { reason: result.reason }) : mt('没有可以提炼的新内容'), data: { ok: true, ...result } }
+      return {
+        ok: false,
+        summary: result.reason ? mt('没有可以提炼的新内容：{{reason}}', { reason: result.reason }) : mt('没有可以提炼的新内容'),
+        data: { ok: false, ...result }
+      }
     }
   }
 ]

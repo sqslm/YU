@@ -47,6 +47,7 @@ import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
 import { RecordReleaser } from './knowledge/release'
 import { SettleRegistry, settleRecordKnowledge, type SettleRecordDeps } from './knowledge/settle'
+import { handoffNote, handoffReading, type HandoffDeps } from './knowledge/handoff'
 import { DraftCards } from './knowledge/card-draft'
 import { saveCardAsNote } from './knowledge/card-notes'
 import { CleanupRetries } from './knowledge/cleanup'
@@ -335,6 +336,46 @@ const profileCollector = new ProfileCollector({
  * Every call goes through the same host and collector the UI uses, so the model
  * sees the user's real library and can never widen it.
  */
+/**
+ * The knowledge base as the model sees it: two reads and one explicit write.
+ * Every call goes through the same host and collector the UI uses, so the model
+ * sees the user's real library and can never widen it.
+ */
+const handoff: HandoffDeps = {
+  enabled: () => knowledgeCollector.enabled,
+  channelOn: channel => store.get().knowledge[channel] !== false,
+  gameActive: () => gameMode.snapshot().active,
+  paused: async () => (await knowledge.queueStatus()).pausedReasons,
+  async publishReading(material) {
+    // The page this run already read becomes a reading source through the same
+    // projection a normal summary uses; the text is the one in hand, never re-read.
+    // Waiting for this publish's own answer is what makes the status honest.
+    const published = await knowledgeCollector.publishReading(
+      { ...(material as import('./knowledge/collector').ReadingMaterial), locator: material.url ?? '' },
+      { threadId: 'workflow', at: Date.now(), scope: '工作流' }
+    )
+    return published?.sourceId ?? null
+  },
+  async publishNote(noteId) {
+    // Reading the note back through its own store is the only way in: the tool
+    // never accepts a body handed to it from outside.
+    const note = notes.list().notes.find(entry => entry.id === noteId)
+    if (!note) throw new Error('这条随记已不存在')
+    const published = await knowledgeCollector.publishNote(note)
+    return published?.sourceId ?? null
+  },
+  extract: sourceId =>
+    extractSourceNow(sourceId, {
+      host: () => knowledge,
+      enabled: () => knowledgeCollector.enabled,
+      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+      resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
+      wake: () => extractEngine.wake(),
+      log: line => log(line)
+    }),
+  log: line => log(line)
+}
+
 const knowledgeTools: KnowledgeTools = {
   enabled: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
   async search(query, limit) {
@@ -347,42 +388,8 @@ const knowledgeTools: KnowledgeTools = {
   get(id) {
     return knowledge.getCard(id)
   },
-  async reading(material) {
-    // The page this run already read becomes a reading source through the same
-    // projection a normal summary uses; the text is the one in hand, never re-read.
-    // Waiting for this publish's own answer is what makes the status honest: the
-    // old fire-and-forget shape then looked the source up and often found nothing.
-    const at = Date.now()
-    const published = await knowledgeCollector.publishReading(
-      { ...(material as import('./knowledge/collector').ReadingMaterial), locator: material.url ?? '' },
-      { threadId: 'workflow', at, scope: '工作流' }
-    )
-    if (!published?.sourceId) return { queued: 0, reason: '这条读取还没有进入知识库' }
-    return extractSourceNow(published.sourceId, {
-      host: () => knowledge,
-      enabled: () => knowledgeCollector.enabled,
-      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
-      resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
-      wake: () => extractEngine.wake(),
-      log: line => log(line)
-    })
-  },
-  async extractFromNote(noteId) {
-    // Reading the note back through its own store is the only way in: the tool
-    // never accepts a body handed to it from outside.
-    const note = notes.list().notes.find(entry => entry.id === noteId)
-    if (!note) throw new Error('这条随记已不存在')
-    const published = await knowledgeCollector.publishNote(note)
-    if (!published) return { queued: 0, reason: '这条随记还不能提炼' }
-    return extractSourceNow(published.sourceId, {
-      host: () => knowledge,
-      enabled: () => knowledgeCollector.enabled,
-      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
-      resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
-      wake: () => extractEngine.wake(),
-      log: line => log(line)
-    })
-  }
+  reading: (material, options) => handoffReading(handoff, material, options),
+  extractFromNote: noteId => handoffNote(handoff, noteId)
 }
 
 /**

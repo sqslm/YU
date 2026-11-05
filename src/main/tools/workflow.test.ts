@@ -4,6 +4,7 @@ import { setMainLanguage } from '@shared/mainI18n'
 import type { Workflow, WorkflowStep } from '@shared/workflow'
 import { runTool, type ToolContext } from './registry'
 import { workflowCommand, type WorkflowTools } from './workflow'
+import type { KnowledgeTools } from './knowledge'
 import { directVoiceIntent } from '../voice-intent'
 import type { PersonalTools } from './personal'
 import { WindowsTools } from './windows'
@@ -221,5 +222,90 @@ describe('save_workflow accepts what a model actually sends', () => {
     const result = await runTool('save_workflow', { name: '晨间', steps: tooMany }, saveCtx())
     expect(result.ok).toBe(false)
     expect(result.summary).toContain('最多 8 步')
+  })
+})
+
+/**
+ * The knowledge hand-off of a saved workflow.
+ *
+ * The bug this locks down: a refused extraction (queued 0 — paused, switch off,
+ * stale source) came back as `ok: true`, so the workflow walked on and ran the
+ * steps after it, and the report claimed a queue entry the helper never made.
+ */
+describe('run_workflow stops at the extraction it could not hand over', () => {
+  const PAGE = 'https://example.test/notes'
+  const HTML = '<html><head><title>去重笔记</title></head><body><p>写入前先认领版本，再删除卡片。</p></body></html>'
+
+  /** A transport the URL check treats as a test double, so no DNS is involved. */
+  function fetchOf(): typeof fetch {
+    return vi.fn(async () => new Response(HTML, { headers: { 'content-type': 'text/html; charset=utf-8' } })) as unknown as typeof fetch
+  }
+
+  function knowledgeOf(reading: ReturnType<typeof vi.fn>): KnowledgeTools {
+    return {
+      search: vi.fn(),
+      get: vi.fn(),
+      extractFromNote: vi.fn(async () => ({ queued: 0, reason: '来源已失效' })),
+      enabled: () => true,
+      reading: reading as unknown as KnowledgeTools['reading']
+    }
+  }
+
+  it('hands over the page this run read, once, and reports the accept', async () => {
+    const reading = vi.fn(async () => ({ queued: 1, groupId: 'grp_1' }))
+    vi.mocked(store.get).mockReturnValue(workflowOf([step('read_webpage', { url: PAGE }), step('extract_knowledge')]))
+    const result = await runTool('run_workflow', { id: 'wf-1' }, { ...context(['run_workflow', 'read_webpage']), knowledge: knowledgeOf(reading), fetchImpl: fetchOf() })
+    expect(result.ok).toBe(true)
+    expect(reading).toHaveBeenCalledTimes(1)
+    const [material] = reading.mock.calls[0] as unknown as [{ url?: string; text?: string }]
+    expect(material.url).toBe(PAGE)
+    expect(material.text).toContain('写入前先认领版本')
+  })
+
+  it('stops the workflow when the queue refuses the page', async () => {
+    const reading = vi.fn(async () => ({ queued: 0, reason: '知识采集未开启' }))
+    vi.mocked(store.get).mockReturnValue(
+      workflowOf([step('read_webpage', { url: PAGE }), step('extract_knowledge'), step('get_datetime')])
+    )
+    const result = await runTool('run_workflow', { id: 'wf-1' }, { ...context(['run_workflow', 'read_webpage', 'get_datetime']), knowledge: knowledgeOf(reading), fetchImpl: fetchOf() })
+    expect(result.ok).toBe(false)
+    expect(result.summary).toContain('知识采集未开启')
+    const steps = result.data.steps as Array<{ tool: string }>
+    expect(steps.map(row => row.tool)).toEqual(['read_webpage', 'extract_knowledge'])
+    expect(result.data.stoppedAt).toBe('extract_knowledge')
+  })
+
+  it('stops on a refused note and never reaches the next step', async () => {
+    const knowledge = knowledgeOf(vi.fn())
+    vi.mocked(store.get).mockReturnValue(workflowOf([step('extract_knowledge', { noteId: 'n1' }), step('get_datetime')]))
+    const result = await runTool('run_workflow', { id: 'wf-1' }, { ...context(['run_workflow', 'get_datetime']), knowledge })
+    expect(result.ok).toBe(false)
+    expect(result.summary).toContain('来源已失效')
+    const steps = result.data.steps as Array<{ tool: string }>
+    expect(steps.map(row => row.tool)).toEqual(['extract_knowledge'])
+  })
+
+  it('hands nothing over when the turn is cancelled between the read and the hand-off', async () => {
+    const reading = vi.fn(async () => ({ queued: 1 }))
+    vi.mocked(store.get).mockReturnValue(workflowOf([step('read_webpage', { url: PAGE }), step('extract_knowledge')]))
+    const turn = new AbortController()
+    // The page arrives, then the user stops the turn: the queue must not be touched.
+    const fetchImpl = (async () => {
+      const page = new Response(HTML, { headers: { 'content-type': 'text/html; charset=utf-8' } })
+      turn.abort()
+      return page
+    }) as unknown as typeof fetch
+    const result = await runTool('run_workflow', { id: 'wf-1' }, {
+      ...context(['run_workflow', 'read_webpage']),
+      knowledge: knowledgeOf(reading),
+      fetchImpl,
+      signal: turn.signal
+    })
+    // The turn's own cancel wins over the step report — that is what the registry
+    // answers for any tool once the signal fired — and nothing reached the queue.
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe('cancelled')
+    expect(result.summary).toContain('已取消')
+    expect(reading).not.toHaveBeenCalled()
   })
 })

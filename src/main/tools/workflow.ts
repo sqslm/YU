@@ -167,8 +167,14 @@ async function runWorkflow(
       // A knowledge step with no note of its own takes the page this run already
       // read: the same material the normal summary path projects, so a workflow and
       // a plain question share one source chain instead of two copies.
+      // A run the user stopped must not hand anything over: the request would
+      // outlive the turn it belonged to, and the report would claim a queue entry
+      // nobody asked for. Cancel before the write, not after it.
+      if (step.tool === 'extract_knowledge' && ctx.signal?.aborted) throw new Error(mt('本轮已取消'))
       if (step.tool === 'extract_knowledge' && !args.noteId && lastReading && ctx.knowledge?.reading) {
-        const handed = await ctx.knowledge.reading(lastReading)
+        // The same signal travels with the hand-off so a cancel that lands while
+        // the source is being published still stops before the queue is touched.
+        const handed = await ctx.knowledge.reading(lastReading, { signal: ctx.signal })
         outcome = handed.queued
           ? { ok: true, summary: mt('已把这次读取送入知识提炼'), data: { ...handed } }
           : { ok: false, summary: mt('没有可提炼的新内容：{{reason}}', { reason: handed.reason ?? '未说明' }), data: { ...handed } }
