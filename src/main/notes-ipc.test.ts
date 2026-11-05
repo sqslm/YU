@@ -127,7 +127,7 @@ describe('deleting a note with the knowledge option', () => {
     // failed write must still run inside that registration.
     const settle = vi.fn(async (_id: string, body: () => Promise<void>) => body())
     const remove = vi.fn(async () => { throw new Error('disk is full') })
-    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast: vi.fn(), settle })
+    registerNotesIpc({ store: { remove } as never, persistDir: vi.fn(), broadcast: vi.fn(), settle: settle as never })
     await expect(mock.handlers.get('notes:remove')!(null, 'n1', { deleteKnowledge: true, ticket: 't1' })).rejects.toThrow('disk is full')
     expect(settle.mock.calls[0][0]).toBe('n1')
     expect(remove).toHaveBeenCalledWith('n1')
