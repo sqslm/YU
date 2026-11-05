@@ -453,7 +453,7 @@ export class AssistantSession {
   }
   private allowedTools(input: string): string[] {
     return [...ASSISTANT_TOOLS, ...(this.deps.windows ? WINDOWS_TOOLS : []), ...(this.deps.personal ? PERSONAL_TOOLS : []),
-      ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.knowledge ? KNOWLEDGE_TOOLS : []), ...(this.deps.readSelection ? ['get_selection'] : []),
+      ...(this.deps.life ? LIFE_TOOLS : []), ...(this.deps.workflow ? WORKFLOW_TOOLS : []), ...(this.deps.knowledge?.enabled() ? KNOWLEDGE_TOOLS.filter(name => name !== 'extract_knowledge') : []), ...(this.deps.readSelection ? ['get_selection'] : []),
       ...(this.deps.analyzeScreenshot && (screenshotNeedsEditor(input) || /截.{0,8}(?:图|窗口|屏)|屏幕|图片|图表|这个界面|这张图|\b(?:screenshot|screen|capture|OCR|image|chart|interface)\b/iu.test(input)) ? ['analyze_screenshot'] : [])]
   }
 

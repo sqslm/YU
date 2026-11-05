@@ -32,6 +32,8 @@ export interface NotesIpcOptions {
    * and the caller sees the real reason.
    */
   purgeKnowledge?: (noteId: string, options?: { cards?: boolean; ticket?: string }) => Promise<void>
+  /** Proves the confirmed preview still holds, before the note is removed. */
+  verifyKnowledge?: (noteId: string, ticket?: string) => Promise<void>
 }
 
 /** IPC hands us a real `Int16Array`, but a stray array must not throw. */
@@ -92,7 +94,7 @@ async function serveAudio(file: string, range: string | null, attachment = false
 }
 
 export function registerNotesIpc(options: NotesIpcOptions): void {
-  const { store, persistDir, broadcast, purgeKnowledge } = options
+  const { store, persistDir, broadcast, purgeKnowledge, verifyKnowledge } = options
   let audioJob: AbortController | null = null
 
   ipcHandle('notes:cancelAudioJob', () => audioJob?.abort())
@@ -250,6 +252,8 @@ export function registerNotesIpc(options: NotesIpcOptions): void {
     // The record really goes first, then its knowledge is settled: the ticket the
     // user confirmed is re-validated by the helper, and a mismatch is reported as
     // a partial failure instead of sweeping away knowledge created meanwhile.
+    // A destructive confirmation is proved while the record still exists.
+    if (options?.deleteKnowledge) await verifyKnowledge?.(id, options.ticket)
     await store.remove(id)
     broadcast()
     if (!options?.deleteKnowledge) { await purgeKnowledge?.(id, { cards: false }); return }

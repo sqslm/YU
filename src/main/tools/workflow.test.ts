@@ -88,7 +88,7 @@ describe('whole-name workflow routing', () => {
 describe('run_workflow authorizes each step against this round', () => {
   it('replays a knowledge extraction step only while the feature is on', async () => {
     const extracted: string[] = []
-    const knowledge = { search: vi.fn(), get: vi.fn(), extractFromNote: vi.fn(async (noteId: string) => { extracted.push(noteId); return { queued: 1, groupId: 'grp_1', state: 'stabilizing' } }) }
+    const knowledge = { search: vi.fn(), get: vi.fn(), extractFromNote: vi.fn(async (noteId: string) => { extracted.push(noteId); return { queued: 1, groupId: 'grp_1', state: 'stabilizing' } }), enabled: () => true }
     vi.mocked(store.get).mockReturnValue(workflowOf([step('extract_knowledge', { noteId: 'n1' })]))
     // The round granted only run_workflow: a knowledge step is granted by the
     // knowledge switch, not by the chat allowlist.

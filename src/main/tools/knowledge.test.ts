@@ -21,6 +21,7 @@ let ctx: ToolContext
 beforeEach(() => {
   api = {
     search: vi.fn().mockResolvedValue({ total: 2, items: [card('c1', '锁粒度'), card('c2', '幂等键')] }),
+  enabled: () => true,
     get: vi.fn().mockResolvedValue({ id: 'c1', title: '锁粒度', summary: '摘要', kind: 'concept', topics: ['锁'], body: '锁的粒度决定竞争范围。', sourceIds: ['src_1'], updatedAt: 5 }),
     extractFromNote: vi.fn().mockResolvedValue({ queued: 1, groupId: 'grp_1', state: 'stabilizing' })
   }
@@ -41,7 +42,10 @@ afterEach(() => { setMainLanguage('zh') })
 describe('knowledge tools inside an answer', () => {
   it('is advertised only while the feature is on', () => {
     for (const name of KNOWLEDGE_TOOLS) expect(TOOL_NAMES).toContain(name)
-    expect(availableToolNames(ctx)).toEqual(expect.arrayContaining([...KNOWLEDGE_TOOLS]))
+    // Only the two reads: an ordinary answer never gets the write tool.
+    expect(availableToolNames(ctx)).toEqual(expect.arrayContaining(['search_knowledge', 'get_knowledge']))
+    expect(availableToolNames(ctx)).not.toContain('extract_knowledge')
+    expect(availableToolNames({ ...ctx, knowledgeWrite: true })).toContain('extract_knowledge')
     const off: ToolContext = { ...ctx, knowledge: undefined }
     for (const name of KNOWLEDGE_TOOLS) expect(availableToolNames(off)).not.toContain(name)
   })
@@ -86,7 +90,9 @@ describe('knowledge tools inside an answer', () => {
   })
 
   it('re-queues a note through the same entry the app uses', async () => {
-    const result = await runTool('extract_knowledge', { noteId: 'n1' }, ctx)
+    // Extraction is a write: it needs this run's write grant, not just the switch.
+    await expect(runTool('extract_knowledge', { noteId: 'n1' }, ctx)).resolves.toMatchObject({ ok: false })
+    const result = await runTool('extract_knowledge', { noteId: 'n1' }, { ...ctx, knowledgeWrite: true })
     expect(api.extractFromNote).toHaveBeenCalledWith('n1')
     expect(result.ok).toBe(true)
     expect(JSON.stringify(result.data)).toContain('grp_1')

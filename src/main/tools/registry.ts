@@ -64,6 +64,8 @@ export interface ToolContext {
   workflow?: WorkflowTools
   /** The user's own knowledge base, present only while it is switched on. */
   knowledge?: KnowledgeTools
+  /** Set only by the step that may write: an ordinary answer never gets it. */
+  knowledgeWrite?: boolean
   windows?: WindowsTools
   onLocalResult?: (result: AssistantLocalResult) => void
   onToolResult?: (name: string, result: ToolOutcome) => void
@@ -729,7 +731,10 @@ export function availableToolNames(ctx: ToolContext): string[] {
     if (PERSONAL_TOOLS.includes(name as typeof PERSONAL_TOOLS[number])) return Boolean(ctx.personal && ctx.allowedTools)
     if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number])) return Boolean(ctx.life && ctx.allowedTools)
     if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number])) return Boolean(ctx.workflow && ctx.allowedTools)
-    if (KNOWLEDGE_TOOLS.includes(name as typeof KNOWLEDGE_TOOLS[number])) return Boolean(ctx.knowledge && ctx.allowedTools)
+    if (KNOWLEDGE_TOOLS.includes(name as typeof KNOWLEDGE_TOOLS[number])) {
+      if (!ctx.knowledge?.enabled() || !ctx.allowedTools) return false
+      return name !== 'extract_knowledge' || Boolean(ctx.knowledgeWrite)
+    }
     if (name === 'analyze_screenshot') return Boolean(ctx.analyzeScreenshot && ctx.allowedTools)
     return name !== 'web_search' || ctx.settings.search?.enabled !== false
   }).map(tool => tool.name)
@@ -812,7 +817,10 @@ async function runRegisteredTool(
   if (LIFE_TOOLS.includes(name as typeof LIFE_TOOLS[number]) && (!ctx.life || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
   if (WORKFLOW_TOOLS.includes(name as typeof WORKFLOW_TOOLS[number]) && (!ctx.workflow || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
   if (WINDOWS_TOOLS.includes(name as typeof WINDOWS_TOOLS[number]) && (!ctx.windows || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
-  if (KNOWLEDGE_TOOLS.includes(name as typeof KNOWLEDGE_TOOLS[number]) && (!ctx.knowledge || !ctx.allowedTools?.includes(name))) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  if (KNOWLEDGE_TOOLS.includes(name as typeof KNOWLEDGE_TOOLS[number])) {
+    const allowed = Boolean(ctx.knowledge?.enabled() && ctx.allowedTools?.includes(name))
+    if (!allowed || (name === 'extract_knowledge' && !ctx.knowledgeWrite)) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
+  }
   if (ctx.allowedTools && !ctx.allowedTools.includes(name)) return reject(mt('本次任务未授权此工具：{{name}}', { name }))
   if (!tool) return reject(mt('未知工具：{{name}}', { name }))
   const input = args ?? {}

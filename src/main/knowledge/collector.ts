@@ -326,6 +326,32 @@ export class KnowledgeCollector {
    * identity, so two documents never collapse into one unlocatable string and a
    * re-read of the same page updates that page instead of minting a new one.
    */
+  /**
+   * Publishes one already-read material and answers with this publish's own
+   * result, so a caller never has to look the source up by origin afterwards.
+   */
+  async publishReading(material: ReadingMaterial, projection: { threadId: string; at: number; scope: string }): Promise<PublishResult | null> {
+    if (!this.allows('reading')) return null
+    const text = material.text ?? ''
+    if (!text.trim()) return null
+    const capped = text.length > MAX_MATERIAL_CHARS ? { ...material, text: text.slice(0, MAX_MATERIAL_CHARS), truncated: true } : material
+    const groupKey = readingKey(capped.origin)
+    this.remember(capped.origin, groupKey, capped.text, capped.path)
+    return this.publish({
+      channel: 'reading',
+      kind: materialKind(capped),
+      originRef: capped.origin,
+      groupKey,
+      threadKey: projection.threadId,
+      title: capped.title.slice(0, 200),
+      locator: capped.locator ?? capped.url ?? capped.path ?? capped.attachmentId ?? '',
+      readAt: projection.at,
+      scope: projection.scope.slice(0, 1000),
+      text: capped.text,
+      at: projection.at
+    })
+  }
+
   readingFinished(reading: ReadingProjection): void {
     if (!this.allows('reading')) return
     const answer = reading.answer.trim()

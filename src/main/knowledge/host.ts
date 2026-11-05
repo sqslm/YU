@@ -750,6 +750,11 @@ export class KnowledgeHost {
   }
 
   /** Removes or unlinks the cards of records that were just deleted, atomically. */
+  /** Settles sources without a destructive confirmation (the default delete). */
+  purgeSources(sources: { id: string; version: string }[], cards: boolean): Promise<PurgeCardsResult> {
+    return this.call<PurgeCardsResult>('card.purge', { sources, cards })
+  }
+
   /** The helper takes the record identity, the confirmed snapshot and the ticket. */
   purgeCards(input: PurgeCardsInput): Promise<PurgeCardsResult> {
     return this.call<PurgeCardsResult>('card.purge', { ...input.record, confirm: input.confirm, cards: input.cards })

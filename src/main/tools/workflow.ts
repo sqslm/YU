@@ -173,7 +173,7 @@ async function runWorkflow(
           ? { ok: true, summary: mt('已把这次读取送入知识提炼'), data: { ...handed } }
           : { ok: false, summary: mt('没有可提炼的新内容：{{reason}}', { reason: handed.reason ?? '未说明' }), data: { ...handed } }
       } else {
-        outcome = await runTool(step.tool, args, stepCtx)
+        outcome = await runTool(step.tool, args, knowledgeStep ? { ...stepCtx, knowledgeWrite: true } : stepCtx)
       }
     }
     catch(error){outcome={ok:false,summary:String(error instanceof Error?error.message:error),data:{ok:false}}}

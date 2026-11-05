@@ -34,6 +34,8 @@ export interface KnowledgeTools {
   get(id: string): Promise<KnowledgeCard>
   /** Re-queues one note for extraction through the real source chain. */
   extractFromNote(noteId: string): Promise<ExtractSourceResult>
+  /** True only while the user has the knowledge base switched on and idle. */
+  enabled(): boolean
 }
 
 const MAX_QUERY = 200
@@ -56,7 +58,7 @@ export const KNOWLEDGE_DEFINITIONS: ToolDefinition[] = [
       required: ['query'],
       additionalProperties: false
     },
-    available: (ctx) => Boolean(ctx.knowledge),
+    available: (ctx) => Boolean(ctx.knowledge?.enabled()),
     run: async (args, ctx): Promise<ToolOutcome> => {
       const query = text(args.query)
       if (!ctx.knowledge) throw new Error(mt('知识库当前不可用：{{name}}', { name: 'search_knowledge' }))
@@ -85,7 +87,7 @@ export const KNOWLEDGE_DEFINITIONS: ToolDefinition[] = [
       required: ['id'],
       additionalProperties: false
     },
-    available: (ctx) => Boolean(ctx.knowledge),
+    available: (ctx) => Boolean(ctx.knowledge?.enabled()),
     run: async (args, ctx): Promise<ToolOutcome> => {
       const id = text(args.id)
       if (!ctx.knowledge) throw new Error(mt('知识库当前不可用：{{name}}', { name: 'get_knowledge' }))
@@ -112,7 +114,7 @@ export const KNOWLEDGE_DEFINITIONS: ToolDefinition[] = [
       required: ['noteId'],
       additionalProperties: false
     },
-    available: (ctx) => Boolean(ctx.knowledge),
+    available: (ctx) => Boolean(ctx.knowledge?.enabled() && ctx.knowledgeWrite),
     run: async (args, ctx): Promise<ToolOutcome> => {
       const noteId = text(args.noteId)
       if (!ctx.knowledge) throw new Error(mt('知识库当前不可用：{{name}}', { name: 'extract_knowledge' }))

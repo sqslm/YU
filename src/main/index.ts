@@ -319,6 +319,7 @@ const profileCollector = new ProfileCollector({
  * sees the user's real library and can never widen it.
  */
 const knowledgeTools: KnowledgeTools = {
+  enabled: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
   async search(query, limit) {
     const page = await knowledge.searchCards({ query, offset: 0, limit })
     return {
@@ -332,19 +333,15 @@ const knowledgeTools: KnowledgeTools = {
   async reading(material) {
     // The page this run already read becomes a reading source through the same
     // projection a normal summary uses; the text is the one in hand, never re-read.
-    knowledgeCollector.readingFinished({
-      threadId: 'workflow',
-      scope: '工作流',
-      request: material.title,
-      materials: [material as import('./knowledge/collector').ReadingMaterial],
-      answer: (material.text ?? '').slice(0, 2000),
-      sources: [{ title: material.title, url: material.url }],
-      at: Date.now()
-    })
-    const found = await knowledge.findSources({ channel: 'reading', originRef: material.origin })
-    const source = found.sources[0]
-    if (!source) return { queued: 0, reason: '这条读取还没有进入知识库' }
-    return extractSourceNow(source.id, {
+    // Waiting for this publish's own answer is what makes the status honest: the
+    // old fire-and-forget shape then looked the source up and often found nothing.
+    const at = Date.now()
+    const published = await knowledgeCollector.publishReading(
+      { ...(material as import('./knowledge/collector').ReadingMaterial), locator: material.url ?? '' },
+      { threadId: 'workflow', at, scope: '工作流' }
+    )
+    if (!published?.sourceId) return { queued: 0, reason: '这条读取还没有进入知识库' }
+    return extractSourceNow(published.sourceId, {
       host: () => knowledge,
       enabled: () => knowledgeCollector.enabled,
       allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
@@ -376,6 +373,13 @@ const knowledgeTools: KnowledgeTools = {
  * itself is deleted. It throws: nothing has been deleted when it does, so the
  * caller keeps both sides intact and can retry with the real reason.
  */
+async function verifyKnowledgeDelete(identity: import('@shared/knowledge').SourceIdentity, ticket?: string): Promise<void> {
+  if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
+  const preview = await knowledge.cardImpact(identity)
+  if (!preview.cards) return
+  if (!ticket || preview.ticket !== ticket) throw new Error('预览已失效，请重新确认')
+}
+
 async function purgeRecordKnowledge(input: FindSourceInput, identity: import('@shared/knowledge').SourceIdentity, options: { cards?: boolean; ticket?: string } = {}): Promise<void> {
   // A switched-off loop must not block the invalidation of knowledge that already
   // exists; with no database there is nothing to settle and no helper to wake.
@@ -386,11 +390,9 @@ async function purgeRecordKnowledge(input: FindSourceInput, identity: import('@s
   if (!sources.length) return
   // The helper re-checks these versions and this ticket inside its write
   // transaction, so a preview that no longer holds refuses instead of widening.
-  const result = await knowledge.purgeCards({
-    record: identity,
-    confirm: { sources, ticket: options.ticket ?? '' },
-    cards: Boolean(options.cards)
-  })
+  const result = options.cards
+    ? await knowledge.purgeCards({ record: identity, confirm: { sources, ticket: options.ticket ?? '' }, cards: true })
+    : await knowledge.purgeSources(sources, false)
   log(`[knowledge] 记录删除后：移除 ${result.removed.length} 张卡片，保留 ${result.kept.length} 张，跳过 ${result.skipped.length} 个已变更来源`)
 }
 /** Characters of a card body handed to a continued discussion. */
@@ -2064,6 +2066,7 @@ function registerIpc(): void {
     // The thread really goes first; its knowledge is settled afterwards, with the
     // ticket the user confirmed. A mismatch is a partial failure, never a silent
     // cleanup of knowledge created after the preview.
+    if (input.deleteKnowledge) await verifyKnowledgeDelete({ channel: 'chat', groupKey: input.id }, input.ticket)
     const removed = chats.edit(input)
     try {
       await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },
@@ -3251,6 +3254,7 @@ async function bootstrap(): Promise<void> {
     store: notes,
     // The user ticked 「同时删除关联知识」 in the confirmation: remove the cards
     // this note alone supported, before the note row itself goes away.
+    verifyKnowledge: (noteId, ticket) => verifyKnowledgeDelete({ channel: 'note', originRef: noteId }, ticket),
     purgeKnowledge: (noteId, options) => purgeRecordKnowledge({ channel: 'note', originRef: noteId },
       { channel: 'note', originRef: noteId }, options),
     persistDir: async (dir) => {
