@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 外部复核未通过，两轮复核提出的 R1～R7 与 T1～T5 修复均已提交（见「阶段 3 外部复核」两节），待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 外部复核未通过。T1/T2/T4/T5 及「目标被删」分支已通过外部定点复核，T3 陈旧 merge 建议分支本项修复已提交（`0f42024`），待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -814,3 +814,25 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 实现提交：`79e6f5e`（`fix(knowledge): settle every claim, bound the plan and park cleanly`）。上述验证在同一份代码的提交前工作区上各跑一次，提交内容与该工作区一致。
 
 **未测与边界**：真实付费模型调用 0 次（注入完成器）；未在打包后的 Electron 实例中跑启动/退出；120 秒预算只以较短期限验证取消；60 秒稳定期由 `YU_KNOWLEDGE_STABLE_MS` 缩短；未对 450 来源以上规模做并发压测。
+
+### T3 补充：比较期间版本变化时的 merge 建议（2026-11-05，reportId `294d7136-c80e-478c-9f8c-828c2c69649d`）
+
+外部在 `15737f5` 上确认通过：定向 Vitest 17 文件 / 134 项、`cargo test --locked --test extract` 11 项、`git diff --check 3ae28e1..HEAD` 为 0、release 哈希一致；并定点重放通过 T1（空闲后扫描自动提炼、结束无 timer）、T2（读 I/O 抛错立即 `failed`/`working 0`、同 helper 修复读取后可重试完成）、T4（渠道关闭 abort 并停放 `ready`、重开自动完成、手动暂停不被游戏恢复覆盖、游戏进入先 park 后 stop、退出续跑）、T5（450 条长元数据按预算分批 200/200/50，最大请求 52,577 字节、结果 1,044,038 字节，模型正文 ≤5,400 字符）以及 T3 的「目标被删」三例。
+
+仍有一处未通过：比较期间人工改卡后，旧的 merge 草稿被重新绑到新 revision 上，`suggestion.accept` 版本比较因此通过，旧草稿覆盖了人工正文。
+
+| 项 | 实测失败 | 修复 |
+| --- | --- | --- |
+| T3 陈旧 merge 建议 | 目标卡 revision1、模型比较所见 revision1；等待比较回复期间 `card.update` 改成 revision2（`edited=1`）；模型返回基于 revision1 的 merge → `apply` 走 `edited != 0 \|\| moved` 分支并以**当前** revision2 生成 open 建议（`target_revision=2`），`runOk=true`、提交进度；随后 `suggestion.accept` 版本比较通过，人工正文被覆盖 | merge 分支把「比较后版本已变化」与「比较前就已人工编辑」分开：前者与 `reference`/`propose` 一致，直接 `source_changed`（「目标卡片在提炼期间已更新」），事务不写卡、不写分段完成、不生成可接受草稿，由既有 `extract.fail` 结算（`source_changed → needs_reread`）；只有「比较前已 `edited` 且期间 revision 未变」才 `suggest`，且绑定模型实际所见的 revision。`suggestions::accept` 的 revision 校验语义不变，用户仍可接受有效建议 |
+
+落地：`native/knowledge/src/extract.rs`（merge 分支）。
+
+新增/修正回归（真实 helper + 生产 host/engine，`src/main/knowledge/residual.integration.test.ts`，现 11 项）：
+
+1. 比较期间人工改到 revision2 后返回 merge → 人工正文/`edited`/revision 保留，**没有**可接受建议（`listSuggestions().total === 0`），无新卡，`working 0`，本批明确 `needs_reread`（`source_changed` 结算），已完成计数不增加。
+2. 比较前就已 `edited`（revision2）、期间未变 → 生成绑定 `targetRevision = 2` 的建议；`acceptSuggestion` 成功，正文按草稿更新、`revision = 3`、`edited` 仍为真、两条来源都在。
+3. 该有效建议生成后再人工改到 revision3 → `acceptSuggestion` 拒绝（`source_changed`），revision3 正文不变，建议按既有语义置为 `rejected`。
+
+验证（实际命令与退出码）：`cargo fmt -- --check` 0；`cargo test --locked` 0（15 lib + 11 extract + 11 process + 18 queue）；`cargo clippy --locked --all-targets -- -D warnings` 0（含 `--features fixture`）；`node scripts/build-native.mjs` 0；`pnpm exec vitest run src/main/knowledge src/preload/index.test.ts src/main/ipc-trust.test.ts` 17 文件 / 136 项通过；`pnpm typecheck` 0。本轮只改 Rust 与该回归，未重跑 7 crate 与整仓长测试。
+
+交付产物：`native/bin/yu-knowledge.exe` 2,714,624 字节，SHA-256 `f0359af8b3937fe427efcb67b4d0465123f539a56caff012a9cadaf94fb9fb12`（MSVC 重建哈希可能变化；debug/fixture 不计入交付）。实现提交 `0f42024`。未测：真实付费模型 0 次；未在打包 Electron 实例中运行。
