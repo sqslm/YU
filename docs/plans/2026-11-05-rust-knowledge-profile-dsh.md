@@ -1770,3 +1770,65 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 ### 7. 提交
 
 - `b844592` `fix(knowledge): judge a failed library read by an explicit lookup request` —— 5 个文件（`src/shared/workspace.ts` + 4 个测试文件）；本节由随后的 docs 提交记录。
+
+## 阶段 6 B 交付（2026-11-06 第十五轮）
+
+起始 `a5ba746`（工作区干净，release 助手 3,199,488 字节 `7e55ca98…0b66e87`）。本轮只做 B：笔记删除、对话删除与阅读来源按真实归属撤回；C/D 与阶段 7 未动。
+
+### 两条反例与根因
+
+| 反例 | 根因 |
+| --- | --- |
+| 同一网页被两个会话读过，删其中一个会话把这张网页撤没了 | 归属只存在于 `queue_groups`（`channel` + 单值 `thread_key`），删除按 `threadKey` 选组、把组内来源整体置 `invalid`；阅读组按材料去重只有一行，最后写入的 `thread_key` 覆盖前一个，删除任一方都会波及对方 |
+| 卡片预览/清理只认自己那条 source | `card.impact` / `card.purge` 按记录 identity 枚举来源，逐条 `retract`；共享来源被当成独占来源，于是预览承诺删除对方仍在用的材料，清理也把它撤掉 |
+
+### 交付
+
+| 项 | 实现 | 位置 |
+| --- | --- | --- |
+| 来源归属表 | `source_records(source_id, channel, record_ref, created_at)`，`PRIMARY KEY (source_id, channel, record_ref)` + `(channel, record_ref)` 索引；一条来源可有多个拥有者 | `native/knowledge/src/store.rs`（`SOURCE_OWNER_SQL`） |
+| 发布即登记归属 | `record_owner()`：chat 记 `group_key`（线程即记录），reading 记 `thread_key`（读它的会话），note 不登记；`INSERT OR IGNORE`，重放不重复计 | `native/knowledge/src/queue.rs` |
+| 归属感知的线程撤回 | `invalidate_thread` 逐个判定 `other_owners`：有他人 → `detach` 进 `detached`；无他人 → `retired` 并置 `invalid`；组内来源全在 `retired` 才 `cancelled`，否则把 `thread_key` 修到剩余拥有者；返回 `{threadKey, cancelled, detached, reason}` | 同上 |
+| 记录级查询 | `thread_sources` 改为 `queue_items` 旧路径 ∪ `source_records`；新增 `owner_ref` / `other_owners` / `detach` / `detach_all` / `owners` | `native/knowledge/src/sources.rs` |
+| 预览只承诺真正拥有的部分 | `CardImpact.shared` 与 `PurgeResult.detached`；`impact` 把 live 来源分成 `shared`/`lost`，`items` 只用 `lost` 统计（票据仍对全量来源取哈希，预览与确认一致）；`purge` 对他人仍拥有的来源只 `detach`，其余 `retract` | `native/knowledge/src/purge.rs` |
+| 默认删除（不勾选删卡）走同一归属 | 新 `releaseRecord(host, input, identity, reason)`：chat 记录 → `invalidateThread`；note 记录 → 逐来源失效 + 取消自己的组；任何情况下不碰卡片，失败收集后抛第一条 | `src/main/knowledge/release.ts`，接线 `src/main/index.ts` 的 `settleRecord` |
+| 契约 | `CardImpact.shared: string[]`、`PurgeCardsResult.detached?: string[]`、`invalidateThread` 返回 `{cancelled, detached}` | `src/shared/knowledge.ts`、`src/main/knowledge/host.ts` |
+| 迁移 | `KNOWLEDGE_SCHEMA = 9`；打开旧库时按旧数据回填：chat 组记 `group_key`，reading 组记当时的 `thread_key` | `native/knowledge/src/store.rs` |
+
+### 旧数据边界（如实记录）
+
+旧库只保存一个 `thread_key`，双读无法还原：升级后一条网页只回填一个读者，删另一个线程不会触及它，删被记录的那个才会退休它。`native/knowledge/tests/ownership.rs` 的第三个用例直接构造旧库（`DROP TABLE source_records` + `PRAGMA user_version=8`）验证回填与上述行为。同时实测记录：重复发布同一材料命中 `same` 分支直接返回，不刷新 `queue_groups.thread_key`，所以 `thread_key` 只作提示，归属只看 `source_records`。
+
+### 回归（真实件）
+
+| 用例 | 覆盖 |
+| --- | --- |
+| `native/knowledge/tests/ownership.rs`（真 helper 二进制 + 真 SQLite，3 项） | 双读共享：删一方 `detached` 1 条、来源仍 active、对方 reading 组未取消、`thread_key` 修到对方；最后一方退休来源。共享卡片：预览 `cards 0 / shared [page]`，purge 只 `detached`，卡片与 `sourceIds` 保留；最后一方才删卡。旧库回填：重开后回填 ≥2 行，删对方线程只撤自己那轮 |
+| `src/main/knowledge/ownership.integration.test.ts`（真 helper + 真 `ChatStore` + 生产 `KnowledgeCollector`，4 项） | 同材料双读撤回、卡片保留；`releaseRecord` 默认删除（勾选未开）只让出自己那条、对方来源与 reading 任务保留、重复删除无事发生、无来源的笔记是空操作、最后一方退休来源且卡片仍在；同一记录被并发删除时两次都成功、恰有一方 `detached`、来源最终 `invalid`、双方都看不到 live 行 |
+| `src/main/knowledge/host.integration.test.ts`、`loop.test.ts` | 只把 schema 断言 8 → 9，其余不动 |
+| `src/renderer/src/settings/pages/knowledgeView.test.ts` | 只补 `shared: []` 夹具字段（`impactNotice` 仍只看 `cards`，共享来源不产生删卡提议） |
+
+### 验证（实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cd native/knowledge && cargo fmt -- --check` | 0 |
+| `cd native/knowledge && cargo test --locked` | 0，133 项全过（含新增 ownership 3 项） |
+| `cd native/knowledge && cargo clippy --locked --all-targets -- -D warnings` | 0（本轮修掉 `if let` 可合并、两处 `needless_borrow`、测试里的 `let_and_return`） |
+| `node scripts/build-native.mjs` | 0（release 26.83 s） |
+| release 助手 | 3,215,872 字节 `0820276e57dfb150459c0536543cf963721c7bbb39dbdc34a2d89124a4960d58`（有 Rust 改动，已重建） |
+| `pnpm exec vitest run src/main/knowledge src/main/tools/knowledge.test.ts src/main/ask-knowledge.integration.test.ts src/main/chat.test.ts src/main/assistant.test.ts src/main/agent.test.ts src/main/workspace.test.ts src/main/ipc-trust.test.ts src/preload/index.test.ts src/renderer/src/settings` | 0，68 文件 / 870 项全过（上一轮 866 项 + 新增 4 项） |
+| `pnpm typecheck` | 0（node + web） |
+| `pnpm build` | 0（14.17 s） |
+| `git diff --check` | 0 |
+
+### 未测与边界
+
+- 本轮无夹具变更，未跑 `--features fixture`。
+- 主进程 `chat:edit` / `notes:remove` 的 IPC 外壳（`verifyKnowledgeDelete` 预览 → 票据 → `settleOnDelete` → `releaseRecord`）只经类型检查与 `release.ts` 的真实 helper 集成覆盖，未在隔离实窗里点删除对话框；`settleOnDelete` 的登记竞态仍无自动化用例（B 的历史遗留项，本轮未扩大范围）。
+- 并发用例经 helper 的 `Mutex` 串行执行，验证的是「两次删除先后生效也不会半状态」，不是真并行写入。
+- 完整全量 `pnpm test` 仍是阶段 6 收尾门槛；C（继续讨论草稿与随记实窗）、D（工作流验收）、阶段 7 未动。
+
+### 提交
+
+- `26244c0` `fix(knowledge): settle a deleted record by what it really owned` —— 13 个文件（4 个 Rust 源文件 + 新增 `native/knowledge/tests/ownership.rs`、`src/main/knowledge/release.ts`、`src/main/knowledge/ownership.integration.test.ts`，以及 `src/main/index.ts`、`host.ts`、`knowledge.ts`、两处 schema 断言与一处渲染夹具）。本节由随后的 docs 提交记录。
