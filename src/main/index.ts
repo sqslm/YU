@@ -221,7 +221,7 @@ const profileText = async (): Promise<string> => {
 const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
 }, () => assistant.localQueries(), turn => collectChatTurn(turn), (threadId, reason) => {
-  knowledgeCollector.threadRemoved(threadId, reason)
+  if (!settlingRecords.has(threadId)) knowledgeCollector.threadRemoved(threadId, reason)
   void profileCollector.retractThread(threadId, reason)
 }, profileText)
 let explanationController: AbortController | null = null
@@ -373,14 +373,36 @@ const knowledgeTools: KnowledgeTools = {
  * itself is deleted. It throws: nothing has been deleted when it does, so the
  * caller keeps both sides intact and can retry with the real reason.
  */
-async function verifyKnowledgeDelete(identity: import('@shared/knowledge').SourceIdentity, ticket?: string): Promise<void> {
+/** Records whose deletion this process is settling, so the store callbacks stay out. */
+const settlingRecords = new Set<string>()
+
+async function verifyKnowledgeDelete(identity: import('@shared/knowledge').SourceIdentity, ticket?: string, cards = true): Promise<void> {
   if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
   const preview = await knowledge.cardImpact(identity)
   if (!preview.cards) return
+  // A preview built on a capped source list must never be confirmed: the real
+  // dependency count is larger than what the user saw.
+  if (cards && preview.incomplete) throw new Error(mt('这条记录的来源太多，请先在知识库确认后再删除关联知识'))
   if (!ticket || preview.ticket !== ticket) throw new Error('预览已失效，请重新确认')
 }
 
+function recordKey(input: FindSourceInput): string {
+  return 'originRef' in input ? input.originRef : input.groupKey
+}
+
 async function purgeRecordKnowledge(input: FindSourceInput, identity: import('@shared/knowledge').SourceIdentity, options: { cards?: boolean; ticket?: string } = {}): Promise<void> {
+  // One path owns the ordering: while this runs, the store's own removal callback
+  // must not invalidate the sources first and let the confirmed op fall through.
+  const key = recordKey(input)
+  settlingRecords.add(key)
+  try {
+    await settleRecord(input, identity, options)
+  } finally {
+    settlingRecords.delete(key)
+  }
+}
+
+async function settleRecord(input: FindSourceInput, identity: import('@shared/knowledge').SourceIdentity, options: { cards?: boolean; ticket?: string }): Promise<void> {
   // A switched-off loop must not block the invalidation of knowledge that already
   // exists; with no database there is nothing to settle and no helper to wake.
   if (!knowledgeCollector.enabled && !(knowledge.running || knowledge.hasData())) return
@@ -390,9 +412,23 @@ async function purgeRecordKnowledge(input: FindSourceInput, identity: import('@s
   if (!sources.length) return
   // The helper re-checks these versions and this ticket inside its write
   // transaction, so a preview that no longer holds refuses instead of widening.
-  const result = options.cards
-    ? await knowledge.purgeCards({ record: identity, confirm: { sources, ticket: options.ticket ?? '' }, cards: true })
-    : await knowledge.purgeSources(sources, false)
+  if (!options.cards) {
+    // The default keeps every card and the link that says where it came from: the
+    // source is marked invalid, the queue stops, and the card still points at the
+    // record it was distilled from.
+    for (const source of sources) {
+      await knowledge.invalidateSource(source.id, '记录已删除').catch(error =>
+        log(`[knowledge] 失效来源失败：${error instanceof Error ? error.message : String(error)}`)
+      )
+    }
+    if ('channel' in input) {
+      const group = 'groupKey' in input ? { channel: input.channel, groupKey: input.groupKey } : { channel: input.channel, groupKey: input.originRef }
+      await knowledge.invalidateTask(group, '记录已删除').catch(() => undefined)
+    }
+    log(`[knowledge] 记录删除后：失效 ${sources.length} 个来源，卡片与来源关联保留`)
+    return
+  }
+  const result = await knowledge.purgeCards({ record: identity, confirm: { sources, ticket: options.ticket ?? '' }, cards: true })
   log(`[knowledge] 记录删除后：移除 ${result.removed.length} 张卡片，保留 ${result.kept.length} 张，跳过 ${result.skipped.length} 个已变更来源`)
 }
 /** Characters of a card body handed to a continued discussion. */
@@ -809,7 +845,7 @@ const notes = new NotesStore({
     // old body is not a new note and must not raise the usage count.
     if (event === 'created') void profileCollector.completedNote(note.id)
   },
-  onRemoved: id => knowledgeCollector.noteRemoved(id),
+  onRemoved: id => { if (!settlingRecords.has(id)) knowledgeCollector.noteRemoved(id) },
   getSettings: () => store.get(),
   notify: () => broadcastNotes(),
   localAsr: {
@@ -2067,6 +2103,7 @@ function registerIpc(): void {
     // ticket the user confirmed. A mismatch is a partial failure, never a silent
     // cleanup of knowledge created after the preview.
     if (input.deleteKnowledge) await verifyKnowledgeDelete({ channel: 'chat', groupKey: input.id }, input.ticket)
+    else settlingRecords.add(input.id)
     const removed = chats.edit(input)
     try {
       await purgeRecordKnowledge({ channel: 'chat', groupKey: input.id }, { channel: 'chat', groupKey: input.id },

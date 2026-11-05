@@ -271,4 +271,32 @@ describe('records and the knowledge they produced', () => {
     await expect(instance.getCard(card.id)).resolves.toMatchObject({ id: card.id })
     expect((await instance.getSource(source.id)).state).toBe('active')
   }, 60_000)
+
+  it('keeps the card and its invalidated link when the record is only invalidated', async () => {
+    const instance = host()
+    const source = await instance.saveSource({
+      kind: 'note',
+      originRef: 'n-keep',
+      locator: 'n-keep',
+      title: '保留关联',
+      scope: '随记',
+      version: '1',
+      readAt: 1,
+      text: '来源已删除时，卡片仍应指出它来自哪条记录。'
+    })
+    const card = await instance.saveCard({
+      title: '保留的卡片',
+      body: '来源失效但关联仍在的正文内容，用于验证默认删除路径。',
+      sourceIds: [source.id],
+      kind: 'concept',
+      topics: ['保留']
+    })
+    const impact = await instance.cardImpact({ channel: 'note', originRef: 'n-keep' })
+    expect(impact.single).toBe(1)
+    // The default path marks the source invalid instead of unlinking it.
+    await instance.invalidateSource(source.id, '记录已删除')
+    const after = await instance.getCard(card.id)
+    expect(after.sourceIds).toEqual([source.id])
+    expect((await instance.getSource(source.id)).state).toBe('invalid')
+  })
 })

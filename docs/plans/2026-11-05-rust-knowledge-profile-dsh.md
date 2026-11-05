@@ -1493,3 +1493,43 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - `5a98e43` `feat(knowledge): read the bounded user profile into every answer` —— 8 个文件：`src/shared/prompts.ts`（`PromptContext.profile` 与 `profileContext()`）、`src/main/chat.ts`、`src/main/assistant.ts`、`src/main/index.ts`（`profileText` 提供者）与三处测试。
 - 说明：`pnpm test` 首轮出现 1 项失败，重跑两次均为 276 文件 / 3940 项通过；首轮失败项的名称未被保留，`src/main/chat.test.ts` 随后连续三次单独重跑 16/16 通过。
 - 本节由随后的 docs 提交记录。
+
+## 阶段 6 复核 A～D 检查点（2026-11-05 第十一轮）
+
+起始 `27f676d`。本轮只修外部复核仍可复现的两处删除缺陷，并把 A～D 已落地的部分记录在此；**A/C/D 的生产路径与实窗证据尚未交付**，因此这不是阶段 6 验收。
+
+### 已交付（提交见末行）
+
+| 项 | 实现 | 位置 |
+| --- | --- | --- |
+| B 默认删除保留失效关联 | 默认路径不再走 `purge.rs` 的解链语义，改为逐个 `source.invalidate`（`UPDATE sources SET state='invalid'` 保留 `card_sources` 行）+ 组级 `invalidateTask` 取消待办 | `src/main/index.ts` `settleRecord` |
+| B 旧回调不再抢先作废 | 新增模块级 `settlingRecords`：`verifyKnowledgeDelete` / 聊天删除在动原记录前登记，`settleRecord` 结束时释放；`onRemoved: noteRemoved` 与 `threadRemoved` 命中登记即跳过 | 同上 |
+| B pre-check 拒绝不完整预览 | `verifyKnowledgeDelete(identity, ticket, cards)` 在破坏性路径上遇 `preview.incomplete` 直接拒绝（`这条记录的来源太多，请先在知识库确认后再删除关联知识`） | 同上 |
+| A/C/D 已落地部分 | 开关实时求值 + 写权限门（`knowledgeWrite`）、删除前票据校验、`publishReading` 等待本次回包、卡片草稿以不可信参考进入真实请求 | 见上一节 |
+
+### 反例修复前后（真实 helper）
+
+| 反例 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 默认删除后卡片 `sourceIds` | `[]`（`purge.rs` 解链） | 仍为 `[source.id]`，来源 `state='invalid'`（`linkage.integration.test.ts` 新增用例，真 helper） |
+
+新增回归：`keeps the card and its invalidated link when the record is only invalidated`（真实 release helper：发布随记来源 → 建卡并关联 → `card.impact.single === 1` → `source.invalidate` → 卡片关联仍在、来源失效）。`linkage.integration.test.ts` 现 7 项全过。
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `npx tsc --noEmit -p tsconfig.node.json` / `-p tsconfig.web.json` | 0 / 0 |
+| `npx vitest run src/main/knowledge src/main/tools src/main/chat.test.ts src/main/assistant.test.ts src/main/notes-ipc.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts src/renderer/src/settings` | 76 文件 / 1068 项全过 |
+| `pnpm test` | 276 文件通过 / 3 跳过；3942 项通过 / 8 跳过；96.49 s |
+| `pnpm build` | 0（12.27 s，`settings-BzP2gADE.js` 4,708.97 kB） |
+| `git diff --check` | 0 |
+| release 助手 | 3,199,488 字节 `7e55ca9896336a878f613eb0ee251d8153c80fb347ff02780b0b7b32a0b66e87`（本轮无 Rust 改动，未重建） |
+
+### 未测与未交付（明确边界）
+
+- **A**：Ask 回答卡的知识引用与点击路径、`get_knowledge` 真实结果/阅读投影引用、真实 `ChatService`/`AssistantSession` → 生产 `askAgent` → 仅替网络的端到端回归、隔离 Electron 实窗点击，均未交付。
+- **C**：`knowledge:by-source` 仍走 `findSources()[0]`；两版本分页、草稿关联卡片界面、发送前 ID 复核、另存随记不重复制卡的验证，均未交付。
+- **D**：工作流真实执行器 + 注入读 + 真 helper 的回归（配置交接等待、取消不新建任务、与普通总结共用来源）未交付。
+- B 的两处新语义（`settlingRecords` 竞态、`incomplete` 拒绝）没有自动化用例，只有代码路径与人工推演；真实 `chat:edit`/`notes:remove` 的两来源误报复现未以生产入口写成测试。
+- `cargo fmt/test/clippy` 未复跑（本轮无 Rust 改动）。
