@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2 已通过外部复核；阶段 3 外部复核未通过。T1/T2/T4/T5 及「目标被删」分支已通过外部定点复核，T3 陈旧 merge 建议分支本项修复已提交（`0f42024`），待外部 Codex 复核。阶段 4～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1、阶段 2、阶段 3 已通过外部复核；阶段 4 已实现，待外部 Codex 复核。阶段 5～7 未开始；用户可见的知识库页面与画像页面尚未开放（后台画像与上下文接口已就绪，接入回答属阶段 6）。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -836,3 +836,57 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 验证（实际命令与退出码）：`cargo fmt -- --check` 0；`cargo test --locked` 0（15 lib + 11 extract + 11 process + 18 queue）；`cargo clippy --locked --all-targets -- -D warnings` 0（含 `--features fixture`）；`node scripts/build-native.mjs` 0；`pnpm exec vitest run src/main/knowledge src/preload/index.test.ts src/main/ipc-trust.test.ts` 17 文件 / 136 项通过；`pnpm typecheck` 0。本轮只改 Rust 与该回归，未重跑 7 crate 与整仓长测试。
 
 交付产物：`native/bin/yu-knowledge.exe` 2,714,624 字节，SHA-256 `f0359af8b3937fe427efcb67b4d0465123f539a56caff012a9cadaf94fb9fb12`（MSVC 重建哈希可能变化；debug/fixture 不计入交付）。实现提交 `0f42024`。未测：真实付费模型 0 次；未在打包 Electron 实例中运行。
+
+## 阶段 4 实施记录（2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+**状态：阶段 4 已实现，待外部 Codex 复核。阶段 5～7 未开始；用户可见的画像页面尚未开放，但后台画像与上下文字符串已经可读。**
+
+### 契约（本阶段对外行为）
+
+设置块 `Settings.userProfile`：`{enabled:false, usage:true, chat:true, profileId:null, effort:'high'}`。与知识库开关完全独立：知识库关、画像开可正常工作，反之亦然；两者都关时不启动 helper、不新建数据库、不排定时器。
+
+RPC（全部经 `handle()`／`knowledgeOwner`，渲染进程不能提交正文、根目录、SQL 或提示词）：
+
+| 方法 | 用途 |
+| --- | --- |
+| `profile.configure` | 同步 `enabled/usage/chat/pausedManual/pausedGame`，返回状态 |
+| `profile.pause` | 手动暂停/恢复（与游戏暂停分开存储，互不覆盖） |
+| `profile.status` | 开关、暂停原因、待处理条数、条数、统计总数、`nextDueAt` |
+| `profile.event` | 幂等记录一次已完成动作（`op_id` 去重），立即聚合到按天/按功能 |
+| `profile.evidence` | 入队用户本人语句（超长按 Rust 选定分段切分，>200000 字符显式 `too_large`） |
+| `profile.learn.next` / `.run` / `.fail` | 取批次（claim）、一次模型归纳、释放 claim |
+| `profile.context` | 只读上下文（≤2000 字符，带条目 id/类别） |
+| `profile.retract` | 会话删除/转临时后撤回证据 |
+| `profile.clear` | 清空统计、待处理正文、条目与证据，并留下清除屏障 |
+
+数据模型（`data/profile/profile.db`，`PROFILE_SCHEMA = 2`）：新增 `profile_items.slot`（稳定身份）、`profile_usage(day, feature, count)`、`profile_events(op_id)`（幂等窗口）、`profile_pending`（待处理用户正文，处理后删除）、`profile_claims`（同一时刻最多一个批次）、`profile_progress`，以及 `profile_evidence.state`（`active|invalid`）。知识库库仍是 `KNOWLEDGE_SCHEMA = 5`；两个库独立清空，无跨库外键或分布式事务。
+
+稳定身份：`save` 以 `slot`（缺省为 `dimension`）为准，同一 slot 的再次写入是覆盖而不是新增；人工纠正/固定/删除留下的是 slot 级排除，自动写入既不能改值也不能靠新 id 绕过；`profile.save` 不再按 `(dimension,value)` 匹配。
+
+学习预算：单批 ≤12000 字符用户材料、≤8 条候选条目（≤4000 字符）、一次归纳请求、`maxTokens ≤ 4096`、120 秒总预算、最多 6 条有效更新，无事可写时返回显式空数组；无隐式重试、无第二次比较、无向量检索。`profile.learn.run` 与 `extract.run` 一样通过 `model.request` 父子协议借用既有的 `KnowledgeHost` + `createKnowledgeCompleter`；未配置 profile 时由主进程解析“第一个可用模型”（与知识库共用同一规则），不在 Rust 里各猜一份。
+
+### 实现
+
+Rust（`native/knowledge/src/`）：`store.rs` 增加 `PROFILE_LOOP_SQL` 迁移；`profile.rs` 增加 `slot` 与槽位级排除；新增 `profile_learning.rs`（控制、幂等统计、分段入队、批次 claim、单次归纳、原子写入、retract、clear 屏障、优先级上下文）；`service.rs`/`lib.rs` 挂载 `profile.*` 十一个方法。
+
+主进程：新增 `src/main/knowledge/profile.ts`（`ProfileCollector`：把真实完成点的事实交给 helper、只持有一次唤醒与一个 in-flight 批次、`park()` 只取消 `profile.learn.run`）；`session.ts`、`engine.ts`、`host.ts` 增加 `cancelInFlight(reason, only)` 以便两个模块各取消自己的批次；`src/main/index.ts` 接上聊天完成、浮动提问完成、随记创建、手动改卡四个真实入口，游戏进入先 park 再 stop、退出后恢复，`settings:update` 与启动各自同步两个模块的开关；新增 `profile:pause`、`profile:clear`、`profile:context` 三个受信通道并在 `api.ts`/`preload` 镜像。
+
+### 验证（实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | 0 |
+| `cargo test --locked` | 0（15 lib + 11 extract + 11 process + 11 profile + 18 queue） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture`） |
+| `pnpm exec vitest run src/main/knowledge src/main/chat.test.ts src/main/notes.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 20 文件 / 208 项通过 |
+| `pnpm typecheck` | 0 |
+| `pnpm test:native` | 0（7 个 crate 全部构建并测试通过） |
+| `pnpm test` | 0（268 文件通过 / 3 跳过；3819 项通过 / 8 跳过） |
+| `pnpm build` | 0 |
+| `git diff --check` | 0（提交前）；提交后再核对 `git diff --check 7987aed..HEAD` 与 `git status` |
+
+新增回归 `src/main/knowledge/profile.integration.test.ts`（真实 helper + 生产 `KnowledgeHost`/`ProfileCollector`，6 项）：开关关闭时不启动任何进程、不建库且上下文为空；同一次完成重复上报只计一次、统计立即可查且 0 次模型调用；用户自己的句子经一次归纳写成带原文引用的条目，上下文可读且 ≤2000 字符，同时证明知识库渠道仍为关闭（两模块互不影响）；清除后迟到的模型答复不能复活条目（人工固定条目先写、随后 clear，上下文为空、条目 0）；游戏进入 park 后 `pausedGame` 为真、退出恢复后排队证据被消费；手动暂停期间证据不丢、恢复后立刻处理。
+
+未测与边界：未调用真实付费模型（全部为注入 completer）；未在打包 Electron 实例里运行；30 天窗口以注入时间验证；上下文只有字符串，尚未接入回答（阶段 6）。
+
+实现提交：`df335c3` `feat(knowledge): run the user profile loop in the background`。交付产物：`native/bin/yu-knowledge.exe` 2,863,616 字节，SHA-256 `0d53a348ef6541f358787cad86d70d61a5d25eb754d6c9618e2bd284bfa08341`（MSVC 重建哈希会变；debug/fixture 不计入交付）。
