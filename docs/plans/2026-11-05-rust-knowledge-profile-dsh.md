@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1 已通过外部复核；阶段 2 第二次外部复核未通过，A～E 修复已提交（`45b7fab`，见「阶段 2 复核修复」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1 已通过外部复核；阶段 2 外部复核仍未通过，R1～R5 修复已提交（见「阶段 2 第三次复核修复」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -505,7 +505,7 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 
 - Rust：`queue::enabled`（`queue_control.enabled`，默认 false），`channel_enabled` 要求总开关打开，`collect.configure` 可写 `enabled`；`channels_json` 回报 `enabled`。
 - TS：`collector.sync({ game })` 无条件把 `enabled` 与三通道、游戏暂停一起交给 helper；总开关关闭且 helper 未运行时只清空暂存、不启动进程；关闭时先确认配置落地（`confirmed` 握手，发布前等待仍在途的配置），再清空暂存。
-- 游戏模式：进入只在 `knowledge.running` 为真时写 `pause game` 再停进程，退出只在开关打开且进程运行中解除 `game` 原因，手动暂停不受影响。
+- 游戏模式（第三轮修正）：进入与退出都通过 `collector.sync({ game })` 直接写数据库，不依赖进程是否在运行；进入后仍停掉进程，退出后新来源到来会重新启动；手动暂停不受影响。
 
 **E｜一致性、分页与输入上限**
 
@@ -516,7 +516,7 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 
 **未覆盖与说明**
 
-- 开关/游戏暂停的端到端验证在 `KnowledgeCollector` 与 `HistoryDriver` 层完成（含"关闭时不启动进程"），未在真实 Electron 启动流程里跑集成测试：`src/main/index.ts` 的装配目前仍由现有 vitest 结构外的人工验证覆盖。
+- 开关/游戏暂停的端到端验证在 `KnowledgeCollector` 与真实 helper 上完成（含"关闭时不启动进程"、进程死亡后仍保持游戏暂停、退出后解除），未在真实 Electron 启动流程里跑集成测试：`src/main/index.ts` 的装配仍由现有 vitest 结构之外的人工验证覆盖。
 - 60 秒稳定期仍只用缩短窗口（`YU_KNOWLEDGE_STABLE_MS`）验证。
 
 **A～E 修复后验证（2026-11-05 第三轮，实现提交 `45b7fab`；实际命令与退出码，依赖顺序执行，未并发）**
@@ -539,3 +539,51 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 事务行为修正：写事务改为 `TransactionBehavior::Immediate`，避免延迟事务在锁竞争下升级失败（改为 `storage_error`），使"取消不推进检查点"在真实 `BEGIN IMMEDIATE` 竞争下成立。
 - 交付 release：`native/bin/yu-knowledge.exe`，2,489,344 字节，SHA-256 `0e6a998a7eecbbbb8332be481b1fba336aef634011ac6a92b3e46685783af457`（每次重建都会变）。
 - 仅用于测试的二进制：`target/debug/yu-knowledge.exe`（`aeb44d65…`）、`target/debug/yu-knowledge-fixture.exe`（`616f34c6…`），不随安装包分发。
+
+## 阶段 2 第三次复核修复（2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+外部复核报告 ID `7b95f676-f74b-46ce-94d9-7b4c1866ab95`，基线 `56556579061fa69d6322491c344b327ce195235a`。外部确认通过且未重做的部分：批次锁等待取消不推进游标、重放不重复计数、200000 字符发布上限、201 条条目全部可达、公开 `history-step` 已移除、`HistoryDriver` 已接线、问答仅在 `completed` 入库且删除/临时会话会撤回、附件与真实切片同源。
+
+复核实际失败项（真实入口，不用 mock 代替）：
+
+| 项 | 探针结果 |
+| --- | --- |
+| R1 恢复 | `source.read` 只和自己比较，没有真实读取 NotesStore/ChatStore，也没有生产调用方 |
+| R2 游标/边界 | 按可变 `updatedAt` 排序：扫描中把已读笔记改旧后，下一页返回 `[n2,n3,n1]`；`get(thread, 10000)` 的数组下标游标在 5001 回合下丢掉第 0 问，追加后下一页丢掉第 2 问 |
+| R2 尾部批次 | 同一游标的空批次被当成重放，剩余行被删除时驱动会一直循环 |
+| R3 清空笔记 | `polished=''`、`transcript='旧转写'`、`polishStatus='ok'` 时仍以旧转写入库（`{"probe":"cleared_note_after_repair","queued":true}`） |
+| R4 游戏暂停 | 进入时暂停并停进程，退出时因进程已停不再解除（`{"probe":"game_exit_then_new_source","resumeSent":false,"running":true,"paused":true,"reasons":{"game":true,"manual":false}}`） |
+| R5 乱序回合 | 迟到的历史回合把组的稳定期起点向后拖，刚到的新讨论因此提前 ready |
+
+**修复映射**
+
+- **R1**：新增 `src/main/knowledge/recover.ts`（`createSourceRecovery`，按 channel + origin 从真实 `NotesStore`/`ChatStore` 读当前正文，明确区分 `deleted`/`temporary`/`empty`/`unknown`），在 `index.ts` 装配为 `KnowledgeCollector` 的 `readBody`；`retry` 现在走 `queue.items` → 真实读取 → `source.read` 带正文重新计算指纹 → 未变才 `queue.retry`，变了按 `source changed` 撤回，读不到正文按 `needs_reread` 落库。Rust `sources::read` 改为接收正文并由 Rust 重算 SHA-256，不再自证。
+- **R2**：`chat-store.ts` 新增 `historyBound()`/`historyThreads()`/`historyTurns(threadId, afterSeq, bound, limit)`，按 `seq` 分页并配对完整问答，不再用消息窗口下标；`pages.ts` 重写为稳定 id 顺序 + 作业开始时固定并持久化的上界（`history_jobs.note_bound`/`chat_bound`，schema 升到 4），笔记页按 UTF-8 字节预算（`HISTORY_BATCH_BYTES = 512 KiB`）装箱；`history.rs` 的重放判定改为"同游标且批次非空"，空批次视为完成标记。
+- **R3**：`collector.noteBody` 改用 `@shared/noteBody` 的 `noteBodyField`，`NotesStore` 的写入前后比较用同一条规则，清空润色不再回退到旧转写。
+- **R4**：游戏进入/退出都通过 `collector.sync({ game })` 直接写库；退出后新来源会重新启动 helper；手动暂停保留。
+- **R5**：`queue.items` 排序改为 `s.read_at, i.ordinal`，组更新用 `MAX(stable_at, ?)`/`MAX(updated_at, ?)`，迟到回合不再把稳定期拉回过去。
+
+**新增真实回归**
+
+- `src/main/knowledge/host.integration.test.ts`（真实 helper）：正文已变的待办在重试时被撤回为 `cancelled`；清空润色的笔记不再以旧转写入库；helper 死亡后游戏暂停仍保持、退出后解除；总开关关闭时既不启动进程也不入队。
+- `src/main/knowledge/history.integration.test.ts`：真实 `NotesStore` + 真实 `ChatStore` 驱动扫描；5001 回合（10002 条消息）线程第一页从第 0 问开始且 5001 回合全部到达；边界内的插入不重复、原有笔记不漏。
+- `src/main/knowledge/pages.test.ts`：按字节预算装箱（20 行上限下只发 17 行）、单个超大正文仍可达下一页。
+- `src/main/knowledge/collector.test.ts`：暂存超过 16 MiB 后最早的分组重试落到 `needs_reread`；`queue.items` 返回的是分组条目而不是分组本身（真实形状）。
+
+**第三轮（R1～R5）修复后验证（实际命令与退出码，依赖顺序执行）**
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `cargo fmt -- --check` | 0 | — |
+| `cargo test --locked` | 0 | 15 lib + 11 process + 18 queue |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 | — |
+| `cargo clippy --locked --all-targets --features fixture -- -D warnings` | 0 | — |
+| `pnpm exec vitest run src/main/knowledge src/main/notes.test.ts src/main/chat.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 0 | 11 文件 / 161 项 |
+| `pnpm typecheck` | 0 | node + web |
+| `pnpm test:native` | 0 | 7 个 crate |
+| `pnpm test` | 0 | 259 文件通过 / 3 跳过（262）；3772 项通过 / 8 跳过（3780） |
+| `pnpm build` | 0 | renderer 与主进程构建通过 |
+
+- 交付 release：`native/bin/yu-knowledge.exe`，2,497,536 字节，SHA-256 `085f3ec8cb272de639adf26a893e7bc80e6514ceac7cb1cce5ae9069b0dca20f`（每次重建都会变）。
+- 仅用于测试的二进制：`target/debug/yu-knowledge.exe`（3,927,040 字节，`2f47e92afd61de7bd4db2f16d0773a201431a1c1af9d9ebbfb9220f2a3086d66`）、`target/debug/yu-knowledge-fixture.exe`（2,412,544 字节，`393df85ac02f8945e9da4cbc6fdc5fbd4947dee82a4dd5ac61abf53a5fc7657c`），不随安装包分发。
+- 仍未覆盖：真实 Electron 启动、打包安装后的六程序联动、60 秒稳定期的真实时长（仍用 `YU_KNOWLEDGE_STABLE_MS` 缩短验证）、阶段 3 的卡片生成（本阶段不调用任何模型）。
