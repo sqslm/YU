@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5 和阶段 6 A 已通过外部 Codex 复核。阶段 6 B 待补齐删除后的知识清理重试。B 验收后按 6 C1 知识库排版、6 C2 卡片联动、6 D 工作流的顺序交付。阶段 7 未开始。
+**当前状态**　阶段 1～5、阶段 6 A 与阶段 6 B 已通过外部 Codex 复核。阶段 6 C1（知识库浏览排版）已交付，并按外部复核提出的三条反例完成定点补修，待外部验收。其后按 6 C2 卡片联动、6 D 工作流的顺序交付。阶段 7 未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2287,3 +2287,51 @@ Rust 本轮未改，`native/bin/yu-knowledge.exe` 复用 `66731bd317674ff537c954
 - 代码：`d7cdded` `feat(knowledge): browse cards in one column with a graph preview and a detail dialog`
 - 计划：本文件所在的 `docs(plan)` 提交。
 - 未 push / merge / rebase / reset。
+
+## 阶段 6 C1 定点补修（2026-11-06 第二十一轮）：预览同步、往返位置与异常详情关闭
+
+起始 `c214d4b`（工作区干净）。本轮只处理外部复核提出的三条真实反例，未改 Rust、未加 IPC 或持久化；release 助手仍是 3,247,104 字节 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`，本轮未重建。C2、D、阶段 7 未动。
+
+### 外部反例与修复
+
+| 外部复测到的现象（04:28:41 构建） | 根因 | 修复 |
+| --- | --- | --- |
+| 展开节点区后用真实 IPC 删一张卡：网格 12→11、`graph()` total 11，预览仍「匹配 12 / 总数 12」，已删节点还能点开 unknown card | 页面只在 cards 通知里重取列表与详情，预览只吃 `reload` | 预览的 `refreshToken` 改为 `reload + cardsToken`，cards 通知同时 bump；卡片与关系的改在 Rust 里同属 `scope='cards'`，因此关系增删也走同一处。预览仍整份替换（`acceptGraph` 只认最新一票，不叠节点），刷新时保留当前画面，只有 topic/查询变化才清空重画，避免区块塌陷改变页面高度 |
+| 「复核」筛选下把预览排到卡片区之后：展开节点区、滚到底、点已在视口内的「展开图谱」，返回后筛选与卡片数保持，但 `aria-expanded` true→false，`scrollTop` 841→765，1.6 s 后仍不复原 | 展开状态是预览组件内部 `useState`，预览随完整图谱卸载而丢；只加补写帧数补不回缺少的内容高度 | 展开状态上提到页面（`nodesOpen`/`onToggleNodes`，预览受控，`aria-expanded={nodesOpen}`）。往返后预览重挂即带原高度，既有的「写住即停」按帧恢复因此能落到目标位置，未加大任何魔数 |
+| 820×690 单列视口用真实已删卡打开全屏详情：只有「重试」，没有可见关闭控件，只能按 Esc | `KnowledgeCardDetail` 的 loading 与 `!card` 分支提前返回，关闭控件只在成功分支渲染 | 抽出 `closeControl()`（`data-knowledge-detail-close`、`aria-label` = `closeLabel` 或「返回」）供三个分支共用；loading 与读失败分支补带下边框的头部行，成功分支仍按 `(!wide \|\| closeLabel)` 渲染，正常状态只有一个关闭控件 |
+
+实窗复验时另发现：触发卡被真删后关闭详情，`restore()` 把焦点还给已从 DOM 移除的元素，焦点落到 `document.body`。改为只在触发项仍 `isConnected` 时回焦，否则把焦点交给知识页容器（容器加 `tabIndex={-1}`、`outline: none`），Tab 继续在页内。
+
+### 本轮实现
+
+- `src/renderer/src/settings/pages/KnowledgePage.tsx`：新增 `nodesOpen`、`cardsToken`；cards 通知里 `setCardsToken(v => v + 1)`；预览传 `refreshToken={reload + cardsToken}`、`nodesOpen`、`onToggleNodes`；`restore()` 增加 `isConnected` 判断与容器兜底；页面容器加 `tabIndex={-1}`。
+- `src/renderer/src/settings/pages/KnowledgeGraphPreview.tsx`：`nodesOpen`/`onToggleNodes` 改为受控 props（删除内部 `showNodes`）；刷新时保留上一份绘制，仅 `topic`/`query` 实际变化才清空并复位 `fit`。
+- `src/renderer/src/settings/sections/KnowledgeCardDetail.tsx`：新增 `closeLabelText` 与 `closeControl()`；loading 与 `!card` 分支改为「头部行（关闭控件）+ 内容」，成功分支复用同一控件。
+
+### 验证命令与退出码
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run src/renderer/src/settings/pages/knowledgeView.test.ts src/main/knowledge/graph-budget.test.ts src/main/ask-knowledge.integration.test.ts` | 3 文件 / 67 项通过，exit 0（外部复跑同为 67/67） |
+| `pnpm exec vitest run src/renderer/src/settings src/main/knowledge src/main/notes-ipc.test.ts src/main/chat.test.ts src/main/preload/index.test.ts src/main/ipc-trust.test.ts` | 66 文件 / 783 项通过，exit 0 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm build` | exit 0（14.79 s；`out/main/index.js` 04:55:21、`KnowledgeGraphPreview-BlOMrSi_.js` 与 `settings-yVnz95gV.js` 04:55:36） |
+| `git diff --check` | exit 0 |
+| `git diff --check c214d4b..HEAD` | exit 0（代码提交 `fde569e`） |
+
+### 实窗证据（最终构建 04:55，真 helper、真 IPC、模型走桩，零付费）
+
+证据目录 `.tmp/c1-evidence/`（gitignored）：`report-r10.md`（外部子代理首轮 A/B/C 全过）、`results/r10-{a,b,c,seed,probe-fiber}.json`、`shots/r10-*.png` 15 张、`scripts/r10/{common,fixture,a,b,c,probe-fiber}.js`、`logs/r10/`。装置：`electron out/main/index.js` + CDP 19235 + 桩 19236，临时根 `E:\CpanQianYi\Temp\yu-c1d`（用 junction 借仓库 `node_modules`/`native`/`resources`），收尾已删临时根并复核无残留。
+
+- **场景 A（预览实时同步，默认窗口 1080×750）19/19 PASS**：基线「匹配 14 / 总数 14」= `graph({limit:200})` 14 节点 6 边，fiber 取样 14/6；`saveCard` 后 **123 ms** 变「匹配 15 / 总数 15」，fiber 15/6，新节点进键盘节点区首位，网格「共 15 条」；`deleteCard` 真实 id 后 **121 ms** 回 14/14，按钮、fiber、预览文本（TreeWalker 扫文本节点 + `aria-label`/`title`）命中 0，删后画布原坐标 + 4×3 采样共 13 次点击 0 命中（正向对照：活节点换算坐标 `offset [0,0]` 打开正确卡）；`addRelation` **602 ms** 边 6→7、`removeRelation` **131 ms** 回 6；搜索「合成」13/13，范围内新增 113 ms → 14/14，范围外新增预览仍 14/14 而全库 `graph()` 16（只刷新同一 scope）。
+- **场景 B（筛选 + 节点区展开 + 滚到底 + 已加载多页）8/8 PASS**：25 张匹配卡，首屏 20 → 加载更多 25；滚轮 2 步到底 `scrollTop = maxScroll = 2057`（`scrollHeight 2767 / clientHeight 710`），「展开图谱」矩形 `{x:991,y:303,72×31,inView:true}`；**不做 scrollIntoView** 直接用真实鼠标点 → 图谱页 → 点「返回卡片」：搜索值、卡片数、id 顺序、`aria-expanded=true` 全部保持；0/300/1600 ms 三次采样 `scrollTop` 恒为 2057，零漂移；从预览节点开卡 → Esc：仍在浏览页、25 卡、`scrollTop 2057`。
+- **场景 C（820×690，`Emulation.setDeviceMetricsOverride` 明确使用模拟，单列、对话框全屏）8/8 PASS**：正常详情 `[data-knowledge-detail-close]` count=1、`aria-label="关闭"`、Tab **1 次**可达；loading 用 rAF 逐帧 361 帧捕到 **2 帧**（t=117/118 ms，paper + close + spinner，`h2` 未出现），两帧都有关闭控件；失败态两条真实路径——「已打开 → 真删」（139 ms 出 `role=alert` 含 `unknown card: <id>`）与「同 tick 先删再开」（133 ms 出 alert、`title=null`，纯 `!card` 分支），两态关闭控件均 count=1「关闭」，真实鼠标点击后对话框消失、网格可见，焦点落在知识页容器（`inPage: true`，再 Tab 一次到页内按钮）。
+- 取证过程中我改过证据脚本 `scripts/r10/c.js`：C7 需要网格里有一张可点卡，C4/C6 已把唯一夹具卡真删，脚本补卡后仍取不到视口内卡片，再补 `scrollIntoView` 才跑出 C7；这是脚本夹具修复，未改应用代码或断言。A/B/C 三份结果都由最终构建重跑覆盖。
+
+### 未测与边界
+
+- 视口只覆盖 1080×750 真实窗口与 820×690 模拟（`Emulation.setDeviceMetricsOverride`），dpr≠1、触屏指针、>100 张多页未测；分页只到 25 张。
+- 画布节点点击用 `graphData` + `canvas.__zoom` 近似换算（`graph2ScreenCoords` 取不到），删除后的阴性结论靠 13 点采样而非逐点穷举。
+- 预览刷新延迟为 113–605 ms 观测值，轮询粒度 100 ms，只说明「无需手动刷新」；未测真实外网模型链路（本轮不需要）。
+- loading 态只能捕到 2 帧（无 >1 s 强制停留），`!card` 首帧加载失败用「同 tick 删+开」制造，网格里不存在可点的已删卡。
+- C6 之前的旧结论（焦点落 body）已由本轮容器兜底取代；`scrollTop` 恢复仍依赖页面内容高度在 20 帧内稳定，若未来在浏览页上方加入异步区块需要重新验证。
