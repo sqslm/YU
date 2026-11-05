@@ -137,6 +137,9 @@ export interface TypelessApi {
     get(id: string): Promise<import('./knowledge').ProfileItem>
     delete(id: string): Promise<{ removed: boolean }>
     list(query?: import('./knowledge').CardQuery): Promise<import('./knowledge').ProfilePage>
+    pause(paused: boolean): Promise<boolean>
+    clear(): Promise<boolean>
+    context(): Promise<import('./knowledge').ProfileContext | null>
   }
   entities: {
     list(): Promise<import('./entities').EntityTerm[]>

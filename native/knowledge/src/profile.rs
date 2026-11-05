@@ -13,7 +13,7 @@ use crate::protocol::{ApiError, ApiResult, Code, fit_page};
 use crate::store::CATEGORIES;
 use crate::util::{check_chars, new_id, now_ms, page, require_text};
 
-const ITEM_SELECT: &str = "SELECT id, dimension, value, category, origin, pinned, corrected, created_at, updated_at FROM profile_items";
+const ITEM_SELECT: &str = "SELECT id, dimension, value, category, origin, pinned, corrected, created_at, updated_at, slot FROM profile_items";
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +31,9 @@ pub struct ProfileItem {
     pub id: String,
     pub dimension: String,
     pub value: String,
+    /// Stable identity of this preference; empty only in a database that has not
+    /// been migrated yet.
+    pub slot: String,
     pub category: String,
     pub origin: String,
     pub pinned: bool,
@@ -68,6 +71,11 @@ pub struct SaveParams {
     pub dimension: String,
     pub value: String,
     pub category: String,
+    /// Stable identity of the preference. Automatic writers address an item by
+    /// this slot, so restating the same preference with different words cannot
+    /// slip past a correction the user made.
+    #[serde(default)]
+    pub slot: Option<String>,
     #[serde(default)]
     pub origin: Option<String>,
     #[serde(default)]
@@ -111,10 +119,6 @@ fn protected(item: &ProfileItem) -> bool {
     item.pinned || item.corrected
 }
 
-fn key_of(dimension: &str, value: &str) -> String {
-    format!("{dimension}={value}")
-}
-
 fn map(row: &Row<'_>) -> rusqlite::Result<ProfileItem> {
     Ok(ProfileItem {
         id: row.get(0)?,
@@ -127,6 +131,7 @@ fn map(row: &Row<'_>) -> rusqlite::Result<ProfileItem> {
         evidence: Vec::new(),
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
+        slot: row.get(9)?,
     })
 }
 
@@ -245,7 +250,15 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Profil
         )));
     }
     let automatic = origin == "auto";
-    let key = key_of(&dimension, &value);
+    let slot = params
+        .slot
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| dimension.clone());
+    check_chars("slot", &slot, 100)?;
+    let key = slot.clone();
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| {
@@ -276,8 +289,8 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Profil
             }
             transaction
                 .execute(
-                    "UPDATE profile_items SET category = ?2, origin = ?3, updated_at = ?4 WHERE id = ?1",
-                    params![item.id, params.category, origin, now],
+                    "UPDATE profile_items SET value = ?5, category = ?2, origin = ?3, updated_at = ?4 WHERE id = ?1",
+                    params![item.id, params.category, origin, now, value],
                 )
                 .map_err(sqlite_error)?;
             item.id
@@ -286,8 +299,8 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Profil
             let id = new_id("prof");
             transaction
                 .execute(
-                    "INSERT INTO profile_items (id, dimension, value, category, origin, pinned, corrected, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                    "INSERT INTO profile_items (id, dimension, value, category, origin, pinned, corrected, slot, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?8, ?8)",
                     params![
                         id,
                         dimension,
@@ -296,7 +309,8 @@ pub fn save(connection: &mut Connection, params: SaveParams) -> ApiResult<Profil
                         origin,
                         i64::from(params.pinned),
                         i64::from(params.corrected),
-                        now
+                        now,
+                        slot
                     ],
                 )
                 .map_err(sqlite_error)?;
@@ -348,7 +362,7 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Pr
     let category = params.category.unwrap_or(existing.category.clone());
     let pinned = params.pinned.unwrap_or(existing.pinned);
     let corrected = params.corrected.unwrap_or(existing.corrected);
-    let key = key_of(&existing.dimension, &value);
+    let key = existing.slot.clone();
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| {
@@ -387,7 +401,11 @@ pub fn update(connection: &mut Connection, params: UpdateParams) -> ApiResult<Pr
 pub fn delete(connection: &mut Connection, id: &str) -> ApiResult<bool> {
     check_chars("id", id, 128)?;
     let existing = load(connection, id)?;
-    let key = key_of(&existing.dimension, &existing.value);
+    let key = if existing.slot.is_empty() {
+        existing.dimension.clone()
+    } else {
+        existing.slot.clone()
+    };
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| {

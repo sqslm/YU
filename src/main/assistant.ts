@@ -407,6 +407,12 @@ export class AssistantSession {
      * break an answer that already succeeded.
      */
     onReading?: (reading: import('./knowledge/collector').ReadingProjection) => void
+    /**
+     * Called once when a floating answer really completed, whatever it read. The
+     * user's own question is the only text handed over; the answer, the tool
+     * output and the page bodies stay where they are.
+     */
+    onCompleted?: (ask: { taskId: string; question: string; at: number }) => void
     changed: (state: AssistantState) => void
     log: (line: string) => void
     now?: () => number
@@ -685,6 +691,13 @@ export class AssistantSession {
       // A temporary turn was never stored, so nothing may quote it either — the
       // check looks at the final result, including a turn that became temporary
       // while it was being answered.
+      if (task.state === 'completed' && !turn.memoryTemporary) {
+        try {
+          this.deps.onCompleted?.({ taskId: task.id, question: turn.question, at: this.now() })
+        } catch {
+          // The profile loop never gets to fail an answer that already succeeded.
+        }
+      }
       if (task.state === 'completed' && materials.length && !turn.memoryTemporary) {
         try {
           this.deps.onReading?.({

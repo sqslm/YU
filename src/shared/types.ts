@@ -457,6 +457,7 @@ export interface Settings {
   speechEnhancement: boolean
   memory: import('./memory').MemorySettings
   knowledge: import('./knowledgeSettings').KnowledgeSettings
+  userProfile: import('./profileSettings').UserProfileSettings
   gameMode: GameModeSettings
   briefingDelivery: import('./briefingDelivery').BriefingDeliverySettings
   assistantAccess: import('./assistantAccess').AssistantAccessSettings

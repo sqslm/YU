@@ -205,6 +205,12 @@ export interface CardSearchQuery extends CardQuery {
 export interface SaveProfileInput {
   dimension: string
   value: string
+  /**
+   * Stable identity of one preference. Two sentences worded differently share a
+   * slot, so a manual correction cannot be bypassed by a new value or a new id.
+   * Omitted: the slot is the dimension.
+   */
+  slot?: string
   category: ProfileCategory
   origin?: ProfileOrigin
   pinned?: boolean
@@ -268,6 +274,17 @@ export type KnowledgeMethod =
   | 'suggestion.get'
   | 'suggestion.accept'
   | 'suggestion.reject'
+  | 'profile.configure'
+  | 'profile.pause'
+  | 'profile.status'
+  | 'profile.event'
+  | 'profile.evidence'
+  | 'profile.learn.next'
+  | 'profile.learn.run'
+  | 'profile.learn.fail'
+  | 'profile.context'
+  | 'profile.retract'
+  | 'profile.clear'
 
 export type KnowledgeErrorCode =
   | 'invalid_request'
@@ -366,6 +383,8 @@ export interface QueueTask {
 }
 
 export interface CollectChannels {
+  /** Master switch, as the helper currently understands it. */
+  enabled: boolean
   note: boolean
   chat: boolean
   reading: boolean
@@ -666,3 +685,106 @@ export const KNOWLEDGE_FIXTURES = {
   },
   modelResult: { v: 1, type: 'model.result', id: 'm1', ok: true, text: '答' }
 } as const
+
+// ---------------------------------------------------------------- user profile
+
+/** The four feature categories the app may report. */
+export type ProfileFeature = 'chat' | 'ask' | 'note' | 'card-edit'
+
+/** Where the user's own sentence came from. */
+export type ProfileSourceKind = 'chat' | 'ask'
+
+export interface ProfileState {
+  enabled: boolean
+  usage: boolean
+  chat: boolean
+  pausedManual: boolean
+  pausedGame: boolean
+  /** Bumped by a clear; an answer started under an older value is refused. */
+  epoch: number
+}
+
+export interface ProfileStatus extends ProfileState {
+  pending: number
+  items: number
+  usageTotal: number
+  nextDueAt: number | null
+}
+
+export interface ProfileConfigureInput {
+  enabled?: boolean
+  usage?: boolean
+  chat?: boolean
+  pausedManual?: boolean
+  pausedGame?: boolean
+}
+
+/** One pending piece of the user's own text, as the helper queued it. */
+export interface ProfilePendingItem {
+  id: string
+  sourceKind: string
+  sourceId: string
+  version: string
+  segment: number
+  originRef: string
+  locator: string
+  text: string
+  at: number
+}
+
+export interface ProfileBatch {
+  claim: string
+  epoch: number
+  items: ProfilePendingItem[]
+}
+
+export interface ProfileNext extends ProfileState {
+  batch: ProfileBatch | null
+  nextDueAt: number | null
+}
+
+export interface ProfileEvidenceInput {
+  sourceKind: ProfileSourceKind | string
+  sourceId: string
+  version: string
+  originRef: string
+  locator?: string
+  at?: number
+  text: string
+}
+
+export interface ProfileLearnRunInput {
+  claim: string
+  profileId?: string | null
+  effort?: string
+}
+
+export interface ProfileLearnFailInput {
+  claim: string
+  code?: string
+  reason?: string
+}
+
+export interface ProfileContextItem {
+  id: string
+  dimension: string
+  value: string
+  category: 'explicit' | 'observed' | 'inferred'
+  pinned: boolean
+  corrected: boolean
+  /** True when the evidence behind it is inside the recent window. */
+  recent: boolean
+}
+
+export interface ProfileContext {
+  enabled: boolean
+  text: string
+  items: ProfileContextItem[]
+  bytes: number
+}
+
+export interface ProfileWriteResult {
+  written: { id: string; action: 'created' | 'updated' }[]
+  skipped: number
+  evidence: number
+}

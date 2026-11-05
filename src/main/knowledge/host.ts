@@ -37,6 +37,13 @@ import {
   type KnowledgeSuggestion,
   type RejectedSuggestion,
   type SuggestionPage,
+  type ProfileConfigureInput,
+  type ProfileContext,
+  type ProfileEvidenceInput,
+  type ProfileLearnFailInput,
+  type ProfileLearnRunInput,
+  type ProfileNext,
+  type ProfileStatus,
   type ExtractNext,
   type ExtractOutcome,
   type ExtractRunInput,
@@ -62,7 +69,7 @@ export type { TaskTarget, TaskRefusal } from '@shared/knowledge'
 
 
 interface Pending {
-  method: string
+  method: KnowledgeMethod
   resolve: (value: unknown) => void
   reject: (error: Error) => void
   timer: NodeJS.Timeout
@@ -133,6 +140,13 @@ function readFailure(
   if (typeof error.code !== 'string' || typeof error.message !== 'string') return undefined
   return { code: error.code as KnowledgeErrorCode, message: error.message }
 }
+
+/**
+ * Requests that own a model call. Cancelling one of these must not touch a plain
+ * CRUD call, and the two modules cancel only their own: closing the profile never
+ * aborts an extraction batch.
+ */
+const LONG_RUNNING = new Set<KnowledgeMethod>(['extract.run', 'profile.learn.run'])
 
 export class KnowledgeHost {
   private child?: ChildProcessWithoutNullStreams
@@ -407,10 +421,10 @@ export class KnowledgeHost {
    * so a late answer cannot be written; the claim is released by the caller through
    * `extract.fail`.
    */
-  cancelInFlight(reason = 'the request was cancelled'): number {
+  cancelInFlight(reason = 'the request was cancelled', only?: KnowledgeMethod): number {
     let cancelled = 0
     for (const [id, entry] of [...this.pending]) {
-      if (entry.method !== 'extract.run') continue
+      if (only ? entry.method !== only : !LONG_RUNNING.has(entry.method)) continue
       try {
         this.writeTo(entry.child, { v: KNOWLEDGE_PROTOCOL_VERSION, type: 'cancel', id })
       } catch {
@@ -796,6 +810,71 @@ export class KnowledgeHost {
 
   invalidateTask(target: TaskTarget, reason: string): Promise<TaskRefusal> {
     return this.call<TaskRefusal>('queue.invalidate', { ...target, reason })
+  }
+
+  // ------------------------------------------------------------ user profile
+
+  configureProfile(input: ProfileConfigureInput): Promise<ProfileStatus> {
+    return this.call<ProfileStatus>('profile.configure', input)
+  }
+
+  pauseProfile(reason: 'manual' | 'game', paused: boolean): Promise<ProfileStatus> {
+    return this.call<ProfileStatus>('profile.pause', { reason, paused })
+  }
+
+  profileStatus(): Promise<ProfileStatus> {
+    return this.call<ProfileStatus>('profile.status', {})
+  }
+
+  /** Counts one completed action; the helper ignores a repeated operation id. */
+  recordProfileEvent(input: {
+    opId: string
+    feature: string
+    at?: number
+  }): Promise<{ counted: boolean; reason?: string }> {
+    return this.call('profile.event', input)
+  }
+
+  /** Queues the user's own words; long text is split by the helper. */
+  queueProfileEvidence(items: ProfileEvidenceInput[]): Promise<{
+    queued: number
+    skipped?: number
+    reason?: string
+  }> {
+    return this.call('profile.evidence', { items })
+  }
+
+  learnNext(): Promise<ProfileNext> {
+    return this.call<ProfileNext>('profile.learn.next', {})
+  }
+
+  /** Synthesis may think: the 120 s budget covers the whole batch. */
+  learnRun(input: ProfileLearnRunInput): Promise<{
+    written: { id: string; action: string }[]
+    skipped: number
+    evidence: number
+  }> {
+    return this.call('profile.learn.run', input, KNOWLEDGE_LIMITS.modelRequestMs)
+  }
+
+  learnFail(input: ProfileLearnFailInput): Promise<{ released: number; state: string }> {
+    return this.call('profile.learn.fail', input)
+  }
+
+  profileContext(): Promise<ProfileContext> {
+    return this.call<ProfileContext>('profile.context', {})
+  }
+
+  retractProfileSource(
+    sourceKind: string,
+    sourceId: string,
+    reason?: string
+  ): Promise<{ retracted: boolean; dropped: number }> {
+    return this.call('profile.retract', { sourceKind, sourceId, reason })
+  }
+
+  clearProfile(): Promise<{ cleared: boolean; items: number; pending: number; epoch: number }> {
+    return this.call('profile.clear', {})
   }
 
   needsReread(target: TaskTarget, reason: string): Promise<TaskRefusal> {

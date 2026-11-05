@@ -14,7 +14,7 @@ use rusqlite::Connection;
 use crate::protocol::{ApiError, ApiResult, Code};
 
 pub const KNOWLEDGE_SCHEMA: i64 = 5;
-pub const PROFILE_SCHEMA: i64 = 1;
+pub const PROFILE_SCHEMA: i64 = 2;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
 /// deleting or hiding a conversation also cancels its reading tasks.
@@ -280,6 +280,62 @@ CREATE TABLE exclusions (
 );
 "#;
 
+/// Stage 4 adds the background profile loop to `profile.db`, so its schema moves
+/// to 2 while `knowledge.db` stays at 5.
+const PROFILE_LEARN_SQL: &str = r#"
+ALTER TABLE profile_items ADD COLUMN slot TEXT NOT NULL DEFAULT '';
+UPDATE profile_items SET slot = dimension WHERE slot = '';
+CREATE INDEX profile_items_slot ON profile_items (slot, value);
+
+CREATE TABLE profile_control (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE profile_usage (
+  day INTEGER NOT NULL,
+  feature TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (day, feature)
+);
+
+CREATE TABLE profile_usage_ops (
+  op_id TEXT PRIMARY KEY,
+  feature TEXT NOT NULL,
+  at INTEGER NOT NULL
+);
+
+CREATE TABLE profile_pending (
+  id TEXT PRIMARY KEY,
+  source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  segment INTEGER NOT NULL DEFAULT 0,
+  origin_ref TEXT NOT NULL DEFAULT '',
+  locator TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending'
+    CHECK (state IN ('pending', 'working', 'done', 'failed')),
+  claim TEXT,
+  reason TEXT NOT NULL DEFAULT '',
+  at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (source_kind, source_id, version, segment)
+);
+CREATE INDEX profile_pending_state ON profile_pending (state, at);
+
+CREATE TABLE profile_source_state (
+  source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('active', 'invalid')),
+  reason TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (source_kind, source_id)
+);
+"#;
+
 /// Both databases, opened lazily on the first data request.
 pub struct Store {
     pub knowledge: Mutex<Connection>,
@@ -303,7 +359,11 @@ impl Store {
                 EXTRACT_SQL,
             ],
         )?;
-        let profile = open_db(&profile_path, PROFILE_SCHEMA, &[PROFILE_SQL])?;
+        let profile = open_db(
+            &profile_path,
+            PROFILE_SCHEMA,
+            &[PROFILE_SQL, PROFILE_LEARN_SQL],
+        )?;
         // A helper that died mid-batch leaves a claim nobody can release. Turning
         // such tasks into a retryable failure keeps them from sitting in `working`
         // forever; segments already committed stay committed, so a retry does not

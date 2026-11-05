@@ -43,6 +43,7 @@ import { HistoryDriver } from './knowledge/history'
 import { createHistoryPages } from './knowledge/pages'
 import { syncKnowledge } from './knowledge/session'
 import { createSourceRecovery } from './knowledge/recover'
+import { ProfileCollector } from './knowledge/profile'
 import type { TaskTarget } from '@shared/knowledge'
 
 import {
@@ -193,7 +194,10 @@ const stats = new StatsStore()
 let settingsWindow: BrowserWindow | null = null
 const chats = new ChatService(join(chatRoot, 'chats.db'), () => store.get(), event => {
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('chat:event', event)
-}, () => assistant.localQueries(), turn => collectChatTurn(turn), (threadId, reason) => knowledgeCollector.threadRemoved(threadId, reason))
+}, () => assistant.localQueries(), turn => collectChatTurn(turn), (threadId, reason) => {
+  knowledgeCollector.threadRemoved(threadId, reason)
+  void profileCollector.retractThread(threadId, reason)
+})
 let explanationController: AbortController | null = null
 let barWindow: BrowserWindow | null = null
 /** Which pill renderer has finished loading and subscribed to its channels. */
@@ -270,11 +274,32 @@ const historyDriver = new HistoryDriver({
   log: line => log(line)
 })
 
+/**
+ * The user-profile loop. It shares the helper process with extraction and nothing
+ * else: its own switch, its own pause, its own clear, its own in-flight batch.
+ * Constructing it starts no process; with the default off nothing is created.
+ */
+const profileCollector = new ProfileCollector({
+  settings: () => store.get(),
+  host: () => knowledge,
+  allowed: (): boolean => profileCollector.enabled && !gameMode.snapshot().active,
+  log: line => log(line)
+})
+
 /** The switch/game facts and the scan they authorize, in one call. */
 const knowledgeWiring = { collector: knowledgeCollector, history: historyDriver, engine: extractEngine }
 
 /** A finished chat turn: a reading summary never also becomes a plain task. */
 function collectChatTurn(turn: import('./knowledge/collector').ChatTurnDone): void {
+  // Counting and evidence are separate facts: a turn that read something is still
+  // the user's own question, so both modules look at it.
+  void profileCollector.completedChat({
+    threadId: turn.threadId,
+    userId: turn.userId,
+    answerId: turn.answerId,
+    question: turn.question,
+    at: turn.at
+  })
   if (turn.materials.length) {
     knowledgeCollector.readingFinished({
       threadId: turn.threadId,
@@ -340,6 +365,7 @@ const windowsTools = new WindowsTools({
 })
 const assistant = new AssistantSession({ settings: () => store.get(), windows: windowsTools, log: line => log(line),
   onReading: reading => knowledgeCollector.readingFinished(reading),
+  onCompleted: ask => void profileCollector.completedAsk(ask),
   readSelection: async (context, signal) => {
     signal.throwIfAborted()
     const target = await captureSelectionTarget(store.get(), context, signal)
@@ -659,7 +685,7 @@ function saveFeeds(feeds: ExternalCalendar[]): ExternalCalendar[] {
  */
 const notes = new NotesStore({
   log: (line) => log(line),
-  onSettled: note => knowledgeCollector.noteSettled(note),
+  onSettled: note => { knowledgeCollector.noteSettled(note); void profileCollector.completedNote(note.id) },
   onRemoved: id => knowledgeCollector.noteRemoved(id),
   getSettings: () => store.get(),
   notify: () => broadcastNotes(),
@@ -837,7 +863,12 @@ function applyGameMode(status: GameModeStatus): void {
     // The pause flag has to reach the database before the helper dies, so the
     // hand-over is awaited and only then is the process stopped. With the feature
     // off nothing spawns and nothing is paused: there is no scan to hold back.
-    if (knowledgeCollector.enabled) void syncKnowledge(knowledgeWiring, true).finally(() => knowledge.stop())
+    // Each module parks its own batch before the process goes; the helper stops
+    // once both hand-overs are recorded, never while one is still writing.
+    const parking: Promise<unknown>[] = []
+    if (knowledgeCollector.enabled) parking.push(syncKnowledge(knowledgeWiring, true))
+    if (profileCollector.enabled) parking.push(profileCollector.sync({ game: true }))
+    void Promise.allSettled(parking).finally(() => knowledge.stop())
     hotkeys?.stop()
     refreshWakeWord()
     cancelAssistant()
@@ -864,6 +895,7 @@ function applyGameMode(status: GameModeStatus): void {
     // Leaving the game lifts only the game reason; a manual pause stays put, and a
     // disabled feature still does not spawn anything just to clear a flag.
     if (knowledgeCollector.enabled) void syncKnowledge(knowledgeWiring, false)
+    if (profileCollector.enabled) void profileCollector.sync({ game: false })
     if (gameResourceTimer) clearInterval(gameResourceTimer)
     gameResourceTimer = null
     if (!quitting) {
@@ -1501,9 +1533,25 @@ function registerIpc(): void {
     return knowledge.invalidateSource(knowledgeId(id, '来源 ID'), typeof reason === 'string' ? reason : undefined)
   })
   handle('knowledge:card-save', (event, input: SaveCardInput) => { knowledgeOwner(event); return knowledge.saveCard(input) })
-  handle('knowledge:card-update', (event, input: UpdateCardInput) => {
+  handle('profile:pause', (event, paused: boolean) => {
     knowledgeOwner(event)
-    return knowledge.updateCard({ ...input, id: knowledgeId(input?.id, '卡片 ID') })
+    return profileCollector.pause(Boolean(paused))
+  })
+  handle('profile:clear', (event) => {
+    knowledgeOwner(event)
+    return profileCollector.clear()
+  })
+  handle('profile:context', (event) => {
+    knowledgeOwner(event)
+    return profileCollector.context()
+  })
+  handle('knowledge:card-update', async (event, input: UpdateCardInput) => {
+    knowledgeOwner(event)
+    const card = await knowledge.updateCard({ ...input, id: knowledgeId(input?.id, '卡片 ID') })
+    // A manual edit is a completed in-app action the profile may count; the card
+    // body itself never becomes a statement about the user.
+    void profileCollector.editedCard(card.id)
+    return card
   })
   handle('knowledge:card-get', (event, id: string) => { knowledgeOwner(event); return knowledge.getCard(knowledgeId(id, '卡片 ID')) })
   handle('knowledge:card-delete', (event, id: string) => { knowledgeOwner(event); return knowledge.deleteCard(knowledgeId(id, '卡片 ID')) })
@@ -1786,6 +1834,7 @@ function registerIpc(): void {
     const next = await store.update(patch)
     if (previous.memory.enabled !== next.memory.enabled || previous.memory.autoLearn !== next.memory.autoLearn) void memory.configure()
     if (JSON.stringify(previous.knowledge) !== JSON.stringify(next.knowledge)) void syncKnowledge(knowledgeWiring, gameMode.snapshot().active)
+    if (JSON.stringify(previous.userProfile) !== JSON.stringify(next.userProfile)) void profileCollector.sync({ game: gameMode.snapshot().active })
     if (!next.tts.enabled) speech?.stop()
     setMainLanguage(next.uiLanguage)
     gameMode.configure(next.gameMode)
@@ -2581,6 +2630,9 @@ async function bootstrap(): Promise<void> {
   // database is created and no scan is resumed; the game flag is corrected here
   // too, so a pause left behind by a crash cannot outlive the restart.
   void syncKnowledge(knowledgeWiring, gameMode.snapshot().active)
+  // The profile switch is independent of the knowledge one: this runs even when
+  // knowledge is off, and does nothing at all when both are off.
+  void profileCollector.sync({ game: gameMode.snapshot().active })
   // Lifetime usage rollup. Seeded from the history that is still on disk when
   // the file does not exist yet, so upgrading does not reset the 概览 charts.
   await stats.load(() => history.list(''))
@@ -3209,6 +3261,7 @@ if (!gotLock) {
     wakeWord.cancelLearning()
     memory.shutdown()
     extractEngine.stop()
+    profileCollector.stop()
     void knowledge.shutdown()
     entityStore.close()
     if (hubRetireTimer) clearTimeout(hubRetireTimer)

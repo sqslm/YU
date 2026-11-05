@@ -44,6 +44,15 @@ export const DEFAULT_SETTINGS: Settings = {  version: SETTINGS_VERSION,
     profileId: null,
     effort: 'high',
   },
+  // The profile module is independent: its own switch, its own pause, its own
+  // data. It is off by default for the same reason.
+  userProfile: {
+    enabled: false,
+    usage: true,
+    chat: true,
+    profileId: null,
+    effort: 'high',
+  },
   hotkeys: {
     enabled: true,
     // Mirrors the vendor defaults discovered on disk so muscle memory carries

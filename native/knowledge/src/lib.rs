@@ -10,6 +10,7 @@ pub mod extract;
 pub mod history;
 pub mod link;
 pub mod profile;
+pub mod profile_learning;
 pub mod protocol;
 pub mod queue;
 pub mod service;

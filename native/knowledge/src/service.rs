@@ -480,6 +480,92 @@ impl Service {
                     "cards",
                 ))
             }
+            // ---------------------------------------------------------- stage 4
+            "profile.configure" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::configure(&mut connection, decode(params)?)?;
+                Ok(changed(result, "profile"))
+            }
+            "profile.pause" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::pause(&mut connection, decode(params)?)?;
+                Ok(changed(result, "profile"))
+            }
+            "profile.status" => {
+                let store = self.store()?;
+                let connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::status(&connection)?;
+                Ok(Outcome {
+                    result,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "profile.event" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result =
+                    crate::profile_learning::record_event(&mut connection, decode(params)?)?;
+                Ok(Outcome {
+                    result,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "profile.evidence" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::enqueue(&mut connection, decode(params)?)?;
+                Ok(changed(result, "profile"))
+            }
+            "profile.learn.next" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::next(&mut connection)?;
+                Ok(Outcome {
+                    result,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "profile.learn.run" => {
+                let store = self.store()?;
+                let params = decode::<crate::profile_learning::RunParams>(params)?;
+                Ok(changed(
+                    crate::profile_learning::learn(&store, link, parent, params)?,
+                    "profile",
+                ))
+            }
+            "profile.learn.fail" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::fail(&mut connection, decode(params)?)?;
+                Ok(changed(result, "profile"))
+            }
+            "profile.context" => {
+                let store = self.store()?;
+                let connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::context(&connection)?;
+                Ok(Outcome {
+                    result,
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            "profile.retract" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::retract(&mut connection, decode(params)?)?;
+                Ok(changed(result, "profile"))
+            }
+            "profile.clear" => {
+                let store = self.store()?;
+                let mut connection = store.profile.lock().map_err(lock_error)?;
+                let result = crate::profile_learning::clear(&mut connection)?;
+                Ok(changed(result, "profile"))
+            }
             "history.latest" => {
                 let store = self.store()?;
                 let connection = store.knowledge.lock().map_err(lock_error)?;

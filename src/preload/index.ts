@@ -87,7 +87,10 @@ const api: TypelessApi = {
     update: input => ipcRenderer.invoke('profile:update', input),
     get: id => ipcRenderer.invoke('profile:get', id),
     delete: id => ipcRenderer.invoke('profile:delete', id),
-    list: (query = {}) => ipcRenderer.invoke('profile:list', query)
+    list: (query = {}) => ipcRenderer.invoke('profile:list', query),
+    pause: paused => ipcRenderer.invoke('profile:pause', paused),
+    clear: () => ipcRenderer.invoke('profile:clear'),
+    context: () => ipcRenderer.invoke('profile:context')
   },
   entities: {
     list: () => ipcRenderer.invoke('entities:list'),
