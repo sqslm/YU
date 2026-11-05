@@ -355,6 +355,7 @@ describe('delete impact', () => {
     multi: 0,
     items: [],
     sources: [],
+    shared: [],
     ticket: '',
     incomplete: false,
     more: false,

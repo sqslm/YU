@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use crate::protocol::{
     ApiError, ApiResult, Code, DEFAULT_PAGE, MAX_GROUP_CHARS, MAX_PAGE, fit_page,
 };
+use crate::sources::{detach, detach_all, other_owners};
 use crate::util::{check_chars, ensure_not_cancelled, new_id, now_ms, require_text, sha256_hex};
 
 pub const CHANNELS: [&str; 3] = ["note", "chat", "reading"];
@@ -631,6 +632,15 @@ pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<Publish
         }
     };
 
+    // The record, not the group, owns the source: see SOURCE_OWNER_SQL.
+    record_owner(
+        transaction,
+        &source_id,
+        channel,
+        &group_key,
+        params.thread_key.as_deref(),
+    )?;
+
     Ok(PublishResult {
         source_id,
         version: fingerprint.clone(),
@@ -639,6 +649,31 @@ pub fn publish_in(conn: &Connection, params: PublishParams) -> ApiResult<Publish
         state,
         duplicate: duplicate || duplicate_source,
     })
+}
+
+/// Records who produced one source. A chat turn owns the row it published; a
+/// reading material read during a conversation is owned by that conversation,
+/// even though its own group is keyed by the material. Inserting is idempotent so
+/// a replayed publish never doubles a claim.
+fn record_owner(
+    conn: &Connection,
+    source_id: &str,
+    channel: &str,
+    group_key: &str,
+    thread_key: Option<&str>,
+) -> ApiResult<()> {
+    let owner = match (channel, thread_key) {
+        ("chat", _) => group_key,
+        ("reading", Some(thread)) if !thread.trim().is_empty() => thread,
+        _ => return Ok(()),
+    };
+    conn.execute(
+        "INSERT OR IGNORE INTO source_records (source_id, channel, record_ref, created_at)
+         VALUES (?1, 'chat', ?2, ?3)",
+        params![source_id, owner, now_ms()],
+    )
+    .map_err(|error| ApiError::storage(format!("cannot record the source owner: {error}")))?;
+    Ok(())
 }
 
 fn source_link(conn: &Connection, group_id: &str, ordinal: i64, source_id: &str) -> ApiResult<()> {
@@ -931,6 +966,21 @@ pub struct ThreadParams {
     pub reason: Option<String>,
 }
 
+/// The source rows one group quotes, in insertion order.
+fn group_sources(conn: &Connection, group_id: &str) -> ApiResult<Vec<String>> {
+    let mut statement = conn
+        .prepare("SELECT source_id FROM queue_items WHERE group_id = ?1 ORDER BY ordinal")
+        .map_err(|error| ApiError::storage(format!("cannot read the queued items: {error}")))?;
+    let rows = statement
+        .query_map([group_id], |row| row.get::<_, String>(0))
+        .map_err(|error| ApiError::storage(format!("cannot read the queued items: {error}")))?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+fn owners_of(conn: &Connection, source_id: &str) -> ApiResult<Vec<String>> {
+    crate::sources::owners(conn, source_id)
+}
+
 /// Cancels every task that quoted a conversation: its chat turns and the reading
 /// tasks it produced. A deleted or made-temporary thread must not leave work
 /// behind just because reading tasks live under their material identity.
@@ -945,32 +995,101 @@ pub fn invalidate_thread(conn: &mut Connection, params: ThreadParams) -> ApiResu
     let transaction = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| ApiError::storage(format!("cannot start the invalidate: {error}")))?;
-    let groups: Vec<String> = {
+    // What this conversation really owns: its own turns and every material it read,
+    // whether or not another conversation read the same material.
+    let owned: Vec<String> = {
         let mut statement = transaction
-            .prepare("SELECT id FROM queue_groups WHERE thread_key = ?1 AND state <> 'cancelled'")
-            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
+            .prepare(
+                "SELECT source_id FROM source_records
+                  WHERE channel = 'chat' AND record_ref = ?1
+                  ORDER BY created_at, source_id",
+            )
+            .map_err(|error| {
+                ApiError::storage(format!("cannot read the owned sources: {error}"))
+            })?;
         let rows = statement
             .query_map([&thread_key], |row| row.get::<_, String>(0))
+            .map_err(|error| {
+                ApiError::storage(format!("cannot read the owned sources: {error}"))
+            })?;
+        rows.filter_map(Result::ok).collect()
+    };
+    let mut retired: Vec<String> = Vec::new();
+    let mut detached: Vec<String> = Vec::new();
+    for id in &owned {
+        if other_owners(&transaction, id, &thread_key)? {
+            // Another conversation still cites this row: only the claim goes, so
+            // its cards keep their evidence and its reading task stays alive.
+            detach(&transaction, id, &thread_key)?;
+            detached.push(id.clone());
+        } else {
+            retired.push(id.clone());
+        }
+    }
+    let encoded = serde_json::to_string(&retired)
+        .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
+    // A group is cancelled only when every row it quotes is being retired. A group
+    // that still holds a live row belongs to another conversation: it keeps its
+    // work and loses only the stale thread pointer.
+    let candidates: Vec<String> = {
+        let mut statement = transaction
+            .prepare(
+                "SELECT g.id FROM queue_groups g
+                  WHERE g.state <> 'cancelled'
+                    AND (g.thread_key = ?1
+                      OR g.id IN (SELECT i.group_id FROM queue_items i
+                                   WHERE i.source_id IN (SELECT value FROM json_each(?2))))
+                  ORDER BY g.created_at, g.id",
+            )
+            .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
+        let rows = statement
+            .query_map(params![thread_key, encoded], |row| row.get::<_, String>(0))
             .map_err(|error| ApiError::storage(format!("cannot read the threads: {error}")))?;
         rows.filter_map(Result::ok).collect()
     };
-    for id in &groups {
+    let mut groups: Vec<String> = Vec::new();
+    for id in &candidates {
+        let sources = group_sources(&transaction, id)?;
+        if sources.iter().all(|source| retired.contains(source)) {
+            set_state(&transaction, id, "cancelled", Some(&reason), None)?;
+            groups.push(id.clone());
+            continue;
+        }
+        let remaining = sources
+            .iter()
+            .flat_map(|source| owners_of(&transaction, source).unwrap_or_default())
+            .find(|owner| owner != &thread_key);
+        transaction
+            .execute(
+                "UPDATE queue_groups SET thread_key = ?2, updated_at = ?3 WHERE id = ?1",
+                params![id, remaining, now_ms()],
+            )
+            .map_err(|error| ApiError::storage(format!("cannot repair the thread key: {error}")))?;
+    }
+    if !retired.is_empty() {
         transaction
             .execute(
                 "UPDATE sources SET state = 'invalid', invalid_reason = ?2, updated_at = ?3
-                 WHERE id IN (SELECT source_id FROM queue_items WHERE group_id = ?1)",
-                params![id, reason, now_ms()],
+                 WHERE id IN (SELECT value FROM json_each(?1))",
+                params![encoded, reason, now_ms()],
             )
             .map_err(|error| {
                 ApiError::storage(format!("cannot invalidate the sources: {error}"))
             })?;
-        set_state(&transaction, id, "cancelled", Some(&reason), None)?;
+        for id in &retired {
+            detach_all(&transaction, id)?;
+        }
     }
     ensure_not_cancelled()?;
     transaction
         .commit()
         .map_err(|error| ApiError::storage(format!("cannot commit the invalidate: {error}")))?;
-    Ok(json!({ "threadKey": thread_key, "cancelled": groups, "reason": reason }))
+    Ok(json!({
+        "threadKey": thread_key,
+        "cancelled": groups,
+        "detached": detached,
+        "reason": reason
+    }))
 }
 
 pub fn cancel(conn: &Connection, params: GroupParams) -> ApiResult<Value> {

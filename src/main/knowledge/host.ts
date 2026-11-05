@@ -857,9 +857,19 @@ export class KnowledgeHost {
     return this.call<TaskRefusal>('queue.retry', target)
   }
 
-  /** Cancels every task that quoted this conversation, chat and reading alike. */
-  invalidateThread(threadKey: string, reason: string): Promise<{ threadKey: string; cancelled: string[] }> {
-    return this.call<{ threadKey: string; cancelled: string[] }>('queue.invalidate_thread', { threadKey, reason })
+  /**
+   * Gives up this conversation's claim on everything it produced: its own turns
+   * are retracted, and a material another conversation also read keeps its row,
+   * its cards and its reading task. `detached` names those kept rows.
+   */
+  invalidateThread(
+    threadKey: string,
+    reason: string
+  ): Promise<{ threadKey: string; cancelled: string[]; detached: string[] }> {
+    return this.call<{ threadKey: string; cancelled: string[]; detached: string[] }>(
+      'queue.invalidate_thread',
+      { threadKey, reason }
+    )
   }
 
   /** One page of a task's items; a long thread never arrives in one frame. */

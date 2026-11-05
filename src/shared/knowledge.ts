@@ -296,6 +296,12 @@ export interface CardImpact {
   ticket: string
   /** True when the record's source set was too large to preview exactly. */
   incomplete: boolean
+  /**
+   * Sources this record holds only because another record owns them too. A delete
+   * gives up the claim and leaves the row, its cards and the other record's
+   * evidence in place, so no card here is counted as going away.
+   */
+  shared: string[]
 }
 
 /** The original record a purge was asked for, at the version the preview saw. */
@@ -315,6 +321,8 @@ export interface PurgeCardsInput {
 
 export interface PurgeCardsResult {
   removed: string[]
+  /** Sources kept alive for another record; the purge dropped only this claim. */
+  detached?: string[]
   kept: string[]
   /** Ids the purge refused because the record moved since the preview. */
   skipped: string[]

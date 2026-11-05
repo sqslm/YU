@@ -505,13 +505,20 @@ fn thread_sources(
 ) -> ApiResult<Vec<FoundSource>> {
     let group_key = require_text("groupKey", group_key)?;
     check_chars("groupKey", &group_key, 400)?;
+    // A conversation owns its own turns and every material it read, and a material
+    // can be owned by several conversations. `source_records` carries that
+    // relation; the queue join stays as the older, per-turn trace.
     let mut statement = connection
         .prepare(
             "SELECT s.id, s.kind, s.state, s.version, s.title, s.origin_ref, s.size
                FROM sources s
-               JOIN queue_items i ON i.source_id = s.id
-               JOIN queue_groups g ON g.id = i.group_id
-              WHERE g.channel = ?1 AND g.group_key = ?2
+              WHERE s.id IN (
+                SELECT i.source_id
+                  FROM queue_items i JOIN queue_groups g ON g.id = i.group_id
+                 WHERE g.channel = ?1 AND g.group_key = ?2
+                UNION
+                SELECT r.source_id FROM source_records r
+                 WHERE r.channel = 'chat' AND r.record_ref = ?2)
               GROUP BY s.id
               ORDER BY s.read_at ASC, s.created_at ASC, s.id ASC
               LIMIT ?3",
@@ -524,6 +531,75 @@ fn thread_sources(
         )
         .map_err(sqlite_error)?
         .collect::<rusqlite::Result<Vec<FoundSource>>>()
+        .map_err(sqlite_error)?;
+    Ok(rows)
+}
+
+/// The record a source-ownership question is about, when the identity names a
+/// conversation. A note owns its versions by `originRef`, not through a relation.
+pub(crate) fn owner_ref(record: &RecordRef) -> Option<String> {
+    if record.channel == "chat" {
+        record.group_key.clone()
+    } else {
+        None
+    }
+}
+
+/// True when some other record also owns this source, so retiring it for one
+/// record would take evidence away from the other.
+pub(crate) fn other_owners(
+    connection: &Connection,
+    source_id: &str,
+    record_ref: &str,
+) -> ApiResult<bool> {
+    let count: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM source_records
+              WHERE source_id = ?1 AND channel = 'chat' AND record_ref <> ?2",
+            params![source_id, record_ref],
+            |row| row.get(0),
+        )
+        .map_err(sqlite_error)?;
+    Ok(count > 0)
+}
+
+/// Gives up one record's claim on a source. The source itself stays exactly as it
+/// was: its state, its cards, and every other claim on it.
+pub(crate) fn detach(connection: &Connection, source_id: &str, record_ref: &str) -> ApiResult<()> {
+    connection
+        .execute(
+            "DELETE FROM source_records
+              WHERE source_id = ?1 AND channel = 'chat' AND record_ref = ?2",
+            params![source_id, record_ref],
+        )
+        .map_err(sqlite_error)?;
+    Ok(())
+}
+
+/// Drops every claim on a source that is being retired anyway.
+pub(crate) fn detach_all(connection: &Connection, source_id: &str) -> ApiResult<()> {
+    connection
+        .execute(
+            "DELETE FROM source_records WHERE source_id = ?1",
+            params![source_id],
+        )
+        .map_err(sqlite_error)?;
+    Ok(())
+}
+
+/// The records that still claim one source, in the order they first claimed it.
+pub(crate) fn owners(connection: &Connection, source_id: &str) -> ApiResult<Vec<String>> {
+    let mut statement = connection
+        .prepare(
+            "SELECT record_ref FROM source_records
+              WHERE source_id = ?1 AND channel = 'chat'
+              ORDER BY created_at ASC, record_ref ASC",
+        )
+        .map_err(sqlite_error)?;
+    let rows = statement
+        .query_map([source_id], |row| row.get::<_, String>(0))
+        .map_err(sqlite_error)?
+        .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(sqlite_error)?;
     Ok(rows)
 }

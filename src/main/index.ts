@@ -45,6 +45,7 @@ import type { KnowledgeTools } from './tools/knowledge'
 import type { FindSourceInput, SourceRef } from '@shared/knowledge'
 import { isSafeLink } from '@shared/links'
 import { KnowledgeCollector } from './knowledge/collector'
+import { releaseRecord } from './knowledge/release'
 import { ExtractEngine } from './knowledge/engine'
 import { HistoryDriver } from './knowledge/history'
 import { createHistoryPages } from './knowledge/pages'
@@ -424,25 +425,14 @@ async function settleRecord(input: FindSourceInput, identity: import('@shared/kn
   // The helper re-checks these versions and this ticket inside its write
   // transaction, so a preview that no longer holds refuses instead of widening.
   if (!options.cards) {
-    // The default keeps every card and the link that says where it came from: the
-    // source is marked invalid, the queue stops, and the card still points at the
-    // record it was distilled from.
+    // The default keeps every card and the link that says where it came from, and
+    // it only takes back what this record really owned: a material another record
+    // also read keeps its row and its reader's queued work.
     // A failed invalidation is reported, never swallowed into a false success: the
     // record is already gone, so the caller sees a retryable partial failure.
-    const failures: string[] = []
-    for (const source of sources) {
-      try {
-        await knowledge.invalidateSource(source.id, '记录已删除')
-      } catch (error) {
-        failures.push(error instanceof Error ? error.message : String(error))
-      }
-    }
-    if ('channel' in input) {
-      const group = 'groupKey' in input ? { channel: input.channel, groupKey: input.groupKey } : { channel: input.channel, groupKey: input.originRef }
-      await knowledge.invalidateTask(group, '记录已删除').catch(() => undefined)
-    }
-    if (failures.length) throw new Error(failures[0])
-    log(`[knowledge] 记录删除后：失效 ${sources.length} 个来源，卡片与来源关联保留`)
+    const released = await releaseRecord(knowledge, input, identity, '记录已删除')
+    if (released.failures.length) throw new Error(released.failures[0])
+    log(`[knowledge] 记录删除后：失效 ${released.sources.length} 个来源，保留 ${released.detached.length} 条共享出处，卡片与来源关联保留`)
     return
   }
   const result = await knowledge.purgeCards({ record: identity, confirm: { sources, ticket: options.ticket ?? '' }, cards: true })

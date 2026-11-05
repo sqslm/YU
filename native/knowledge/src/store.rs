@@ -13,7 +13,7 @@ use rusqlite::Connection;
 
 use crate::protocol::{ApiError, ApiResult, Code};
 
-pub const KNOWLEDGE_SCHEMA: i64 = 8;
+pub const KNOWLEDGE_SCHEMA: i64 = 9;
 pub const PROFILE_SCHEMA: i64 = 3;
 
 /// Phase 2 (second pass) ties a queued task to the thread it came from, so
@@ -398,6 +398,31 @@ CREATE TABLE profile_markers (
 CREATE INDEX profile_markers_created ON profile_markers (created_at);
 "#;
 
+/// A source belongs to the record that produced it, and one source can belong to
+/// several records: the same page read by two conversations is one row with two
+/// owners. Deleting one record must therefore drop its claim, not retire the
+/// source; only the last owner going away retires it. `queue_groups.thread_key`
+/// is a single column and keeps only the newest thread, so it is never used to
+/// answer ownership.
+const SOURCE_OWNER_SQL: &str = r#"
+CREATE TABLE source_records (
+  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL,
+  record_ref TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (source_id, channel, record_ref)
+);
+CREATE INDEX source_records_record ON source_records (channel, record_ref);
+INSERT OR IGNORE INTO source_records (source_id, channel, record_ref, created_at)
+  SELECT i.source_id, 'chat', g.group_key, g.created_at
+    FROM queue_items i JOIN queue_groups g ON g.id = i.group_id
+   WHERE g.channel = 'chat';
+INSERT OR IGNORE INTO source_records (source_id, channel, record_ref, created_at)
+  SELECT i.source_id, 'chat', g.thread_key, g.created_at
+    FROM queue_items i JOIN queue_groups g ON g.id = i.group_id
+   WHERE g.channel = 'reading' AND g.thread_key IS NOT NULL AND g.thread_key <> '';
+"#;
+
 /// Both databases, opened lazily on the first data request.
 pub struct Store {
     pub knowledge: Mutex<Connection>,
@@ -422,6 +447,7 @@ impl Store {
                 GRAPH_SQL,
                 RELATION_SOURCE_SQL,
                 CITED_SQL,
+                SOURCE_OWNER_SQL,
             ],
         )?;
         let profile = open_db(

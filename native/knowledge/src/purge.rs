@@ -13,7 +13,10 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{ApiError, ApiResult, Code};
-use crate::sources::{FindParams, RECORD_SOURCES, RecordRef, resolve_record};
+use crate::sources::{
+    FindParams, RECORD_SOURCES, RecordRef, detach, detach_all, other_owners, owner_ref,
+    resolve_record,
+};
 use crate::util::{check_chars, ensure_not_cancelled, now_ms, sha256_hex};
 
 /// How many affected cards the preview names; `more` says the rest exist.
@@ -95,6 +98,10 @@ pub struct CardImpact {
     pub multi: i64,
     pub items: Vec<ImpactItem>,
     pub more: bool,
+    /// Sources this record keeps only because another record owns them too. A
+    /// delete gives up the claim and leaves the row, its cards and the other
+    /// record's evidence untouched.
+    pub shared: Vec<String>,
     /// True when the record holds more rows than one answer may carry: the preview
     /// is a slice and must not be confirmed.
     pub incomplete: bool,
@@ -162,6 +169,8 @@ impl PurgeParams {
 #[serde(rename_all = "camelCase")]
 pub struct PurgeResult {
     pub removed: Vec<String>,
+    /// Sources kept alive for another record; only the claim was dropped.
+    pub detached: Vec<String>,
     pub kept: Vec<String>,
     pub skipped: Vec<String>,
     pub ticket: String,
@@ -257,17 +266,32 @@ pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardIm
         [only] => (only.id.clone(), only.version.clone()),
         _ => (String::new(), String::new()),
     };
-    // A record already retracted threatens no card: its links were dropped when it
-    // was retracted, and a purge would skip it. Only live rows count here.
-    let ids: Vec<String> = set
+    // What this record really takes away: the live rows no other record also
+    // owns. A material read by two conversations is kept for the other one, so
+    // counting it as lost would promise a deletion that never happens.
+    let owner = owner_ref(&set.record);
+    let mut shared: Vec<String> = Vec::new();
+    let mut lost: Vec<String> = Vec::new();
+    for source in set
         .sources
         .iter()
         .filter(|source| source.state != "invalid")
-        .map(|source| source.id.clone())
-        .collect();
-    let touched = affected(connection, &ids)?;
+    {
+        let also = match owner.as_deref() {
+            Some(record) => other_owners(connection, &source.id, record)?,
+            None => false,
+        };
+        if also {
+            shared.push(source.id.clone());
+        } else {
+            lost.push(source.id.clone());
+        }
+    }
+    // The digest covers the whole record, shared rows included, so a preview and
+    // the purge that confirms it hash exactly the same inputs.
+    let touched = affected(connection, &set.ids())?;
     let digest = ticket(&sources, &touched);
-    if ids.is_empty() {
+    if lost.is_empty() {
         return Ok(CardImpact {
             source_id,
             version,
@@ -279,10 +303,13 @@ pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardIm
             items: Vec::new(),
             more: false,
             incomplete: set.incomplete,
+            shared,
             ticket: digest,
         });
     }
-    let key = serde_json::to_string(&ids)
+    let key = serde_json::to_string(&set.ids())
+        .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
+    let lost_encoded = serde_json::to_string(&lost)
         .map_err(|error| ApiError::storage(format!("cannot encode the sources: {error}")))?;
     let mut statement = connection
         .prepare(&format!(
@@ -293,7 +320,7 @@ pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardIm
         ))
         .map_err(sqlite)?;
     let rows = statement
-        .query_map(params![&key, &key], |row| {
+        .query_map(params![&key, &lost_encoded], |row| {
             let valid: i64 = row.get(3)?;
             let owned: i64 = row.get(4)?;
             Ok(ImpactItem {
@@ -321,6 +348,7 @@ pub fn impact(connection: &Connection, params: ImpactParams) -> ApiResult<CardIm
         items,
         more,
         incomplete: set.incomplete,
+        shared,
         sources,
         ticket: digest,
     })
@@ -341,12 +369,23 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
             ApiError::storage(format!("cannot start the purge transaction: {error}"))
         })?;
     let now = now_ms();
-    let (targets, digest) = snapshot(&transaction, &params)?;
+    let (targets, digest, owner) = snapshot(&transaction, &params)?;
     let mut purged: BTreeSet<String> = BTreeSet::new();
+    let mut detached: BTreeSet<String> = BTreeSet::new();
     let mut skipped: Vec<String> = Vec::new();
     for entry in &targets {
+        // Another record still owns this row: this delete gives up its own claim
+        // and leaves the row, its cards and the other record's evidence alone.
+        if let Some(record) = owner.as_deref()
+            && other_owners(&transaction, &entry.id, record)?
+        {
+            detach(&transaction, &entry.id, record)?;
+            detached.insert(entry.id.clone());
+            continue;
+        }
         match retract(&transaction, entry, now)? {
             Some(id) => {
+                detach_all(&transaction, &id)?;
                 purged.insert(id);
             }
             None => skipped.push(entry.id.clone()),
@@ -390,6 +429,7 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
         .map_err(|error| ApiError::storage(format!("cannot commit the purge: {error}")))?;
     Ok(PurgeResult {
         removed: removed.into_iter().collect(),
+        detached: detached.into_iter().collect(),
         kept: kept.into_iter().collect(),
         skipped,
         ticket: digest,
@@ -403,7 +443,7 @@ pub fn purge(connection: &mut Connection, params: PurgeParams) -> ApiResult<Purg
 fn snapshot(
     transaction: &Connection,
     params: &PurgeParams,
-) -> ApiResult<(Vec<PurgeSource>, String)> {
+) -> ApiResult<(Vec<PurgeSource>, String, Option<String>)> {
     let Some(confirm) = params.confirm.as_ref() else {
         let targets = params.sources.clone();
         let ids: Vec<String> = targets.iter().map(|entry| entry.id.clone()).collect();
@@ -415,7 +455,7 @@ fn snapshot(
                 version: entry.version.clone(),
             })
             .collect();
-        return Ok((targets, ticket(&sources, &cards)));
+        return Ok((targets, ticket(&sources, &cards), None));
     };
     let set = resolve_record(transaction, &params.find())?;
     if set.incomplete {
@@ -438,6 +478,7 @@ fn snapshot(
     if confirm.ticket != expected || listed != counted {
         return Err(ApiError::new(Code::SourceChanged, STALE));
     }
+    let owner = owner_ref(&set.record);
     let targets = sources
         .into_iter()
         .map(|entry| PurgeSource {
@@ -445,7 +486,7 @@ fn snapshot(
             version: entry.version,
         })
         .collect();
-    Ok((targets, expected))
+    Ok((targets, expected, owner))
 }
 
 /// Retracts one listed record when it still carries the version the caller saw.
