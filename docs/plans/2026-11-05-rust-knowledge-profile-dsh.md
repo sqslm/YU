@@ -612,6 +612,8 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 修复：`src/main/knowledge/history.ts` 的自动暂停改为"只结束本次 walk、保留 helper 中的 `running`"，手动暂停仍是持久 `paused`；新增 `src/main/knowledge/session.ts` 的 `syncKnowledge(wiring, game)`：先 `collector.sync({ game })` 让配置落地，再在"功能开启且不在游戏"时 `history.resume()`。`src/main/index.ts` 的游戏进入、游戏退出、设置更新、启动恢复四处都改为走它，因此真实流程（而不是单测手工调用两个组件）就会续跑。
 - 回归：`src/main/knowledge/session.integration.test.ts`（真实 helper + 真实 `ChatStore` + 生产 `HistoryDriver`/collector/`syncKnowledge`：25 轮扫描进行到已提交批次后进入游戏 → 作业保持 `running` 且未完成 → 退出游戏经 `syncKnowledge` 自动续跑到 `completed`、`scanned 25`；手动暂停的作业经游戏进入/退出仍 `paused`；功能关闭时 `syncKnowledge` 不启动进程、也不触发恢复）。
 
+实现提交 `0267018`（修复）与 `083e007`（本文档记录）。
+
 ### 本轮验证（实际命令与退出码，依赖顺序执行）
 
 | 命令 | 退出码 | 结果 |
