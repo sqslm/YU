@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6 的修复已提交，等待外部复核（见文末「阶段 5 外部复核与修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
+**状态：阶段 1～4 已通过外部 Codex 复核；阶段 5 外部复核未通过，R1～R6 与补充复核 T1～T3 的修复均已提交，等待外部复核（见文末「阶段 5 外部复核与修复」「阶段 5 补充复核修复」）。阶段 6～7 未开始；语在回答中检索引用知识、备份与卸载尚未接入。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -1169,3 +1169,60 @@ TS：`src/main/knowledge/loop.test.ts` 增 2 项，用真实 fixture 管道验�
 - 图谱仍是知识页内的视图（通过知识页工具栏进入），不是一等侧栏路由；知识设置仍是页面自有对话框，未并入全局设置分区。
 - 来源定位对已删除或本机不可读的文件只显示真实原因，不提供重建入口。
 - 真实窗口只走到「搜索 → 命中列表 → 图谱 → 画像面板」这条主线：来源跳转/失效原因、手动提炼、合并对话框、建议接受、画像纠正/置顶/清空这些动作由单元与集成测试覆盖（`targets.test.ts`、`loop.test.ts` 真实夹具、Rust 各 suite），本轮未在真实窗口逐个点击。
+
+## 阶段 5 补充复核修复（T1～T3，2026-11-05 第七轮，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+外部复核在 `9e60512` 上仍判三项阻塞：手动提炼接不回队列消费、文档打开只靠可伪造的 locator、图谱前端把两次响应合并导致超出节点预算。本轮只修这三项，阶段 1～4 的数据与行为、已通过项一律不动；阶段 6～7 未开始。
+
+### 三项根因与落点
+
+| 编号 | 根因（实际代码） | 落点 |
+| --- | --- | --- |
+| T1 | `knowledge:source-extract` 只调用 `host.extractSource`，而 helper 仅入队；`changed` 只广播给渲染进程，空闲的 `ExtractEngine` 没有任何唤醒，稳定窗口（测试为 0）过后任务仍停在 `ready`，模型调用数不变。阅读来源的原文已逐出时同样回 `queued:1`。 | 新增 `src/main/knowledge/manual.ts`（`extractSourceNow` / `sourceChannel` / `missingReason`）：先按 `enabled`/`allowed` 门控，读真实来源、用 `collector.resolveBody` 取回原文（笔记/会话走 `createSourceRecovery`，阅读走进程内暂存），原文仍在本进程时入队并 `extractEngine.wake()`；原文已逐出则用 `host.needsReread` 落 `needs_reread` 并回真实原因，不启动模型调用。`src/main/index.ts` 的 handler 改为调用它，渲染进程仍只传来源 ID。 |
+| T2 | `resolveSourceTarget` 的文件分支只做 `statSync(path).isFile()`，而 `knowledge:source-save` 允许写任意 locator，于是「能存元数据 + 文件存在」被当成读取授权；`knowledge:source-open` 直接把它交给 `shell.openPath`。 | `TargetDeps.file` 换成 `ownedFile(path): string | null`，由主进程用 `realpathSync` 校验文件确实位于自身笔记根目录（`roots().notes`）之下；新增 `src/main/knowledge/open.ts`（`openSource`），解析与打开共用同一裁决，`url` 分支再次校验 `^https?://`，其余一律回真实原因。附件仍走 `chats.store.attachmentOwner` → 会话记录。 |
+| T3 | `knowledgeView.mergeGraph` 把前后两次图谱响应按 id 求并：Rust 已按 200 节点预算裁掉的旧节点又被加回（复现为 201），而 `total/shown` 取自新响应，画布与页脚因此可以不一致。 | 删除 `mergeGraph`，改用 `acceptGraph`（最新票据才替换、过期票据原样返回、从不合并）+ `graphView`/`graphCounts`：画布节点、边、信息栏计数和裁切提示全部取自同一份已校验响应，`expanded` 与 `visible` 同源。页面数据 effect 用票据作废旧响应。 |
+
+### 反例修复前后（真实入口，非 mock）
+
+| 探针 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 生产 host + release helper：给一条合成随记入队后调用生产手动提炼（稳定窗口 0，引擎先空转） | `queued:1, state:'stabilizing'`，任务停在 `ready`，`wake` 未发生，模型调用 1 | `manual.test.ts`：`queued:1` 且 `wake` 1 次，任务进入 `stabilizing`；真实引擎在无手动 tick 情况下把该组跑到 `completed` |
+| 同一入口，原文已不在（仅剩 active 元数据） | `queued:1`，随后提炼失败 | 返回 `{queued:0, state:'needs_reread', reason:'无法读取原文'}`，落库为该状态，来源 `state`/`version` 不变，模型调用 0 |
+| 用 `knowledge:source-save` 写入隔离根里的惰性 txt 后请求打开 | `{kind:'file', path:'…fake.txt'}`，随后会被交给 `shell.openPath` | `{kind:'none', reason:'该来源没有可核验的读取记录'}`，打开函数未被调用（注入 opener 断言 0 次） |
+| 200 同主题节点 + 1 主题外邻居：主题查询后焦点查询 | 合并后画布 201 节点，页脚 200 / 200 | 画布 200（含焦点与邻居，被裁节点不回流），`{visible:200,total:200,expanded:1}`，无悬空边 |
+
+### 三条反例的负向控制（临时复原缺陷，确认对应用例确实失败）
+
+| 复原的缺陷 | 失败的用例 |
+| --- | --- |
+| 去掉 `extractSourceNow` 里的 `deps.wake()` | `manual.test.ts` 的「queues the existing task and wakes the engine once」与「finishes a clicked extraction through the real engine with no manual pump」 |
+| 文件分支退回「locator 存在即可打开」 | `open.test.ts` 的「never hands a fabricated locator to the file opener」、`targets.test.ts` 的「opens an app-owned document and refuses a locator with no read credential」 |
+| `acceptGraph` 改回按 id 求并 | `knowledgeView.test.ts` 的「draws the expanded answer at its own size, not on top of the previous one」（走页面真实路径 `acceptGraph → graphView`）与「ignores a late answer for a query the user already left」 |
+
+### 新增回归
+
+- `src/main/knowledge/manual.test.ts`（6 项，release helper + 生产函数）：入队并唤醒一次；原文缺失落 `needs_reread` 且 0 次模型调用；总开关关闭时不启动 helper；`sourceChannel` 映射；helper 无法启动时如实失败；真实引擎无人为唤醒也把点击的任务跑到 `completed`。
+- `src/main/knowledge/open.test.ts`（6 项，注入 opener）：可信网页来源可打开；伪造 locator 到不了 opener；自有文件可打开并原样回传 opener 失败原因；解析器给出不可信协议时仍拒绝；会话来源回 `record`；失效来源按解析器结果拒绝。
+- `src/main/knowledge/graph-budget.test.ts`（1 项，真实 helper）：201 张卡片建图，主题查询 200 → 焦点查询含邻居，经 `acceptGraph`/`graphView` 后画布 ≤200 且边端点全部可见。
+- `src/renderer/src/settings/pages/knowledgeView.test.ts` 增至 37 项：预算用例改为走页面真实路径（先接受主题答案，再接受焦点答案），并保留重复展开不累积、迟到响应不覆盖、计数同源等断言。
+
+### 验证（本轮最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 0 |
+| `cargo test --locked` | 0；113 项（lib 17 / cards_view 9 / extract 12 / process 11 / profile 27 / queue 22 / relations 15） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture` 变体 0） |
+| `node scripts/build-native.mjs` | 0；release `native/bin/yu-knowledge.exe` 3,076,608 字节，SHA-256 `67c5a55e2b112e0d656dca9a73dae5d6016678f7908b10e5d98068a6cd409188`（本轮未改 Rust，重跑仅确认产物一致） |
+| `pnpm typecheck` | 0（node + web） |
+| 定向 vitest（`src/main/knowledge`、`knowledgeView.test.ts`、`preload`、`ipc-trust`） | 23 文件 / 216 项通过 |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0；273 文件通过 / 3 跳过，3893 项通过 / 8 跳过，95.38s |
+| `pnpm build` | 0；11.78s；`KnowledgePage-DWi4WlsZ.js` 200,361 字节、`KnowledgeGraphPage-ZG1dz-Nr.js` 18,523 字节为独立 chunk，`settings-D1FTgw9p.js` 4,689.68 kB 内 `d3Force` 计数 0 |
+
+### 未测与边界
+
+- 未调用付费模型；T1 的闭环用注入的 completer 与 `{"cards": []}` 响应，只验证「点击 → 入队 → 引擎消费 → 结算」这条链路。
+- 未在打包安装包上点测（阶段 7）；未重复做真实窗口截图，本轮 T1～T3 的证据是真实 helper + 生产桥接 + 生产渲染函数，UI 布局回归沿用上轮 1080×750 / 940×690 的窗口证据。
+- `ownedFile` 只承认笔记根目录下的文件；保存在其他位置的历史 `document` 来源将显示「该来源没有可核验的读取记录」，不提供重建入口（不新增授权框架）。
+- 手动提炼受现有稳定窗口约束：窗口内重复点击只归并到同一任务，不额外排批。
