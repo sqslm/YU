@@ -2335,3 +2335,63 @@ Rust 本轮未改，`native/bin/yu-knowledge.exe` 复用 `66731bd317674ff537c954
 - 预览刷新延迟为 113–605 ms 观测值，轮询粒度 100 ms，只说明「无需手动刷新」；未测真实外网模型链路（本轮不需要）。
 - loading 态只能捕到 2 帧（无 >1 s 强制停留），`!card` 首帧加载失败用「同 tick 删+开」制造，网格里不存在可点的已删卡。
 - C6 之前的旧结论（焦点落 body）已由本轮容器兜底取代；`scrollTop` 恢复仍依赖页面内容高度在 20 帧内稳定，若未来在浏览页上方加入异步区块需要重新验证。
+
+## 阶段 6 C1 外部验收与 6 C2 交付（第二十二轮）
+
+### 6 C1 的外部验收（外部结论，单列，不与我方 r10 混记）
+
+外部 Codex 在 `c214d4b` 之后核对：`git diff --check c214d4b..HEAD` 退出 0；指定三个测试文件 67/67；用最终 04:55:36 构建、隔离 Electron + 真 release helper + 合成数据复测——删卡后 Rust、网格与预览同步从 12 降到 11，已删节点消失；筛选后节点区保持展开，图谱往返滚动 688→688，卡片数保持；单列全屏下已删卡详情出现关闭按钮，实际点击后回到网格。C1 通过，不重做。
+
+我方 r10 证据（`.tmp/c1-evidence/`，只作参考，不当外部复跑）：A 19/19（新增/删除/关系增删后预览与计数同步，删后 13 点采样 0 命中）、B 8/8（25 卡，`scrollTop=maxScroll=2057`，0/300/1600 ms 零漂移）、C 8/8（关闭控件 count=1，Tab 可达，loading 帧也有关闭入口）。
+
+### 6 C2 交付
+
+| 项 | 实现 |
+| --- | --- |
+| 随记卡片入口按真实记录身份查询 | `NotesPage.tsx` 的 `loadCards` 改用 `bySource({ noteId })`；`knowledge:by-source` 既有的 `SourceIdentity` 归一与 Rust 记录级查询不变（一版一条来源，用 sourceId 只会命中最新版） |
+| 随记卡片脚注跟随知识变更 | `NotesPage` 新增 `knowledge.onChanged` 订阅，`scope === 'cards'` 时为当前随记重取第一页（此前只在选中时取一次，来源还在稳定窗口里就一直显示「这条随记还没有生成知识」） |
+| C1 收尾（无行为变化） | `KnowledgeGraphPreview.tsx` 的 scope 模板串里的真实 NUL 换成源码转义 `\u0000`，文件不再含 NUL；`git diff --text` 只有一行可审查改动 |
+| 继续讨论 → 普通聊天草稿 | 新 `src/main/knowledge/card-draft.ts`：`DraftCard { id, title }` 只留身份；`draftSeed(read, pending)` 在真正发送时按 id 重读卡片，正文截到 `MAX_CARD_CONTEXT = 2000`。`knowledge:continue` 只登记草稿身份，不发消息、不调模型、不把正文存成未来要发的种子 |
+| 草稿关联卡片 | 新窄 IPC `chat:draft-card` / `chat:drop-draft-card`（`chatOwner` 校验），`ChatPage` 在无消息草稿上方渲染 `data-chat-draft-card` 可点行与 `data-chat-draft-card-drop` 移除按钮；`chat:edit` 删除草稿时清内存登记 |
+| 首发前按 ID 重读 | `chat:send` 先 `draftSeed(knowledge.getCard, draftCards.get(id))` 再 `chats.send(id, text, attachments, seed, () => draftCards.delete(id))`；`ChatService.send` 在 `store.begin` 之后才调 `started`，所以只有真正开始的回合消耗一次草稿；读失败（卡片已删）在发送前抛出，输入与附件保留、模型零请求 |
+| 另存为随记 | 新 `src/main/knowledge/card-notes.ts` 的 `saveCardAsNote`：`nextId()` → 先 `cite(noteId, [cardId])` → 再 `notes.createText`，`NotesStore.onSettled` 优先用这份登记发布，因此真实第一条来源就带 `cited_card_ids`，不与普通发布竞争；`createText` 支持调用方指定 id |
+| 导航回归 | `App.tsx` 的 `knowledgeToOpen` 改为 `{ id, ticket }`，同一张卡连点两次也会重新打开详情；`KnowledgePage` 的 focus effect 依赖 `[focusCardId, focusTicket]` |
+
+### 验证（本机实测，退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run`（linkage、ask-knowledge.integration、chat、notes-ipc、knowledgeView、preload、ipc-trust、card-note.integration、chat-draft.integration、chat-delete、settle.integration、cleanup、cleanupQueue、renderer settings） | 49 文件 / 623 项通过，exit 0（06:13） |
+| 同上更早一次（不含 chat-delete/settle/cleanup 系列） | 46 文件 / 592 项通过，exit 0 |
+| `pnpm typecheck` | 0（node + web） |
+| `pnpm build` | 0（14.58 s，`out/renderer/assets/settings-DYMBBCXQ.js`） |
+| `git diff --check` | 0 |
+
+关键集成用例：
+- `card-note.integration.test.ts`（真 helper + 真 `NotesStore` + 生产 collector + 真 `ExtractEngine`，`YU_KNOWLEDGE_STABLE_MS=0`）：另存后该随记只有 1 条来源且 `cited_card_ids === [card.id]`；提炼复用原卡（卡片总数不变、原卡正文不变、卡 `sourceIds` 增加这条随记来源）；再次另存不新增卡；知识关闭时随记照常保存且不发布来源。
+- `chat-draft.integration.test.ts`（真 `KnowledgeHost` + 真 `ChatService` + 本地 loopback 桩）：草稿建立时 0 请求；改卡后发送，线上 `messages` 里参考消息带**新**正文且不含旧句，`{title, text}` 两字段、`text.length === 2000`（草稿层上限），`started` 只调一次；答案未引用卡片时落库 `records` 为空（6 A 引用口径不变）；删卡后 `draftSeed` 抛错、0 请求、会话无消息。
+
+### 实窗证据（隔离 Electron + 真 helper + 本地零付费桩）
+
+证据目录 `.tmp/c2-evidence/`（gitignored）：`report.md`（A–F 步骤、点击坐标/选择器、预期 vs 实际、结论）、`shots/`、`requests/001..008.json`、`results/{A..F}.json`、`logs/`。验证者用 `E:\CpanQianYi\Temp\yu-c2c` 隔离根（app 目录 junction 到仓库 `out/*`、`native`、`resources`、`node_modules`，`boot.js` 只 require 真入口并覆写 `setLoginItemSettings` 避免 HKCU 写入）、独立 userData、桩 `127.0.0.1:19496`、CDP 19495、视口 1080×750；卡片与随记用应用 IPC 播种，交互全部是 `Input.dispatchMouseEvent`（含 `elementFromPoint` 命中校验）。
+
+| 场景 | 结果 | 实际值 |
+| --- | --- | --- |
+| A 继续讨论=草稿、0 请求 | 部分达成（不自动跳页） | 点「继续讨论」后停在知识库，只出「已新建对话／打开」提示；点「打开」进聊天页。chip `card_f44a0bfa99c2135c`、messages=0、桩请求 0→0 |
+| B 发送时按 ID 重读 | PASS | 发送前把正文改为 1646 字；请求 0→2，seed `textLen=1200`、hasNew=true、hasOld=false |
+| C 已删卡首发 | PASS | Alert `chat:send: KnowledgeError: unknown card: card_5a7df260895813c1`；请求 3→3；chip 与草稿保留；messages=[] |
+| D 随记 ↔ 卡片双向 | PASS | 随记卡片区 → 详情 → 来源「打开」→ 回 notes 且 `data-notes-row-active=noteId`，dialog 关闭 |
+| E 另存为随记 | PASS | 新随记 `5d070fbf…` 被选中，卡片脚注回显同一张卡（依赖真实稳定窗口，约 30–60 s 后才出现；首次 20 s 观测为空是时序） |
+| F 生成待办 | PASS | reminders 0→1（`5b3177c9…`，source=manual），页面 1 行 |
+
+验证者构建（05:15）不含此后补的 `NotesPage` 变更通知订阅，因此补记一次当前构建（05:47）上的检查：`scripts/check-notes.js` 经 `assistant.navigate('notes')` 切页、点 `data-notes-row=…`，等到 `data-notes-knowledge-card` 渲染出「概念C2 联动卡片」（`shots/G-note-card-row.png`）。这条只证明 `bySource({ noteId })` 的渲染路径，未在 05:47 构建上重放「等待期间脚注自动出现」的那一刻。
+
+A 的不自动跳页沿用 C1 的既有交互（详情动作只给成功提示与「打开」按钮），本轮未改；草稿随后可从聊天页打开且关联卡片保留。
+
+### 未测与边界
+
+- 草稿关联只存在于本进程内存：应用重启后同一对话仍可发送，但不再带卡片参考（派单只要求同进程内可恢复）。
+- 未测 dpr≠1、>100 张多页、图谱放大后返回、en-US 文案定位下的点击路径。
+- 实窗里的「删除卡片」「新建卡片」经应用 IPC 播种，不是逐个点界面表单；A–F 的**验证**交互都是真实点击。
+- 06:13 之前的 46/592 与之后的 49/623 是同一套代码的两次运行，后者含 `NotesPage` 变更。
+- 未跑 `cargo`：本轮没有改 Rust（helper 仍是 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`）。
