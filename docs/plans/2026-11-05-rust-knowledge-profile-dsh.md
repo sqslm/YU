@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B 与阶段 6 C1（知识库浏览排版）已通过外部 Codex 复核。阶段 6 C2（卡片联动）已交付，并按外部复核提出的反例完成三轮定点补修（草稿关联的删除边界、随记卡片段的顺序分页、后台通知与手动翻页的协调）。阶段 6 D（工作流送入知识提炼）已交付，待外部复核。阶段 7 未开始。
+**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B、阶段 6 C1（知识库浏览排版）与阶段 6 C2（卡片联动）已通过外部 Codex 复核。阶段 6 D（工作流送入知识提炼）已交付，并按外部复核提出的四条边界（暂停读取中取消、配置确认中取消、权限设置禁用、helper 真实拒绝）完成定点补修，待外部复验。阶段 7 未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2599,4 +2599,73 @@ C2（卡片联动）本身与其后三轮定点补修（草稿关联的删除边
 ### 8. 提交
 
 - 代码：`16cecf1 feat(workflow): hand a real reading to the knowledge queue and stop when it cannot`（`src/main/knowledge/handoff.ts`、`src/main/index.ts`、`src/main/tools/knowledge.ts`、`src/main/tools/workflow.ts`、`src/main/tools/workflow.test.ts`、`src/main/workflow-extract.integration.test.ts`）。
+- 本文件：随本次交付一并提交。
+
+## 阶段 6 D 定点补修（第二十六轮，2026-11-06）：取消、权限与真实拒绝
+
+外部复核（在 6 D 首版 `3a584bf` 上）用真 `WorkflowStore`、`runTool('run_workflow')`、真 hand-off、真 collector、release helper 复现四条边界；本轮把它们变成可重跑的回归并修掉。
+
+### 1. 反例与修复
+
+| 外部反例 | 根因 | 修复 |
+| --- | --- | --- |
+| A1 读到真 `queueStatus` 后延迟返回 `pausedReasons`，在等待中 abort：最终报 cancelled，但库新增来源 1、任务 1 | `handoffBlocker` 只在 `await paused()` 之前查一次 `signal`，返回后照样发布 | `handoffBlocker` 的检查抽成 `check()`，等待前与等待后各跑一次；`publishReading`/`publishNote` 也带 `signal` |
+| A2 延迟 `configureCollect`，在 collector 等 `confirmed` 时取消：取消瞬间 0/0，放开配置后变成 1/1，工作流却报 cancelled | `publish()` 只在进入时查 `signal`，`await this.confirmed` 之后没有复查；`remember()` 与 `onQueued` 已执行 | `publish(input, options)` 在配置确认之后再查 `signal.aborted`；`publishReading` 在 `remember()` 前也查一次；显式随记分支的 `extractFromNote` 现在转发 `ctx.signal` |
+| A2b 显式随记分支没有转发 `ctx.signal` | `KnowledgeTools.extractFromNote(noteId)` 只有单参 | 改为 `extractFromNote(noteId, options?: { signal })`，`index.ts` 与 `handoffNote` 透传 |
+| B `disabledTools` 显式含 `extract_knowledge` 时，工作流的无 noteId 直接路径仍照常交接：completed、来源 1、任务 1、后续步骤执行 | 该路径绕过 `runTaskTool` 的禁用/可用性门 | `HandoffDeps` 增 `disabled()`；`handoffBlocker` 在等待前后都拒绝「此工具已在权限设置中关闭：extract_knowledge」；失败即 `break`，后续步骤不执行 |
+| C helper 侧 `reading` 组被排除时，界面只说「这条读取还没有进入知识库」 | collector 的 `publish` 把拒绝吞成 `null`，交接只能报通用文案 | `publish` 接受 `reject` 回调，`handoffReading`/`handoffNote` 转成「知识库拒绝了这次读取：{{reason}}」/「知识库拒绝了这条随记：{{reason}}」；普通后台采集继续沿用原来的日志与静默 |
+
+另外：`extractSourceNow` 在入口、`getSource` 之后、`extractSource` 之前各查 `signal`，取消时不再唤醒引擎（`wake` 计数保持 0）。
+
+### 2. 实现位置
+
+- `src/main/knowledge/handoff.ts`：`HandoffPublishOptions { signal?, reject? }`、`HandoffDeps.disabled()`；`handoffBlocker` 改为 async 的双重检查；两条 `handoff*` 捕获拒绝原因与「已提交后才取消」的真实状态（来源保留，不再排队）。
+- `src/main/knowledge/collector.ts`：`PublishOptions { signal?, reject? }`；`publishReading`/`publishNote`/`publish` 的取消检查点（进入、`remember` 前、配置确认后），拒绝原因回传。
+- `src/main/knowledge/manual.ts`：`ManualExtractDeps.signal`，三处取消检查。
+- `src/main/tools/knowledge.ts`：`extractFromNote(noteId, options)`；`queued === 1` 才 `ok:true`（6 D 首版已改）。
+- `src/main/index.ts`：`handoff.disabled = () => store.get().assistantAccess?.disabledTools ?? []`，`publishReading`/`publishNote`/`extract` 全部透传 signal 与 reject。
+
+### 3. 回归
+
+`src/main/workflow-extract.integration.test.ts` 扩到 10 项（真 helper、真 collector/engine、真 `WorkflowStore`、真 handoff；只替 Electron 外壳、模型传输与网页响应）：
+
+| 用例 | 断言 |
+| --- | --- |
+| 暂停 gate 中取消（A1） | `status === 'cancelled'`；来源 0；队列 0；`wakes === 0` |
+| 配置确认 gate 中取消（A2） | 放开 gate 前来源 0 / 队列 0；放开后仍 0 / 0；`wakes === 0`；`get_datetime` 未执行 |
+| 显式随记同一边界（A2b） | 取消后来源 0、队列 0、`wakes === 0` |
+| `disabledTools` 含 `extract_knowledge`（B） | 停在提炼步、摘要含「此工具已在权限设置中关闭」、来源 0、队列 0、后续步骤未执行 |
+| helper 侧排除（C） | 摘要含「知识库拒绝了这次读取」与 `excluded`、来源 0、队列 0 |
+| 正例精确性 | 卡片的 `sourceIds` 等于本次 hand-off 真实回包的 `sourceId`（不再用 `^src_` 前缀） |
+
+`src/main/tools/knowledge.test.ts` 的 `extractFromNote` 期望加第二参 `{ signal: expect.anything() }`。
+
+### 4. 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run`（8 个定向文件） | 8 文件 / 88 项通过（首个失败：`knowledge.test.ts` 的 `toHaveBeenCalledWith('n1')` 因新增 signal 参数失败，改期望后复跑通过） |
+| `pnpm exec vitest run src/main/workflow-extract.integration.test.ts` | 10 项通过（1.28 s） |
+| `pnpm typecheck` | 0 |
+| `pnpm build` | 0（14.02 s） |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 290 文件通过 / 3 跳过；4076 项通过 / 8 跳过（`/tmp/full25.log`） |
+| `git diff --check` | 0 |
+
+本轮未改 Rust，`native/bin/yu-knowledge.exe` 仍为 3,247,104 B、SHA-256 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`。
+
+### 5. 实窗复测（隔离 Electron，`.tmp/d-evidence/report.md` 第二节）
+
+本轮改的是取消/权限/拒绝分支，成功路径仍按上一轮脚本重跑以确认没有被新契约打断：07:39 构建、隔离根 `E:\CpanQianYi\Temp\yu-d1`、CDP 19995、桩 `127.0.0.1:19996`、真 release helper。浮层回答「早间提炼：✓ 送入提炼」；`queue.counts.completed = 1`；卡片 `card_f11b05070dbfed8b`，`sourceIds: ['src_e096af48327514dd']`；`bySource({noteId})` 1 条；知识库页正常。进程与隔离根已回收。
+
+### 6. 未测与边界
+
+- 四条阻塞分支在窗口里逐个点击仍未覆盖（只在真 helper 的集成用例里）。取消路径无法在窗口里稳定触发（需要卡住真实切换握手或暂停读取），因此没有实窗证据。
+- 「已提交后才取消」的真实窗口表现未观察；集成层面已按「保留已提交来源、不再排队」断言。
+- 普通后台采集（`readingFinished`）的静默行为未变，也没有专门加回归——它原本就不向界面汇报。
+- 外部反例里用临时复制测试卡时序的手法，本轮以 `paused`/`collectorHost` 两个注入点固化在仓库用例里；两者都只替时序，不替业务。
+
+### 7. 提交
+
+- 代码：`e069667 fix(workflow): stop a cancelled or disabled extraction before it writes`（`src/main/knowledge/{handoff,collector,manual}.ts`、`src/main/tools/knowledge.ts`、`src/main/index.ts`、`src/main/tools/knowledge.test.ts`、`src/main/workflow-extract.integration.test.ts`）。
 - 本文件：随本次交付一并提交。
