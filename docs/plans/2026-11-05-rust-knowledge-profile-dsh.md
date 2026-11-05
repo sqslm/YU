@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1 已通过外部复核；阶段 2 外部复核仍未通过，R1～R5 修复已提交（见「阶段 2 第三次复核修复」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
+**状态：阶段 1 已通过外部复核；阶段 2 外部复核仍未通过，T1～T3 修复已提交（见「阶段 2 第四次复核修复」），待外部 Codex 复核。阶段 3～7 未开始；用户可见的知识库/画像功能尚未开放。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -588,3 +588,40 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 - 仅用于测试的二进制：`target/debug/yu-knowledge.exe`（3,927,040 字节，`2f47e92afd61de7bd4db2f16d0773a201431a1c1af9d9ebbfb9220f2a3086d66`）、`target/debug/yu-knowledge-fixture.exe`（2,412,544 字节，`393df85ac02f8945e9da4cbc6fdc5fbd4947dee82a4dd5ac61abf53a5fc7657c`），不随安装包分发。
 - 临时产物：本轮删除了先前遗留的 15 个 `%TEMP%/yu-knowledge-scan-*` 目录；`history.integration.test.ts` 现在在 `afterEach` 关闭 `ChatStore` 再删根目录（Windows 会锁住打开中的数据库），复跑后 `%TEMP%/yu-knowledge*` 为 0；`native/knowledge/target` 为 1.2 GB（`.gitignore` 已忽略，沿用仓库保留编译缓存的习惯）。
 - 仍未覆盖：真实 Electron 启动、打包安装后的六程序联动、60 秒稳定期的真实时长（仍用 `YU_KNOWLEDGE_STABLE_MS` 缩短验证）、阶段 3 的卡片生成（本阶段不调用任何模型）。
+
+## 阶段 2 第四次复核修复（T1～T3，2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
+
+外部复核（reportId `b6179793-6dde-42ed-a4f9-59f0d7658a91`，基线 HEAD `6808376`）复跑目标 11 文件 161 项 Vitest 与阶段 diff 均通过，release 哈希 `085f3ec8…` 一致；真实 helper 探针确认空尾批可完成、锁等待取消不动 checkpoint、重放不重复计数、201 项完整唯一可取、乱序来源按原时间顺序且 `stableAt` 不倒退。这些保留、未重做。以下三处仍属原 R1/R2/R4 目标内的实际失败，本轮只修它们。
+
+### T1 旧聊天正文恢复受默认 100 条窗口限制（P1）
+
+- 失败证据：真实 `ChatStore` 61 轮共 122 条消息，`ChatStore.get(threadId)` 默认只返回最近 100 条 → 生产 `createSourceRecovery` 对第 1 轮返回 `{"missing":"deleted"}`，`collector.retry` 会因此整组撤回。
+- 修复：`src/main/knowledge/recover.ts` 改为按绑定的 `userId` 锚点定向读取 `ChatStore.get(threadId, CHAT_MESSAGE_WINDOW = 8, userId)`，不再依赖"最近窗口"；短窗口里没有不再是删除的依据。真实 store 在线程或锚点消息不存在时抛错，恢复层捕获后如实返回 `deleted`；回答未 `done` 返回 `unknown`（撤回为 `source changed`），`memoryTemporary` 仍返回 `temporary`。
+- 真实链路（`collector.retry`）：`queue.items` 取分组条目 → `readBody`（recover 读真实 store）→ `source.read`（Rust 用收到的正文重算 SHA-256 与来源指纹比对）→ 只有一致才 `queue.retry`，不一致按 `source changed` 撤回。
+- 回归：`src/main/knowledge/recover.test.ts`（真实 `ChatStore`，61 轮 122 条，第 1/30/60 轮正文正确；删除线程 → `deleted` 且同库另一线程仍可恢复；临时会话 → `temporary`；未完成回答 → `unknown`）、`src/main/knowledge/recover.integration.test.ts`（真实 store + 生产 recovery/collector + 编译好的 helper：三个 61 轮线程分别绑定第 1/30/60 轮，`needs_reread` 后重试全部成功，来源指纹未变、分组未被撤回）。
+
+### T2 字节分页跨已完成线程时 cursor 不前进（P1）
+
+- 失败证据：A 线程 2 轮、B 线程 1 轮（每轮回答约 180 000 字符）时，第一页装下 A0+A1 后因 B0 超预算返回，而 cursor 被写成裸线程 id `A`；下一页 `splitCursor` 把裸 id 当作 `A:0`，于是永远重复 A0+A1，B 不可达。
+- 修复：`src/main/knowledge/pages.ts` 线程结束后仍写 `${threadId}:${position}`，不再写裸 id；字节预算、固定 `chatBound`、持久 seq、完整问答配对、空尾完成标记与重放保护都保持不变。
+- 回归：`src/main/knowledge/pages.cursor.test.ts`（真实 `ChatStore`：字节溢出的 A/B 用例逐页读到 `done`，三轮各出现一次、B 可达、非末页 cursor 每次前进；行数上限跨线程同样推进）。
+
+### T3 游戏自动挂起被误记为手动暂停（P2）
+
+- 失败证据：`HistoryDriver.walk` 在 `allowed()` 为假时调用 `pauseHistory` 把作业持久化为 `paused`，而 `resume()` 只接受 `running`；游戏退出只同步队列暂停标记，没有恢复 walk，作业永久停在 `paused`。
+- 修复：`src/main/knowledge/history.ts` 的自动暂停改为"只结束本次 walk、保留 helper 中的 `running`"，手动暂停仍是持久 `paused`；新增 `src/main/knowledge/session.ts` 的 `syncKnowledge(wiring, game)`：先 `collector.sync({ game })` 让配置落地，再在"功能开启且不在游戏"时 `history.resume()`。`src/main/index.ts` 的游戏进入、游戏退出、设置更新、启动恢复四处都改为走它，因此真实流程（而不是单测手工调用两个组件）就会续跑。
+- 回归：`src/main/knowledge/session.integration.test.ts`（真实 helper + 真实 `ChatStore` + 生产 `HistoryDriver`/collector/`syncKnowledge`：25 轮扫描进行到已提交批次后进入游戏 → 作业保持 `running` 且未完成 → 退出游戏经 `syncKnowledge` 自动续跑到 `completed`、`scanned 25`；手动暂停的作业经游戏进入/退出仍 `paused`；功能关闭时 `syncKnowledge` 不启动进程、也不触发恢复）。
+
+### 本轮验证（实际命令与退出码，依赖顺序执行）
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `pnpm exec vitest run src/main/knowledge src/main/notes.test.ts src/main/chat.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 0 | 15 文件 / 170 项 |
+| `pnpm typecheck` | 0 | node + web |
+| `pnpm test` | 0 | 263 文件通过 / 3 跳过（266）；3781 项通过 / 8 跳过（3789） |
+| `pnpm build` | 0 | 主进程与 renderer 构建通过 |
+
+- 本轮未改 Rust 源码/协议/迁移，`native/bin/yu-knowledge.exe` 与上一轮逐字节相同：2,497,536 字节，SHA-256 `085f3ec8cb272de639adf26a893e7bc80e6514ceac7cb1cce5ae9069b0dca20f`（重建后仍以此为准，重启构建不保证可复现）。
+- 测试专用二进制未变：`target/debug/yu-knowledge.exe` 3,927,040 字节 `2f47e92a…`；`target/debug/yu-knowledge-fixture.exe` 2,412,544 字节 `393df85a…`，不随安装包分发。
+- 临时产物：`%TEMP%/yu-knowledge*` 复跑后为 0；`native/knowledge/target` 1.2 GB（`.gitignore` 已忽略）。
+- 仍未覆盖：真实 Electron 启动与安装包联动、60 秒稳定期真实时长（仍用 `YU_KNOWLEDGE_STABLE_MS` 缩短）、阶段 3 卡片生成（本轮 0 次模型调用）。
