@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**状态：阶段 1、阶段 2、阶段 3 已通过外部复核；阶段 4 已实现，待外部 Codex 复核。阶段 5～7 未开始；用户可见的知识库页面与画像页面尚未开放（后台画像与上下文接口已就绪，接入回答属阶段 6）。**
+**状态：阶段 1、阶段 2、阶段 3 已通过外部复核；阶段 4 外部复核未通过，复核提出的 P1～P6 修复已提交，等待外部复核。阶段 5～7 未开始；用户可见的知识库页面与画像页面尚未开放（后台画像与上下文接口已就绪，接入回答属阶段 6）。**
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -839,7 +839,7 @@ v1 → v2 只新增表，不改既有列，卡片/来源/排除原地保留；`p
 
 ## 阶段 4 实施记录（2026-11-05，DSH 执行会话 session-e4795148-53a3-4afd-b014-730be9b3c9f1）
 
-**状态：阶段 4 已实现，待外部 Codex 复核。阶段 5～7 未开始；用户可见的画像页面尚未开放，但后台画像与上下文字符串已经可读。**
+**状态：阶段 4 外部复核未通过，复核提出的 P1～P6 修复已提交（见文末「阶段 4 复核问题修复」），等待外部复核。阶段 5～7 未开始；用户可见的画像页面尚未开放，但后台画像与上下文字符串已经可读。**
 
 ### 契约（本阶段对外行为）
 
@@ -857,9 +857,10 @@ RPC（全部经 `handle()`／`knowledgeOwner`，渲染进程不能提交正文�
 | `profile.learn.next` / `.run` / `.fail` | 取批次（claim）、一次模型归纳、释放 claim |
 | `profile.context` | 只读上下文（≤2000 字符，带条目 id/类别） |
 | `profile.retract` | 会话删除/转临时后撤回证据 |
-| `profile.clear` | 清空统计、待处理正文、条目与证据，并留下清除屏障 |
+| `profile.clear` | 清空统计、待处理正文、条目与证据，并留下清除屏障（`cleared_at` + 幂等标记） |
+| `profile.retry` | 人工把 `failed` 的暂存项放回 `pending`（唯一的重试入口） |
 
-数据模型（`data/profile/profile.db`，`PROFILE_SCHEMA = 2`）：新增 `profile_items.slot`（稳定身份）、`profile_usage(day, feature, count)`、`profile_events(op_id)`（幂等窗口）、`profile_pending`（待处理用户正文，处理后删除）、`profile_claims`（同一时刻最多一个批次）、`profile_progress`，以及 `profile_evidence.state`（`active|invalid`）。知识库库仍是 `KNOWLEDGE_SCHEMA = 5`；两个库独立清空，无跨库外键或分布式事务。
+数据模型（`data/profile/profile.db`，`PROFILE_SCHEMA = 3`；阶段 4 首次实现时为 2，P5 复核后升到 3）：`profile_items.slot`（稳定身份）、`profile_control(key, value, updated_at)`（开关、暂停原因、`cleared_at` 屏障、`epoch`）、`profile_usage(day, feature, count)`（按天/功能聚合）、`profile_usage_ops(op_id, feature, at)`（动作幂等窗口，30 天后回收）、`profile_pending(id, source_kind, source_id, version, segment, origin_ref, locator, text, state, claim, reason, at, updated_at)`（活动暂存，状态只有 `pending|working|failed`，归纳成功后整行删除、不留正文）、`profile_source_state(source_kind, source_id, state, reason)`（来源撤回后为 `invalid`）、`profile_markers(source_kind, source_id, version, segment, created_at)`（已处理证据的轻量幂等标记，不存正文）。没有 `profile_events`、`profile_claims`、`profile_progress`，也没有 `profile_evidence.state`。知识库库仍是 `KNOWLEDGE_SCHEMA = 5`；两个库独立清空，无跨库外键或分布式事务。
 
 稳定身份：`save` 以 `slot`（缺省为 `dimension`）为准，同一 slot 的再次写入是覆盖而不是新增；人工纠正/固定/删除留下的是 slot 级排除，自动写入既不能改值也不能靠新 id 绕过；`profile.save` 不再按 `(dimension,value)` 匹配。
 
@@ -867,7 +868,7 @@ RPC（全部经 `handle()`／`knowledgeOwner`，渲染进程不能提交正文�
 
 ### 实现
 
-Rust（`native/knowledge/src/`）：`store.rs` 增加 `PROFILE_LOOP_SQL` 迁移；`profile.rs` 增加 `slot` 与槽位级排除；新增 `profile_learning.rs`（控制、幂等统计、分段入队、批次 claim、单次归纳、原子写入、retract、clear 屏障、优先级上下文）；`service.rs`/`lib.rs` 挂载 `profile.*` 十一个方法。
+Rust（`native/knowledge/src/`）：`store.rs` 增加 `PROFILE_LEARN_SQL`（阶段 4）与 `PROFILE_MARKER_SQL`（复核修复）迁移，并在打开画像库时把 `working` 残留标成可重试的 `failed`；`profile.rs` 增加 `slot`、槽位级排除与「手改即视为人工更正」；`profile_learning.rs`（控制、幂等统计、分段入队、容量与屏障检查、批次 claim、单次归纳、候选快照校验、原子写入、retract、clear 屏障、优先级上下文）；`service.rs`/`lib.rs` 挂载 `profile.*` 十二个方法。
 
 主进程：新增 `src/main/knowledge/profile.ts`（`ProfileCollector`：把真实完成点的事实交给 helper、只持有一次唤醒与一个 in-flight 批次、`park()` 只取消 `profile.learn.run`）；`session.ts`、`engine.ts`、`host.ts` 增加 `cancelInFlight(reason, only)` 以便两个模块各取消自己的批次；`src/main/index.ts` 接上聊天完成、浮动提问完成、随记创建、手动改卡四个真实入口，游戏进入先 park 再 stop、退出后恢复，`settings:update` 与启动各自同步两个模块的开关；新增 `profile:pause`、`profile:clear`、`profile:context` 三个受信通道并在 `api.ts`/`preload` 镜像。
 
@@ -890,3 +891,48 @@ Rust（`native/knowledge/src/`）：`store.rs` 增加 `PROFILE_LOOP_SQL` 迁移�
 未测与边界：未调用真实付费模型（全部为注入 completer）；未在打包 Electron 实例里运行；30 天窗口以注入时间验证；上下文只有字符串，尚未接入回答（阶段 6）。
 
 实现提交：`df335c3` `feat(knowledge): run the user profile loop in the background`。交付产物：`native/bin/yu-knowledge.exe` 2,863,616 字节，SHA-256 `0d53a348ef6541f358787cad86d70d61a5d25eb754d6c9618e2bd284bfa08341`（MSVC 重建哈希会变；debug/fixture 不计入交付）。
+
+## 阶段 4 复核问题修复（2026-11-05 第四轮，P1～P6）
+
+外部复核在 `fe3f127` 上判阶段 4 未通过（reportId `3c6b1b49-b492-457f-b8a0-92a507d5e1e7`），并给出六组真实缺陷。本节记录实测失败与修复，不覆盖上文已交付记录。
+
+| 项 | 外部实测失败 | 修复 |
+| --- | --- | --- |
+| P1 证据不唤醒归纳、统计口径错 | 引擎空闲后调用生产 `completedChat`：`pending=1、modelCalls=0、timer=false`；旧随记仅改正文也计入「创建」；Rust 手动暂停后 `recordProfileEvent` 仍 `counted=true` | 入队成功即 `wake()`（重复投递 `queued:0` 不触发、不花模型调用）；随记 `onSettled(note, event)` 区分 `created/updated`，只有真正创建计入；卡片编辑用 `card:${id}:${revision}` 作操作身份；`record_event` 与 `enqueue` 都先看 `enabled/usage/chat/pausedManual/pausedGame` |
+| P2 取消不释放、重启不恢复、模块互杀 | 关画像总开关/chat 后 `signal.aborted=false`、行永久 `working`；手动暂停 `cancelled` 分支直接 return；`ExtractEngine.abort` 无过滤取消，关知识库会误杀画像批次 | 每个 claim 的退出路径显式结算：`cancelled/paused → release()` 回 `pending`，`source_changed/retracted → drop_claim()`，其余 `failed`；`Store::open` 把 `working` 残留改成 `failed`（`助手中断，需重试`）；新增 `profile.retry` 为唯一重试入口，`profile.status` 给出有界 `failed/failedItems`；`engine.abort()` 只取消 `extract.run`，`ProfileCollector.park()` 只取消 `profile.learn.run` |
+| P3 人工更正被覆盖、slot 未受控 | 在途 `profile.update` 只改值不改 `corrected`，旧回复覆盖人工值；pinned 后可另建矛盾项；同批两个 focus 互相覆盖到 1 条 | 手改值即视为更正（`corrected = 原值 or 值已变`）；候选带 `Candidate{id,slot,dimension,updated_at}` 快照，写入前核对 `updated_at`，人工更正/固定/删除后旧回复一律跳过；自动输出只能引用本批候选的 slot，未知 slot 直接 `invalid_output`；`project/focus` 等可并存维度按值派生 slot（`dimension:hash12`），单值维度用快照 slot；排除同时按 slot 与 `dimension=value` 生效；提示词附带 ≤20 条、≤400 字符的 `removed` 列表，避免换措辞绕过（不增加第二次模型调用） |
+| P4 清空/撤回后旧证据可重放、schema1 排除丢失 | `clear` 后重放同 source/version 仍 `queued=1` 并重新归纳；`retract` 后重放也能重建；schema1 的 `dimension=value` 排除在迁移后失效 | `clear` 写入 `profile_control.cleared_at` 屏障并给在途/待处理证据打 `profile_markers`；`enqueue` 拒绝 `at <= cleared_at`、来源 `invalid`、命中标记的项；撤回同样落标记；迁移保留 schema1/schema2 的条目、证据、固定/更正与 `dimension=value` 排除 |
+| P5 容量静默丢任务 | 200 条 `done` 后第 201 条 `queued:1` 但随后被 `prune` 删掉，`learn.next.batch=null`；`done` 仍留全文 3690 字符 | `profile_pending` 只装活动工作（`pending/working/failed`），成功归纳后整行删除、改记 `profile_markers`；`enqueue` 先整批规划再写：`active_rows + planned > 200` 或 `active_chars + chars > 240000` 时返回 `{queued:0, reason:"capacity", capacity, pending}` 且一条不写；`prune` 只回收 30 天前的标记，从不裁剪待处理队列 |
+| P6 观察时间错、稳定偏好误过期、使用观察不可读 | 31 天前的 focus 被标 `recent=true`（`attach` 写了学习时刻）；明确 depth 偏好因证据超 30 天从上下文消失；`context` 从不读 `profile_usage` | `attach` 写真实 `at`（观察时间）；`context` 只对 `project/focus` 施加 30 天近期窗口，明确稳定偏好按人工固定/更正优先保留，并追加 `- 近期常用：{feature} {count} 次`（来自 `profile_usage` 的窗口聚合） |
+| 文档 | 计划与 README 写了 `PROFILE_LOOP_SQL`、`profile_events`、`profile_claims`、`profile_progress`、`profile_evidence.state` 与「处理后删除正文」 | 已按真实实现改写：`PROFILE_LEARN_SQL`/`PROFILE_MARKER_SQL`、`profile_control`/`profile_usage`/`profile_usage_ops`/`profile_pending`/`profile_source_state`/`profile_markers`，并说明成功后正文即删 |
+
+接口变化（仅本阶段）：新增 `profile.retry`；`profile.status` 增加 `failed` 与有界 `failedItems[{id,reason,chars,at}]`；`profile.clear` 返回 `clearedAt`；`profile.context` 返回 `recent` 与使用观察行；画像 schema 由 2 升到 3（新增 `profile_markers`），知识库 schema 仍为 5。
+
+### 新增回归
+
+Rust `native/knowledge/tests/profile.rs` 现 20 项（原 11 项 + 9 项）：手改即更正且在途旧回复不能覆盖；两个 focus 并存且伪造 slot 被拒；容量不足整批拒绝且不丢任务（200 条满后第 201 条先 `capacity`、归纳完再 `queued:1` 并被处理）；清空/撤回后原样重放不入队不重建；31 天前 focus 不算近期而明确偏好保留且「近期常用」可读；暂停冻结统计与入队、恢复后继续；真实模型失败只能经 `profile.retry` 恢复且 `status.failed` 可读；删除的偏好被列入提示词并在返回时被拒；真实进程崩溃（kill）后重启把在途批次标成可重试失败并成功重试。
+
+`src/main/knowledge/profile.integration.test.ts` 重写为 8 项（真实 helper + 生产 `KnowledgeHost`/`ProfileCollector`，0 次付费模型）：开关关闭不启动进程；同一次完成重复上报只计一次且只调一次模型；用户句子仅靠真实证据（测试内**不调用** `wake()`）自动归纳出带原文引用的条目；清空时 completer 真的停在 gate 上、放行后迟到回复不能复活条目；仅关闭知识库时画像批次照常完成（`cancelInFlight('采集已暂停','extract.run')`）；真实失败只经 `profile.retry` 恢复；游戏 park/pause 在批次真正在途时取消，待处理数归零后恢复并继续。
+
+`src/main/notes.test.ts` 现在断言 settled 事件为 `created:`/`updated:`，证明既有笔记编辑不算新建；`engine.test.ts` 断言 `cancelInFlight('采集已暂停','extract.run')`；`host.integration.test.ts`/`loop.test.ts` 的 ready 契约改为 `{knowledge:5, profile:3}`。
+
+### 验证（最终代码，实际命令与退出码）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | 0 |
+| `cargo test --locked` | 0（15 lib + 11 extract + 11 process + 20 profile + 18 queue = 75 项） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0（含 `--features fixture`） |
+| `node scripts/build-native.mjs` | 0（只用 20.67 s 重建 knowledge crate） |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` / `-p tsconfig.web.json` | 0 / 0 |
+| `pnpm exec vitest run src/main/knowledge src/main/chat.test.ts src/main/notes.test.ts src/main/assistant.test.ts src/preload/index.test.ts src/main/ipc-trust.test.ts` | 0（21 文件 / 267 项） |
+| `pnpm test:native` | 0（7 个 crate 全部构建并测试通过） |
+| `pnpm test` | 0（268 文件通过 / 3 跳过；3821 项通过 / 8 跳过；98.75 s） |
+| `pnpm build` | 0（`settings-*.js` 4,687.76 kB） |
+| `git diff --check` | 0（提交前） |
+
+交付产物：`native/bin/yu-knowledge.exe` 2,891,264 字节，SHA-256 `3bbf5711eb35fcb2d5f851ff6355dec6db369c9c3d1eae1e4717e2ca311dc889`（MSVC 重建哈希会变；debug `native/knowledge/target/debug/yu-knowledge.exe` 与 fixture `yu-knowledge-fixture.exe` 不计入交付）。
+
+实现提交：`c30df7e` `fix(knowledge): close the stage 4 profile loop review gaps`。
+
+未测与边界：未调用真实付费模型（全部为注入 completer，模型调用次数由测试断言为 0 或 1）；未在打包 Electron 实例内运行；30 天窗口用注入时间验证，未等待真实日历；画像页面与聊天检索仍属阶段 5～7，`profile.context` 目前只有主进程消费者；`profile.retry` 只把 `failed` 放回 `pending`，不做自动重试。
