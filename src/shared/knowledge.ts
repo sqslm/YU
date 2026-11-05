@@ -612,6 +612,20 @@ export interface ExtractSourceResult {
 }
 
 /**
+ * What the caller knows about the body before it asks.
+ *
+ * `expectVersion`/`expectFingerprint` are the text the caller actually read: the
+ * helper refuses a source that moved on before it resets this version's progress.
+ * `missing` states that the body is gone, so the task is parked instead of queued.
+ */
+export interface ExtractSourceQuery {
+  sourceId: string
+  expectVersion?: string
+  expectFingerprint?: string
+  missing?: string
+}
+
+/**
  * What the main process will do with a source, resolved from the stored source
  * itself. The renderer never builds a path or a chat id on its own.
  */

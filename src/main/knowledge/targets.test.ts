@@ -12,6 +12,8 @@ import type { LocalRecord } from '@shared/workspace'
 import type { NoteEntry } from '@shared/types'
 
 import { parseChatRef, resolveSourceTarget, type TargetDeps } from './targets'
+import { documentPath } from './documents'
+import { fingerprintOf } from './engine'
 
 function source(over: Partial<KnowledgeSource> = {}): KnowledgeSource {
   return {
@@ -46,7 +48,8 @@ function deps(over: Partial<TargetDeps> = {}): TargetDeps {
     note: () => undefined,
     chat: () => undefined,
     attachment: () => undefined,
-    ownedFile: () => null,
+    // The production decision, with nothing read and no file behind it.
+    document: value => documentPath(value, { read: () => null, file: () => null }),
     url: value => value.startsWith('https://'),
     ...over
   }
@@ -126,16 +129,19 @@ describe('resolveSourceTarget', () => {
   })
 
   it('opens an app-owned document and refuses a locator with no read credential', () => {
-    expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/notes/a.pdf' }), deps({ ownedFile: value => value })))
+    // A real read record plus a real path is the only combination that opens.
+    const read = { read: () => 'PDF 正文', file: (value: string) => value }
+    const readDeps = deps({ document: value => documentPath(value, read) })
+    expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/notes/a.pdf', fingerprint: fingerprintOf('PDF 正文') }), readDeps))
       .toEqual({ kind: 'file', path: 'C:/notes/a.pdf' })
-    // A locator written through `source.save` proves nothing: without an owned
-    // read record it stays a metadata row.
+    // A locator written through `source.save` proves nothing: without a read
+    // record it stays a metadata row.
     expect(resolveSourceTarget(source({ kind: 'document', locator: 'C:/anywhere/gone.pdf' }), deps()))
       .toEqual({ kind: 'none', reason: '该来源没有可核验的读取记录' })
   })
 
   it('prefers a safe web locator over the file branch for a reading source', () => {
-    expect(resolveSourceTarget(source({ kind: 'document', locator: 'https://example.com/p' }), deps({ ownedFile: value => value })))
+    expect(resolveSourceTarget(source({ kind: 'document', locator: 'https://example.com/p' }), deps()))
       .toEqual({ kind: 'url', url: 'https://example.com/p' })
   })
 })

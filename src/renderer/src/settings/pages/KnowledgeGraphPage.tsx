@@ -245,8 +245,8 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
               color="warning"
               variant="outlined"
               label={notice.limitedBy === 'bytes'
-                ? t('knowledge.graphLimitedBytes', { shown: notice.shown, total: notice.total })
-                : t('knowledge.graphLimitedNodes', { shown: notice.shown, total: notice.total })}
+                ? t('knowledge.graphLimitedBytes', { matched: notice.matched, total: notice.total })
+                : t('knowledge.graphLimitedNodes', { matched: notice.matched, total: notice.total })}
             />
           )}
         </Box>
@@ -321,7 +321,7 @@ export function KnowledgeGraphPage({ onOpenCard, onBack }: Props): JSX.Element {
           <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
             <Typography variant="subtitle2">{t('knowledge.graphList')}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {t('knowledge.graphCounts', { shown: counts.visible, total: counts.total })}
+              {t('knowledge.graphCounts', { matched: counts.matched, total: counts.total })}
               {counts.expanded > 0 ? ` · ${t('knowledge.graphExpanded', { count: counts.expanded })}` : ''}
             </Typography>
           </Box>

@@ -211,7 +211,7 @@ describe('graph adaptation', () => {
   })
 
   it('says which budget limited the graph', () => {
-    expect(graphNotice(graph)).toEqual({ limitedBy: 'nodes', total: 8, shown: 2 })
+    expect(graphNotice(graph)).toEqual({ limitedBy: 'nodes', matched: 2, total: 8 })
     expect(graphNotice({ ...graph, limitedBy: 'bytes' })?.limitedBy).toBe('bytes')
     expect(graphNotice({ ...graph, truncated: false, limitedBy: null })).toBeNull()
   })
@@ -252,7 +252,7 @@ describe('graph budget', () => {
     expect(first.nodes).toHaveLength(LIMIT)
     const next = graphView(acceptGraph(gate, gate.next(), expanded(topicNodes(LIMIT)), topic))
     expect(next.nodes).toHaveLength(LIMIT)
-    expect(next.counts).toEqual({ visible: LIMIT, total: LIMIT, expanded: 1 })
+    expect(next.counts).toEqual({ matched: LIMIT - 1, total: LIMIT, expanded: 1 })
     expect(next.nodes.some((row) => row.id === 'focus')).toBe(true)
     expect(next.nodes.some((row) => row.id === 'neighbour')).toBe(true)
     // The helper evicted this one; the page must not put it back.
@@ -271,13 +271,37 @@ describe('graph budget', () => {
     }
   })
 
-  it('reports visible, filter total and expanded from the one answer', () => {
+  it('reports matched, filter total and expanded from the one answer', () => {
     const view = graphView(expanded(topicNodes(LIMIT)))
-    expect(view.counts).toEqual({ visible: LIMIT, total: LIMIT, expanded: 1 })
-    expect(view.counts.visible).toBe(view.nodes.length)
-    expect(graphCounts(answer(topicNodes(2), { total: 8, shown: 2 }))).toEqual({ visible: 2, total: 8, expanded: 0 })
-    expect(graphCounts(null)).toEqual({ visible: 0, total: 0, expanded: 0 })
+    // Everything but the neighbour matched, and the info line compares that
+    // against the filter total, never against the canvas size.
+    expect(view.counts).toEqual({ matched: LIMIT - 1, total: LIMIT, expanded: 1 })
+    expect(view.counts.matched + view.counts.expanded).toBe(view.nodes.length)
+    expect(graphCounts(answer(topicNodes(2), { total: 8, shown: 2 }))).toEqual({ matched: 2, total: 8, expanded: 0 })
+    expect(graphCounts(null)).toEqual({ matched: 0, total: 0, expanded: 0 })
     expect(graphView(null).nodes).toHaveLength(0)
+  })
+
+  // The external probe's real answer: one node matched the filter, the focus
+  // pulled in one neighbour from outside it, so the canvas drew two nodes.
+  it('never reports the expanded neighbour as a second match', () => {
+    const probe = answer([node('match'), node('neighbour')], { total: 1, shown: 2, focused: true, expanded: 1 })
+    const view = graphView(probe)
+    expect(view.counts).toEqual({ matched: 1, total: 1, expanded: 1 })
+    expect(view.counts.matched).toBeLessThanOrEqual(view.counts.total)
+    expect(view.nodes).toHaveLength(2)
+    expect(view.nodes).toHaveLength(probe.nodes.length)
+  })
+
+  it('puts the budget notice on the filtered total, not the canvas size', () => {
+    const probe = answer([node('match'), node('neighbour')], { total: 1, shown: 2, focused: true, expanded: 1, truncated: true, limitedBy: 'nodes' })
+    expect(graphNotice(probe)).toEqual({ limitedBy: 'nodes', matched: 1, total: 1 })
+  })
+
+  it('keeps reporting a full budget of matches when nothing was expanded', () => {
+    const view = graphView(answer(topicNodes(LIMIT)))
+    expect(view.counts).toEqual({ matched: LIMIT, total: LIMIT, expanded: 0 })
+    expect(view.nodes).toHaveLength(LIMIT)
   })
 
   it('ignores a late answer for a query the user already left', () => {
@@ -297,7 +321,7 @@ describe('graph budget', () => {
     const view = graphView(twice)
     expect(view.nodes).toHaveLength(LIMIT)
     expect(view.links).toHaveLength(LIMIT - 1)
-    expect(view.counts).toEqual({ visible: LIMIT, total: LIMIT, expanded: 1 })
+    expect(view.counts).toEqual({ matched: LIMIT - 1, total: LIMIT, expanded: 1 })
   })
 })
 

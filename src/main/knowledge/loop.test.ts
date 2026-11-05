@@ -256,7 +256,7 @@ describe('the stage 5 review fields over the real fixture', () => {
   }, 60_000)
 
   it('re-queues one existing source and reports the real state', async () => {
-    const result = await host().extractSource('fixture-source')
+    const result = await host().extractSource({ sourceId: 'fixture-source' })
     expect(result.queued).toBe(1)
     expect(result.groupId).toBe('grp_1')
     expect(result.state).toBe('stabilizing')

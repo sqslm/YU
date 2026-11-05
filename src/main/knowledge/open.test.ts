@@ -12,6 +12,8 @@ import type { KnowledgeSource } from '@shared/knowledge'
 
 import { openSource, type OpenDeps } from './open'
 import { resolveSourceTarget, type TargetDeps } from './targets'
+import { documentPath } from './documents'
+import { fingerprintOf } from './engine'
 
 function source(over: Partial<KnowledgeSource> = {}): KnowledgeSource {
   return {
@@ -38,7 +40,7 @@ function targets(over: Partial<TargetDeps> = {}): TargetDeps {
     note: () => undefined,
     chat: () => undefined,
     attachment: () => undefined,
-    ownedFile: () => null,
+    document: value => documentPath(value, { read: () => null, file: () => null }),
     url: value => value.startsWith('https://'),
     ...over
   }
@@ -73,13 +75,34 @@ describe('openSource', () => {
     expect(calls).toEqual({ external: [], file: [] })
   })
 
-  it('opens an app-owned document and reports the opener failure verbatim', async () => {
+  it('opens a document it really read and reports the opener failure verbatim', async () => {
     const calls: Calls = { external: [], file: [] }
-    const ok = await openSource(source({ locator: 'C:/notes/a.pdf' }), deps(calls, { ownedFile: value => value }))
+    // The production decision, fed by a real read record for this exact text.
+    const read = { read: () => 'PDF 正文', file: (value: string) => value }
+    const readDeps = (failure = ''): Partial<TargetDeps> => ({ document: value => documentPath(value, read) })
+    const body = { fingerprint: fingerprintOf('PDF 正文') }
+    const ok = await openSource(source({ locator: 'C:/notes/a.pdf', ...body }), deps(calls, readDeps()))
     expect(ok).toEqual({ opened: true, reason: '' })
-    const bad = await openSource(source({ locator: 'C:/notes/b.pdf' }), deps(calls, { ownedFile: value => value }, '文件已被删除'))
+    const bad = await openSource(source({ locator: 'C:/notes/b.pdf', ...body }), deps(calls, readDeps(), '文件已被删除'))
     expect(bad).toEqual({ opened: false, reason: '文件已被删除' })
     expect(calls.file).toEqual(['C:/notes/a.pdf', 'C:/notes/b.pdf'])
+  })
+
+  it('refuses a script or an unread body even when the path exists', async () => {
+    const calls: Calls = { external: [], file: [] }
+    const read = { read: () => 'echo hi', file: (value: string) => value }
+    const readDeps: Partial<TargetDeps> = { document: value => documentPath(value, read) }
+    const digest = { fingerprint: fingerprintOf('echo hi') }
+    // A readable script is still not a document.
+    expect(await openSource(source({ locator: 'C:/notes/inert.cmd', ...digest }), deps(calls, readDeps)))
+      .toEqual({ opened: false, reason: '这类文件不提供打开' })
+    // A real document whose stored hash is not the hash that was read.
+    expect(await openSource(source({ locator: 'C:/notes/c.pdf', fingerprint: fingerprintOf('别的正文') }), deps(calls, readDeps)))
+      .toEqual({ opened: false, reason: '该来源的正文与读取记录不符' })
+    // No read record at all, e.g. after a restart.
+    expect(await openSource(source({ locator: 'C:/notes/d.pdf', ...digest }), deps(calls)))
+      .toEqual({ opened: false, reason: '该来源没有可核验的读取记录' })
+    expect(calls).toEqual({ external: [], file: [] })
   })
 
   it('refuses a protocol the app does not trust even if the resolver said url', async () => {

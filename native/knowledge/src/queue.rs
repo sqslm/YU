@@ -971,6 +971,18 @@ pub fn retry(conn: &Connection, params: GroupParams) -> ApiResult<Value> {
 pub struct ExtractParams {
     /// The source whose text should be extracted again.
     pub source_id: String,
+    /// The version the caller actually read. A source that moved on is refused
+    /// here, before this version's progress is reset.
+    #[serde(default)]
+    pub expect_version: Option<String>,
+    /// The whole-body hash the caller computed from the text it read.
+    #[serde(default)]
+    pub expect_fingerprint: Option<String>,
+    /// The caller already resolved the body and knows it is gone. The task is
+    /// parked in this same transaction, so a lost body can neither reset the
+    /// progress an earlier run committed nor wake a model call.
+    #[serde(default)]
+    pub missing: Option<String>,
 }
 
 /// Puts an existing source back in the queue so its text is extracted again.
@@ -981,6 +993,9 @@ pub struct ExtractParams {
 /// again once the settling window passes.
 pub fn extract(conn: &mut Connection, params: ExtractParams) -> ApiResult<Value> {
     check_chars("sourceId", &params.source_id, 128)?;
+    if let Some(fingerprint) = params.expect_fingerprint.as_deref() {
+        check_chars("expectFingerprint", fingerprint, 128)?;
+    }
     let now = now_ms();
     let transaction = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -1028,11 +1043,42 @@ pub fn extract(conn: &mut Connection, params: ExtractParams) -> ApiResult<Value>
             "this source is excluded from collection",
         ));
     }
+    // A body the caller already found missing is parked right here, in the same
+    // transaction that checked the channel and the exclusions. Park before reset:
+    // the progress an earlier run committed stays, so recovering the text resumes
+    // where it stopped instead of re-extracting the whole source.
+    if let Some(reason) = params.missing.as_deref() {
+        check_chars("reason", reason, 200)?;
+        set_state(&transaction, &group_id, "needs_reread", Some(reason), None)?;
+        ensure_not_cancelled()?;
+        transaction
+            .commit()
+            .map_err(|error| ApiError::storage(format!("cannot park the task: {error}")))?;
+        return Ok(json!({
+            "queued": 0,
+            "reason": "needs_reread",
+            "groupId": group_id,
+            "state": "needs_reread"
+        }));
+    }
     // The text itself is never stored, only its fingerprint, so a source that was
     // never read through, or was invalidated since, has nothing to extract. Saying
     // so is better than queueing work that can only fail.
     if source.state != "active" || source.size <= 0 {
         return Ok(json!({ "queued": 0, "reason": "needs_reread" }));
+    }
+    // Stale text is refused before anything is reset: the body the caller read has
+    // to be the version and the fingerprint this source really holds.
+    let stale_version = params
+        .expect_version
+        .as_deref()
+        .is_some_and(|version| version != source.version);
+    let stale_body = params
+        .expect_fingerprint
+        .as_deref()
+        .is_some_and(|print| print != source.fingerprint);
+    if stale_version || stale_body {
+        return Ok(json!({ "queued": 0, "reason": "source_changed" }));
     }
     // This version starts over: an earlier run's progress would otherwise count
     // every segment as done and close the task as empty.

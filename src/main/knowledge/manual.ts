@@ -1,19 +1,18 @@
 /**
  * Manual extraction of one named source.
  *
- * The helper only enqueues; something still has to read the text and let the
- * engine pick the task up. This module is that "something": it answers from the
- * real stores, wakes the extraction driver when a task really became runnable,
- * and reports a body that is gone as `needs_reread` instead of pretending the
- * manual request was accepted.
+ * The body is read and described *before* the queue is touched: the helper parks
+ * or refuses from that description inside its own write transaction, so a lost or
+ * changed text can never reset the progress an earlier run committed. Only a
+ * really accepted task wakes the engine.
  *
- * Every decision about ordering, the settling window, dedupe and exclusion stays
- * in Rust: this only reads a body and asks.
+ * Every ordering decision stays in Rust: this reads text and states what it read.
  */
 
 import type { CollectChannel, ExtractSourceResult, KnowledgeSource } from '@shared/knowledge'
 import type { KnowledgeHost } from './host'
 import type { RecoveredBody } from './collector'
+import { fingerprintOf } from './engine'
 
 export interface ManualExtractDeps {
   host: () => KnowledgeHost
@@ -41,13 +40,17 @@ export function missingReason(missing: 'deleted' | 'temporary' | 'empty' | 'unkn
   return reading ? '原文已不在内存，需要重新读取该来源' : '无法读取原文'
 }
 
+/** The helper refused because the text this caller read is no longer current. */
+const STALE = 'source_changed'
+const STALE_REASON = '原文已变更，需要重新读取该来源'
+
 /**
  * Runs one manual extraction.
  *
- * The body is checked before the queue is touched, so a source whose text only
- * survives as metadata is reported — and persisted — as `needs_reread` without a
- * provider call. A runnable task is handed to the engine through `wake`, which is
- * the only thing an idle driver is missing.
+ * A body that is gone is reported as `missing` (parked by the helper, progress
+ * kept). A body that is present is sent together with its version and hash, so a
+ * source that changed in between is refused instead of re-extracted. Both answers
+ * come back from one write transaction, and a storage failure is returned as it is.
  */
 export async function extractSourceNow(id: string, deps: ManualExtractDeps): Promise<ExtractSourceResult> {
   if (!deps.enabled()) return { queued: 0, reason: '知识采集未开启' }
@@ -57,15 +60,27 @@ export async function extractSourceNow(id: string, deps: ManualExtractDeps): Pro
   if (source.state !== 'active') return { queued: 0, reason: source.invalidReason || '来源已失效' }
   const channel = sourceChannel(source)
   const body = deps.resolveBody(channel, source.originRef)
-  const missing = 'missing' in body ? body.missing : null
-  const queued = await host.extractSource(id)
-  if (!queued.queued || !queued.groupId) return queued
-  if (missing) {
-    // Rust keeps the source and its cards; only the task is parked.
-    await host.needsReread({ groupId: queued.groupId }, missingReason(missing, channel === 'reading')).catch(() => undefined)
-    return { queued: 0, reason: missingReason(missing, channel === 'reading'), groupId: queued.groupId, state: 'needs_reread' }
+
+  if ('missing' in body) {
+    const reason = missingReason(body.missing, channel === 'reading')
+    const parked = await host.extractSource({ sourceId: id, missing: reason })
+    // A batch already holds the task: its claim is not pulled out from under the
+    // running call, and nothing is claimed to be parked when it was not.
+    if (parked.state !== 'needs_reread') return parked
+    deps.log?.(`[knowledge] 手动提炼缺原文，已挂起：${source.kind} ${parked.groupId ?? ''}`.trim())
+    return { queued: 0, reason, groupId: parked.groupId ?? null, state: 'needs_reread' }
+  }
+
+  const queued = await host.extractSource({
+    sourceId: id,
+    expectVersion: source.version,
+    expectFingerprint: fingerprintOf(body.text)
+  })
+  if (!queued.queued) {
+    if (queued.reason === STALE) return { ...queued, reason: STALE_REASON }
+    return queued
   }
   deps.wake()
-  deps.log?.(`[knowledge] 手动提炼已排队：${source.kind} ${queued.groupId}`)
+  deps.log?.(`[knowledge] 手动提炼已排队：${source.kind} ${queued.groupId ?? ''}`.trim())
   return queued
 }

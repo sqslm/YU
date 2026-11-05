@@ -17,7 +17,7 @@ import { app, clipboard, dialog, nativeTheme, net, Notification, powerMonitor, p
 import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { dirname, join, resolve, sep } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import os from 'node:os'
 import type { BrowserWindow } from 'electron'
 import type { BarActionId, BarState, CardAction, ModelListResult, Settings } from '@shared/types'
@@ -38,6 +38,7 @@ import { UiaHost } from './uia/host'
 import { KnowledgeHost } from './knowledge/host'
 import { createKnowledgeCompleter, selectProfile } from './knowledge/model'
 import { resolveSourceTarget } from './knowledge/targets'
+import { documentPath } from './knowledge/documents'
 import { openSource } from './knowledge/open'
 import { extractSourceNow } from './knowledge/manual'
 import { isSafeLink } from '@shared/links'
@@ -1555,16 +1556,19 @@ function registerIpc(): void {
   const workspaceSources = () => ({ notes: () => notes.list().notes, chat: chats.store, history, reminders: () => reminders!.store.list(), events: () => calendar!.list() })
   /**
    * A stored locator is written by the collector but can also be written through
-   * `knowledge:source-save`, so the row itself proves nothing. Only a file inside
-   * the notes directory this process already owns is handed to the OS; anything
-   * else stays a metadata row with an honest reason.
+   * `knowledge:source-save`, so the row itself proves nothing. What authorises a
+   * document is the read record this process kept for it: the text it really read,
+   * whose hash has to match the source. A restart or an evicted body keeps the row
+   * readable and says why it cannot be opened.
    */
-  const ownedFile = (value: string): string | null => {
+  const documentRead = (source: KnowledgeSource): string | null => {
+    const body = knowledgeCollector.resolveBody('reading', source.originRef)
+    return 'text' in body ? body.text : null
+  }
+  const documentFile = (value: string): string | null => {
     try {
       const real = realpathSync(value)
-      if (!statSync(real).isFile()) return null
-      const base = realpathSync(roots().notes)
-      return real === base || real.startsWith(base.endsWith(sep) ? base : base + sep) ? real : null
+      return statSync(real).isFile() ? real : null
     } catch {
       return null
     }
@@ -1579,7 +1583,7 @@ function registerIpc(): void {
       }
     },
     attachment: attachmentId => chats.store.attachmentOwner(attachmentId),
-    ownedFile,
+    document: value => documentPath(value, { read: documentRead, file: documentFile }),
     url: value => isSafeLink(value)
   })
   /**

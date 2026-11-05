@@ -67,6 +67,11 @@ describe('the graph budget the helper applies', () => {
       expect(visible.has(link.source)).toBe(true)
       expect(visible.has(link.target)).toBe(true)
     }
-    expect(expanded.counts).toEqual({ visible: focusAnswer.shown, total: focusAnswer.total, expanded: focusAnswer.expanded })
+    // The canvas stays at the budget while matching and expanded are counted apart.
+    expect(expanded.counts).toEqual({
+      matched: focusAnswer.shown - focusAnswer.expanded,
+      total: focusAnswer.total,
+      expanded: focusAnswer.expanded
+    })
   }, 180_000)
 })

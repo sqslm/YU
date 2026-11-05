@@ -270,29 +270,40 @@ export function acceptGraph(gate: RequestGate, ticket: number, next: KnowledgeGr
 export interface GraphNotice {
   /** Which budget stopped the expansion. */
   limitedBy: 'nodes' | 'bytes'
+  /** Filter matches the canvas keeps; the neighbours the focus added are not part of it. */
+  matched: number
+  /** Cards matching the filter before any budget cut them. */
   total: number
-  shown: number
+}
+
+/**
+ * Filter matches inside one answer. `shown` counts every node the helper drew,
+ * including the focus's out-of-filter neighbours, so subtracting `expanded` is
+ * what keeps the denominator comparable with `total`.
+ */
+export function graphMatched(graph: Pick<KnowledgeGraph, 'shown' | 'expanded'>): number {
+  return Math.max(0, graph.shown - graph.expanded)
 }
 
 /** The wording the canvas owes the user when the backend trimmed the graph. */
 export function graphNotice(graph: KnowledgeGraph): GraphNotice | null {
   if (!graph.truncated || !graph.limitedBy) return null
-  return { limitedBy: graph.limitedBy, total: graph.total, shown: graph.shown }
+  return { limitedBy: graph.limitedBy, matched: graphMatched(graph), total: graph.total }
 }
 
 export interface GraphCounts {
-  /** Nodes of this answer the canvas draws. */
-  visible: number
+  /** Nodes of this answer that matched the filter: `shown - expanded`. */
+  matched: number
   /** Cards matching the filter before any budget cut them. */
   total: number
-  /** Of `visible`, the nodes the focus brought in that the filter did not match. */
+  /** Of the drawn nodes, the ones the focus brought in that the filter did not match. */
   expanded: number
 }
 
 /** The three numbers the info bar owes, all from the one accepted answer. */
 export function graphCounts(graph: KnowledgeGraph | null): GraphCounts {
-  if (!graph) return { visible: 0, total: 0, expanded: 0 }
-  return { visible: graph.shown, total: graph.total, expanded: graph.expanded }
+  if (!graph) return { matched: 0, total: 0, expanded: 0 }
+  return { matched: graphMatched(graph), total: graph.total, expanded: graph.expanded }
 }
 
 export interface GraphView extends ForceData {

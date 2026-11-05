@@ -35,6 +35,7 @@ import {
   type CollectChannels,
   type ExclusionEntry,
   type ExtractFailInput,
+  type ExtractSourceQuery,
   type ExtractSourceResult,
   type AcceptedSuggestion,
   type KnowledgeSuggestion,
@@ -744,9 +745,13 @@ export class KnowledgeHost {
     return this.call<KnowledgeGraph>('graph.query', query)
   }
 
-  /** Re-queues one stored source for extraction; the helper owns every check. */
-  extractSource(sourceId: string): Promise<ExtractSourceResult> {
-    return this.call<ExtractSourceResult>('queue.extract', { sourceId })
+  /**
+   * Re-queues one stored source for extraction; the helper owns every check.
+   * The caller states what it read, so a stale body is refused before the
+   * helper resets that version's progress.
+   */
+  extractSource(query: ExtractSourceQuery): Promise<ExtractSourceResult> {
+    return this.call<ExtractSourceResult>('queue.extract', query)
   }
 
   saveProfile(input: SaveProfileInput): Promise<ProfileItem> {

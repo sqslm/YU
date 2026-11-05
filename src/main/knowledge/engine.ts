@@ -72,7 +72,7 @@ const missingReason = (missing: 'deleted' | 'temporary' | 'empty' | 'unknown'): 
 }
 
 /** The whole-body hash the helper compares with the version it stored. */
-const fingerprintOf = (text: string): string =>
+export const fingerprintOf = (text: string): string =>
   createHash('sha256').update(text, 'utf8').digest('hex')
 
 export class ExtractEngine {
