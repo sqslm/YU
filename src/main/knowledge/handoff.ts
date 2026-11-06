@@ -52,7 +52,7 @@ export interface HandoffDeps {
   /** Reads the note through its own store, publishes it, and answers the source id. */
   publishNote(noteId: string, options: HandoffPublishOptions): Promise<string | null>
   /** Queues one published source and wakes the engine only when it was accepted. */
-  extract(sourceId: string, options: { signal?: AbortSignal }): Promise<ExtractSourceResult>
+  extract(sourceId: string, options: { signal?: AbortSignal; admit?: () => Promise<string> }): Promise<ExtractSourceResult>
   log?(line: string): void
 }
 
@@ -145,7 +145,9 @@ export async function handoffReading(
   // The source may already be committed when the cancel lands here. That is the
   // truth, so it is not rolled back — but nothing more is written or queued.
   if (options.signal?.aborted) return { queued: 0, reason: mt('本轮已取消') }
-  return deps.extract(sourceId, options.signal ? { signal: options.signal } : {})
+  // The queueing path reads the source back before it writes; the same admission
+  // travels with it, because that read is another moment the user can change.
+  return deps.extract(sourceId, { admit, ...(options.signal ? { signal: options.signal } : {}) })
 }
 
 /** One real note, re-read through its own store and handed over. */
@@ -175,5 +177,5 @@ export async function handoffNote(
     return { queued: 0, reason: options.signal?.aborted ? mt('本轮已取消') : mt('这条随记还不能提炼') }
   }
   if (options.signal?.aborted) return { queued: 0, reason: mt('本轮已取消') }
-  return deps.extract(sourceId, options.signal ? { signal: options.signal } : {})
+  return deps.extract(sourceId, { admit, ...(options.signal ? { signal: options.signal } : {}) })
 }

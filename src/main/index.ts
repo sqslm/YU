@@ -372,6 +372,9 @@ const handoff: HandoffDeps = {
     extractSourceNow(sourceId, {
       host: () => knowledge,
       signal: options.signal,
+      // The same admission the publish gate used: the read-back below is another
+      // moment where a cancel, a switch or a pause has to be honoured.
+      admit: options.admit,
       enabled: () => knowledgeCollector.enabled,
       allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
       resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),

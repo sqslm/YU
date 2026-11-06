@@ -143,7 +143,7 @@ interface Rig {
   /** What the extraction model was asked, in order. */
   prompts: string[]
   /** What the last hand-over published, and whether the engine was woken. */
-  evidence: { publishedId: string | null; wakes: number }
+  evidence: { publishedId: string | null; wakes: number; extractSources: number }
   /** The notes the note hand-over may read back, by id. */
   notes: Map<string, NoteProjection>
 }
@@ -160,6 +160,8 @@ async function rig(
     note?: { id: string; text: string }
     /** Held right after a hand-over published, before the source is queued. */
     beforeExtract?: () => Promise<void>
+    /** Held while the queueing path reads the source it was told about. */
+    getSourceGate?: () => Promise<void>
   } = {}
 ): Promise<Rig> {
   if (!existsSync(ENTRY)) throw new Error(`the knowledge helper is missing: ${ENTRY}`)
@@ -213,7 +215,33 @@ async function rig(
     settings: () => settings,
     allowed: () => true
   })
-  const evidence: { publishedId: string | null; wakes: number } = { publishedId: null, wakes: 0 }
+  const evidence: { publishedId: string | null; wakes: number; extractSources: number } = {
+    publishedId: null,
+    wakes: 0,
+    extractSources: 0
+  }
+  // Counts the write requests the helper actually receives, and can hold the
+  // read-back open so a test can change the live settings mid-await.
+  const queueHost = new Proxy(host, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver)
+      if (property === 'extractSource') {
+        const real = value as (input: unknown) => Promise<unknown>
+        return async (input: unknown) => {
+          evidence.extractSources += 1
+          return real.call(target, input)
+        }
+      }
+      if (property !== 'getSource' || !options.getSourceGate) {
+        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+      }
+      const real = value as (id: string) => Promise<unknown>
+      return async (id: string) => {
+        await options.getSourceGate!()
+        return real.call(target, id)
+      }
+    }
+  })
   const notes = new Map<string, NoteProjection>()
   if (options.note) {
     notes.set(options.note.id, {
@@ -252,7 +280,8 @@ async function rig(
     extract: async (sourceId, extractOptions) => {
       if (options.beforeExtract) await options.beforeExtract()
       return extractSourceNow(sourceId, {
-        host: () => host,
+        host: () => queueHost,
+        admit: extractOptions.admit,
         signal: extractOptions.signal,
         enabled: () => collector.enabled,
         allowed: () => collector.enabled,
@@ -627,15 +656,22 @@ const SECOND_HTML = `<html><head><title>去重笔记</title></head><body><p>${SE
 function heldSwitches(): {
   collectorHost: (host: KnowledgeHost) => KnowledgeHost
   calls: () => number
+  /** Resolves the moment the held hand-over really begins. */
+  entered: Promise<void>
   release: () => void
 } {
   let release = (): void => undefined
   const gate = new Promise<void>(resolve => {
     release = resolve
   })
+  let enter = (): void => undefined
+  const entered = new Promise<void>(resolve => {
+    enter = resolve
+  })
   let calls = 0
   return {
     calls: () => calls,
+    entered,
     release: () => release(),
     collectorHost: host =>
       new Proxy(host, {
@@ -649,7 +685,9 @@ function heldSwitches(): {
           // later is the one held open.
           return async (channels: unknown) => {
             calls += 1
-            if (calls > 1) await gate
+            if (calls === 1) return real.call(target, channels)
+            enter()
+            await gate
             return real.call(target, channels)
           }
         }
@@ -691,7 +729,7 @@ describe('a hand-over that waited for the switches re-reads the rules before it 
       contextOf(current, fetchImpl, ['run_workflow', 'read_webpage'], controller.signal)
     )
     await until(() => readCalls(fetchImpl), count => count > 0, 'the page read')
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await switches.entered
     controller.abort()
     switches.release()
     await syncing
@@ -738,7 +776,7 @@ describe('a hand-over that waited for the switches re-reads the rules before it 
     const fetchImpl = fetchOf()
     const running = runTool('run_workflow', { id: saved.id }, contextOf(current, fetchImpl, ['run_workflow', 'read_webpage']))
     await until(() => readCalls(fetchImpl), count => count > 0, 'the page read')
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await switches.entered
     // The user switches the tool off while the wait is still open.
     current.settings.assistantAccess.disabledTools = ['extract_knowledge']
     switches.release()
@@ -768,7 +806,7 @@ describe('a hand-over that waited for the switches re-reads the rules before it 
     const fetchImpl = fetchOf()
     const running = runTool('run_workflow', { id: saved.id }, contextOf(current, fetchImpl, ['run_workflow', 'read_webpage']))
     await until(() => readCalls(fetchImpl), count => count > 0, 'the page read')
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await switches.entered
     await current.host.pauseCollect('manual', true)
     switches.release()
     await syncing
@@ -792,7 +830,7 @@ describe('a hand-over that waited for the switches re-reads the rules before it 
       steps: [{ tool: 'extract_knowledge', args: { noteId: 'note-1' }, label: '送入提炼' }]
     })
     const running = runTool('run_workflow', { id: saved.id }, contextOf(current, fetchOf(), ['run_workflow']))
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await switches.entered
     current.settings.assistantAccess.disabledTools = ['extract_knowledge']
     switches.release()
     await syncing
@@ -840,5 +878,91 @@ describe('a hand-over that waited for the switches re-reads the rules before it 
     const queue = await current.host.queueStatus()
     expect(queue.total, 'only the task the publish itself created').toBe(1)
     expect(current.evidence.wakes).toBe(0)
+  }, 120_000)
+})
+
+describe('the queueing path re-reads the rules after it read the source back', () => {
+  /** Holds the read-back of the source a hand-over already committed. */
+  function heldRead(): { gate: () => Promise<void>; entered: Promise<void>; release: () => void } {
+    let release = (): void => undefined
+    const held = new Promise<void>(resolve => {
+      release = resolve
+    })
+    let enter = (): void => undefined
+    const entered = new Promise<void>(resolve => {
+      enter = resolve
+    })
+    return {
+      entered,
+      release: () => release(),
+      gate: async () => {
+        enter()
+        await held
+      }
+    }
+  }
+
+  it('stops without a second write request when the tool is switched off mid read-back', async () => {
+    const read = heldRead()
+    const current = await rig({ getSourceGate: read.gate })
+    const saved = current.workflows.save({
+      name: '早间提炼',
+      steps: [
+        { tool: 'read_webpage', args: { url: PAGE }, label: '读页面' },
+        { tool: 'extract_knowledge', args: {}, label: '送入提炼' },
+        { tool: 'get_datetime', args: {}, label: '记时间' }
+      ]
+    })
+    const fetchImpl = fetchOf()
+    const running = runTool('run_workflow', { id: saved.id }, contextOf(current, fetchImpl, ['run_workflow', 'read_webpage', 'get_datetime']))
+    await read.entered
+    // The publish already went through; only the queueing is still in front of us.
+    current.settings.assistantAccess.disabledTools = ['extract_knowledge']
+    read.release()
+    const result = await running
+    expect(result.ok).toBe(false)
+    expect(result.summary).toContain('此工具已在权限设置中关闭')
+
+    // The committed source and its task stay exactly as they were accepted.
+    const rows = readSources(current.root).filter(row => row.origin_ref === PAGE)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].state).toBe('active')
+    expect(bodyOf(current)).toBe(BODY)
+    expect((await current.host.queueStatus()).total).toBe(1)
+    // Nothing was queued a second time, and nothing woke the engine.
+    expect(current.evidence.extractSources).toBe(0)
+    expect(current.evidence.wakes).toBe(0)
+    expect(JSON.stringify(result.data)).not.toContain('get_datetime')
+  }, 120_000)
+
+  it('stops without a second write request when collection is paused mid read-back', async () => {
+    const read = heldRead()
+    const current = await rig({ getSourceGate: read.gate })
+    const saved = current.workflows.save({
+      name: '早间提炼',
+      steps: [
+        { tool: 'read_webpage', args: { url: PAGE }, label: '读页面' },
+        { tool: 'extract_knowledge', args: {}, label: '送入提炼' },
+        { tool: 'get_datetime', args: {}, label: '记时间' }
+      ]
+    })
+    const fetchImpl = fetchOf()
+    const running = runTool('run_workflow', { id: saved.id }, contextOf(current, fetchImpl, ['run_workflow', 'read_webpage', 'get_datetime']))
+    await read.entered
+    await current.host.pauseCollect('manual', true)
+    read.release()
+    const result = await running
+    expect(result.ok).toBe(false)
+    expect(result.summary).toContain('采集已暂停')
+
+    const rows = readSources(current.root).filter(row => row.origin_ref === PAGE)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].state).toBe('active')
+    expect(bodyOf(current)).toBe(BODY)
+    expect((await current.host.queueStatus()).total).toBe(1)
+    expect(current.evidence.extractSources).toBe(0)
+    expect(current.evidence.wakes).toBe(0)
+    expect(JSON.stringify(result.data)).not.toContain('get_datetime')
+    await current.host.pauseCollect('manual', false)
   }, 120_000)
 })

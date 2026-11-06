@@ -23,6 +23,16 @@ export interface ManualExtractDeps {
   /** False while paused, in game mode, or when the channel is off. */
   allowed: () => boolean
   resolveBody: (channel: CollectChannel, originRef: string) => RecoveredBody
+  /**
+   * Asked once more right before the write request. A hand-over already passed the
+   * publish gate, but reading the source back is another await: the tool may have
+   * been switched off or collection paused in between, and queueing then would be
+   * a write nobody allowed. Answers a reason to refuse with, or '' to go ahead.
+   *
+   * Optional on purpose: the UI's own extract action and the background collector
+   * keep their existing semantics.
+   */
+  admit?: () => Promise<string>
   wake: () => void
   log?: (line: string) => void
 }
@@ -59,6 +69,12 @@ export async function extractSourceNow(id: string, deps: ManualExtractDeps): Pro
   if (deps.signal?.aborted) return cancelled()
   if (!deps.enabled()) return { queued: 0, reason: '知识采集未开启' }
   if (!deps.allowed()) return { queued: 0, reason: '采集已暂停' }
+  /** The last gate before a write: asked after every await, cancel checked last. */
+  const lastCheck = async (): Promise<ExtractSourceResult | null> => {
+    const denied = deps.admit ? await deps.admit() : ''
+    if (denied) return { queued: 0, reason: denied }
+    return deps.signal?.aborted ? cancelled() : null
+  }
   const host = deps.host()
   const source = await host.getSource(id)
   // Reading the source and its body is an await: the turn may be gone by now, and
@@ -73,6 +89,8 @@ export async function extractSourceNow(id: string, deps: ManualExtractDeps): Pro
     // The snapshot travels with the news as well: a source that was invalidated,
     // replaced or cancelled while this read was in flight must not be parked by a
     // request that described an older state.
+    const refused = await lastCheck()
+    if (refused) return refused
     const parked = await host.extractSource({
       sourceId: id,
       expectVersion: source.version,
@@ -89,7 +107,8 @@ export async function extractSourceNow(id: string, deps: ManualExtractDeps): Pro
     return { queued: 0, reason, groupId: parked.groupId ?? null, state: 'needs_reread' }
   }
 
-  if (deps.signal?.aborted) return cancelled()
+  const refused = await lastCheck()
+  if (refused) return refused
   const queued = await host.extractSource({
     sourceId: id,
     expectVersion: source.version,
