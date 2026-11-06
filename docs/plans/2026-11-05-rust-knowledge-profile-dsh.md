@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～6 全部通过外部 Codex 复核。阶段 7 A（知识库与用户画像的备份恢复）首版已提交 `b808c11`/`c1f2b00`，外部复核通过其中 39 项定向测试，同时用真实助手复现了四类边界（冷备份创建库、库类别与 schema 未预检、中断后暂存损坏无法回退、维护开关未管住后台写入）。本轮（第三十轮）已按四条反例定点补修并通过自动化验证，待外部复验；7 B 的升级保全、旧钩子拒绝、静默卸载与暂存冲突已有隔离安装器进程证据，交互卸载仍待验。用户于 2026-11-06 明确授权先进入 7 C。第四十轮已在隔离临时根跑通正式包解包产物的关功能懒启动、开启后两库跨重启回读、数据根不可写时的准确反馈与恢复，以及 cargo/TypeScript 全量回归；第四十一轮按外部复核校准了旧读数（聊天库实为 `data/chat/chats.db`、ACL 递归结论收窄、cargo 目标计数为 150 例），并用真实鼠标交互跑通历史整理扫描期间的界面并发，重写了九组样例的合约判据。正式安装器进程、交互式备份恢复、真实转写任务并发与九组样例的真实模型质量仍待验。
+**当前状态**　阶段 1～6 全部通过外部 Codex 复核。阶段 7 A（知识库与用户画像的备份恢复）首版已提交 `b808c11`/`c1f2b00`，外部复核通过其中 39 项定向测试，同时用真实助手复现了四类边界（冷备份创建库、库类别与 schema 未预检、中断后暂存损坏无法回退、维护开关未管住后台写入）。本轮（第三十轮）已按四条反例定点补修并通过自动化验证，待外部复验；7 B 的升级保全、旧钩子拒绝、静默卸载与暂存冲突已有隔离安装器进程证据，交互卸载仍待验。用户于 2026-11-06 明确授权先进入 7 C。第四十轮已在隔离临时根跑通正式包解包产物的关功能懒启动、开启后两库跨重启回读、数据根不可写时的失败反馈与恢复（错误原因码不准确），以及 cargo/TypeScript 全量回归；第四十一轮按外部复核校准了旧读数（聊天库实为 `data/chat/chats.db`、ACL 递归结论收窄、cargo 目标计数为 150 例），并用真实鼠标交互跑通历史整理扫描期间的界面并发，重写了九组样例的合约判据。正式安装器进程、交互式备份恢复、真实转写任务并发与九组样例的真实模型质量仍待验。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -3208,14 +3208,14 @@ S3b 数据根不可写时的反馈与恢复（`results/S3b.json`）：
 
 ### 校准第四十轮读数
 
-1. 聊天库路径写错了：真实路径是 `data/chat/chats.db`（`src/main/index.ts:185` `const chatRoot = join(appRoot, 'data', 'chat')`，随后 `new ChatService(join(chatRoot, 'chats.db'), …)`）。第四十轮 S1/S2 表里的 `data\chats.db` 不成立。本轮 H4/H6 的数据根清单直接列出 `chat/chats.db 49152`。S1 只能支撑“`data\knowledge`、`data\profile` 未创建”，聊天目录由聊天服务初始化建立，与两库开关无关。
-2. ACL 结论必须收窄：`icacls "…\app\data" /deny "17133:(OI)(CI)(F)" /T` 本轮实测**退出码 1**，输出“已创建 1 个文件; 处理 1 个文件时失败”，子项遍历被自身刚写入的拒绝 ACE 挡住；`icacls "…\app\data\knowledge"` 直接“拒绝访问”（退出码 1）。`icacls "…\app\data"` 只列出根目录的显式 `HUYANG\17133:(OI)(CI)(N)`。由于 `(OI)(CI)` 继承，子树写入确实被拒（shell 侧 `writeFileSync` 得到 `EPERM`）。可以说“拒绝生效且覆盖子树”，不能说“递归 `/T` 成功”。
+1. 聊天库路径写错了：真实路径是 `data/chat/chats.db`（`src/main/index.ts:186` `const chatRoot = join(appRoot, 'data', 'chat')`，`:233` `new ChatService(join(chatRoot, 'chats.db'), …)`）。第四十轮 S1/S2 表里的 `data\chats.db` 不成立。本轮 H4/H6 的数据根清单都直接列出 `chat/chats.db`：H4 捕获时 4096 字节（`-wal` 86552），H6 基线 49152 字节。S1 只能支撑“`data\knowledge`、`data\profile` 未创建”，聊天目录由聊天服务初始化建立，与两库开关无关。
+2. ACL 结论必须收窄：`icacls "…\app\data" /deny "17133:(OI)(CI)(F)" /T` 本轮实测**退出码 1**，输出三行——“已创建 1 个文件: …\app\data”“已成功处理 1 个文件; 处理 1 个文件时失败”“…\app\data\*: 拒绝访问。”——子项遍历被刚写入的拒绝 ACE 挡住；`icacls "…\app\data\knowledge"` 直接“拒绝访问”（退出码 1）。`icacls "…\app\data"`（退出码 0）输出里只有一条显式拒绝 ACE `HUYANG\17133:(OI)(CI)(N)`，同用户的继承 `(I)(OI)(CI)(F)` 仍在，只是拒绝优先。由于 `(OI)(CI)` 继承，子树写入确实被拒（shell 侧 `writeFileSync` 得到 `EPERM`）。可以说“拒绝生效且覆盖子树”，不能说“递归 `/T` 成功”，也不能说子树每层 ACE 都核对过。
 3. S3b 的失败不能单独代表“数据根不可写”的常态：那一次助手已持有库文件句柄，失败发生在目录创建步骤。本轮改用跨进程重开取读数（见下），并把“准确权限提示”从已验项移出。
-4. cargo 计数对上了：第四十轮只贴了 `cargo test --locked` 的最后一段（relations 30 例）。本轮完整输出 11 个测试目标——lib 18、backup 8、cards_view 11、extract 15、ownership 8、process 11、profile 27、queue 22、relations 30，合计 **150 passed / 0 failed**，与外部独立读数一致（`logs/cargo-test-full.log`）。
+4. cargo 计数对上了：第四十轮只贴了 `cargo test --locked` 的最后一段（relations 30 例）。本轮完整输出 11 条 `test result`（10 个测试目标 + `Doc-tests yu_knowledge`）——lib 18、backup 8、cards_view 11、extract 15、ownership 8、process 11、profile 27、queue 22、relations 30，非零合计 **150 passed / 0 failed**，另两个 0 例目标是 `unittests src\main.rs` 与 doc-tests；外部独立读到的数字同样是 150，但仓库内没有外部产物，只能比对数字（`logs/cargo-test-full.log`）。
 
 ### 交互机制核对（`scripts/h3.cjs`、`results/H3.json`）
 
-首启引导浮层（“第 1 步，共 5 步”“跳过引导”）盖住整个界面。侧栏项是 MUI `ListItemButton`（`role="button"`），对最外层 `MuiBox` 调 `.click()` 不触发跳转：点击后正文仍是 536 字符的概览页。改用 CDP `Input.dispatchMouseEvent`（mouseMoved → mousePressed → mouseReleased，落在元素矩形中心）后跳到知识库页（正文 154 字符，“知识库 0 主题 …”）。本轮所有“真实交互”都用后者，脚本里没有模拟按键或人为阻塞渲染。
+首启引导浮层（“第 1 步，共 5 步”“跳过引导”）盖住整个界面。侧栏项是 MUI `ListItemButton`（`role="button"`），对最外层 `MuiBox` 调 `.click()` 不触发跳转：点击后正文仍是 536 字符的概览页。改用 CDP `Input.dispatchMouseEvent`（mouseMoved → mousePressed → mouseReleased，落在元素矩形中心）后跳到知识库页（正文 154 字符，“知识库 0 主题 …”）。H3–H6 的界面点击都用后者（更早的 `h2.cjs` 导航仍用 DOM `.click()`，那次读数已作废）；脚本里没有模拟按键、没有人缩短任务寿命，也没有人为阻塞渲染。
 
 ### 历史整理扫描期间的界面并发（`results/H4.json`）
 
@@ -3227,35 +3227,37 @@ S3b 数据根不可写时的反馈与恢复（`results/S3b.json`）：
 | 提炼状态 | `pauseCollect('7c 合成并发验收', true)` → `pausedManual:true`、`note:true`、`chat:true`、`reading:true` |
 | 模型配置 | `modelInfo` = `{profiles: [], selectedId: null, effectiveId: null}`，无任何 profile |
 | 任务 | `beginHistory({notes:true, chat:false})` → job `his_0684d834cceea1ec`、`noteBound "n0200"`、`state running` |
-| 进度采样 | `0 ms:3`、`32 ms:36`、`357 ms:200`（时间戳为发起读取的时刻，读取本身 1–2 ms） |
+| 进度采样 | `0 ms:3`、`32 ms:36`、`357 ms:200`（时间戳为发起读取的时刻，读取本身 1–4 ms） |
 | 并发动作 | 35 ms 处真实鼠标点击侧栏「知识库」：35 ms 内正文切到知识库页；同一窗口 `settings.update` 往返 14 ms、`historyStatus` 往返 2 ms 且返回 `running / scanned 117` |
-| 截图 | `shots/H4-mid-scan-knowledge.png`（知识库页）、`shots/H4-end.png` |
+| 截图 | `shots/H4-mid-scan-knowledge.png`（扫描中已切到知识库页、无引导浮层）、`shots/H4-end.png`（返回概览后的收尾帧） |
 | 终态 | `completed`、`scanned 200`、`ready 200`、`noteDone true`、`failed 0`、`skipped 0`、`needsReread 0` |
 | 队列 | `ready 199 + stabilizing 1`，`paused.manual=true`（提炼仍暂停，未产生模型任务） |
 | 助手 | 扫描期间 pid 47720，`ExecutablePath` 为 `…\yu-c7h\app\resources\native\yu-knowledge.exe`；退出后 `[]`，`YU/yu-knowledge/yu-hotkey` 计数 0 |
-| 数据根 | `chat/chats.db 49152`；`knowledge/knowledge.db 356352` + `-wal 4152992` + `-shm 32768`；`profile/profile.db 4096` + `-wal 131872` + `-shm 32768` |
+| 数据根 | `chat/chats.db 4096` + `-wal` 86552 + `-shm` 32768；`knowledge/knowledge.db 356352` + `-wal` 4152992 + `-shm` 32768；`profile/profile.db 4096` + `-wal` 111272 + `-shm` 32768 |
 
-作废的对照：`results/H1.json` 那次 200 条正文各只有几十字符，扫描 21 ms 即 `completed`，且切页被引导浮层挡住（`changed:false`、5015 ms 超时），采样只拿到 2 点，不能作为并发证据。
+并发窗口很窄：从 `0 ms` 首采到 `357 ms` 终态，全任务约 0.36 s，只够证明“扫描期间界面能响应一次真实切页与一次设置写入”，不能代表长时间任务的并发表现。
+
+作废的对照：`results/H1.json` 那次 200 条正文每条约 140 字符（`notes.bytes = 222117`），扫描在 21 ms 内完成（`finalStatus.createdAt 1793961740224` → `updatedAt 1793961740245`），采样线只落到 5117 ms 一点；切页用的是 DOM `.click()`，命中侧栏最外层 `div`（`clicked.tag: "div"`，与 H3 里那个 `MuiBox-root css-0` 同源、没有点击处理器），所以 `changed:false`、5015 ms 超时——不是被引导浮层挡住（该文件没有引导相关字段）。不能作为并发证据。
 
 ### 数据根不可写（跨进程重开，`results/H6.json`）
 
 | 段 | 动作与读数 |
 | --- | --- |
 | A 基线 | 干净起点启用知识库，`saveCard` 成功（`card_2d4d966bc05bdb8e`），`listCards` 5 条，退出干净（助手 0） |
-| 施加拒绝 | `icacls …\data /deny "17133:(OI)(CI)(F)" /T` **退出码 1**；ACL 只有根目录 `:(OI)(CI)(N)`；shell 写 `data\knowledge\shell-probe.txt` 得 `EPERM` |
+| 施加拒绝 | `icacls …\data /deny "17133:(OI)(CI)(F)" /T` **退出码 1**；`icacls …\data` 只多出一条显式拒绝 `HUYANG\17133:(OI)(CI)(N)`（继承 `(F)` 仍在，拒绝优先）；shell 写 `data\knowledge\shell-probe.txt` 得 `EPERM` |
 | B 重启后写入 | `knowledge.status()` 仍 `running:true`、`opened:false`、schema 10/3；`saveCard`、`listCards`、`queueStatus` 三个 IPC 都抛 `KnowledgeError: cannot create the data directory E:\CpanQianYi\Temp\yu-c7h\app\data\knowledge: 当文件已存在时，无法创建该文件。 (os error 183)`；`app.version()`、`settings.get()`、页面正文正常，界面不崩（`shots/H6-write-denied.png`） |
 | 文案核对 | 错误带上了数据目录绝对路径，但 OS 原因码是 183（`ERROR_ALREADY_EXISTS`），与真实原因（拒绝访问）不符。因此只能说“写入失败被 IPC 抛给界面并指出数据目录”，不能说“权限提示准确”；是否改文案属产品决定，本轮未改代码 |
 | C 恢复 | `icacls …\data /remove:d 17133 /T` 退出码 0 后重启，`saveCard` 成功，退出干净（助手 0） |
 
 ### 样例判据重写（`.tmp/c7-evidence/samples/model-samples.json`，v2）
 
-- 判据全部挂到合约上：卡片类型 `concept/method/question/decision/comparison/reading/review`（`src/shared/knowledge.ts:45-52`）、关系类型 `contains/prerequisite/applies/contrast/derives` 且模型关系必须带 `evidence`+`sourceId`+`segment`（`:412-428`）、画像来源 `manual/auto`（`:55`）。
+- 判据全部挂到合约上：卡片类型 `concept/method/question/decision/comparison/reading/review`（`src/shared/knowledge.ts:45-52`）、关系类型 `contains/prerequisite/applies/contrast/derives` 且模型关系必须带 `evidence`+`sourceId`+`segment`（`:417-429`）、画像来源 `manual/auto`（`:55`）。
 - S1 三条渠道只保留同一可复用结论，检查点等额外事实移出，避免与去重断言耦合。
 - S2 明确“不可过度合并”，允许 2–3 张卡，不再强求 3 张。
 - S5 允许三种合约表示：一张卡同时含 120/60 与两个来源；两张卡 + `contrast` 关系（必须带引用）；两张卡 + 需实测建议。禁止静默取舍。
 - S6 只在引擎自身正文逐出时才允许 `needs_reread`（`src/main/knowledge/collector.ts:489` “reading body no longer in memory”、`:571` “reading body evicted”），截断本身不构成断言。
-- S8 拆两段：S8a 卡片修订（同 id、`revision` 递增、`edited=true`、不新增重复卡）；S8b 画像人工更正（自动归纳不得覆盖人工值，`native/knowledge/src/profile.rs:332`、`:371`、`profile_learning.rs:1472-1474`）。
-- S9 用 `findSource` 复核删除后为空、卡片不留悬空引用、模型关系级联（`native/knowledge/src/purge.rs:613`）、无关来源不受影响。
+- S8 拆两段：S8a 卡片修订（同 id、`revision` 递增、`edited=true`、不新增重复卡）；S8b 画像人工更正（自动归纳不得覆盖人工值，`native/knowledge/src/profile.rs:334`、`:372-376`、`profile_learning.rs:1472-1474`）。
+- S9 用 `findSource` 复核删除后为空、卡片不留悬空引用、模型关系级联（`native/knowledge/src/purge.rs:614`）、无关来源不受影响。
 - 每例都带 `assertions` 与 `measurementsToRecord`（可复用知识、依据、误合并、画像误学、更正、删除复现、耗时、调用量），`realModelCallsThisRound: 0`，真实读数仍记待验。
 
 ### 回归与检查
@@ -3270,7 +3272,7 @@ S3b 数据根不可写时的反馈与恢复（`results/S3b.json`）：
 
 ### 未测
 
-正式安装器进程的安装/卸载交互与实窗启动退出；交互式备份→恢复及「备份目标不可写」的真实反馈；真实转写任务进行时界面可用性（本轮验证的是历史整理扫描，不是语音转写）；9 组样例的真实模型质量读数（无授权，调用计 0）；权限错误文案是否修改。
+正式安装器进程的安装/卸载交互与实窗启动退出；交互式备份→恢复及「备份目标不可写」的真实反馈；真实转写任务进行时界面可用性（本轮验证的是历史整理扫描，不是语音转写）；长时间并发（并发窗口仅约 357 ms）；9 组样例的真实模型质量读数（无授权，调用计 0）；权限错误文案是否修改；首启引导浮层是否真的被关掉（`h4.cjs` 的 `dismissed` 判据恒为真，只有 `shots/H4-mid-scan-knowledge.png` 未见浮层这一间接旁证）；ACL 子树的逐项状态（`/T` 遍历本身失败，未枚举子目录 ACE）；「与外部独立读数一致」只能比对数字，仓库内无外部产物。
 
 ### 清理与保留
 
@@ -3278,4 +3280,6 @@ S3b 数据根不可写时的反馈与恢复（`results/S3b.json`）：
 
 ### 提交
 
-本轮提交号见 `git log`（`docs(plan): record the stage 7 C history-scan concurrency readings`）。
+`9808083` `docs(plan): record the stage 7 C history-scan concurrency and calibrate older readings`——本轮唯一改动，未改产品代码、未重建正式包。
+
+随后一条 `docs(plan): correct the stage 7 C continuation readings after review` 是内部只读复核后的修正：复核逐条比对 H4/H6/H3/H1 与 cargo 日志，查出 6 处必须改成（H4 数据根的 `chat/chats.db` 是 4096 而不是 49152、`profile.db -wal` 是 111272 而不是 131872；把 49152 归给「H4/H6」不成立；H1 作废理由两处说错——正文每条约 140 字符而非「几十字符」，切页失败是 DOM `.click()` 命中无处理器的外层 `div` 而不是被引导浮层挡住，该文件没有引导字段；第 3 行「准确反馈」与本轮结论矛盾；`chatRoot` 在 `src/main/index.ts:186` 而非 185），并采纳可选修正（读取耗时 1–4 ms、「10 个测试目标 + doc-tests」、ACL 表述改为「只有一条显式拒绝 ACE」，`profile.rs:334`/`:372-376`、`purge.rs:614`、`knowledge.ts:417-429`，并为并发窗口约 357 ms 与引导浮层判据加了限定）。
