@@ -3197,3 +3197,7 @@ S3b 数据根不可写时的反馈与恢复（`results/S3b.json`）：
 ### 清理与保留
 
 本轮未新建可重建产物，也未改代码。`E:\CpanQianYi\Temp\yu-c7` 是硬链接＋Junction 的轻量夹具，作为可复用装置保留；`.tmp/c7-evidence` 保留脚本、日志、读数、截图与样例，供外部复核复跑。测试用的 ACL 拒绝已全部撤除（`icacls data /remove:d 17133 /T`，9 个文件），`YU.exe`、`yu-knowledge.exe`、`yu-hotkey.exe` 进程计数 0。
+
+### 提交
+
+`66d2313` `docs(plan): record stage 7 C packaged regression readings`——本轮唯一改动，未改产品代码、未重建正式包；随后一条只补记这个提交号。
