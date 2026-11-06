@@ -93,6 +93,10 @@ export async function checkLibraries(manifest: Manifest, directory: string, insp
     // promised a table it no longer holds fails the moment the helper recovers its
     // own interrupted work, so it is refused before anything is moved.
     if (label.missing?.length) throw Error(`备份里的${said}缺少必需的表：${label.missing.join('、')}`)
+    // A version 2 entry describes one self-contained file. A sidecar next to it holds
+    // pages the manifest never hashed, so it is neither copied nor allowed: restoring
+    // the database alone would silently lose whatever was committed into the log.
+    if (existsSync(`${file}-wal`) || existsSync(`${file}-shm`)) throw Error(`备份里的${said}带着清单之外的数据：${item.path}-wal`)
   }
 }
 function allowed(area: unknown, path: unknown): path is string {
@@ -252,6 +256,14 @@ export function applyPendingRestore(roots: BackupRoots, inspect?: Inspector): st
   const marker = join(roots.user, PENDING), stage = join(roots.user, STAGE), journal = join(stage, 'restore-state.json'), complete = join(stage, 'restore-complete')
   if (!existsSync(marker)) return null
   const pending = JSON.parse(readFileSync(marker, 'utf8')) as PendingMarker
+  // The staged copy is checked again here: staging and the next start are separated
+  // by a restart, and a sidecar that appeared in between is data the manifest never
+  // vouched for.
+  for (const item of LIBRARIES) {
+    if (!pending.items?.some(held => held.area === item.area && held.path === item.path)) continue
+    const staged = join(stage, item.area, item.path)
+    if (existsSync(`${staged}-wal`) || existsSync(`${staged}-shm`)) throw Error(`恢复暂存与标记不符：${item.area}/${item.path}-wal`)
+  }
   const declared = Array.isArray(pending.items) ? pending.items : RESTORE_ITEMS
   let state: RestoreState | undefined
   if (existsSync(journal)) {

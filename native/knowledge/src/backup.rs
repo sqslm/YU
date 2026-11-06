@@ -21,6 +21,7 @@ use serde::Deserialize;
 
 use crate::protocol::{ApiError, ApiResult};
 use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA, expected_tables};
+use crate::util::ensure_not_cancelled;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -206,6 +207,10 @@ fn copy(source: &Connection, target: &Path, timeout_ms: u64) -> ApiResult<()> {
         let backup = Backup::new(source, &mut destination)
             .map_err(|error| ApiError::storage(format!("cannot start the snapshot: {error}")))?;
         loop {
+            // The host may cancel while the copy runs: a snapshot nobody waits for
+            // must not keep writing pages. Checked every step, before and after it,
+            // so a cancel that lands on the last page still leaves nothing behind.
+            ensure_not_cancelled()?;
             if Instant::now() >= deadline {
                 return Err(ApiError::storage(
                     "the snapshot timed out: the database is busy",
@@ -215,6 +220,7 @@ fn copy(source: &Connection, target: &Path, timeout_ms: u64) -> ApiResult<()> {
                 // The last page can be the expensive one: a copy that only finishes
                 // after the deadline must not look like a success.
                 Ok(StepResult::Done) => {
+                    ensure_not_cancelled()?;
                     if Instant::now() >= deadline {
                         return Err(ApiError::storage(
                             "the snapshot timed out: the database is busy",

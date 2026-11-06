@@ -283,10 +283,20 @@ export class ProfileCollector {
     if (first) this.deps.log?.(reason)
   }
 
-  /** Waits until a batch that was already claimed has been handed back. */
+  /**
+   * Waits until a batch that was already claimed has been handed back. A batch the
+   * host cancelled still belongs to the helper until the release round-trip comes
+   * back, so a drain that could not release it reports here instead of leaving the
+   * claim marked `working` inside the snapshot.
+   */
   async settled(): Promise<void> {
     const loop = this.loop
     if (loop) await loop
+    const failure = this.failure
+    if (failure) {
+      this.failure = null
+      throw failure
+    }
   }
 
   wake(): void {
@@ -307,6 +317,8 @@ export class ProfileCollector {
 
   private loop: Promise<void> | null = null
 
+  private failure: unknown = null
+
   private async tick(): Promise<void> {
     if (this.working) return
     this.working = true
@@ -321,7 +333,13 @@ export class ProfileCollector {
     }
     })()
     this.loop = done
-    try { await done } finally { if (this.loop === done) this.loop = null }
+    try {
+      await done
+    } catch (error) {
+      this.failure = error
+    } finally {
+      if (this.loop === done) this.loop = null
+    }
   }
 
   /** Runs every batch the helper is willing to hand out right now. */
@@ -356,7 +374,18 @@ export class ProfileCollector {
         })
       } catch (error) {
         const code = error instanceof KnowledgeError ? error.code : 'internal'
-        if (code === 'cancelled') return
+        if (code === 'cancelled') {
+          // Cancelling the local request does not release the claim: the helper
+          // keeps it until it hears the release. Awaiting that round-trip is what
+          // lets maintenance start a snapshot without `working` in it; a release
+          // that fails is reported through `settled()` so the backup stops.
+          await host.learnFail({
+            claim,
+            code: 'cancelled',
+            reason: '正在备份或准备恢复',
+          })
+          return
+        }
         await host
           .learnFail({ claim, code, reason: describe(error).slice(0, 300) })
           .catch(() => undefined)

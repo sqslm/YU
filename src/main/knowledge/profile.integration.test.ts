@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -492,5 +493,61 @@ describe('the profile loop over the compiled helper', () => {
     expect(status.items).toBe(0)
     expect(status.pending).toBe(0)
     expect(prompts).toHaveLength(1)
+  })
+
+  it('holds maintenance until the helper has released a cancelled claim', { timeout: 90_000 }, async () => {
+    const gate: { release?: () => void } = {}
+    const waiting = new Promise<void>(resolve => {
+      gate.release = resolve
+    })
+    const root = makeRoot()
+    const { host, profile, prompts } = harness({
+      root,
+      answer: async () => {
+        await waiting
+        return JSON.stringify({ items: [] })
+      }
+    })
+    await profile.sync()
+    await profile.completedChat({
+      threadId: 't3',
+      userId: 'm1',
+      answerId: 'm2',
+      question: '我更喜欢先给结论',
+      at: Date.now()
+    })
+    await until(async () => (prompts.length === 1 ? true : undefined), 'the provider call')
+    // The live profile database, held so the helper cannot commit its release: the
+    // claim really is still `working` while maintenance waits.
+    const live = new DatabaseSync(join(root, 'data', 'profile', 'profile.db'))
+    live.exec('BEGIN IMMEDIATE')
+    await profile.park('正在备份')
+    let settled = false
+    const pending = profile.settled().then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await new Promise(resolve => setTimeout(resolve, 300))
+    expect(settled).toBe(false)
+    const held = live.prepare('SELECT state FROM profile_pending').get() as { state: string } | undefined
+    expect(held?.state).toBe('working')
+    live.exec('ROLLBACK')
+    live.close()
+    gate.release?.()
+    await pending
+    // Only now may a snapshot be taken, and it must not carry the cancelled claim.
+    const target = join(mkdtempSync(join(tmpdir(), 'yu-profile-snap-')), 'profile.db')
+    expect(await host.backupDatabase('profile', target, 1500)).toBeGreaterThan(0)
+    const snapshot = new DatabaseSync(target, { readOnly: true })
+    try {
+      const row = snapshot.prepare("SELECT count(*) AS n FROM profile_pending WHERE state = 'working'").get() as { n: number }
+      expect(Number(row.n)).toBe(0)
+    } finally {
+      snapshot.close()
+    }
   })
 })

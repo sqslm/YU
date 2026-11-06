@@ -309,3 +309,63 @@ describe('what a backup refuses to invent', () => {
     expect(describeDatabase(join(roots.profile, 'data', 'profile', 'profile.db')).version).toBe(SUPPORTED_SCHEMA.profile)
   })
 })
+
+describe('a snapshot the host gave up on', () => {
+  it('stops writing once the host cancels, and takes one again later', async () => {
+    const { base, roots } = rig()
+    const install = roots.knowledge
+    const live = join(install, 'data', 'knowledge', 'knowledge.db')
+    mkdirSync(join(install, 'data', 'knowledge'), { recursive: true })
+    // A real exclusive lock in rollback mode: the copy cannot read a single page.
+    const lock = new DatabaseSync(live)
+    lock.exec(`PRAGMA journal_mode = DELETE;
+      CREATE TABLE IF NOT EXISTS probe (id TEXT PRIMARY KEY);
+      INSERT OR IGNORE INTO probe (id) VALUES ('x');
+      BEGIN EXCLUSIVE;`)
+    // The host's own deadline is far shorter than the snapshot budget, so the
+    // request is cancelled while the helper is still stepping pages.
+    const instance = new KnowledgeHost({ entry: ENTRY, root: install, requestMs: 450, idleMs: 60_000 })
+    hosts.push(instance)
+    const target = join(base, 'held.db')
+    await expect(instance.backupDatabase('knowledge', target, 1500)).rejects.toThrow(/did not answer within 450 ms/)
+    // The helper opens its destination before it copies a page, so the file can exist
+    // for a moment. What matters is that the cancelled copy leaves nothing usable
+    // behind once the lock is gone.
+
+    // Released only after the cancel: whether the helper noticed at all is what
+    // this asserts, so a late success here would be the defect.
+    lock.exec('ROLLBACK')
+    lock.close()
+    await new Promise(resolve => setTimeout(resolve, 1600))
+    expect(existsSync(target)).toBe(false)
+    expect(await instance.backupDatabase('knowledge', target, 1500)).toBeGreaterThan(0)
+  }, 40_000)
+})
+
+describe('a version 2 entry that needs a log', () => {
+  it('refuses a library whose committed pages only live in a sidecar', async () => {
+    const { base, roots } = rig()
+    const instance = helper(roots.knowledge)
+    await instance.profileStatus()
+    await createBackup(join(base, 'backup'), roots, {}, (database, target) => instance.backupDatabase(database, target))
+    const file = join(base, 'backup', 'knowledge', 'data', 'knowledge', 'knowledge.db')
+    // Pages committed into the log and nowhere else: the manifest still describes
+    // the main file, so a restore of that file alone would lose this table.
+    const writer = new DatabaseSync(file)
+    writer.exec(`PRAGMA journal_mode = WAL;
+      PRAGMA wal_autocheckpoint = 0;
+      CREATE TABLE only_in_wal (id TEXT PRIMARY KEY);
+      INSERT INTO only_in_wal (id) VALUES ('page');`)
+    const manifest = join(base, 'backup', 'manifest.json')
+    const bytes = readFileSync(file)
+    const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as { entries: Array<{ path: string; bytes: number; sha256: string }> }
+    const entry = parsed.entries.find(row => row.path === 'data/knowledge/knowledge.db')!
+    entry.bytes = bytes.length
+    entry.sha256 = createHash('sha256').update(bytes).digest('hex')
+    writeFileSync(manifest, JSON.stringify(parsed))
+    await expect(inspectBackup(join(base, 'backup'), file => instance.inspectDatabase(file))).rejects.toThrow(/清单之外的数据/)
+    await expect(stageRestore(join(base, 'backup'), roots, file => instance.inspectDatabase(file))).rejects.toThrow(/清单之外的数据/)
+    expect(existsSync(join(roots.user, '.yu-restore-stage'))).toBe(false)
+    writer.close()
+  }, 40_000)
+})
