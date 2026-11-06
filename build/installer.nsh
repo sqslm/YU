@@ -9,13 +9,58 @@
 
 ; Copy one protected directory into the export the user chose, requiring the file
 ; that makes it readable. A category that is not installed copies nothing.
-!macro YuExport SOURCE TARGET PROBE FAIL
-  IfFileExists "${SOURCE}\*.*" 0 +3
-    CreateDirectory "${TARGET}"
-    CopyFiles /SILENT "${SOURCE}\*.*" "${TARGET}"
+!macro YuExport SOURCE TARGET PROBE FAIL SKIP
+  ; A category that was never used is not an error: nothing to copy, nothing to
+  ; check. Only a category that holds its own database has to arrive complete.
+  ${IfNot} ${FileExists} "${SOURCE}\${PROBE}"
+    Goto ${SKIP}
+  ${EndIf}
+  CreateDirectory "${TARGET}"
+  CopyFiles /SILENT "${SOURCE}\*.*" "${TARGET}"
   IfErrors ${FAIL}
-  IfFileExists "${SOURCE}\${PROBE}" 0 ${FAIL}
-  IfFileExists "${TARGET}\${PROBE}" 0 ${FAIL}
+  ${IfNot} ${FileExists} "${TARGET}\${PROBE}"
+    Goto ${FAIL}
+  ${EndIf}
+${SKIP}:
+!macroend
+
+; A silent run cannot show a message, and a message box in a silent upgrade is
+; just a hang: report the failure through the exit code instead.
+!macro YuStop MESSAGE
+  IfSilent 0 +4
+    SetErrorLevel 2
+    Quit
+  MessageBox MB_OK|MB_ICONSTOP "${MESSAGE}"
+  Abort
+!macroend
+
+; Fails when PATH resolves inside $INSTDIR, whatever spelling it was given. The
+; call is inline because this macro only ever expands inside the uninstaller, and
+; a helper function there would leave the installer build without a caller.
+!macro YuOutsideInstall PATH INSIDE
+  Push "${PATH}"
+  Exch $R5
+  Push $R7
+  System::Call 'kernel32::CreateFileW(w "$R5", i 0, i 3, p 0, i 3, i 0x02000000, p 0) p .r7'
+  StrCmp $R7 "-1" yu_physical_failed 0
+  System::Call 'kernel32::GetFinalPathNameByHandleW(p r7, t .r5, i 1024, i 0)'
+  System::Call 'kernel32::CloseHandle(p r7)'
+  Push "$INSTDIR"
+  Exch $R6
+  System::Call 'kernel32::CreateFileW(w "$R6", i 0, i 3, p 0, i 3, i 0x02000000, p 0) p .r7'
+  StrCmp $R7 "-1" yu_physical_failed 0
+  System::Call 'kernel32::GetFinalPathNameByHandleW(p r7, t .r6, i 1024, i 0)'
+  System::Call 'kernel32::CloseHandle(p r7)'
+  StrCmp $R5 "" ${INSIDE}
+  StrCmp $R6 "" ${INSIDE}
+  StrLen $R3 $R6
+  StrCpy $R4 $R5 $R3
+  StrCmp $R4 $R6 ${INSIDE}
+  Goto yu_physical_done
+  yu_physical_failed:
+    Goto ${INSIDE}
+  yu_physical_done:
+  Pop $R7
 !macroend
 
 ; One job: let the downloaded speech models and the user's own data survive an
@@ -44,10 +89,18 @@
   StrCpy $R9 0
 
   ${if} ${isUpdated}
+    ; A parked name from an earlier attempt means the last run stopped in the
+    ; middle: there may be a sibling folder, or a live directory that only holds
+    ; what was left behind. Either way this run must not touch it — it stops
+    ; before moving anything, with the path the user has to look at.
+    IfFileExists "$INSTDIR.chat-data" 0 +2
+      !insertmacro YuStop "Chat data from a previous interrupted update is still at $INSTDIR.chat-data. Restore it before retrying."
+    IfFileExists "$INSTDIR.knowledge-data" 0 +2
+      !insertmacro YuStop "Knowledge data from a previous interrupted update is still at $INSTDIR.knowledge-data. Restore it before retrying."
+    IfFileExists "$INSTDIR.profile-data" 0 +2
+      !insertmacro YuStop "Profile data from a previous interrupted update is still at $INSTDIR.profile-data. Restore it before retrying."
     ; Chat and attachments live together in data\chat (SQLite includes attachments).
     IfFileExists "$INSTDIR\data\chat\*.*" 0 yu_park_knowledge
-      IfFileExists "$INSTDIR.chat-data\*.*" 0 +2
-        Abort "Chat data from a previous interrupted update still exists at $INSTDIR.chat-data. Restore it before retrying."
       ClearErrors
       Rename "$INSTDIR\data\chat" "$INSTDIR.chat-data"
       IfErrors 0 +2
@@ -55,8 +108,6 @@
       IntOp $R9 $R9 | 1
     yu_park_knowledge:
     IfFileExists "$INSTDIR\data\knowledge\*.*" 0 yu_park_profile
-      IfFileExists "$INSTDIR.knowledge-data\*.*" 0 +2
-        Abort "Knowledge data from a previous interrupted update still exists at $INSTDIR.knowledge-data. Restore it before retrying."
       ClearErrors
       Rename "$INSTDIR\data\knowledge" "$INSTDIR.knowledge-data"
       IfErrors yu_park_knowledge_failed
@@ -70,8 +121,6 @@
       Abort "Cannot preserve the knowledge base. Close YU and retry; its files are still at $INSTDIR\data\knowledge."
     yu_park_profile:
     IfFileExists "$INSTDIR\data\profile\*.*" 0 yu_parked
-      IfFileExists "$INSTDIR.profile-data\*.*" 0 +2
-        Abort "Profile data from a previous interrupted update still exists at $INSTDIR.profile-data. Restore it before retrying."
       ClearErrors
       Rename "$INSTDIR\data\profile" "$INSTDIR.profile-data"
       IfErrors yu_park_profile_failed
@@ -115,6 +164,7 @@
       GetFullPathName $R1 "$R1"
       StrCmp $R1 "" 0 +2
         Abort "Cannot resolve the backup folder. Original data has been kept."
+      !insertmacro YuOutsideInstall "$R1" yu_inside
       StrCpy $R1 "$R1\YU-data"
       ; NSIS string compares ignore case, which is what keeps a differently-cased
       ; spelling of the installation from slipping past this check.
@@ -123,6 +173,7 @@
       StrLen $R3 $R2
       StrCpy $R4 $R1 $R3
       StrCmp $R4 $R2 0 yu_destination
+    yu_inside:
         MessageBox MB_OK|MB_ICONEXCLAMATION "保存目录必须位于安装目录之外。 / Choose a folder outside the installation."
         Goto yu_choose
     yu_destination:
@@ -133,9 +184,9 @@
       ClearErrors
       CreateDirectory "$R1"
       IfErrors yu_export_failed
-      !insertmacro YuExport "$INSTDIR\data\chat" "$R1\chat" "chats.db" yu_export_failed
-      !insertmacro YuExport "$INSTDIR\data\knowledge" "$R1\knowledge" "knowledge.db" yu_export_failed
-      !insertmacro YuExport "$INSTDIR\data\profile" "$R1\profile" "profile.db" yu_export_failed
+      !insertmacro YuExport "$INSTDIR\data\chat" "$R1\chat" "chats.db" yu_export_failed yu_skip_chat
+      !insertmacro YuExport "$INSTDIR\data\knowledge" "$R1\knowledge" "knowledge.db" yu_export_failed yu_skip_knowledge
+      !insertmacro YuExport "$INSTDIR\data\profile" "$R1\profile" "profile.db" yu_export_failed yu_skip_profile
       Goto yu_wipe
     yu_export_failed:
       RMDir /r "$R1"
