@@ -2979,3 +2979,38 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 命令与结果（本机）：定向 Vitest（backup 单元+集成、profile 集成、gate、engine、host 集成、ipc-trust、preload）→ 8 文件 / 88 项通过；`pnpm typecheck` 0；`pnpm build` 0；`git diff --check` 0。仅 TS 改动，release 助手复用 3,279,360 B `d7908399b5d8144b00f39e138da4d2559d5e570e39aab3b69b15259f79a62279`。
 
 未测与边界：本轮的中断夹具用「日志 + 恢复目录 + 已搬走的原件」复刻进程退出 44 的落盘形态，没有再次拉起真实 Electron 子进程；`it.each` 只覆盖 `profile.db` 旁的两种副文件，`knowledge.db` 旁同理由同一函数处理未单独参数化。
+
+## 阶段 7 B 升级与卸载保护（第三十五轮）
+
+### 升级：同卷暂存三类数据
+
+`build/installer.nsh` 的 `customRemoveFiles` 在 `${isUpdated}` 分支里把 `data\chat`、`data\knowledge`、`data\profile` 依次改名为同卷的 `$INSTDIR.chat-data`、`$INSTDIR.knowledge-data`、`$INSTDIR.profile-data`（`Rename`，不复制），删除后用 `Rename` 改回；保留原有的 `models\` 暂存与 `un.atomicRMDir` 忙文件分支。要点：
+
+- 全部成功才进入递归删除；任一步失败会先把本轮已经暂存的目录放回（`IntOp $R6 $R9 & N` 位掩码判断），再以「文件仍在原处」的文案中止，不留半迁移。
+- 上次中断留下的同名暂存目录（例如 `$INSTDIR.knowledge-data`）直接中止并给出该路径，不覆盖、不合并。
+- 缺失的目录保持缺失：三个 `IfFileExists ... \*.*` 都不命中时不创建任何东西，只有 `data` 里确实有内容才暂存。
+- 只处理文件与原目录；库的打开与迁移仍由应用和助手的既有启动路径负责。
+
+### 卸载：一次询问覆盖三类数据
+
+非升级分支先检测三类目录中是否有内容（任意一类，包括只有画像或只有知识库）；有内容时：
+
+- `IfSilent` 中止，文案说明必须交互选择，避免无人确认时删掉唯一的卡片；
+- 交互下一次性询问「保留并迁移 / 删除 / 取消」，不再按类别逐个问；
+- 选择迁移后挑选安装目录之外的文件夹，导出为 `<目标>\YU-data\chat|knowledge|profile`，每类必须落出 `chats.db` / `knowledge.db` / `profile.db` 才算成功，`CopyFiles /SILENT` 带上同目录的 `-wal`/`-shm` 与附件；
+- 目标已存在、解析失败、位于安装目录内（`StrCmp` 大小写不敏感比较前缀）、复制失败都会删掉半成品目录、保留原件并中止卸载；选择删除才继续原有卸载范围（userData、随记、Mem0、模型与登录策略不变）。
+
+### 构建与证据
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm typecheck` | 0 |
+| `pnpm package`（`node scripts/build-native.mjs && electron-vite build && electron-builder --win nsis --publish never`） | 0，产出 `release/YU-1.2.2-rc.3-setup.exe` |
+| 产物 | 187,222,341 B（178.5 MiB），SHA-256 `fc8438b1a0738e5f11d57df6f306c78d…`，`release/YU-1.2.2-rc.3-setup.exe.blockmap` 同时生成 |
+| `git diff --check` | 0 |
+
+### 缺口与未测
+
+- 本轮没有在真实安装身份里跑安装/卸载：仓库里的 `.nsh` 只在 `pnpm package` 里由 electron-builder 编译进产物，未在隔离的注册表/快捷方式环境执行；`h_*` 试验（用 makensis 单独编译同一文件的两个分支）在临时目录里能编译，但静默运行未走通（安装器上下文缺少 electron-builder 的 `${isUpdated}` 定义与 `un.atomicRMDir` 实现，替代条件与桩函数下未能得到可信结论），已删除，未计入证据。
+- 因此「升级后三类数据回原位」「静默卸载拒绝」「交互迁移可读」这三条目前只有静态审查与真实产物编译证据，没有进程级读数。
+- 旧版卸载器的能力未验证：无法在不安装旧版的前提下确认它对已存在的新库的行为；本轮没有宣称兼容旧构建的卸载器。
