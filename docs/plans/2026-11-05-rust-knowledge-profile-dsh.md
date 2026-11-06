@@ -3084,3 +3084,7 @@ DSH 本轮**未执行**交互卸载矩阵：本会话没有允许的隔离 Windo
 ### 未测（阻塞原因见「隔离交互环境核对」）
 
 交互「保留并迁移」后三库、附件与 WAL/SHM 的 SHA-256 与 `proof` 表 committed-chat/committed-knowledge/committed-profile 读回；取消后原件、附件与测试注册项保留；明确删除后仅隔离数据与测试注册项消失、外部哨兵完好；目标已存在与安装内 Junction 被拒且可重新选择；非空但缺主库时取消卸载并保留原件、清理半成品；正常外部路径与同前缀兄弟目录可写入。已通过项（升级保留三库、含新库的旧钩子提前拒绝、仅知识或仅画像静默拒绝、暂存冲突保留原件、无数据静默卸载）沿用第三十七、三十八轮的进程级证据，本轮未重跑。
+
+### 提交
+
+`7b9e484` `docs(7b): correct the old-uninstaller upgrade guidance`——README 纠正与本轮记录同批落库；之后一条只补记这个提交号。本轮未改 `build/installer.nsh`、未新建可重建产物，轻量夹具与 `sqlite.cjs` 原样留在 `E:\CpanQianYi\Temp\yu-nsis-full-w7b3tjn5iq`。
