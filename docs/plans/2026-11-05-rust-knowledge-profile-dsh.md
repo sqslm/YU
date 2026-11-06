@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～6 全部通过外部 Codex 复核。阶段 6 D 的最后一条「排队路径的准入复核」由外部在 `f08e490` 上核对通过（`git diff --check`、6 文件 96 项定向测试，含 17 项真实 release helper 工作流集成）。阶段 7 A（知识库与用户画像的备份恢复）已实现并完成定点验证，待外部复核；7 B（升级与卸载）、7 C（安装包与真实模型效果）未开始。
+**当前状态**　阶段 1～6 全部通过外部 Codex 复核。阶段 7 A（知识库与用户画像的备份恢复）首版已提交 `b808c11`/`c1f2b00`，外部复核通过其中 39 项定向测试，同时用真实助手复现了四类边界（冷备份创建库、库类别与 schema 未预检、中断后暂存损坏无法回退、维护开关未管住后台写入）。本轮（第三十轮）已按四条反例定点补修并通过自动化验证，待外部复验；7 B（升级与卸载）、7 C（安装包与真实模型效果）未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2840,3 +2840,50 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 ### 提交
 
 `b808c11`（code，13 文件：`native/knowledge/src/backup.rs`、`native/knowledge/tests/backup.rs`、`src/main/backup.ts`、`src/main/backup.test.ts`、`src/main/backup.integration.test.ts`、`src/main/index.ts`、`src/main/knowledge/host.ts`、`src/shared/backup.ts`、`src/shared/knowledge.ts`、`src/renderer/src/settings/sections/Backup.tsx`、`src/renderer/src/locales/en-US.json`、`native/knowledge/src/lib.rs`、`native/knowledge/src/service.rs`）
+
+## 阶段 7 A 定点补修（第三十轮）：备份只读、恢复预检、断点回退、维护门
+
+外部在 `c1f2b00` 上复现的四条反例、本轮修复与证据。
+
+### 反例与修复
+
+| # | 复现（外部/我方实测） | 根因 | 本轮修复 |
+| --- | --- | --- | --- |
+| A | 初始化后停助手、隔离根只剩其一，走 `createBackup` + 真实 `backupDatabase`：缺 `knowledge` 时它被重新创建；缺 `profile` 时它被创建且 v2 清单把空 profile 也列进去 | `backup.db` 走 `self.store()`，打开/迁移/创建两库 | `native/knowledge/src/backup.rs` 改为按 `root` 固定路径、`SQLITE_OPEN_READ_ONLY` 打开源库，库不存在报 `database not found`，全程不碰业务 Store；`src/main/index.ts` 去掉维护窗口里的 `profileCollector.status()`/`queueStatus()` 探测，改为跟踪用户自己按下的暂停标志 |
+| B | 把真 knowledge 快照换进 profile 条目、或把 profile `user_version` 改 999，重算 bytes/SHA-256 后预览、暂存、启动应用均放行，重启助手报 schema 超出支持 | 只做 `quick_check` 与文件名判断 | 新增 Rust `backup.inspect`（只读读 `sqlite_master` 与 `user_version`，返回 `{kind, version, supported}`）；`src/main/backup.ts` 新增 `describe()` 与 `checkLibraries()`，`inspectBackup`/`stageRestore` 在复制前、`applyPendingRestore` 在移动原件前都校验类别与 `SUPPORTED_SCHEMA` |
+| C | 子进程在移走原件后 `exit 44`，再破坏暂存中的 profile.db，重启 `applyPendingRestore` 报「备份文件校验失败」，两个原路径仍缺失、日志滞留 | 恢复日志校验先 `readManifest(stage)` | 暂存标记 `restore-pending.json` 写入本次要替换的 `items`；日志校验只比对日志与标记（外加白名单与 sidecar 归属），不读暂存；回退只依赖 `.yu-before-restore-<id>` 里的原件 |
+| D | 真实维护入口 `setDataMaintenance(true)` + `engine.abort` 后待跑 tick 仍新增 1 卡、1 完成任务、1 次桩请求；历史 await 放行后 `scanned +1` | `engine`/`history`/`profile` 的 `allowed` 只看开关与游戏模式 | `src/main/ipc-trust.ts` 暴露 `dataMaintenanceActive()`；`src/main/index.ts` 的四处知识 `allowed` 与画像 `allowed` 均加 `&& !dataMaintenanceActive()`；维护窗口仍先闭门（`setDataMaintenance(true)`）再 cancel/park |
+
+### 实现位置
+
+- `native/knowledge/src/backup.rs`：`snapshot(root, params)` 只读源库 + 目标路径校验 + 快照置 `journal_mode=DELETE`；`inspect(params)` 返回 `{kind, version, supported}`；`library_path()` 把 `knowledge`/`profile` 绑到 `Store::open` 用的固定路径。
+- `native/knowledge/src/service.rs`：`backup.db` 不再 `self.store()`；新增 `backup.inspect`（`scope: None`，不广播、不唤醒）。
+- `src/main/backup.ts`：`SUPPORTED_SCHEMA`（与 Rust 常量对照，由集成用例守住）、`describe()`、`checkLibraries()`、`inspectBackup`/`stageRestore`/`applyPendingRestore` 三处校验；`PendingMarker.items` 与只依赖日志的回退。
+- `src/main/ipc-trust.ts`：`dataMaintenanceActive()`。
+- `src/main/index.ts`：五处 `allowed` 加维护门；`collectPaused`/`profilePausedByUser` 跟踪用户暂停；维护窗口不再探测业务 Store。
+
+### 回归与结果（本机实测）
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` | 0 |
+| `cargo test --locked` | 0，147 项（含 `tests/backup.rs` 5 项：WAL 已提交内容、目标路径四条拒绝、profile 同法、冷备份不建库、`inspect` 三类文件） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 |
+| `node scripts/build-native.mjs` | 0，`native/bin/yu-knowledge.exe` 3,273,728 B SHA-256 `3ed9ad3f03e981f416ee2eda98a6dfdb86356f3de089848140c717d9bf7ea396` |
+| `pnpm exec vitest run src/main/backup.test.ts src/main/backup.integration.test.ts src/main/knowledge/engine.test.ts src/main/knowledge/host.integration.test.ts src/main/ipc-trust.test.ts src/preload/index.test.ts` | 0，6 文件 / 59 项 |
+| `pnpm typecheck` | 0 |
+| `pnpm build` | 0，13.95 s |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0，291 文件通过 / 3 跳过，4096 项通过 / 8 跳过 |
+
+新增自动化（8 项）：
+
+- `backup.test.ts`：其它库的快照换进本库条目后被预览与暂存拒绝（`不是该数据库`）；`user_version` 超出支持范围被拒绝（`版本不受支持`）；日志在、暂存被破坏时按日志回退两个库的原始字节、清日志并落 `restore-failed-*`。
+- `backup.integration.test.ts`（真 release helper）：应用从未打开过库时备份既不建库也不把库写进清单；`SUPPORTED_SCHEMA` 与助手写出的 `user_version` 一致。
+- `knowledge/engine.test.ts`：`allowed` 接维护门时待跑 tick 不发 `extractNext`/`extractRun`，清门后正常执行。
+
+### 未测与边界
+
+- 本轮未重跑隔离 Electron 实窗抽验：上一轮的 `.tmp/a7-evidence` 流程是分步对话框驱动脚本，换构建要重新对位；本轮改动的四条路径（只读快照、库类别/schema 预检、日志回退、维护门）都由上表的自动化用例对真实 release helper 覆盖。实窗复核留给外部，或在 7 B 一并重跑。
+- 维护门的「历史整理 await 与在途画像 claim 落定」以 `allowed` 闭门 + `park` 保证，未做「等待在途 claim 完成」的显式屏障（Rust 侧仍会拒绝已闭门后的新写入）。
+- 我方第 29 轮的全量与实窗证据（`.tmp/a7-evidence`）与本轮自动化证据分开记录，不互相替代。
