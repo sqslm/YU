@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～6 全部通过外部 Codex 复核。阶段 7 A（知识库与用户画像的备份恢复）首版已提交 `b808c11`/`c1f2b00`，外部复核通过其中 39 项定向测试，同时用真实助手复现了四类边界（冷备份创建库、库类别与 schema 未预检、中断后暂存损坏无法回退、维护开关未管住后台写入）。本轮（第三十轮）已按四条反例定点补修并通过自动化验证，待外部复验；7 B 的升级保全、旧钩子拒绝、静默卸载与暂存冲突已有隔离安装器进程证据，交互卸载仍待验。用户于 2026-11-06 明确授权先进入 7 C，正式包资源与打包助手的首检已完成，安装包运行回归与真实模型效果仍待验证。
+**当前状态**　阶段 1～6 全部通过外部 Codex 复核。阶段 7 A（知识库与用户画像的备份恢复）首版已提交 `b808c11`/`c1f2b00`，外部复核通过其中 39 项定向测试，同时用真实助手复现了四类边界（冷备份创建库、库类别与 schema 未预检、中断后暂存损坏无法回退、维护开关未管住后台写入）。本轮（第三十轮）已按四条反例定点补修并通过自动化验证，待外部复验；7 B 的升级保全、旧钩子拒绝、静默卸载与暂存冲突已有隔离安装器进程证据，交互卸载仍待验。用户于 2026-11-06 明确授权先进入 7 C。第四十轮已在隔离临时根跑通正式包解包产物的关功能懒启动、开启后两库跨重启回读、数据根不可写时的准确反馈与恢复，以及 cargo/TypeScript 全量回归；正式安装器进程、交互式备份恢复与九组样例的真实模型质量仍待验。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -3102,3 +3102,98 @@ DSH 本轮**未执行**交互卸载矩阵：本会话没有允许的隔离 Windo
 1. 复用正式配置的现有产物。用允许的独立 Windows 测试身份或隔离环境运行安装包，以合成数据验证启动、退出、辅助进程定位、设置关闭时的懒启动、跨重启持久化、备份与恢复及目标不可写时的真实反馈。额外确认运行历史任务时界面可用、退出后助手回收。用户安装、个人库、登录启动项与真实注册项不参与测试。仅能运行 win-unpacked 或协议探针时，按实际覆盖范围单列，正式安装与交互留待验证。
 2. 用合成样例评估真实模型的提炼、去重和画像。覆盖网页/文档/聊天中重复材料、独立观点、一次片面提问、方案取舍、矛盾材料、截断阅读、虚构角色、用户更正和已删来源。记录可复用知识是否新增、结论依据、误合并和画像误学、修正效果、实际耗时与调用量。使用已明确获准的模型与额度。若没有可用授权，先完成合成夹具和非模型回归，真实调用单列待验。不得将个人材料、密钥、模型提示正文写入报告或诊断日志。
 3. 运行对应 crate 的 cargo fmt -- --check、cargo test --locked、cargo clippy --locked --all-targets -- -D warnings，及相关 Vitest、pnpm typecheck、pnpm test:native、pnpm test、pnpm build。区分真实安装包、打包资源、测试替身和真实模型结果。仅修验收复现且属于本阶段的缺陷。DSH 回填命令、退出码、结果、未测项与提交编号，保留必要证据并清理本轮临时资产。本阶段无签名、发布或推送操作。
+
+## 阶段 7 C 正式包回归与知识库/画像验收（第四十轮）
+
+基线 `a959525`（`docs(plan): start stage 7 C and record packaged helper smoke`），工作区干净。本轮只在隔离临时根运行正式包的解包产物；正式安装器进程未执行（原因见「隔离身份核对」），真实模型调用 0 次。
+
+### 产物核对
+
+| 项 | 读数 |
+| --- | --- |
+| `release-7b\YU-1.2.2-rc.3-setup.exe` | 170,495,958 B，SHA-256 `406af44f84f266b6df6c490c4bdce44d2ebfafd8381a06786ddd7e73b3c70fb3`，与第三十七轮一致；本轮未安装、未签名、未发布 |
+| `release-7b\win-unpacked` | 723 MB，含 `resources\app.asar` 与 `resources\native\*`，为同次构建的解包产物 |
+| `release-7b\win-unpacked\resources\native\yu-knowledge.exe` | 3,279,360 B，SHA-256 `d7908399b5d8144b00f39e138da4d2559d5e570e39aab3b69b15259f79a62279`，与 `native\bin\yu-knowledge.exe` 同一哈希，说明自动化用例与实跑用的是同一份助手字节 |
+
+### 隔离身份核对
+
+`C:\Windows\System32\WindowsSandbox.exe` 不存在；`net user` 只有 `17133`、`Administrator`、`CodexSandboxOffline`、`CodexSandboxOnline`、`share`、`sshuser` 等账号，没有允许交互操作的独立测试桌面；当前 `whoami` 为 `17133`，`net session` 失败（未提权），`HKCU` 是用户真实身份。据此**正式安装器进程没有执行**，安装、卸载、登录启动项写入与真实注册项均未触碰。派单的通过标准里依赖实窗交互的项按未测单列，未用编译结果、协议探针或模拟按键替代。
+
+### 隔离测试装置
+
+`E:\CpanQianYi\Temp\yu-c7\app` 由 `release-7b\win-unpacked` 全量文件的硬链接构成，`resources`、`locales` 以 Junction 指回打包目录：`process.resourcesPath` 即打包资源，`app.isPackaged=true`，应用代码取自 `app.asar`，数据根落在 `app\data`。userData 用 `--user-data-dir=E:\CpanQianYi\Temp\yu-c7\userdata`，渲染进程经 CDP 端口 20295 受控。证据在 `.tmp/c7-evidence`：`scripts/s1.cjs`～`s3b.cjs`、`logs/`（`app-*.out`、`cargo.log`、`pnpm.log`）、`results/S1.json`～`S3b.json`、`shots/`（4 张）、`samples/model-samples.json`。
+
+环境坑：宿主设了 `ELECTRON_RUN_AS_NODE=1`，直接 spawn `YU.exe` 会得到 `YU.exe: bad option: --user-data-dir=…`，spawn 前必须清除该变量；`backup:create`/`preview`/`restore` 全部由原生目录对话框门控（`src/main/index.ts:2214-2221`），备份交互无法用 CDP 驱动。
+
+### 场景读数
+
+S1 默认关闭（`results/S1.json`）：
+
+| 项 | 读数 |
+| --- | --- |
+| 版本 | `1.2.2-rc.3` |
+| 设置 | `knowledge.enabled=false`、`userProfile.enabled=false`（`src/shared/defaults.ts:39-53`） |
+| 助手进程 | `yu-knowledge.exe` 计数 0 |
+| 数据目录 | `data\knowledge`、`data\profile`、`data\chats.db` 均未创建 |
+| 助手与热键定位 | `app.log` 记录 `[hotkey] spawning E:\CpanQianYi\Temp\yu-c7\app\resources\native\yu-hotkey.exe`，即打包资源路径 |
+| 界面 | `画像学习已关闭`，截图 `shots/S1-settings-off.png` |
+| 退出 | 关窗后 `appExited=true` |
+| 启动项 | 关窗前后 `HKCU\...\Run\typeless-rebuild` 均为 `<absent>`（`src/main/index.ts:3476` 未写入） |
+
+S2 开启后播种并跨重启回读（`results/S2.json`）：
+
+| 项 | 读数 |
+| --- | --- |
+| 开关 | `settings.update({knowledge:{enabled:true},userProfile:{enabled:true}})` 生效 |
+| 知识写入 | `knowledge.saveCard` → `card_7333ae099977bc24` |
+| 画像写入 | `profile.save` → `prof_80aa3103a93485b7` |
+| 状态 | `{version:1, running:true, schema:{knowledge:10, profile:3}, opened:true, fts5:true, trigram:true}` |
+| 库文件 | `knowledge\knowledge.db` 4,096 B + `-wal` 263,712 B；`profile\profile.db` 4,096 B + `-wal` 131,872 B；`chats.db` 未创建 |
+| 助手进程 | `ExecutablePath` 为 `E:\CpanQianYi\Temp\yu-c7\app\resources\native\yu-knowledge.exe`，确为打包资源 |
+| 首次退出 | 应用退出，`yu-knowledge.exe` 计数 0 |
+| 重启后回读 | `listCards({limit:10})` total=1，标题「合成样例：知识库开关的懒加载边界」；`profileStatus.items=1`，`profileList` 1 条（slot「合成验收-离线偏好」）；截图 `shots/S2-after-restart.png`、`shots/S2-knowledge-on.png` |
+| 二次退出 | 应用退出，助手计数 0 |
+
+S3b 数据根不可写时的反馈与恢复（`results/S3b.json`）：
+
+| 项 | 读数 |
+| --- | --- |
+| 制造条件 | `icacls data /deny "17133:(OI)(CI)(F)" /T`，递归拒绝写入 |
+| 写入反馈 | `knowledge.saveCard` 抛 `Error invoking remote method 'knowledge:card-save': KnowledgeError: cannot create the data directory E:\CpanQianYi\Temp\yu-c7\app\data\knowledge: 当文件已存在时，无法创建该文件。 (os error 183)` |
+| 状态接口 | `knowledge.status()` 仍返回 `opened:false`、schema 10/3，未崩溃 |
+| 界面可用 | `settings.get()` 与 `window.api.app.version()` → `1.2.2-rc.3` 正常，截图 `shots/S3-readonly-data.png` |
+| 助手存活 | pid 15472 未被连带杀掉 |
+| 恢复 | `icacls data /remove:d 17133 /T` 撤除 9 个文件后 `saveCard` 恢复成功 `card_f508cc23889d8174` |
+| 退出 | 两次退出均干净，退出后助手计数 0 |
+
+先行的一次失败尝试已作废并保留为教训：`icacls data /deny "17133:(WD,AD)"` 只作用于目录本身，不阻止对已有库文件的写入，`saveCard` 仍成功（`card_c0b0090e10882dba`），因此 `results/S3.json` 不能作为不可写证据。
+
+### 备份恢复、历史任务并发与真实模型
+
+- 交互式备份→恢复与「备份目标不可写」的真实反馈：`backup:create` 由原生目录对话框门控，CDP 无法选择目录，本机也没有允许的交互桌面，故未测，属未覆盖项而非通过项。
+- 备份恢复语义的自动化覆盖：`src/main/backup.integration.test.ts` 等用例（还原既有库、跳过缺失库、拒绝 v2 侧车缺失、目标不可写错误路径）随 `pnpm test` 全量通过，用于证明代码路径，不替代实窗反馈验收。
+- 运行历史任务时界面是否可用：未测（需要真实转写任务与真实模型）。
+- 真实模型质量：`.tmp/c7-evidence/samples/model-samples.json` 已按派单准备 9 组合成样例（同内容多渠道 → 1 卡 3 来源；三独立观点 → 3 卡；片面提问 → question 卡且不写画像；方案取舍 → decision 卡须含代价；矛盾材料 → 保留双方数值与来源；截断阅读 → 0 卡或 needs_reread；虚构角色 → 标记虚构且不学成画像；用户更正 → 同卡新修订留修订史；已删来源 → bySource 为空、其余不受影响），但本轮没有明确模型授权，`realModelCallsThisRound: 0`，九项质量读数全部待验。生产链路的替身覆盖来自既有 Vitest（`src/main/knowledge/extract.integration.test.ts` 等配合真实助手字节），随 `pnpm test` 通过。
+
+### 回归命令
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `cargo fmt -- --check`（`native\knowledge`） | 0 | 无差异 |
+| `cargo test --locked` | 0 | `running 30 tests`，`test result: ok. 30 passed; 0 failed` |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 | 无告警 |
+| `pnpm typecheck` | 0 | 通过 |
+| `pnpm test:native` | 0 | 通过（含 doc-tests 0 例） |
+| `pnpm test` | 0 | `Test Files 292 passed \| 3 skipped (295)`，`Tests 4114 passed \| 8 skipped (4122)`，`Duration 99.12s` |
+| `pnpm build` | 0 | `✓ built in 12.58s`，产物 `settings-CFmcGLUY.js` |
+| `git diff --check` | 0 | 提交前后一致 |
+
+未改产品代码，因此未重建正式包，`release-7b` 产物沿用第三十七轮编译结果；`pnpm build` 只刷新被忽略的 `out/`，跑完 `git status --porcelain` 仍为空。
+
+### 未测
+
+正式安装器进程的安装/卸载交互与实窗启动退出；交互式备份→恢复及「备份目标不可写」的真实反馈；真实转写任务进行时界面可用性；9 组样例的真实模型质量读数（无授权，调用计 0）。
+
+### 清理与保留
+
+本轮未新建可重建产物，也未改代码。`E:\CpanQianYi\Temp\yu-c7` 是硬链接＋Junction 的轻量夹具，作为可复用装置保留；`.tmp/c7-evidence` 保留脚本、日志、读数、截图与样例，供外部复核复跑。测试用的 ACL 拒绝已全部撤除（`icacls data /remove:d 17133 /T`，9 个文件），`YU.exe`、`yu-knowledge.exe`、`yu-hotkey.exe` 进程计数 0。
