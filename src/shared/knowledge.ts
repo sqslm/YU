@@ -587,6 +587,7 @@ export type KnowledgeMethod =
   | 'source.find'
   | 'source.release_record'
   | 'backup.db'
+  | 'backup.inspect'
   | 'profile.save'
   | 'profile.get'
   | 'profile.list'

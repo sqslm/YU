@@ -117,6 +117,39 @@ describe('ExtractEngine', () => {
     expect(host.extractRun).toHaveBeenCalled()
   })
 
+  it('hands a claim back when the window closes while it is handed out', async () => {
+    const host = fakeHost()
+    let allowed = true
+    // The claim was taken just before the backup window; the write must not follow.
+    host.extractNext.mockImplementationOnce(async () => {
+      allowed = false
+      return { enabled: true, paused: false, group: GROUP, nextDueAt: null }
+    })
+    const { engine } = engineWith(host, { allowed: () => allowed })
+    await engine.tick()
+    expect(host.extractRun).not.toHaveBeenCalled()
+    // The claim is handed back as a pause, the state a closed window leaves a task in.
+    expect(host.extractFail).toHaveBeenCalledWith(expect.objectContaining({ groupId: 'grp_1', claim: 'clm_1', code: 'paused' }))
+  })
+
+  it('parks until the claim a running batch holds is released', async () => {
+    const host = fakeHost()
+    let release: (() => void) | undefined
+    host.extractNext.mockImplementationOnce(async () => ({ enabled: true, paused: false, group: GROUP, nextDueAt: null }))
+    host.extractRun.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve({ state: 'paused', cards: [], proposals: [] }) }))
+    const { engine } = engineWith(host)
+    void engine.tick()
+    await Promise.resolve()
+    let parked = false
+    const park = engine.park('正在备份').then(() => { parked = true })
+    await Promise.resolve()
+    expect(parked).toBe(false)
+    release?.()
+    await park
+    expect(parked).toBe(true)
+    expect(host.cancelInFlight).toHaveBeenCalled()
+  })
+
   it('waits for the due time when nothing is runnable', async () => {
     const host = fakeHost({
       extractNext: vi.fn(async () => ({ enabled: true, paused: false, group: null, nextDueAt: 61_000 }))

@@ -1,7 +1,7 @@
 import { MemoryService } from './memory/host'
 import { ChatService } from './chat'
 import { readWorkspaceRecord, searchWorkspace } from './workspace'
-import { applyPendingRestore, createBackup, inspectBackup, stageRestore, type BackupRoots } from './backup'
+import { applyPendingRestore, createBackup, inspectBackup, stageRestore, type BackupRoots, type DatabaseReport } from './backup'
 import { dataMaintenanceActive, setDataMaintenance } from './ipc-trust'
 import { explainSelection } from './explanation'
 import { setMemoryService } from './memory/registry'
@@ -2144,6 +2144,10 @@ function registerIpc(): void {
   handle('knowledge:suggestion-get', (event, id: unknown) => { knowledgeOwner(event); return knowledge.getSuggestion(knowledgeId(id, '建议 ID')) })
   handle('knowledge:suggestion-accept', (event, id: unknown) => { knowledgeOwner(event); return knowledge.acceptSuggestion(knowledgeId(id, '建议 ID')) })
   handle('knowledge:suggestion-reject', (event, id: unknown) => { knowledgeOwner(event); return knowledge.rejectSuggestion(knowledgeId(id, '建议 ID')) })
+  /** The helper's own deadline for one snapshot: shorter than this window's, so
+   *  a busy database fails here instead of finishing after the answer. */
+  const SNAPSHOT_BUDGET_MS = 1500
+  const inspectDatabase = (path: string): Promise<DatabaseReport> => knowledge.inspectDatabase(path)
   let selectedBackup: string | null = null, backupWorking = false
   // Pauses the reader set themselves. They are tracked here so a backup can
   // honour them without opening the very stores it is about to snapshot.
@@ -2164,9 +2168,13 @@ function registerIpc(): void {
       assertBackupIdle()
       setDataMaintenance(true); paused = true
       // Extraction writes into the knowledge database the snapshot is taken from,
-      // so a running batch is drained first; the engine is woken again once the
-      // backup is done unless the reader had paused collection or is in a game.
-      extractEngine.abort(restarting ? '正在恢复备份' : '正在备份')
+      // so a running batch is drained first — and awaited: a claim already handed
+      // out would otherwise still be `working` inside the snapshot. The engine is
+      // woken again once the backup is done unless the reader paused collection.
+      await extractEngine.park(restarting ? '正在恢复备份' : '正在备份')
+      // A history walk writes sources as it pages; wait for the step it already
+      // started before the maintenance door is treated as closed.
+      await historyDriver.park()
       // Profile learning writes profile.db as well, so it is parked for the whole
       // window and only woken afterwards when the reader had not paused it itself.
       // The flag the reader set, not a status read: asking the profile store
@@ -2198,19 +2206,19 @@ function registerIpc(): void {
     if (chosen.canceled || !chosen.filePaths[0]) return null
     return backupWork(() => createBackup(join(chosen.filePaths[0], `YU-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`), roots(), {
       '聊天': chats.store.list().threads.length, '随记': notes.list().notes.length, '历史记录': history.count(), '提醒与待办': reminders!.store.list().length, '日程': calendar!.list().length
-    }, (database, target) => knowledge.backupDatabase(database, target)))
+    }, (database, target) => knowledge.backupDatabase(database, target, SNAPSHOT_BUDGET_MS)))
   })
   handle('backup:preview', async event => {
     chatOwner(event); selectedBackup = null
     const chosen = await dialog.showOpenDialog({ title: '选择 YU 备份目录', properties: ['openDirectory'] })
     if (chosen.canceled || !chosen.filePaths[0]) return null
-    const result = inspectBackup(chosen.filePaths[0]); selectedBackup = chosen.filePaths[0]; return result
+    const result = await inspectBackup(chosen.filePaths[0], inspectDatabase); selectedBackup = chosen.filePaths[0]; return result
   })
   handle('backup:restore', async event => {
     chatOwner(event)
     if (!selectedBackup) throw Error('请先选择并校验备份')
     const source = selectedBackup
-    await backupWork(() => stageRestore(source, roots()), true)
+    await backupWork(() => stageRestore(source, roots(), inspectDatabase), true)
     selectedBackup = null
     setImmediate(() => { app.relaunch(); app.quit() })
   })

@@ -401,3 +401,77 @@ fn inspect_names_the_library_and_its_schema_without_touching_the_store() {
     );
     assert_eq!(unknown["kind"], "unknown", "{unknown}");
 }
+
+#[test]
+fn a_snapshot_aborts_at_its_own_deadline_and_leaves_nothing() {
+    let root = Root::new("deadline");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "d1",
+        "source.save",
+        json!({
+            "kind": "note",
+            "originRef": "n1",
+            "text": "截止时间测试使用的正文，长度超过三十个字，避免提炼器认为正文过短。"
+        }),
+    );
+    // A WAL reader is not blocked by a concurrent writer, so the deadline cannot
+    // be provoked by holding a lock; it is exercised directly instead: the copy
+    // must give up inside its own budget and leave no target behind.
+    let target = root.outside().join("deadline.db");
+    let error = helper.err(
+        "d2",
+        "backup.db",
+        json!({
+            "database": "knowledge",
+            "target": target.display().to_string(),
+            "timeoutMs": 0
+        }),
+    );
+    assert!(format!("{error}").contains("timed out"), "{error}");
+    assert!(
+        !target.exists(),
+        "a timed out snapshot must not be left behind"
+    );
+    let done = helper.snapshot("d3", "knowledge", &target);
+    assert!(done["bytes"].as_u64().unwrap_or(0) > 0, "{done}");
+}
+
+#[test]
+fn inspect_names_the_tables_a_version_owes() {
+    let root = Root::new("tables");
+    let mut helper = Helper::start(&root);
+    helper.ok(
+        "t1",
+        "profile.save",
+        json!({ "dimension": "语言偏好", "value": "中文，简洁直接", "category": "explicit", "origin": "manual" }),
+    );
+    let profile = root.data.join("data/profile/profile.db");
+    let target = root.outside().join("profile.db");
+    helper.snapshot("t2", "profile", &target);
+    let whole = helper.ok(
+        "t3",
+        "backup.inspect",
+        json!({ "path": target.to_string_lossy() }),
+    );
+    assert_eq!(whole["kind"], "profile", "{whole}");
+    assert_eq!(whole["missing"], json!([]), "{whole}");
+
+    // A file at the current version that lost the table the recovery path needs:
+    // being the right kind and version is not enough to install it.
+    let damaged = root.outside().join("damaged.db");
+    std::fs::copy(&target, &damaged).unwrap();
+    let connection = rusqlite::Connection::open(&damaged).unwrap();
+    connection
+        .execute_batch("DROP TABLE profile_pending")
+        .unwrap();
+    drop(connection);
+    let seen = helper.ok(
+        "t4",
+        "backup.inspect",
+        json!({ "path": damaged.to_string_lossy() }),
+    );
+    assert_eq!(seen["kind"], "profile", "{seen}");
+    assert_eq!(seen["missing"], json!(["profile_pending"]), "{seen}");
+    assert!(profile.exists());
+}

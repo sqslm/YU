@@ -449,31 +449,84 @@ pub struct Store {
     pub profile_path: PathBuf,
 }
 
+/// The migrations each database applies, in order, one per schema version. A
+/// backup checks a snapshot against these same strings: a file at a given version
+/// must already hold the tables that version promised.
+pub const KNOWLEDGE_MIGRATIONS: [&str; 10] = [
+    KNOWLEDGE_SQL,
+    QUEUE_SQL,
+    THREAD_SQL,
+    HISTORY_BOUND_SQL,
+    EXTRACT_SQL,
+    GRAPH_SQL,
+    RELATION_SOURCE_SQL,
+    CITED_SQL,
+    SOURCE_OWNER_SQL,
+    SOURCE_HINT_SQL,
+];
+
+pub const PROFILE_MIGRATIONS: [&str; 3] = [PROFILE_SQL, PROFILE_LEARN_SQL, PROFILE_MARKER_SQL];
+
+/// The tables a database of `kind` at `version` is expected to hold, read out of
+/// the migrations themselves rather than a second hand-written list. Temporary
+/// tables are dropped or renamed by the same migration, so only the names a
+/// finished database keeps are reported.
+pub fn expected_tables(kind: &str, version: i64) -> Vec<String> {
+    let migrations: &[&str] = match kind {
+        "knowledge" => &KNOWLEDGE_MIGRATIONS,
+        "profile" => &PROFILE_MIGRATIONS,
+        _ => return Vec::new(),
+    };
+    let mut tables: Vec<String> = Vec::new();
+    for (index, sql) in migrations.iter().enumerate() {
+        if version < index as i64 + 1 {
+            break;
+        }
+        for statement in sql.split(';') {
+            let words: Vec<&str> = statement.split_whitespace().collect();
+            let table_at = |from: usize| -> Option<String> {
+                words
+                    .get(from)
+                    .map(|name| name.trim_matches('"').to_string())
+            };
+            if words.len() > 3 && words[0] == "CREATE" && words[1] == "TABLE" {
+                let name = if words[2] == "IF" {
+                    table_at(5)
+                } else {
+                    table_at(2)
+                };
+                if let Some(name) = name
+                    && !tables.contains(&name)
+                {
+                    tables.push(name);
+                }
+            } else if words.len() > 3 && words[0] == "DROP" && words[1] == "TABLE" {
+                if let Some(name) = table_at(2) {
+                    tables.retain(|held| held != &name);
+                }
+            } else if words.len() > 5
+                && words[0] == "ALTER"
+                && words[1] == "TABLE"
+                && words[3] == "RENAME"
+                && words[4] == "TO"
+                && let (Some(from), Some(to)) = (table_at(2), table_at(5))
+            {
+                tables.retain(|held| held != &from);
+                if !tables.contains(&to) {
+                    tables.push(to);
+                }
+            }
+        }
+    }
+    tables
+}
+
 impl Store {
     pub fn open(root: &Path) -> ApiResult<Store> {
         let knowledge_path = root.join("data").join("knowledge").join("knowledge.db");
         let profile_path = root.join("data").join("profile").join("profile.db");
-        let knowledge = open_db(
-            &knowledge_path,
-            KNOWLEDGE_SCHEMA,
-            &[
-                KNOWLEDGE_SQL,
-                QUEUE_SQL,
-                THREAD_SQL,
-                HISTORY_BOUND_SQL,
-                EXTRACT_SQL,
-                GRAPH_SQL,
-                RELATION_SOURCE_SQL,
-                CITED_SQL,
-                SOURCE_OWNER_SQL,
-                SOURCE_HINT_SQL,
-            ],
-        )?;
-        let profile = open_db(
-            &profile_path,
-            PROFILE_SCHEMA,
-            &[PROFILE_SQL, PROFILE_LEARN_SQL, PROFILE_MARKER_SQL],
-        )?;
+        let knowledge = open_db(&knowledge_path, KNOWLEDGE_SCHEMA, &KNOWLEDGE_MIGRATIONS)?;
+        let profile = open_db(&profile_path, PROFILE_SCHEMA, &PROFILE_MIGRATIONS)?;
         // A helper that died mid-batch leaves a claim nobody can release. Turning
         // such tasks into a retryable failure keeps them from sitting in `working`
         // forever; segments already committed stay committed, so a retry does not

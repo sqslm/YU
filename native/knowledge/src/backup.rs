@@ -13,20 +13,25 @@
 //! path are refused before anything is opened.
 
 use std::path::{Component, Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use rusqlite::backup::Backup;
+use rusqlite::backup::{Backup, StepResult};
 use rusqlite::{Connection, OpenFlags};
 use serde::Deserialize;
 
 use crate::protocol::{ApiError, ApiResult};
-use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA};
+use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA, expected_tables};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupParams {
     database: String,
     target: String,
+    /// How long the copy may take before it gives up. The host's own deadline is
+    /// longer than this, so a busy database fails here instead of leaving a
+    /// snapshot to be written after the caller already gave up on it.
+    #[serde(default)]
+    timeout_ms: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -58,10 +63,17 @@ pub fn snapshot(root: &Path, params: BackupParams) -> ApiResult<u64> {
         )));
     }
     let target = destination_path(root, &path, &params.target)?;
+    if params.timeout_ms == Some(0) {
+        // No budget at all: refuse before touching the target, so a caller that
+        // cancelled in the same breath leaves nothing behind.
+        return Err(ApiError::storage(
+            "the snapshot timed out: the database is busy",
+        ));
+    }
     {
         let source = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|error| ApiError::storage(format!("cannot open the database: {error}")))?;
-        copy(&source, &target)?;
+        copy(&source, &target, params.timeout_ms.unwrap_or(1_500))?;
     }
     settle(&target)?;
     let bytes = std::fs::metadata(&target)
@@ -103,7 +115,24 @@ pub fn inspect(params: InspectParams) -> ApiResult<serde_json::Value> {
     } else {
         ("unknown", 0)
     };
-    Ok(serde_json::json!({ "ok": true, "kind": kind, "version": version, "supported": supported }))
+    // Being the right kind is not the same as being openable: a file at a version
+    // that promised a table which is missing fails the moment the helper recovers
+    // its interrupted work. The migrations say which tables that version owes.
+    let mut missing = Vec::new();
+    if kind != "unknown" {
+        for table in expected_tables(kind, version) {
+            if !has(&table)? {
+                missing.push(table);
+            }
+        }
+    }
+    Ok(serde_json::json!({
+        "ok": true,
+        "kind": kind,
+        "version": version,
+        "supported": supported,
+        "missing": missing,
+    }))
 }
 
 /// Rejects a target the host should not have asked for, before opening anything:
@@ -151,7 +180,7 @@ fn destination_path(root: &Path, source: &Path, target: &str) -> ApiResult<PathB
     Ok(path)
 }
 
-fn copy(source: &Connection, target: &Path) -> ApiResult<()> {
+fn copy(source: &Connection, target: &Path, timeout_ms: u64) -> ApiResult<()> {
     let mut destination = Connection::open_with_flags(
         target,
         OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -162,12 +191,33 @@ fn copy(source: &Connection, target: &Path) -> ApiResult<()> {
         let _ = std::fs::remove_file(target);
         ApiError::storage(format!("cannot create the snapshot: {error}"))
     })?;
+    // Pages are stepped one at a time so the copy can stop: a database held under
+    // an exclusive lock, or one whose pages keep changing, must not leave a
+    // complete-looking snapshot behind after the caller's deadline.
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
     let result = (|| -> ApiResult<()> {
         let backup = Backup::new(source, &mut destination)
             .map_err(|error| ApiError::storage(format!("cannot start the snapshot: {error}")))?;
-        backup
-            .run_to_completion(512, Duration::from_millis(2), None)
-            .map_err(|error| ApiError::storage(format!("cannot finish the snapshot: {error}")))
+        loop {
+            if Instant::now() >= deadline {
+                return Err(ApiError::storage(
+                    "the snapshot timed out: the database is busy",
+                ));
+            }
+            match backup.step(-1) {
+                Ok(StepResult::Done) => return Ok(()),
+                Ok(StepResult::More) => {}
+                Ok(StepResult::Busy) | Ok(StepResult::Locked) => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    return Err(ApiError::storage(format!(
+                        "cannot finish the snapshot: {error}"
+                    )));
+                }
+            }
+        }
     })();
     drop(destination);
     match result {

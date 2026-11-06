@@ -177,7 +177,7 @@ describe('the two libraries in the backup', () => {
     rmSync(join(destination, 'knowledge'), { recursive: true, force: true })
     rmSync(join(destination, 'profile'), { recursive: true, force: true })
     require('node:fs').writeFileSync(manifestPath, JSON.stringify(manifest))
-    expect(inspectBackup(destination).libraries).toEqual([])
+    expect((await inspectBackup(destination)).libraries).toEqual([])
 
     await expect(stageRestore(destination, roots)).resolves.toBeUndefined()
     applyPendingRestore(roots)
@@ -192,7 +192,7 @@ describe('the two libraries in the backup', () => {
     const claimManifest = JSON.parse(readFileSync(join(claim, 'manifest.json'), 'utf8'))
     claimManifest.version = 1
     require('node:fs').writeFileSync(join(claim, 'manifest.json'), JSON.stringify(claimManifest))
-    expect(() => inspectBackup(claim)).toThrow('无效')
+    await expect(inspectBackup(claim)).rejects.toThrow('无效')
     await expect(stageRestore(claim, roots)).rejects.toThrow('无效')
   }, 120_000)
 

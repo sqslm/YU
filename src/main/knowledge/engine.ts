@@ -75,6 +75,8 @@ const missingReason = (missing: 'deleted' | 'temporary' | 'empty' | 'unknown'): 
 export const fingerprintOf = (text: string): string =>
   createHash('sha256').update(text, 'utf8').digest('hex')
 
+const ML_MAINTENANCE_REASON = '正在备份或准备恢复'
+
 export class ExtractEngine {
   private readonly deps: ExtractDeps
   private readonly schedule: (run: () => void, delayMs: number) => { cancel: () => void }
@@ -175,6 +177,12 @@ export class ExtractEngine {
         if (!next.enabled || next.paused) break
         if (!next.group) {
           if (next.nextDueAt !== null) this.at(next.nextDueAt - this.now())
+          break
+        }
+        // The claim was taken before the gate closed: release it instead of
+        // sending a request the backup window would write around.
+        if (!this.deps.allowed()) {
+          await this.settle(host, next.group, 'paused', ML_MAINTENANCE_REASON)
           break
         }
         const settled = await this.runGroup(host, next.group)

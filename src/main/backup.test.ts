@@ -43,7 +43,7 @@ const helperSnapshot = async (database: 'knowledge' | 'profile', target: string)
   const file = new DatabaseSync(target)
   try {
     if (database === 'knowledge') file.exec('PRAGMA journal_mode=DELETE; PRAGMA user_version=10; CREATE TABLE sources(id TEXT PRIMARY KEY); CREATE TABLE cards(id TEXT PRIMARY KEY)')
-    else file.exec('PRAGMA journal_mode=DELETE; PRAGMA user_version=3; CREATE TABLE profile_items(id TEXT PRIMARY KEY)')
+    else file.exec('PRAGMA journal_mode=DELETE; PRAGMA user_version=3; CREATE TABLE profile_items(id TEXT PRIMARY KEY); CREATE TABLE profile_pending(id TEXT PRIMARY KEY)')
     return fs.statSync(target).size
   } finally { file.close() }
 }
@@ -78,7 +78,7 @@ it('rejects changed files and path traversal before touching current data', asyn
   const { roots, destination } = setup()
   await createBackup(destination, roots, {}, helperSnapshot)
   fs.appendFileSync(join(destination, 'notes', 'notes.json'), 'bad')
-  expect(() => inspectBackup(destination)).toThrow('校验失败')
+  await expect(inspectBackup(destination)).rejects.toThrow('校验失败')
   expect(fs.existsSync(join(roots.user, '.yu-restore-stage'))).toBe(false)
   const manifest = JSON.parse(fs.readFileSync(join(destination, 'manifest.json'), 'utf8'))
   manifest.entries[0].path = '../account.json'
@@ -131,6 +131,46 @@ function marker(path: string): string | undefined {
   const file = new DatabaseSync(path, { readOnly: true })
   try { return file.prepare('SELECT value FROM marker').get()?.value as string | undefined } finally { file.close() }
 }
+it('refuses a library whose structure the helper reports as incomplete', async () => {
+  const { roots, destination } = setup()
+  makeLibrary(roots, 'knowledge', 10, '在用')
+  makeLibrary(roots, 'profile', 3, '在用')
+  await createBackup(destination, roots, {}, helperSnapshot)
+  // Right kind, right version, missing the table the recovery path opens first:
+  // installing it would only fail on the next start.
+  const inspect = async (file: string) => ({ kind: file.includes('profile') ? 'profile' as const : 'knowledge' as const, version: 3, missing: file.includes('profile') ? ['profile_pending'] : [] })
+  await expect(inspectBackup(destination, inspect)).rejects.toThrow('缺少必需的表')
+  await expect(stageRestore(destination, roots, inspect)).rejects.toThrow('缺少必需的表')
+  expect(fs.existsSync(join(roots.user, '.yu-restore-stage'))).toBe(false)
+})
+
+it('refuses a restore log that does not name the range the marker promised', async () => {
+  const { roots, destination } = setup()
+  const knowledge = library(roots, 'knowledge', '恢复前的知识库')
+  library(roots, 'profile', '恢复前的画像')
+  await createBackup(destination, roots, {}, helperSnapshot)
+  await stageRestore(destination, roots)
+  const stage = join(roots.user, '.yu-restore-stage')
+  const journal = join(stage, 'restore-state.json')
+  const pending = JSON.parse(fs.readFileSync(join(roots.user, 'restore-pending.json'), 'utf8'))
+  const id = '11111111-2222-3333-4444-555555555555'
+  const items = pending.items.map((item: { area: string; path: string }) => ({ ...item, present: true }))
+  // A log naming one file more than the marker announced is not this restore.
+  fs.writeFileSync(journal, JSON.stringify({ id, items: [...items, { area: 'user', path: 'account.json', present: true }] }))
+  expect(() => applyPendingRestore(roots)).toThrow('恢复日志无效')
+  expect(marker(knowledge)).toBe('恢复前的知识库')
+  // Nor is one that repeats an entry, or drops one the marker promised.
+  fs.writeFileSync(journal, JSON.stringify({ id, items: [...items, items.at(-1)] }))
+  expect(() => applyPendingRestore(roots)).toThrow('恢复日志无效')
+  fs.writeFileSync(journal, JSON.stringify({ id, items: items.slice(1) }))
+  expect(() => applyPendingRestore(roots)).toThrow('恢复日志无效')
+  expect(marker(knowledge)).toBe('恢复前的知识库')
+  // The range the marker did promise still applies.
+  fs.writeFileSync(journal, JSON.stringify({ id, items }))
+  expect(applyPendingRestore(roots)!.length).toBeGreaterThan(0)
+})
+
+
 it('keeps the live libraries when a version one backup carries none', async () => {
   const { roots, destination } = setup()
   const knowledge = library(roots, 'knowledge', '在用的知识库')
@@ -145,7 +185,7 @@ it('keeps the live libraries when a version one backup carries none', async () =
   fs.rmSync(join(destination, 'knowledge'), { recursive: true, force: true })
   fs.rmSync(join(destination, 'profile'), { recursive: true, force: true })
   fs.writeFileSync(`${profile}-wal`, 'stale profile log')
-  expect(inspectBackup(destination).libraries).toEqual([])
+  expect((await inspectBackup(destination)).libraries).toEqual([])
   await stageRestore(destination, roots)
   applyPendingRestore(roots)
   expect(marker(knowledge)).toBe('在用的知识库')
@@ -189,7 +229,7 @@ function makeLibrary(roots: BackupRoots, area: 'knowledge' | 'profile', version:
   fs.mkdirSync(join(path, '..'), { recursive: true })
   const file = new DatabaseSync(path); databases.push(file)
   if (area === 'knowledge') file.exec(`PRAGMA user_version=${version}; CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS cards(id TEXT PRIMARY KEY); DELETE FROM sources`)
-  else file.exec(`PRAGMA user_version=${version}; CREATE TABLE IF NOT EXISTS profile_items(id TEXT PRIMARY KEY); DELETE FROM profile_items`)
+  else file.exec(`PRAGMA user_version=${version}; CREATE TABLE IF NOT EXISTS profile_items(id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS profile_pending(id TEXT PRIMARY KEY); DELETE FROM profile_items`)
   file.prepare(`INSERT INTO ${area === 'knowledge' ? 'sources' : 'profile_items'} VALUES(?)`).run(value)
   file.close()
   return path
@@ -215,7 +255,7 @@ it('refuses a snapshot whose file is the other library', async () => {
   // The genuine knowledge snapshot is put where the profile belongs. A restore
   // that only checked the file name would install it and break the profile.
   swap(destination, 'profile', join(destination, 'knowledge', 'data', 'knowledge', 'knowledge.db'))
-  expect(() => inspectBackup(destination)).toThrow('不是该数据库')
+  await expect(inspectBackup(destination)).rejects.toThrow('不是该数据库')
   await expect(stageRestore(destination, roots)).rejects.toThrow('不是该数据库')
 })
 
@@ -228,7 +268,7 @@ it('refuses a library whose schema the helper cannot open', async () => {
     try { file.exec(`PRAGMA user_version=${SUPPORTED_SCHEMA[database] + 996}`) } finally { file.close() }
     return fs.statSync(target).size
   })
-  expect(() => inspectBackup(destination)).toThrow('版本不受支持')
+  await expect(inspectBackup(destination)).rejects.toThrow('版本不受支持')
   await expect(stageRestore(destination, roots)).rejects.toThrow('版本不受支持')
 })
 

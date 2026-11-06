@@ -43,12 +43,16 @@ const library = (area: unknown): area is Library => LIBRARIES.some(item => item.
 export const SUPPORTED_SCHEMA: Record<Library, number> = { knowledge: 10, profile: 3 }
 /** What a SQLite file claims to be: which library, and how new its schema is. */
 export interface DatabaseKind { kind: Library | 'unknown'; version: number }
+/** What the helper reports about a file: which library, how new, and — from the
+ *  same migrations it applies — which tables that version still owes. */
+export interface DatabaseReport extends DatabaseKind { missing?: string[] }
+export type Inspector = (file: string) => Promise<DatabaseReport>
 /**
  * Reads the label a restore has to check before it moves anything: the kind comes
  * from the tables a library is built on, the version from `user_version`. Opened
  * read-only, so nothing is migrated, created or unlocked by looking.
  */
-export function describe(file: string): DatabaseKind {
+export function describe(file: string): DatabaseReport {
   const connection = new DatabaseSync(file, { readOnly: true })
   try {
     const tables = connection.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => String((row as { name: unknown }).name))
@@ -56,20 +60,53 @@ export function describe(file: string): DatabaseKind {
     // The helper's own tables decide the kind, not the file name: a knowledge
     // snapshot dropped into the profile slot is still a knowledge database.
     const kind = tables.includes('cards') && tables.includes('sources') ? 'knowledge' : tables.includes('profile_items') ? 'profile' : 'unknown'
-    return { kind, version }
+    return { kind, version, missing: [] }
   } finally { connection.close() }
+}
+/** The minimum a start must find before it installs a library: the tables whose
+ *  absence the helper reports first. Stage time checks the whole contract through
+ *  the helper; this runs on a cold start, before the helper exists. */
+function tablesOf(file: string): string[] {
+  const connection = new DatabaseSync(file, { readOnly: true })
+  try { return connection.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => String((row as { name: unknown }).name)) } finally { connection.close() }
+}
+function recoverable(file: string): DatabaseReport {
+  const label = describe(file)
+  if (label.kind === 'unknown') return { ...label, missing: [] }
+  const held = new Set(tablesOf(file))
+  const owed = label.kind === 'profile' ? ['profile_items', 'profile_pending'] : ['cards', 'sources']
+  const missing = owed.filter(table => !held.has(table))
+  return { ...label, missing }
+}
+/** The same refusal as `checkLibraries`, without the helper. */
+function checkLibrariesSync(manifest: Manifest, directory: string): void {
+  for (const item of LIBRARIES) {
+    const entry = manifest.entries.find(file => file.area === item.area && file.path === item.path)
+    if (!entry) continue
+    const label = recoverable(owned(directory, `${entry.area}/${entry.path}`))
+    const said = item.area === 'knowledge' ? '知识库' : '画像'
+    if (label.kind !== item.area) throw Error(`备份里的${said}不是该数据库`)
+    if (label.version < 1 || label.version > SUPPORTED_SCHEMA[item.area]) throw Error(`备份里的${said}版本不受支持`)
+    if (label.missing?.length) throw Error(`备份里的${said}缺少必需的表：${label.missing.join('、')}`)
+  }
 }
 /**
  * Refuses a manifest whose library entries do not hold that library, or hold a
  * schema the running helper cannot open. Called before anything is overwritten.
  */
-function checkLibraries(manifest: Manifest, directory: string): void {
+export async function checkLibraries(manifest: Manifest, directory: string, inspect?: Inspector): Promise<void> {
   for (const item of LIBRARIES) {
     const entry = manifest.entries.find(file => file.area === item.area && file.path === item.path)
     if (!entry) continue
-    const label = describe(owned(directory, `${entry.area}/${entry.path}`))
-    if (label.kind !== item.area) throw Error(`备份里的${item.area === 'knowledge' ? '知识库' : '画像'}不是该数据库`)
-    if (label.version < 1 || label.version > SUPPORTED_SCHEMA[item.area]) throw Error(`备份里的${item.area === 'knowledge' ? '知识库' : '画像'}版本不受支持`)
+    const file = owned(directory, `${entry.area}/${entry.path}`)
+    const label = inspect ? await inspect(file) : describe(file)
+    const said = item.area === 'knowledge' ? '知识库' : '画像'
+    if (label.kind !== item.area) throw Error(`备份里的${said}不是该数据库`)
+    if (label.version < 1 || label.version > SUPPORTED_SCHEMA[item.area]) throw Error(`备份里的${said}版本不受支持`)
+    // Right kind and version is not the same as openable: a file at a version that
+    // promised a table it no longer holds fails the moment the helper recovers its
+    // own interrupted work, so it is refused before anything is moved.
+    if (label.missing?.length) throw Error(`备份里的${said}缺少必需的表：${label.missing.join('、')}`)
   }
 }
 function allowed(area: unknown, path: unknown): path is string {
@@ -146,11 +183,11 @@ export async function createBackup(destination: string, roots: BackupRoots, coun
     return summary(destination, manifest)
   } catch (error) { await rm(destination, { recursive: true, force: true }); throw error }
 }
-export function inspectBackup(directory: string): BackupSummary {
+export async function inspectBackup(directory: string, inspect?: Inspector): Promise<BackupSummary> {
   const manifest = readManifest(directory)
   // Preview is a promise about what a restore would install, so it checks the
   // libraries now rather than letting the next start discover a mismatch.
-  checkLibraries(manifest, directory)
+  await checkLibraries(manifest, directory, inspect)
   return summary(directory, manifest)
 }
 function readManifest(directory: string): Manifest {
@@ -170,11 +207,11 @@ function readManifest(directory: string): Manifest {
   }
   return manifest
 }
-export async function stageRestore(source: string, roots: BackupRoots): Promise<void> {
+export async function stageRestore(source: string, roots: BackupRoots, inspect?: Inspector): Promise<void> {
   const manifest = readManifest(source), stage = join(roots.user, STAGE)
   if (existsSync(stage) || existsSync(join(roots.user, PENDING))) throw Error(`已有恢复暂存数据，请先重启；若恢复曾失败，请检查 ${stage}`)
   for (const root of Object.values(roots)) if (inside(source, root)) throw Error('恢复来源不能包含当前数据目录')
-  checkLibraries(manifest, source)
+  await checkLibraries(manifest, source, inspect)
   await mkdir(stage)
   try {
     for (const entry of manifest.entries) {
@@ -185,7 +222,7 @@ export async function stageRestore(source: string, roots: BackupRoots): Promise<
     readManifest(stage)
     // The staged copies are read back too: the backup may be fine while the copy
     // that landed on disk is not, and a broken stage must not replace anything.
-    checkLibraries(readManifest(stage), stage)
+    await checkLibraries(readManifest(stage), stage, inspect)
     // The marker carries what this restore will replace, so a later start can
     // reason about an interrupted restore without reading the stage again.
     await writeFile(join(roots.user, PENDING), JSON.stringify({ version: manifest.version, notesDir: resolve(roots.notes), items: restoreItems(manifest) }))
@@ -209,8 +246,13 @@ const RESTORE_ITEMS = sidecars(SELECTIONS)
  * version 1 is — therefore leaves the other library and its sidecars alone.
  */
 function restoreItems(manifest: Manifest): Array<{ area: Area; path: string }> {
-  return [...RESTORE_ITEMS, ...sidecars(LIBRARIES.filter(item => manifest.entries.some(entry => entry.area === item.area)))]
+  return scopeItems(LIBRARIES.filter(item => manifest.entries.some(entry => entry.area === item.area)))
 }
+/** The exact item list a restore of these libraries replaces, in one fixed order. */
+function scopeItems(libraries: Array<{ area: Area; path: string }>): Array<{ area: Area; path: string }> {
+  return [...RESTORE_ITEMS, ...sidecars(libraries)]
+}
+const scopeKey = (items: Array<{ area: Area; path: string }>): string => items.map(item => `${item.area}/${item.path}`).join('|')
 function recoverPrevious(roots: BackupRoots, state: RestoreState): void {
   for (const item of [...state.items].reverse()) {
     const target = owned(roots[item.area], item.path), original = owned(roots[item.area], `.yu-before-restore-${state.id}/${item.path}`)
@@ -220,7 +262,7 @@ function recoverPrevious(roots: BackupRoots, state: RestoreState): void {
   }
 }
 /** Run after taking the single-instance lock, before opening any store or worker. */
-export function applyPendingRestore(roots: BackupRoots): string[] | null {
+export function applyPendingRestore(roots: BackupRoots, inspect?: Inspector): string[] | null {
   const marker = join(roots.user, PENDING), stage = join(roots.user, STAGE), journal = join(stage, 'restore-state.json'), complete = join(stage, 'restore-complete')
   if (!existsSync(marker)) return null
   const pending = JSON.parse(readFileSync(marker, 'utf8')) as PendingMarker
@@ -229,7 +271,6 @@ export function applyPendingRestore(roots: BackupRoots): string[] | null {
   if (existsSync(journal)) {
     state = JSON.parse(readFileSync(journal, 'utf8')) as RestoreState
     const expected = state.items
-    const same = (items: Array<{ area: Area; path: string }>) => Array.isArray(expected) && expected.length === items.length && expected.every((item, i) => item.area === items[i].area && item.path === items[i].path)
     // A log lists the database files and their sidecars; `allowed` describes the
     // files themselves, so a sidecar is checked through the file it belongs to.
     const legal = (items: Array<{ area: Area; path: string }>) => Array.isArray(items) && items.every((item): boolean => {
@@ -244,15 +285,26 @@ export function applyPendingRestore(roots: BackupRoots): string[] | null {
     // never against the stage. An interrupted restore must be recoverable even
     // when the staged files are gone or damaged: the originals sit in the
     // recovery directory, waiting to be moved back.
-    if (!/^[a-f0-9-]{36}$/.test(state?.id ?? '') || !legal(expected) || !(same(RESTORE_ITEMS) || same(declared))) throw Error('恢复日志无效，未修改用户数据')
+    // The marker is the range this restore promised to replace; the log has to
+    // name exactly that range — no extra file, no repeat, no reordering — and a
+    // legacy marker still means the legacy list alone.
+    const unique = (items: Array<{ area: Area; path: string }>) => new Set(items.map(item => `${item.area}/${item.path}`)).size === items.length
+    const declaredOk = Array.isArray(pending.items) && unique(pending.items)
+    const allowedRanges = [scopeKey(RESTORE_ITEMS), ...(Array.isArray(pending.items) ? [scopeKey(declared)] : [])]
+    if (!/^[a-f0-9-]{36}$/.test(state?.id ?? '') || !legal(expected) || !declaredOk || !unique(expected) || !allowedRanges.includes(scopeKey(expected))) throw Error('恢复日志无效，未修改用户数据')
+    if (!expected.every(item => typeof item.present === 'boolean')) throw Error('恢复日志无效，未修改用户数据')
     if (!existsSync(complete)) { recoverPrevious(roots, state); rmSync(journal); state = undefined }
   }
   if (!state) {
     try {
       const manifest = readManifest(stage)
+      // The staged manifest has to describe the same replacement range the marker
+      // announced: a stage that grew or lost a library since then is not the one
+      // the user agreed to.
+      if (Array.isArray(pending.items) && scopeKey(restoreItems(manifest)) !== scopeKey(declared)) throw Error('恢复暂存与标记不符，未修改用户数据')
       // Last check before the first move: the libraries in the stage must be the
       // two databases, at a schema this helper can open.
-      checkLibraries(manifest, stage)
+      checkLibrariesSync(manifest, stage)
       for (const root of Object.values(roots)) mkdirSync(root, { recursive: true })
       state = { id: randomUUID(), items: restoreItems(manifest).map(item => {
         const target = owned(roots[item.area], item.path), present = existsSync(target)

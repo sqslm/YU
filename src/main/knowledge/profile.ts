@@ -283,6 +283,12 @@ export class ProfileCollector {
     if (first) this.deps.log?.(reason)
   }
 
+  /** Waits until a batch that was already claimed has been handed back. */
+  async settled(): Promise<void> {
+    const loop = this.loop
+    if (loop) await loop
+  }
+
   wake(): void {
     if (!this.enabled || !this.deps.allowed()) return
     if (this.working) {
@@ -299,9 +305,12 @@ export class ProfileCollector {
     this.timer = null
   }
 
+  private loop: Promise<void> | null = null
+
   private async tick(): Promise<void> {
     if (this.working) return
     this.working = true
+    const done = (async () => {
     try {
       do {
         this.again = false
@@ -310,6 +319,9 @@ export class ProfileCollector {
     } finally {
       this.working = false
     }
+    })()
+    this.loop = done
+    try { await done } finally { if (this.loop === done) this.loop = null }
   }
 
   /** Runs every batch the helper is willing to hand out right now. */
@@ -327,6 +339,12 @@ export class ProfileCollector {
       }
       if (!next.batch) {
         this.arm(next.nextDueAt)
+        return
+      }
+      if (!this.enabled || !this.deps.allowed() || this.parked) {
+        // The batch was handed out before the gate closed; handing it back keeps
+        // the claim out of a snapshot instead of letting it sit in `working`.
+        await host.learnFail({ claim: next.batch.claim, code: 'cancelled', reason: '正在备份或准备恢复' }).catch(() => undefined)
         return
       }
       const claim = next.batch.claim

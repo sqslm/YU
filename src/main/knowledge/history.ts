@@ -49,6 +49,8 @@ export const HISTORY_PAGE = 20
 export class HistoryDriver {
   /** Jobs this process is currently walking, so two starts never interleave. */
   private readonly walking = new Set<string>()
+  /** Walks this process is running, so a backup can wait for the current step. */
+  private readonly pending = new Set<Promise<void>>()
 
   constructor(private readonly deps: HistoryDeps) {}
 
@@ -91,6 +93,17 @@ export class HistoryDriver {
 
   async walk(jobId: string, scopes: { notes: boolean; chat: boolean }): Promise<void> {
     if (this.walking.has(jobId)) return
+    const task = this.walkJob(jobId, scopes)
+    this.pending.add(task)
+    try { await task } finally { this.pending.delete(task) }
+  }
+
+  /** Stops here, and waits until a step already in flight has landed. */
+  async park(): Promise<void> {
+    await Promise.allSettled([...this.pending])
+  }
+
+  private async walkJob(jobId: string, scopes: { notes: boolean; chat: boolean }): Promise<void> {
     this.walking.add(jobId)
     try {
       while (true) {
@@ -104,9 +117,13 @@ export class HistoryDriver {
           return
         }
         const job = (await host.historyStatus(jobId)).job
+        // The gate can close while the status call is in flight; a closed window
+        // must not start a page it would then write into the snapshot.
+        if (this.deps.allowed && !this.deps.allowed()) return
         if (!job || job.state !== 'running') return
         if (scopes.notes && !job.noteDone) {
           const page = this.deps.pages.notes(job.noteCursor, job.noteBound ?? null)
+          if (this.deps.allowed && !this.deps.allowed()) return
           const step = await host.stepHistory({
             jobId,
             kind: 'note',
@@ -120,6 +137,7 @@ export class HistoryDriver {
         }
         if (scopes.chat && !job.chatDone) {
           const page = this.deps.pages.chat(job.chatCursor, job.chatBound ?? null)
+          if (this.deps.allowed && !this.deps.allowed()) return
           const step = await host.stepHistory({
             jobId,
             kind: 'chat',

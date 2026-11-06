@@ -91,8 +91,31 @@ describe('game mode and the scan', () => {
     const collector = new KnowledgeCollector({ settings: () => config, host: () => handler })
     await syncKnowledge({ collector, history: { resume: async () => null } }, game)
 
+    // Hold the very first page in flight so the gate closes while a batch is
+    // already claimed — the boundary the maintenance window has to survive.
+    const gates: { open?: () => void; release?: () => void } = {}
+    const entered = new Promise<void>(resolve => { gates.open = resolve })
+    const gate = new Promise<void>(resolve => { gates.release = resolve })
+    let held = false
+    const proxy = new Proxy(handler, {
+      get(target, property) {
+        const value = Reflect.get(target, property, target)
+        if (property === 'stepHistory' && typeof value === 'function') {
+          return async (input: never) => {
+            if (!held) {
+              held = true
+              gates.open?.()
+              await gate
+            }
+            return value.call(target, input)
+          }
+        }
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    })
+
     const driver = new HistoryDriver({
-      host: () => handler,
+      host: () => proxy,
       pages: createHistoryPages({ notes: () => ({ list: () => ({ notes: [] }) }), chats: () => chats, limit: 4 }),
       // The real predicate: a game suspends the walk, it does not pause the job.
       allowed: () => collector.enabled && !game,
@@ -101,14 +124,19 @@ describe('game mode and the scan', () => {
 
     const job = await driver.start({ notes: false, chat: true })
     expect(job).not.toBeNull()
+    await entered
 
-    // Suspend mid-scan, before the scan can finish.
+    // Close the gate while that page is still in the helper, then let it commit:
+    // the claimed batch finishes, and the walk starts nothing after it.
     game = true
-    await until(async () => (await handler.historyStatus(job!.id)).job!.chatCursor !== null, 'a committed batch')
-    await new Promise(resolve => setTimeout(resolve, 150))
+    gates.release?.()
+    await new Promise(resolve => setTimeout(resolve, 200))
     const parked = (await handler.historyStatus(job!.id)).job!
     expect(parked.state).toBe('running')
     expect(parked.chatDone).toBe(false)
+    const settled = parked.scanned
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect((await handler.historyStatus(job!.id)).job!.scanned).toBe(settled)
 
     // Leaving the game is the real wiring's job, not the test's.
     game = false
@@ -116,6 +144,15 @@ describe('game mode and the scan', () => {
     await until(async () => (await handler.historyStatus(job!.id)).job!.state === 'completed', 'the scan to finish')
     const done = (await handler.historyStatus(job!.id)).job!
     expect(done.scanned).toBe(25)
+  }, 60_000)
+
+  it('leaves a manually paused job paused across a game', async () => {
+    if (!existsSync(ENTRY)) throw new Error(`the knowledge helper is missing: ${ENTRY}`)
+    const dir = root()
+    const handler = new KnowledgeHost({ entry: ENTRY, root: dir, requestMs: 30_000, idleMs: 60_000 })
+    instances.push(handler)
+    const chats = new ChatStore(join(dir, 'chats.db'))
+    stores.push(chats)
   }, 60_000)
 
   it('leaves a manually paused job paused across a game', async () => {

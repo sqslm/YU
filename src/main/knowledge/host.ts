@@ -774,8 +774,16 @@ export class KnowledgeHost {
    * still in WAL, and nothing uncommitted. The host only passes a path it built
    * from the backup directory the user picked.
    */
-  backupDatabase(database: 'knowledge' | 'profile', target: string): Promise<number> {
-    return this.call<{ bytes: number }>('backup.db', { database, target }).then(result => result.bytes)
+  inspectDatabase(path: string): Promise<{ kind: 'knowledge' | 'profile' | 'unknown'; version: number; supported: number; missing: string[] }> {
+    return this.call('backup.inspect', { path })
+  }
+
+  backupDatabase(database: 'knowledge' | 'profile', target: string, timeoutMs?: number): Promise<number> {
+    return this.call<{ bytes: number }>('backup.db', {
+      database,
+      target,
+      ...(timeoutMs === undefined ? {} : { timeoutMs })
+    }).then(result => result.bytes)
   }
 
   listTopics(limit?: number): Promise<TopicList> {
