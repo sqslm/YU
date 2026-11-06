@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B、阶段 6 C1（知识库浏览排版）与阶段 6 C2（卡片联动）已通过外部 Codex 复核。阶段 6 D（工作流送入知识提炼）已交付，并按外部复核提出的七个边界（暂停读取中取消、配置确认中取消、权限设置禁用、helper 真实拒绝、配置交接中的取消、等待中关闭工具、等待中暂停采集）完成三轮定点补修；最后一条「排队路径的准入复核」已实现并待外部复核。阶段 7 未开始。
+**当前状态**　阶段 1～6 全部通过外部 Codex 复核。阶段 6 D 的最后一条「排队路径的准入复核」由外部在 `f08e490` 上核对通过（`git diff --check`、6 文件 96 项定向测试，含 17 项真实 release helper 工作流集成）。阶段 7 A（知识库与用户画像的备份恢复）已实现并完成定点验证，待外部复核；7 B（升级与卸载）、7 C（安装包与真实模型效果）未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2777,3 +2777,66 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 ### 提交
 
 - 代码 `063685d`：`fix(knowledge): re-check the turn and the settings before the queueing write`（`src/main/knowledge/{manual,handoff}.ts`、`src/main/index.ts`、`src/main/workflow-extract.integration.test.ts`）；本节随该提交之后的文档提交落盘。
+
+## 阶段 6 验收记录与阶段 7 A 交付（第二十九轮）
+
+**起始 HEAD `f08e49093346b5be2be426e8306033ec6c9c13e0`（master，工作区干净）；进入本轮前的 release 助手 3,247,104 字节 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`。**
+
+### 阶段 6 外部验收记录
+
+外部 Codex 在 `f08e490` 上核对阶段 6 D：`git diff --check` 通过，6 文件 96 项定向测试通过，含 17 项真实 release helper 的工作流集成；确认「读回期间把工具加入 `disabledTools` 或暂停采集时不会重复排队、已提交来源与原任务保留、后续步骤不执行」。DSH 第 28 轮实跑（单列为 DSH 证据，不计入外部复跑）：`pnpm test` 290 文件通过 / 3 跳过、4083 项通过 / 8 跳过；`pnpm typecheck`、`pnpm build`、`pnpm test:native` 均退出 0。阶段 6（A、B、C1、C2、D）至此全部通过外部复核。
+
+### 7 A 要求与实现
+
+| 要求 | 实现 |
+| --- | --- |
+| 只纳入两个新库，数据根与 `KnowledgeHost` 一致 | `src/main/index.ts` 新增 `appRoot = app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath()`，`chatRoot` 与 `KnowledgeHost({root: appRoot})` 都从它派生；`BackupRoots` 增 `knowledge`/`profile`，`LIBRARIES` 固定为 `data/knowledge/knowledge.db` 与 `data/profile/profile.db`。老库（聊天、随记、历史、记忆、设置）路径与语义未变。 |
+| 版本 2 清单 + Rust 在线快照 | `native/knowledge/src/backup.rs` 新增 `backup.db` 方法：按名字取库，校验目标（绝对路径、无 `..`、不在数据根内、必须不存在、父目录存在）后持锁用 `rusqlite::backup::Backup::run_to_completion` 生成快照，再把快照置为 `journal_mode=DELETE`。清单 `version: 2`；两个库只在源库存在时快照，缺失独立跳过、不建库、不启用功能；失败删掉本次未完成的目录，不回退到 C 盘。 |
+| 读取 v1/v2、只替换清单里出现的库 | `readManifest` 接受 v1 与 v2；v1 里出现库条目即判无效。`restoreItems(manifest)` 对 v1 给老列表，对 v2 只加清单出现的库及其 `-wal`/`-shm`；`applyPendingRestore` 的日志校验同时接受老 v1 中断日志与「按暂存清单算出的列表」。替换时把旧 db 与 sidecar 一起移进 `.yu-before-restore-<id>`，避免旧 WAL 被重放到新库。 |
+| 排干写入者、恢复期暂停、恢复后按真实状态唤醒 | `backupWork` 在 `setDataMaintenance(true)` 之后 `extractEngine.abort('正在备份' | '正在恢复备份')`，并 `profileCollector.park(...)`；结束时若读者自己暂停过画像（`status().pausedManual`）或知识采集（`queueStatus().pausedReasons`）或处于游戏模式则不唤醒，否则 `extractEngine.wake()` / `profileCollector.wake()`。恢复暂存成功后 `backupWorking = true`，直到重启前不再接受新的备份或恢复。 |
+
+### 回归与缺口
+
+- 新增 `native/knowledge/tests/backup.rs` 3 项：快照含已提交的 WAL 内容并排除未提交事务、快照不带 `-wal`/`-shm` 且日志模式为 `DELETE`；目标路径四条拒绝（相对、数据根内、已存在、未知库）；profile 库同样可快照。
+- `src/main/backup.test.ts` 8 项（原 5 项保留）：v1 备份不携带库时目标两库与其 sidecar 原样；两库一起替换且第二个库复制失败时两库都回滚、pending 清掉；第二个库快照失败时整个备份目录被删。
+- 新增 `src/main/backup.integration.test.ts` 4 项（真 helper + 真 SQLite）：①双库备份 → 追加数据 → 恢复 → 冷启动读回备份时的卡片、来源与画像，`notes.json` 回到备份时内容，恢复目录里有旧库文件；②只含知识库的 v2 恢复后 profile 与其 `-wal` 原样；③v1 备份照常恢复，而「v1 却列了库条目」被拒；④两库都不存在时不调用快照、不建目录，快照失败时目录被删。
+
+### 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（`native/knowledge`） | 退出 0 |
+| `cargo test --locked` | 145 项通过（18 + 3 + 11 + 15 + 8 + 11 + 27 + 22 + 30） |
+| `cargo clippy --locked --all-targets -- -D warnings` | 退出 0 |
+| `node scripts/build-native.mjs` | 退出 0，`native/bin/yu-knowledge.exe` 3,266,560 字节 `c15499b86e643a19a8d57b474f69991a0aa6d31555bc3154329562e5f366c9ee` |
+| `pnpm exec vitest run src/main/backup.test.ts src/main/backup.integration.test.ts src/main/ipc-trust.test.ts src/preload/index.test.ts src/main/knowledge/host.integration.test.ts` | 5 文件 / 39 项通过 |
+| `pnpm typecheck` | 退出 0（node + web） |
+| `pnpm build` | 退出 0（14.39 s） |
+| `pnpm test:native` | 退出 0 |
+| `pnpm test` | 291 文件通过 / 3 跳过，4090 项通过 / 8 跳过（96.96 s） |
+| `git diff --check` | 退出 0 |
+
+### 实窗证据
+
+- 构建：`out/main/index.js` 2026-11-06 08:43:51（1,922,432 B），`native/bin/yu-knowledge.exe` 3,266,560 字节 `c15499b8…66c9ee`；隔离根 `E:\CpanQianYi\Temp\yu-a7`（`app/` 里 `out`/`node_modules`/`resources` 为 junction，`native/bin` 为副本，`boot.js` 只 require 仓库 `out/main/index.js` 并覆写 `setLoginItemSettings`），CDP 20195，1080×750，未配置模型（无模型调用）。
+- 真实点击全链路（无 IPC 兜底点击）：`创建备份` → 原生目录框（点编辑框 → Ctrl+A → 粘贴 `E:\CpanQianYi\Temp\yu-a7ackup2` → ENTER → 点「选择文件夹」）→ `从备份恢复` 预览 → `恢复并重启` → 重启后点 `知识库`、`随记`。
+- 备份：`backup2\YU-backup-2026-11-06T00-47-13-786Z`，manifest v2、8 条 entries、13 个文件、0.5 MiB；`knowledge.db` 217,088 B、`profile.db` 102,400 B，两库目录内无 `-wal`/`-shm`。备份前线上 `knowledge.db` 只有 4,096 B、数据全在 341,992 B 的 `-wal` 里，而备份里是单个 217,088 B 文件——证明走的是 Rust 在线快照而非文件拷贝。
+- 预览弹窗原文：`2026/11/6 08:47:13 · 8 个文件 · 0.5 MiB` + counts，按钮「取消 / 恢复并重启」。
+- 恢复前人为造差异：cards 1 → 2（新增 `card_7f570e474de0aa9b`），profile 1 → 2（新增 `prof_62dc79f87698b737`）。
+- 恢复后：cards 1（`card_54676ce1f79d4aaf`）、来源 `src_bd4d840e43519edd`（`kind:note`、`origin_ref:n1`、active、36 B）、`bySource({noteId:'n1'})` 1 条、profile 1（`prof_cb6dbbe4babf6f40`）、`profileStatus` `{items:1,pending:0,failed:0}`、`knowledge.status` `{running:true,opened:true,schema:{knowledge:10,profile:3},fts5:true,trigram:true}`；磁盘 `knowledge.db` 217,088 + 新 `-wal` 4,152、`profile.db` 102,400 + 新 `-wal` 4,152（体积与备份一致；sha256 因重启后开库新建 WAL 而不同，已如实记录）。知识库页真实点击后显示「匹配 1 / 总数 1」「共 1 条」。
+- 恢复目录：`app\.yu-before-restore-1f5c763d-…`，内含恢复前 `knowledge.db` 4,096 + `-wal` 341,992 + `-shm`、`profile.db` 4,096 + `-wal` 152,472；把三元组拷出来用 `node:sqlite` 只读打开，确认里面正是恢复前那一刻的 2 卡 1 来源与 2 画像项。重启后 `restore-pending.json` 与 `.yu-restore-stage` 均已清理。
+- 重启证据：pid `44728 → 35532`、`restore-pending.json` 消失、恢复目录生成；主进程日志出现 `正在备份`、`正在恢复备份`（本轮新增的 park 文案）。
+- 偏差与未覆盖：预览弹窗不显示库名（本提交补了一行「知识库与画像」文案，未据新文案重跑窗口）；`findSources` 未在 preload 暴露，读回改用 `getSource` + `bySource`；随记页恢复后 0 条是因为播种的 note 属于知识域 `sources` 表、不在 notes 子系统；`13-restore-busy.png` 缺失（relaunch 2.5 s 内销毁渲染进程，`Page.captureScreenshot` 不返回），改用 pid/端口/日志三重证明。
+- 证据：`.tmp/a7-evidence/report.md`（首轮 1–7 节 + 「复核（最终构建 08:43:51）」8.1–8.14）、`results.json`、`results-final-build.json`、`backup-manifest-final-build.json`、`shots/`（17 张 `r2-*` 与首轮 20 张）、`work/`（驱动脚本与恢复目录数据库副本）。
+
+### 未测与边界
+
+- 只在开发构建（`out/`）的隔离实例上点测，未在打包安装包上验证；安装包与卸载交互属阶段 7 后续子项。
+- 备份目录选择沿用系统目录对话框；实窗里对话框的自动化方式见证据说明，失败时退回同一 IPC 的方式已标注。
+- 恢复应用仍在冷启动（单实例锁之后、任何 store 打开之前）执行；「恢复期间新写入」靠既有 `setDataMaintenance(true)` + 排干 + IPC 拦截，没有新增常驻协调器。
+- 旧 v1 备份里没有知识/画像条目时，目标机器上的这两个库按设计保留，不会被清空；这一点由单测覆盖，实窗只覆盖 v2 双库往返。
+- 第二个库替换失败、中断后重启回退由 `backup.test.ts` 的注入用例覆盖，未在实窗制造该失败。
+
+### 提交
+
+`b808c11`（code，13 文件：`native/knowledge/src/backup.rs`、`native/knowledge/tests/backup.rs`、`src/main/backup.ts`、`src/main/backup.test.ts`、`src/main/backup.integration.test.ts`、`src/main/index.ts`、`src/main/knowledge/host.ts`、`src/shared/backup.ts`、`src/shared/knowledge.ts`、`src/renderer/src/settings/sections/Backup.tsx`、`src/renderer/src/locales/en-US.json`、`native/knowledge/src/lib.rs`、`native/knowledge/src/service.rs`）
