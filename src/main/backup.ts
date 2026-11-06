@@ -63,32 +63,18 @@ export function describe(file: string): DatabaseReport {
     return { kind, version, missing: [] }
   } finally { connection.close() }
 }
-/** The minimum a start must find before it installs a library: the tables whose
- *  absence the helper reports first. Stage time checks the whole contract through
- *  the helper; this runs on a cold start, before the helper exists. */
-function tablesOf(file: string): string[] {
-  const connection = new DatabaseSync(file, { readOnly: true })
-  try { return connection.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => String((row as { name: unknown }).name)) } finally { connection.close() }
-}
-function recoverable(file: string): DatabaseReport {
-  const label = describe(file)
-  if (label.kind === 'unknown') return { ...label, missing: [] }
-  const held = new Set(tablesOf(file))
-  const owed = label.kind === 'profile' ? ['profile_items', 'profile_pending'] : ['cards', 'sources']
-  const missing = owed.filter(table => !held.has(table))
-  return { ...label, missing }
-}
-/** The same refusal as `checkLibraries`, without the helper. */
-function checkLibrariesSync(manifest: Manifest, directory: string): void {
-  for (const item of LIBRARIES) {
-    const entry = manifest.entries.find(file => file.area === item.area && file.path === item.path)
-    if (!entry) continue
-    const label = recoverable(owned(directory, `${entry.area}/${entry.path}`))
-    const said = item.area === 'knowledge' ? '知识库' : '画像'
-    if (label.kind !== item.area) throw Error(`备份里的${said}不是该数据库`)
-    if (label.version < 1 || label.version > SUPPORTED_SCHEMA[item.area]) throw Error(`备份里的${said}版本不受支持`)
-    if (label.missing?.length) throw Error(`备份里的${said}缺少必需的表：${label.missing.join('、')}`)
-  }
+/**
+ * What the helper verified at stage time, bound to the marker.
+ *
+ * The staged manifest already hashes every file, and `checkLibraries` asked the
+ * running helper whether each library is one it can open. Hashing the library
+ * entries together turns that verdict into something a cold start can check
+ * without opening anything: same entries, same bytes, same promise. A list of
+ * table names here would be a weaker second opinion that drifts with the schema.
+ */
+function verifiedKey(manifest: Manifest): string {
+  const libraries = manifest.entries.filter(entry => library(entry.area)).map(entry => [entry.area, entry.path, entry.bytes, entry.sha256])
+  return JSON.stringify([scopeKey(restoreItems(manifest)), libraries])
 }
 /**
  * Refuses a manifest whose library entries do not hold that library, or hold a
@@ -225,7 +211,7 @@ export async function stageRestore(source: string, roots: BackupRoots, inspect?:
     await checkLibraries(readManifest(stage), stage, inspect)
     // The marker carries what this restore will replace, so a later start can
     // reason about an interrupted restore without reading the stage again.
-    await writeFile(join(roots.user, PENDING), JSON.stringify({ version: manifest.version, notesDir: resolve(roots.notes), items: restoreItems(manifest) }))
+    await writeFile(join(roots.user, PENDING), JSON.stringify({ version: manifest.version, notesDir: resolve(roots.notes), items: restoreItems(manifest), verified: verifiedKey(manifest) }))
   } catch (error) { await rm(stage, { recursive: true, force: true }); throw error }
 }
 
@@ -236,7 +222,7 @@ interface RestoreState { id: string; items: Array<{ area: Area; path: string; pr
  * list of items the restore replaces. Older markers only carry the first two, and
  * a restore from before the libraries existed replaced the legacy list alone.
  */
-interface PendingMarker { version?: number; notesDir?: string; items?: Array<{ area: Area; path: string }> }
+interface PendingMarker { version?: number; notesDir?: string; items?: Array<{ area: Area; path: string }>; verified?: string }
 const sidecars = (items: Array<{ area: Area; path: string }>) => items.flatMap(item => [item, ...(sqlite(item.path) ? [{ ...item, path: item.path + '-wal' }, { ...item, path: item.path + '-shm' }] : [])])
 const RESTORE_ITEMS = sidecars(SELECTIONS)
 /**
@@ -289,8 +275,11 @@ export function applyPendingRestore(roots: BackupRoots, inspect?: Inspector): st
     // name exactly that range — no extra file, no repeat, no reordering — and a
     // legacy marker still means the legacy list alone.
     const unique = (items: Array<{ area: Area; path: string }>) => new Set(items.map(item => `${item.area}/${item.path}`)).size === items.length
-    const declaredOk = Array.isArray(pending.items) && unique(pending.items)
-    const allowedRanges = [scopeKey(RESTORE_ITEMS), ...(Array.isArray(pending.items) ? [scopeKey(declared)] : [])]
+    // A version 1 marker predates both the item list and the libraries: it
+    // promised the legacy list alone, and that is the only range its log may name.
+    const legacy = !Array.isArray(pending.items) && (pending.version === 1 || pending.version === undefined)
+    const declaredOk = Array.isArray(pending.items) ? unique(pending.items) : legacy
+    const allowedRanges = legacy ? [scopeKey(RESTORE_ITEMS)] : [scopeKey(declared)]
     if (!/^[a-f0-9-]{36}$/.test(state?.id ?? '') || !legal(expected) || !declaredOk || !unique(expected) || !allowedRanges.includes(scopeKey(expected))) throw Error('恢复日志无效，未修改用户数据')
     if (!expected.every(item => typeof item.present === 'boolean')) throw Error('恢复日志无效，未修改用户数据')
     if (!existsSync(complete)) { recoverPrevious(roots, state); rmSync(journal); state = undefined }
@@ -302,9 +291,14 @@ export function applyPendingRestore(roots: BackupRoots, inspect?: Inspector): st
       // announced: a stage that grew or lost a library since then is not the one
       // the user agreed to.
       if (Array.isArray(pending.items) && scopeKey(restoreItems(manifest)) !== scopeKey(declared)) throw Error('恢复暂存与标记不符，未修改用户数据')
-      // Last check before the first move: the libraries in the stage must be the
-      // two databases, at a schema this helper can open.
-      checkLibrariesSync(manifest, stage)
+      // The stage has to be the one the helper verified: a library that appeared,
+      // vanished or changed after that verdict is a different restore. A marker
+      // from before this binding existed cannot prove it, so it is refused rather
+      // than checked against a weaker list.
+      if (restoreItems(manifest).length > RESTORE_ITEMS.length) {
+        if (!pending.verified) throw Error('恢复暂存来自更早的版本，请重新发起恢复')
+        if (pending.verified !== verifiedKey(manifest)) throw Error('恢复暂存与标记不符，未修改用户数据')
+      }
       for (const root of Object.values(roots)) mkdirSync(root, { recursive: true })
       state = { id: randomUUID(), items: restoreItems(manifest).map(item => {
         const target = owned(roots[item.area], item.path), present = existsSync(target)

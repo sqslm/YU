@@ -262,14 +262,17 @@ const knowledge = new KnowledgeHost({
   log: line => log(line),
   onChanged: scope => {
     broadcastKnowledge(scope)
-    // A cleanup whose record is gone finishes as soon as the helper is reachable.
-    void settling.retry()
+    // A cleanup whose record is gone finishes as soon as the helper is reachable —
+    // unless a backup window is open: that retry writes into the very libraries
+    // being snapshotted, so it waits for the door to open again.
+    if (!dataMaintenanceActive()) void settling.retry()
   },
   onReady: () => {
     // The other half of the same promise: a helper that could not be spawned left no
     // change notification behind, so its first successful start is what picks the
-    // waiting cleanups up again.
-    void settling.retry()
+    // waiting cleanups up again. A start during a backup is the exception: the window
+    // itself decides when writes may resume.
+    if (!dataMaintenanceActive()) void settling.retry()
   }
 })
 /**
@@ -2181,11 +2184,16 @@ function registerIpc(): void {
       // would open a database the backup may be about to replace.
       profilePaused = profilePausedByUser
       await profileCollector.park(restarting ? '正在恢复备份' : '正在备份')
+      // `park` stops the loop; `settled` is what waits for the batch it had already
+      // claimed to reach Rust again, so the snapshot cannot hold a `working` claim.
+      await profileCollector.settled()
       memory.pause('backup'); sync?.stop(); reminders?.suspend(); calendarScheduler?.stop(); briefing?.stop()
       const result = await work(); completed = true; return result
     } finally {
       if (paused && (!restarting || !completed)) {
         setDataMaintenance(false); wakeSuspended = wasSuspended; memory.resume('backup')
+        // Whatever queued behind the closed door starts now, in the order it queued.
+        void settling.retry()
         if (!gameMode.snapshot().active) {
           hotkeys?.setSuspended(screenshotTool.isOpen || Boolean(wakeSetupMode)); refreshWakeWord()
           if (!wakeSuspended && !wakeLocked) reminders?.resume()
@@ -2195,6 +2203,9 @@ function registerIpc(): void {
           // open the helper's database to find out.
           if (knowledgeCollector.enabled && !collectPaused) extractEngine.wake()
           if (!profilePaused) profileCollector.wake()
+          // An authorized scan resumes from the checkpoint the helper kept; the
+          // maintenance window only stopped it between pages.
+          if (knowledgeCollector.enabled) void syncKnowledge(knowledgeWiring, gameMode.snapshot().active)
         }
       }
       backupWorking = restarting && completed

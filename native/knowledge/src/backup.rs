@@ -195,6 +195,13 @@ fn copy(source: &Connection, target: &Path, timeout_ms: u64) -> ApiResult<()> {
     // an exclusive lock, or one whose pages keep changing, must not leave a
     // complete-looking snapshot behind after the caller's deadline.
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    // SQLite's own busy handler would otherwise sit inside one `step` for the whole
+    // lock wait, so the deadline would only be noticed after the copy finished. A
+    // short wait makes every step return, which keeps the loop in control of the
+    // budget: a locked source fails here instead of producing a late snapshot.
+    source
+        .busy_timeout(Duration::from_millis(50))
+        .map_err(|error| ApiError::storage(format!("cannot bound the snapshot wait: {error}")))?;
     let result = (|| -> ApiResult<()> {
         let backup = Backup::new(source, &mut destination)
             .map_err(|error| ApiError::storage(format!("cannot start the snapshot: {error}")))?;
@@ -205,7 +212,16 @@ fn copy(source: &Connection, target: &Path, timeout_ms: u64) -> ApiResult<()> {
                 ));
             }
             match backup.step(-1) {
-                Ok(StepResult::Done) => return Ok(()),
+                // The last page can be the expensive one: a copy that only finishes
+                // after the deadline must not look like a success.
+                Ok(StepResult::Done) => {
+                    if Instant::now() >= deadline {
+                        return Err(ApiError::storage(
+                            "the snapshot timed out: the database is busy",
+                        ));
+                    }
+                    return Ok(());
+                }
                 Ok(StepResult::More) => {}
                 Ok(StepResult::Busy) | Ok(StepResult::Locked) => {
                     std::thread::sleep(Duration::from_millis(5));

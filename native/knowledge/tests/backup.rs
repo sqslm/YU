@@ -438,6 +438,41 @@ fn a_snapshot_aborts_at_its_own_deadline_and_leaves_nothing() {
 }
 
 #[test]
+fn a_budget_shorter_than_the_copy_stops_it_inside_the_steps() {
+    let root = Root::new("deadline-mid-copy");
+    let mut helper = Helper::start(&root);
+    helper.ok("c1", "collect.configure", json!({ "enabled": true }));
+    // A database big enough that the copy cannot finish inside a millisecond: the
+    // deadline has to bite between pages, not only before the first one.
+    for index in 0..400 {
+        let body = format!("{index}-{}", "填充".repeat(400));
+        helper.ok(
+            "s",
+            "source.save",
+            json!({
+                "kind": "note",
+                "originRef": format!("n{index}"),
+                "title": format!("来源 {index}"),
+                "text": body,
+                "at": 1_700_000_000_000_i64 + index,
+            }),
+        );
+    }
+    let target = root.snapshots.join("partial.db");
+    let budget =
+        json!({ "database": "knowledge", "target": target.to_string_lossy(), "timeoutMs": 1 });
+    let error = helper.err("d2", "backup.db", budget.clone()).to_string();
+    assert!(error.contains("timed out"), "{error}");
+    assert!(
+        !target.exists(),
+        "a stopped copy must not leave a file behind"
+    );
+    // The same request with a real budget still works: a stop is not damage.
+    let done = helper.snapshot("d3", "knowledge", &root.snapshots.join("whole.db"));
+    assert!(done["bytes"].as_u64().unwrap_or(0) > 4096, "{done}");
+}
+
+#[test]
 fn inspect_names_the_tables_a_version_owes() {
     let root = Root::new("tables");
     let mut helper = Helper::start(&root);

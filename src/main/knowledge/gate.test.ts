@@ -82,4 +82,30 @@ describe('background work and the maintenance gate', () => {
     expect(host.learnRun).not.toHaveBeenCalled()
     expect(host.learnFail).toHaveBeenCalledWith(expect.objectContaining({ claim: 'clm_1', code: 'cancelled' }))
   })
+
+  it('settles the profile batch it had already asked for', async () => {
+    const next = deferred<{ batch: { claim: string } }>()
+    let allowed = true
+    const host = { learnNext: vi.fn(() => next.promise), learnRun: vi.fn(), learnFail: vi.fn(async () => ({ claim: 'clm_1' })), cancelInFlight: vi.fn(() => 0) }
+    const collector = new ProfileCollector({
+      settings: () => mergeSettings({ ...DEFAULT_SETTINGS, userProfile: { ...DEFAULT_SETTINGS.userProfile, enabled: true } }),
+      host: () => host as unknown as KnowledgeHost,
+      allowed: () => allowed,
+      log: () => undefined,
+      schedule: () => ({ cancel: () => undefined })
+    })
+    collector.wake()
+    await Promise.resolve()
+    allowed = false
+    await collector.park('正在备份')
+    let settled = false
+    const waiting = collector.settled().then(() => { settled = true })
+    await Promise.resolve()
+    // `park` stops the loop; `settled` is what proves the claim reached Rust.
+    expect(settled).toBe(false)
+    next.resolve({ batch: { claim: 'clm_1' } })
+    await waiting
+    expect(host.learnRun).not.toHaveBeenCalled()
+    expect(host.learnFail).toHaveBeenCalledWith(expect.objectContaining({ claim: 'clm_1', code: 'cancelled' }))
+  })
 })

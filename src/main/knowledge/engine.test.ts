@@ -101,6 +101,32 @@ describe('ExtractEngine', () => {
     expect(host.extractNext).not.toHaveBeenCalled()
   })
 
+  it('parks until the claim it requested came back and was released', async () => {
+    const host = fakeHost()
+    let answer: (value: unknown) => void = () => undefined
+    let asked = 0
+    host.extractNext.mockImplementation(async () => {
+      asked += 1
+      if (asked > 1) return { enabled: true, paused: false, group: null, nextDueAt: null }
+      return new Promise(resolve => { answer = resolve })
+    })
+    const { engine } = engineWith(host)
+    const ticking = engine.tick()
+    await Promise.resolve()
+    let parked = false
+    const park = engine.park('正在备份').then(() => { parked = true })
+    await Promise.resolve()
+    // `park` only awaiting the running batch would miss the claim request that is
+    // still in flight: the snapshot has to wait for Rust to answer it.
+    expect(parked).toBe(false)
+    answer({ enabled: true, paused: false, group: GROUP, nextDueAt: null })
+    await park
+    await ticking
+    // One claim ran to its release; the loop then found nothing else to do.
+    expect(host.extractRun).toHaveBeenCalledTimes(1)
+    expect(host.extractFail).not.toHaveBeenCalled()
+  })
+
   it('waits while the backup window holds the data still', async () => {
     const host = fakeHost()
     oneGroup(host)

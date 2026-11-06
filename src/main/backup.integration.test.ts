@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -54,6 +55,78 @@ function rows(path: string, table: string): number {
   const file = new DatabaseSync(path, { readOnly: true })
   try { return Number(file.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n ?? 0) } finally { file.close() }
 }
+
+describe('the structure a cold start has to trust', () => {
+  /** Re-sign one file in a manifest after editing it, as a tampered stage would. */
+  const resign = (manifestFile: string, file: string, path: string): void => {
+    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as { entries: Array<{ path: string; bytes: number; sha256: string }> }
+    const entry = manifest.entries.find(row => row.path === path)!
+    const bytes = readFileSync(file)
+    entry.bytes = bytes.length
+    entry.sha256 = createHash('sha256').update(bytes).digest('hex')
+    writeFileSync(manifestFile, JSON.stringify(manifest))
+  }
+
+  it('restores an older profile schema through the helper that verified it', async () => {
+    const { base, roots } = rig()
+    const install = roots.knowledge
+    const instance = helper(install)
+    await instance.profileStatus()
+    await createBackup(join(base, 'backup'), roots, {}, (database, target) => instance.backupDatabase(database, target))
+    // A real schema 1 profile: exactly the table that version created, nothing the
+    // later migrations add. This is what a supported older backup holds.
+    const copy = join(base, 'backup', 'profile', 'data', 'profile', 'profile.db')
+    rmSync(copy, { force: true })
+    const legacy = new DatabaseSync(copy)
+    try {
+      legacy.exec(`PRAGMA journal_mode = DELETE;
+        CREATE TABLE profile_items (
+          id TEXT PRIMARY KEY,
+          dimension TEXT NOT NULL,
+          value TEXT NOT NULL,
+          category TEXT NOT NULL CHECK (category IN ('explicit','observed','inferred')),
+          origin TEXT NOT NULL CHECK (origin IN ('manual','auto')),
+          pinned INTEGER NOT NULL DEFAULT 0,
+          corrected INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          UNIQUE (dimension, value)
+        );
+        CREATE INDEX profile_items_updated ON profile_items (updated_at DESC);
+        PRAGMA user_version = 1;`)
+    } finally {
+      legacy.close()
+    }
+    resign(join(base, 'backup', 'manifest.json'), copy, 'data/profile/profile.db')
+    // Stage time asks the running helper, which accepts a version it supports; the
+    // cold start then trusts that verdict through the marker, not a table list.
+    await stageRestore(join(base, 'backup'), roots)
+    await instance.stop()
+    expect(() => applyPendingRestore(roots)).not.toThrow()
+    const reopened = helper(install)
+    expect(await reopened.profileStatus()).toBeTruthy()
+  })
+
+  it('refuses a staged library that changed after the helper verified it', async () => {
+    const { base, roots } = rig()
+    const instance = helper(roots.knowledge)
+    await instance.saveSource({ kind: 'note', originRef: 'n1', locator: '', title: '随记一', version: '1', scope: '随记', readAt: 1, text: '这条随记讲的是幂等键的用途，正文够长。' })
+    await createBackup(join(base, 'backup'), roots, {}, (database, target) => instance.backupDatabase(database, target))
+    await stageRestore(join(base, 'backup'), roots)
+    // A library that lost a table after the verdict, with a manifest re-signed to
+    // match: the hashes agree with each other, so only the marker binding can tell.
+    const staged = join(roots.user, '.yu-restore-stage', 'knowledge', 'data', 'knowledge', 'knowledge.db')
+    const tampered = new DatabaseSync(staged)
+    try {
+      tampered.exec('DROP TABLE queue_groups;')
+    } finally {
+      tampered.close()
+    }
+    resign(join(roots.user, '.yu-restore-stage', 'manifest.json'), staged, 'data/knowledge/knowledge.db')
+    await instance.stop()
+    expect(() => applyPendingRestore(roots)).toThrow()
+  })
+})
 
 describe('the two libraries in the backup', () => {
   it('snapshots them, restores them on the next start and leaves the other data alone', async () => {

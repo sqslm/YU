@@ -86,6 +86,7 @@ export class ExtractEngine {
   private again = false
   private runningChannel: CollectChannel | null = null
   private inflight: Promise<void> | null = null
+  private loop: Promise<void> | null = null
 
   constructor(deps: ExtractDeps) {
     this.deps = deps
@@ -126,6 +127,11 @@ export class ExtractEngine {
     this.abort(reason)
     const inflight = this.inflight
     if (inflight) await inflight
+    // The claim request and its release live inside the drain loop, not inside
+    // `inflight`: waiting for the batch alone could snapshot while Rust still
+    // holds a claim it is about to hand back.
+    const loop = this.loop
+    if (loop) await loop
   }
 
   /** Stops only a batch that belongs to this channel. */
@@ -170,6 +176,25 @@ export class ExtractEngine {
     const host = this.deps.host()
     if (!host?.running || !this.deps.allowed()) return
     this.busy = true
+    const drain = this.drain(host)
+    this.loop = drain.then(
+      () => undefined,
+      () => undefined
+    )
+    try {
+      await drain
+    } finally {
+      this.loop = null
+      this.busy = false
+    }
+    if (this.again && !this.stopped) {
+      this.again = false
+      this.at(0)
+    }
+  }
+
+  /** One pass over the runnable tasks: claim, run, release. */
+  private async drain(host: KnowledgeHost): Promise<void> {
     try {
       for (;;) {
         if (this.stopped || !this.deps.allowed()) break
@@ -192,12 +217,6 @@ export class ExtractEngine {
       // The helper itself failed: the claim is recovered when it restarts, and the
       // next explicit wake retries. Never spin here.
       this.log(`[knowledge] 提炼中断：${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      this.busy = false
-    }
-    if (this.again && !this.stopped) {
-      this.again = false
-      this.at(0)
     }
   }
 

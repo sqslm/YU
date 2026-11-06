@@ -272,6 +272,40 @@ it('refuses a library whose schema the helper cannot open', async () => {
   await expect(stageRestore(destination, roots)).rejects.toThrow('版本不受支持')
 })
 
+it('recovers a version one marker that never listed what it replaced', async () => {
+  const { roots, destination } = setup()
+  const knowledge = library(roots, 'knowledge', '恢复前')
+  await createBackup(destination, roots, {}, helperSnapshot)
+  await stageRestore(destination, roots)
+  // A marker written by the version that predates the item list: version and notes
+  // directory only. Requiring `items` here would report a valid old log as invalid
+  // and leave the moved originals in the recovery directory.
+  const declared = JSON.parse(fs.readFileSync(join(roots.user, 'restore-pending.json'), 'utf8')) as { items: Array<{ area: string; path: string }> }
+  // A version 1 stage never carried a library: the manifest is the legacy one.
+  const stage = join(roots.user, '.yu-restore-stage')
+  const full = JSON.parse(fs.readFileSync(join(stage, 'manifest.json'), 'utf8')) as { version: number; entries: Array<{ area: string; path: string }> }
+  fs.writeFileSync(join(stage, 'manifest.json'), JSON.stringify({ ...full, version: 1, entries: full.entries.filter(entry => entry.path.startsWith('data/') === false) }))
+  fs.rmSync(join(stage, 'knowledge'), { recursive: true, force: true })
+  fs.writeFileSync(join(roots.user, 'restore-pending.json'), JSON.stringify({ version: 1, notesDir: roots.notes }))
+  const id = '22222222-3333-4444-8555-666666666666'
+  const at = (area: string) => (roots as unknown as Record<string, string>)[area]
+  // The legacy list, in the order a version 1 marker always used.
+  const legacyList = declared.items.filter(item => !item.path.startsWith('data/'))
+  const items = legacyList.map(item => ({ ...item, present: fs.existsSync(join(at(item.area), item.path)) }))
+  fs.writeFileSync(join(roots.user, '.yu-restore-stage', 'restore-state.json'), JSON.stringify({ id, items }))
+  const moved = items.filter(item => item.present)
+  for (const item of moved) {
+    const target = join(at(item.area), item.path), original = join(at(item.area), `.yu-before-restore-${id}`, item.path)
+    fs.mkdirSync(join(original, '..'), { recursive: true }); fs.renameSync(target, original)
+  }
+  // A v1 restore replaces the legacy list only: the libraries stay as they are.
+  expect(() => applyPendingRestore(roots)).not.toThrow()
+  for (const item of moved) expect(fs.existsSync(join(at(item.area), item.path))).toBe(true)
+  expect(fs.existsSync(join(roots.user, 'restore-pending.json'))).toBe(false)
+  // The library the v1 list never mentioned is still the live one.
+  expect(fs.existsSync(knowledge)).toBe(true)
+})
+
 it('rolls the libraries back from the log when the staged files were destroyed', async () => {
   const { roots, destination } = setup()
   const ids = { knowledge: 'before', profile: 'before' }
