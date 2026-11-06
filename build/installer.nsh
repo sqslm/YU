@@ -1,5 +1,12 @@
 ; Installer hooks.
 !macro customInstall
+  ClearErrors
+  FileOpen $R4 "$INSTDIR\resources\yu-library-upgrade-v1" w
+  ${If} ${Errors}
+    !insertmacro YuStop "无法记录卸载器的数据保护能力。 / Could not record library protection support."
+  ${EndIf}
+  FileWrite $R4 "1"
+  FileClose $R4
   ; Preserve the builder's shortcut policy; only change icons on links it created.
   ${if} ${FileExists} "$newDesktopLink"
     CreateShortCut "$newDesktopLink" "$appExe" "" "$INSTDIR\resources\shortcut.ico" 0 "" "" "${APP_DESCRIPTION}"
@@ -31,6 +38,32 @@
   ${EndIf}
   MessageBox MB_OK|MB_ICONSTOP "${MESSAGE}"
   Abort
+!macroend
+
+!macro YuCheckRegisteredUpgrade ROOT
+  ReadRegStr $R4 ${ROOT} "${UNINSTALL_REGISTRY_KEY}" UninstallString
+  !ifdef UNINSTALL_REGISTRY_KEY_2
+    ${If} $R4 == ""
+      ReadRegStr $R4 ${ROOT} "${UNINSTALL_REGISTRY_KEY_2}" UninstallString
+    ${EndIf}
+  !endif
+  ${If} $R4 != ""
+    ReadRegStr $R4 ${ROOT} "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ${If} $R4 == ""
+      !insertmacro YuStop "无法核实旧版安装目录，已停止升级。 / Cannot verify the previous installation directory."
+    ${EndIf}
+    ${IfNot} ${FileExists} "$R4\resources\yu-library-upgrade-v1"
+      ${If} ${FileExists} "$R4\data\knowledge\*.*"
+      ${OrIf} ${FileExists} "$R4\data\profile\*.*"
+        !insertmacro YuStop "旧版卸载器无法保证保留知识库或画像。请先备份并移出这些数据库，再重试。原数据仍在 $R4\data。 / Back up and move the libraries out before retrying. Existing data was kept."
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+!macro customInit
+  !insertmacro YuCheckRegisteredUpgrade HKCU
+  !insertmacro YuCheckRegisteredUpgrade HKLM
 !macroend
 
 ; Fails when PATH resolves inside $INSTDIR, whatever spelling it was given. The
@@ -80,8 +113,9 @@
 ; the user's cards because nobody could answer is not a default.
 
 !macro customRemoveFiles
+  Var /GLOBAL YuParkedMask
   ; Bitmask of what this run parked: 1 chat, 2 knowledge, 4 profile.
-  StrCpy $R9 0
+  StrCpy $YuParkedMask 0
 
   ${if} ${isUpdated}
     ; A parked name from an earlier attempt means the last run stopped in the
@@ -103,16 +137,16 @@
       Rename "$INSTDIR\data\chat" "$INSTDIR.chat-data"
       IfErrors 0 +2
         Abort "Cannot preserve chat data. Close YU and retry."
-      IntOp $R9 $R9 | 1
+      IntOp $YuParkedMask $YuParkedMask | 1
     yu_park_knowledge:
     IfFileExists "$INSTDIR\data\knowledge\*.*" 0 yu_park_profile
       ClearErrors
       Rename "$INSTDIR\data\knowledge" "$INSTDIR.knowledge-data"
       IfErrors yu_park_knowledge_failed
-      IntOp $R9 $R9 | 2
+      IntOp $YuParkedMask $YuParkedMask | 2
     Goto yu_park_profile
     yu_park_knowledge_failed:
-      IntOp $R6 $R9 & 1
+      IntOp $R6 $YuParkedMask & 1
       StrCmp $R6 0 +3
         CreateDirectory "$INSTDIR\data"
         Rename "$INSTDIR.chat-data" "$INSTDIR\data\chat"
@@ -122,15 +156,15 @@
       ClearErrors
       Rename "$INSTDIR\data\profile" "$INSTDIR.profile-data"
       IfErrors yu_park_profile_failed
-      IntOp $R9 $R9 | 4
+      IntOp $YuParkedMask $YuParkedMask | 4
     Goto yu_parked
     yu_park_profile_failed:
       ; Put back what this run moved, so nothing is left half-parked.
-      IntOp $R6 $R9 & 2
+      IntOp $R6 $YuParkedMask & 2
       StrCmp $R6 0 +3
         CreateDirectory "$INSTDIR\data"
         Rename "$INSTDIR.knowledge-data" "$INSTDIR\data\knowledge"
-      IntOp $R6 $R9 & 1
+      IntOp $R6 $YuParkedMask & 1
       StrCmp $R6 0 +3
         CreateDirectory "$INSTDIR\data"
         Rename "$INSTDIR.chat-data" "$INSTDIR\data\chat"
@@ -212,15 +246,15 @@
       Pop $R0
 
       ; Nothing was wiped, so the parked directories go straight back.
-      IntOp $R6 $R9 & 1
+      IntOp $R6 $YuParkedMask & 1
       StrCmp $R6 0 +3
         CreateDirectory "$INSTDIR\data"
         Rename "$INSTDIR.chat-data" "$INSTDIR\data\chat"
-      IntOp $R6 $R9 & 2
+      IntOp $R6 $YuParkedMask & 2
       StrCmp $R6 0 +3
         CreateDirectory "$INSTDIR\data"
         Rename "$INSTDIR.knowledge-data" "$INSTDIR\data\knowledge"
-      IntOp $R6 $R9 & 4
+      IntOp $R6 $YuParkedMask & 4
       StrCmp $R6 0 +3
         CreateDirectory "$INSTDIR\data"
         Rename "$INSTDIR.profile-data" "$INSTDIR\data\profile"
@@ -233,21 +267,21 @@
   RMDir /r $INSTDIR
 
   ${if} ${isUpdated}
-    IntOp $R6 $R9 & 1
+    IntOp $R6 $YuParkedMask & 1
     StrCmp $R6 0 +6
       CreateDirectory "$INSTDIR\data"
       ClearErrors
       Rename "$INSTDIR.chat-data" "$INSTDIR\data\chat"
       IfErrors 0 +2
         Abort "Chat data is preserved next to the installation at $INSTDIR.chat-data. Restore it before launching YU."
-    IntOp $R6 $R9 & 2
+    IntOp $R6 $YuParkedMask & 2
     StrCmp $R6 0 +6
       CreateDirectory "$INSTDIR\data"
       ClearErrors
       Rename "$INSTDIR.knowledge-data" "$INSTDIR\data\knowledge"
       IfErrors 0 +2
         Abort "The knowledge base is preserved next to the installation at $INSTDIR.knowledge-data. Restore it before launching YU."
-    IntOp $R6 $R9 & 4
+    IntOp $R6 $YuParkedMask & 4
     StrCmp $R6 0 +6
       CreateDirectory "$INSTDIR\data"
       ClearErrors
