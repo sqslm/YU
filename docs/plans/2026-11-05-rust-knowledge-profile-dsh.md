@@ -2962,3 +2962,20 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 命令与结果（本机）：`cargo fmt -- --check` 0、`cargo test --locked` 150 项 0、`cargo clippy --locked --all-targets -- -D warnings` 0；`node scripts/build-native.mjs` 0，`native/bin/yu-knowledge.exe` 3,279,360 B `d7908399b5d8144b00f39e138da4d2559d5e570e39aab3b69b15259f79a62279`；定向 Vitest 33 文件 / 281 项；`pnpm typecheck` 0、`pnpm build` 0、`pnpm test:native` 0；`pnpm test` 292 文件通过 / 3 跳过，4112 项通过 / 8 跳过；`git diff --check` 0。
 
 未测与边界：取消路径的观测点是「目标文件是否残留 + 之后能否正常备份」，未逐页断言复制进度；独占锁由 `node:sqlite` 在 DELETE 模式下持有，与外部工具持有的锁等价但未跨工具复验；锁定期间目标文件可能短暂存在（助手先开目标再复制），断言只要求取消后不留可用产物。助手哈希与上一轮不同是因为本轮改了 `native/knowledge/src/backup.rs`。
+
+## 阶段 7 A 中断回退与暂存 sidecar 的先后（第三十四轮）
+
+外部在隔离根上用真实助手复现：双库备份成功暂存后，让启动恢复在第二个原库 `profile.db` 被移到 `.yu-before-restore-*` 后退出 44，两份原件都不在 live 路径；随后在暂存 `profile.db` 旁加入未登记的 `-wal`/`-shm` 再调 `applyPendingRestore`，两种情况下都先报「恢复暂存与标记不符」，没有走日志回退，两份原库都留在恢复目录里，`journal` 仍在；错误信息还把 `-shm` 报成 `-wal`。
+
+修复（只动这条路径，`src/main/backup.ts`）：
+- 把暂存 sidecar 检查从函数开头移进「准备首次应用 / 回退后重新应用」的分支：先读受信 marker 与已有 `journal`，按既有逻辑 `recoverPrevious` 把未完成的原件搬回（回退只依赖日志与恢复目录，不读暂存），回退之后、读暂存 manifest / 打开 SQLite / 移动任何原数据之前才调用 `checkStaged()`。
+- `checkStaged()` 用真实后缀拼文案：`恢复暂存与标记不符，未修改用户数据：{area}/{path}{-wal|-shm}`。
+- 失败沿用既有语义：抛错后由既有 catch 写 `restore-failed-<ts>.json`、保留 marker 与恢复目录，原库已回到原位。已完成的有效恢复仍在 `restore-complete` 分支收尾，不受之后暂存副文件影响；预览/暂存拒绝额外 sidecar 的检查未变。
+
+回归：
+- `src/main/backup.test.ts` 新增参数化 `it.each(['-wal', '-shm'])`「rolls the libraries back before it refuses a staged sidecar」：真双库备份 + 真暂存，按进程被杀后的形态写 journal 并搬走两份原件，再往暂存 `profile.db` 旁放副文件。断言回退已发生（两库回到 live 且 `id` 与恢复前一致）、拒绝信息含对应后缀、只留下 `restore-failed-*` 与 marker，说明没有安装不合法的暂存。
+- 对照保留：`refuses a staged library that changed after the helper verified it`（无中断时先拒绝副文件）、`rolls the libraries back from the log when the staged files were destroyed`（坏主文件回退）、v1 marker、目标侧原 WAL 保留、健康暂存重试。
+
+命令与结果（本机）：定向 Vitest（backup 单元+集成、profile 集成、gate、engine、host 集成、ipc-trust、preload）→ 8 文件 / 88 项通过；`pnpm typecheck` 0；`pnpm build` 0；`git diff --check` 0。仅 TS 改动，release 助手复用 3,279,360 B `d7908399b5d8144b00f39e138da4d2559d5e570e39aab3b69b15259f79a62279`。
+
+未测与边界：本轮的中断夹具用「日志 + 恢复目录 + 已搬走的原件」复刻进程退出 44 的落盘形态，没有再次拉起真实 Electron 子进程；`it.each` 只覆盖 `profile.db` 旁的两种副文件，`knowledge.db` 旁同理由同一函数处理未单独参数化。
