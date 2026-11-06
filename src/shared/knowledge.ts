@@ -586,6 +586,7 @@ export type KnowledgeMethod =
   | 'card.purge'
   | 'source.find'
   | 'source.release_record'
+  | 'backup.db'
   | 'profile.save'
   | 'profile.get'
   | 'profile.list'

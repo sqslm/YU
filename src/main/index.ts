@@ -179,12 +179,16 @@ if (resolve(app.getPath('userData')) === resolve(join(app.getPath('appData'), ap
 }
 app.setName('YU')
 const gotLock = app.requestSingleInstanceLock()
-const chatRoot = join(app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(), 'data', 'chat')
+// The application data root: beside the executable once packaged, the checkout when
+// running from source. The knowledge and profile databases live under it, and they
+// are the only files there a backup may touch.
+const appRoot = app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath()
+const chatRoot = join(appRoot, 'data', 'chat')
 if (gotLock && existsSync(join(app.getPath('userData'), 'restore-pending.json'))) {
   try {
     const user = app.getPath('userData'), pending = JSON.parse(readFileSync(join(user, 'restore-pending.json'), 'utf8'))
     if (typeof pending.notesDir !== 'string' || !pending.notesDir) throw Error('恢复目标目录无效')
-    const recovered = applyPendingRestore({ user, notes: pending.notesDir, chat: chatRoot })
+    const recovered = applyPendingRestore({ user, notes: pending.notesDir, chat: chatRoot, knowledge: appRoot, profile: appRoot })
     void app.whenReady().then(() => dialog.showMessageBox({ type: 'info', message: '备份已恢复，同步已关闭', detail: `恢复前的数据保存在：\n${recovered?.join('\n') || user}` }))
   } catch (error) { dialog.showErrorBox('恢复未完成，软件已停止启动以保护数据', String(error)); app.exit(1) }
 }
@@ -253,7 +257,7 @@ setMemoryService(memory)
  */
 const knowledge = new KnowledgeHost({
   entry: app.isPackaged ? join(process.resourcesPath, 'native', 'yu-knowledge.exe') : join(app.getAppPath(), 'native', 'bin', 'yu-knowledge.exe'),
-  root: app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath(),
+  root: appRoot,
   completer: createKnowledgeCompleter({ settings: () => store.get() }),
   log: line => log(line),
   onChanged: scope => {
@@ -2139,7 +2143,7 @@ function registerIpc(): void {
   handle('knowledge:suggestion-accept', (event, id: unknown) => { knowledgeOwner(event); return knowledge.acceptSuggestion(knowledgeId(id, '建议 ID')) })
   handle('knowledge:suggestion-reject', (event, id: unknown) => { knowledgeOwner(event); return knowledge.rejectSuggestion(knowledgeId(id, '建议 ID')) })
   let selectedBackup: string | null = null, backupWorking = false
-  const roots = (): BackupRoots => ({ user: app.getPath('userData'), notes: store.get().notesDir || app.getPath('userData'), chat: chatRoot })
+  const roots = (): BackupRoots => ({ user: app.getPath('userData'), notes: store.get().notesDir || app.getPath('userData'), chat: chatRoot, knowledge: appRoot, profile: appRoot })
   const assertBackupIdle = (): void => {
     if (chats.busy || assistant.busy || pipeline?.isBusy || notesRecording || cardVoice.active || notes.list().notes.some(note => note.polishStatus === 'pending') || sync?.status().state === 'syncing' || briefingDelivery?.history().some(row => row.status === 'sending')) throw Error('请等待录音、生成、随记转写、投递或同步完成后再备份或恢复')
   }
@@ -2147,14 +2151,21 @@ function registerIpc(): void {
     if (backupWorking) throw Error('正在备份或准备恢复，请稍候')
     assertBackupIdle()
     backupWorking = true
-    let paused = false, completed = false
+    let paused = false, completed = false, profilePaused = false
     const wasSuspended = wakeSuspended
     try {
       if (settingsWindow && !await prepareHubRelease(settingsWindow)) throw Error('请先保存编辑内容并处理未发送的草稿')
       await store.update({})
       assertBackupIdle()
       setDataMaintenance(true); paused = true
-      chats.cancel(); hotkeys?.setSuspended(true); wakeSuspended = true; refreshWakeWord()
+      // Extraction writes into the knowledge database the snapshot is taken from,
+      // so a running batch is drained first; the engine is woken again once the
+      // backup is done unless the reader had paused collection or is in a game.
+      extractEngine.abort(restarting ? '正在恢复备份' : '正在备份')
+      // Profile learning writes profile.db as well, so it is parked for the whole
+      // window and only woken afterwards when the reader had not paused it itself.
+      profilePaused = (await profileCollector.status())?.pausedManual ?? false
+      await profileCollector.park(restarting ? '正在恢复备份' : '正在备份')
       memory.pause('backup'); sync?.stop(); reminders?.suspend(); calendarScheduler?.stop(); briefing?.stop()
       const result = await work(); completed = true; return result
     } finally {
@@ -2164,6 +2175,14 @@ function registerIpc(): void {
           hotkeys?.setSuspended(screenshotTool.isOpen || Boolean(wakeSetupMode)); refreshWakeWord()
           if (!wakeSuspended && !wakeLocked) reminders?.resume()
           calendarScheduler?.start(); briefing?.start(); sync?.reconfigure()
+          // Wake only what should run: a manual pause or the game keeps the
+          // reader quiet until they lift it, and the helper is the one that knows.
+          if (knowledgeCollector.enabled) {
+            void knowledge.queueStatus().then(status => {
+              if (!status.pausedReasons.manual && !status.pausedReasons.game) extractEngine.wake()
+            }).catch(() => undefined)
+          }
+          if (!profilePaused) profileCollector.wake()
         }
       }
       backupWorking = restarting && completed
@@ -2175,7 +2194,7 @@ function registerIpc(): void {
     if (chosen.canceled || !chosen.filePaths[0]) return null
     return backupWork(() => createBackup(join(chosen.filePaths[0], `YU-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`), roots(), {
       '聊天': chats.store.list().threads.length, '随记': notes.list().notes.length, '历史记录': history.count(), '提醒与待办': reminders!.store.list().length, '日程': calendar!.list().length
-    }))
+    }, (database, target) => knowledge.backupDatabase(database, target)))
   })
   handle('backup:preview', async event => {
     chatOwner(event); selectedBackup = null

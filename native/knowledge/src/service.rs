@@ -17,7 +17,7 @@ use serde::Deserialize;
 use crate::protocol::{ApiError, ApiResult, Code};
 use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA, Store};
 use crate::util::ensure_not_cancelled;
-use crate::{cards, history, profile, purge, queue, relations, release, sources};
+use crate::{backup, cards, history, profile, purge, queue, relations, release, sources};
 
 #[derive(Deserialize)]
 struct IdParams {
@@ -128,6 +128,18 @@ impl Service {
                 scope: None,
                 shutdown: true,
             }),
+            // A consistent copy of one database for the existing backup feature.
+            // No scope: a snapshot publishes nothing and must not wake the host.
+            "backup.db" => {
+                let params: backup::BackupParams = decode(params)?;
+                let store = self.store()?;
+                let bytes = backup::snapshot(&store, &self.root, params)?;
+                Ok(Outcome {
+                    result: json!({ "ok": true, "bytes": bytes }),
+                    scope: None,
+                    shutdown: false,
+                })
+            }
             "source.save" => {
                 let store = self.store()?;
                 let mut connection = store.knowledge.lock().map_err(lock_error)?;

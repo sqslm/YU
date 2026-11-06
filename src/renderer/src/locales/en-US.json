@@ -2896,6 +2896,7 @@
   "备份与恢复": "Backup and restore",
   "完整保存本地用户数据与附件，不包含模型缓存和登录态。密钥仍使用系统加密，换电脑后可能需要重新填写。": "Save all local user data and attachments. Models, caches and login sessions are excluded. Keys remain system-encrypted and may need to be entered again on another computer.",
   "创建备份": "Create backup",
+  "知识库与画像": "Includes the knowledge base and the profile",
   "从备份恢复": "Restore from backup",
   "个文件": "files",
   "正在处理用户数据…": "Processing user data…",

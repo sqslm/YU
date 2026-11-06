@@ -19,6 +19,8 @@ export function BackupSection(): JSX.Element {
   const details = (value: BackupSummary): JSX.Element => <Stack spacing={1}>
     <Typography variant="body2">{new Date(value.createdAt).toLocaleString()} · {value.files} {t('个文件')} · {(value.bytes / 1024 / 1024).toFixed(1)} MiB</Typography>
     <Typography variant="body2">{Object.entries(value.counts).map(([kind, count]) => `${t(kind)} ${count}`).join(' · ')}</Typography>
+    {/* The two new libraries are named so an older backup that did not carry them is not mistaken for one that did. */}
+    {value.libraries && value.libraries.length > 0 && <Typography variant="body2">{t('知识库与画像')}</Typography>}
     <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{value.path}</Typography>
   </Stack>
   return <SettingsGroup title={t('备份与恢复')}>

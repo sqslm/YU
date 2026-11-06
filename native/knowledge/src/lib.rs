@@ -5,6 +5,7 @@
 //! runs each one on its own thread, and writes results back through a single
 //! shared writer so frames never interleave.
 
+pub mod backup;
 pub mod cards;
 pub mod extract;
 pub mod history;

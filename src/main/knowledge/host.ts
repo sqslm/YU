@@ -768,6 +768,16 @@ export class KnowledgeHost {
     return this.call<PurgeCardsResult>('card.purge', { ...input.record, confirm: input.confirm, cards: input.cards })
   }
 
+  /**
+   * Copies one of the two databases into `target` through SQLite's online backup,
+   * so the file is what a restart would see: committed pages, including the ones
+   * still in WAL, and nothing uncommitted. The host only passes a path it built
+   * from the backup directory the user picked.
+   */
+  backupDatabase(database: 'knowledge' | 'profile', target: string): Promise<number> {
+    return this.call<{ bytes: number }>('backup.db', { database, target }).then(result => result.bytes)
+  }
+
   listTopics(limit?: number): Promise<TopicList> {
     return this.call<TopicList>('topic.list', { limit })
   }

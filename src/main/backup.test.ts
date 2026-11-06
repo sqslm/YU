@@ -7,8 +7,10 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { applyPendingRestore, createBackup, inspectBackup, stageRestore, type BackupRoots } from './backup'
+const real = vi.hoisted(() => ({ copy: undefined as undefined | typeof import('node:fs').copyFileSync }))
 vi.mock('node:fs', async original => {
   const actual = await original<typeof import('node:fs')>()
+  real.copy = actual.copyFileSync
   return { ...actual, copyFileSync: vi.fn(actual.copyFileSync) }
 })
 
@@ -16,7 +18,7 @@ const rootsToRemove: string[] = [], databases: DatabaseSync[] = []
 afterEach(() => { vi.restoreAllMocks(); for (const db of databases.splice(0)) if (db.isOpen) db.close(); for (const root of rootsToRemove.splice(0)) fs.rmSync(root, { recursive: true, force: true }) })
 function setup(): { root: string; roots: BackupRoots; destination: string } {
   const root = fs.mkdtempSync(join(tmpdir(), 'yu-backup-test-')); rootsToRemove.push(root)
-  const roots = { user: join(root, 'user'), notes: join(root, 'custom-notes'), chat: join(root, 'install', 'chat') }
+  const roots = { user: join(root, 'user'), notes: join(root, 'custom-notes'), chat: join(root, 'install', 'chat'), knowledge: join(root, 'install'), profile: join(root, 'install') }
   for (const dir of Object.values(roots)) fs.mkdirSync(dir, { recursive: true })
   fs.mkdirSync(join(roots.user, 'memory', 'model'), { recursive: true })
   fs.writeFileSync(join(roots.user, 'memory', 'model', 'weights.onnx'), 'model remains local')
@@ -27,11 +29,21 @@ function setup(): { root: string; roots: BackupRoots; destination: string } {
   fs.writeFileSync(join(roots.notes, 'notes', 'attachments', 'id', 'source.json'), 'arbitrary attachment bytes')
   return { root, roots, destination: join(root, 'backup') }
 }
+/**
+ * A stand-in for the helper: it writes a real SQLite file so every later check —
+ * quick_check on preview, copy on restore — sees one. The genuine snapshot is
+ * covered by the integration test against the release helper.
+ */
+const helperSnapshot = async (_database: 'knowledge' | 'profile', target: string): Promise<number> => {
+  const file = new DatabaseSync(target)
+  try { file.exec('PRAGMA journal_mode=DELETE; CREATE TABLE marker(value TEXT)'); return fs.statSync(target).size } finally { file.close() }
+}
+
 it('backs up committed WAL contents and restores user data while retaining models, login and a recovery copy', async () => {
   const { roots, destination } = setup()
   const db = new DatabaseSync(join(roots.chat, 'chats.db')); databases.push(db)
   db.exec("PRAGMA journal_mode=WAL; CREATE TABLE data(value TEXT); INSERT INTO data VALUES('最新已提交内容')")
-  const result = await createBackup(destination, roots, { 聊天: 1, 随记: 1 })
+  const result = await createBackup(destination, roots, { 聊天: 1, 随记: 1 }, helperSnapshot)
   expect(result.files).toBe(4)
   expect(fs.existsSync(join(destination, 'user', 'memory'))).toBe(false)
   expect(fs.existsSync(join(destination, 'user', 'account.json'))).toBe(false)
@@ -55,7 +67,7 @@ it('backs up committed WAL contents and restores user data while retaining model
 })
 it('rejects changed files and path traversal before touching current data', async () => {
   const { roots, destination } = setup()
-  await createBackup(destination, roots, {})
+  await createBackup(destination, roots, {}, helperSnapshot)
   fs.appendFileSync(join(destination, 'notes', 'notes.json'), 'bad')
   expect(() => inspectBackup(destination)).toThrow('校验失败')
   expect(fs.existsSync(join(roots.user, '.yu-restore-stage'))).toBe(false)
@@ -67,7 +79,7 @@ it('rejects changed files and path traversal before touching current data', asyn
 })
 it('rolls back all moved data when installing a restored file fails', async () => {
   const { roots, destination } = setup()
-  await createBackup(destination, roots, {})
+  await createBackup(destination, roots, {}, helperSnapshot)
   fs.writeFileSync(join(roots.notes, 'notes.json'), '{"notes":[{"id":"new"}]}')
   await stageRestore(destination, roots)
   vi.mocked(fs.copyFileSync).mockImplementationOnce(() => { throw Error('simulated locked destination') })
@@ -79,7 +91,7 @@ it('rolls back all moved data when installing a restored file fails', async () =
 
 it.each(['renameSync', 'copyFileSync'])('recovers after a process interruption during %s', async method => {
   const { roots, destination } = setup()
-  await createBackup(destination, roots, {})
+  await createBackup(destination, roots, {}, helperSnapshot)
   fs.writeFileSync(join(roots.notes, 'notes.json'), '{"notes":[{"id":"before-crash"}]}')
   await stageRestore(destination, roots)
   const script = `import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module';
@@ -93,4 +105,71 @@ it.each(['renameSync', 'copyFileSync'])('recovers after a process interruption d
   const recovery = applyPendingRestore(roots)!
   expect(fs.readFileSync(join(roots.notes, 'notes.json'), 'utf8')).toContain('原始内容')
   expect(recovery.some(dir => fs.existsSync(join(dir, 'notes.json')) && fs.readFileSync(join(dir, 'notes.json'), 'utf8').includes('before-crash'))).toBe(true)
+})
+
+/** A library file with one row, standing in for one the helper would write. */
+function library(roots: BackupRoots, area: 'knowledge' | 'profile', value: string): string {
+  const path = join(roots[area]!, 'data', area, `${area}.db`)
+  fs.mkdirSync(join(path, '..'), { recursive: true })
+  const file = new DatabaseSync(path)
+  file.exec("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS marker(value TEXT); DELETE FROM marker")
+  file.prepare('INSERT INTO marker VALUES(?)').run(value)
+  file.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  file.close()
+  return path
+}
+function marker(path: string): string | undefined {
+  const file = new DatabaseSync(path, { readOnly: true })
+  try { return file.prepare('SELECT value FROM marker').get()?.value as string | undefined } finally { file.close() }
+}
+it('keeps the live libraries when a version one backup carries none', async () => {
+  const { roots, destination } = setup()
+  const knowledge = library(roots, 'knowledge', '在用的知识库')
+  const profile = library(roots, 'profile', '在用的画像')
+  await createBackup(destination, roots, {}, helperSnapshot)
+  // The same directory declared as a version 1 backup: the libraries are not part
+  // of that format, so a restore must leave both of them, logs included, alone.
+  const manifest = JSON.parse(fs.readFileSync(join(destination, 'manifest.json'), 'utf8'))
+  manifest.version = 1
+  manifest.entries = manifest.entries.filter((entry: { area: string }) => entry.area !== 'knowledge' && entry.area !== 'profile')
+  fs.writeFileSync(join(destination, 'manifest.json'), JSON.stringify(manifest))
+  fs.rmSync(join(destination, 'knowledge'), { recursive: true, force: true })
+  fs.rmSync(join(destination, 'profile'), { recursive: true, force: true })
+  fs.writeFileSync(`${profile}-wal`, 'stale profile log')
+  expect(inspectBackup(destination).libraries).toEqual([])
+  await stageRestore(destination, roots)
+  applyPendingRestore(roots)
+  expect(marker(knowledge)).toBe('在用的知识库')
+  expect(marker(profile)).toBe('在用的画像')
+  expect(fs.readFileSync(`${profile}-wal`, 'utf8')).toBe('stale profile log')
+})
+it('replaces both libraries and rolls them back together when the second one cannot be copied', async () => {
+  const { roots, destination } = setup()
+  const knowledge = library(roots, 'knowledge', '备份里的知识库')
+  const profile = library(roots, 'profile', '备份里的画像')
+  await createBackup(destination, roots, {}, helperSnapshot)
+  const live = new DatabaseSync(knowledge); databases.push(live)
+  live.exec("UPDATE marker SET value='恢复前的知识库'"); live.close()
+  const liveProfile = new DatabaseSync(profile); databases.push(liveProfile)
+  liveProfile.exec("UPDATE marker SET value='恢复前的画像'"); liveProfile.close()
+  await stageRestore(destination, roots)
+  vi.mocked(fs.copyFileSync).mockImplementation((from, to) => {
+    if (String(to).endsWith('profile.db')) throw Error('simulated locked profile')
+    return real.copy!(from, to)
+  })
+  expect(() => applyPendingRestore(roots)).toThrow('locked profile')
+  expect(marker(knowledge)).toBe('恢复前的知识库')
+  expect(marker(profile)).toBe('恢复前的画像')
+  expect(fs.existsSync(join(roots.user, 'restore-pending.json'))).toBe(false)
+})
+it('removes the whole backup when the second library cannot be snapshotted', async () => {
+  const { roots, destination } = setup()
+  library(roots, 'knowledge', '能快照的知识库')
+  library(roots, 'profile', '快照失败的画像')
+  const snapshot = async (database: 'knowledge' | 'profile', target: string): Promise<number> => {
+    if (database === 'profile') throw Error('the profile database is locked')
+    return helperSnapshot(database, target)
+  }
+  await expect(createBackup(destination, roots, {}, snapshot)).rejects.toThrow('locked')
+  expect(fs.existsSync(destination)).toBe(false)
 })
