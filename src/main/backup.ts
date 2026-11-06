@@ -256,15 +256,22 @@ export function applyPendingRestore(roots: BackupRoots, inspect?: Inspector): st
   const marker = join(roots.user, PENDING), stage = join(roots.user, STAGE), journal = join(stage, 'restore-state.json'), complete = join(stage, 'restore-complete')
   if (!existsSync(marker)) return null
   const pending = JSON.parse(readFileSync(marker, 'utf8')) as PendingMarker
-  // The staged copy is checked again here: staging and the next start are separated
-  // by a restart, and a sidecar that appeared in between is data the manifest never
-  // vouched for.
-  for (const item of LIBRARIES) {
-    if (!pending.items?.some(held => held.area === item.area && held.path === item.path)) continue
-    const staged = join(stage, item.area, item.path)
-    if (existsSync(`${staged}-wal`) || existsSync(`${staged}-shm`)) throw Error(`恢复暂存与标记不符：${item.area}/${item.path}-wal`)
-  }
   const declared = Array.isArray(pending.items) ? pending.items : RESTORE_ITEMS
+  /**
+   * The staged copy is checked again here: staging and the next start are separated
+   * by a restart, and a sidecar that appeared in between is data the manifest never
+   * vouched for. It runs only when a restore is about to be applied — an interrupted
+   * one is first rolled back from its log, which never needs the stage.
+   */
+  const checkStaged = (): void => {
+    for (const item of LIBRARIES) {
+      if (!declared.some(held => held.area === item.area && held.path === item.path)) continue
+      const staged = join(stage, item.area, item.path)
+      for (const suffix of ['-wal', '-shm']) {
+        if (existsSync(`${staged}${suffix}`)) throw Error(`恢复暂存与标记不符，未修改用户数据：${item.area}/${item.path}${suffix}`)
+      }
+    }
+  }
   let state: RestoreState | undefined
   if (existsSync(journal)) {
     state = JSON.parse(readFileSync(journal, 'utf8')) as RestoreState
@@ -298,6 +305,9 @@ export function applyPendingRestore(roots: BackupRoots, inspect?: Inspector): st
   }
   if (!state) {
     try {
+      // Before the stage is read, opened or copied: a file next to a staged library
+      // is not part of what the user agreed to replace.
+      checkStaged()
       const manifest = readManifest(stage)
       // The staged manifest has to describe the same replacement range the marker
       // announced: a stage that grew or lost a library since then is not the one

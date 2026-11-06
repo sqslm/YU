@@ -306,6 +306,42 @@ it('recovers a version one marker that never listed what it replaced', async () 
   expect(fs.existsSync(knowledge)).toBe(true)
 })
 
+it.each(['-wal', '-shm'])('rolls the libraries back before it refuses a staged sidecar (%s)', async suffix => {
+  const { roots, destination } = setup()
+  const ids = { knowledge: 'before', profile: 'before' }
+  for (const area of ['knowledge', 'profile'] as const) makeLibrary(roots, area, area === 'knowledge' ? 10 : 3, ids[area])
+  await createBackup(destination, roots, {}, helperSnapshot)
+  await stageRestore(destination, roots)
+  // A process killed after moving the second original leaves exactly this: a log, a
+  // recovery directory, and both live paths empty.
+  const marker = JSON.parse(fs.readFileSync(join(roots.user, 'restore-pending.json'), 'utf8'))
+  const id = '33333333-4444-4555-8666-777777777777'
+  const items = marker.items as Array<{ area: string; path: string }>
+  const at = (area: string) => (roots as unknown as Record<string, string>)[area]
+  const state = { id, items: items.map(item => ({ ...item, present: fs.existsSync(join(at(item.area), item.path)) })) }
+  fs.writeFileSync(join(roots.user, '.yu-restore-stage', 'restore-state.json'), JSON.stringify(state))
+  for (const item of state.items) if (item.present) {
+    const target = join(at(item.area), item.path)
+    const original = join(at(item.area), `.yu-before-restore-${id}`, item.path)
+    fs.mkdirSync(join(original, '..'), { recursive: true }); fs.renameSync(target, original)
+  }
+  const staged = join(roots.user, '.yu-restore-stage', 'profile', 'data', 'profile', 'profile.db')
+  fs.writeFileSync(`${staged}${suffix}`, 'stray')
+  // The rollback never needs the stage, so it happens first; only the re-application
+  // finds the extra file and refuses, with no original left behind.
+  expect(() => applyPendingRestore(roots)).toThrow(`${suffix}`)
+  for (const area of ['knowledge', 'profile'] as const) {
+    const file = new DatabaseSync(join(roots[area], 'data', area, `${area}.db`), { readOnly: true })
+    try {
+      const row = file.prepare(`SELECT id FROM ${area === 'knowledge' ? 'sources' : 'profile_items'}`).get() as { id: string }
+      expect(row.id).toBe(ids[area])
+    } finally {
+      file.close()
+    }
+  }
+  expect(fs.readdirSync(roots.user).some(name => name.startsWith('restore-failed-'))).toBe(true)
+})
+
 it('rolls the libraries back from the log when the staged files were destroyed', async () => {
   const { roots, destination } = setup()
   const ids = { knowledge: 'before', profile: 'before' }
