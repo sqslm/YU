@@ -2916,3 +2916,32 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 | `git diff --check` | 0 |
 
 未测与边界：本轮窗口抽验未重跑——`.tmp/a7-evidence/` 只留下产物（清单、截图、结果 JSON），驱动脚本没有落盘，重建需另写 CDP 客户端；替代证据是本节的真助手集成用例（备份→恢复→冷启动读回、缺结构拒绝、日志范围拒绝）与上一轮 08:43 构建的窗口证据（不视为本轮）。SQLite 忙锁路径用 0 预算确定性触发，未在真实并发写者下计时；`expected_tables` 依赖迁移 SQL 的书写形态（`CREATE/DROP/ALTER … RENAME TO`），新增迁移需同步复核。
+
+## 阶段 7 A 最后四个验收缺口（第三十二轮）
+
+| 缺口 | 外部反例 | 修复 |
+| --- | --- | --- |
+| 1 排干未接到生产入口 | 扣住 `extractNext`/`learnNext` 回包后按生产顺序 `park`，快照里仍是 `working`；`ProfileCollector.settled()` 从未被调用 | `ExtractionEngine` 把每次 drain 记进 `loop`，`park()` 在等完批次后继续等整个 drain（含认领请求与释放）；`backupWork` 在 `profileCollector.park()` 之后 `await profileCollector.settled()`；维护窗口内 `onChanged`/`onReady` 的 `settling.retry()` 被 `dataMaintenanceActive()` 挡住，窗口关闭时统一补一次；成功备份/失败退出后按持久暂停与游戏状态唤醒提炼与画像，并重新 `syncKnowledge` 让已授权历史作业从 checkpoint 续跑 |
+| 2 冷启动校验与真实预检不一致 | 合法 schema 1 画像被冷启动强求 `profile_pending` 拒绝；正常库删 `queue_groups` 并重签清单后冷启动仍应用 | 去掉冷启动的表名白名单（`tablesOf`/`recoverable`/`checkLibrariesSync`）；`stageRestore` 在真助手 `inspect` 通过后把「已核验范围 + 各库 bytes/sha256」的摘要写进 marker，`applyPendingRestore` 只认这份绑定，摘要不符即「恢复暂存与标记不符」，旧 marker 无摘要则要求重新发起恢复 |
+| 3 旧 v1 marker 回归 | 真 v1 备份中断后 marker 只有 `version:1`/`notesDir`，启动被判「恢复日志无效」，原随记没回位 | 日志校验按 marker 形态分流：无 `items` 的 v1 marker 只认固定旧清单；现代 marker 仍要求确切范围、完整库组合、`present` 布尔与日志一致。回退不读暂存 |
+| 4 实际锁仍迟到写出 | 真实 `BEGIN EXCLUSIVE` 持锁 2200 ms、预算 1500 ms，真助手 2252 ms 后仍写出完整快照 | `copy` 对源连接设 50 ms `busy_timeout`，逐页 `step` 后由循环裁决预算，`Done` 之后再查一次期限；超时删目标、不留产物 |
+
+回归（真助手 + 确定性 gate）：
+- `src/main/knowledge/engine.test.ts`：`park` 等到在途 `extractNext` 回包后才放行。
+- `src/main/knowledge/gate.test.ts`：`park` 后 `settled()` 仍等 `learnNext` 回包，画像批次以 `cancelled` 交回。
+- `src/main/backup.test.ts`：无 `items` 的 v1 marker + 中断仍能回退原件（14 项）。
+- `src/main/backup.integration.test.ts`：真 schema 1 画像经 `stageRestore` 冷启动应用后助手可迁移读回；暂存库删表并重签清单被「恢复暂存与标记不符」拒绝（8 项）。
+- `native/knowledge/tests/backup.rs`：预算小于拷贝量时在页间截止、目标不留文件、随后正常快照仍成功（8 项）。
+
+命令与结果（本机）：
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check` / `cargo test --locked` / `cargo clippy --locked --all-targets -- -D warnings` | 0 / 0（150 项）/ 0 |
+| `node scripts/build-native.mjs` | 0，`native/bin/yu-knowledge.exe` 3,279,360 B `6c2066337433057963fc8af8b9fdaf507aedb04e8e6952bd3c8fdedcea568a8a` |
+| 定向 Vitest（backup 单元+集成、ipc-trust、preload、knowledge 全目录） | 33 文件 / 278 项通过 |
+| `pnpm typecheck` / `pnpm build` / `pnpm test:native` | 0 / 0 / 0 |
+| `pnpm test` | 292 文件通过 / 3 跳过，4109 项通过 / 8 跳过 |
+| `git diff --check` | 0 |
+
+未测与边界：维护入口 `backupWork` 本身仍是 `src/main/index.ts` 内的闭包，没有独立的单元用例；它的排干顺序由 `park`/`settled`/`retry` 的驱动级回归与 `session.integration.test.ts` 的真实历史驱动间接覆盖。真实并发持锁路径未能在助手侧复现（助手按 WAL 打开，读者不被写者阻塞），改用「预算小于拷贝量」在页间触发同一截止分支；宿主取消由 1500 ms 预算与 host 请求期限共同保证。隔离 Electron 窗口抽验本轮未重跑：`.tmp/a7-evidence/` 无驱动脚本，重建需另写 CDP 客户端；替代证据为上述真助手集成用例。
