@@ -3014,3 +3014,15 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 - 本轮没有在真实安装身份里跑安装/卸载：仓库里的 `.nsh` 只在 `pnpm package` 里由 electron-builder 编译进产物，未在隔离的注册表/快捷方式环境执行；`h_*` 试验（用 makensis 单独编译同一文件的两个分支）在临时目录里能编译，但静默运行未走通（安装器上下文缺少 electron-builder 的 `${isUpdated}` 定义与 `un.atomicRMDir` 实现，替代条件与桩函数下未能得到可信结论），已删除，未计入证据。
 - 因此「升级后三类数据回原位」「静默卸载拒绝」「交互迁移可读」这三条目前只有静态审查与真实产物编译证据，没有进程级读数。
 - 旧版卸载器的能力未验证：无法在不安装旧版的前提下确认它对已存在的新库的行为；本轮没有宣称兼容旧构建的卸载器。
+
+### 阶段 7 B 定点补修（第三十六轮）
+
+外部用锁定 makensis 在独立临时目录跑出三条反例，本轮修 `build/installer.nsh`：
+
+1. `YuExport` 的 `IfFileExists ... 0 +3` 落在错误与主库探测之前，缺任一库的迁移会走到「absent category made export fail」。改为 LogicLib：`${IfNot} ${FileExists} "${SOURCE}\${PROBE}"` 时 `Goto ${SKIP}`（每次调用带唯一标签 `yu_skip_chat`/`knowledge`/`profile`），只有确实带主库的类别才复制并复核目标主库。
+2. 冲突分支直接 `Abort`，绕开位掩码回退。改为在**首次移动之前**统一检查三个同级暂存名（`$INSTDIR.chat-data`/`knowledge-data`/`profile-data`，`IfFileExists` 对目录与文件占位都成立），命中即停、不移动任何东西；新增 `YuStop` 宏：静默运行 `SetErrorLevel 2` + `Quit`（不弹出无法回答的对话框），交互运行才 `MessageBox` + `Abort`，文案给出停放路径。原按类别回退（`IntOp $R6 $R9 & N`）保留给搬移失败。
+3. 迁移目录的前缀比较只比文本，Junction 别名可绕过。新增 `YuOutsideInstall` 宏：用 `kernel32::CreateFileW`（`FILE_FLAG_BACKUP_SEMANTICS`）+ `GetFinalPathNameByHandleW` 取选择目录与 `$INSTDIR` 的物理路径再比前缀，解析失败按「不在外部」拒绝；因该宏只在卸载器上下文展开，实现为内联代码而非 `un.` 函数（否则安装器编译会报 warning 6020 并失败）。
+
+探针（每轮自建、已删除）：`p1` 用生产 `YuExport` 对「只有知识库（含 `-wal`）+ 只有画像、没有 chat」的来源运行 → 退出 0，`out/knowledge/knowledge.db`、`knowledge.db-wal`、`out/profile/profile.db` 均落盘，证明缺项不再失败且副文件随目录复制。
+
+未完成：`p2`（Junction 别名）与 `p3`（预置 `.knowledge-data` 的升级冲突）探针在重写 walk 之前未跑通——`p2` 首次运行的 `mklink` 在 Git Bash 里失败导致取到空路径、探针又用 `SetErrorLevel 0` 覆盖了结果；`p3` 因当时版本仍用 `Abort` 在静默模式弹框挂起，改成 `YuStop` 后未重跑。真实安装器/卸载器进程（含 electron-builder 模板 `installSection.nsh`/`installUtil.nsh` 的 `--updated` 路径、旧版卸载器兼容、交互迁移、静默拒绝）本轮均未执行，`release/` 下的产物只证明 NSIS 编译通过（本轮最后一次构建产出 `release/YU-1.2.2-rc.3-setup.exe` 170,495,463 B，SHA-256 `cfdaa67a2b45aa18d2f57a33…`），未签名、未发布、未改版本号。
