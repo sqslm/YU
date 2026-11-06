@@ -2945,3 +2945,20 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 | `git diff --check` | 0 |
 
 未测与边界：维护入口 `backupWork` 本身仍是 `src/main/index.ts` 内的闭包，没有独立的单元用例；它的排干顺序由 `park`/`settled`/`retry` 的驱动级回归与 `session.integration.test.ts` 的真实历史驱动间接覆盖。真实并发持锁路径未能在助手侧复现（助手按 WAL 打开，读者不被写者阻塞），改用「预算小于拷贝量」在页间触发同一截止分支；宿主取消由 1500 ms 预算与 host 请求期限共同保证。隔离 Electron 窗口抽验本轮未重跑：`.tmp/a7-evidence/` 无驱动脚本，重建需另写 CDP 客户端；替代证据为上述真助手集成用例。
+
+## 阶段 7 A 三个剩余边界（第三十三轮）
+
+| 边界 | 外部反例 | 修复 |
+| --- | --- | --- |
+| 1 在途模型取消不等于 Rust 已落定 | 扣住 `learn.run` 的模型回包后 `park()`+`settled()` 立即返回，在线快照里 `profile_pending.state = 'working'` | `ProfileCollector` 遇 `cancelled` 不再直接返回：先 `await learnFail({claim, code:'cancelled'})`，用助手的回包证明释放事务已提交；释放失败记进 `failure`，由 `settled()` 抛出，维护据此中止、不写快照 |
+| 2 真助手忽略宿主先发出的取消 | DELETE 模式 `BEGIN EXCLUSIVE` + 1500 ms 预算、宿主 450 ms 期限，取消后助手仍写出完整快照 | `backup::copy` 每页前后调用 `ensure_not_cancelled()`（复用请求线程的同一取消令牌），取消即删目标文件；短忙等待与有界预算不变 |
+| 3 v2 接受清单外的 WAL | 快照改 WAL、关闭 checkpoint、独立连接把新表只提交进 `-wal`，预览/暂存/应用都成功但恢复后新表消失 | `checkLibraries` 对清单内的库检查 `-wal`/`-shm` 存在即报「带着清单之外的数据」；`applyPendingRestore` 对暂存库同样检查，阶段与重启之间出现的 sidecar 也被拒，且不动原库 |
+
+回归（真助手）：
+- `src/main/knowledge/profile.integration.test.ts`：`holds maintenance until the helper has released a cancelled claim` —— 真 helper + 挂起模型桩 + 第二个 `BEGIN IMMEDIATE` 连接；锁住时 `settled()` 300 ms 内不完成、`profile_pending` 仍 `working`；放行后 `settled()` 完成，`backup.db` 快照里 `state='working'` 行为 0。
+- `src/main/backup.integration.test.ts`：`stops writing once the host cancels, and takes one again later` —— 真 DELETE 模式独占锁 + 450 ms 宿主期限；取消后释放锁并等 1600 ms，目标文件不存在；随后同一实例再次备份成功（>0 字节）。
+- `src/main/backup.integration.test.ts`：`refuses a library whose committed pages only live in a sidecar` —— 快照改 WAL、`wal_autocheckpoint = 0`、新表只提交进 WAL 后重签清单；预览与暂存都报「清单之外的数据」，暂存目录未创建。
+
+命令与结果（本机）：`cargo fmt -- --check` 0、`cargo test --locked` 150 项 0、`cargo clippy --locked --all-targets -- -D warnings` 0；`node scripts/build-native.mjs` 0，`native/bin/yu-knowledge.exe` 3,279,360 B `d7908399b5d8144b00f39e138da4d2559d5e570e39aab3b69b15259f79a62279`；定向 Vitest 33 文件 / 281 项；`pnpm typecheck` 0、`pnpm build` 0、`pnpm test:native` 0；`pnpm test` 292 文件通过 / 3 跳过，4112 项通过 / 8 跳过；`git diff --check` 0。
+
+未测与边界：取消路径的观测点是「目标文件是否残留 + 之后能否正常备份」，未逐页断言复制进度；独占锁由 `node:sqlite` 在 DELETE 模式下持有，与外部工具持有的锁等价但未跨工具复验；锁定期间目标文件可能短暂存在（助手先开目标再复制），断言只要求取消后不留可用产物。助手哈希与上一轮不同是因为本轮改了 `native/knowledge/src/backup.rs`。
