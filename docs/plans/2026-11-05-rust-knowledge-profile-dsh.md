@@ -1,6 +1,6 @@
 # Rust 知识库、知识卡片与用户画像开发计划
 
-**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B、阶段 6 C1（知识库浏览排版）与阶段 6 C2（卡片联动）已通过外部 Codex 复核。阶段 6 D（工作流送入知识提炼）已交付，并按外部复核提出的七个边界（暂停读取中取消、配置确认中取消、权限设置禁用、helper 真实拒绝、配置交接中的取消、等待中关闭工具、等待中暂停采集）完成两轮定点补修，最后三条待外部复验。阶段 7 未开始。
+**当前状态**　阶段 1～5、阶段 6 A、阶段 6 B、阶段 6 C1（知识库浏览排版）与阶段 6 C2（卡片联动）已通过外部 Codex 复核。阶段 6 D（工作流送入知识提炼）已交付，并按外部复核提出的七个边界（暂停读取中取消、配置确认中取消、权限设置禁用、helper 真实拒绝、配置交接中的取消、等待中关闭工具、等待中暂停采集）完成三轮定点补修；最后一条「排队路径的准入复核」已实现并待外部复核。阶段 7 未开始。
 
 **目标：** 从随记、与语的聊天、用户交给语总结的网页和文档中持续提炼可复用知识，形成可整理、可追溯、可关联、可在聊天中调用的知识卡片；同时通过 YU 内的使用与聊天维护可查看、可纠正的用户画像。
 
@@ -2734,3 +2734,46 @@ C2（卡片联动）本身与其后三轮定点补修（草稿关联的删除边
 
 - 代码：`fix(knowledge): re-check the turn and the settings after the switch hand-over`（`src/main/knowledge/{collector,handoff}.ts`、`src/main/workflow-extract.integration.test.ts`）。
 - 本文件：随本次交付一并提交。
+
+## 阶段 6 D 最后一个写入边界（第二十八轮）：排队路径的准入复核
+
+外部反例（本轮由外部用真执行器、生产交接与真实 release helper 复现）：工作流已通过 `source.publish` 提交来源后，用代理扣住真实 `host.getSource` 的返回，让 `extractSourceNow` 停在读回来源的 `await`；此时把 `extract_knowledge` 加入实时 `disabledTools`，或调 `pauseCollect('manual', true)`。放行后两次都变成 completed，`host.extractSource` 多发一次、手动唤醒多一次、后续 `get_datetime` 照跑；来源与任务数量仍是 1/1，所以只数行看不出重复写入。根因：发布路径已复核，而手动排队路径在 `getSource` 之后只复核 `signal`，生产 `allowed` 也只读启用与游戏模式。
+
+### 实现
+
+| 位置 | 改动 |
+| --- | --- |
+| `src/main/knowledge/manual.ts` | `ManualExtractDeps` 增可选 `admit?: () => Promise<string>`（注释：交接已过发布门，但读回来源又是一次 `await`，其间工具可能被关、采集可能被暂停，此时排队就是没人允许的写入；保持可选，界面自己的提炼动作与后台采集语义不变）。新增局部 `lastCheck()`：先 `await deps.admit()`，返回拒绝原因就 `{queued:0, reason}`；再检查 `signal.aborted`（取消**最后**查，因为前面可能已经 await）。`missing` 分支与正常排队分支的 `host.extractSource` 之前各调一次。 |
+| `src/main/knowledge/handoff.ts` | `HandoffDeps.extract` 的第二参增 `admit`；`handoffReading`/`handoffNote` 把同一个 `admit` 一起交给排队路径（注释：排队路径会读回来源，那段等待同样是用户能改变设置的时刻）。 |
+| `src/main/index.ts` | `extract` 适配把 `options.admit` 传入 `extractSourceNow`。 |
+
+提交侧语义不变：已通过准入并提交的来源、正文与原始任务照常保留（含该次发布的通知）；后一道准入被拒时不发排队请求、不挂起、不手动唤醒，也不回滚已提交来源，工作流以真实原因停在该步。若写请求已实际发出，仍按 helper 的真实结果处理。
+
+### 回归
+
+- `src/main/workflow-extract.integration.test.ts`：rig 增 `getSourceGate?` 与 `evidence.extractSources`（测试文件内的 `queueHost` 代理统计 `extractSource` 调用）；`heldSwitches()` 增 `entered` 真实入点信号，三条「等待交接」用例改用 `await switches.entered`，不再用 50 ms 推测。
+- 新增 `describe('the queueing path re-reads the rules after it read the source back')` 两项：读回来源被扣住时分别把 `extract_knowledge` 加入 `disabledTools`、调 `pauseCollect('manual', true)`；断言 `result.ok === false`、`summary` 含「此工具已在权限设置中关闭」/「采集已暂停」、来源仍 1 条且 `active`、正文未变、`queueStatus().total === 1`、`evidence.extractSources === 0`、`evidence.wakes === 0`、`data` 不含 `get_datetime`。
+- 反证：把三处生产改动 `git stash` 后重跑，两条新用例都失败（`expected true to be false`——旧行为 completed 并继续执行第三步），恢复后 17/17 通过。之前 15 项工作流回归全部保留并通过，其中「提交后取消」用例未改。
+
+### 命令与结果（本机实测）
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run src/main/tools/workflow.test.ts src/main/tools/knowledge.test.ts src/main/workflows.test.ts src/main/knowledge src/main/workflow-extract.integration.test.ts src/main/ask-knowledge.integration.test.ts src/shared/workflow-edit.test.ts src/shared/workflow-tool-groups.test.ts src/main/agent.test.ts` | 37 文件 / 370 项通过 |
+| `pnpm exec vitest run src/main/workflow-extract.integration.test.ts` | 17 项通过（2.85 s） |
+| `pnpm typecheck`（`tsc -p tsconfig.node.json` + `-p tsconfig.web.json`） | 0 |
+| `pnpm build` | 0（14.44 s） |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 290 文件通过 / 3 跳过，4083 项通过 / 8 跳过（日志 `/tmp/full28.log`） |
+| `git diff --check` | 0 |
+
+Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104 字节，SHA-256 `66731bd317674ff537c954e6649d95b93fb2a6c9addc07ea1c32b50cd793ab7f`），未重建。
+
+### 实窗与未测
+
+- 成功路径与本轮改动无关，沿用第二十五/二十七轮的隔离实窗证据（`.tmp/d-evidence/`：浮层「运行早间提炼」→「✓ 送入提炼」、0 模型请求、队列 completed=1、卡片 1 张）。本轮新增交错以确定性集成测试为准，未重造实窗。
+- 未单独覆盖：`pauseCollect('game', true)`/游戏模式在排队路径的分支（与手动暂停共用同一 `admit`，读取 `pausedReasons`）；写请求已实际发出后才被拒的竞态（按 helper 真实回答处理，未构造）；界面手动提炼与后台采集仍不传 `admit`，其行为未变（无新增回归）。
+
+### 提交
+
+- 代码 `063685d`：`fix(knowledge): re-check the turn and the settings before the queueing write`（`src/main/knowledge/{manual,handoff}.ts`、`src/main/index.ts`、`src/main/workflow-extract.integration.test.ts`）；本节随该提交之后的文档提交落盘。
