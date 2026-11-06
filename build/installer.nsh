@@ -9,27 +9,26 @@
 
 ; Copy one protected directory into the export the user chose, requiring the file
 ; that makes it readable. A category that is not installed copies nothing.
-!macro YuExport SOURCE TARGET PROBE FAIL SKIP
-  ; A category that was never used is not an error: nothing to copy, nothing to
-  ; check. Only a category that holds its own database has to arrive complete.
-  ${IfNot} ${FileExists} "${SOURCE}\${PROBE}"
-    Goto ${SKIP}
-  ${EndIf}
-  CreateDirectory "${TARGET}"
-  CopyFiles /SILENT "${SOURCE}\*.*" "${TARGET}"
-  IfErrors ${FAIL}
-  ${IfNot} ${FileExists} "${TARGET}\${PROBE}"
+!macro YuExport SOURCE TARGET PROBE FAIL
+  ${If} ${FileExists} "${SOURCE}\${PROBE}"
+    ClearErrors
+    CreateDirectory "${TARGET}"
+    IfErrors ${FAIL}
+    CopyFiles /SILENT "${SOURCE}\*.*" "${TARGET}"
+    IfErrors ${FAIL}
+    IfFileExists "${TARGET}\${PROBE}" 0 ${FAIL}
+  ${ElseIf} ${FileExists} "${SOURCE}\*.*"
     Goto ${FAIL}
   ${EndIf}
-${SKIP}:
 !macroend
 
 ; A silent run cannot show a message, and a message box in a silent upgrade is
 ; just a hang: report the failure through the exit code instead.
 !macro YuStop MESSAGE
-  IfSilent 0 +4
+  ${If} ${Silent}
     SetErrorLevel 2
     Quit
+  ${EndIf}
   MessageBox MB_OK|MB_ICONSTOP "${MESSAGE}"
   Abort
 !macroend
@@ -38,29 +37,25 @@ ${SKIP}:
 ; call is inline because this macro only ever expands inside the uninstaller, and
 ; a helper function there would leave the installer build without a caller.
 !macro YuOutsideInstall PATH INSIDE
-  Push "${PATH}"
-  Exch $R5
-  Push $R7
-  System::Call 'kernel32::CreateFileW(w "$R5", i 0, i 3, p 0, i 3, i 0x02000000, p 0) p .r7'
-  StrCmp $R7 "-1" yu_physical_failed 0
-  System::Call 'kernel32::GetFinalPathNameByHandleW(p r7, t .r5, i 1024, i 0)'
+  StrCpy $5 ""
+  StrCpy $6 ""
+  System::Call 'kernel32::CreateFileW(w "${PATH}", i 0, i 7, p 0, i 3, i 0x02000000, p 0) p .r7'
+  StrCmp $7 "-1" ${INSIDE}
+  System::Call 'kernel32::GetFinalPathNameByHandleW(p r7, t .r5, i 1024, i 0) i .r8'
   System::Call 'kernel32::CloseHandle(p r7)'
-  Push "$INSTDIR"
-  Exch $R6
-  System::Call 'kernel32::CreateFileW(w "$R6", i 0, i 3, p 0, i 3, i 0x02000000, p 0) p .r7'
-  StrCmp $R7 "-1" yu_physical_failed 0
-  System::Call 'kernel32::GetFinalPathNameByHandleW(p r7, t .r6, i 1024, i 0)'
+  IntCmp $8 0 ${INSIDE} ${INSIDE} 0
+  IntCmp $8 1024 ${INSIDE} 0 ${INSIDE}
+  System::Call 'kernel32::CreateFileW(w "$INSTDIR", i 0, i 7, p 0, i 3, i 0x02000000, p 0) p .r7'
+  StrCmp $7 "-1" ${INSIDE}
+  System::Call 'kernel32::GetFinalPathNameByHandleW(p r7, t .r6, i 1024, i 0) i .r8'
   System::Call 'kernel32::CloseHandle(p r7)'
-  StrCmp $R5 "" ${INSIDE}
-  StrCmp $R6 "" ${INSIDE}
-  StrLen $R3 $R6
-  StrCpy $R4 $R5 $R3
-  StrCmp $R4 $R6 ${INSIDE}
-  Goto yu_physical_done
-  yu_physical_failed:
-    Goto ${INSIDE}
-  yu_physical_done:
-  Pop $R7
+  IntCmp $8 0 ${INSIDE} ${INSIDE} 0
+  IntCmp $8 1024 ${INSIDE} 0 ${INSIDE}
+  StrCmp $5 $6 ${INSIDE}
+  StrCpy $6 "$6\"
+  StrLen $8 $6
+  StrCpy $8 $5 $8
+  StrCmp $8 $6 ${INSIDE}
 !macroend
 
 ; One job: let the downloaded speech models and the user's own data survive an
@@ -93,12 +88,15 @@ ${SKIP}:
     ; middle: there may be a sibling folder, or a live directory that only holds
     ; what was left behind. Either way this run must not touch it — it stops
     ; before moving anything, with the path the user has to look at.
-    IfFileExists "$INSTDIR.chat-data" 0 +2
+    ${If} ${FileExists} "$INSTDIR.chat-data"
       !insertmacro YuStop "Chat data from a previous interrupted update is still at $INSTDIR.chat-data. Restore it before retrying."
-    IfFileExists "$INSTDIR.knowledge-data" 0 +2
+    ${EndIf}
+    ${If} ${FileExists} "$INSTDIR.knowledge-data"
       !insertmacro YuStop "Knowledge data from a previous interrupted update is still at $INSTDIR.knowledge-data. Restore it before retrying."
-    IfFileExists "$INSTDIR.profile-data" 0 +2
+    ${EndIf}
+    ${If} ${FileExists} "$INSTDIR.profile-data"
       !insertmacro YuStop "Profile data from a previous interrupted update is still at $INSTDIR.profile-data. Restore it before retrying."
+    ${EndIf}
     ; Chat and attachments live together in data\chat (SQLite includes attachments).
     IfFileExists "$INSTDIR\data\chat\*.*" 0 yu_park_knowledge
       ClearErrors
@@ -184,9 +182,9 @@ ${SKIP}:
       ClearErrors
       CreateDirectory "$R1"
       IfErrors yu_export_failed
-      !insertmacro YuExport "$INSTDIR\data\chat" "$R1\chat" "chats.db" yu_export_failed yu_skip_chat
-      !insertmacro YuExport "$INSTDIR\data\knowledge" "$R1\knowledge" "knowledge.db" yu_export_failed yu_skip_knowledge
-      !insertmacro YuExport "$INSTDIR\data\profile" "$R1\profile" "profile.db" yu_export_failed yu_skip_profile
+      !insertmacro YuExport "$INSTDIR\data\chat" "$R1\chat" "chats.db" yu_export_failed
+      !insertmacro YuExport "$INSTDIR\data\knowledge" "$R1\knowledge" "knowledge.db" yu_export_failed
+      !insertmacro YuExport "$INSTDIR\data\profile" "$R1\profile" "profile.db" yu_export_failed
       Goto yu_wipe
     yu_export_failed:
       RMDir /r "$R1"
