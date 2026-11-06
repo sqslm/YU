@@ -34,6 +34,44 @@ const inside = (root: string, file: string): boolean => { const rel = relative(r
 const sqlite = (path: string) => /\.(?:db|sqlite)$/i.test(path)
 const database = (area: Area, path: string) => area === 'chat' || area === 'knowledge' || area === 'profile' || area === 'user' && !path.startsWith('audio/') && sqlite(path)
 const library = (area: unknown): area is Library => LIBRARIES.some(item => item.area === area)
+/**
+ * The newest schema each library may hold, mirrored from `KNOWLEDGE_SCHEMA` and
+ * `PROFILE_SCHEMA` in native/knowledge/src/store.rs. A restore refuses a library
+ * whose schema is newer than the helper that will open it; `backup.test.ts`
+ * compares these against what the helper reports so they cannot drift silently.
+ */
+export const SUPPORTED_SCHEMA: Record<Library, number> = { knowledge: 10, profile: 3 }
+/** What a SQLite file claims to be: which library, and how new its schema is. */
+export interface DatabaseKind { kind: Library | 'unknown'; version: number }
+/**
+ * Reads the label a restore has to check before it moves anything: the kind comes
+ * from the tables a library is built on, the version from `user_version`. Opened
+ * read-only, so nothing is migrated, created or unlocked by looking.
+ */
+export function describe(file: string): DatabaseKind {
+  const connection = new DatabaseSync(file, { readOnly: true })
+  try {
+    const tables = connection.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => String((row as { name: unknown }).name))
+    const version = Number((connection.prepare('PRAGMA user_version').get() as { user_version?: unknown } | undefined)?.user_version ?? 0)
+    // The helper's own tables decide the kind, not the file name: a knowledge
+    // snapshot dropped into the profile slot is still a knowledge database.
+    const kind = tables.includes('cards') && tables.includes('sources') ? 'knowledge' : tables.includes('profile_items') ? 'profile' : 'unknown'
+    return { kind, version }
+  } finally { connection.close() }
+}
+/**
+ * Refuses a manifest whose library entries do not hold that library, or hold a
+ * schema the running helper cannot open. Called before anything is overwritten.
+ */
+function checkLibraries(manifest: Manifest, directory: string): void {
+  for (const item of LIBRARIES) {
+    const entry = manifest.entries.find(file => file.area === item.area && file.path === item.path)
+    if (!entry) continue
+    const label = describe(owned(directory, `${entry.area}/${entry.path}`))
+    if (label.kind !== item.area) throw Error(`备份里的${item.area === 'knowledge' ? '知识库' : '画像'}不是该数据库`)
+    if (label.version < 1 || label.version > SUPPORTED_SCHEMA[item.area]) throw Error(`备份里的${item.area === 'knowledge' ? '知识库' : '画像'}版本不受支持`)
+  }
+}
 function allowed(area: unknown, path: unknown): path is string {
   return typeof path === 'string' && !path.includes('\\') && !path.split('/').some(part => !part || part === '.' || part === '..') &&
     (SELECTIONS.some(item => item.area === area && (path === item.path || ['audio', 'memory/sdk', 'notes'].includes(item.path) && path.startsWith(item.path + '/')))
@@ -109,7 +147,11 @@ export async function createBackup(destination: string, roots: BackupRoots, coun
   } catch (error) { await rm(destination, { recursive: true, force: true }); throw error }
 }
 export function inspectBackup(directory: string): BackupSummary {
-  return summary(directory, readManifest(directory))
+  const manifest = readManifest(directory)
+  // Preview is a promise about what a restore would install, so it checks the
+  // libraries now rather than letting the next start discover a mismatch.
+  checkLibraries(manifest, directory)
+  return summary(directory, manifest)
 }
 function readManifest(directory: string): Manifest {
   const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8')) as Manifest
@@ -132,6 +174,7 @@ export async function stageRestore(source: string, roots: BackupRoots): Promise<
   const manifest = readManifest(source), stage = join(roots.user, STAGE)
   if (existsSync(stage) || existsSync(join(roots.user, PENDING))) throw Error(`已有恢复暂存数据，请先重启；若恢复曾失败，请检查 ${stage}`)
   for (const root of Object.values(roots)) if (inside(source, root)) throw Error('恢复来源不能包含当前数据目录')
+  checkLibraries(manifest, source)
   await mkdir(stage)
   try {
     for (const entry of manifest.entries) {
@@ -140,11 +183,23 @@ export async function stageRestore(source: string, roots: BackupRoots): Promise<
     }
     await writeFile(join(stage, 'manifest.json'), JSON.stringify(manifest))
     readManifest(stage)
-    await writeFile(join(roots.user, PENDING), JSON.stringify({ version: manifest.version, notesDir: resolve(roots.notes) }))
+    // The staged copies are read back too: the backup may be fine while the copy
+    // that landed on disk is not, and a broken stage must not replace anything.
+    checkLibraries(readManifest(stage), stage)
+    // The marker carries what this restore will replace, so a later start can
+    // reason about an interrupted restore without reading the stage again.
+    await writeFile(join(roots.user, PENDING), JSON.stringify({ version: manifest.version, notesDir: resolve(roots.notes), items: restoreItems(manifest) }))
   } catch (error) { await rm(stage, { recursive: true, force: true }); throw error }
 }
 
 interface RestoreState { id: string; items: Array<{ area: Area; path: string; present: boolean }> }
+/**
+ * What `stageRestore` leaves behind: which backup version it came from, the notes
+ * directory it will point at, and — for markers written from here on — the exact
+ * list of items the restore replaces. Older markers only carry the first two, and
+ * a restore from before the libraries existed replaced the legacy list alone.
+ */
+interface PendingMarker { version?: number; notesDir?: string; items?: Array<{ area: Area; path: string }> }
 const sidecars = (items: Array<{ area: Area; path: string }>) => items.flatMap(item => [item, ...(sqlite(item.path) ? [{ ...item, path: item.path + '-wal' }, { ...item, path: item.path + '-shm' }] : [])])
 const RESTORE_ITEMS = sidecars(SELECTIONS)
 /**
@@ -168,19 +223,36 @@ function recoverPrevious(roots: BackupRoots, state: RestoreState): void {
 export function applyPendingRestore(roots: BackupRoots): string[] | null {
   const marker = join(roots.user, PENDING), stage = join(roots.user, STAGE), journal = join(stage, 'restore-state.json'), complete = join(stage, 'restore-complete')
   if (!existsSync(marker)) return null
+  const pending = JSON.parse(readFileSync(marker, 'utf8')) as PendingMarker
+  const declared = Array.isArray(pending.items) ? pending.items : RESTORE_ITEMS
   let state: RestoreState | undefined
   if (existsSync(journal)) {
     state = JSON.parse(readFileSync(journal, 'utf8')) as RestoreState
     const expected = state.items
-    const same = (items: Array<{ area: Area; path: string }>) => expected.length === items.length && expected.every((item, i) => item.area === items[i].area && item.path === items[i].path)
-    // An interrupted restore from before the libraries existed has the legacy
-    // list, which is exactly what it moved; recover it rather than refuse it.
-    if (!/^[a-f0-9-]{36}$/.test(state.id) || !(same(RESTORE_ITEMS) || same(restoreItems(readManifest(stage))))) throw Error('恢复日志无效，未修改用户数据')
+    const same = (items: Array<{ area: Area; path: string }>) => Array.isArray(expected) && expected.length === items.length && expected.every((item, i) => item.area === items[i].area && item.path === items[i].path)
+    // A log lists the database files and their sidecars; `allowed` describes the
+    // files themselves, so a sidecar is checked through the file it belongs to.
+    const legal = (items: Array<{ area: Area; path: string }>) => Array.isArray(items) && items.every((item): boolean => {
+      const path: string = item.path
+      // A log also lists sidecars; `allowed` describes the files themselves, so a
+      // sidecar is checked through the database file it belongs to.
+      const base = path.replace(/-(?:wal|shm)$/, '')
+      if (base === path) return allowed(item.area, path)
+      return allowed(item.area, base)
+    })
+    // The log lists what it moved, and that list is checked against the marker —
+    // never against the stage. An interrupted restore must be recoverable even
+    // when the staged files are gone or damaged: the originals sit in the
+    // recovery directory, waiting to be moved back.
+    if (!/^[a-f0-9-]{36}$/.test(state?.id ?? '') || !legal(expected) || !(same(RESTORE_ITEMS) || same(declared))) throw Error('恢复日志无效，未修改用户数据')
     if (!existsSync(complete)) { recoverPrevious(roots, state); rmSync(journal); state = undefined }
   }
   if (!state) {
     try {
       const manifest = readManifest(stage)
+      // Last check before the first move: the libraries in the stage must be the
+      // two databases, at a schema this helper can open.
+      checkLibraries(manifest, stage)
       for (const root of Object.values(roots)) mkdirSync(root, { recursive: true })
       state = { id: randomUUID(), items: restoreItems(manifest).map(item => {
         const target = owned(roots[item.area], item.path), present = existsSync(target)

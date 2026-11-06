@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import * as fs from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -5,8 +6,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-import { applyPendingRestore, createBackup, inspectBackup, stageRestore, type BackupRoots } from './backup'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { applyPendingRestore, createBackup, inspectBackup, stageRestore, SUPPORTED_SCHEMA, type BackupRoots } from './backup'
 const real = vi.hoisted(() => ({ copy: undefined as undefined | typeof import('node:fs').copyFileSync }))
 vi.mock('node:fs', async original => {
   const actual = await original<typeof import('node:fs')>()
@@ -14,6 +15,8 @@ vi.mock('node:fs', async original => {
   return { ...actual, copyFileSync: vi.fn(actual.copyFileSync) }
 })
 
+// The copy mock is a module-level stand-in, so each test starts from the real one.
+beforeEach(() => { vi.mocked(fs.copyFileSync).mockImplementation((from, to) => real.copy!(from, to)) })
 const rootsToRemove: string[] = [], databases: DatabaseSync[] = []
 afterEach(() => { vi.restoreAllMocks(); for (const db of databases.splice(0)) if (db.isOpen) db.close(); for (const root of rootsToRemove.splice(0)) fs.rmSync(root, { recursive: true, force: true }) })
 function setup(): { root: string; roots: BackupRoots; destination: string } {
@@ -34,9 +37,15 @@ function setup(): { root: string; roots: BackupRoots; destination: string } {
  * quick_check on preview, copy on restore — sees one. The genuine snapshot is
  * covered by the integration test against the release helper.
  */
-const helperSnapshot = async (_database: 'knowledge' | 'profile', target: string): Promise<number> => {
+// The snapshots have to look like the libraries they claim to be: a restore
+// checks the tables and the schema version before it replaces anything.
+const helperSnapshot = async (database: 'knowledge' | 'profile', target: string): Promise<number> => {
   const file = new DatabaseSync(target)
-  try { file.exec('PRAGMA journal_mode=DELETE; CREATE TABLE marker(value TEXT)'); return fs.statSync(target).size } finally { file.close() }
+  try {
+    if (database === 'knowledge') file.exec('PRAGMA journal_mode=DELETE; PRAGMA user_version=10; CREATE TABLE sources(id TEXT PRIMARY KEY); CREATE TABLE cards(id TEXT PRIMARY KEY)')
+    else file.exec('PRAGMA journal_mode=DELETE; PRAGMA user_version=3; CREATE TABLE profile_items(id TEXT PRIMARY KEY)')
+    return fs.statSync(target).size
+  } finally { file.close() }
 }
 
 it('backs up committed WAL contents and restores user data while retaining models, login and a recovery copy', async () => {
@@ -172,4 +181,82 @@ it('removes the whole backup when the second library cannot be snapshotted', asy
   }
   await expect(createBackup(destination, roots, {}, snapshot)).rejects.toThrow('locked')
   expect(fs.existsSync(destination)).toBe(false)
+})
+
+/** A live library of the shape and schema the helper would have written. */
+function makeLibrary(roots: BackupRoots, area: 'knowledge' | 'profile', version: number, value: string): string {
+  const path = join(roots[area], 'data', area, `${area}.db`)
+  fs.mkdirSync(join(path, '..'), { recursive: true })
+  const file = new DatabaseSync(path); databases.push(file)
+  if (area === 'knowledge') file.exec(`PRAGMA user_version=${version}; CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS cards(id TEXT PRIMARY KEY); DELETE FROM sources`)
+  else file.exec(`PRAGMA user_version=${version}; CREATE TABLE IF NOT EXISTS profile_items(id TEXT PRIMARY KEY); DELETE FROM profile_items`)
+  file.prepare(`INSERT INTO ${area === 'knowledge' ? 'sources' : 'profile_items'} VALUES(?)`).run(value)
+  file.close()
+  return path
+}
+
+/** Rewrites one library entry so the manifest still matches the bytes on disk. */
+function swap(destination: string, area: 'knowledge' | 'profile', source: string): void {
+  const entry = join(destination, area, 'data', area, `${area}.db`)
+  fs.mkdirSync(join(entry, '..'), { recursive: true })
+  fs.copyFileSync(source, entry)
+  const manifest = JSON.parse(fs.readFileSync(join(destination, 'manifest.json'), 'utf8'))
+  const row = manifest.entries.find((item: { area: string }) => item.area === area)
+  const bytes = fs.statSync(entry).size
+  const hash = createHash('sha256').update(fs.readFileSync(entry)).digest('hex')
+  row.bytes = bytes; row.sha256 = hash
+  fs.writeFileSync(join(destination, 'manifest.json'), JSON.stringify(manifest))
+}
+
+it('refuses a snapshot whose file is the other library', async () => {
+  const { roots, destination } = setup()
+  makeLibrary(roots, 'knowledge', 10, 'before'); makeLibrary(roots, 'profile', 3, 'before')
+  await createBackup(destination, roots, {}, helperSnapshot)
+  // The genuine knowledge snapshot is put where the profile belongs. A restore
+  // that only checked the file name would install it and break the profile.
+  swap(destination, 'profile', join(destination, 'knowledge', 'data', 'knowledge', 'knowledge.db'))
+  expect(() => inspectBackup(destination)).toThrow('不是该数据库')
+  await expect(stageRestore(destination, roots)).rejects.toThrow('不是该数据库')
+})
+
+it('refuses a library whose schema the helper cannot open', async () => {
+  const { roots, destination } = setup()
+  makeLibrary(roots, 'knowledge', 10, 'before'); makeLibrary(roots, 'profile', 3, 'before')
+  await createBackup(destination, roots, {}, async (database, target) => {
+    await helperSnapshot(database, target)
+    const file = new DatabaseSync(target)
+    try { file.exec(`PRAGMA user_version=${SUPPORTED_SCHEMA[database] + 996}`) } finally { file.close() }
+    return fs.statSync(target).size
+  })
+  expect(() => inspectBackup(destination)).toThrow('版本不受支持')
+  await expect(stageRestore(destination, roots)).rejects.toThrow('版本不受支持')
+})
+
+it('rolls the libraries back from the log when the staged files were destroyed', async () => {
+  const { roots, destination } = setup()
+  const ids = { knowledge: 'before', profile: 'before' }
+  for (const area of ['knowledge', 'profile'] as const) makeLibrary(roots, area, area === 'knowledge' ? 10 : 3, ids[area])
+  await createBackup(destination, roots, {}, helperSnapshot)
+  await stageRestore(destination, roots)
+  // A process killed after moving the originals leaves exactly this state: a log,
+  // a recovery directory, and a stage that is no longer trustworthy.
+  const marker = JSON.parse(fs.readFileSync(join(roots.user, 'restore-pending.json'), 'utf8'))
+  const id = '11111111-2222-4333-8444-555555555555'
+  const items = marker.items as Array<{ area: string; path: string }>
+  const at = (area: string) => (roots as unknown as Record<string, string>)[area]
+  const state = { id, items: items.map(item => ({ ...item, present: fs.existsSync(join(at(item.area), item.path)) })) }
+  fs.writeFileSync(join(roots.user, '.yu-restore-stage', 'restore-state.json'), JSON.stringify(state))
+  for (const item of state.items) if (item.present) {
+    const target = join(at(item.area), item.path)
+    const original = join(at(item.area), `.yu-before-restore-${id}`, item.path)
+    fs.mkdirSync(join(original, '..'), { recursive: true }); fs.renameSync(target, original)
+  }
+  fs.appendFileSync(join(roots.user, '.yu-restore-stage', 'knowledge', 'data', 'knowledge', 'knowledge.db'), 'broken')
+  expect(() => applyPendingRestore(roots)).toThrow('校验失败')
+  for (const area of ['knowledge', 'profile'] as const) {
+    const file = new DatabaseSync(join(roots[area], 'data', area, `${area}.db`), { readOnly: true })
+    try { expect(file.prepare(`SELECT id FROM ${area === 'knowledge' ? 'sources' : 'profile_items'}`).get()?.id).toBe(ids[area]) } finally { file.close() }
+  }
+  expect(fs.existsSync(join(roots.user, 'restore-pending.json'))).toBe(false)
+  expect(fs.readdirSync(roots.user).some(name => name.startsWith('restore-failed-'))).toBe(true)
 })

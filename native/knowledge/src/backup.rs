@@ -19,8 +19,8 @@ use rusqlite::backup::Backup;
 use rusqlite::{Connection, OpenFlags};
 use serde::Deserialize;
 
-use crate::protocol::{ApiError, ApiResult, Code};
-use crate::store::Store;
+use crate::protocol::{ApiError, ApiResult};
+use crate::store::{KNOWLEDGE_SCHEMA, PROFILE_SCHEMA};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,18 +29,38 @@ pub struct BackupParams {
     target: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InspectParams {
+    path: String,
+}
+
+/// The two databases the backup carries, at the paths `Store::open` uses.
+fn library_path(root: &Path, database: &str) -> ApiResult<(PathBuf, i64)> {
+    match database {
+        "knowledge" => Ok((root.join("data/knowledge/knowledge.db"), KNOWLEDGE_SCHEMA)),
+        "profile" => Ok((root.join("data/profile/profile.db"), PROFILE_SCHEMA)),
+        other => Err(ApiError::invalid(format!("unknown database: {other}"))),
+    }
+}
+
 /// Copies one database into `target` and returns the snapshot size in bytes.
-pub fn snapshot(store: &Store, root: &Path, params: BackupParams) -> ApiResult<u64> {
-    let (path, destination) = match params.database.as_str() {
-        "knowledge" => (&store.knowledge_path, &store.knowledge),
-        "profile" => (&store.profile_path, &store.profile),
-        other => return Err(ApiError::invalid(format!("unknown database: {other}"))),
-    };
-    let target = destination_path(root, path, &params.target)?;
+///
+/// The source is opened read-only on its own, so a backup never creates, migrates
+/// or reopens the business store: a database that is not there stays absent, and
+/// one that is there is read exactly as it lies on disk.
+pub fn snapshot(root: &Path, params: BackupParams) -> ApiResult<u64> {
+    let (path, _) = library_path(root, &params.database)?;
+    if !path.exists() {
+        return Err(ApiError::invalid(format!(
+            "database not found: {}",
+            params.database
+        )));
+    }
+    let target = destination_path(root, &path, &params.target)?;
     {
-        let source = destination
-            .lock()
-            .map_err(|_| ApiError::new(Code::Internal, "the database lock was poisoned"))?;
+        let source = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|error| ApiError::storage(format!("cannot open the database: {error}")))?;
         copy(&source, &target)?;
     }
     settle(&target)?;
@@ -48,6 +68,42 @@ pub fn snapshot(store: &Store, root: &Path, params: BackupParams) -> ApiResult<u
         .map_err(|error| ApiError::storage(format!("cannot read the snapshot back: {error}")))?
         .len();
     Ok(bytes)
+}
+
+/// Reads what a file claims to be, without touching the business store: the
+/// restore paths use this to refuse a snapshot whose kind or schema does not
+/// belong where the manifest says it goes.
+pub fn inspect(params: InspectParams) -> ApiResult<serde_json::Value> {
+    let path = PathBuf::from(&params.path);
+    if params.path.trim().is_empty() || !path.is_absolute() {
+        return Err(ApiError::invalid("the database path must be absolute"));
+    }
+    if !path.exists() {
+        return Err(ApiError::invalid("the database file is missing"));
+    }
+    let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|error| ApiError::storage(format!("cannot open the database: {error}")))?;
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|error| ApiError::storage(format!("cannot read the schema version: {error}")))?;
+    let has = |table: &str| -> ApiResult<bool> {
+        connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                [table],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|count| count > 0)
+            .map_err(|error| ApiError::storage(format!("cannot read the schema: {error}")))
+    };
+    let (kind, supported) = if has("cards")? && has("sources")? {
+        ("knowledge", KNOWLEDGE_SCHEMA)
+    } else if has("profile_items")? {
+        ("profile", PROFILE_SCHEMA)
+    } else {
+        ("unknown", 0)
+    };
+    Ok(serde_json::json!({ "ok": true, "kind": kind, "version": version, "supported": supported }))
 }
 
 /// Rejects a target the host should not have asked for, before opening anything:

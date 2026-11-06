@@ -2,7 +2,7 @@ import { MemoryService } from './memory/host'
 import { ChatService } from './chat'
 import { readWorkspaceRecord, searchWorkspace } from './workspace'
 import { applyPendingRestore, createBackup, inspectBackup, stageRestore, type BackupRoots } from './backup'
-import { setDataMaintenance } from './ipc-trust'
+import { dataMaintenanceActive, setDataMaintenance } from './ipc-trust'
 import { explainSelection } from './explanation'
 import { setMemoryService } from './memory/registry'
 import { memoryIdleCheck } from './memory/idle'
@@ -290,7 +290,7 @@ const extractEngine = new ExtractEngine({
   // real stores. The engine never invents a body of its own.
   readBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
   settings: () => store.get(),
-  allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+  allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active && !dataMaintenanceActive(),
   log: line => log(line)
 })
 
@@ -310,7 +310,7 @@ const historyPages = createHistoryPages({ notes: () => notes, chats: () => chats
 const historyDriver = new HistoryDriver({
   host: () => knowledge,
   pages: historyPages,
-  allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+  allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active && !dataMaintenanceActive(),
   // A scan is the only producer that queues many groups without any other traffic,
   // so extraction has to be told; nothing else would ever look at them.
   onBatch: () => extractEngine.wake(),
@@ -331,7 +331,7 @@ const historyDriver = new HistoryDriver({
 const profileCollector = new ProfileCollector({
   settings: () => store.get(),
   host: () => knowledge,
-  allowed: (): boolean => profileCollector.enabled && !gameMode.snapshot().active,
+  allowed: (): boolean => profileCollector.enabled && !gameMode.snapshot().active && !dataMaintenanceActive(),
   log: line => log(line)
 })
 
@@ -380,7 +380,7 @@ const handoff: HandoffDeps = {
       // moment where a cancel, a switch or a pause has to be honoured.
       admit: options.admit,
       enabled: () => knowledgeCollector.enabled,
-      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active && !dataMaintenanceActive(),
       resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
       wake: () => extractEngine.wake(),
       log: line => log(line)
@@ -1846,6 +1846,7 @@ function registerIpc(): void {
   handle('knowledge:card-save', (event, input: SaveCardInput) => { knowledgeOwner(event); return knowledge.saveCard(input) })
   handle('profile:pause', (event, paused: boolean) => {
     knowledgeOwner(event)
+    profilePausedByUser = Boolean(paused)
     return profileCollector.pause(Boolean(paused))
   })
   handle('profile:clear', (event) => {
@@ -1959,7 +1960,7 @@ function registerIpc(): void {
     return extractSourceNow(knowledgeId(id, '来源 ID'), {
       host: () => knowledge,
       enabled: () => knowledgeCollector.enabled,
-      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active,
+      allowed: () => knowledgeCollector.enabled && !gameMode.snapshot().active && !dataMaintenanceActive(),
       resolveBody: (channel, originRef) => knowledgeCollector.resolveBody(channel, originRef),
       wake: () => extractEngine.wake(),
       log: line => log(line)
@@ -2079,6 +2080,7 @@ function registerIpc(): void {
   })
   handle('knowledge:collect-pause', (event, reason: 'manual' | 'game', paused: boolean) => {
     knowledgeOwner(event)
+    if (reason === 'manual') collectPaused = Boolean(paused)
     // Pausing must not wait for a provider to answer: cancel the batch that is in
     // flight, then record the flag. Rust refuses the commit either way.
     if (paused) extractEngine.abort(reason === 'game' ? '游戏模式已开启' : '采集已暂停')
@@ -2143,6 +2145,9 @@ function registerIpc(): void {
   handle('knowledge:suggestion-accept', (event, id: unknown) => { knowledgeOwner(event); return knowledge.acceptSuggestion(knowledgeId(id, '建议 ID')) })
   handle('knowledge:suggestion-reject', (event, id: unknown) => { knowledgeOwner(event); return knowledge.rejectSuggestion(knowledgeId(id, '建议 ID')) })
   let selectedBackup: string | null = null, backupWorking = false
+  // Pauses the reader set themselves. They are tracked here so a backup can
+  // honour them without opening the very stores it is about to snapshot.
+  let collectPaused = false, profilePausedByUser = false
   const roots = (): BackupRoots => ({ user: app.getPath('userData'), notes: store.get().notesDir || app.getPath('userData'), chat: chatRoot, knowledge: appRoot, profile: appRoot })
   const assertBackupIdle = (): void => {
     if (chats.busy || assistant.busy || pipeline?.isBusy || notesRecording || cardVoice.active || notes.list().notes.some(note => note.polishStatus === 'pending') || sync?.status().state === 'syncing' || briefingDelivery?.history().some(row => row.status === 'sending')) throw Error('请等待录音、生成、随记转写、投递或同步完成后再备份或恢复')
@@ -2164,7 +2169,9 @@ function registerIpc(): void {
       extractEngine.abort(restarting ? '正在恢复备份' : '正在备份')
       // Profile learning writes profile.db as well, so it is parked for the whole
       // window and only woken afterwards when the reader had not paused it itself.
-      profilePaused = (await profileCollector.status())?.pausedManual ?? false
+      // The flag the reader set, not a status read: asking the profile store
+      // would open a database the backup may be about to replace.
+      profilePaused = profilePausedByUser
       await profileCollector.park(restarting ? '正在恢复备份' : '正在备份')
       memory.pause('backup'); sync?.stop(); reminders?.suspend(); calendarScheduler?.stop(); briefing?.stop()
       const result = await work(); completed = true; return result
@@ -2175,13 +2182,10 @@ function registerIpc(): void {
           hotkeys?.setSuspended(screenshotTool.isOpen || Boolean(wakeSetupMode)); refreshWakeWord()
           if (!wakeSuspended && !wakeLocked) reminders?.resume()
           calendarScheduler?.start(); briefing?.start(); sync?.reconfigure()
-          // Wake only what should run: a manual pause or the game keeps the
-          // reader quiet until they lift it, and the helper is the one that knows.
-          if (knowledgeCollector.enabled) {
-            void knowledge.queueStatus().then(status => {
-              if (!status.pausedReasons.manual && !status.pausedReasons.game) extractEngine.wake()
-            }).catch(() => undefined)
-          }
+          // Wake only what should run: a manual pause keeps the reader quiet until
+          // they lift it. The flag is the one this process saw, so nothing has to
+          // open the helper's database to find out.
+          if (knowledgeCollector.enabled && !collectPaused) extractEngine.wake()
           if (!profilePaused) profileCollector.wake()
         }
       }

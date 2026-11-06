@@ -132,10 +132,20 @@ impl Service {
             // No scope: a snapshot publishes nothing and must not wake the host.
             "backup.db" => {
                 let params: backup::BackupParams = decode(params)?;
-                let store = self.store()?;
-                let bytes = backup::snapshot(&store, &self.root, params)?;
+                let bytes = backup::snapshot(&self.root, params)?;
                 Ok(Outcome {
                     result: json!({ "ok": true, "bytes": bytes }),
+                    scope: None,
+                    shutdown: false,
+                })
+            }
+            // The restore paths read a snapshot back to check what it is; no
+            // store is opened, so validating never creates or migrates anything.
+            "backup.inspect" => {
+                let params: backup::InspectParams = decode(params)?;
+                let result = backup::inspect(params)?;
+                Ok(Outcome {
+                    result,
                     scope: None,
                     shutdown: false,
                 })

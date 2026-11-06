@@ -31,6 +31,12 @@ export interface IpcCaller {
 const trustedIds = new Set<number>()
 let dataMaintenance = false
 export function setDataMaintenance(active: boolean): void { dataMaintenance = active }
+/**
+ * Whether the backup window is holding the data still. Background writers ask
+ * this before they start anything, so an idle tick that fires while a snapshot is
+ * being taken waits instead of writing into the database being copied.
+ */
+export function dataMaintenanceActive(): boolean { return dataMaintenance }
 
 /**
  * The rule: the caller must be a window we created, and must be calling from

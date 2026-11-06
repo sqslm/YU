@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { applyPendingRestore, createBackup, inspectBackup, stageRestore, type BackupRoots } from './backup'
+import { applyPendingRestore, createBackup, describe as describeDatabase, inspectBackup, stageRestore, SUPPORTED_SCHEMA, type BackupRoots } from './backup'
 import { KnowledgeHost } from './knowledge/host'
 
 /**
@@ -210,4 +210,29 @@ describe('the two libraries in the backup', () => {
     await expect(createBackup(locked, roots, {}, async () => { throw Error('the database is locked') })).rejects.toThrow('locked')
     expect(existsSync(locked)).toBe(false)
   }, 60_000)
+})
+
+describe('what a backup refuses to invent', () => {
+  const TEXT = '冷备份时只应看到已经存在的那个库，缺失的那个不该被备份创建出来。'
+  it('creates neither library when the app never opened one', async () => {
+    const { roots } = rig()
+    const instance = helper(roots.knowledge)
+    const knowledge = join(roots.knowledge, 'data', 'knowledge', 'knowledge.db')
+    const profile = join(roots.profile, 'data', 'profile', 'profile.db')
+    expect(existsSync(knowledge) || existsSync(profile)).toBe(false)
+    const result = await createBackup(join(roots.knowledge, '..', 'backup-cold'), roots, {}, (database, target) => instance.backupDatabase(database, target))
+    // Nothing to copy, nothing invented: a backup is not a reason to start a library.
+    expect(result.libraries).toEqual([])
+    expect(existsSync(knowledge), 'the backup created the knowledge library').toBe(false)
+    expect(existsSync(profile), 'the backup created the profile library').toBe(false)
+  })
+
+  it('mirrors the schema the helper writes', async () => {
+    const { roots } = rig()
+    const instance = helper(roots.knowledge)
+    await instance.saveSource({ kind: 'note', originRef: 'n1', locator: 'n1', title: '冷备份', version: 'v1', scope: '测试', text: TEXT })
+    expect(describeDatabase(join(roots.knowledge, 'data', 'knowledge', 'knowledge.db')).version).toBe(SUPPORTED_SCHEMA.knowledge)
+    await instance.profileStatus()
+    expect(describeDatabase(join(roots.profile, 'data', 'profile', 'profile.db')).version).toBe(SUPPORTED_SCHEMA.profile)
+  })
 })

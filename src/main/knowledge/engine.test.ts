@@ -6,6 +6,7 @@ import type { Mock } from 'vitest'
 import { DEFAULT_SETTINGS, mergeSettings } from '@shared/defaults'
 import { KnowledgeError } from '@shared/knowledge'
 
+import { dataMaintenanceActive, setDataMaintenance } from '../ipc-trust'
 import { ExtractEngine } from './engine'
 import type { KnowledgeHost } from './host'
 
@@ -98,6 +99,22 @@ describe('ExtractEngine', () => {
     const { engine } = engineWith(host, { allowed: () => false })
     await engine.tick()
     expect(host.extractNext).not.toHaveBeenCalled()
+  })
+
+  it('waits while the backup window holds the data still', async () => {
+    const host = fakeHost()
+    oneGroup(host)
+    // The production closure asks the same gate the backup work sets, so a queued
+    // group waits for the window instead of writing into the copied database.
+    const { engine } = engineWith(host, { allowed: () => !dataMaintenanceActive() })
+    setDataMaintenance(true)
+    try {
+      await engine.tick()
+      expect(host.extractNext).not.toHaveBeenCalled()
+      expect(host.extractRun).not.toHaveBeenCalled()
+    } finally { setDataMaintenance(false) }
+    await engine.tick()
+    expect(host.extractRun).toHaveBeenCalled()
   })
 
   it('waits for the due time when nothing is runnable', async () => {
