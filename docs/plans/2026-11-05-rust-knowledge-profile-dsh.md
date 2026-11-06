@@ -3026,3 +3026,16 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 探针（每轮自建、已删除）：`p1` 用生产 `YuExport` 对「只有知识库（含 `-wal`）+ 只有画像、没有 chat」的来源运行 → 退出 0，`out/knowledge/knowledge.db`、`knowledge.db-wal`、`out/profile/profile.db` 均落盘，证明缺项不再失败且副文件随目录复制。
 
 未完成：`p2`（Junction 别名）与 `p3`（预置 `.knowledge-data` 的升级冲突）探针在重写 walk 之前未跑通——`p2` 首次运行的 `mklink` 在 Git Bash 里失败导致取到空路径、探针又用 `SetErrorLevel 0` 覆盖了结果；`p3` 因当时版本仍用 `Abort` 在静默模式弹框挂起，改成 `YuStop` 后未重跑。真实安装器/卸载器进程（含 electron-builder 模板 `installSection.nsh`/`installUtil.nsh` 的 `--updated` 路径、旧版卸载器兼容、交互迁移、静默拒绝）本轮均未执行，`release/` 下的产物只证明 NSIS 编译通过（本轮最后一次构建产出 `release/YU-1.2.2-rc.3-setup.exe` 170,495,463 B，SHA-256 `cfdaa67a2b45aa18d2f57a33…`），未签名、未发布、未改版本号。
+
+### 阶段 7 B 升级保全（第三十七轮）
+
+外部用锁定 electron-builder 26.15.3 + `--prepackaged` 编出 0.0.1（`227014c` 旧聊天钩子）/0.0.2/0.0.3 三个 ~1.79 MB 夹具，在隔离 appId 与合成 SQLite 上跑真实安装进程，发现两条升级缺口：
+
+1. 模板 `sisScriptGenerator.js` 的 `flags()` 为每个 `${isUpdated}` 生成 `StdUtils.TestParameter` 并把结果写进 `$R9`；生产宏把三类暂存位掩码也存在 `$R9`，后两次条件判断把掩码清零，复原分支被跳过——实测 0.0.2→0.0.3 退出 0、注册版本更新，但 live `data` 整个消失，9 个 db/WAL/SHM 留在 `.chat-data`/`.knowledge-data`/`.profile-data`。
+2. 旧聊天钩子卸载器不认识已存在的新库：0.0.1 时代钩子装出三库后由 0.0.2 真升级，退出 0，knowledge/profile 的 live 与停放副本都不存在。
+
+修复（`build/installer.nsh`，+47/−13）：位掩码改用 `Var /GLOBAL YuParkedMask`；新增 `YuCheckRegisteredUpgrade`（读 `UninstallString` 后取 `InstallLocation`，核实不到即停；缺少 `resources\yu-library-upgrade-v1` 而 `data\knowledge`/`data\profile` 有内容时 `YuStop`），`customInit` 对 HKCU/HKLM 各查一次；`customInstall` 成功后写该能力标记，写失败也停。只有带这套保护的构建才写标记，判断依据是钩子能力而非产品版本号。
+
+DSH 侧：以 `git apply` 应用外部单文件补丁（SHA-256 `96b3693e…69f5`，`--whitespace=error` 通过），`git diff --check` 0，`pnpm typecheck` 0，正式配置 `electron-builder --win nsis --publish never` 编译通过，产物 `release-7b/YU-1.2.2-rc.3-setup.exe` 170,495,958 B SHA-256 `406af44f84f266b6…`。
+
+未做（本轮）：DSH 自己尚未重跑 `--prepackaged` 真实安装/升级进程；卸载矩阵（只知识/只画像静默拒绝、空数据静默成功、交互迁移后读回、取消、显式删除、Junction/已存在目标/缺主库/暂存冲突）全部未跑；正文只记录外部进程证据与 DSH 的编译/静态结果。
