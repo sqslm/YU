@@ -3039,3 +3039,11 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 DSH 侧：以 `git apply` 应用外部单文件补丁（SHA-256 `96b3693e…69f5`，`--whitespace=error` 通过），`git diff --check` 0，`pnpm typecheck` 0，正式配置 `electron-builder --win nsis --publish never` 编译通过，产物 `release-7b/YU-1.2.2-rc.3-setup.exe` 170,495,958 B SHA-256 `406af44f84f266b6…`。
 
 未做（本轮）：DSH 自己尚未重跑 `--prepackaged` 真实安装/升级进程；卸载矩阵（只知识/只画像静默拒绝、空数据静默成功、交互迁移后读回、取消、显式删除、Junction/已存在目标/缺主库/暂存冲突）全部未跑；正文只记录外部进程证据与 DSH 的编译/静态结果。
+
+#### 卸载矩阵与交互验收状态（第三十八轮，DSH 侧）
+
+外部用本提交经 `--prepackaged` 编出的夹具跑真实卸载进程：仅 knowledge 或仅 profile 的 `/S /currentuser _?=<隔离根>` 分别退出 2 且三个文件哈希不变；预置 `.knowledge-data` 哨兵后 `/S /currentuser --updated _?=<隔离根>` 退出 2，三库与副文件加 chat 附件共 10 个文件哈希不变、哨兵未动、注册项仍在、SQLite 三条已提交记录可读；无数据静默卸载退出 0 并移除测试注册项。
+
+DSH 本轮**未执行**交互卸载矩阵：本会话没有允许的隔离 Windows UI 测试环境（外部 Computer Use 对该应用返回 `product policy blocks this app`），按派单要求不绕过工具限制、不把宏探针或编译当点击证据。因此以下场景仍为未测：交互「保留并迁移」后三库/附件/WAL 已提交内容读回、取消后原件与注册项保留、明确删除后仅隔离数据与测试注册消失、目标已存在与安装内 Junction 被拒且可重新选择、非空缺主库时失败并保留原件、正常外部路径与同前缀兄弟目录可选。可复用的轻量夹具 `fixture-0.0.3.exe`（1,790,441 B，appId `local.yu.nsis.qa.w7b3tjn5iq`，产品名 `YuNsisQa-w7b3tjn5iq`）与 `sqlite.cjs` 保留在 `E:\CpanQianYi\Temp\yu-nsis-full-w7b3tjn5iq` 供后续有 UI 条件时复用。
+
+旧卸载器安全停止的用户侧说明已写入 README：早期版本卸载器只保护聊天数据，若安装目录里已有知识库或画像，新安装器会在调用它之前拒绝升级并显示原数据路径，用户需先备份并移出 `data\knowledge`、`data\profile` 再重试；带保护能力的构建会在 `resources\yu-library-upgrade-v1` 留下标记，后续升级据此判断，不看产品版本号。

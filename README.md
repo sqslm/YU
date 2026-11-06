@@ -494,3 +494,9 @@ Windows 操作桥接的[原始测量](tests/yu-v2/evidence/rust-windows-20261103
 ## 许可
 
 MIT，见 [LICENSE](LICENSE)。第三方依赖保留各自许可，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 `licenses/`。应用图标来自 `logo/YU_语_品牌图标资源包`，`pnpm icon` 从原始资源复制适用尺寸。语音模型权重不随安装器和源码分发，下载后遵循各模型自己的许可。
+
+### 从早期版本升级时被拦下怎么办
+
+更早的安装包卸载器只会保护聊天数据。若安装目录里已经有知识库或画像，新安装器会在调用旧卸载器之前停下，并显示这些数据所在的路径（`data\knowledge`、`data\profile`），避免升级过程把它们删掉。
+
+处理方式：先把 `data\knowledge` 与 `data\profile`（连同 `-wal`、`-shm`）备份到安装目录之外，再从安装目录移出这些文件夹，然后重新运行安装器。带数据保护能力的构建会在 `resources\yu-library-upgrade-v1` 留下标记，之后的升级和卸载会自动保全这两类数据。
