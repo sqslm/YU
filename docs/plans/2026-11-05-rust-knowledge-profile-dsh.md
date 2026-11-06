@@ -2887,3 +2887,32 @@ Rust 未改动，release helper 复用 `native/bin/yu-knowledge.exe`（3,247,104
 - 本轮未重跑隔离 Electron 实窗抽验：上一轮的 `.tmp/a7-evidence` 流程是分步对话框驱动脚本，换构建要重新对位；本轮改动的四条路径（只读快照、库类别/schema 预检、日志回退、维护门）都由上表的自动化用例对真实 release helper 覆盖。实窗复核留给外部，或在 7 B 一并重跑。
 - 维护门的「历史整理 await 与在途画像 claim 落定」以 `allowed` 闭门 + `park` 保证，未做「等待在途 claim 完成」的显式屏障（Rust 侧仍会拒绝已闭门后的新写入）。
 - 我方第 29 轮的全量与实窗证据（`.tmp/a7-evidence`）与本轮自动化证据分开记录，不互相替代。
+
+## 阶段 7 A 收尾（第三十一轮）：维护排干、结构核验、有界快照与日志范围
+
+外部验收单剩四条缺口，本轮逐条修复并用真实 release 助手回归。
+
+| 缺口 | 反例 | 修复 |
+| --- | --- | --- |
+| A 维护闭门后仍有越过 await 的写入 | `extractNext` 已认领、`historyStatus`/`learnNext` 回包后仍写库 | `ExtractionEngine.tick()` 在 `runGroup` 前复查 `allowed()`，关闸则按 `paused` 交回 claim；`ProfileCollector.drain()` 在 `learnNext` 回包后复查并 `learnFail(cancelled)`，`tick()` 暴露 `settled()`；`HistoryDriver` 把每个 `walkJob()` 记进 `pending`，`park()` 等它们落定，`walkJob` 在状态回包后与每次 `stepHistory` 前复查 `allowed`；`backupWork` 改为 `await extractEngine.park()` + `await historyDriver.park()` 后才快照/暂存 |
+| B 缺关键表仍被安装 | 真 profile 快照删掉 `profile_pending` 后 preview/staged/apply 全过，重启才失败 | 迁移数组抽成 `KNOWLEDGE_MIGRATIONS`/`PROFILE_MIGRATIONS`；`store::expected_tables(kind, version)` 按真实迁移 SQL 推出该版本应保留的表；`backup.inspect` 返回 `missing`；`backup.ts` 的 `checkLibraries`（预览/暂存，经真助手）与 `checkLibrariesSync`（冷启动，本地 `sqlite_master`）共用同一拒绝文案「备份里的知识库/画像缺少必需的表」 |
+| C 锁超时后迟到写出快照 | host 超时后 Rust 仍写出完整快照 | `BackupParams.timeout_ms` + 逐页 `step(-1)` 循环，每步前查截止时间，超时返回 `the snapshot timed out: the database is busy` 并删目标；`backup:create` 传 1500 ms 预算 |
+| D 恢复日志边界过宽 | `legal()` 只校验白名单，未查重复/顺序/`present` | 日志项限定为固定旧项目加本次出现库的 db/wal/shm 组合，拒绝重复、错序、非布尔 `present`；应用前还要求 `scopeKey(restoreItems(manifest))` 与 marker 声明范围一致 |
+
+回归（真实助手 + 确定性 gate，不用 sleep 猜测）：`knowledge/gate.test.ts` 3 项（历史驱动关闸后不再 `stepHistory`、`park()` 等回包、画像驱动改 `learnFail`）；`knowledge/engine.test.ts` +2 项（关闸把已认领批次按 `paused` 交回、`park()` 等 `extractRun` 落定）；`backup.integration.test.ts` +2 项（结构不全被 preview/stage 拒、日志范围不符不移动原数据）；`native/knowledge/tests/backup.rs` +2 项（0 预算快照不落目标、`inspect` 报出缺表）；`session.integration.test.ts` 的游戏模式用例改为「在途批次提交后关闸不再开新页」，并加门闩保证不再靠时序猜测。
+
+命令与结果（本机）：
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo fmt -- --check`（native/knowledge） | 0 |
+| `cargo test --locked` | 0，149 项通过 |
+| `cargo clippy --locked --all-targets -- -D warnings` | 0 |
+| `node scripts/build-native.mjs` | 0，`native/bin/yu-knowledge.exe` 3,278,848 B `0973c9cbb0f36bf2c6300bfd7a1ec26d803d9eec757d21428cf74d9c14ae94b2` |
+| `pnpm exec vitest run`（backup 单元+集成、ipc-trust、preload、knowledge 全目录） | 0，33 文件 / 273 项 |
+| `pnpm typecheck` / `pnpm build` | 0 / 0 |
+| `pnpm test:native` | 0 |
+| `pnpm test` | 0，292 文件通过 / 3 跳过，4104 项通过 / 8 跳过 |
+| `git diff --check` | 0 |
+
+未测与边界：本轮窗口抽验未重跑——`.tmp/a7-evidence/` 只留下产物（清单、截图、结果 JSON），驱动脚本没有落盘，重建需另写 CDP 客户端；替代证据是本节的真助手集成用例（备份→恢复→冷启动读回、缺结构拒绝、日志范围拒绝）与上一轮 08:43 构建的窗口证据（不视为本轮）。SQLite 忙锁路径用 0 预算确定性触发，未在真实并发写者下计时；`expected_tables` 依赖迁移 SQL 的书写形态（`CREATE/DROP/ALTER … RENAME TO`），新增迁移需同步复核。
