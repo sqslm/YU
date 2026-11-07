@@ -2,474 +2,118 @@
 
 **Use your own words to work with your computer.**
 
-A Windows voice input and local AI assistant: press a hotkey, speak, and the cleaned-up text is typed into whatever field is focused. The same hotkey also translates, answers questions, files notes, creates reminders and captures screen regions. Every model and search backend is yours to configure — or keep it entirely on your own machine.
+A Windows voice input and local AI assistant: press a hotkey, speak, and the cleaned-up text is typed into whatever field is focused. The same entry point also translates, answers questions, files notes, creates reminders and replays workflows. Every model is yours to configure, and your data stays on your own machine by default.
 
-[中文](README.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Server deployment](server/README.md)
+Current version **1.2.2-rc.3** · Windows 10/11 x64 · MIT
 
-> Current version **1.2.2-rc.3**, Windows 10/11 x64, MIT.
-> This is a release candidate: finished features work, unfinished ones are listed item by item in the [roadmap](ASSISTANT_ROADMAP.md).
-
-![YU / 语](resources/brand/logo-dark.png)
-
-## What it does
-
-| Capability | In one line |
-| --- | --- |
-| **Dictation** | Press to talk, press again to stop; the result is inserted at the caret — clipboard paste first, SendInput character injection as fallback, then read back to verify |
-| **Ask** | `Space + Right Alt` to start, retrieval plus a tool-calling agent, the answer lands in a floating card you can pin, follow up on, or save as a note; unified voice tasks can also query local file bodies (plain text, docx, xlsx, pptx, text-based PDF) and the Everything index |
-| **Translation** | A dedicated translation mode and a selection-translation hotkey; 1–3 target languages, source language left to the ASR |
-| **Notes** | Voice or typed notes with categories and tags, playback, and audio import with re-transcription; polished text and raw transcript are kept separately |
-| **Reminders / to-dos** | Natural-language times (Chrono plus programmatic checks), repeats, snooze, a strong-alert overlay, missed-item recovery; each to-do can carry a priority and a deadline. Date filters use the alert time for reminders and the deadline for to-dos, falling back to creation time for undated to-dos |
-| **Events** | Its own page: month grid (each cell lists the first two events with their clock and title, plus a +N count instead of bare dots), day list, create and edit (start, end, location, advance alert), ICS import and export — the page and the assistant write the same data; subscribe to external ICS calendars (including Google / Outlook secret addresses) and sync both ways once you sign in to your own server |
-| **Briefing / read-aloud** | The 简报 tab of the calendar page plus a daily schedule: today's events, due to-dos, overdue items and tomorrow's preview, optionally written as one paragraph by a model (falling back to the template), readable aloud; quiet hours hold delivery back, and the last two weeks stay on this machine |
-| **Automation** | Save a sequence of steps you repeat as a named workflow and replay it with one sentence, with no model in the loop; each step runs with the saved arguments and reports its result |
-| **Screen capture** | Drag-only region selection, eight-handle resize, rectangle / ellipse / arrow / pen / text / mosaic tools, Windows OCR, translation in place, scrolling screenshots, cross-monitor regions and pinned images with copy/save |
-| **Wake word** | Optional offline wake word using Windows on-device speech, with a selectable input device and adjustable confidence threshold; nothing is uploaded or stored before it fires |
-| **Updates** | Checks this project's GitHub Releases by default; when a newer build exists the hub shows a pill at the bottom left, and one click downloads and restarts into it |
-| **Sync** | Optional self-hosted server for history, notes, note audio, events, reminders and per-device personal stats; dictation audio stays on the machine that recorded it |
-
-Extract to-dos uses the note body currently displayed; if that body changes during extraction, run it again. Editing a snoozed reminder's title or description preserves its repeat rule and completed count. Archiving and restoring history syncs across devices; restoring a legacy failed entry retains its failure status and retry action.
-
-## Unified entry capabilities
-
-Invoke YU from the target window and say “Summarize this page”, “Explain this repository”, or “Summarize the current document”. The Ask shortcut uses the same reader. YU reads the original task window's real address and content without copying a link or configuring a search provider. Edge, Ego, Firefox and other browsers that expose their address through Windows accessibility share this path. Accessible rendered text is preferred; public page text can be fetched when needed, prioritizing article / GitHub README content. Browser cookies and login profiles are not read.
-
-Current-document reading supports opened Word, Excel and PowerPoint documents (including unsaved text and legacy formats when Office COM is available), local text-based PDFs, DOCX/XLSX/PPTX, ODT/ODS/ODP, plain text, Markdown, CSV, JSON, HTML and common source files. Selecting one file in Explorer also works; image text can use local Windows OCR. File reads are limited to 32 MiB, OCR images to 6 MiB, and model input to 48,000 characters of extracted text per read. Partial coverage is identified. Directory/app exclusions and tool permissions apply; unknown editor paths are refused when a file scope is restricted. Protected documents, scanned PDFs, apps without accessible text and unsupported binary formats return an explicit failure instead of an invented summary.
-
-The [complete capability inventory and operating conditions](ASSISTANT_ROADMAP.md#统一入口功能清单) lists the supported operations for writing your own tests. rc.14 connects note audio control, actual prompt provenance, per-note sync failures, frozen selection preview/apply, hardware and system volume, PDF content, real download/recent records, permissions, monthly/yearly and finite reminders, workflow branches/result bindings, cross-monitor capture/pins, and email/mobile briefing delivery.
-
-External delivery is off by default. Configure Resend email or ntfy mobile push in Schedule & reminders → Briefing delivery, then enable the channel. Keys use OS encryption; receipts distinguish provider acceptance, failure and unknown delivery. Everything port/CLI, file access, tool permissions and exclusions are in Assistant & automation → Assistant & permissions. External ICS subscriptions remain read-only; two-way sync refers to local data through the self-hosted server.
-
-Wake learning: enable Voice & input → Wake word, then choose Learn wake phrase and record three natural readings. The local recognizer learns consistent pronunciation/recognition variants and calibrates the visible confidence threshold; it does not train a new speaker model. Only recognized variants are saved; raw audio stays in memory and is never uploaded or saved. Test the phrase directly after learning without starting a task. Changing the phrase invalidates the old profile; clearing and re-recording are supported. Device name and input level help verify the actual input.
-
-Screenshot QR scanning: select the entire code, including a clear border, then click Scan QR code. Decoding is local and needs no configured model. Copy the text or explicitly open a recognized HTTP(S) link; QR content is never executed automatically.
-
-Chat can query local notes, dictation history, reminders/tasks and calendar events, including when web search is off. Existing disabled-tool permissions still apply. Original-record links come from actual tool results, persist with the conversation, and open the matching record. These chat tools are read-only.
-
-The search field at the top of the sidebar (the whole strip is the button — clicking the label opens it too) searches chat bodies, extracted chat attachments, notes, history, reminders and events locally. Literal substring matching supports short Chinese queries and punctuation. Hits come in a row of kind chips (all / chat / notes / events / reminders / history, each with a count, and kinds without a hit do not appear); picking one narrows the list to that kind, while **all** stacks the kinds in sections. Relevance order is kept inside a kind, 30 per page. Every hit is its own card — hairline border, rounded corners, breathing room between rows — with the record time on the right (time of day for today, month-day for older hits, the year only when it differs), so a page of hits reads as separate records rather than one long article; hovering the card deepens its border. A matched chat message scrolls into place with a theme-coloured outline that flashes and fades, and a **Back to latest messages** action resumes normal browsing. A hot-reloaded window can outrun the running main process; if the dialog reports that search needs a restart, restart YU once.
-
-ICS imports preserve IANA time-zone instants and multi-day all-day ranges, including after a title edit. Recurrence rules and unsupported custom time-zone names are rejected before any event in the file is written; expand recurring events into individual events first. Subscriptions use the same parser.
-
-**Settings → Data and app → Storage** includes backup and restore. A backup is a complete directory with a `manifest.json`, SQLite snapshots and file hashes. It includes user records, original attachments, recordings, memory databases and settings, while excluding model caches and login sessions. Keep the entire directory. API keys remain encrypted by the operating system and may need to be entered again on another computer or Windows account.
-
-Restore validates and previews the backup before confirmation, stages it and restarts the app, then replaces files before opening any store. The current notes location is preserved and sync is turned off. Copies of the previous data remain in `.yu-before-restore-*` directories. Interrupted restores recover the original files before retrying; failed writes roll back.
-
-## Screens
-
-The interface pairs warm white / graphite surfaces with jade accents and supports light, dark and system appearance. The collapsible sidebar groups navigation into Workspace, Everyday and Library. Overview, chat, notes, calendar, to-dos, history and settings share the same visual language; the floating bar and answer card use graphite and jade while retaining warning and error colours.
-
-Notes uses a list and a wide editor. Search, type, category, tags and sorting live in the list pane; category and sorting expand on demand. Export and re-transcription are under More, and the list can collapse for focused editing. The list-collapse toggle sits left of the title. Three floating buttons follow the reader at the lower right of the body: back to top, back to bottom (each greys out at its end) and the source switch (`<>`, rich ↔ Markdown, keeping the reading position). The 插入图片 / 附件 row still sticks to the top of the reading area, so a picture can be added mid-note. Under the category and tag controls the sidebar offers 随记 / 大纲: the outline lists every heading with reading-appropriate row spacing, and picking one pins that section to the top of the reading pane (clear of the sticky attachment row), flashes the target in the theme accent and fades it out, so the whole section is readable at once (the source view brings the line to the top, puts the caret on it and highlights it). Links in a note open in the default browser only on Ctrl+click; a plain click stays inert. The image menu is 复制图片 / 图片另存为 / 缩放 (50/75/original/125/150 %) / 打开所在文件夹 / 删除图片.
-
-![Notes](resources/screenshots/hub-notes.png)
-
-Design tokens live in `src/renderer/src/settings/theme.ts`: light canvas/paper/accent are `#f5f5f0` / `#fdfdf9` / `#28664c`; dark equivalents are `#191c1a` / `#202421` / `#9bd6bb`. Local Segoe UI Variable and Microsoft YaHei UI avoid network font requests. Type scales through 12/14/18/24/30/34 px, spacing uses MUI's 8 px base with 4 px half steps, and cards use 12–16 px radii. Controls include hover, selected, disabled and keyboard focus states and respect reduced motion.
-
-The look is split into two independent controls under Settings → Appearance: **theme** (light, dark, follow the system) and **theme pack** (the whole visual language). Three packs ship — *Celadon*, *Apple* and *Brutalist* — and switching between them takes effect immediately across the main window, the settings dialog, the recording bar, the answer card, the sign-in window, strong reminders and the capture editor, including the Windows title-bar button colours. Every pack carries both a light and a dark palette, so changing the pack never changes the light/dark choice. A pack is one light `Skin` + one dark `Skin` + one glass-surface set: `skinFor` / `glassSkin` own colour, type, geometry, stroke width and material, `makeTheme` builds the MUI tree, and `wash()` / `accentWash()` let the bar and the card express the same semantic ("a 6% neutral rule") in every language. *Celadon* reuses the original values above, so an install that never picks another pack is pixel-identical before and after this feature. *Apple* uses system blue (`#0071e3` light, `#0a84ff` dark), the SF font stack (Segoe UI Variable where SF is absent), 8 px control radii and `backdrop-filter` materials; in light mode the floating bar becomes a white frosted sheet. *Brutalist* follows the Brutalism style: zero radius, 2 px ink rules, hard `4px 4px 0` offset shadows instead of blurs, 800-weight uppercase labels with wide tracking, instant rather than eased state changes, and a single signal orange (`#ff4d00` fill with black ink in light, `#ff6a00` in dark) on bone `#f2efe6` or coal `#121110`; the floating bar and answer card become hard-edged paper slips rather than glass.
-
-![Theme pack: Apple, light](resources/screenshots/theme-pack/apple-light.png)
-
-![Theme pack: Apple, dark](resources/screenshots/theme-pack/apple-dark.png)
-
-![Theme pack: Brutalist, light](resources/screenshots/theme-pack/brutal-light.png)
-
-![Theme pack: Brutalist, dark](resources/screenshots/theme-pack/brutal-dark.png)
-
-![Theme pack: Celadon, light](resources/screenshots/theme-pack/classic-light.png)
-
-![Theme pack picker with three packs](resources/screenshots/theme-pack/brutal-light-settings.png)
-
-Overview remains the default landing page. The top of the page is a **stats strip**, not a stats card: six numbers (today's characters / duration / pace ‖ lifetime characters / records / active days) sit on one line at content height, with the 今日/图表 toggle inline on the right — switching pack or view no longer leaves a block of empty space. The two columns below are content-height too: on the left, *Today, start with these* carries its three counters (events / open / overdue) inline beside the title, then today's agenda (up to 3 rows) and open to-dos (up to 4), with row rhythm tightened to 34–36 px; the right column belongs entirely to recent activity (up to 8 rows, with a 查看全部 action). Today's briefing no longer has a card here — it lives under Calendar → 简报, and the height it used to take goes back to the activity list. One screen therefore shows three agenda rows, four to-dos and several activity rows instead of one row per block. Picking 图表 scrolls the page and keeps both columns at their own height rather than squashing them into half a card. Popular apps sit in the footer. The lifetime input heatmap appears above History and is unaffected by history filters or deletion. Loading uses skeletons, empty sections provide guidance, and failed reads retain reasons and retry actions.
-
-![Overview: stats strip and content-height columns](resources/screenshots/theme-pack/home-layout-qingci-light.png)
-
-![Overview: chart view](resources/screenshots/theme-pack/home-layout-chart.png)
-
-The new YU navigation entry above Overview opens persistent local chat. Conversations, groups and original attachments live in `data/chat/chats.db` under the installation directory, with rename, group moves and deletion; deleting a group ungroups its conversations. The first successful reply triggers one extra LLM call for its title. Naming failures fall back to a short opening-message summary, and manual names always win. Context is isolated per conversation and bounded to ten completed turns / 24,000 characters, plus the current message. Generation can be stopped; errors and interruptions remain visible and recover after restart. Chats reuse configured web search, weather, time and calculation, and the existing Ask memory policy. Other conversations and old history are not scanned. Starting with “temporary chat” disables memory for later messages in that conversation, including after restart; the local chat transcript is still retained. New conversations use the normal memory policy.
-
-Selected answer text has a context menu for copy, select-all, link copy and Explain. Explain opens an attached one-time sidebar with a frozen snapshot of the current question and nearby answer. It invokes no tools and writes neither conversation history nor long-term memory. Changing the answer or closing the sidebar/card cancels its request; the original card width is restored on close. History actions now have individual descriptions, and workflow operations are grouped by purpose.
-
-The top strip separates today's three metrics from lifetime word count, successful records and active days, with a divider and no repeated heading. CJK characters count individually; other words use built-in `Intl.Segmenter` / [ICU word boundaries](https://unicode-org.github.io/icu/userguide/boundaryanalysis/), excluding punctuation. Pace is the sum of raw-ASR units divided by matching recording time, excluding samples under one second. Generated answers never inflate pace. Legacy aggregates without raw samples retain totals but do not produce an estimated pace. Invalid dates and non-finite, negative or fractional counters are rejected.
-
-Updates use up to 32 resumable ranges, sized at approximately 256 KB or larger, reuse the resolved release-CDN URL and retry stalled transfers after 15 seconds without data. If the official route fails, public YU installers alone may use the [GH-Proxy backup](https://gh-proxy.com/docs/github-accelerator); credentials, cookies, signed query strings and custom feeds are not forwarded. Feed metadata stays official and the complete installer must match its SHA-512 digest. The download tooltip identifies the route. Public-network availability and throughput are not guaranteed.
+[中文](README.md) · [Roadmap](ASSISTANT_ROADMAP.md) · [Design philosophy (Chinese)](resources/brand/PHILOSOPHY.zh-CN.md) · [Server deployment](server/README.md)
 
 ![Overview](resources/screenshots/hub-home.png)
 
-| The bar while recording | Ask answer card |
+## What it is
+
+A voice entry point that stays out of the way — not an input method, and not another chat page. Hotkey, audio, recognition, polishing and insertion form one chain. Anything that has to actually happen (set a reminder, schedule an event, file a note, read a page or a local file, run a sequence) goes through whitelisted tools against your real data, and the answer cites where it came from.
+
+Cloud or local is your call: speech recognition, text models and read-aloud can each point at your own accounts or at a service running on this machine. Local recognition works without any cloud model configured.
+
+## What sets it apart
+
+| Difference | What it means |
 | --- | --- |
-| ![Bar](resources/screenshots/bar-recording.png) | ![Answer card](resources/screenshots/card-answer.png) |
+| **One entry point that routes by intent** | No wall of hotkeys: "polish this", "translate it into English", "summarise this page", "remind me in ten minutes", "move the second one to eleven" all enter through the same place, and multi-step requests continue from the previous step's real result |
+| **Models are not tied to a subscription** | ASR, LLM and TTS are configured independently and can mix cloud with local; local recognition and OpenAI-compatible endpoints (including a service on this machine) are supported. No platform credits and no per-call middleman |
+| **Knowledge base and profile live on this machine** | Cards, the user profile and chats sit in `data\knowledge`, `data\profile` and `data\chat` inside the install directory, maintained as SQLite by the bundled Rust helper. Back them up, move them with the install, or export them on uninstall |
+| **The target window is re-checked before writing** | Insertion, selection replacement and appending re-verify the foreground window and the selected text; if either changed, the write is dropped instead of landing somewhere else |
+| **Screen capture is a whole chain** | Region select, eight-handle resize, annotations, Windows-local OCR, translation in place, scrolling capture, pinnable images and local QR reading; the image never leaves the machine, and only the recognised text is sent if you configured that |
+| **Everything can be self-hosted** | The sync server has zero npm dependencies (Node ≥ 22.5), and `update-feed.txt` can point updates at your own repository. Local features work with no account and no network |
+| **It does not sit in your background** | No always-on recording, no clipboard polling, no background screenshots, no window polling; tools are whitelisted and validated, and IPC only accepts the main frame of windows this app created |
 
-| History | Briefing |
+## Core capabilities
+
+| Capability | In one line |
 | --- | --- |
-| ![History](resources/screenshots/hub-history.png) | ![Briefing](resources/screenshots/hub-briefing.png) |
+| **Dictation** | Press to talk, press again to stop; the result is inserted at the caret — clipboard paste first, character injection as fallback, then read back to verify |
+| **Ask** | Retrieval plus a tool-calling agent; the answer lands in a floating card you can pin, follow up on by text or voice, or save as a note |
+| **Translation** | A dedicated translation mode and selection translation, 1–3 target languages, source language left to the recogniser |
+| **Notes** | Voice or typed notes with categories and tags, playback, and audio import with re-transcription; polished text and the raw transcript are kept separately |
+| **Reminders / to-dos** | Natural-language times (Chrono plus programmatic checks), repeats, snooze, a strong-alert overlay, missed-item recovery; to-dos can carry a priority and a deadline |
+| **Events / briefing** | Month grid, day list, ICS import and export, external calendar subscriptions; the briefing gathers today's events and due items into one paragraph, read aloud on request, with quiet hours |
+| **Automation** | Save a sequence of steps as a named workflow — with conditions, fallback branches and references to earlier results — then replay it with one sentence, re-checking permissions at every step |
+| **Screen capture** | Region capture, annotations, local OCR, translation in place, scrolling long screenshots, pinned images |
+| **Local search** | File bodies in directories you pick (plain text, DOCX, XLSX, PPTX, text-based PDF), optionally through the Everything index; `node_modules`, `.git` and system directories are skipped |
+| **Wake word** | An optional offline wake word, recognised locally with an adjustable confidence threshold; nothing before the trigger is uploaded or stored |
+| **Sync** | Optional self-hosted server for history, notes and note audio, events and reminders, and per-device stats; without it everything stays local |
+| **Updates** | Checks this project's GitHub Releases by default, with segmented downloads and checksum verification, or point it at your own feed — or turn it off |
 
-| Events | Settings (general) |
+![Recording strip](resources/screenshots/bar-recording.png)
+![Answer card](resources/screenshots/card-answer.png)
+
+## Keyboard shortcuts
+
+| Action | Default shortcut |
 | --- | --- |
-| ![Events](resources/screenshots/hub-calendar.png) | ![Settings](resources/screenshots/prefs-general.png) |
+| Dictation (recognise + polish + insert) | Tap `Right Alt` to start, tap again to stop |
+| Ask (with retrieval) | `Space + Right Alt` to start, a single `Right Alt` to stop |
+| Translation mode | `Right Alt + Right Shift` |
+| Paste the last result | `Left Ctrl + Right Shift + V` |
+| Polish / translate the selection | `Left Ctrl + Right Shift + S` / `T` |
+| Quick voice reminder | `Left Ctrl + Right Shift + R` |
+| Region capture / OCR / translate | `Left Ctrl + Right Shift + X` |
+| Settings / new note | `Ctrl + ,` / `Ctrl + N` (notes page) |
 
-| Settings (schedule & briefing) | Settings (automation) |
-| --- | --- |
-| ![Schedule & briefing](resources/screenshots/prefs-life.png) | ![Automation](resources/screenshots/prefs-automation.png) |
+Every shortcut can be re-recorded or cleared, and the tray menu can suspend all of them. The trigger can be switched to push-to-talk. Pressing `Esc` while recording discards that take: nothing is inserted and nothing is written to history.
 
-![Models & intelligence](resources/screenshots/prefs-models.png)
+## Install and first run
 
-A fresh install has no working connections: this is where you add a recognition and a text connection — address, key, model — let it save automatically, then test the connection. Records shown in these screenshots are demo content.
+**Install:** download `YU-<version>-setup.exe` from [GitHub Releases](https://github.com/sqslm/YU/releases) and run it. The installer is **unsigned**, so Windows SmartScreen will warn and you have to confirm manually.
 
-![Schedule & briefing](resources/screenshots/prefs-life.png)
+**First run, three steps:**
 
-Events have separate start and end dates and times, including overnight schedules. All-day events also keep their location and notes. Advance alerts can inherit the default, be explicitly disabled, or use a specific number of minutes; editing preserves the existing choice. Events can be imported from or exported to ICS. The daily briefing folds today's events, due to-dos, overdue items and tomorrow's preview into one paragraph you can have read aloud, and quiet hours hold it back. To-dos use their deadline, falling back to the alert time, so deadline-only tasks are included. Manual generations and scheduled deliveries share 14 days of local history; regenerating a day replaces its record without consuming that day's scheduled delivery. Open pages refresh after midnight, and changing the delivery time discards unfinished results from the old schedule. Events have their own page under Reminders in the main window, with 简报 as its second tab (a briefing is about today's schedule, so it no longer owns a sidebar entry), and local calendar data works offline and can sync when cloud sync is enabled and signed in.
+1. Open *Settings → Models & intelligence* and add a speech-recognition (ASR) and a text-model (LLM) connection: address, key, model, then test the connection.
+2. Tap `Right Alt`, say a sentence, and release when the recording strip shows text.
+3. Optional: sign in to your own server for sync, learn a wake word under *Voice & input → Wake word*, remap shortcuts under *Shortcuts*.
 
-In Reminders, the deadline and the alert time are the same date-time picker: clicking anywhere in the field opens it (no need to hit the small calendar icon), the calendar sits on the left with the hour and minute as two scrolling columns beside it, and 清除 / 今天 / 确定 sit in the footer. The popover is drawn with the app's own components, so it follows the active theme pack instead of the OS blue calendar. The same picker serves the repeat rule's end date and the custom date filters.
+No API key yet? `pnpm mock` starts a fake OpenAI-compatible backend at `http://127.0.0.1:8787/v1` so you can try the whole chain.
 
-![Alert-time picker: calendar on the left, hour and minute as scrolling columns](resources/screenshots/theme-pack/reminder-picker.png)
+## Build from source
 
-The automation page lists the workflows you saved: describe a run of steps once, then replay it with a single sentence — no model in the loop, each step reported as it finishes.
-
-## Quick start
-
-Requirements: Windows 10/11 x64, Node.js 22.18 or newer (the self-hosted server needs ≥ 22.5 because it uses `node:sqlite`), pnpm 11, and the Rust stable MSVC toolchain with Visual Studio C++ Build Tools / Windows SDK. Rust is a build dependency; users do not need it installed.
+You need Windows 10/11 x64, Node.js 22.18+, pnpm 11, plus a Rust stable MSVC toolchain and Visual Studio C++ Build Tools / Windows SDK. Rust is build-time only; end users do not need it.
 
 ```powershell
 git clone https://github.com/sqslm/YU.git
 cd YU
 pnpm install --frozen-lockfile
-
-# Optional: a local fake backend, so you can try things without any API key
-pnpm mock                     # http://127.0.0.1:8787/v1
-
 pnpm build
-Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue   # see Known pitfalls
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 node_modules\electron\dist\electron.exe .
 ```
 
-For development use `pnpm dev`. A fresh install has no model connections: open **Settings → Models & intelligence**, add an ASR connection and a text connection, fill in address, key and model, let it save automatically, then test the connection. With the fake backend, point the address at `http://127.0.0.1:8787/v1` (starting the mock does not change your settings).
-
-Building the installer:
-
-```powershell
-$env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
-$env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
-pnpm package          # -> release\YU-<version>-setup.exe (unsigned)
-```
-
-## Usage
-
-| Action | Default shortcut |
-| --- | --- |
-| Dictation (recognize + polish + insert) | `Right Alt` — press once to start, once to stop |
-| Ask (optional web retrieval before answering) | `Space + Right Alt` to start, a **single `Right Alt`** to finish |
-| Translation mode | `Right Alt + Right Shift` |
-| Paste the last result | `Left Ctrl + Right Shift + V` |
-| Polish selection / translate selection | `Left Ctrl + Right Shift + S` / `T` |
-| Quick voice reminder | `Left Ctrl + Right Shift + R` |
-| Region capture / OCR / smart translate | `Left Ctrl + Right Shift + X` |
-| Settings / new note | `Ctrl + ,` / `Ctrl + N` (notes page only) |
-
-After Right Alt starts a task, the bar first shows Smart task. Prompt cards stay hidden during recording and recognition, then appear when the selected card is actually used for polishing or translation.
-
-Settings has six sidebar groups and 24 individual pages: Preferences & shortcuts, Voice & input, Models & intelligence, Assistant & automation, Schedule & reminders, and Data & application. Search by page name or keyword; `Ctrl + K` focuses search. Labels, controls and live status stay visible, with supplementary explanations on hover. Briefing delivery uses an explicit Save button. Wake confidence is adjustable from 10% to 99% in Voice & input → Voice wake, saved automatically and applied locally without restarting the microphone. Lower thresholds wake more easily; higher thresholds reduce false activations. Older settings retain their previous defaults, including stricter matching for short phrases.
-
-Ask cards support voice follow-ups: click Voice follow-up, speak, then Finish and send (up to 60 seconds). They use the configured input microphone and local/cloud ASR or audio-direct model. Cancellation, closing and game mode release the recording resources. The card stays expanded while a follow-up is pending, identifies the previous question, and keeps action results and failures in the same card.
-
-The wake confidence range is 10%–99%. Complete matching candidates rejected internally by Windows are also judged against the configured threshold; below-threshold scores appear in wake settings. Actual recognition depends on speech, the microphone and installed Windows language support.
-
-Clash Verge / Mihomo TUN fake-IP addresses in the default pools trigger independent public-domain validation through Cloudflare HTTPS DNS. Requests retain the original hostname; real private destinations and redirects remain blocked. A captured browser link remains visible even when the body cannot be read.
-
-Default prompt cycling: Left Ctrl + Right Shift + P, configurable under Voice & input → Shortcuts. Cycle automatic routing, all Polish / Translate / Document / Email / AI cards (including inactive cards), then automatic routing. Each kind's active card remains unchanged. Keep modifiers held and press the main key again for each immediate switch; holding the main key does not auto-repeat.
-
-Custom wake phrases match the complete text or pronunciation, ignoring punctuation and whitespace. Chinese name phrases such as “你好，胡小杨” allow a pause of about one second between the greeting and name, and can match homophonic name spellings. The configured utterance threshold is the confidence gate; no hidden per-word floor overrides it. Pronunciations come from the installed Windows recognizer, without name-specific aliases or cloud audio uploads. A complete wake phrase at the start of a longer utterance is matched at whole-word boundaries instead of requiring the entire utterance to equal the wake phrase. Wait for the recording bar before speaking the task; speech before recording starts is not replayed into the task.
-
-Current-page/document summaries keep the actual body, source URL and coverage together instead of replacing the read with a search snippet. “Send me the summary” returns the result in this response. Confirmation-only or deferred-delivery drafts are corrected once from the same evidence before publication; an unresolved generation failure is reported honestly rather than marked complete.
-
-Explicit read-aloud resolves actual note titles/IDs, completed polish/translation results, the previous answer, briefings, events/to-dos, the current page/document, selection, clipboard or supplied text. Clear sources run without a model rewriting excerpts; missing or ambiguous sources require clarification. Progress identifies the source, long content plays in segments without the previous 1,200-character cutoff, and pause/resume/stop controls remain available. Partial source reads and later playback failures are reported.
-
-Three things worth knowing:
-
-- **Trigger mode** can be switched in the Shortcuts page between "press to start, press to stop" (default) and "hold to talk". In press mode, dictation, Ask and voice translation all end with another single `Right Alt`.
-- **Press `Esc` while recording** to throw the take away: it is neither inserted nor written to history.
-- Every shortcut can be re-recorded or cleared, and the tray menu can suspend all of them temporarily. Recording a shortcut distinguishes left and right Shift / Ctrl / Alt.
-- **Say it, and it is noted**: in Ask, “schedule a project review tomorrow 3 to 4 pm” creates an event, “what is on today” lists events, “read today’s briefing” speaks it, and “mark that to-do high priority, due Friday” updates it. Right Alt routes calendar, reminders, notes and queries through the same entry. Asking for a daily task briefing configures the existing schedule. Compound operations use actual tool results and report failed writes. These are all allowlisted tools — answers come from real data, and an empty result stays empty.
-- **Follow-ups do not need the context repeated**: "make the second one eleven", "mark the last one high priority" — the assistant resolves the target against the previous turn's real results, and asks first when it cannot tell which item you mean instead of guessing.
-- **Say it once, replay it with one sentence**: tell it “from now on, when I say morning check, look at today's calendar, build the briefing and read it out” and it saves those steps as a workflow. Say the complete saved name, or “run morning check”, to match an active workflow before generic commands. Each step uses its saved arguments without having a model guess actions from the name, and reports its actual result. Workflows can be created, edited, archived and restored under Automation. Add or remove steps manually; ordinary arguments use form fields, while conditions, fallback branches and result references remain available in Advanced arguments. Referenced steps cannot be removed until their references are edited.
-
-Folder opening prefers the complete literal path. If it does not exist, each missing component is matched against real sibling directories, ignoring case and English spacing/hyphen/underscore differences. Longer English names allow one missing, extra or wrong letter, or an adjacent transposition, including `software` → `softwares`. It never changes the drive, searches the whole disk or guesses a year/short acronym. Equally close matches require clarification; a missing child never opens its parent instead. Directory permissions still apply.
-
-Screenshot translation: select a region, then choose Translation → Start translation. Text is replaced at its original position while the surrounding screen stays intact. Before selecting, Translate full screen selects the entire display. Compare with the original, copy text, or copy/save the translated image. OCR recognizes text and coordinates locally; only recognized text goes to your configured text model.
-
-Scrolling screenshots: select the content area and choose Scrolling screenshot. Scroll continuously downward without pausing on each frame, then choose Done to preview, copy or save the long image. A live thumbnail shows capture progress; matching accounts for fixed headers/footers and cursor interference. Adjacent frames still need overlap: after a full-page jump that cannot be matched, return to the previous position and continue scrolling. Exclude overlays and scrollbars. Downward capture only, limited to 32 million pixels and 30,000 pixels in height; closing releases the capture, with no background capture.
-
-## Configuration
-
-- **Models**: switch between ASR, LLM and TTS. Select a connection or provider on the left and edit its configuration on the right. ASR includes local recognition; LLM groups text and audio-direct connections separately. Add a connection from a searchable provider template, enter its name, key, URL and model, then test it. OpenAI-compatible services support fetching model IDs or entering them manually. Connections can be enabled, made primary or reordered for failover; request paths and extra headers are under Advanced settings. Voice processing supports staged ASR → LLM or multimodal audio direct. Text connections remain available for Ask and selection work. TTS lists saved configurations only. Add a provider template to create a connection; multiple configurations of the same provider retain their own URL, key, model, voice and playback preferences. Existing configured providers are preserved.
-- **Search**: single backend, sequential failover, or merged sources. Every connection stores its own key, address, result count and order, and each one can be tested on its own. Weather questions go straight to Open-Meteo instead of a search engine.
-- **Dictionary**: literal replacements applied after polishing, for proper nouns the ASR keeps getting wrong; longer entries win.
-- **Audio**: fidelity first by default (48 kHz capture, resampled in the browser to 16 kHz mono PCM16); switch to "call noise reduction" in noisy rooms. The speaker test reuses the real capture path for up to 10 seconds and never calls a recognition service.
-- **Insertion and newlines**: insertion method (auto / SendInput / clipboard), multi-line handling (space / Shift+Enter / real newline), and whether to restore the clipboard after pasting.
-- **Prompts**: five card types (AI, polish, translation, document, email) with editable built-in cards and per-card temperature. "Auto activate" picks a card from the foreground app, and the Window classification page lets you add manual rules and preview which rule wins.
-
-- **Schedule & reminders**: calendar and briefing options hold default advance alerts, calendar subscriptions (https / webcal only), delivery time and quiet hours. Calendar, briefing, delivery and reminder notifications have separate pages. System voice, cloud TTS and playback settings are under Models & intelligence → TTS models.
-- **Wake word**: pick the input device explicitly. If it disappears the app falls back to the system default and logs a line in diagnostics instead of failing silently.
-- **Game mode**: under Settings → Data & application → Resources, automatic detection is enabled by default. Settings and the tray also offer manual game mode. Detection uses known game processes, Unity / Unreal game windows and Windows exclusive 3D full-screen; ordinary browser full-screen and presentations alone do not trigger it. Add unrecognized windowed games by process name or full exe path, one per line. Game mode stops wake words, voice shortcuts, the recording bar and related workers, unloads the local model and pauses sync, calendar, briefing and reminder scheduling. Alt+Tab keeps it active; previous settings resume after all detected games exit, with the local model loaded on demand. Drafts are saved before their interface is reclaimed. Failed saves, necessary saving work, explicitly opened interfaces and unsaved screenshots are retained. Missed reminders remain recorded. Detection does not inject into games or change Windows settings.
-- **Updates**: checked against GitHub Releases by default; point `update-feed.txt` or an environment variable at your own feed if you prefer, or turn update checks off entirely.
-
-Settings save automatically except for briefing delivery, which uses Save; if a save fails, the pending change is kept with a retry entry point.
-
-## Sync and self-hosting
-
-Everything runs locally by default — no account required. For multiple devices, deploy `server/` (zero npm dependencies, Node ≥ 22.5) and enter your own HTTP/HTTPS address under **Settings → Account → Sign in**:
-
-```powershell
-cd server
-pnpm start                # or use Docker, see server/README.md
-```
-
-The server only handles accounts and sync (history, notes, note audio, events, reminders, personal stats). ASR, text models and local models are still configured per client. The client reads server capabilities: public registration off hides the sign-up entry, no SMTP hides password recovery. Prompts are written by this project (`src/shared/prompts.ts`, `src/shared/promptLibrary.ts`). Notes are stored as plaintext on the server and administrators can read them; there is no end-to-end encryption today.
+`pnpm dev` runs the development build; `pnpm package` builds the installer into `release\` (unsigned). Test and acceptance commands are listed in `package.json` and the [roadmap](ASSISTANT_ROADMAP.md).
 
 ## Data and privacy
 
-- The data directory lives under `%APPDATA%`, in a folder named after the application's technical identifier (the legacy identifier is kept so upgrades don't lose settings or the signed-in session): `settings.json`, `history.sqlite`, `notes.json` and `notes/audio/`, plus `calendar.json`, `workflows.json` and `briefing-state.json`. Notes can be moved to a custom directory.
-- Keys are encrypted with the system keystore (DPAPI / safeStorage) and only ciphertext is written to disk. Where the platform provides no keystore, keys are stored as-is and the UI says so.
-- No always-on recording, no background clipboard watching, no background screenshots, no window polling. Selection reads and screenshots happen only on an explicit trigger, the original window is re-verified before and after, and password managers are refused.
-- Every local tool of the assistant goes through an allowlist plus argument validation: irreversible deletion, arbitrary commands, software installation and system changes are refused outright. Opening a web page requires the URL to come from real search results — the model may not guess domains.
-- Calendar subscription addresses stay in the local `settings.json`; a failed fetch writes a log line and nothing else.
-- Local body search runs only inside the folder you name, skipping `node_modules`, `.git` and system directories, and caches results in memory by path + mtime + size — nothing is written to disk.
-- Exported diagnostics redact credentials, URLs, e-mail addresses, private-network addresses and local paths.
-- Every IPC call from a renderer passes a trust check: only a `webContents` this app created, calling from that window's main frame (never an embedded iframe), is accepted.
+- Settings, history, notes, events and reminders live in the app folder under `%APPDATA%`; the knowledge base, profile and chats live in `data\` inside the install directory, which therefore has to be writable.
+- Keys are encrypted with Windows secure storage (DPAPI); the settings file only holds ciphertext.
+- Screen, selection and clipboard are read only on an explicit action, and the original window is re-checked before and after; password managers are refused.
+- Assistant tools are whitelisted and parameter-checked: irreversible deletion, arbitrary commands, software installs and system changes are refused; opening a page requires a URL that came from real retrieval.
+- Diagnostics export redacts credentials, URLs, e-mail addresses, intranet addresses and local paths.
+- A backup is a folder with a `manifest.json` covering chats and attachments, notes and audio, history, reminders, events, workflows, entities, the memory store, the knowledge and profile databases and settings. Restores are verified before anything is replaced, and the previous files stay in `.yu-before-restore-*`.
 
-## Architecture
+## Self-hosting and updates
 
-```
-Right Alt (tap / hold)
-  ↓  WH_KEYBOARD_LL global hook (separate Rust process, swallows its keys, leaves normal Alt behaviour intact)
-hotkey child ──IPC──▶ main/pipeline
-  ↓
-bar window (AudioWorklet, always-on warm stream, 16 kHz mono PCM16)
-  ↓ chunked back to the main process
-pipeline: silence gate → concatenate WAV → trim → route
-  ├ classic: ASR (/v1/audio/transcriptions) → text model (/v1/chat/completions)
-  │            └─ ask goes through the tool agent: weather / search / read page / time / math / selection
-  │               → answer with sources → floating card
-  └ multimodal: Gemini generateContent (WAV + prompt) in one call
-  ↓
-insert: clipboard paste → SendInput Unicode fallback → UIA fallback, then read back to verify
-  ↓
-history.sqlite (SQLite search, with sources and pipeline markers)
-```
-
-The Electron main process remains TypeScript. Keyboard hooks, UIA and the resident wake-word listener run in separate Rust executables with inherited JSON pipes and EOF cleanup. Local ASR and memory retain separate Electron utility processes. `yu-windows.exe` and `yu-speech.exe` start per request and exit after one operation or one utterance — window checks, disk queries, system volume, local OCR, browser address, Explorer folder, recent file and registered application list reading, or Windows local speech; they add no resident daemon and monitor owner death. All five live in `resources/native/`, outside ASAR, with a static CRT. Resource accounting includes the hotkey/UIA PIDs. Progress, evidence and remaining work are tracked in the [Rust refactor plan](docs/rust-refactor-plan.md).
-
-`yu-knowledge.exe` owns knowledge and profile storage. It starts on the first explicit knowledge request, exchanges line-delimited JSON over inherited pipes, and exits after 120 idle seconds or when the parent closes the pipe. Its databases are `data/knowledge/knowledge.db` and `data/profile/profile.db` under the install directory (the project directory in development); the dev binary is `native/bin/yu-knowledge.exe` and it ships in `resources/native/`. Stage 1 covers only the Rust foundation, the pipe contract and the bridge: the pages, automatic extraction and chat retrieval are not shipped, and no background learning runs.
-
-Modules worth calling out:
-
-- `native/hotkey/` + `src/main/hotkey/host.ts` — the Rust keyboard hook and Electron lifecycle. Gestures run directly on keyboard events; idle waits indefinitely instead of polling every 4 ms. Only held keys require 25 ms lost-release reconciliation. Hook events remain authoritative; `GetAsyncKeyState` may only remove entries. Restart, suspension, shortcut capture and activity acknowledgements retain their existing interface.
-- `native/uia/` + `src/main/uia/host.ts` — a windowless MTA uses generated COM bindings and only ValuePattern. Target HWND/PID/title are checked before and after reads; password controls return no snapshot. Values retain at most 4000 trailing UTF-16 units without splitting surrogate pairs; official SDK constants identify control types. On-demand warmup, at least 1500ms startup wait, default 150ms read budget, timeout termination and five-minute idle reclamation bound the lifecycle.
-- `native/windows/` + `src/main/windows-native.ts` — explicit per-action native/PowerShell routing, without fallback after native failure. Window identity/minimized checks, fixed/removable disk fields, the default multimedia render endpoint, volume range and OCR language/6 MiB limit/line geometry/Chinese spacing remain intact. Images stay in memory; the 15-second timeout, cancellation and output cap remain. App discovery/activation, recent files, Windows Search, browser/Office reads and independent speech scripts retain their existing implementation.
-- `native/scroll/` + `src/main/scroll-match.ts` — overlap scoring and fixed-edge detection run in a pure Rust DLL through existing Koffi bindings, synchronously borrowing frame buffers without copying or retaining them. The change mask includes only sampled columns. TypeScript retains image chunks, previews, the 32M-pixel/30,000-row limits and cancellation. The library loads on demand from `resources/native/yu-scroll.dll` and shares the main process's failure boundary; system interfaces and models remain in isolated processes.
-- `native/wake/` + `src/main/wake-word.ts` — the resident listener and device enumeration run in `yu-wake.exe`: `ISpRecognizer`/`ISpRecoContext` events are awaited instead of polled, and the SRGS rules cover the complete phrase, the phrase followed by a command, and leading/trailing pieces (a Chinese phrase is a single word, so a pause needs the piece rules). Recognised words, pronunciations and audio positions are converted into the 300–9000 ms duration and confidence the old host used, with the same engine, threshold, five-second cooldown, pause and game-mode rules. Events are subscribed with the `SPFEI` masks (including `SPFEI_FLAGCHECK`) and a session ends on the engine's stream-end event; on this machine `SpMMAudioIn::SetDeviceId` still returns `SPERR_ALREADY_INITIALIZED` for real indices, so audio comes from our own waveIn capture through a custom `IStream`. Levels are the RMS of the capture buffer, and the silence start shares one cumulative timeline with result positions; a vanished device falls back to the system default and the actual device name is reported. Pronunciations go through the system `ISpPhoneticAlphabetConverter::SAPI2UPS` and are then normalised to FormD without combining marks, which matches the IPA `System.Speech` stores for a learned phrase value by value (real sample: `nihaʊhuɕjaʊjɑŋ`), so old learned variants need no re-recording; if the converter cannot be created, only pronunciation matching is disabled and text matching still wakes. The three-sample learning still calls `resources/voice-wake.ps1` with an unchanged training format; the dev binary lives at `native/bin/yu-wake.exe` and ships in `resources/native/`. Re-measured after fixing the event masks and the format identifier (20 samples each): enumeration P50 fell from 981 ms to 52 ms, first-ready P95 from 1277 ms to 597 ms and settled private memory from 75.4 MB to 13.3 MB; idle CPU samples are mostly zero with sporadic non-zero readings, so no claim of "no regression" is made. A single 622-second synthetic session (negative and positive phrases after the ten-minute mark) kept waking with private memory flat at 33.4–33.8 MB; real speech into a microphone is untested.
-- `native/speech/` + `src/main/speech.ts` — Windows local speech runs in `yu-speech.exe`, one process per request that exits when the utterance ends. The fixed-version `SpVoice`/`ISpVoice` binding clamps `SetRate`/`SetVolume`, selects a voice by name and falls back to the system default when it is missing; `started` only acknowledges this stream's own `SPEI_START_INPUT_STREAM` (an end without that start is an error, never a fabricated success), the terminal line maps to `SPEI_END_INPUT_STREAM` and is emitted once, pause/resume receipts carry the request id (a repeated pause is not forwarded again and one resume clears it), and closing stdin stops and releases the voice. Real `GetEvents`/`WaitForNotifyEvent` failures exit with the step and its HRESULT. Text always carries `SPF_IS_NOT_XML`, so `<voice>`, file paths, quotes or `$` are spoken literally; a request containing a NUL is refused with a single `ok:false` line (the upstream `speechText` already strips NULs and keeps both sides, so the product path is unaffected). Events are awaited with a 50 ms bound, so control input waits at most one wait period — a pause receipt measured under 300 ms. The TypeScript protocol, 20 s startup deadline, 5 s control deadline, output limit, segmentation and interruption are unchanged, and `resources/speech.ps1` is kept as a baseline only, no longer packaged. Over 40 samples per host with the same text and voice (PS/Rust/Rust/PS; `total` from request write to pipe close, CPU the job-accounted process total over that same window, private memory the kernel peak and working set the maximum of a 100 ms sampler): enumeration P50 852 → 26 ms, start-to-`started` P50 891 → 291 ms and P95 943 → 321 ms (−66.0%, −622 ms), whole-utterance CPU P50 1703 → 125 ms (−92.7%), private memory peak 75.4 → 10.5 MB (−86.0%), working-set peak 113.8 → 41.5 MB (−63.5%), `total` P50 5010 → 4209 ms. Audible playback on real speakers, Bluetooth/hot-plug, Remote Desktop and lock screen, the failure shape with no audio output device, and switching the default audio device remain untested.
-- `src/main/capture-screen.ts` — GDI capture runs in the main process through Koffi: the nine exports are resolved once on first capture and kept bound, `captureScreenPixels(rect)` writes top-down BGRA into a JS-allocated Buffer, and `captureScreen(rect)` only wraps it in a NativeImage. Scrolling capture therefore stops building a NativeImage and converting it back with `toBitmap` on every frame; DPI/multi-monitor maths, the 40M-pixel ceiling, failure fallback, cancellation and cleanup are unchanged. A three-way comparison inside one Electron process puts 1080p capture at 14.1 → 12.3ms P50, while the standalone Rust DLL gains only −2.5%–7.9% over the cached TypeScript and misses the 10% bar, so the DLL is neither wired into the runtime nor shipped; the candidate stays in `native/capture/` and `native/bin/yu-capture.dll` is only produced by `pnpm benchmark:capture`.
-- `src/main/pipeline.ts` — the full lifecycle of one take (~2200 lines): `MIN_DURATION_MS=350` against accidental taps, `STOP_GRACE_MS=500` to wait for the final audio chunk, and a run token re-checked at every async hop so a cancelled take can never be inserted.
-- `src/main/insert.ts` — clipboard paste first; SendInput uses a hand-written 40-byte `INPUT` layout with `AttachThreadInput` before injection; the clipboard is restored only while it still holds our text.
-- `src/main/agent.ts` + `src/main/tools/` — Ask's scheduler and its 9 tools. Native `tool_calls` first, a strict JSON-intent fallback when the model can't call tools; `runTool` never throws and every network tool has a hard ≤8 s budget.
-- `src/main/foreground.ts`, `selection-target.ts` — the original-window snapshot: captured when recording starts, re-verified by pid + title + class before reading or replacing a selection, and verified once more afterwards.
-- `src/main/providers/` — one OpenAI-shaped transport plus per-vendor field rewriting (OpenAI reasoning models, Gemini and DeepSeek all differ inside `adaptChatBody`), and adapters for 13 search backends.
-- `src/renderer/src/bar/capture.ts` — the microphone stays warm (`setActive` only controls reporting), avoiding the 200–800 ms cold-start loss.
-- `src/main/calendar-sync.ts`, `src/main/reminders-sync.ts` — the sync side of events and reminders: ICS subscriptions accept only https / webcal and reuse the private-address block from search, sync uses the server's increasing `seq` as a cursor, deletions travel as tombstones, and one failing source never blocks the others.
-- `src/main/file-index.ts`, `src/main/everything.ts` — local search: bodies go through a hand-rolled `node:zlib` zip reader for docx / xlsx / pptx (PDFs are explicitly unsupported), Everything is tried over HTTP first then `es.exe`, and when neither answers the tool says so and the model falls back to the built-in search.
-- `src/main/briefing.ts` + `src/shared/briefing.ts` — briefing scheduling with two sources: the template always works, and a failed model narration falls back to it with `source` recording which one you got; quiet hours hold delivery instead of queueing it, and a window crossing midnight never fires twice.
-- `src/renderer/src/settings/UpdatePill.tsx` — the pill only renders the phase the main process pushes (`available` / `downloading` / `paused` / `verifying` / `downloaded` / download errors); click to download, pause, resume, retry, or restart; progress includes bytes, speed and estimated remaining time.
-
-## Development
-
-```powershell
-pnpm test                     # unit tests plus integration tests that start a real local server
-pnpm typecheck                # both the main-process and renderer projects
-pnpm test:native              # Rust hotkey, UIA, Windows bridge, scroll matching and knowledge helper tests
-pnpm build:native             # six native helpers (hotkey/UIA/Windows/wake/speech/knowledge) plus the scroll DLL; also run by dev/build/test/package
-pnpm benchmark:hotkey         # isolated old/new worker comparison; briefly uses F8
-pnpm benchmark:uia            # synthetic real UIA controls; briefly focuses a test form
-pnpm benchmark:windows        # four full-request comparisons; no focus or audio changes
-pnpm benchmark:scroll         # synthetic baseline/sparse-TS/Rust, CPU samples and transfer costs
-pnpm benchmark:capture        # GDI capture: baseline / cached-binding TS / Rust DLL; verdict: DLL rejected
-pnpm benchmark:memory-graph  # graph maths: baseline TS / copy-free TS / Rust batch; verdict: TS only
-pnpm benchmark:wake          # wake host: enumeration, first ready, idle CPU and private memory (PowerShell vs Rust)
-pnpm benchmark:speech        # local speech host: enumeration, start-to-started, activity memory and CPU (PowerShell vs Rust)
-pnpm benchmark:models         # existing local model; isolated SDK/inference/recall/PCM measurements
-pnpm benchmark:browser-url    # browser address read: owned UIA fixture, PowerShell vs Rust field by field
-pnpm benchmark:explorer-folder # explorer folder read: owned window, PowerShell vs Rust
-pnpm benchmark:recent-files    # recent files read: read-only Recent directory, PowerShell vs Rust
-pnpm benchmark:applications    # registered application list: read-only registry and Start menu, PowerShell vs Rust
-pnpm benchmark:app           # whole-app resources: cold start, first open, tray idle, repeated toggles (one side per run; compare-app-resources.mjs applies the thresholds)
-
-# End to end (silence gate skipped, everything pointed at the fake backend:
-# dictation, Ask + retrieval, multimodal)
-pnpm mock
-node_modules\electron\dist\electron.exe .        # enable self-test via environment variables first
-```
-
-`scripts/mock-openai.mjs` serves fake ASR / LLM / Gemini / SearXNG and ships nine retrieval scenarios A–I: `curl http://127.0.0.1:8787/__scenario?id=C` switches scenario, and the next Ask walks through "official docs first / drop stale articles / fold syndicated copies / flag numeric conflicts". `src/main/ask-acceptance.test.ts` asserts against the same scenarios offline.
-
-Debug switches (self-test mode, skip the silence gate, capture UI only, point at a specific FFmpeg binary) are environment variables; the readers are at the top of `src/main/index.ts` and in `src/main/audio/transcode.ts`. UI-only captures land in `screenshots/`, which is not committed.
-
-Stack: Electron 42, electron-vite 4, React 18, MUI 6, TypeScript 5.9, Rust and Vitest 4. Native helpers use `windows-sys` / `windows`, `serde_json` and `base64`, pinned in their Cargo lockfiles. Other features retain existing Node dependencies. Builds skip copying identical helpers that may be running; exit a running development build before changing its native binaries.
-
-The [raw hook benchmark](tests/yu-v2/evidence/rust-hotkey-20261103.json) compares two interleaved rounds per implementation in isolated Electron: private committed memory about 33–34 → 1 MiB, working set 61–64 → 5.3 MiB, and injected-key-to-host-start P95 about 16–17 → 0.3–0.5 ms. These are worker-only measurements, excluding UI, microphone and models. Idle CPU timing was too coarse to establish a reduction. Re-run with `pnpm benchmark:hotkey --baseline <old-commit> --output <report-path>`. Physical keyboards, UAC and lock-screen transitions still need manual acceptance.
-
-The [UIA benchmark](tests/yu-v2/evidence/rust-uia-20261103.json) uses the same owned Windows Forms control over two interleaved rounds: private resident memory about 19 → 1.8–1.9 MiB, private commit 32 → 2.4–2.5 MiB, read P95 3.9–4.3 → 3.1–3.2ms, and readiness plus first read 92–102 → 39–45ms. Editable/read-only/long Chinese/button/password controls, mismatched targets and EOF during a blocked provider passed. These results do not cover every vendor application, elevated desktop or total app memory, and do not quantify CPU reduction. Keep fixture focus stable during the probe; mismatched focus or content fails the run instead of sampling another window.
-
-The [Windows bridge benchmark](tests/yu-v2/evidence/rust-windows-20261103.json) includes process startup, input, execution, output and exit over two interleaved rounds, five measured requests per action per round: median window check 883–936 → 20–21ms, disk query 792–794 → 22–23ms, audio read 902–910 → 27ms and OCR 891–898 → 51–54ms. It uses an owned transparent, non-activating window and an in-memory image without changing audio settings. Worker CPU samples have accounting granularity and exclude compiler subprocesses; no total-app CPU or RAM reduction is inferred.
-
-The [scroll benchmark](tests/yu-v2/evidence/rust-scroll-20261103.json) compares baseline, sparse-mask TypeScript and Rust DLL matching: 4K median matching is about 64 → 47–48 → 15ms; matching plus chunk append and raw thumbnail sampling is about 66 → 49 → 16–18ms. The 4K temporary change mask shrinks from 7.9 MiB to 129 KiB; this is not total-app memory. All 442 differential cases and a real Electron NativeImage/FFI probe passed. Synthetic-frame timings exclude GDI, PNG encoding and UI work, so they do not establish an end-to-end capture frame rate.
-
-The [capture benchmark](tests/yu-v2/evidence/rust-capture-20261103.json) interleaves three variants inside one Electron process against an opaque window this project owns: A the previous baseline, B cached Koffi bindings returning a raw Buffer from TypeScript, C the Rust DLL writing into the same Buffer. With 30 samples per variant and CPU accumulated over 100-call batches, 1080p capture-to-Buffer runs about 14.1 → 12.3 → 12.2ms P50 and 20.8 → 18.7 → 13.0ms P95, 720p about 8.7 → 7.9 → 8.1ms; the colour blocks and the deterministic per-row pattern match byte for byte, and 200 repeated captures leave the GDI/USER handle counts unchanged. The Rust DLL is only −2.5%–7.9% faster than B across three runs, under the 10% reference, so only B ships: the scroll timer no longer round-trips each frame through a NativeImage. The scenes are 1280×720 and 1920×1032 client areas of a 1920×1080 display (the 1080p request loses 48 rows to the work area); 4K, a second monitor with mixed DPI, UAC/RDP/lock screen, PNG encoding, renderer round-trips and desktop composition waits are untested, so this is not an end-to-end capture frame rate.
-
-Local model wrappers retain TypeScript and process isolation. The [component and baseline benchmark](tests/yu-v2/evidence/model-workers-20261103.json) shows that avoiding the Mem0 SDK import for read-only recall reduces worker private resident memory from about 200–215 to 76–77 MiB and first recall from 1106–1126 to 188–203ms; warm recall over one memory changes from about 1.2 to 1.3–1.4ms. Retrieval over 1000 synthetic vectors changes from 15.8–17.8 to 11.3–11.6ms. Models, normalization, cosine ranking, learning and storage remain compatible; writes still load the SDK. Direct WAV-to-Float32 conversion removes about 5.5 MiB of intermediate PCM for three minutes of audio. These are synthetic worker measurements, not real ASR decoding or total-app peak RAM; no model download is needed for validation.
-
-## Known pitfalls
-
-- **`ELECTRON_RUN_AS_NODE=1`**: if that variable is set, `electron.exe` degrades into plain Node and fails with `Cannot read properties of undefined (reading 'getPath')`. Clear it before launching.
-- **The main process is CJS**: with ESM, `import { BrowserWindow } from 'electron'` fails at runtime with `does not provide an export named 'BrowserWindow'`, which is why `package.json` has no `"type": "module"`.
-- **pnpm 11** no longer reads `pnpm.onlyBuiltDependencies` from `package.json`; the build-script allowlist belongs in `allowBuilds` in `pnpm-workspace.yaml`.
-- **koffi callback pointers**: declaring the argument as `const KBDLLHOOKSTRUCT *` decodes it into an object automatically; declaring it `intptr_t` yields a number and `koffi.decode` then fails with `expected external or TypedArray`.
-- **FFmpeg encoding**: Opus needs an FFmpeg build with `libopus`, otherwise the app falls back to WAV (transcription is unaffected). Importing non-WAV audio needs FFmpeg on the machine, or an environment variable pointing at the executable.
-- **Clipboard fallback briefly owns the clipboard**; there is a setting to restore its previous contents after pasting.
-- **The tool agent depends on function calling**: models that support `tool_calls` use them directly, the rest (or gateways returning 400/404/422) fall back to emitting a single JSON intent — weaker, but the request does not fail outright.
-
-## Deliberate design choices
-
-This project is an independent implementation. It contains no third-party client source code, recordings, history, screenshots or reverse-engineering artifacts; its specifications come from observed public behaviour and our own judgement.
-
-- Sign-in is optional, and there are no working model connections by default — ASR, text models and multimodal all need your own configuration.
-- The model decides whether retrieval is needed, and the source list is added by this project so answers can be checked; weather questions query the data source directly.
-- The server has no payment code; plans and quotas are set by the administrator.
-- There is an onboarding flow, but no team spaces and no subscription flow.
-- No always-on recording, no clipboard monitoring, no background screenshots — and "the model says it did it" is never treated as "it happened".
-
-## Project status
-
-Release candidate (`1.2.2-rc.3`). **Done**: a today board on the hub (events, to-dos and the daily briefing side by side), dictation and translation, Ask plus the tool agent, notes, reminders and to-dos with priorities and deadlines (synced), a local events page with ICS plus external ICS subscriptions and two-way sync, a briefing page and read-aloud with both template and model sources, quiet hours and two weeks of history, simple sequential workflows, local file body search and Everything integration, conversational references, a selectable wake-word device, screen capture with OCR, accounts and sync, self-hosted server, and update checks against GitHub Releases with a hub pill.
-
-**Product boundaries**: directory/app exclusions, text-based PDF search, conditional workflows and email/mobile briefings are connected; see the unified-entry inventory for requirements. Other indexers are not integrated. External calendars are read-only ICS subscriptions — skipping Google / Outlook OAuth is a deliberate choice, not a gap. The installer is still unsigned, and the update feed points at this project's GitHub Releases — it only works if releases are published to the matching `rc.yml` (prerelease) and `latest.yml` (stable) channels.
-
-Verification boundaries: `pnpm test` and `pnpm typecheck` cover unit and integration paths, and end-to-end runs use the fake backend. The [roadmap](ASSISTANT_ROADMAP.md) records the 81-item field comparison from 0.35.0 and what remained unresolved. A real microphone, physical hotkeys, overwrite installs, how Windows toasts actually look, and the real quotas of vendor accounts still have to be verified by you; the [API audit](PROVIDER_API_AUDIT.md) marks which endpoints were never confirmed with a real account.
+- **Sync:** deploy `server/` (zero npm dependencies, Node ≥ 22.5) and enter your own address under *Settings → Account* to sync across devices. The server handles accounts and sync only — models are still configured per client, and notes are stored in plain text server-side, readable by the administrator.
+- **Updates:** the default feed is this project's GitHub Releases. Use `update-feed.txt` or an environment variable to point it at your own address, or turn automatic checks off entirely.
 
 ## Documentation
 
-| Document | Contents |
+| Document | What is inside |
 | --- | --- |
-| [ASSISTANT_ROADMAP.md](ASSISTANT_ROADMAP.md) | Phased scope, actual progress, item-by-item acceptance records |
-| [PROVIDER_API_AUDIT.md](PROVIDER_API_AUDIT.md) | Per-vendor protocol differences, fixes, unverified items |
-| [docs/asr-api-setup.md](docs/asr-api-setup.md) | How to get and configure speech-to-text API keys (Aliyun, Volcengine, iFlytek, Tencent Cloud), with troubleshooting (Chinese) |
-| [resources/brand/PHILOSOPHY.zh-CN.md](resources/brand/PHILOSOPHY.zh-CN.md) | Design philosophy: why the trade-offs went this way (Chinese) |
-| [server/README.md](server/README.md) · [server/docs/API.md](server/docs/API.md) | Server deployment and HTTP API |
-| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) · `licenses/` | Third-party licenses |
-| [src/main/prompts/reminder-refinement.md](src/main/prompts/reminder-refinement.md) | The full prompt used for reminder extraction |
-
-Community dictionaries are available in the term manager: select categories and choose Import / update. Sources are Rime Frost names, internet and computing lists plus the 5,000 most frequent THUOCL IT entries (8,469 total on 2026-10-29). Reimport adds missing entries while preserving personal edits and enabled states; failed downloads do not partially import. Source and license links are shown. Lists are downloaded on demand, not bundled; downloads send no recordings, history or credentials. These lists do not verify actor–work relationships or guarantee coverage of recent names.
-
-Proper-name enhancement is off by default. Open Settings → Voice & input → Vocabulary enhancement, add/import terms, then enable it. Domains/app names select relevant terms automatically; blank domains are common user terms. Related terms may be sent to your configured ASR/LLM. The local entities.sqlite is independent of history retention, is not synced, and never learns private terms automatically. Only verified provider protocols receive ASR context; local SenseVoice uses candidates in existing LLM polishing. Direct-audio mode adds no new ASR/correction request. Full user-supplied factory prompts are bundled without truncation; customized card text is preserved.
-
-## Changelog
-
-- **1.2.1-rc.1**: the hub sidebar and the chat list can both collapse — the app rail shrinks to a 60 px icon strip with a width transition, the chat list folds away entirely, and the notes list collapses too (all three remember the last choice). The chat list follows Codex: a full-width "New chat" with an icon-only "New group", collapsible groups with counts, rename/delete menus that appear on hover, "Ungrouped" last, and distinct empty and no-match hints. Every conversation can pick its own model and thinking effort (default "high"; "default/low/high/max/off" when following the first LLM) instead of borrowing the fast, thinking-disabled polish configuration. The notes preview is now directly editable: click a block to reveal its Markdown in place, Enter splits or continues list prefixes, Backspace at a block start merges, and Ctrl/Cmd+B/I/K work; the Markdown source mode gained the same list continuation and wrapping. Notes can import Markdown documents (multi-select, title from the first H1 or the file name, one bad file does not sink the batch). Answer cards keep only the card-style source list, which links out to the browser; the duplicated "## Sources" block in the body is gone and sources are de-duplicated by URL.
-- **1.1.0-rc.16**: adds a streaming adapter for iFlytek's realtime transcription service (`rtasr.xfyun.cn/v1/ws`: the signature uses the APIKey rather than the APISecret, 40 ms / 1280-byte frames, billed per session length with no duration cap), and makes Volcengine's App ID and Access Token optional in the form so the new-console API Key is no longer blocked.
-- **1.1.0-rc.15**: Volcengine Doubao streaming now authenticates with the new-console API Key (`X-Api-Key` plus a Resource Id) instead of an App ID and Access Token, which still work for the old console; exercised against a real account. "Get models" no longer sends an HTTP request to a socket URL — streaming adapters list the models their engine supports, and Tencent realtime says to use its engine parameter instead.
-- **1.1.0-rc.14**: three streaming transcription adapters (Alibaba Bailian realtime, Tencent Cloud realtime, Volcengine Doubao streaming) and a paraformer-v2 file-transcription preset. Streaming adapters send audio while it is still being recorded and replay an already-recorded take at 4x, still returning the whole transcript; existing connections, keys and settings are untouched. Bailian realtime was exercised against a real account, the other two are covered by local protocol tests.
-- **1.1.0-rc.13**: community dictionary import/update from reviewed GitHub lists, preserving personal edits and disabled entries; public homophone candidates require relevant context, and unrelated public terms are not preloaded as ASR hints.
-- **1.1.0-rc.12**: embeds five complete supplied writing cards and renames the AI category to agent collaboration. Adds optional local proper-name management, bounded contextual ASR hints for verified protocols, and conservative candidates shared by existing polishing/translation requests. Includes CRUD, domains, aliases, relationships, source metadata and JSON import/export, exact-token protection, and original-transcript retention. See [protocol and validation notes](PROVIDER_API_AUDIT.md).
-
-- **1.1.0-rc.11**: restores today’s data at the top of the overview. Screenshot Cancel/Done stay visible; clicks do not snap windows or create marks, and double-click completes a selection in drawing modes. Cancelled drags restore the prior region. Assistant screenshot capture is disconnected; manual capture, OCR, translation, Ask and QR decoding remain available. Page/document summaries keep using the content reader.
-
-- **1.1.0-rc.10**: reduces offline wake end-of-speech waits while retaining paused phrases. Spoken drive paths support nested directories. Explicit Chinese cursor-insertion commands generate content through the configured LLM: code uses the original file title to infer language (explicit language wins, Python is the fallback); prose omits window metadata. Generated content uses plain-text insertion without executing code. Existing dictation, translation, Ask and notes routes remain available.
-
-- **1.1.0-rc.9**: restores and repositions the recording bar for each take and replays its state after reload. The start cue finishes before playback is muted; cancellation cannot reopen a pending recording gate. Offline wake follows the Windows default recording device, retains brief phrase pauses, and adds three local readings to learn consistent recognition variants and calibrate confidence, followed by a wake test. Screenshot QR decoding runs locally with copy and explicit web-link opening.
-
-- **1.1.0-rc.8**: fixes actual page/document bodies being dropped when a read also contains source links. Summaries use the verified content, return their result directly, and do not reconfirm the captured URL. Confirmation-only, contradictory or future-delivery drafts receive one bounded correction before the final result is published.
-- **1.1.0-rc.7**: fixes external content targeting from YU windows and removes unrelated focused-field dialogue from page summaries. Read-aloud resolves real sources directly, reports progress and plays long content in segments. Prompt cycling fires on each main-key press with modifiers held. Fixes live microphone position resets discarding unread audio. Complete wake phrases can match at the start of a longer utterance while retaining word-boundary, confidence and game-mode gates.
-- **1.1.0-rc.6**: fixes custom wake candidates being discarded internally by Windows; confidence can be set as low as 10%. Adds verified Clash Verge / Mihomo TUN fake-IP compatibility and keeps captured page links on read failures. Workflows support manual creation and editing; Ask cards support voice follow-ups, remain expanded while waiting and identify their context. A shortcut cycles automatic routing and all prompt cards. TTS lists user-added configurations, including multiple accounts and voices per provider. Fixes workflow state after failed writes, nested argument mutation and result references after step deletion.
-
-- **1.1.0-rc.5**: automatic game detection, manual game mode and custom game processes. Voice wake, shortcuts and background schedules pause while idle interfaces, the recording bar, keyboard/context workers and local models are released. Previous settings resume after all detected games exit. Drafts are saved before interface reclamation; failed saves retain the interface. Fixes late events from old keyboard workers, context-reader restarts after stop, and unbounded retries when startup failures reset the retry counter. A child that finishes spawning after suspension is terminated once its PID is available.
-
-- **1.1.0-rc.4**: redesigns ASR / LLM / TTS settings as a connection list and detail editor; adds current-page, GitHub project and common-document summaries; accepts pauses and full phonetic matches in custom wake phrases without a hidden per-word confidence floor. Fixes connection checks hanging after response headers, model cache reuse across accounts or organizations, and new connections being hidden by an old search filter.
-
-<details>
-<summary>Highlights of earlier versions (expand)</summary>
-
-- **1.1.0-rc.2**: includes V2 reminder, event-reference, workflow and screenshot-confirmation fixes. Compact history tabs/pagination. Notes support CommonMark/GFM preview and Markdown source editing, with picked, pasted or dropped files copied into the note directory, carried through migration and included in exports. Attachments remain local; the existing text/audio sync protocol does not upload them.
-- **1.1.0-rc.1**: four concurrent update ranges, persistent pause/resume, speed/ETA and SHA-512 verification before the upstream verified install; standard download fallback when Range is unsupported. Differential downloads are disabled for a consistent resumable path. Spoken folders use unique real directory matches for spaced initials, repeated drives and trailing s. Independent reminder clauses can accompany calendar actions; partial failures retain completed receipts. UI uses vector icons. Screenshot translation improves columns and legible layout; continuous scrolling needs no pauses, handles fixed headers/footers and cursor interference, and shows a live thumbnail. Translated selections retain their frame and adjacent toolbar. Shared TaskContext preserves original-window identity; existing tools share schema, permission, cancellation, timeout and confirmation semantics. Deterministic commands and actual result IDs reduce model routing; redacted diagnostics include stage P50/P95. Also fixes unsynced note/audio preservation after remote deletion, migration overwrite protection, workflow archive retention and cascading glossary replacements.
-- **1.0.0-rc.14**: separates development and installed Windows identities and repairs the legacy Electron shortcut collision; routes named drive folders before application lookup; connects Everything interface failure to built-in search and recovered result presentation. The roadmap now separates the current implementation audit from historical delivery records.
-- **1.0.0-rc.12**: fixes Windows taskbar icon property order; disables RC downgrades across update checks, events, downloads and installation; connects calendar, daily briefing configuration and compound tasks through Right Alt; restarts briefing scheduling immediately after settings changes; fixes event end dates, future reminder postponement, false save receipts and unreviewed note extraction; shares polish output constraints and artifact/duplicate cleanup. See the [100-case acceptance record](src/main/fixtures/voice-routing-100-rc12.md) for exact validation boundaries.
-- **1.0.0-rc.11**: screenshot translation replaces text at its original position in the full-screen view, with original comparison and image export; adds downward scrolling screenshots matched by overlap; gives taskbar windows an external YU icon; fixes late capture windows after closing, plus focus and control interaction during scrolling.
-- **1.0.0-rc.10**: the hub was laid out again — the four numbers became one strip (characters, time and pace today, with the lifetime count behind a divider), the schedule and the to-dos share one list in time order on the left with the briefing in its own column on the right, the week chart sits beside the lifetime insights, and the year heat map closes the page; "average paragraph" became "today's pace" because it was repeating the footnote under the duration. Local installer only, nothing published to GitHub.
-- **1.0.0-rc.9**: notifications now carry our own icon — the tray's "check for updates", briefing, calendar and reminder toasts shipped without one, so Windows fell back to the host executable's picture and showed Electron's atom logo; the hub dropped its recent-takes list (the history page is the same data with search and replay), the week chart takes the full width again but is capped and centred, and a Chinese interface no longer labels the heat-map axis "Nov Dec Jan" — the twelve month keys had been written into both locales with English values. This build is a local installer only; nothing was published to GitHub.
-- **1.0.0-rc.8**: the hub gained a today board under the four numbers — events, to-dos and the daily briefing in three columns, each with a one-click jump to its page, and short windows scroll instead of cropping the heat map; the "top apps" dialog now puts the legend on the left and the ring on the right at two thirds width, with a long legend scrolling in its own column; "the workflow was not saved" is fixed — steps sent as a JSON string or as bare tool names now save, and the message says whether it was not a list, a step without a tool, or more than 8 steps; a tool refused by the permission check now logs the arg shapes instead of failing silently.
-- **1.0.0-rc.7**: every IPC call now goes through a trust check — only a `webContents` this app created, calling from that window's main frame, is accepted, so embedded iframes and unknown renderers are refused; provider preset names follow the selected language instead of staying Chinese; the 5 MB cap on subscribed calendars is enforced while streaming, so an oversized feed is dropped instead of buffered whole; external calendars are explicitly read-only ICS subscriptions.
-- **1.0.0-rc.6**: fixes the packaged build reporting no local recognition runtime (the native runtime is an optional dependency that packaging dropped; it is now a real dependency with all three native folders unpacked); update checks move to this project's GitHub Releases with the prerelease channel pinned from the version tag and a pill in the hub when a newer build exists; events and reminders sync both ways with your own server (increasing `seq` as the cursor, tombstones for deletions) and external ICS calendars can be subscribed; Ask reads local docx / xlsx / pptx bodies and the Everything index, degrading honestly when Everything is missing; the briefing can be written by a model with a template fallback, gains its own page and keeps fourteen days; conversational references and a selectable wake-word device land too.
-- **1.0.0-rc.5**: the long-term memory system is gone (spoken preferences are no longer kept forever; notes carry them instead); events get their own page (month grid, day list, form, ICS import/export), to-dos gain a priority and a deadline, the briefing honours quiet hours and keeps two weeks of text on this machine, and a new dictation stops a read-aloud in progress; workflows let you save a sequence of tool steps under a name and replay it with one sentence.
-- **1.0.0-rc.4**: a local calendar, the daily briefing and read-aloud become allowlisted tools, and Ask no longer claims those abilities are missing; settings gain a Memory & schedule section; the calendar and briefing timers re-check after sleep and a briefing missed today is still delivered today.
-- **1.0.0-rc.3**: release-audit fixes, Electron 42.11.18 and Vitest 4.1.12, known dependency vulnerabilities patched; brand assets and icons unified, settings folded into six groups, diagnostics exports redacted, and the legacy application identifier and user directory kept so upgrades lose nothing.
-- **1.0.0-rc.2**: the Ask card waits for its subscription before sending and keeps early messages; sequential search failover no longer splits the deadline evenly (8 s per connection, 24 s overall, at most two merged sources in flight); today's news separates "service failure" from "successful query with no matches", and after midnight keeps reports from the last 48 hours with their real dates; model forms link official platforms and key pages; long wake phrases drop to 0.80 / 0.50 confidence while short words stay at 0.94 / 0.75.
-- **0.41.0**: capture snaps to the topmost real window under the cursor, filtering transparent and click-through overlays with Alt to bypass; eight-handle resize and undo in the annotation layer; missed reminders are reported together after restart or wake, and "got it" does not change the item's state.
-- **0.40.0**: wake recording merges ~160 ms segments for the voice gate, submits after 320 ms of speech plus a 2 s pause, and ends after 15 s of silence; wake adds competing dictation grammar, length and cooldown gates; notes gain independent titles, search and sync; the assistant acts on notes by real ID, executing safe operations and refusing irreversible deletion.
-- **0.39.0**: reminders and to-dos share one page (all / reminders / to-dos) with search and time filters applied before paging; settings navigation folded into six groups; capture shows after first paint and transfers raw pixels, skipping full-screen PNG encode/decode.
-- **0.37.0**: a bounded TCP reachability check before recording (no test audio, no quota spent); enabled built-in ASR models load automatically; offline wake word added; capture prefers raw pixels via GDI, and local OCR handles mixed Chinese/English and light text on dark backgrounds.
-- **0.35.0**: Windows tools land — App Paths and Start-menu discovery, opening apps/folders/documents/URLs, metadata search inside bounded directories; shipped with an 81-item field comparison that states plainly where verification still stops.
-- **0.34.0**: one unified voice entry where a single full transcript decides the actual feature (Ask / translate / note / reminder / Windows action); Ask becomes the only question window; live caption preview while recording.
-- **0.8.x**: faster Ask (concurrent retrieval and page reads, single tool round, SSE streaming), local ASR keep-alive, mode label on the bar, window classification and per-app prompt routing.
-
-Finer detail lives in `git log`.
-</details>
-
-## First-run setup
-
-The history toolbar keeps search, mode tabs and manual refresh visible. Filters expand application, date, order and archive controls; refresh interval, export and cleanup live under More. Destructive cleanup still asks for confirmation.
-
-Cursor insertion shows a generation status. News, live information and explicit web requests reuse read-only Ask research and include retrieved sources. Search must be enabled and configured; no sources means no insertion of unverifiable current claims. Ordinary prose and code still use direct generation.
-
-Spoken selection translation/polish replaces by default. Explicit append/keep-original wording appends at the selected range's end, preserving later document text. Shortcuts retain their saved insert preference. Original-window, selection and cancellation checks still apply.
-
-The warmed microphone is retained, but startup no longer enumerates all media devices. Opening a microphone picker requests enumeration on demand. Hidden hubs attempt guarded retirement after 15 seconds and hidden answer cards after about 20 seconds. An isolated enumeration-only measurement started an additional Chromium video-device service with approximately 76 MiB working set; this is not a full application before/after memory benchmark. The installed older main process alone used about 153 MiB working set, so a 100 MB total with all features active has not been achieved or promised. No forced working-set trimming or disabling voice/hotkeys is used.
-
-The skippable guide brings microphone selection and a local level test, ASR / LLM / TTS connections, custom wake-word setup and optional account sign-in into one place. Settings save automatically; reopen the guide from the hub. The level test neither saves nor uploads audio.
-
-Examples appear only for configured capabilities: speech models enable dictation; an LLM enables polishing, translation, reminders, to-dos, events and questions through one input. Review recognized speech before running it. Trials use an isolated conversation without long-term memory, while explicitly executed reminders, to-dos and events create real records. Saving a connection does not verify connectivity; use its connection test.
-
-Examples stay outside the input until the user clicks “Fill in this sentence”. Switching examples preserves the current input.
-
-## Model allowances
-
-The sidebar ring initially shows the preferred LLM connection. Click it to see all saved ASR, LLM, multimodal and TTS connections, including disabled ones and enabled local ASR. Any connection can be selected for the ring. Each model connection also has a Check allowance button in settings. The dialog opens with a search field (name, model or kind) and a row of kind chips (all / LLM / multimodal / ASR / TTS / local ASR, each with a count, and kinds without a hit do not appear); picking a chip narrows the list, and both stay pinned while the list scrolls.
-
-Queries support DeepSeek and Kimi China account balances, SiliconFlow China's user-info endpoint when it returns valid billing data, OpenRouter key spending caps, and ElevenLabs subscription allowances. Unsupported providers, custom gateways, unavailable endpoints, authentication errors and invalid responses are shown explicitly, never as zero balance. SiliconFlow's empty-status zero placeholders are treated as unavailable. These APIs expose shared account/key allowance, not an independent balance for each model; shared amounts are never summed together.
-
-A percentage is drawn only when both a real limit and remaining allowance are available. Balance-only responses (DeepSeek, Moonshot, SiliconFlow) and uncapped keys (OpenRouter) draw no arc: the ring carries the amount itself (`$7.62`, `$12.3K`; the 28 px sidebar ring keeps just the figure and leaves the currency to the tooltip), so it reads as neither an empty circle nor a fake 0%. Dark mode uses white for remaining and deeper gray for used; light mode uses dark and light gray. A dash distinguishes "no amount, no ratio" from an exhausted allowance.
-
-Only saved connection IDs cross the query interface. Credentials are read in the main process and sent to matching official HTTPS endpoints, without redirects or model-generation calls. Successes are cached in RAM for five minutes, failures for 30 seconds, with manual refresh and shared in-flight requests for the same account credentials. The list queries at most two entries concurrently and stops queueing when closed/hidden. There is no background polling or persistent billing cache.
-
-## Local long-term memory
-
-Explicit “remember” requests and automatic learning both use Mem0 extraction before saving: remove spoken fillers, repetitions and self-corrections, preserve names, numbers and constraints, and store concise standalone facts rather than raw transcripts. A save is confirmed only after an actual ADD/UPDATE succeeds. Manual entries and edits remain exactly as entered; existing memories are not rewritten in bulk. Node dragging uses 15% less pointer displacement with slightly higher simulation damping.
-
-Open Settings → Assistant & automation → Long-term memory. This feature is off by default. Enabling it explains the separate storage and additional LLM calls, then downloads an approximately 24 MB local Chinese embedding model with progress, cancellation and integrity checks.
-
-Mem0 **2.4.6** supplies extraction, deduplication, ADD/UPDATE/DELETE and SQLite persistence. Read-only recall uses the same float32 cosine scores, stable ties, user/category separation and 5/3-result limits over the pinned SQLite format without importing the SDK; SDK upgrades require differential validation. Version 3.3.1 was evaluated but its additive capture does not replace conflicting old facts. Writes load the SDK in an on-demand Electron utility process; no Python, Docker or database server is required. LLM requests reuse the selected connection in the main process. Local storage does not make cloud-configured LLM calls offline.
-
-Assistant facts and writing preferences use separate databases under `memory/`. New Ask user statements and explicit writing preferences may be learned; ordinary dictation, older history, notes, webpages, files and clipboard are not automatically imported. Writing receives style preferences only. Say “remember…”, “forget…”, or start an assistant conversation with “temporary chat”. The manager supports search, add, edit, delete and clear, and Ask can show the memory references used.
-
-Personal/project/preference queries retrieve up to five facts; writing uses up to three preferences. The foreground recall budget is 600 ms; a cold lookup may be skipped while loading continues. Up to 30 candidate inputs are buffered in RAM for this session, keeping the newest on overflow and discarding unprocessed candidates on exit. After three inputs or a five-minute wait, extraction processes at most three inputs/6000 characters per batch, requiring at least 60 seconds of computer idle time, CPU at or below 25%, and free RAM at least 1 GiB and 10% of total. Models are released after each batch or 30 seconds without retrieval. Explicit remember commands still save immediately. Closing the main window reclaims idle memory, context-reader and local ASR processes; recording, foreground work, lock and games pause background learning.
-
-The memory graph supports zoom, pan, category/search filters and node details. Lists and graphs read pinned Mem0 SQLite files without loading the SDK or embedding model; the lightweight reader exits after five idle seconds. Solid links mean shared provenance, dashed links mean vector similarity, not confirmed factual relationships. The view is capped at 200 matching memories and three nearest neighbors per node (cosine at least 0.78). Graph rendering is lazy-loaded and makes no model calls. Graph maths stays in the memory process: vectors are read in place as float32 and each pair is scored once, which takes a 200-node graph from 16.3 to 10.2ms P50; a batched Rust cosine only gains another 6% (0.6ms) and misses the bar, so it is not shipped. BGE is the retrieval encoder; the configured LLM extracts facts. This version does not offer alternative encoders or embedding APIs; changing encoders requires re-embedding existing data.
-
-Native lifecycle, protocol fixtures and 65 synthetic Chinese retrieval/update cases were tested. These do not establish real LLM extraction accuracy. Older unused client dependencies retain audit findings; active SDK model output is bounded before validation. See [validation and dependency notes](PROVIDER_API_AUDIT.md#本地长期记忆rc17).
-
-Extraction and update requests now have stage-specific JSON contracts. A complete object may have explanatory text or code fences around it; truncated/ambiguous data and missing update/delete targets are rejected. Invalid formatting gets at most one retry using the original request, never the malformed model reply. Failed candidates stay in session RAM for manual Retry extraction, without repeated background retries. Disabling memory/automatic learning, clearing memory or exiting cancels the corresponding candidates. An extraction-format error comes from the configured LLM and does not require downloading the embedding model again.
+| [ASSISTANT_ROADMAP.md](ASSISTANT_ROADMAP.md) | Capability list for the unified entry point, current architecture, item-by-item status and measurements |
+| [docs/](docs/) | Design plans, staged acceptance records, native module notes |
+| [server/README.md](server/README.md) | Deploying the self-hosted sync server, including Docker |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Third-party dependencies and licences |
+| [resources/brand/PHILOSOPHY.zh-CN.md](resources/brand/PHILOSOPHY.zh-CN.md) | Design philosophy and interface trade-offs (Chinese) |
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Third-party dependencies keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `licenses/`. The application icon comes from `logo/YU_语_品牌图标资源包` and `pnpm icon` copies the applicable sizes. Speech-model weights are not distributed with the installer or the source archive; each model keeps its own license.
-
-### Chat attachments and storage
-
-The Yu chat supports file selection and drag-and-drop, attachment preview/removal, and follow-up questions. Up to 5 files per message, 10 MiB each, 25 MiB combined. Supported inputs include raster images, PDF, modern Office/OpenDocument, text and code. Images use the current LLM’s OpenAI-compatible vision input; a vision-capable model is required. Images are resized locally to at most 2048 pixels and stripped of metadata; animated images use their first frame. Text references cover the latest 5 attachments in this conversation, with a combined 48,000-character limit. Scanned/encrypted/corrupt documents report errors. Attachment contents are kept separate from user memory learning.
-
-Chats, original attachments and processed references are stored together in `data/chat/chats.db` under the installation directory (project directory in development), with no fallback to the C: user profile. The installation directory must be writable. Updates preserve this folder. Interactive uninstall asks whether to delete chat data or copy it to a chosen directory outside the installation as `YU-chat-data`; cancellation/copy failure retains the originals, and existing backups are not overwritten. Silent uninstall stops if chat data exists. To restore, quit YU and copy the backup contents into the new installation’s `data/chat/`. Other existing data locations are unchanged.
+MIT, see [LICENSE](LICENSE). Third-party dependencies keep their own licences; speech model weights are not distributed with the installer or the source, and follow each model's licence once downloaded.
